@@ -333,7 +333,9 @@
       "providerIncompatible": "Este proveedor no soporta este par",
       "saveConfiguration": "Guardar Configuración",
       "providerInfoBanner": "Los proveedores obtienen automáticamente los tipos de cambio de los bancos centrales. Sin un proveedor, deberá insertar los tipos manualmente.",
-      "noProviderWarning": "Ningún proveedor configurado. Deberá insertar manualmente los tipos de cambio para cada fecha."
+      "noProviderWarning": "Ningún proveedor configurado. Deberá insertar manualmente los tipos de cambio para cada fecha.",
+      "createIntermediatePairs": "Crear también los pares intermedios",
+      "createIntermediatePairsHint": "Cada paso de las cadenas seleccionadas se guardará como par autónomo con su proveedor, para poder sincronizarlos de forma independiente."
     },
     "provider": {
       "primary": "Principal",

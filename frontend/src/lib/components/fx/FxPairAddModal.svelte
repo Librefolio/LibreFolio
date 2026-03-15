@@ -23,6 +23,7 @@
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
     import type {ChainStep} from '$lib/utils/currencyGraph';
+    import {getRegisteredPairs} from '$lib/stores/fxStoreRegistry';
 
     // =========================================================================
     // Props (Svelte 5)
@@ -56,6 +57,8 @@
     let syncing = $state(false);
     let error = $state<string | null>(null);
     let quoteSelectRef = $state<HTMLDivElement | null>(null);
+    /** When true, intermediate pairs from chain routes are auto-created on save */
+    let createIntermediatePairs = $state(false);
 
     // Dirty/discard state
     let showDiscardConfirm = $state(false);
@@ -66,8 +69,11 @@
 
     let hasCurrencies = $derived(!!baseCurrency && !!quoteCurrency && baseCurrency !== quoteCurrency);
     let hasRoutes = $derived(selectedRoutes.length > 0);
+    let hasChainRoutes = $derived(selectedRoutes.some(r => r.length > 1));
     let isValid = $derived(hasCurrencies);
     let isDirty = $derived(baseCurrency !== '' || quoteCurrency !== '' || selectedRoutes.length > 0);
+    /** Slugs of already-configured FX pairs for sorting chain routes */
+    let configuredPairSlugs = $derived(getRegisteredPairs());
 
     // =========================================================================
     // Handlers
@@ -89,32 +95,65 @@
             ? quoteCurrency.toUpperCase() : baseCurrency.toUpperCase();
 
         try {
-            if (selectedRoutes.length > 0) {
-                // Save with selected routes (each route has its own chain_steps)
-                const items = selectedRoutes.map((chainSteps, idx) => ({
+            // Build the main pair routes
+            const mainItems = selectedRoutes.length > 0
+                ? selectedRoutes.map((chainSteps, idx) => ({
                     base, quote,
                     chain_steps: chainSteps,
                     priority: idx + 1,
-                }));
-                await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(items);
-            } else {
-                // No routes selected — create MANUAL sentinel so the pair exists
-                // in routes and appears in the list. The backend auto-manages
-                // MANUAL: removes it when a real provider is added, reinstates when removed.
-                await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([{
+                }))
+                : [{
                     base, quote,
                     chain_steps: [{from: base, to: quote, provider: 'MANUAL'}],
                     priority: 999,
-                }]);
+                }];
+
+            // Collect intermediate pair routes if flag is on and there are chain routes
+            const intermediateItems: typeof mainItems = [];
+            if (createIntermediatePairs && selectedRoutes.some(r => r.length > 1)) {
+                const existingSlugs = new Set(configuredPairSlugs);
+                // Also include the main pair being created
+                existingSlugs.add(`${base}-${quote}`);
+                const added = new Set<string>(); // track to avoid duplicates across chains
+
+                for (const chainSteps of selectedRoutes) {
+                    for (const step of chainSteps) {
+                        const iBase = step.from < step.to ? step.from : step.to;
+                        const iQuote = step.from < step.to ? step.to : step.from;
+                        const slug = `${iBase}-${iQuote}`;
+                        if (existingSlugs.has(slug) || added.has(slug)) continue;
+                        // Skip if it's the same as the main pair
+                        if (iBase === base && iQuote === quote) continue;
+                        added.add(slug);
+                        intermediateItems.push({
+                            base: iBase, quote: iQuote,
+                            chain_steps: [{from: step.from, to: step.to, provider: step.provider}],
+                            priority: 1,
+                        });
+                    }
+                }
             }
+
+            // Create all routes in one bulk call
+            await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([
+                ...mainItems,
+                ...intermediateItems,
+            ]);
+
             // Auto-sync if real routes exist (not MANUAL-only)
             const hasRealProvider = selectedRoutes.length > 0;
             if (hasRealProvider && dateStart && dateEnd) {
                 syncing = true;
                 try {
-                    const slug = base < quote ? `${base}-${quote}` : `${quote}-${base}`;
+                    const mainSlug = base < quote ? `${base}-${quote}` : `${quote}-${base}`;
+                    const pairsToSync = [mainSlug];
+                    // Also sync newly created intermediate pairs
+                    for (const item of intermediateItems) {
+                        const iSlug = `${item.base}-${item.quote}`;
+                        pairsToSync.push(iSlug);
+                    }
                     await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                        pairs: [slug],
+                        pairs: pairsToSync,
                         start: dateStart,
                         end: dateEnd,
                     });
@@ -156,6 +195,7 @@
         baseCurrency = '';
         quoteCurrency = '';
         selectedRoutes = [];
+        createIntermediatePairs = false;
         error = null;
         showDiscardConfirm = false;
         onclose?.();
@@ -193,7 +233,7 @@
             <!-- Currency selection -->
             <!-- ========================================================= -->
             <div class="space-y-1.5">
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
+                <div class="flex flex-col sm:flex-row items-stretch gap-2">
                     <div class="flex-1">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.baseCurrency')}
@@ -211,11 +251,16 @@
                             }}
                         />
                     </div>
-                    <!-- Arrow: → on desktop, ↓ on mobile -->
-                    <span class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:mt-5">
-                        <ArrowRight size={18} class="hidden sm:block" />
-                        <ArrowDown size={18} class="sm:hidden" />
-                    </span>
+                    <!-- Arrow: → on desktop (invisible label + flex-1 for vertical centering), ↓ on mobile -->
+                    <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:flex flex-col items-center">
+                        <div class="text-xs font-medium invisible mb-1 select-none" aria-hidden="true">&nbsp;</div>
+                        <div class="flex-1 flex items-center justify-center px-1">
+                            <ArrowRight size={18} />
+                        </div>
+                    </div>
+                    <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:hidden">
+                        <ArrowDown size={18} />
+                    </div>
                     <div class="flex-1" bind:this={quoteSelectRef}>
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.quoteCurrency')}
@@ -256,7 +301,23 @@
                     bind:selectedRoutes
                     onSelectionChange={handleRoutesChange}
                     disabled={!hasCurrencies}
+                    {configuredPairSlugs}
                 />
+
+                <!-- Create intermediate pairs checkbox (visible only when chain routes are selected) -->
+                {#if hasChainRoutes}
+                    <label class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors">
+                        <input
+                            type="checkbox"
+                            bind:checked={createIntermediatePairs}
+                            class="mt-0.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green"
+                        />
+                        <div class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                            <span class="font-medium">{$_('fx.addPair.createIntermediatePairs')}</span>
+                            <p class="text-blue-500 dark:text-blue-400 mt-0.5">{$_('fx.addPair.createIntermediatePairsHint')}</p>
+                        </div>
+                    </label>
+                {/if}
             </div>
         </div>
 

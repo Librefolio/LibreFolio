@@ -53,6 +53,8 @@
         onSelectionChange?: (routes: ChainStep[][]) => void;
         language?: string;
         disabled?: boolean;
+        /** Slugs of already-configured FX pairs (e.g. ["EUR-USD","GBP-USD"]) for sorting */
+        configuredPairSlugs?: string[];
     }
 
     let {
@@ -62,6 +64,7 @@
         onSelectionChange,
         language = 'en',
         disabled = false,
+        configuredPairSlugs = [],
     }: Props = $props();
 
     // =========================================================================
@@ -130,11 +133,28 @@
     /** Unselected routes filtered by search */
     let filteredDirect = $derived(directRoutes.filter(r => !selectedKeys.has(r.key) && matchesSearch(r)));
 
-    /** Chain routes sorted: by provider count ascending, then alphabetically by key */
+    /** Set of configured pair slugs for fast lookup */
+    let configuredSet = $derived(new Set(configuredPairSlugs));
+
+    /** Count how many intermediate legs of a route are already configured pairs */
+    function countConfiguredLegs(route: RouteOption): number {
+        let count = 0;
+        for (const step of route.chainSteps) {
+            const slug = [step.from, step.to].sort().join('-');
+            if (configuredSet.has(slug)) count++;
+        }
+        return count;
+    }
+
+    /** Chain routes sorted: configured-legs desc, then step count asc, then unique providers asc, then key */
     let sortedChainRoutes = $derived(
         [...chainRoutes].sort((a, b) => {
             if (a.stepCount !== b.stepCount) return a.stepCount - b.stepCount;
-            // Within same step count, sort by unique provider count, then alphabetically
+            // Within same step count, prefer routes with more already-configured intermediate legs
+            const aConf = countConfiguredLegs(a);
+            const bConf = countConfiguredLegs(b);
+            if (aConf !== bConf) return bConf - aConf; // descending: more configured = first
+            // Then by unique provider count, then alphabetically
             const aUnique = new Set(a.providers).size;
             const bUnique = new Set(b.providers).size;
             if (aUnique !== bUnique) return aUnique - bUnique;

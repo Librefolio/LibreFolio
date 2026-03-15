@@ -49,6 +49,8 @@
     let elapsedMs = $state(0);
     let countdownInterval: ReturnType<typeof setInterval> | null = null;
     let hasResults = $derived(pairResults.length > 0);
+    /** Track previous open state to detect open transitions (closed→open only) */
+    let wasOpen = $state(false);
 
     const statusIcon: Record<string, typeof Check> = {
         ok: Check,
@@ -70,8 +72,10 @@
     let totalPointsChanged = $derived(pairResults.reduce((sum, r) => sum + (r.points_changed ?? 0), 0));
     let totalPointsFetched = $derived(pairResults.reduce((sum, r) => sum + (r.points_fetched ?? 0), 0));
 
+    // Reset state ONLY when modal transitions from closed → open (not on prop changes)
     $effect(() => {
-        if (open) {
+        const isOpen = open;
+        if (isOpen && !wasOpen) {
             pairResults = [];
             error = null;
             isTimeout = false;
@@ -80,6 +84,7 @@
             // but DB writes and chain computations scale with pair count)
             timeoutSec = Math.max(10, Math.ceil(pairs.length * 1));
         }
+        wasOpen = isOpen;
     });
 
     function startCountdown() {

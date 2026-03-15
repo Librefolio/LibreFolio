@@ -333,7 +333,9 @@
       "providerIncompatible": "Questo provider non supporta questa coppia",
       "saveConfiguration": "Salva Configurazione",
       "providerInfoBanner": "I provider recuperano automaticamente i tassi di cambio dalle banche centrali. Senza un provider, dovrai inserire i tassi manualmente.",
-      "noProviderWarning": "Nessun provider configurato. Dovrai inserire manualmente i tassi di cambio per ogni data."
+      "noProviderWarning": "Nessun provider configurato. Dovrai inserire manualmente i tassi di cambio per ogni data.",
+      "createIntermediatePairs": "Crea anche le coppie intermedie",
+      "createIntermediatePairsHint": "Ogni passaggio delle catene selezionate verrà salvato come coppia autonoma con il suo provider, così da poterle sincronizzare indipendentemente."
     },
     "provider": {
       "primary": "Primario",

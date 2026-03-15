@@ -6,8 +6,8 @@
  * - Edges = provider relationships (base → target, one per provider)
  *
  * Uses DFS with backtracking to find all possible conversion paths
- * between two currencies, respecting business constraints:
- * - No repeated edge pairs (same currency pair in any direction)
+ * between two currencies, producing only **simple paths** (no repeated nodes):
+ * - No node visited twice in a path (eliminates all cycles)
  * - Max 2 uses per provider per path
  *
  * The output ChainStep[] can be sent directly as chain_steps to the backend.
@@ -129,6 +129,11 @@ export function buildCurrencyGraph(
  * Each ChainStep[] output can be sent directly as chain_steps in
  * POST /fx/providers/routes — no transformation needed.
  *
+ * Produces only **simple paths** — no node is visited twice in a path.
+ * This eliminates redundant cycles (e.g. EUR→USD→GBP→EUR→RON where
+ * the round-trip EUR→USD→GBP→EUR is pointless) and guarantees each
+ * conversion chain is unique and optimal.
+ *
  * @param graph - MultiDirectedGraph built by buildCurrencyGraph
  * @param source - Source currency code (e.g. "RON")
  * @param target - Target currency code (e.g. "USD")
@@ -155,13 +160,13 @@ export function findAllPaths(
      *
      * @param currentNode - Current currency in the path
      * @param pathEdges - ChainSteps accumulated so far
-     * @param usedEdgePairs - Set of currency pairs already traversed ("EUR-USD")
+     * @param visitedNodes - Nodes already in the current path (prevents cycles)
      * @param providerUseCount - Map<provider, count> uses in current path
      */
     function dfs(
         currentNode: string,
         pathEdges: ChainStep[],
-        usedEdgePairs: Set<string>,
+        visitedNodes: Set<string>,
         providerUseCount: Map<string, number>,
     ): void {
         // Reached the target — record this path
@@ -177,10 +182,10 @@ export function findAllPaths(
          * Try advancing to a neighbor node via an edge.
          * Used for both outbound (native) and inbound (reverse) edges.
          */
-        function tryEdge(neighbor: string, edgeSrc: string, edgeTgt: string, provider: string): void {
-            // Constraint 1: same currency pair cannot appear twice (any direction, any provider)
-            const edgePair = [edgeSrc, edgeTgt].sort().join('-');
-            if (usedEdgePairs.has(edgePair)) return;
+        function tryEdge(neighbor: string, provider: string): void {
+            // Constraint 1: simple paths only — no revisiting nodes already in the path
+            // (target is allowed as the exit condition, it's not in visitedNodes)
+            if (visitedNodes.has(neighbor)) return;
 
             // Constraint 2: max 2 uses per provider per path
             const currentUses = providerUseCount.get(provider) ?? 0;
@@ -188,15 +193,15 @@ export function findAllPaths(
 
             // --- ADVANCE ---
             pathEdges.push({ from: currentNode, to: neighbor, provider });
-            usedEdgePairs.add(edgePair);
+            visitedNodes.add(neighbor);
             providerUseCount.set(provider, currentUses + 1);
 
             // RECURSE — explore from neighbor
-            dfs(neighbor, pathEdges, usedEdgePairs, providerUseCount);
+            dfs(neighbor, pathEdges, visitedNodes, providerUseCount);
 
             // --- BACKTRACK ---
             pathEdges.pop();
-            usedEdgePairs.delete(edgePair);
+            visitedNodes.delete(neighbor);
             if (currentUses === 0) {
                 providerUseCount.delete(provider);
             } else {
@@ -205,21 +210,21 @@ export function findAllPaths(
         }
 
         // ── Outbound edges (NATIVE direction: currentNode → neighbor) ──
-        graph.forEachOutboundEdge(currentNode, (_edgeKey, attrs, src, tgt) => {
-            tryEdge(tgt, src, tgt, attrs.provider);
+        graph.forEachOutboundEdge(currentNode, (_edgeKey, attrs, _src, tgt) => {
+            tryEdge(tgt, attrs.provider);
         });
 
         // ── Inbound edges (REVERSE direction: currentNode ← source) ──
         // The edge in the graph is src→currentNode, but we traverse it backwards.
-        graph.forEachInboundEdge(currentNode, (_edgeKey, attrs, src, tgt) => {
+        graph.forEachInboundEdge(currentNode, (_edgeKey, attrs, src, _tgt) => {
             // src = edge origin (e.g. EUR), tgt = currentNode (e.g. USD)
             // neighbor = src (going towards EUR)
-            tryEdge(src, src, tgt, attrs.provider);
+            tryEdge(src, attrs.provider);
         });
     }
 
-    // Start DFS from source
-    dfs(source, [], new Set(), new Map());
+    // Start DFS from source — mark source as visited (can't return to it)
+    dfs(source, [], new Set([source]), new Map());
 
     // Sort by path length (shortest first)
     validPaths.sort((a, b) => a.length - b.length);
