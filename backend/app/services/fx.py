@@ -170,6 +170,22 @@ class FXRateProvider(ABC):
         return {"en": self.description}
 
     @property
+    def warning_i18n(self) -> dict[str, str]:
+        """
+        Multilingual provider warnings/caveats.
+
+        Override in subclasses to surface data-quality warnings to the user.
+        When non-empty, the frontend displays a ⚠️ triangle on routes using
+        this provider, with a tooltip showing the warning text.
+
+        Default: empty dict (no warning).
+
+        Returns:
+            Dict[str, str] — e.g. {"en": "...", "it": "...", ...}
+        """
+        return {}
+
+    @property
     def docs_url(self) -> str | None:
         """
         URL to the documentation page for this provider.
@@ -691,7 +707,12 @@ def compute_chain_rate(
     - If from_cur < to_cur (direct order): multiply by rate
     - If from_cur > to_cur (inverse order): multiply by 1/rate
 
-    Returns: composite rate, or None if any leg is missing.
+    **Strict date matching**: ALL legs must have data for the exact target_date.
+    If any leg is missing, returns None and this date is skipped.
+    This means chains using providers with sparse data (e.g. SNB monthly)
+    will only produce rates on dates where every leg has fresh data.
+
+    Returns: composite rate, or None if any leg is missing for this date.
     """
     composite = Decimal("1")
     for step in steps:

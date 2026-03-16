@@ -66,6 +66,7 @@ class FXProviderInfo(BaseModel):
     target_currencies: list[str] = Field(default_factory=list, description="All target currencies this provider can convert to (from get_supported_currencies)")
     description: str = Field(..., description="Provider description")
     description_i18n: dict[str, str] = Field(default_factory=dict, description="Multilingual provider descriptions {lang_code: description}")
+    warning_i18n: dict[str, str] = Field(default_factory=dict, description="Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning.")
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
     docs_url: Optional[str] = Field(None, description="URL to documentation page for this provider")
 

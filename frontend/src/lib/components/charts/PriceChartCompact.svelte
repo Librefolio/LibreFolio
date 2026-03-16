@@ -20,6 +20,8 @@
         colorByBaseline?: boolean;
         /** Show grid lines */
         showGridLines?: boolean;
+        /** Show stale-data gradient (per-point opacity). Default: false for compact */
+        showGradient?: boolean;
         /** Overlay signals to render as additional line series */
         overlaySignals?: RenderedSignal[];
     }
@@ -32,6 +34,7 @@
         showMiniAxis = true,
         colorByBaseline,
         showGridLines,
+        showGradient = false,
         overlaySignals = [],
     }: Props = $props();
 
@@ -45,7 +48,7 @@
     areaFill={areaFill}
     compact={true}
     {showMiniAxis}
-    showGradient={false}
+    showGradient={showGradient}
     colorByBaseline={effectiveColorByBaseline}
     showGridLines={showGridLines}
     {viewMode}

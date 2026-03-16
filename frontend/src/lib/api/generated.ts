@@ -3361,6 +3361,12 @@ const FXProviderInfo = z
       .record(z.string())
       .describe("Multilingual provider descriptions {lang_code: description}")
       .optional(),
+    warning_i18n: z
+      .record(z.string())
+      .describe(
+        "Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning."
+      )
+      .optional(),
     icon_url: z
       .union([z.string(), z.null()])
       .describe("Provider icon URL (hardcoded)")
