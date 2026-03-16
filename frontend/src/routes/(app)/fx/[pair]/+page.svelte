@@ -30,7 +30,8 @@
     import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
     import {signalFromConfig} from '$lib/charts/signals';
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {getCurrencyInfo, ensureCurrenciesLoaded, isCurrenciesLoaded} from '$lib/stores/currencyStore';
+    import {currentLanguage} from '$lib/stores/language';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {
         getFxStore, apiResultToFxDataPoint, getRegisteredPairs,
@@ -95,6 +96,9 @@
     let pendingEditPoints: LineDataPoint[] = $state([]);
     let savingEdit = $state(false);
 
+    // Panel states before edit mode (to restore when exiting)
+    let savedPanelStates: {aesthetics: boolean; measures: boolean; signals: boolean} | null = $state(null);
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -142,9 +146,6 @@
     /** Combined overlay signals: computed from settings + measure signals */
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals]);
 
-    let baseFlag = $derived(getCurrencyInfo(displayBase).flag_emoji);
-    let quoteFlag = $derived(getCurrencyInfo(displayQuote).flag_emoji);
-
     let configuredPairSlugs = $derived(getRegisteredPairs());
 
     // Provider config: build editRoutes for the modal
@@ -157,8 +158,20 @@
     // =========================================================================
 
     onMount(async () => {
-        await Promise.all([loadChartData(), loadProviders(), loadAvailableProviders()]);
+        await Promise.all([
+            ensureCurrenciesLoaded(get(currentLanguage)),
+            loadChartData(),
+            loadProviders(),
+            loadAvailableProviders(),
+        ]);
+        // Force flag reactivity after currencies load
+        flagVersion++;
     });
+
+    // Trigger flag re-evaluation when currencies finish loading
+    let flagVersion = $state(0);
+    let baseFlag = $derived.by(() => { void flagVersion; return getCurrencyInfo(displayBase).flag_emoji; });
+    let quoteFlag = $derived.by(() => { void flagVersion; return getCurrencyInfo(displayQuote).flag_emoji; });
 
     // ResizeObserver for adaptive filter bar layout (same breakpoints as FX list page)
     $effect(() => {
@@ -166,10 +179,10 @@
         if (!el) return;
         const ro = new ResizeObserver(([entry]) => {
             const w = entry.contentRect.width;
-            if (w >= 900) layoutMode = 'wide';
-            else if (w >= 610) layoutMode = 'tablet';
+            if (w >= 810) layoutMode = 'wide';
+            else if (w >= 550) layoutMode = 'tablet';
             else layoutMode = 'mobile';
-            showActionLabels = w >= 690;
+            showActionLabels = w >= 600;
         });
         ro.observe(el);
         return () => ro.disconnect();
@@ -446,23 +459,18 @@
                 />
             </div>
 
-            <!-- Pair Summary (rate + delta + date) -->
+            <!-- Pair Summary (rate + delta) — no date, already in DateRangePicker -->
             {#if lastRate !== null}
-                <div class="flex items-center gap-3 px-3 {layoutMode === 'wide' ? 'border-l border-r border-gray-200 dark:border-slate-600' : ''}">
-                    <div class="text-center">
-                        <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
-                            {lastRate.toFixed(4)}
+                <div class="flex items-center gap-2 px-3 {layoutMode === 'wide' ? 'border-l border-r border-gray-200 dark:border-slate-600' : ''}">
+                    <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
+                        {lastRate.toFixed(4)}
+                    </span>
+                    {#if deltaPercent !== null}
+                        <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                            {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
+                            {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
                         </span>
-                        {#if deltaPercent !== null}
-                            <div class="flex items-center justify-center gap-1 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                                {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
-                                {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
-                            </div>
-                        {/if}
-                        {#if lastDate}
-                            <div class="text-[10px] text-gray-400 dark:text-gray-500">{lastDate}</div>
-                        {/if}
-                    </div>
+                    {/if}
                 </div>
             {/if}
         </div>
@@ -582,7 +590,26 @@
                         class="p-1.5 rounded-lg transition-colors {showDataEditor
                             ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-600 hover:text-amber-600'}"
-                        onclick={() => showDataEditor = !showDataEditor}
+                        onclick={() => {
+                            if (showDataEditor) {
+                                // Exiting edit mode: hide editor, restore panel states
+                                showDataEditor = false;
+                                pendingEditPoints = [];
+                                if (savedPanelStates) {
+                                    showAesthetics = savedPanelStates.aesthetics;
+                                    showMeasures = savedPanelStates.measures;
+                                    showSignals = savedPanelStates.signals;
+                                    savedPanelStates = null;
+                                }
+                            } else {
+                                // Entering edit mode: save panel states, fold all, show editor
+                                savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
+                                showAesthetics = false;
+                                showMeasures = false;
+                                showSignals = false;
+                                showDataEditor = true;
+                            }
+                        }}
                         title={showDataEditor ? 'Close editor' : 'Edit rates'}
                     >
                         <Pencil size={16} />
@@ -693,7 +720,16 @@
                 </span>
                 <button
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    onclick={() => { showDataEditor = false; pendingEditPoints = []; }}
+                    onclick={() => {
+                        showDataEditor = false;
+                        pendingEditPoints = [];
+                        if (savedPanelStates) {
+                            showAesthetics = savedPanelStates.aesthetics;
+                            showMeasures = savedPanelStates.measures;
+                            showSignals = savedPanelStates.signals;
+                            savedPanelStates = null;
+                        }
+                    }}
                     title="Close editor"
                 >✕</button>
             </div>
@@ -703,8 +739,26 @@
                     quote={displayQuote}
                     {chartData}
                     bind:saving={savingEdit}
-                    onsave={async () => { await handleRefresh(); showDataEditor = false; }}
-                    oncancel={() => { showDataEditor = false; pendingEditPoints = []; }}
+                    onsave={async () => {
+                        await handleRefresh();
+                        showDataEditor = false;
+                        if (savedPanelStates) {
+                            showAesthetics = savedPanelStates.aesthetics;
+                            showMeasures = savedPanelStates.measures;
+                            showSignals = savedPanelStates.signals;
+                            savedPanelStates = null;
+                        }
+                    }}
+                    oncancel={() => {
+                        showDataEditor = false;
+                        pendingEditPoints = [];
+                        if (savedPanelStates) {
+                            showAesthetics = savedPanelStates.aesthetics;
+                            showMeasures = savedPanelStates.measures;
+                            showSignals = savedPanelStates.signals;
+                            savedPanelStates = null;
+                        }
+                    }}
                     onpendingchange={(points) => pendingEditPoints = points}
                 />
             </div>

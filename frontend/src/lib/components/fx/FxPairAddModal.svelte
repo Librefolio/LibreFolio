@@ -75,14 +75,46 @@
     // Dirty/discard state
     let showDiscardConfirm = $state(false);
 
-    // Populate state when editMode opens
+    // Populate state when editMode opens, and load routes from backend
+    let loadingRoutes = $state(false);
+
     $effect(() => {
         if (open && editMode && editBase && editQuote) {
             baseCurrency = editBase;
             quoteCurrency = editQuote;
-            selectedRoutes = editRoutes.length > 0 ? [...editRoutes] : [];
+            // Load actual routes from backend for pre-existing pair
+            loadRoutesFromBackend();
         }
     });
+
+    async function loadRoutesFromBackend() {
+        if (!editMode || !editBase || !editQuote) return;
+        loadingRoutes = true;
+        try {
+            const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
+            const items = (response as any)?.items || [];
+            const pairRoutes = items
+                .filter((i: any) =>
+                    ((i.base === editBase && i.quote === editQuote) ||
+                    (i.base === editQuote && i.quote === editBase)) &&
+                    !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')
+                )
+                .sort((a: any, b: any) => a.priority - b.priority);
+            if (pairRoutes.length > 0) {
+                selectedRoutes = pairRoutes.map((r: any) => r.chain_steps ?? []);
+            } else if (editRoutes.length > 0) {
+                selectedRoutes = [...editRoutes];
+            } else {
+                selectedRoutes = [];
+            }
+        } catch (e) {
+            console.error('Failed to load routes for edit mode:', e);
+            // Fallback to prop
+            selectedRoutes = editRoutes.length > 0 ? [...editRoutes] : [];
+        } finally {
+            loadingRoutes = false;
+        }
+    }
 
     // =========================================================================
     // Derived
@@ -285,15 +317,8 @@
             {/if}
 
             <!-- ========================================================= -->
-            <!-- Currency selection (hidden in editMode — currencies are fixed) -->
+            <!-- Currency selection — in editMode: disabled (readonly with flags) -->
             <!-- ========================================================= -->
-            {#if editMode}
-                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{baseCurrency}</span>
-                    <ArrowLeftRight size={14} class="text-gray-400" />
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{quoteCurrency}</span>
-                </div>
-            {:else}
             <div class="space-y-1.5">
                 <div class="flex flex-col sm:flex-row items-stretch gap-2">
                     <div class="flex-1 min-w-0">
@@ -303,21 +328,21 @@
                         <CurrencySearchSelect
                             bind:value={baseCurrency}
                             placeholder={$_('fx.addPair.baseCurrency')}
-                            excludedCurrencies={excludedForBase}
+                            excludedCurrencies={editMode ? new Set() : excludedForBase}
+                            disabled={editMode}
                             onchange={() => {
-                                // Auto-focus the quote currency select after picking base
-                                setTimeout(() => {
-                                    const trigger = quoteSelectRef?.querySelector<HTMLElement>('[tabindex], input');
-                                    trigger?.focus();
-                                    // Only open dropdown if quote is not yet set
-                                    if (!quoteCurrency) {
-                                        trigger?.click();
-                                    }
-                                }, 30);
+                                if (!editMode) {
+                                    // Auto-focus the quote currency select after picking base
+                                    setTimeout(() => {
+                                        const trigger = quoteSelectRef?.querySelector<HTMLElement>('[tabindex], input');
+                                        trigger?.focus();
+                                        if (!quoteCurrency) trigger?.click();
+                                    }, 30);
+                                }
                             }}
                         />
                     </div>
-                    <!-- Arrow: ↔ on desktop (invisible label + flex-1 for vertical centering), ↕ on mobile -->
+                    <!-- Arrow: ↔ on desktop, ↕ on mobile -->
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:flex flex-col items-center">
                         <div class="text-xs font-medium invisible mb-1 select-none" aria-hidden="true">&nbsp;</div>
                         <div class="flex-1 flex items-center justify-center px-1">
@@ -334,12 +359,12 @@
                         <CurrencySearchSelect
                             bind:value={quoteCurrency}
                             placeholder={$_('fx.addPair.quoteCurrency')}
-                            excludedCurrencies={excludedForQuote}
+                            excludedCurrencies={editMode ? new Set() : excludedForQuote}
+                            disabled={editMode}
                         />
                     </div>
                 </div>
             </div>
-            {/if}
 
             <!-- Info banner: explain provider role (always visible) -->
             <InfoBanner variant="info">
