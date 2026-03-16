@@ -13,11 +13,12 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {Ruler, Trash2} from 'lucide-svelte';
+    import {Ruler, Trash2, ChevronDown, Info} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
     import type {MeasurementResult} from '$lib/charts/signals/MeasureSignal';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
 
     // =========================================================================
     // Props
@@ -56,6 +57,10 @@
     let pendingStartValue: number | null = $state(null);
     let measureActive = $state(false);
     let nextId = $state(0);
+    /** Track which measure cards are expanded */
+    let expandedIds = $state<Set<string>>(new Set());
+
+    const annualizedTooltipHtml = `<strong>Annualized Return (Δ%/yr)</strong><br/><br/>Computes the equivalent yearly return assuming compound growth over the measurement period.<br/><br/>$\\Delta\\%_{\\text{yr}} = \\left(1 + \\frac{\\Delta\\%}{100}\\right)^{\\frac{365}{\\text{days}}} - 1$<br/><br/>where <em>Δ%</em> is the period return and <em>days</em> is the duration.`;
 
     // =========================================================================
     // Measure mode
@@ -166,87 +171,100 @@
         </div>
     {/if}
 
-    <!-- Measures list -->
+    <!-- Measure cards (unified: summary header + expandable table) -->
     {#if measures.length > 0}
-        <div class="space-y-1.5">
+        <div class="space-y-2">
             {#each measurements as {measure, result}}
-                <div class="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-slate-700/50 border border-gray-100 dark:border-slate-700">
-                    <span class="text-xs font-mono text-gray-600 dark:text-gray-300">
-                        📏 {measure.params.startDate} → {measure.params.endDate}
-                        {#if result}
-                            <span class="ml-2 {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                                {fmtPct(result.deltaPct)}
-                            </span>
-                            <span class="text-gray-400 dark:text-gray-500 ml-1">· {result.days}d</span>
-                        {/if}
-                    </span>
-                    <button
-                        class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
-                        title="Remove"
-                        onclick={() => removeMeasure(measure.id)}
+                {@const isExpanded = expandedIds.has(measure.id)}
+                <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                    <!-- Card header: clickable summary -->
+                    <div class="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
+                                hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                         onclick={() => {
+                             const next = new Set(expandedIds);
+                             if (next.has(measure.id)) next.delete(measure.id);
+                             else next.add(measure.id);
+                             expandedIds = next;
+                         }}
+                         role="button"
+                         tabindex="0"
                     >
-                        <Trash2 size={13} />
-                    </button>
+                        <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300">
+                            <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
+                            📏 {measure.params.startDate} → {measure.params.endDate}
+                            {#if result}
+                                <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                    {fmtPct(result.deltaPct)}
+                                </span>
+                                <span class="text-gray-400 dark:text-gray-500">· {result.days}d</span>
+                            {/if}
+                        </span>
+                        <button
+                            class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
+                            title="Remove"
+                            onclick={(e) => { e.stopPropagation(); removeMeasure(measure.id); }}
+                        >
+                            <Trash2 size={13} />
+                        </button>
+                    </div>
+
+                    <!-- Expanded content: summary table -->
+                    {#if isExpanded && result}
+                        <table class="w-full text-xs border-t border-gray-200 dark:border-slate-600">
+                            <thead>
+                                <tr class="bg-gray-50/50 dark:bg-slate-700/30">
+                                    <th class="px-3 py-1.5 text-left text-gray-500 dark:text-gray-400 font-medium">Signal</th>
+                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Start</th>
+                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">End</th>
+                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Δ Abs</th>
+                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Δ %</th>
+                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">
+                                        <span class="inline-flex items-center gap-0.5">
+                                            Δ%/yr
+                                            <Tooltip html={annualizedTooltipHtml} math={true} position="top" maxWidth="350px">
+                                                <Info size={11} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
+                                            </Tooltip>
+                                        </span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Main data row -->
+                                <tr class="border-t border-gray-100 dark:border-slate-700/50">
+                                    <td class="px-3 py-1.5 font-medium text-gray-700 dark:text-gray-200">{pairLabel}</td>
+                                    <td class="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{fmtValue(result.startValue)}</td>
+                                    <td class="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{fmtValue(result.endValue)}</td>
+                                    <td class="px-2 py-1.5 text-right font-mono {result.deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtDelta(result.deltaAbs)}</td>
+                                    <td class="px-2 py-1.5 text-right font-mono {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(result.deltaPct)}</td>
+                                    <td class="px-2 py-1.5 text-right font-mono {result.annualizedPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(result.annualizedPct)}</td>
+                                </tr>
+                                <!-- Signal rows -->
+                                {#each overlaySignals.filter(s => s.data.length > 0 && (s.yAxisIndex ?? 0) === 0) as signal}
+                                    {#if true}
+                                        {@const sigResult = measure.getMeasurementForSignal(signal.data)}
+                                        {#if sigResult}
+                                            <tr class="border-t border-gray-100 dark:border-slate-700/50">
+                                                <td class="px-3 py-1.5 text-gray-600 dark:text-gray-300">
+                                                    <span style="color: {signal.color}">●</span> {signal.label}
+                                                </td>
+                                                <td class="px-2 py-1.5 text-right font-mono text-gray-500 dark:text-gray-400">{fmtValue(sigResult.startValue)}</td>
+                                                <td class="px-2 py-1.5 text-right font-mono text-gray-500 dark:text-gray-400">{fmtValue(sigResult.endValue)}</td>
+                                                <td class="px-2 py-1.5 text-right font-mono {sigResult.deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtDelta(sigResult.deltaAbs)}</td>
+                                                <td class="px-2 py-1.5 text-right font-mono {sigResult.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(sigResult.deltaPct)}</td>
+                                                <td class="px-2 py-1.5 text-right font-mono text-gray-400">—</td>
+                                            </tr>
+                                        {/if}
+                                    {/if}
+                                {/each}
+                            </tbody>
+                        </table>
+                    {/if}
                 </div>
             {/each}
         </div>
-    {/if}
-
-    <!-- Summary table -->
-    {#if hasResults}
-        {#each measurements as {measure, result}}
-            {#if result}
-                <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                    <div class="px-3 py-1.5 bg-gray-50 dark:bg-slate-700/50 text-xs font-medium text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-slate-600">
-                        📏 {result.startDate} → {result.endDate} · {result.days} days
-                    </div>
-                    <table class="w-full text-xs">
-                        <thead>
-                            <tr class="bg-gray-50/50 dark:bg-slate-700/30">
-                                <th class="px-3 py-1.5 text-left text-gray-500 dark:text-gray-400 font-medium">Signal</th>
-                                <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Start</th>
-                                <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">End</th>
-                                <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Δ Abs</th>
-                                <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Δ %</th>
-                                <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Δ%/yr</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Main data row -->
-                            <tr class="border-t border-gray-100 dark:border-slate-700/50">
-                                <td class="px-3 py-1.5 font-medium text-gray-700 dark:text-gray-200">{pairLabel}</td>
-                                <td class="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{fmtValue(result.startValue)}</td>
-                                <td class="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{fmtValue(result.endValue)}</td>
-                                <td class="px-2 py-1.5 text-right font-mono {result.deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtDelta(result.deltaAbs)}</td>
-                                <td class="px-2 py-1.5 text-right font-mono {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(result.deltaPct)}</td>
-                                <td class="px-2 py-1.5 text-right font-mono {result.annualizedPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(result.annualizedPct)}</td>
-                            </tr>
-                            <!-- Signal rows -->
-                            {#each overlaySignals.filter(s => s.data.length > 0 && (s.yAxisIndex ?? 0) === 0) as signal}
-                                {#if true}
-                                    {@const sigResult = measure.getMeasurementForSignal(signal.data)}
-                                    {#if sigResult}
-                                        <tr class="border-t border-gray-100 dark:border-slate-700/50">
-                                            <td class="px-3 py-1.5 text-gray-600 dark:text-gray-300">
-                                                <span style="color: {signal.color}">●</span> {signal.label}
-                                            </td>
-                                            <td class="px-2 py-1.5 text-right font-mono text-gray-500 dark:text-gray-400">{fmtValue(sigResult.startValue)}</td>
-                                            <td class="px-2 py-1.5 text-right font-mono text-gray-500 dark:text-gray-400">{fmtValue(sigResult.endValue)}</td>
-                                            <td class="px-2 py-1.5 text-right font-mono {sigResult.deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtDelta(sigResult.deltaAbs)}</td>
-                                            <td class="px-2 py-1.5 text-right font-mono {sigResult.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(sigResult.deltaPct)}</td>
-                                            <td class="px-2 py-1.5 text-right font-mono text-gray-400">—</td>
-                                        </tr>
-                                    {/if}
-                                {/if}
-                            {/each}
-                        </tbody>
-                    </table>
-                </div>
-            {/if}
-        {/each}
-    {:else if measures.length === 0}
+    {:else if !measureActive}
         <p class="text-xs text-gray-400 dark:text-gray-500 italic">
-            No measures. Click "Add Measure" then click two points on the chart.
+            No measures. Click the 📏 ruler icon on the chart to add a measurement.
         </p>
     {/if}
 </div>

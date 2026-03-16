@@ -293,6 +293,37 @@
 
                 if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
                     const markData: any[] = [];
+                    // For measure signals (exactly 2 non-null points), compute arrow rotation
+                    // from the segment slope rather than neighboring data points
+                    const nonNullIndices: number[] = [];
+                    for (let i = 0; i < signalSeriesData.length; i++) {
+                        if (signalSeriesData[i] !== null) nonNullIndices.push(i);
+                    }
+                    const isMeasureSegment = nonNullIndices.length === 2;
+
+                    /** Compute rotation for a 2-point measure segment */
+                    function measureSegmentRotation(isStart: boolean): number {
+                        if (!isMeasureSegment) return 0;
+                        const [i0, i1] = nonNullIndices;
+                        const v0 = signalSeriesData[i0] as number;
+                        const v1 = signalSeriesData[i1] as number;
+                        const dx = i1 - i0;
+                        // Approximate Y scale to match chart aspect ratio
+                        const allVals = signalSeriesData.filter((v: any): v is number => v !== null);
+                        const mainVals = displayData.map(d => d.value);
+                        const yMin = Math.min(...mainVals);
+                        const yMax = Math.max(...mainVals);
+                        const yRange = yMax - yMin || 1;
+                        const xRange = Math.max(signalSeriesData.length, 1);
+                        const yScale = (xRange * 0.25) / yRange;
+                        const dy = (v1 - v0) * yScale;
+                        // Arrow points in the direction from start to end
+                        const angleRad = Math.atan2(-dy, dx);
+                        let angleDeg = (angleRad * 180) / Math.PI;
+                        if (isStart) angleDeg += 180;
+                        return angleDeg + 90; // ECharts arrow points UP by default
+                    }
+
                     if (signal.markerStart) {
                         for (let i = 0; i < signalSeriesData.length; i++) {
                             if (signalSeriesData[i] !== null) {
@@ -300,7 +331,9 @@
                                     coord: [dates[i], signalSeriesData[i]],
                                     symbol: signal.markerStart,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
-                                    symbolRotate: signal.markerStart === 'arrow' ? computeArrowRotationHelper(signalSeriesData, i, true) : 0,
+                                    symbolRotate: signal.markerStart === 'arrow'
+                                        ? (isMeasureSegment ? measureSegmentRotation(true) : computeArrowRotationHelper(signalSeriesData, i, true))
+                                        : 0,
                                     itemStyle: {color: signal.color},
                                 });
                                 break;
@@ -314,7 +347,9 @@
                                     coord: [dates[i], signalSeriesData[i]],
                                     symbol: signal.markerEnd,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
-                                    symbolRotate: signal.markerEnd === 'arrow' ? computeArrowRotationHelper(signalSeriesData, i, false) : 0,
+                                    symbolRotate: signal.markerEnd === 'arrow'
+                                        ? (isMeasureSegment ? measureSegmentRotation(false) : computeArrowRotationHelper(signalSeriesData, i, false))
+                                        : 0,
                                     itemStyle: {color: signal.color},
                                 });
                                 break;
@@ -341,23 +376,6 @@
                 emphasis: {disabled: true}, tooltip: {show: false}, silent: true, z: 0,
             });
         }
-
-        // Overview series (grid[1]) — simplified line (always absolute)
-        const overviewValues = data.map(d => d.value);
-        series.push({
-            type: 'line', name: '__overview__',
-            data: overviewValues,
-            xAxisIndex: 1, yAxisIndex: 3,
-            smooth: true, symbol: 'none',
-            lineStyle: {width: 1, color: baseColor, opacity: 0.5},
-            areaStyle: {
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    {offset: 0, color: isDark ? 'rgba(74,222,128,0.15)' : 'rgba(26,64,49,0.1)'},
-                    {offset: 1, color: 'transparent'},
-                ]),
-            },
-            tooltip: {show: false}, silent: true,
-        });
 
         // Check which overlay axes are active
         const hasSecondaryAxis = overlaySignals.some(s => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
@@ -390,12 +408,10 @@
         const option: echarts.EChartsOption = {
             animation: false,
             grid: [
-                {top: 20, right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12, bottom: 80, left: 10, containLabel: true},
-                {left: 50, right: 50, bottom: 10, height: 40},
+                {top: 20, right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12, bottom: 50, left: 10, containLabel: true},
             ],
             xAxis: [
                 {type: 'category', data: dates, gridIndex: 0, axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}}, axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11}, splitLine: {show: false}},
-                {type: 'category', data: dates, gridIndex: 1, show: false},
             ],
             yAxis: [
                 {type: 'value', gridIndex: 0, position: 'left', min: effectiveMin, max: effectiveMax,
@@ -415,15 +431,14 @@
                     axisLine: {show: hasTertiaryAxis, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}}, axisTick: {show: hasTertiaryAxis},
                     axisLabel: {show: hasTertiaryAxis, color: isDark ? '#a78bfa' : '#7c3aed', fontSize: 10, formatter: (v: number) => Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(4).replace(/\.?0+$/, '')},
                     splitLine: {show: false}, scale: hasTertiaryAxis},
-                {type: 'value', gridIndex: 1, show: false, scale: true},
             ],
             dataZoom: [
-                {type: 'slider', xAxisIndex: [0, 1], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, bottom: 10, height: 40,
+                {type: 'slider', xAxisIndex: [0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, bottom: 5, height: 25,
                     borderColor: isDark ? '#475569' : '#d1d5db', backgroundColor: 'transparent',
                     fillerColor: isDark ? 'rgba(74,222,128,0.1)' : 'rgba(26,64,49,0.08)',
                     handleStyle: {color: isDark ? '#4ade80' : '#1a4031'},
                     textStyle: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 10}, brushSelect: false},
-                {type: 'inside', xAxisIndex: [0, 1], zoomOnMouseWheel: true, moveOnMouseMove: true},
+                {type: 'inside', xAxisIndex: [0], zoomOnMouseWheel: true, moveOnMouseMove: true},
             ],
             tooltip: {
                 trigger: 'axis', appendToBody: true,
@@ -503,7 +518,7 @@
             <div
                 bind:this={chartContainer}
                 class="w-full"
-                style="height: calc({chartHeight} + {overviewHeight});"
+                style="height: {chartHeight};"
                 class:cursor-crosshair={measureMode}
             ></div>
         {:else}
