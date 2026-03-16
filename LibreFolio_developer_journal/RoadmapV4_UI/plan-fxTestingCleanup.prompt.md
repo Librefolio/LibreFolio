@@ -4,7 +4,7 @@
 **Status**: 📋 ACCENNATO — da dettagliare a sviluppi completati
 **Priorità**: Alta (zero copertura E2E FX attualmente)
 **Stima**: ~3 giorni
-**Dipendenze**: `plan-fxConversionChain.prompt.md` + `plan-fxDetailPage.prompt.md` completati
+**Dipendenze**: `plan-fxConversionChain.prompt.md` + `plan-fxDetailPageRedesign.prompt.md` completati
 **Riferimenti**:
 - `phases/phase-05-subplan/05FX_outofdate_plan/plan-phase05Fx.prompt.md` Steps 1, 9 — test pendenti
 - `phases/phase-05-subplan/05FX_outofdate_plan/phase05-pending-audit.md` §C (Testing/Cleanup)
