@@ -761,7 +761,7 @@ Aggiungere chiavi via `./dev.py i18n add` (EN/IT/FR/ES):
 
 ## Bug Report — Post-Redesign Feedback (16 Marzo 2026)
 
-### Bug Immediati (fix isolati)
+### Bug Immediati (fix isolati) — Round 1
 
 | # | Bug | Severità | File | Fix | Status |
 |---|-----|----------|------|-----|--------|
@@ -773,16 +773,26 @@ Aggiungere chiavi via `./dev.py i18n add` (EN/IT/FR/ES):
 | **B10** | **Titolo "Measures" duplicato** — compare sia nel foldable header che dentro MeasurePanel | 🟢 Bassa | `MeasurePanel.svelte` | Rimuovere `<h4>Measures</h4>` interno al MeasurePanel | ✅ |
 | **B11** | **"Add Measure" nel panel vs chart** — bottone nel panel ridondante con icona Ruler overlay chart. Click su Ruler deve attivare subito add-measure | 🟢 Bassa | `MeasurePanel.svelte`, `+page.svelte` detail | Rimuovere bottone Add dal panel, Ruler overlay chart attiva measure mode + apre panel | ✅ |
 
+### Bug Immediati — Round 2 (16 Marzo 2026)
+
+| # | Bug | Severità | File | Fix | Status |
+|---|-----|----------|------|-----|--------|
+| **B15** | **Pair summary layout** — rate e % devono stare sulla stessa riga orizzontale, la data non serve (già nel DateRangePicker) | 🟡 Media | `+page.svelte` detail | Rate e Δ% inline, rimossa data | ✅ |
+| **B16** | **Bandiere bianche su F5** — su refresh diretto le bandiere sono 🏳️ perché `ensureCurrenciesLoaded` non è chiamata | 🟠 Alta | `+page.svelte` detail | Aggiunto `ensureCurrenciesLoaded(lang)` in `onMount` + flagVersion per reactivity | ✅ |
+| **B17** | **Overview chart inutile** — il secondo diagramma (grid[1] + dataZoom slider overview) non aggiunge valore e occupa spazio | 🟡 Media | `PriceChartFull.svelte` | Rimosso grid[1], overview series, quarto yAxis; dataZoom slider compatto bottom | ✅ |
+| **B18** | **FxPairAddModal editMode: testo plain** — in editMode mostra testo "EUR ↔ USD" senza bandiere; deve usare CurrencySearchSelect disabled | 🟠 Alta | `FxPairAddModal.svelte` | Rimosso blocco if/else; sempre CurrencySearchSelect, con `disabled={editMode}` | ✅ |
+| **B19** | **FxPairAddModal editMode: routes vuoti** — i conversion routes non pre-caricano la configurazione dal backend | 🟠 Alta | `FxPairAddModal.svelte` | Aggiunta `loadRoutesFromBackend()` che fa fetch da API e popola selectedRoutes | ✅ |
+| **B20** | **Freccia misura punta su** — la freccia finale del segmento measure guarda sempre verso l'alto invece di seguire la pendenza del segmento | 🟡 Media | `PriceChartFull.svelte` | Per segmenti a 2 punti (measure), calcolo rotazione dal slope start→end, non dai neighbor | ✅ |
+| **B21** | **MeasurePanel: items duplicati** — lista misure e tabelle erano separate; ora unificati in card espandibili con summary header + tabella | 🟠 Alta | `MeasurePanel.svelte` | Ogni misura = card cliccabile con chevron, espande per mostrare tabella riepilogo | ✅ |
+| **B22** | **Δ%/yr senza spiegazione** — aggiunto icona ℹ con Tooltip + formula LaTeX (KaTeX) per Δ%/yr | 🟢 Bassa | `MeasurePanel.svelte` | Tooltip con `math={true}` e formula annualizzazione composta | ✅ |
+| **B23** | **Edit mode: pannelli non si foldano** — premendo pencil, tutti i pannelli devono chiudersi e il Data Editor deve apparire; uscendo si ripristinano | 🟡 Media | `+page.svelte` detail | `savedPanelStates` salva/ripristina stato pannelli; close/cancel/save tutti ripristinano | ✅ |
+
 ### Bug Deferred (prossimo sprint)
 
 | # | Bug | Severità | File | Fix | Note |
 |---|-----|----------|------|-----|------|
-| **B4** | **Pencil click UX non chiaro** — click apre panel editor ma l'utente si aspetta azione più diretta | 🟡 Media | `+page.svelte` detail | Scroll-into-view del panel + eventuale focus textarea | Richiede decisione UX |
-| **B5** | **Measure card non mostra tutto insieme** — orizzonte temporale, stile linea, summary table dovrebbero essere un'unica card per misura | 🟠 Alta | `MeasurePanel.svelte` | Redesign: ogni misura = card accordion con header+stile+tabella | ~2h, refactor MeasurePanel |
 | **B6** | **Nessuna preview tra 1° e 2° click** — manca preview segnale e dati nella tabella durante piazzamento | 🟠 Alta | `MeasurePanel.svelte`, `PriceChartFull.svelte` | Mouse tracking ECharts + linea fantasma + card preview con dati parziali | ~3h, complessità media |
-| **B9** | **Δ%/yr poco sensato** — proposta layout multi-colonna matrix su schermi larghi | 🟢 Bassa | `MeasurePanel.svelte` | Nascondere se `days<30`, o mostrare solo su wide screen | Decisione UX |
-| **B13** | **Edit Provider modal diversa** — mancano: flags read-only, banners/warnings, config pre-esistente dal backend | 🟠 Alta | `FxPairAddModal.svelte` | Mostrare CurrencySearchSelect con flags+testo in readonly, caricare routes esistenti dal backend | Coperto da Step 8 del plan |
-| **B14** | **Overview chart: segnali incompleti** — overview mostra solo serie principale, mancano overlay signals. Segnale verde è `__overview__` con areaStyle | 🟠 Alta | `PriceChartFull.svelte` | Aggiungere serie overview per ogni segnale overlay (sottili, opacity ridotta) | ~1h, integrare nel rendering loop |
+| **B9** | **Δ%/yr layout responsive** — su schermi wide mostrare colonne extra in layout matrice | 🟢 Bassa | `MeasurePanel.svelte` | Layout a matrice responsive per misure e segnali | Decisione UX |
 
 ### Confermato funzionante
 
