@@ -234,6 +234,7 @@
                 areaFill={chartSettings?.areaFill ?? true}
                 colorByBaseline={chartSettings?.colorByBaseline}
                 showGridLines={chartSettings?.gridLines}
+                showGradient={chartSettings?.staleGradient ?? true}
                 overlaySignals={overlaySignals}
             />
         {:else if loading}

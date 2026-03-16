@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.4-8-gded9a99-dirty"
+    "version": "v0.5.4-9-gb402259-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -8769,6 +8769,14 @@
             "type": "object",
             "title": "Description I18N",
             "description": "Multilingual provider descriptions {lang_code: description}"
+          },
+          "warning_i18n": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Warning I18N",
+            "description": "Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning."
           },
           "icon_url": {
             "anyOf": [
