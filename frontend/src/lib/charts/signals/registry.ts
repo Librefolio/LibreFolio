@@ -55,7 +55,7 @@ export interface SignalTypeInfo {
     type: string;
     displayName: string;
     icon: string;
-    category: 'indicator' | 'comparison' | 'benchmark';
+    category: 'indicator' | 'comparison' | 'benchmark' | 'measure';
     paramDescriptors: SignalParamDescriptor[];
     /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-indicators/#ema' */
     docsPath?: string;

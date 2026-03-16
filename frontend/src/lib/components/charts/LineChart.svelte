@@ -1,5 +1,5 @@
 <!--
-  LineChart — ECharts line chart with stale-data gradient, segment coloring, and zoom sync.
+  LineChart — ECharts line chart with stale-data gradient, segment coloring, and zoom.
 
   Features:
   - Line series with configurable area fill
@@ -10,9 +10,7 @@
   - Dark mode support with MutationObserver
   - ResizeObserver for responsive sizing
   - Mouse wheel zoom + drag-to-pan via ECharts inside dataZoom
-  - Bidirectional zoom sync: emits onZoomChange when user zooms inside chart
   - Click event emission for parent components
-  - onChartReady callback for coordinate mapping (used by MeasureOverlay)
 
   Used by: PriceChartCompact, PriceChartFull (line mode)
 -->
@@ -39,10 +37,6 @@
         staleDays?: number;
     }
 
-    export interface ChartApi {
-        getGridBounds: () => {left: number; right: number; top: number; bottom: number; width: number; height: number};
-        dataToPixel: (dataIndex: number, value: number) => {x: number; y: number} | null;
-    }
 
     interface Props {
         data: LineDataPoint[];
@@ -72,10 +66,6 @@
         pendingData?: LineDataPoint[];
         /** Called when a data point is clicked */
         onPointClick?: (date: string, value: number) => void;
-        /** External zoom range [startPercent, endPercent] (0-100) */
-        zoomRange?: [number, number];
-        /** Called when user zooms inside the chart (for DataZoomBar sync) */
-        onZoomChange?: (start: number, end: number) => void;
         /** View mode (for tooltip formatting and segment colors) */
         viewMode?: 'absolute' | 'percentage';
         /** Y-axis mode: 'auto' = fit to data, 'include0' = always show 0, 'custom' = user-defined min/max */
@@ -84,8 +74,6 @@
         yAxisMin?: number;
         /** Custom Y-axis maximum (only when yAxisMode === 'custom') */
         yAxisMax?: number;
-        /** Called when chart instance is ready (for coordinate mapping) */
-        onChartReady?: (api: ChartApi) => void;
         /** Overlay signals to render as additional line series */
         overlaySignals?: RenderedSignal[];
     }
@@ -105,13 +93,10 @@
         pendingColor = '#f59e0b',
         pendingData = [],
         onPointClick,
-        zoomRange,
-        onZoomChange,
         viewMode = 'absolute',
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
-        onChartReady,
         overlaySignals = [],
     }: Props = $props();
 
@@ -130,7 +115,6 @@
     let chartContainer: HTMLDivElement;
     let chartInstance: echarts.ECharts | null = null;
     let resizeObserver: ResizeObserver | null = null;
-    let suppressZoomEvent = false;
     /** Guard: prevents ResizeObserver from calling resize() before first setOption() */
     let chartOptionSet = false;
 
@@ -173,17 +157,6 @@
         }
     });
 
-    $effect(() => {
-        if (chartInstance && zoomRange) {
-            suppressZoomEvent = true;
-            chartInstance.dispatchAction({
-                type: 'dataZoom',
-                start: zoomRange[0],
-                end: zoomRange[1],
-            });
-            setTimeout(() => { suppressZoomEvent = false; }, 50);
-        }
-    });
 
     function cleanup() {
         resizeObserver?.disconnect();
@@ -197,41 +170,6 @@
     // Helpers — see lineChartHelpers.ts for color utilities
     // =========================================================================
 
-    // =========================================================================
-    // ChartApi for external coordinate mapping
-    // =========================================================================
-
-    function emitChartReady() {
-        if (!chartInstance || !onChartReady) return;
-        onChartReady({
-            getGridBounds: () => {
-                try {
-                    const gridModel = (chartInstance as any).getModel().getComponent('grid', 0);
-                    if (gridModel && gridModel.coordinateSystem) {
-                        const rect = gridModel.coordinateSystem.getRect();
-                        return {
-                            left: rect.x,
-                            right: rect.x + rect.width,
-                            top: rect.y,
-                            bottom: rect.y + rect.height,
-                            width: rect.width,
-                            height: rect.height,
-                        };
-                    }
-                } catch (_) { /* fallback below */ }
-                // Fallback estimate
-                return {left: 60, right: 15, top: 35, bottom: 35, width: 0, height: 0};
-            },
-            dataToPixel: (dataIndex: number, value: number) => {
-                if (!chartInstance) return null;
-                try {
-                    const pixel = (chartInstance as any).convertToPixel('grid', [dataIndex, value]);
-                    if (pixel) return {x: pixel[0], y: pixel[1]};
-                } catch (_) { /* return null */ }
-                return null;
-            },
-        });
-    }
 
     // =========================================================================
     // Chart Rendering
@@ -270,18 +208,6 @@
                     }
                 });
             }
-
-            // Bidirectional zoom: emit event for DataZoomBar sync
-            chartInstance.on('datazoom', (params: any) => {
-                if (suppressZoomEvent) return;
-                const batch = params.batch;
-                if (batch && batch.length > 0) {
-                    const {start, end} = batch[0];
-                    if (typeof start === 'number' && typeof end === 'number') {
-                        onZoomChange?.(start, end);
-                    }
-                }
-            });
         }
 
         const isDark = document.documentElement.classList.contains('dark');
@@ -754,19 +680,12 @@
 
         // Restore zoom position if the user had zoomed/panned
         if (savedZoom && !compact) {
-            suppressZoomEvent = true;
             chartInstance.dispatchAction({
                 type: 'dataZoom',
                 start: savedZoom.start,
                 end: savedZoom.end,
             });
-            setTimeout(() => { suppressZoomEvent = false; }, 50);
         }
-
-
-
-        // Emit chart ready API for MeasureOverlay coordinate mapping
-        emitChartReady();
     }
 </script>
 

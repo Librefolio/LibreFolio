@@ -34,6 +34,14 @@
         /** Current date range for auto-sync after creation */
         dateStart?: string;
         dateEnd?: string;
+        /** Edit mode: pre-populates currencies (read-only) for editing providers of existing pair */
+        editMode?: boolean;
+        /** Pre-populated base currency (used in editMode) */
+        editBase?: string;
+        /** Pre-populated quote currency (used in editMode) */
+        editQuote?: string;
+        /** Pre-populated routes (used in editMode) */
+        editRoutes?: ChainStep[][];
         oncreated?: (detail: {base: string; quote: string; hasRealProvider: boolean}) => void;
         onclose?: () => void;
     }
@@ -42,6 +50,10 @@
         open = $bindable(false),
         dateStart = '',
         dateEnd = '',
+        editMode = false,
+        editBase = '',
+        editQuote = '',
+        editRoutes = [],
         oncreated,
         onclose,
     }: Props = $props();
@@ -62,6 +74,15 @@
 
     // Dirty/discard state
     let showDiscardConfirm = $state(false);
+
+    // Populate state when editMode opens
+    $effect(() => {
+        if (open && editMode && editBase && editQuote) {
+            baseCurrency = editBase;
+            quoteCurrency = editQuote;
+            selectedRoutes = editRoutes.length > 0 ? [...editRoutes] : [];
+        }
+    });
 
     // =========================================================================
     // Derived
@@ -243,7 +264,7 @@
         <!-- ============================================================= -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                {$_('fx.addPair.title')}
+                {editMode ? $_('fx.addPair.titleEdit') : $_('fx.addPair.title')}
             </h2>
             <button
                 onclick={handleClose}
@@ -264,8 +285,15 @@
             {/if}
 
             <!-- ========================================================= -->
-            <!-- Currency selection -->
+            <!-- Currency selection (hidden in editMode — currencies are fixed) -->
             <!-- ========================================================= -->
+            {#if editMode}
+                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{baseCurrency}</span>
+                    <ArrowLeftRight size={14} class="text-gray-400" />
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{quoteCurrency}</span>
+                </div>
+            {:else}
             <div class="space-y-1.5">
                 <div class="flex flex-col sm:flex-row items-stretch gap-2">
                     <div class="flex-1 min-w-0">
@@ -311,6 +339,7 @@
                     </div>
                 </div>
             </div>
+            {/if}
 
             <!-- Info banner: explain provider role (always visible) -->
             <InfoBanner variant="info">

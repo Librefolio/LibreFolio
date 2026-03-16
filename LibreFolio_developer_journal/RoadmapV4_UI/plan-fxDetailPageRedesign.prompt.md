@@ -528,7 +528,7 @@ interface Props {
 2. **Lista misure**: `OrderableList` riordinabile con bottone rimuovi per ciascuna. Ogni riga mostra: `📏 YYYY-MM-DD → YYYY-MM-DD · Δ+0.45% · 30d`
 
 3. **Tabella riepilogo** (sotto la lista, visibile quando ≥1 misura):
-   Per ogni misura attiva, tabella con una riga per ciascun segnale visibile nel chart:
+   Per ogni misura attiva, tabella con una riga per ciascun segnale attivo nel chart:
 
    | Signal | Value @ Start | Value @ End | Δ Abs | Δ % | Days | Δ%/Year |
    |--------|---------------|-------------|-------|-----|------|---------|
@@ -757,3 +757,35 @@ Aggiungere chiavi via `./dev.py i18n add` (EN/IT/FR/ES):
 | Pulsante ⚙ nella filter bar? | ⚙ Providers → apre FxPairAddModal in editMode |
 | Edit al posto di settings? | Edit toggle separato nella filter bar, settings inline nei pannelli |
 
+---
+
+## Bug Report — Post-Redesign Feedback (16 Marzo 2026)
+
+### Bug Immediati (fix isolati)
+
+| # | Bug | Severità | File | Fix | Status |
+|---|-----|----------|------|-----|--------|
+| **B1** | **Abs/% è un singolo bottone toggle** — mostra solo "Abs" o "%" alternandosi; dovrebbe essere segmented `[Abs \| %]` come nella FX list | 🟡 Media | `+page.svelte` detail | Sostituire singolo `<button>` con due bottoni segmented identici alla FX list | ✅ |
+| **B2** | **Matrice 2×2: ordine sbagliato** — "Providers" deve andare dove c'era "Settings" (riga 1 col 2), "Sync"/"Refresh" devono restare in riga 2 | 🟡 Media | `+page.svelte` detail | Riordinare: riga 1 = `[Abs/% segmented \| Providers]`, riga 2 = `[Sync \| Refresh]` | ✅ |
+| **B3** | **DateRangePicker troppo grande** — manca ResizeObserver per folding responsive, deve usare gli stessi breakpoint della FX list | 🟡 Media | `+page.svelte` detail | Aggiungere `filterBarRef` + `ResizeObserver` + `layoutMode`/`showActionLabels` identici alla FX list | ✅ |
+| **B7** | **Tooltip mostra solo rate** — in measure mode, hover mostra solo il valore; dovrebbe mostrare delta (abs o %) in base a viewMode | 🟡 Media | `PriceChartFull.svelte` | Nel tooltip formatter: calcolare e mostrare `Δ abs` o `Δ %` rispetto al primo punto | ✅ |
+| **B8** | **Colonna Signal mostra "Main"** — dovrebbe mostrare nome pair con bandiere (🇪🇺 EUR → 🇺🇸 USD) | 🟢 Bassa | `MeasurePanel.svelte` | Aggiungere prop `pairLabel` al MeasurePanel, il parent passa pair con bandiere | ✅ |
+| **B10** | **Titolo "Measures" duplicato** — compare sia nel foldable header che dentro MeasurePanel | 🟢 Bassa | `MeasurePanel.svelte` | Rimuovere `<h4>Measures</h4>` interno al MeasurePanel | ✅ |
+| **B11** | **"Add Measure" nel panel vs chart** — bottone nel panel ridondante con icona Ruler overlay chart. Click su Ruler deve attivare subito add-measure | 🟢 Bassa | `MeasurePanel.svelte`, `+page.svelte` detail | Rimuovere bottone Add dal panel, Ruler overlay chart attiva measure mode + apre panel | ✅ |
+
+### Bug Deferred (prossimo sprint)
+
+| # | Bug | Severità | File | Fix | Note |
+|---|-----|----------|------|-----|------|
+| **B4** | **Pencil click UX non chiaro** — click apre panel editor ma l'utente si aspetta azione più diretta | 🟡 Media | `+page.svelte` detail | Scroll-into-view del panel + eventuale focus textarea | Richiede decisione UX |
+| **B5** | **Measure card non mostra tutto insieme** — orizzonte temporale, stile linea, summary table dovrebbero essere un'unica card per misura | 🟠 Alta | `MeasurePanel.svelte` | Redesign: ogni misura = card accordion con header+stile+tabella | ~2h, refactor MeasurePanel |
+| **B6** | **Nessuna preview tra 1° e 2° click** — manca preview segnale e dati nella tabella durante piazzamento | 🟠 Alta | `MeasurePanel.svelte`, `PriceChartFull.svelte` | Mouse tracking ECharts + linea fantasma + card preview con dati parziali | ~3h, complessità media |
+| **B9** | **Δ%/yr poco sensato** — proposta layout multi-colonna matrix su schermi larghi | 🟢 Bassa | `MeasurePanel.svelte` | Nascondere se `days<30`, o mostrare solo su wide screen | Decisione UX |
+| **B13** | **Edit Provider modal diversa** — mancano: flags read-only, banners/warnings, config pre-esistente dal backend | 🟠 Alta | `FxPairAddModal.svelte` | Mostrare CurrencySearchSelect con flags+testo in readonly, caricare routes esistenti dal backend | Coperto da Step 8 del plan |
+| **B14** | **Overview chart: segnali incompleti** — overview mostra solo serie principale, mancano overlay signals. Segnale verde è `__overview__` con areaStyle | 🟠 Alta | `PriceChartFull.svelte` | Aggiungere serie overview per ogni segnale overlay (sottili, opacity ridotta) | ~1h, integrare nel rendering loop |
+
+### Confermato funzionante
+
+| # | Feature |
+|---|---------|
+| **B12** | Sync funziona e mostra toast ✅ |
