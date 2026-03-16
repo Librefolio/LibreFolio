@@ -66,10 +66,23 @@ export class MeasureSignal extends ChartSignal {
         const end = baseData.find(d => d.date === endDate);
         if (!start || !end) return [];
 
-        return [
-            {date: start.date, value: start.value},
-            {date: end.date, value: end.value},
-        ];
+        // Interpolate all dates between start and end so the line segment
+        // remains visible when zoomed in (ECharts hides lines with both
+        // endpoints outside the visible range if only 2 non-null points exist)
+        const startIdx = baseData.findIndex(d => d.date === startDate);
+        const endIdx = baseData.findIndex(d => d.date === endDate);
+        if (startIdx < 0 || endIdx < 0) return [];
+
+        const points: LineDataPoint[] = [];
+        const totalSteps = endIdx - startIdx;
+        for (let i = startIdx; i <= endIdx; i++) {
+            const t = totalSteps > 0 ? (i - startIdx) / totalSteps : 0;
+            points.push({
+                date: baseData[i].date,
+                value: start.value + t * (end.value - start.value),
+            });
+        }
+        return points;
     }
 
     getLabel(): string {

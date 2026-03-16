@@ -44,7 +44,8 @@
     "retry": "Retry",
     "saving": "Saving...",
     "discardChanges": "Discard Changes?",
-    "discardChangesMessage": "You have unsaved changes. Are you sure you want to close?"
+    "discardChangesMessage": "You have unsaved changes. Are you sure you want to close?",
+    "sync": "Sync"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -763,5 +764,38 @@
       "lower": "Lower",
       "secondaryAxis": "2nd axis"
     }
+  },
+  "measure": {
+    "pending": "Start: {startDate} ({startValue}) — click chart for end point",
+    "empty": "No measures. Click the 📏 ruler icon on the chart to add a measurement.",
+    "active": "Active — click chart",
+    "table": {
+      "signal": "Signal",
+      "start": "Start",
+      "end": "End",
+      "deltaAbs": "Δ Abs",
+      "deltaPct": "Δ %",
+      "annualized": "Δ%/yr"
+    },
+    "remove": "Remove",
+    "days": "{days}d"
+  },
+  "fxDetail": {
+    "aesthetics": "Aesthetics",
+    "measures": "Measures",
+    "signals": "Signals",
+    "editRates": "Edit Rates",
+    "loadingRates": "Loading rates...",
+    "noData": "No rate data available for this range.",
+    "syncRates": "Sync Rates",
+    "backToList": "Back to FX list",
+    "swapDirection": "Swap direction",
+    "exitMeasure": "Exit measure mode",
+    "addMeasure": "Add measurement",
+    "closeEditor": "Close editor",
+    "editRatesBtn": "Edit rates",
+    "providers": "Providers",
+    "syncFromProvider": "Sync rates from provider",
+    "refreshData": "Refresh data"
   }
 }
