@@ -131,13 +131,55 @@ Rimuovere la prop `pendingData` da PriceChartFull e la relativa logica di serie 
 
 **Il chart NON ricalcola gli altri segnali overlay finché non si salva** — la preview è un segnale puro sovrapposto.
 
-### 6. ✅ Fix freccia misura (B30)
+### 6. ⚠️ Fix freccia misura (B30) — RICHIEDE FIX SCALE
 
-**File**: `frontend/src/lib/components/charts/PriceChartFull.svelte` (L310–370)
+**File**: `frontend/src/lib/components/charts/lineChartHelpers.ts`
 
-Importare `computeArrowRotation` da `frontend/src/lib/components/charts/lineChartHelpers.ts` (L428–480). Sostituire le chiamate a `segmentArrowRotation(isStart)` con `computeArrowRotation(signalSeriesData, markerIdx, isStart)`. Eliminare la funzione inline custom `segmentArrowRotation`.
+**Iterazione 1** (completata): Riscritta `computeArrowRotation` con algoritmo semplificato a 2 punti (punto attuale + precedente non-null). Rimossi: multi-vicini, `allVals.filter()`.
 
-La funzione `computeArrowRotation` funziona correttamente ora che `MeasureSignal.computePoints()` interpola tutti i punti tra start/end (fix B31), quindi ci sono vicini non-null su cui calcolare la pendenza.
+**Iterazione 2** (da fare): L'angolo è ancora sbagliato perché `dx` (indice 0..N) e `dy` (dato es. 0.00..0.09) vivono in scale completamente diverse. `atan2(0.09, 100)` ≈ 0.05° → freccia quasi piatta. In più, l'angolo visivamente corretto dipende dalla finestra di zoom (cambia l'aspect ratio Y/X).
+
+**Analisi del problema**:
+- `dx` è in unità indice (0..N punti), `dy` è in unità dato (es. 0.84..0.87)
+- Il rapporto `dy/dx` in coordinate dati NON corrisponde alla pendenza visiva
+- La pendenza visiva dipende da: larghezza pixel griglia / range X visibile, altezza pixel griglia / range Y visibile
+- Quando lo zoom cambia, il range visibile cambia → l'angolo deve cambiare
+- Ergo: l'angolo è funzione dello **stato corrente del chart** (zoom, resize, assi), non solo dei dati
+
+**Approcci proposti**:
+
+**A. Post-render con `convertToPixel` + aggiornamento su zoom/resize**
+- Dopo ogni render/zoom/resize, iterare tutti i marker con freccia
+- Usare `chart.convertToPixel('grid', [dateIndex, value])` per i 2 punti
+- Calcolare l'angolo da pixel delta → sempre corretto
+- Aggiornare solo `symbolRotate` via `chart.setOption({series: [...]}, {replaceMerge: []})`
+- **Pro**: Massima accuratezza, gestisce zoom/resize/axis-change
+- **Con**: Richiede accesso all'istanza ECharts dentro la funzione di rotazione; potenziale costo su zoom frequenti (mitigabile con `requestAnimationFrame`)
+- **Dove agganciare**: evento `dataZoom` + `resize` su chart, callback in LineChart.svelte
+
+**B. Custom `renderItem` series per i marker**
+- Sostituire i `symbol` nativi ECharts con una serie `type: 'custom'` + `renderItem`
+- Dentro `renderItem`, `api.coord([x, y])` dà coordinate pixel → calcolo angolo
+- ECharts richiama `renderItem` automaticamente a ogni render/zoom
+- **Pro**: Più pulito, ECharts gestisce tutto il lifecycle
+- **Con**: Refactor significativo di come i segnali renderizzano i marker; la renderizzazione custom è più complessa dei symbol nativi
+
+**C. `markLine` con frecce**
+- Usare `markLine` ECharts con `symbol: ['arrow', 'arrow']` ai bordi del segnale
+- ECharts gestisce orientamento freccia lungo la linea automaticamente
+- **Pro**: Nessun calcolo manuale di angoli, feature built-in
+- **Con**: `markLine` è pensato per annotazioni, non per marker per-punto; limitato a coppie di punti; potrebbe non integrarsi con lo stile marker attuale (shape + size configurabili)
+
+**D. Passare le dimensioni pixel e i range assi alla funzione**
+- Modificare la signature: `computeArrowRotation(signalData, idx, isStart, xScale, yScale)`
+- `xScale = gridWidthPx / visibleIndexRange`, `yScale = gridHeightPx / visibleYRange`
+- `dx_px = dx * xScale`, `dy_px = dy * yScale` → `atan2(-dy_px, dx_px)`
+- **Pro**: Modifica minimale alla funzione; concettualmente semplice
+- **Con**: Il chiamante deve ottenere le dimensioni pixel e i range assi dal chart, e ricalcolare su ogni zoom/resize (stesse dipendenze dell'approccio A ma con più parametri da passare)
+
+**Raccomandazione**: Approccio **A** — `convertToPixel` è la via più diretta e meno invasiva. La funzione attuale resterebbe quasi invariata (cambia solo la fonte di `dx`/`dy`: pixel anziché dati). L'aggiornamento su zoom si aggancia agli eventi ECharts già presenti nel componente. Se il costo su zoom fosse troppo alto, si può fare debounce o `requestAnimationFrame`.
+
+**⏳ In attesa di review utente per decidere approccio.**
 
 ### 7. ✅ Fix ruler tick + colori misure distinti
 
@@ -186,25 +228,26 @@ Riusarlo in:
 </Tooltip>
 ```
 
-### 9. ✅ Fix cache lingua provider modal (3 sotto-problemi)
+### 9. ✅⚠️ Fix cache lingua provider modal (3 sotto-problemi) — RICHIEDE RE-FIX
 
-**9a — Richieste inutili nonostante cache**
+**Stato dopo primo fix**: Aggiunto `language={$currentLanguage}` a `FxProviderSelect` e sync effect per `selectedKeys`. Ma il test mostra che la chiamata API currencies usa ancora `language=en`, e le route pre-esistenti non vengono mostrate.
 
-**File**: `frontend/src/lib/stores/currencyGraphStore.ts` (L53–62)
+**9a — La lingua è ancora 'en' nonostante il fix**
 
-`getCurrencyGraph()` chiama `ensureCurrenciesLoaded(language)` **anche se il grafo è già in cache** (L54 fa return prima quando `cachedGraph` esiste, ma quando non c'è cache la lingua sbagliata causa rebuild). Il grafo usa solo codici currency (non nomi localizzati) → **non serve ricaricare le currency quando il grafo è già costruito**. Fix: se il grafo è già costruito (`cachedGraph` non null), non chiamare `ensureCurrenciesLoaded` e non ricostruire. Per il primo build, usare la lingua corrente dell'UI.
+Il problema è più profondo del solo `FxProviderSelect`. La catena di chiamate è:
+1. `FxProviderSelect.computeRoutes()` → `findConversionPaths(base, quote, 4, language)`
+2. `findConversionPaths()` → `getCurrencyGraph(language)`
+3. `getCurrencyGraph(language)` → `ensureCurrenciesLoaded(language)`
 
-**9b — Parametro lingua sbagliato**
+Ma `getCurrencyGraph` ha default `language = 'en'` (L53 di currencyGraphStore.ts), e anche `findConversionPaths` (L122). Il grafo usa solo codici currency (non nomi localizzati) → **eliminare il parametro `language` da `getCurrencyGraph` e `findConversionPaths`**, e far sì che `ensureCurrenciesLoaded` dentro `getCurrencyGraph` usi la lingua già caricata in cache, oppure la lingua corrente dallo store. In alternativa, non chiamare affatto `ensureCurrenciesLoaded` da `getCurrencyGraph` se le currencies sono già caricate — verificare con `isCurrenciesLoaded()`.
 
-**File**: `frontend/src/lib/components/fx/FxPairAddModal.svelte` (L391)
+**9b — Route pre-esistenti non mostrate**
 
-Passare `language={$currentLanguage}` a `FxProviderSelect` (importare `currentLanguage` dallo store i18n). Attualmente manca la prop → default `'en'` in `FxProviderSelect.svelte` L67 → la chiamata a `ensureCurrenciesLoaded('en')` invalida la cache italiana in `currencyStore.ts` L56–61, sovrascrivendola con dati EN.
+`loadRoutesFromBackend()` in FxPairAddModal chiama l'API `list_routes` e imposta `selectedRoutes`. Ma il sync $effect aggiunto in `FxProviderSelect` potrebbe non attivarsi correttamente: le chiavi generate da `selectedRoutes` potrebbero non matchare quelle in `routeMap` (che è costruito da `computeRoutes`). Il problema è di **timing**: `computeRoutes` è asincrono e potrebbe non aver ancora popolato `directRoutes`/`chainRoutes` quando il sync effect tenta il matching. Serve garantire che il sync avvenga DOPO che `computeRoutes` ha completato.
 
-**9c — Route già selezionate visibili nel picker**
+**9c — Route pre-esistenti non richieste**
 
-**File**: `frontend/src/lib/components/ui/select/FxProviderSelect.svelte`
-
-`loadRoutesFromBackend()` (in FxPairAddModal L90–117) carica le route attuali dal backend (via `list_routes` API) e popola `selectedRoutes`. `FxProviderSelect.computeRoutes()` calcola le opzioni disponibili per aggiungerne di nuove. **Non è un problema di race condition** — sono due scopi diversi (opzioni vs selezione corrente). Assicurarsi che le route già selezionate (`selectedKeys`) vengano nascoste dal picker "Aggiungi route" — verificare che `hasUnselectedRoutes` e il filtraggio in FxProviderSelect L182 funzionino correttamente con le route caricate dal backend. Ogni apertura in editMode chiama sempre `list_routes` API per avere le priorità fresh dal backend.
+Verificare nel network tab se `list_routes_api_v1_fx_providers_routes_get` viene effettivamente chiamato. Se non viene chiamato, il problema è che il `$effect` in FxPairAddModal (L81–88) non si attiva — probabilmente perché `open`, `editMode`, `editBase`, `editQuote` non sono tutti truthy al momento giusto.
 
 ### 10. Naming i18n + abbreviazioni segnali
 
@@ -267,4 +310,34 @@ Usarle nei `getLabel()` dei segnali tramite un helper i18n-aware.
 | Row-folding nel DataEditor? | Rimosso — paginazione DataTable al suo posto. Giorni vuoti = righe con rate null |
 | Chart update su edit? | Solo su Save — finché non si salva il chart non ricalcola segnali overlay |
 | Formattazione pos/neg nelle colonne DataTable? | Usare `CellContent` custom con snippet HTML (non complicare i tipi generici) |
+| Arrow rotation: serve `isStart`? | Sì. Ma il problema principale è la **mismatch di scala**: `dx` (indici) vs `dy` (dati) producono angoli quasi piatti. L'angolo corretto richiede conversione in pixel-space, e cambia con zoom/resize. 4 approcci proposti (A/B/C/D), raccomandata A (`convertToPixel` + update su zoom) |
+| Provider cache: approccio? | Eliminare param `language` da `getCurrencyGraph`/`findConversionPaths`. Sync route dentro `computeRoutes()` dopo popolamento |
+| Measure preview: interpolazione? | No, preview mostra solo start+end. Al 2° click calcola intermedi per la leggenda |
+| DatePicker misure: quale componente? | Potenziare DateRangePicker con prop `showPresets={false}`. Usa 2 date (start+end), stesse logiche assegnazione |
+
+---
+
+## Nuovi Feature Request (emersi durante test Round 4)
+
+### F1. Preview live misura durante piazzamento (B6) — CONFERMATO
+
+Dopo il 1° click, ogni volta che il mouse passa su un nuovo punto del grafico:
+- Distruggere il segnale misura temporaneo precedente
+- Crearne uno nuovo con stessa configurazione di stile ma con `endDate` = punto corrente sotto il mouse
+- **Semplificazione**: la preview mostra SOLO punto iniziale e finale (nessuna interpolazione intermedia), così il rendering è leggero
+- Al 2° click: calcolare tutti i punti intermedi (interpolazione) per avere la leggenda opportuna con dati completi
+- La tabella riepilogo mostra i dati della preview in tempo reale (solo start/end, senza annualizzazione durante il drag)
+
+**Implementazione**:
+- `MeasurePanel`: aggiungere `pendingMeasure: MeasureSignal | null`, metodo `updatePendingEnd(date, value)` chiamato dal parent
+- `PriceChartFull`: collegare `mousemove` ECharts → `onMeasureHover(date, value)` (solo in measureMode e dopo 1° click)
+- `+page.svelte`: wiring callback `onMeasureHover` → `measurePanel.updatePendingEnd()`
+
+### F2. DatePicker per editare punti misura — CONFERMATO (potenziare DateRangePicker)
+
+Potenziare il componente `DateRangePicker` esistente per renderlo parametrico:
+- Aggiungere prop per nascondere/mostrare i badge con la selezione della finestra temporale (presets 1W/1M/3M/etc.)
+- Per le misure servono 2 date (start + end, la misura ha senso solo tra 2 giorni diversi)
+- Le logiche di assegnazione (click su giorno, highlight range, validazione) sono identiche al range picker attuale
+- In pratica: `DateRangePicker` con `showPresets={false}` usato inline nella card misura per editare `startDate`/`endDate`
 

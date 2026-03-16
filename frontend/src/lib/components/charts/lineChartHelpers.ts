@@ -410,15 +410,18 @@ export function buildBarSeries(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Compute rotation angle (degrees) for an arrow-type marker at the given index.
+ * Compute rotation angle for arrow markers on a signal series.
  *
- * The key insight: data coordinates have very different scales for X (index 0..N)
- * and Y (e.g. 0.84..0.87). Using raw values in atan2 produces extreme angles.
- * We normalize by rescaling Y into the same visual units as X (using the data
- * range), so the arrow visually follows the chart line direction.
+ * Uses only the current point and the nearest non-null neighbor to derive
+ * a pure direction angle.  No yScale — marker Y-positioning is handled by
+ * ECharts via `coord`; this function only computes the arrow orientation.
  *
- * For end-point markers we average the slope over the last few valid neighbors
- * to smooth out noise at the curve tip.
+ * Algorithm:
+ *  1. Scan backward for the first non-null predecessor.
+ *  2. If none found (current point is the first valid), scan forward instead.
+ *  3. atan2(-dy, dx) → math angle (0° = right).
+ *  4. +180° when isStart (arrow points backward / incoming).
+ *  5. +90° to convert from math convention to ECharts (0° = up).
  *
  * @param signalData  The full series data array (null for missing points)
  * @param idx         Index of the marker point
@@ -430,52 +433,38 @@ export function computeArrowRotation(
     idx: number,
     isStart: boolean,
 ): number {
-    // Collect up to 3 valid neighbors for averaged slope
-    const MAX_LOOK = 10;
-    const neighbors: number[] = [];
+    const MAX_LOOK = 20;
+    let dx: number | undefined;
+    let dy: number | undefined;
 
-    if (isStart) {
+    // 1. Try to find the previous non-null point
+    for (let j = idx - 1; j >= Math.max(idx - MAX_LOOK, 0); j--) {
+        if (signalData[j] !== null && signalData[j] !== undefined) {
+            dx = idx - j;
+            dy = (signalData[idx] as number) - (signalData[j] as number);
+            break;
+        }
+    }
+
+    // 2. Fallback: find the next non-null point (current is the first valid)
+    if (dx === undefined) {
         for (let j = idx + 1; j < Math.min(idx + MAX_LOOK + 1, signalData.length); j++) {
             if (signalData[j] !== null && signalData[j] !== undefined) {
-                neighbors.push(j);
-                if (neighbors.length >= 3) break;
-            }
-        }
-    } else {
-        for (let j = idx - 1; j >= Math.max(idx - MAX_LOOK, 0); j--) {
-            if (signalData[j] !== null && signalData[j] !== undefined) {
-                neighbors.push(j);
-                if (neighbors.length >= 3) break;
+                dx = j - idx;
+                dy = (signalData[j] as number) - (signalData[idx] as number);
+                break;
             }
         }
     }
-    if (neighbors.length === 0) return isStart ? 180 : 0;
 
-    const v0 = signalData[idx] as number;
-    const allVals = signalData.filter((v: any): v is number => v !== null && v !== undefined);
-    const yMin = Math.min(...allVals);
-    const yMax = Math.max(...allVals);
-    const yRange = yMax - yMin || 1;
-    const xRange = Math.max(signalData.length, 1);
-    // Aspect ratio scale factor: Y data range maps to ~25% of the X pixel range.
-    // This approximation works well for typical chart aspect ratios (wider than tall).
-    const yScale = (xRange * 0.25) / yRange;
+    // 3. No neighbor at all → vertical arrow
+    if (dx === undefined || dy === undefined) return isStart ? 180 : 0;
 
-    // Average the angle across neighbors for smoother result
-    let sumDx = 0;
-    let sumDy = 0;
-    for (const ni of neighbors) {
-        const dx = ni - idx;        // always positive for start, negative for end
-        const dy = (signalData[ni] as number) - v0;
-        sumDx += dx;
-        sumDy += dy * yScale;
-    }
-
-    // atan2 gives angle where 0=right. ECharts arrow symbol points UP by default,
-    // so we add 90° to convert.
-    const angleRad = Math.atan2(-sumDy, sumDx);
+    // 4. atan2 gives angle where 0° = right.
+    //    ECharts arrow symbol points UP by default, so +90° converts.
+    const angleRad = Math.atan2(-dy, dx);
     let angleDeg = (angleRad * 180) / Math.PI;
     if (isStart) angleDeg += 180;
-    return angleDeg + 90;
+    return angleDeg - 90;
 }
 
