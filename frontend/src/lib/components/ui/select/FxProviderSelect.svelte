@@ -26,6 +26,7 @@
     import type {ChainStep, ProviderInfo} from '$lib/utils/currencyGraph';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {getProviderColor, getPriorityBadgeStyle} from '$lib/utils/colors';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
 
     // =========================================================================
     // Types
@@ -314,6 +315,26 @@
         return prov ? getProviderDescription(prov) : '';
     }
 
+    /** Get provider warning for the current language, with 'en' fallback. Empty = no warning. */
+    function getProviderWarning(code: string): string {
+        const prov = providerMap.get(code);
+        if (!prov?.warning_i18n || Object.keys(prov.warning_i18n).length === 0) return '';
+        return prov.warning_i18n[language] ?? prov.warning_i18n['en'] ?? '';
+    }
+
+    /** Collect all unique provider warnings for a route (deduplicated). */
+    function getRouteWarnings(route: RouteOption): string[] {
+        const seen = new Set<string>();
+        const warnings: string[] = [];
+        for (const code of route.providers) {
+            if (seen.has(code)) continue;
+            seen.add(code);
+            const w = getProviderWarning(code);
+            if (w) warnings.push(`${getProviderName(code)}: ${w}`);
+        }
+        return warnings;
+    }
+
     // =========================================================================
     // Chain group toggle
     // =========================================================================
@@ -371,6 +392,34 @@
     function routeKey(route: RouteOption): string {
         return route.key;
     }
+
+    // =========================================================================
+    // Tooltip HTML builders
+    // =========================================================================
+
+    /** Escape HTML entities for safe tooltip content */
+    function esc(s: string): string {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /** Build HTML tooltip for a provider badge */
+    function providerTooltipHtml(code: string): string {
+        return `<strong>${esc(getProviderName(code))}</strong><br/>${esc(getProviderDescByCode(code))}`;
+    }
+
+    /** Build HTML tooltip for warning messages list */
+    function warningsTooltipHtml(warnings: string[]): string {
+        return warnings.map(w => esc(w)).join('<br/><br/>');
+    }
+
+    /** Build HTML tooltip for provider legend badge (name + desc + optional warning) */
+    function legendTooltipHtml(prov: ProviderInfo): string {
+        const desc = getProviderDescription(prov);
+        const warning = getProviderWarning(prov.code);
+        let h = `<strong>${esc(prov.name)}</strong><br/>${esc(desc)}`;
+        if (warning) h += `<br/><br/><span style="color:#fbbf24">⚠️ ${esc(warning)}</span>`;
+        return h;
+    }
 </script>
 
 
@@ -409,22 +458,19 @@
                             {@const provColor = getProviderColor(step.provider)}
                             <span class="text-sm flex-shrink-0">{fromInfo.flag_emoji}</span>
                             <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
-                            <span class="relative group/prov inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0 cursor-help"
-                                  style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}"
-                                  class:dark-override={true}
-                            >
-                                <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
-                                {#if iconUrl}
-                                    <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
-                                {:else}
-                                    <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
-                                {/if}
-                                <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
-                                <span class="provider-tooltip">
-                                    <span class="font-semibold">{getProviderName(step.provider)}</span><br/>
-                                    {getProviderDescByCode(step.provider)}
+                            <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0"
+                                      style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}"
+                                >
+                                    <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
+                                    {#if iconUrl}
+                                        <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
+                                    {:else}
+                                        <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
+                                    {/if}
+                                    <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
                                 </span>
-                            </span>
+                            </Tooltip>
                             <span class="text-sm flex-shrink-0">{toInfo.flag_emoji}</span>
                             <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
                         {:else}
@@ -439,21 +485,19 @@
                                         <span class="text-sm">{fromInfo.flag_emoji}</span>
                                         <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
                                     {/if}
-                                    <span class="relative group/prov inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0 cursor-help"
-                                          style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}"
-                                    >
-                                        <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
-                                        {#if iconUrl}
-                                            <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
-                                        {:else}
-                                            <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
-                                        {/if}
-                                        <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
-                                        <span class="provider-tooltip">
-                                            <span class="font-semibold">{getProviderName(step.provider)}</span><br/>
-                                            {getProviderDescByCode(step.provider)}
+                                    <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                        <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0"
+                                              style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}"
+                                        >
+                                            <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
+                                            {#if iconUrl}
+                                                <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
+                                            {:else}
+                                                <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
+                                            {/if}
+                                            <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
                                         </span>
-                                    </span>
+                                    </Tooltip>
                                     <span class="text-sm">{toInfo.flag_emoji}</span>
                                     <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
                                 {/each}
@@ -464,6 +508,12 @@
                               style={getPriorityBadgeStyle(index)}>
                             #{index + 1}
                         </span>
+                        <!-- Provider warnings triangle -->
+                        {#if getRouteWarnings(route).length > 0}
+                            <Tooltip html={warningsTooltipHtml(getRouteWarnings(route))} position="top">
+                                <AlertTriangle size={13} class="text-amber-500" />
+                            </Tooltip>
+                        {/if}
                         <!-- Remove button -->
                         {#if !disabled}
                             <button
@@ -517,26 +567,26 @@
                             {#each usedProviders as prov}
                                 {@const iconUrl = prov.icon_url}
                                 {@const provColor = getProviderColor(prov.code)}
-                                {@const description = getProviderDescription(prov)}
-                                <a
-                                    href={prov.docs_url ?? '/mkdocs/developer/backend/fx/providers_list/'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="group relative inline-flex items-center gap-1 px-1.5 py-1 rounded border transition-all cursor-pointer hover:shadow-sm"
-                                    style="background: {provColor.bg}; border-color: {provColor.border}"
-                                >
-                                    {#if iconUrl}
-                                        <img src={iconUrl} alt={prov.code} class="w-4 h-4 rounded object-contain flex-shrink-0" />
-                                    {:else}
-                                        <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(prov.code)}</span>
-                                    {/if}
-                                    <span class="text-[10px] font-semibold text-gray-600 dark:text-gray-300">{prov.code}</span>
-                                    <!-- Tooltip on hover -->
-                                    <span class="provider-tooltip">
-                                        <span class="font-semibold">{prov.name}</span><br/>
-                                        {description}
-                                    </span>
-                                </a>
+                                {@const provWarning = getProviderWarning(prov.code)}
+                                <Tooltip html={legendTooltipHtml(prov)} position="top">
+                                    <a
+                                        href={prov.docs_url ?? '/mkdocs/developer/backend/fx/providers_list/'}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="inline-flex items-center gap-1 px-1.5 py-1 rounded border transition-all cursor-pointer hover:shadow-sm"
+                                        style="background: {provColor.bg}; border-color: {provColor.border}"
+                                    >
+                                        {#if iconUrl}
+                                            <img src={iconUrl} alt={prov.code} class="w-4 h-4 rounded object-contain flex-shrink-0" />
+                                        {:else}
+                                            <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(prov.code)}</span>
+                                        {/if}
+                                        <span class="text-[10px] font-semibold text-gray-600 dark:text-gray-300">{prov.code}</span>
+                                        {#if provWarning}
+                                            <AlertTriangle size={10} class="text-amber-500 flex-shrink-0" />
+                                        {/if}
+                                    </a>
+                                </Tooltip>
                             {/each}
                         </div>
                     </div>
@@ -575,6 +625,7 @@
                             {@const toInfo = getCurrencyInfo(step.to)}
                             {@const iconUrl = getProviderIconUrl(step.provider)}
                             {@const provColor = getProviderColor(step.provider)}
+                            {@const warnings = getRouteWarnings(route)}
                             <button
                                 type="button"
                                 data-testid="fx-route-direct-{route.providers[0]}"
@@ -585,22 +636,25 @@
                                     <Plus size={12} class="text-emerald-500 flex-shrink-0" />
                                     <span class="text-sm">{fromInfo.flag_emoji}</span>
                                     <span class="font-medium text-gray-600 dark:text-gray-300 text-[11px]">{step.from}</span>
-                                    <span class="relative group/prov inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0"
-                                          style="background: {provColor.bg}; border-color: {provColor.border}">
-                                        <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                        {#if iconUrl}
-                                            <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
-                                        {:else}
-                                            <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
-                                        {/if}
-                                        <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                        <span class="provider-tooltip">
-                                            <span class="font-semibold">{getProviderName(step.provider)}</span><br/>
-                                            {getProviderDescByCode(step.provider)}
+                                    <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                        <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0"
+                                              style="background: {provColor.bg}; border-color: {provColor.border}">
+                                            <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                            {#if iconUrl}
+                                                <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
+                                            {:else}
+                                                <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
+                                            {/if}
+                                            <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                         </span>
-                                    </span>
+                                    </Tooltip>
                                     <span class="text-sm">{toInfo.flag_emoji}</span>
                                     <span class="font-medium text-gray-600 dark:text-gray-300 text-[11px]">{step.to}</span>
+                                    {#if warnings.length > 0}
+                                        <Tooltip html={warningsTooltipHtml(warnings)} position="top">
+                                            <AlertTriangle size={11} class="text-amber-500" />
+                                        </Tooltip>
+                                    {/if}
                                     <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex-shrink-0">1 step</span>
                                 </span>
                             </button>
@@ -627,19 +681,15 @@
                             {$_('fx.route.chainSection')} — {group.stepCount} {$_('fx.route.steps')}
                             <span class="ml-1 text-[9px] font-mono px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">{group.routes.length}</span>
                             <!-- Chain risk info icon -->
-                            <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <!-- svelte-ignore a11y_no_static_element_interactions -->
-                            <span class="relative group/info flex-shrink-0 ml-0.5 cursor-help" onclick={(e) => e.stopPropagation()}>
+                            <Tooltip text={$_('fx.route.chainWarning')} position="top">
                                 <Info size={10} class="text-blue-400 dark:text-blue-500" />
-                                <span class="provider-tooltip">
-                                    {$_('fx.route.chainWarning')}
-                                </span>
-                            </span>
+                            </Tooltip>
                         </button>
 
                         <!-- Collapsible content -->
                         {#if isExpanded}
                             {#each group.routes as route (route.key)}
+                                {@const warnings = getRouteWarnings(route)}
                                 <button
                                     type="button"
                                     data-testid="fx-route-chain-{route.stepCount}step-{route.providers.join('-')}"
@@ -658,24 +708,27 @@
                                                     <span class="text-sm">{fromInfo.flag_emoji}</span>
                                                     <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
                                                 {/if}
-                                                <span class="relative group/prov inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0"
-                                                      style="background: {provColor.bg}; border-color: {provColor.border}">
-                                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                                    {#if iconUrl}
-                                                        <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
-                                                    {:else}
-                                                        <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
-                                                    {/if}
-                                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                                    <span class="provider-tooltip">
-                                                        <span class="font-semibold">{getProviderName(step.provider)}</span><br/>
-                                                        {getProviderDescByCode(step.provider)}
+                                                <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                                    <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0"
+                                                          style="background: {provColor.bg}; border-color: {provColor.border}">
+                                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                                        {#if iconUrl}
+                                                            <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
+                                                        {:else}
+                                                            <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
+                                                        {/if}
+                                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                                     </span>
-                                                </span>
+                                                </Tooltip>
                                                 <span class="text-sm">{toInfo.flag_emoji}</span>
                                                 <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
                                             {/each}
                                         </span>
+                                        {#if warnings.length > 0}
+                                            <Tooltip html={warningsTooltipHtml(warnings)} position="top">
+                                                <AlertTriangle size={11} class="text-amber-500" />
+                                            </Tooltip>
+                                        {/if}
                                         <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex-shrink-0 whitespace-nowrap">
                                             {route.stepCount} {$_('fx.route.steps')}
                                         </span>
@@ -748,45 +801,6 @@
     }
     :global(.dark) [style*="--prov-bg"] {
         background: var(--prov-dark-bg, var(--prov-bg)) !important;
-    }
-
-    /* Provider tooltip */
-    .provider-tooltip {
-        display: none;
-        position: absolute;
-        bottom: calc(100% + 6px);
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 50;
-        width: max-content;
-        max-width: 280px;
-        padding: 6px 10px;
-        border-radius: 6px;
-        font-size: 10px;
-        line-height: 1.4;
-        white-space: normal;
-        text-transform: none;
-        letter-spacing: normal;
-        font-weight: normal;
-        color: white;
-        background: rgba(15, 23, 42, 0.95);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        pointer-events: none;
-    }
-    .provider-tooltip::after {
-        content: '';
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border: 5px solid transparent;
-        border-top-color: rgba(15, 23, 42, 0.95);
-    }
-    a:hover > .provider-tooltip,
-    a:focus > .provider-tooltip,
-    :global(.group\/prov):hover > .provider-tooltip,
-    :global(.group\/info):hover > .provider-tooltip {
-        display: block;
     }
 </style>
 

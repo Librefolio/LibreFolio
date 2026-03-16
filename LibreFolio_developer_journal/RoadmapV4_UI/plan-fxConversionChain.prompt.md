@@ -70,6 +70,9 @@
 | 15 Mar 2026 | ✅ MkDocs FX config updated | `configuration.md`: riscritta interamente per documentare `FxConversionRoute`, chain routes, nuovi endpoint `/fx/providers/routes`. Aggiornati anche `backend_documentation_audit.md` e `documentation_plan.md`. |
 | 15 Mar 2026 | ✅ Step 5 scenari smarcati | Tutti i 20 scenari CRUD+sync erano già coperti dai test ma i checkbox non erano stati aggiornati — ora marcati [x]. |
 | 15 Mar 2026 | ✅ MkDocs FX chain algo doc | Creata pagina `developer/frontend/fx-chain-algorithm.md`: descrizione completa dell'algoritmo DFS, vincoli, grafi Mermaid con esempi RON→USD, complessità, caching, sorting UI. Aggiunta a nav + indice frontend. |
+| 16 Mar 2026 | ✅ Provider `warning_i18n` | Nuova proprietà `warning_i18n` su `FXRateProvider` (default: `{}`). Override su SNB con warning 4 lingue che spiega dati solo mensili e conseguenze sulle catene. Schema `FXProviderInfo` + endpoint + client rigenerato. |
+| 16 Mar 2026 | 🔧 Warning ⚠️ triangle UI | `FxProviderSelect` + `FxProviderConfig`: triangolo ambra con tooltip concatenato per route che usano provider con `warning_i18n` non vuoto. Visibile sia nelle route selezionate che nel picker (direct + chain). |
+| 16 Mar 2026 | 🔧 Strict chain date match | `compute_chain_rate`: confermato exact-date matching. Se un leg non ha dati per una data → la data viene skippata. Nessun backward-fill nelle catene: i dati vengono salvati solo quando TUTTI i leg hanno rate fresco per quel giorno. |
 
 ### Refinements — 13 Marzo 2026 (post-review utente)
 

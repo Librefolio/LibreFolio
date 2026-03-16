@@ -131,6 +131,7 @@ async def list_providers(
                         instance, "description", f'{provider_dict["name"]} FX rate provider'
                         ),
                     description_i18n=getattr(instance, "description_i18n", {}),
+                    warning_i18n=getattr(instance, "warning_i18n", {}),
                     icon_url=instance.icon,
                     docs_url=getattr(instance, "docs_url", None),
                     )

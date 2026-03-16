@@ -41,6 +41,8 @@ export interface ProviderInfo {
     description?: string;
     /** Multilingual provider descriptions {lang_code: description} */
     description_i18n?: Record<string, string>;
+    /** Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning. */
+    warning_i18n?: Record<string, string>;
     /** URL to documentation page for this provider */
     docs_url?: string | null;
 }

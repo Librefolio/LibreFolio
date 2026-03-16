@@ -690,12 +690,12 @@
     mode={settingsTargetSlug ? 'pair' : 'global'}
     availablePairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
     pairData={settingsTargetSlug
-        ? pairs.find(p => p.config.slug === settingsTargetSlug)?.data?.map(d => ({date: d.date, value: d.rate}))
+        ? pairs.find(p => p.config.slug === settingsTargetSlug)?.data?.map(d => ({date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0}))
         : undefined}
     pairsDataMap={Object.fromEntries(
         pairs
             .filter(p => p.data.length > 0)
-            .map(p => [p.config.slug, p.data.map(d => ({date: d.date, value: d.rate}))])
+            .map(p => [p.config.slug, p.data.map(d => ({date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0}))])
     )}
     onsave={handleSettingsSave}
     onclose={() => { settingsModalOpen = false; settingsTargetSlug = null; }}

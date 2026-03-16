@@ -6,11 +6,11 @@
   Supports both 1-step (direct) and multi-step (chain) routes with visual distinction.
 -->
 <script lang="ts">
-    import {Plus, Trash2, Save, Undo2, Link, ArrowLeftRight, Info} from 'lucide-svelte';
+    import {Plus, Trash2, Save, Undo2, Link, ArrowLeftRight, Info, AlertTriangle} from 'lucide-svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {getProviderColor, getPriorityBadgeStyle} from '$lib/utils/colors';
     import {getCachedProviders} from '$lib/stores/currencyGraphStore';
-    import type {ProviderInfo} from '$lib/utils/currencyGraph';
     import {_ as t} from '$lib/i18n';
 
     // =========================================================================
@@ -147,6 +147,46 @@
     function getProviderFullName(code: string): string {
         return providerInfoMap.get(code)?.name ?? code;
     }
+
+    /** Get provider warning for the current language, with 'en' fallback. */
+    function getProviderWarning(code: string): string {
+        const prov = providerInfoMap.get(code);
+        if (!prov?.warning_i18n || Object.keys(prov.warning_i18n).length === 0) return '';
+        return prov.warning_i18n[language] ?? prov.warning_i18n['en'] ?? '';
+    }
+
+    /** Collect all unique provider warnings for a route's chain steps. */
+    function getItemWarnings(item: ProviderEntry): string[] {
+        if (!item.chainSteps) return [];
+        const seen = new Set<string>();
+        const warnings: string[] = [];
+        for (const step of item.chainSteps) {
+            if (seen.has(step.provider)) continue;
+            seen.add(step.provider);
+            const w = getProviderWarning(step.provider);
+            if (w) warnings.push(`${getProviderFullName(step.provider)}: ${w}`);
+        }
+        return warnings;
+    }
+
+    // =========================================================================
+    // Tooltip HTML builders
+    // =========================================================================
+
+    /** Escape HTML entities for safe tooltip content */
+    function esc(s: string): string {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /** Build HTML tooltip for a provider badge */
+    function providerTooltipHtml(code: string): string {
+        return `<strong>${esc(getProviderFullName(code))}</strong><br/>${esc(getProviderDescription(code))}`;
+    }
+
+    /** Build HTML tooltip for warning messages list */
+    function warningsTooltipHtml(warnings: string[]): string {
+        return warnings.map(w => esc(w)).join('<br/><br/>');
+    }
 </script>
 
 <div class="space-y-3">
@@ -154,12 +194,9 @@
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
             Provider Configuration
             {#if hasChainRoutes}
-                <span class="relative group/info flex-shrink-0 cursor-help">
+                <Tooltip text={$t('fx.route.chainWarning')} position="top">
                     <Info size={12} class="text-blue-400 dark:text-blue-500" />
-                    <span class="provider-tooltip">
-                        {$t('fx.route.chainWarning')}
-                    </span>
-                </span>
+                </Tooltip>
             {/if}
         </h3>
         <div class="flex items-center gap-2">
@@ -212,18 +249,16 @@
                                 {#if i === 0}
                                     <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.from}</span>
                                 {/if}
-                                <span class="relative group/prov inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0 cursor-help"
-                                      style="background: {provColor.bg}; border-color: {provColor.border}">
-                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                    <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
-                                        {step.provider}
+                                <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                    <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0"
+                                          style="background: {provColor.bg}; border-color: {provColor.border}">
+                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                        <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
+                                            {step.provider}
+                                        </span>
+                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                     </span>
-                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                    <span class="provider-tooltip">
-                                        <span class="font-semibold">{getProviderFullName(step.provider)}</span><br/>
-                                        {getProviderDescription(step.provider)}
-                                    </span>
-                                </span>
+                                </Tooltip>
                                 <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.to}</span>
                             {/each}
                         </div>
@@ -233,18 +268,16 @@
                         {@const provColor = getProviderColor(step.provider)}
                         <div class="flex items-center gap-1 flex-1 min-w-0">
                             <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.from}</span>
-                            <span class="relative group/prov inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0 cursor-help"
-                                  style="background: {provColor.bg}; border-color: {provColor.border}">
-                                <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
-                                    {step.provider}
+                            <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0"
+                                      style="background: {provColor.bg}; border-color: {provColor.border}">
+                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                    <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
+                                        {step.provider}
+                                    </span>
+                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                 </span>
-                                <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                <span class="provider-tooltip">
-                                    <span class="font-semibold">{getProviderFullName(step.provider)}</span><br/>
-                                    {getProviderDescription(step.provider)}
-                                </span>
-                            </span>
+                            </Tooltip>
                             <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.to}</span>
                         </div>
                     {:else}
@@ -257,6 +290,11 @@
                           style={getPriorityBadgeStyle(index)}>
                         #{index + 1}
                     </span>
+                    {#if getItemWarnings(item).length > 0}
+                        <Tooltip html={warningsTooltipHtml(getItemWarnings(item))} position="top">
+                            <AlertTriangle size={13} class="text-amber-500" />
+                        </Tooltip>
+                    {/if}
                     {#if !isReadonly}
                         <button
                             class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all ml-auto"
@@ -308,42 +346,5 @@
     :global(.dark) .priority-badge {
         background-color: var(--badge-dark-bg);
         color: var(--badge-dark-text);
-    }
-
-    /* Provider tooltip */
-    .provider-tooltip {
-        display: none;
-        position: absolute;
-        bottom: calc(100% + 6px);
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 50;
-        width: max-content;
-        max-width: 280px;
-        padding: 6px 10px;
-        border-radius: 6px;
-        font-size: 10px;
-        line-height: 1.4;
-        white-space: normal;
-        text-transform: none;
-        letter-spacing: normal;
-        font-weight: normal;
-        color: white;
-        background: rgba(15, 23, 42, 0.95);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        pointer-events: none;
-    }
-    .provider-tooltip::after {
-        content: '';
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border: 5px solid transparent;
-        border-top-color: rgba(15, 23, 42, 0.95);
-    }
-    :global(.group\/prov):hover > .provider-tooltip,
-    :global(.group\/info):hover > .provider-tooltip {
-        display: block;
     }
 </style>

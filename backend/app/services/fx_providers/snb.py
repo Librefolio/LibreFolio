@@ -117,6 +117,15 @@ class SNBProvider(FXRateProvider):
         }
 
     @property
+    def warning_i18n(self) -> dict[str, str]:
+        return {
+            "en": "SNB provides only monthly averages (one value per month, on the 1st). In conversion chains, rates are computed only on dates where ALL providers have data — days without SNB data will have no chain rate.",
+            "it": "La SNB fornisce solo medie mensili (un valore al mese, il 1°). Nelle catene di conversione, i tassi vengono calcolati solo nelle date in cui TUTTI i provider hanno dati — i giorni senza dati SNB non avranno tasso di catena.",
+            "fr": "La BNS ne fournit que des moyennes mensuelles (une valeur par mois, le 1er). Dans les chaînes de conversion, les taux ne sont calculés que les jours où TOUS les fournisseurs ont des données — les jours sans données BNS n'auront pas de taux de chaîne.",
+            "es": "El BNS solo proporciona promedios mensuales (un valor por mes, el 1°). En las cadenas de conversión, los tipos se calculan solo en fechas donde TODOS los proveedores tienen datos — los días sin datos del BNS no tendrán tipo de cadena.",
+        }
+
+    @property
     def test_currencies(self) -> list[str]:
         return ["CHF", "USD", "EUR", "GBP", "JPY"]
 
