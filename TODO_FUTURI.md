@@ -388,3 +388,25 @@ Ogni provider (ECB, FED, BOE, SNB) dovrebbe avere una **pagina dedicata** nella 
 1. Creare una pagina MkDocs per ogni provider in `mkdocs_src/docs/developer/backend/fx/providers/`
 2. Aggiornare la property `docs_url` in ogni provider per puntare alla pagina specifica
 3. Il frontend già usa `docs_url` per il link nell'info bar del FxProviderSelect (cliccando sull'icona del provider)
+
+---
+
+## 📊 CandlestickChart / VolumeBar — Phase 6 (Assets)
+
+**Data aggiunta**: 16 Marzo 2026
+**Status**: 📋 PIANIFICATO
+**Priorità**: Media (Phase 6)
+
+### Contesto
+Per FX si hanno solo close rate giornalieri — non esiste OHLC reale.
+CandlestickChart e VolumeBar saranno implementati quando avremo dati OHLC
+reali dagli asset source provider (yfinance, JustETF).
+
+### File
+- `frontend/src/lib/components/charts/CandlestickChart.svelte` (stub)
+- `frontend/src/lib/components/charts/VolumeBar.svelte` (stub)
+
+### Note
+- Per FX il toggle Line/Candlestick resta disabilitato (`disableCandlestick={true}`)
+- L'OHLC sintetizzato (O=prev close) non ha valore informativo per FX
+

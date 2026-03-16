@@ -1,32 +1,39 @@
 <!--
   FxEditSection — Edit mode panel for manual rate entry.
   CsvEditor + "+" button + Save/Cancel + CSV format link.
+  NOTE: Will be replaced by FxDataEditorSection in Step 4.
 -->
 <script lang="ts">
-    import {createEventDispatcher} from 'svelte';
     import {Plus, Save, X, Info} from 'lucide-svelte';
     import CsvEditor from './CsvEditor.svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
 
-    export let base: string;
-    export let quote: string;
-    export let saving: boolean = false;
+    interface Props {
+        base: string;
+        quote: string;
+        saving?: boolean;
+        onsave?: (rows: ParsedRow[]) => void;
+        oncancel?: () => void;
+    }
 
-    const dispatch = createEventDispatcher<{
-        save: ParsedRow[];
-        cancel: void;
-    }>();
+    let {
+        base,
+        quote,
+        saving = false,
+        onsave,
+        oncancel,
+    }: Props = $props();
 
-    let csvValue = `date;base;quote;base2quote`;
-    let parsedRows: ParsedRow[] = [];
-    let csvEditor: CsvEditor;
-    let hasEdits = false;
-    let showAddForm = false;
-    let newDate = new Date().toISOString().slice(0, 10);
-    let newRate = '';
+    let csvValue = $state(`date;base;quote;base2quote`);
+    let parsedRows: ParsedRow[] = $state([]);
+    let csvEditor: CsvEditor | undefined = $state(undefined);
+    let hasEdits = $state(false);
+    let showAddForm = $state(false);
+    let newDate = $state(new Date().toISOString().slice(0, 10));
+    let newRate = $state('');
 
-    function handleCsvChange(event: CustomEvent<ParsedRow[]>) {
-        parsedRows = event.detail;
+    function handleCsvChange(validRows: ParsedRow[], _errorCount: number, _hasDuplicates: boolean) {
+        parsedRows = validRows;
         hasEdits = parsedRows.length > 0;
     }
 
@@ -40,14 +47,14 @@
 
     function handleSave() {
         if (parsedRows.length === 0) return;
-        dispatch('save', parsedRows);
+        onsave?.(parsedRows);
     }
 
     function handleCancel() {
         csvValue = `date;base;quote;base2quote`;
         parsedRows = [];
         hasEdits = false;
-        dispatch('cancel');
+        oncancel?.();
     }
 
     export function onPointEdit(date: string, value: number) {
@@ -71,7 +78,7 @@
         Click on chart points to edit, paste CSV data below, or use the + button. Changes are saved only when you click "Save All".
     </p>
 
-    <CsvEditor bind:this={csvEditor} bind:value={csvValue} on:change={handleCsvChange} minHeight="180px" />
+    <CsvEditor bind:this={csvEditor} bind:value={csvValue} onvalidchange={handleCsvChange} minHeight="180px" />
 
     {#if showAddForm}
         <div class="flex items-end gap-2 p-3 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600">
@@ -87,22 +94,22 @@
                     <input type="number" bind:value={newRate} step="0.0001" min="0" placeholder="1.0823" class="mt-1 block w-full px-2 py-1 text-sm border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200" />
                 </label>
             </div>
-            <button class="px-3 py-1.5 text-sm bg-libre-green text-white rounded hover:bg-libre-green/90 disabled:opacity-50" on:click={handleAddPoint} disabled={!newDate || !newRate}>Add</button>
-            <button class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 rounded hover:bg-gray-300" on:click={() => showAddForm = false}>✕</button>
+            <button class="px-3 py-1.5 text-sm bg-libre-green text-white rounded hover:bg-libre-green/90 disabled:opacity-50" onclick={handleAddPoint} disabled={!newDate || !newRate}>Add</button>
+            <button class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 rounded hover:bg-gray-300" onclick={() => showAddForm = false}>✕</button>
         </div>
     {/if}
 
     <div class="flex items-center gap-2">
         {#if !showAddForm}
-            <button class="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors" on:click={() => showAddForm = true}>
+            <button class="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors" onclick={() => showAddForm = true}>
                 <Plus size={14} /> Add Point
             </button>
         {/if}
         {#if hasEdits}
-            <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50" on:click={handleSave} disabled={saving || parsedRows.length === 0}>
+            <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50" onclick={handleSave} disabled={saving || parsedRows.length === 0}>
                 <Save size={15} /> {saving ? 'Saving...' : `Save All (${parsedRows.length})`}
             </button>
-            <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/30" on:click={handleCancel}>
+            <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/30" onclick={handleCancel}>
                 <X size={15} /> Cancel
             </button>
         {/if}

@@ -180,8 +180,9 @@ export abstract class ChartSignal {
     static displayName: string;
     static icon: string;
     static paramDescriptors: SignalParamDescriptor[];
-    /** Category for UI grouping in ChartSettingsModal dropdown selectors */
-    static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
+    /** Category for UI grouping in ChartSettingsModal dropdown selectors.
+     *  'measure' is not shown in dropdowns — managed exclusively by MeasurePanel. */
+    static category: 'indicator' | 'comparison' | 'benchmark' | 'measure' = 'benchmark';
     /** Y-axis index: 0 = primary (same scale as data), 1 = secondary (independent scale). */
     static yAxisIndex: number = 0;
     /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-indicators/#ema' */
