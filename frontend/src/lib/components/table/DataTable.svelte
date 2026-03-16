@@ -51,6 +51,8 @@
         onFiltersChange?: (filters: Record<string, FilterValue>) => void;
         /** Initial filters to apply (from URL params) */
         initialFilters?: Record<string, FilterValue>;
+        /** Optional function to add CSS classes to a row based on its data */
+        getRowClass?: (row: T) => string;
     }
 
     let {
@@ -81,6 +83,7 @@
         getRowDisplayName,
         onFiltersChange,
         initialFilters,
+        getRowClass,
     }: Props = $props();
 
     // Derived: effective selection mode
@@ -785,8 +788,7 @@
                 {#each paginatedData as row}
                     {@const rowId = getRowId(row)}
                     {@const isSelected = rowSelection[rowId]}
-                    <tr class:selected={isSelected}
-                        class:clickable={effectiveSelectionMode === 'single' || onRowClick}
+                    <tr class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {getRowClass?.(row) ?? ''}"
                         onclick={() => handleRowClick(row)}
                         ondblclick={() => handleRowDoubleClick(row)}
                     >
@@ -871,6 +873,24 @@
                                                 <span class="cell-image-label">{cellContent.text}</span>
                                             {/if}
                                         </div>
+                                    {:else if cellContent.type === 'editable-number'}
+                                        <input
+                                            type="number"
+                                            class="cell-editable-number"
+                                            value={cellContent.value ?? ''}
+                                            step={cellContent.step ?? 1}
+                                            placeholder={cellContent.placeholder ?? ''}
+                                            onblur={(e) => {
+                                                const raw = e.currentTarget.value;
+                                                cellContent.onchange(raw === '' ? null : Number(raw));
+                                            }}
+                                            onkeydown={(e) => {
+                                                if (e.key === 'Enter') e.currentTarget.blur();
+                                            }}
+                                            onclick={(e) => e.stopPropagation()}
+                                        />
+                                    {:else if cellContent.type === 'html'}
+                                        {@html cellContent.html}
                                     {/if}
                                 {/if}
                             </td>
@@ -1148,31 +1168,31 @@
         background: #1e293b;
     }
 
-    tbody tr.selected {
+    tbody :global(tr.selected) {
         background: #eff6ff;
     }
 
-    :global(.dark) tbody tr.selected {
+    :global(.dark) tbody :global(tr.selected) {
         background: #1e3a5f;
     }
 
-    tbody tr.clickable {
+    tbody :global(tr.clickable) {
         cursor: pointer;
     }
 
-    tbody tr.clickable:hover {
+    tbody :global(tr.clickable):hover {
         background: #f0fdf4;
     }
 
-    :global(.dark) tbody tr.clickable:hover {
+    :global(.dark) tbody :global(tr.clickable):hover {
         background: #1a2e35;
     }
 
-    tbody tr.clickable.selected {
+    tbody :global(tr.clickable.selected) {
         background: #dcfce7;
     }
 
-    :global(.dark) tbody tr.clickable.selected {
+    :global(.dark) tbody :global(tr.clickable.selected) {
         background: #14532d;
     }
 
@@ -1537,5 +1557,55 @@
         .th-actions, .td-actions {
             position: static;
         }
+    }
+
+    /* Editable number cell */
+    .cell-editable-number {
+        width: 100%;
+        max-width: 120px;
+        padding: 0.25rem 0.375rem;
+        font-size: 0.8125rem;
+        font-family: ui-monospace, monospace;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        background: white;
+        color: #1e293b;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+    .cell-editable-number:focus {
+        border-color: #1a4031;
+        box-shadow: 0 0 0 1px #1a403140;
+    }
+    :global(.dark) .cell-editable-number {
+        background: #0f172a;
+        border-color: #475569;
+        color: #e2e8f0;
+    }
+    :global(.dark) .cell-editable-number:focus {
+        border-color: #4ade80;
+        box-shadow: 0 0 0 1px #4ade8040;
+    }
+
+    /* Row status classes (used via getRowClass prop) */
+    :global(tr.row-deleted) td {
+        background: #fef2f2 !important;
+        text-decoration: line-through;
+        opacity: 0.7;
+    }
+    :global(.dark) :global(tr.row-deleted) td {
+        background: #450a0a !important;
+    }
+    :global(tr.row-edited) td {
+        background: #fffbeb !important;
+    }
+    :global(.dark) :global(tr.row-edited) td {
+        background: #451a0340 !important;
+    }
+    :global(tr.row-appended) td {
+        background: #eff6ff !important;
+    }
+    :global(.dark) :global(tr.row-appended) td {
+        background: #1e3a5f40 !important;
     }
 </style>

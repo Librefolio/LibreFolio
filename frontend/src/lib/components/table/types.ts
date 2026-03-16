@@ -91,6 +91,31 @@ export interface ImageCell {
 }
 
 /**
+ * Editable number cell — renders an inline <input type="number">.
+ * Used by DataEditor for rate editing, etc.
+ */
+export interface EditableNumberCell {
+    type: 'editable-number';
+    /** Current value (null = empty) */
+    value: number | null;
+    /** Step for input increment (default: 1) */
+    step?: number;
+    /** Placeholder text when value is null */
+    placeholder?: string;
+    /** Callback when value changes (blur or Enter) */
+    onchange: (newValue: number | null) => void;
+}
+
+/**
+ * HTML snippet cell — renders raw HTML content.
+ * Used for colored values (pos/neg formatting), inline badges, etc.
+ */
+export interface HtmlCell {
+    type: 'html';
+    html: string;
+}
+
+/**
  * All possible cell content types
  */
 export type CellContent =
@@ -101,7 +126,9 @@ export type CellContent =
     | SizeCell
     | LinkCell
     | CustomCell
-    | ImageCell;
+    | ImageCell
+    | EditableNumberCell
+    | HtmlCell;
 
 // ============ Column Definition Types ============
 

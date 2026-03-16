@@ -83,7 +83,10 @@
 
             const measure = new MeasureSignal(
                 id,
-                MeasureSignal.getDefaultStyle(),
+                {
+                    ...MeasureSignal.getDefaultStyle(),
+                    color: `hsl(${(30 + measures.length * 137.5) % 360}, 70%, 55%)`,
+                },
                 {startDate: start, endDate: end},
             );
             measures = [...measures, measure];

@@ -284,6 +284,27 @@
         return [...counts].sort((a, b) => a - b);
     }
 
+    // Sync internal selectedKeys when selectedRoutes is set externally (e.g., by parent's loadRoutesFromBackend)
+    $effect(() => {
+        if (allRoutes.length === 0 || selectedRoutes.length === 0) return;
+        // Build key for each selectedRoute by matching chainSteps against allRoutes
+        const matchedKeys: string[] = [];
+        for (const route of selectedRoutes) {
+            const key = route.map(s => `${s.from}-${s.to}:${s.provider}`).join('|');
+            if (routeMap.has(key) && !selectedKeys.has(key)) {
+                matchedKeys.push(key);
+            }
+        }
+        if (matchedKeys.length > 0) {
+            const newKeys = new Set(selectedKeys);
+            for (const k of matchedKeys) newKeys.add(k);
+            selectedKeys = newKeys;
+            // Preserve existing order + add new at end
+            const existing = new Set(orderedSelectedKeys);
+            orderedSelectedKeys = [...orderedSelectedKeys, ...matchedKeys.filter(k => !existing.has(k))];
+        }
+    });
+
     // =========================================================================
     // Provider icon helper
     // =========================================================================

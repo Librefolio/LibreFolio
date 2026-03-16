@@ -24,6 +24,7 @@
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
     import type {ChainStep} from '$lib/utils/currencyGraph';
     import {getRegisteredPairs} from '$lib/stores/fxStoreRegistry';
+    import {currentLanguage} from '$lib/stores/language';
 
     // =========================================================================
     // Props (Svelte 5)
@@ -393,6 +394,7 @@
                     {quoteCurrency}
                     bind:selectedRoutes
                     onSelectionChange={handleRoutesChange}
+                    language={$currentLanguage}
                     disabled={!hasCurrencies}
                     {configuredPairSlugs}
                 />

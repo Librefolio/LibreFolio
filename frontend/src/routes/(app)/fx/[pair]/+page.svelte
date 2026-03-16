@@ -12,7 +12,7 @@
      *
      * Uses Svelte 5 runes. Replaces old FxEditSection with FxDataEditorSection.
      */
-    import {onMount} from 'svelte';
+    import {onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
@@ -574,11 +574,12 @@
                         class="p-1.5 rounded-lg transition-colors {measureMode
                             ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={() => {
+                        onclick={async () => {
                             if (measureMode) {
                                 measurePanel?.stopMeasureMode();
                             } else {
                                 showMeasures = true;
+                                await tick();
                                 measurePanel?.startMeasureMode();
                             }
                         }}
@@ -652,63 +653,6 @@
     </div>
 
     <!-- ======================================================================= -->
-    <!-- Foldable Panel: Measures (below chart, above Signals) -->
-    <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <button
-            class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-            onclick={() => showMeasures = !showMeasures}
-        >
-            <span class="flex items-center gap-2">
-                <Ruler size={15} class="text-violet-500" />
-                {$t('fxDetail.measures')}
-                {#if measureMode}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
-                {/if}
-            </span>
-            <ChevronDown size={15} class="transition-transform {showMeasures ? 'rotate-180' : ''}" />
-        </button>
-        {#if showMeasures}
-            <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <MeasurePanel
-                    bind:this={measurePanel}
-                    chartData={lineData}
-                    overlaySignals={overlaySignals}
-                    pairLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
-                    onmeasureschange={(m) => measureSignals = m}
-                    onmeasuremodechange={(active) => measureMode = active}
-                    {viewMode}
-                />
-            </div>
-        {/if}
-    </div>
-
-    <!-- ======================================================================= -->
-    <!-- Foldable Panel: Signals (below Measures) -->
-    <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <button
-            class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-            onclick={() => showSignals = !showSignals}
-        >
-            <span class="flex items-center gap-2">
-                <TrendingUp size={15} class="text-blue-500" />
-                {$t('fxDetail.signals')}
-            </span>
-            <ChevronDown size={15} class="transition-transform {showSignals ? 'rotate-180' : ''}" />
-        </button>
-        {#if showSignals}
-            <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <ChartSignalsSection
-                    signals={[...signals]}
-                    availablePairs={configuredPairSlugs}
-                    onchange={handleSignalsChange}
-                />
-            </div>
-        {/if}
-    </div>
-
-    <!-- ======================================================================= -->
     <!-- Data Editor (shown only when toggled via pencil button) -->
     <!-- ======================================================================= -->
     {#if showDataEditor}
@@ -764,6 +708,64 @@
             </div>
         </div>
     {/if}
+
+    <!-- ======================================================================= -->
+    <!-- Foldable Panel: Measures (below DataEditor, above Signals) -->
+    <!-- ======================================================================= -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+        <button
+            class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+            onclick={() => showMeasures = !showMeasures}
+        >
+            <span class="flex items-center gap-2">
+                <Ruler size={15} class="text-violet-500" />
+                {$t('fxDetail.measures')}
+                {#if measureMode}
+                    <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
+                {/if}
+            </span>
+            <ChevronDown size={15} class="transition-transform {showMeasures ? 'rotate-180' : ''}" />
+        </button>
+        {#if showMeasures}
+            <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+                <MeasurePanel
+                    bind:this={measurePanel}
+                    chartData={lineData}
+                    overlaySignals={overlaySignals}
+                    pairLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
+                    onmeasureschange={(m) => measureSignals = m}
+                    onmeasuremodechange={(active) => measureMode = active}
+                    {viewMode}
+                />
+            </div>
+        {/if}
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- Foldable Panel: Signals (below Measures) -->
+    <!-- ======================================================================= -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+        <button
+            class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+            onclick={() => showSignals = !showSignals}
+        >
+            <span class="flex items-center gap-2">
+                <TrendingUp size={15} class="text-blue-500" />
+                {$t('fxDetail.signals')}
+            </span>
+            <ChevronDown size={15} class="transition-transform {showSignals ? 'rotate-180' : ''}" />
+        </button>
+        {#if showSignals}
+            <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+                <ChartSignalsSection
+                    signals={[...signals]}
+                    availablePairs={configuredPairSlugs}
+                    onchange={handleSignalsChange}
+                />
+            </div>
+        {/if}
+    </div>
+
 
     <!-- ======================================================================= -->
     <!-- Provider Configuration Modal (reuses FxPairAddModal in editMode) -->

@@ -1,13 +1,9 @@
 <!--
   PriceChartFull — Full-featured price chart with unified ECharts instance.
 
-  Architecture: Single ECharts instance with 2 grids + shared dataZoom.
-  - grid[0] (top): Main chart with line/signal series, overlay markers, pending edits
-  - grid[1] (bottom): Overview mini-chart with dataZoom slider
-  - dataZoom[0]: 'slider' type anchored to grid[1], controls both grids
-  - dataZoom[1]: 'inside' type on grid[0] for mouse wheel zoom/pan
-
-  No external DataZoomBar component needed — everything is native ECharts sync.
+  Architecture: Single ECharts instance with 1 grid + inside dataZoom.
+  - grid[0]: Main chart with line/signal series, overlay markers, pending edits
+  - dataZoom: 'inside' type for mouse wheel zoom/pan (no visible slider)
 
   Uses Svelte 5 runes.
 -->
@@ -23,6 +19,7 @@
         buildMainSeries,
         buildBandSeries,
         buildBarSeries,
+        computeArrowRotation,
     } from './lineChartHelpers';
 
     // =========================================================================
@@ -34,7 +31,6 @@
         pendingData?: LineDataPoint[];
         currency?: string;
         chartHeight?: string;
-        overviewHeight?: string;
         initialChartType?: ChartType;
         initialViewMode?: ViewMode;
         editMode?: boolean;
@@ -63,7 +59,6 @@
         pendingData = [],
         currency = '',
         chartHeight = '400px',
-        overviewHeight = '60px',
         initialChartType = 'line',
         initialViewMode = 'absolute',
         editMode = false,
@@ -292,43 +287,6 @@
 
                 if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
                     const markData: any[] = [];
-                    // Collect first and last non-null indices
-                    let firstNonNull = -1;
-                    let lastNonNull = -1;
-                    for (let i = 0; i < signalSeriesData.length; i++) {
-                        if (signalSeriesData[i] !== null) {
-                            if (firstNonNull < 0) firstNonNull = i;
-                            lastNonNull = i;
-                        }
-                    }
-
-                    /**
-                     * Compute arrow rotation for start/end marker of a segment.
-                     * ECharts arrow symbol points UP (0°). symbolRotate is CW degrees.
-                     * To point rightward = 90°, to point down-right = 135°, etc.
-                     */
-                    function segmentArrowRotation(isStart: boolean): number {
-                        if (firstNonNull < 0 || lastNonNull < 0 || firstNonNull === lastNonNull) return 0;
-                        const v0 = signalSeriesData[firstNonNull] as number;
-                        const v1 = signalSeriesData[lastNonNull] as number;
-                        const dx = lastNonNull - firstNonNull;
-                        // Compute approximate y-scale using chart aspect ratio
-                        const mainVals = displayData.map(d => d.value);
-                        const yMin = Math.min(...mainVals);
-                        const yMax = Math.max(...mainVals);
-                        const yRange = yMax - yMin || 1;
-                        const xRange = Math.max(signalSeriesData.length, 1);
-                        // Scale factor: map data-Y to visual units comparable to data-X
-                        const yScale = (xRange * 0.25) / yRange;
-                        const dy = (v1 - v0) * yScale;
-                        // Chart angle (CCW from x-axis, with y-up = positive)
-                        const chartAngle = Math.atan2(dy, dx) * 180 / Math.PI;
-                        // Convert to ECharts rotation: CW from UP
-                        // UP=0°, RIGHT=90°, DOWN=180°, LEFT=270°
-                        let rotation = 90 - chartAngle;
-                        if (isStart) rotation += 180;
-                        return rotation;
-                    }
 
                     if (signal.markerStart) {
                         for (let i = 0; i < signalSeriesData.length; i++) {
@@ -338,7 +296,7 @@
                                     symbol: signal.markerStart,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
                                     symbolRotate: signal.markerStart === 'arrow'
-                                        ? segmentArrowRotation(true)
+                                        ? computeArrowRotation(signalSeriesData, i, true)
                                         : 0,
                                     itemStyle: {color: signal.color},
                                 });
@@ -354,7 +312,7 @@
                                     symbol: signal.markerEnd,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
                                     symbolRotate: signal.markerEnd === 'arrow'
-                                        ? segmentArrowRotation(false)
+                                        ? computeArrowRotation(signalSeriesData, i, false)
                                         : 0,
                                     itemStyle: {color: signal.color},
                                 });
@@ -414,7 +372,7 @@
         const option: echarts.EChartsOption = {
             animation: false,
             grid: [
-                {top: 20, right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12, bottom: 50, left: 10, containLabel: true},
+                {top: 20, right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12, bottom: 20, left: 10, containLabel: true},
             ],
             xAxis: [
                 {type: 'category', data: dates, gridIndex: 0, axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}}, axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11}, splitLine: {show: false}},
@@ -439,12 +397,7 @@
                     splitLine: {show: false}, scale: hasTertiaryAxis},
             ],
             dataZoom: [
-                {type: 'slider', xAxisIndex: [0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, bottom: 5, height: 25,
-                    borderColor: isDark ? '#475569' : '#d1d5db', backgroundColor: 'transparent',
-                    fillerColor: isDark ? 'rgba(74,222,128,0.1)' : 'rgba(26,64,49,0.08)',
-                    handleStyle: {color: isDark ? '#4ade80' : '#1a4031'},
-                    textStyle: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 10}, brushSelect: false},
-                {type: 'inside', xAxisIndex: [0], zoomOnMouseWheel: true, moveOnMouseMove: true},
+                {type: 'inside', xAxisIndex: [0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, zoomOnMouseWheel: true, moveOnMouseMove: true},
             ],
             tooltip: {
                 trigger: 'axis', appendToBody: true,
