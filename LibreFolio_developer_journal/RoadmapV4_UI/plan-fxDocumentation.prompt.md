@@ -62,9 +62,9 @@ Questo plan è l'ultimo della catena Phase 5 FX. Una volta completato, Phase 5 p
 
 **Ordine globale di esecuzione Phase 5:**
 ```
-1. plan-fxConversionChain.prompt.md    (chain/route-based)
-2. plan-fxDetailPage.prompt.md         (candlestick, edit popup, bidirezionalità)
-3. plan-fxTestingCleanup.prompt.md     (E2E, unit test, i18n audit, gallery)
-4. plan-fxDocumentation.prompt.md      (MkDocs, docs utente, traduzioni)
+1. plan-fxConversionChain.prompt.md       (chain/route-based)
+2. plan-fxDetailPageRedesign.prompt.md    (chart unificato, DataEditor, MeasureSignal, pannelli inline)
+3. plan-fxTestingCleanup.prompt.md        (E2E, unit test, i18n audit, gallery)
+4. plan-fxDocumentation.prompt.md         (MkDocs, docs utente, traduzioni)
 ```
 
