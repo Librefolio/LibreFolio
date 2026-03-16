@@ -802,6 +802,8 @@ Aggiungere chiavi via `./dev.py i18n add` (EN/IT/FR/ES):
 
 ### Bug Deferred (prossimo sprint)
 
+> **Round 4**: Vedi [`plan-fxDetailBugRound4.prompt.md`](plan-fxDetailBugRound4.prompt.md) — 14 issue rimanenti (dataZoom, DataTable migrations, cache lingua, preview overlay, i18n, etc.)
+
 | # | Bug | Severità | File | Fix | Note |
 |---|-----|----------|------|-----|------|
 | **B6** | **Nessuna preview tra 1° e 2° click** — manca preview segnale e dati nella tabella durante piazzamento | 🟠 Alta | `MeasurePanel.svelte`, `PriceChartFull.svelte` | Mouse tracking ECharts + linea fantasma + card preview con dati parziali | ~3h, complessità media |
