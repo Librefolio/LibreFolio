@@ -44,7 +44,8 @@
     "retry": "Reintentar",
     "saving": "Guardando...",
     "discardChanges": "¿Descartar Cambios?",
-    "discardChangesMessage": "Tienes cambios sin guardar. ¿Estás seguro de que quieres cerrar?"
+    "discardChangesMessage": "Tienes cambios sin guardar. ¿Estás seguro de que quieres cerrar?",
+    "sync": "Sincronizar"
   },
   "table": {
     "rowsPerPage": "Filas por página",
@@ -763,5 +764,38 @@
       "lower": "Inferior",
       "secondaryAxis": "2° eje"
     }
+  },
+  "measure": {
+    "pending": "Inicio: {startDate} ({startValue}) — haga clic en el gráfico para el punto final",
+    "empty": "Sin mediciones. Haz clic en el icono 📏 regla del gráfico para añadir una.",
+    "active": "Activa — haz clic en el gráfico",
+    "table": {
+      "signal": "Señal",
+      "start": "Inicio",
+      "end": "Fin",
+      "deltaAbs": "Δ Abs",
+      "deltaPct": "Δ %",
+      "annualized": "Δ%/año"
+    },
+    "remove": "Eliminar",
+    "days": "{days}d"
+  },
+  "fxDetail": {
+    "aesthetics": "Estética",
+    "measures": "Medidas",
+    "signals": "Señales",
+    "editRates": "Editar tasas",
+    "loadingRates": "Cargando tasas...",
+    "noData": "No hay datos de tasas disponibles para este rango.",
+    "syncRates": "Sincronizar tasas",
+    "backToList": "Volver a la lista FX",
+    "swapDirection": "Invertir dirección",
+    "exitMeasure": "Salir del modo de medición",
+    "addMeasure": "Añadir medición",
+    "closeEditor": "Cerrar editor",
+    "editRatesBtn": "Editar tasas",
+    "providers": "Proveedores",
+    "syncFromProvider": "Sincronizar tasas",
+    "refreshData": "Actualizar datos"
   }
 }

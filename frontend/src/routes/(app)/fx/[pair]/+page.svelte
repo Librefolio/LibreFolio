@@ -404,7 +404,7 @@
         <button
             class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors"
             onclick={() => goto('/fx')}
-            title="Back to FX list"
+            title={$t('fxDetail.backToList')}
         >
             <ArrowLeft size={20} />
         </button>
@@ -417,7 +417,7 @@
             <button
                 class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 onclick={() => inverted = !inverted}
-                title="Swap direction"
+                title={$t('fxDetail.swapDirection')}
             >
                 <ArrowLeftRight size={16} />
             </button>
@@ -497,30 +497,30 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={() => showProviderModal = true}
-                title="Configure providers"
+                title={$t('fxDetail.providers')}
             >
                 <Wrench size={14} />
-                {#if showActionLabels}<span>Providers</span>{/if}
+                {#if showActionLabels}<span>{$t('fxDetail.providers')}</span>{/if}
             </button>
             <!-- Row 2, Col 1: Sync -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleSync}
                 disabled={syncing}
-                title="Sync rates from provider"
+                title={$t('fxDetail.syncFromProvider')}
             >
                 <RotateCcw size={14} class={syncing ? 'animate-spin' : ''} />
-                {#if showActionLabels}<span>{syncing ? 'Syncing...' : 'Sync'}</span>{/if}
+                {#if showActionLabels}<span>{syncing ? $t('fx.actions.syncing') : $t('common.sync')}</span>{/if}
             </button>
             <!-- Row 2, Col 2: Refresh -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleRefresh}
                 disabled={loading}
-                title="Refresh data"
+                title={$t('fxDetail.refreshData')}
             >
                 <RefreshCw size={14} class={loading ? 'animate-spin' : ''} />
-                {#if showActionLabels}<span>Refresh</span>{/if}
+                {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
         </div>
     </div>
@@ -535,7 +535,7 @@
         >
             <span class="flex items-center gap-2">
                 <Settings size={15} class="text-libre-green" />
-                Aesthetics
+                {$t('fxDetail.aesthetics')}
             </span>
             <ChevronDown size={15} class="transition-transform {showAesthetics ? 'rotate-180' : ''}" />
         </button>
@@ -563,7 +563,7 @@
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
                     <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Loading rates...</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">{$t('fxDetail.loadingRates')}</p>
                 </div>
             </div>
         {:else if lineData.length > 0}
@@ -582,14 +582,14 @@
                                 measurePanel?.startMeasureMode();
                             }
                         }}
-                        title={measureMode ? 'Exit measure mode' : 'Add measurement'}
+                        title={measureMode ? $t('fxDetail.exitMeasure') : $t('fxDetail.addMeasure')}
                     >
                         <Ruler size={16} />
                     </button>
                     <button
                         class="p-1.5 rounded-lg transition-colors {showDataEditor
                             ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-600 hover:text-amber-600'}"
+                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
                         onclick={() => {
                             if (showDataEditor) {
                                 // Exiting edit mode: hide editor, restore panel states
@@ -610,7 +610,7 @@
                                 showDataEditor = true;
                             }
                         }}
-                        title={showDataEditor ? 'Close editor' : 'Edit rates'}
+                        title={showDataEditor ? $t('fxDetail.closeEditor') : $t('fxDetail.editRatesBtn')}
                     >
                         <Pencil size={16} />
                     </button>
@@ -638,13 +638,13 @@
         {:else}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
-                    <p class="text-gray-400 dark:text-gray-500 mb-3">No rate data available for this range.</p>
+                    <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('fxDetail.noData')}</p>
                     <button
                         class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
                         onclick={handleSync}
                         disabled={syncing}
                     >
-                        {syncing ? 'Syncing...' : 'Sync Rates'}
+                        {syncing ? $t('fx.actions.syncing') : $t('fxDetail.syncRates')}
                     </button>
                 </div>
             </div>
@@ -661,9 +661,9 @@
         >
             <span class="flex items-center gap-2">
                 <Ruler size={15} class="text-violet-500" />
-                Measures
+                {$t('fxDetail.measures')}
                 {#if measureMode}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">Active — click chart</span>
+                    <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
             </span>
             <ChevronDown size={15} class="transition-transform {showMeasures ? 'rotate-180' : ''}" />
@@ -693,7 +693,7 @@
         >
             <span class="flex items-center gap-2">
                 <TrendingUp size={15} class="text-blue-500" />
-                Signals
+                {$t('fxDetail.signals')}
             </span>
             <ChevronDown size={15} class="transition-transform {showSignals ? 'rotate-180' : ''}" />
         </button>
@@ -716,7 +716,7 @@
             <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 rounded-t-xl">
                 <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
                     <Pencil size={15} />
-                    Edit Rates
+                    {$t('fxDetail.editRates')}
                 </span>
                 <button
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
@@ -730,7 +730,7 @@
                             savedPanelStates = null;
                         }
                     }}
-                    title="Close editor"
+                    title={$t('fxDetail.closeEditor')}
                 >✕</button>
             </div>
             <div class="px-4 pb-4 pt-3">

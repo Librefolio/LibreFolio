@@ -23,7 +23,6 @@
         buildMainSeries,
         buildBandSeries,
         buildBarSeries,
-        computeArrowRotation as computeArrowRotationHelper,
     } from './lineChartHelpers';
 
     // =========================================================================
@@ -293,35 +292,42 @@
 
                 if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
                     const markData: any[] = [];
-                    // For measure signals (exactly 2 non-null points), compute arrow rotation
-                    // from the segment slope rather than neighboring data points
-                    const nonNullIndices: number[] = [];
+                    // Collect first and last non-null indices
+                    let firstNonNull = -1;
+                    let lastNonNull = -1;
                     for (let i = 0; i < signalSeriesData.length; i++) {
-                        if (signalSeriesData[i] !== null) nonNullIndices.push(i);
+                        if (signalSeriesData[i] !== null) {
+                            if (firstNonNull < 0) firstNonNull = i;
+                            lastNonNull = i;
+                        }
                     }
-                    const isMeasureSegment = nonNullIndices.length === 2;
 
-                    /** Compute rotation for a 2-point measure segment */
-                    function measureSegmentRotation(isStart: boolean): number {
-                        if (!isMeasureSegment) return 0;
-                        const [i0, i1] = nonNullIndices;
-                        const v0 = signalSeriesData[i0] as number;
-                        const v1 = signalSeriesData[i1] as number;
-                        const dx = i1 - i0;
-                        // Approximate Y scale to match chart aspect ratio
-                        const allVals = signalSeriesData.filter((v: any): v is number => v !== null);
+                    /**
+                     * Compute arrow rotation for start/end marker of a segment.
+                     * ECharts arrow symbol points UP (0°). symbolRotate is CW degrees.
+                     * To point rightward = 90°, to point down-right = 135°, etc.
+                     */
+                    function segmentArrowRotation(isStart: boolean): number {
+                        if (firstNonNull < 0 || lastNonNull < 0 || firstNonNull === lastNonNull) return 0;
+                        const v0 = signalSeriesData[firstNonNull] as number;
+                        const v1 = signalSeriesData[lastNonNull] as number;
+                        const dx = lastNonNull - firstNonNull;
+                        // Compute approximate y-scale using chart aspect ratio
                         const mainVals = displayData.map(d => d.value);
                         const yMin = Math.min(...mainVals);
                         const yMax = Math.max(...mainVals);
                         const yRange = yMax - yMin || 1;
                         const xRange = Math.max(signalSeriesData.length, 1);
+                        // Scale factor: map data-Y to visual units comparable to data-X
                         const yScale = (xRange * 0.25) / yRange;
                         const dy = (v1 - v0) * yScale;
-                        // Arrow points in the direction from start to end
-                        const angleRad = Math.atan2(-dy, dx);
-                        let angleDeg = (angleRad * 180) / Math.PI;
-                        if (isStart) angleDeg += 180;
-                        return angleDeg + 90; // ECharts arrow points UP by default
+                        // Chart angle (CCW from x-axis, with y-up = positive)
+                        const chartAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+                        // Convert to ECharts rotation: CW from UP
+                        // UP=0°, RIGHT=90°, DOWN=180°, LEFT=270°
+                        let rotation = 90 - chartAngle;
+                        if (isStart) rotation += 180;
+                        return rotation;
                     }
 
                     if (signal.markerStart) {
@@ -332,7 +338,7 @@
                                     symbol: signal.markerStart,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
                                     symbolRotate: signal.markerStart === 'arrow'
-                                        ? (isMeasureSegment ? measureSegmentRotation(true) : computeArrowRotationHelper(signalSeriesData, i, true))
+                                        ? segmentArrowRotation(true)
                                         : 0,
                                     itemStyle: {color: signal.color},
                                 });
@@ -348,7 +354,7 @@
                                     symbol: signal.markerEnd,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
                                     symbolRotate: signal.markerEnd === 'arrow'
-                                        ? (isMeasureSegment ? measureSegmentRotation(false) : computeArrowRotationHelper(signalSeriesData, i, false))
+                                        ? segmentArrowRotation(false)
                                         : 0,
                                     itemStyle: {color: signal.color},
                                 });

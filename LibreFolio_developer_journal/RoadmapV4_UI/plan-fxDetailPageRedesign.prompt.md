@@ -787,12 +787,26 @@ Aggiungere chiavi via `./dev.py i18n add` (EN/IT/FR/ES):
 | **B22** | **Δ%/yr senza spiegazione** — aggiunto icona ℹ con Tooltip + formula LaTeX (KaTeX) per Δ%/yr | 🟢 Bassa | `MeasurePanel.svelte` | Tooltip con `math={true}` e formula annualizzazione composta | ✅ |
 | **B23** | **Edit mode: pannelli non si foldano** — premendo pencil, tutti i pannelli devono chiudersi e il Data Editor deve apparire; uscendo si ripristinano | 🟡 Media | `+page.svelte` detail | `savedPanelStates` salva/ripristina stato pannelli; close/cancel/save tutti ripristinano | ✅ |
 
+### Bug Immediati — Round 3 (16 Marzo 2026)
+
+| # | Bug | Severità | File | Fix | Status |
+|---|-----|----------|------|-----|--------|
+| **B24** | **a11y warning: div con onclick** — `<div>` card header del MeasurePanel ha `onclick` senza `onkeydown`, causa warning svelte-check | 🟡 Media | `MeasurePanel.svelte` | Sostituito `<div>` con `<button type="button">` nativo, eliminato warning a11y | ✅ |
+| **B25** | **Pencil sempre ambra** — il pulsante matita è sempre arancione, confonde; deve essere grigio quando inattivo, ambra solo quando active | 🟡 Media | `+page.svelte` detail | Classe condizionale: `text-gray-500` di default, `text-amber-600 + ring` solo quando `showDataEditor` | ✅ |
+| **B26** | **Primo click ruler non attiva add mode** — cliccando il righello si apre il pannello Measures ma non si entra subito in modalità add | 🟡 Media | `+page.svelte` detail | Già corretto in Round 2 (B11), confermato funzionante | ✅ |
+| **B27** | **Stile misure non personalizzabile** — i segnali di misura non avevano colore/spessore/tratto come i segnali EMA/SMA | 🟠 Alta | `MeasurePanel.svelte` | Aggiunta riga estetica: color picker, line style (solid/dashed/dotted), width selector (1-3px) | ✅ |
+| **B28** | **Tooltip Δ%/yr troppo verboso** — mostrava formula LaTeX pesante; deve essere sintetico `?` con formula breve | 🟡 Media | `MeasurePanel.svelte` | Sostituito tooltip HTML+KaTeX con semplice `text="(1 + Δ%)^(365/days) − 1"`, icona `CircleHelp` | ✅ |
+| **B29** | **Stringhe hardcoded in inglese** — tutta la pagina FX detail e MeasurePanel avevano stringhe inglesi senza i18n | 🟠 Alta | `MeasurePanel.svelte`, `+page.svelte` detail, `en/it/fr/es.json` | 25+ chiavi i18n aggiunte via `./dev.py i18n add`, tutte le stringhe UI sostituite con `$t(...)` | ✅ |
+| **B30** | **Freccia misura ancora sbagliata** — la rotazione arrow non funzionava per dati interpolati e la formula aveva offset errato | 🟠 Alta | `PriceChartFull.svelte` | Riscritta `segmentArrowRotation()`: usa first/last non-null, formula corretta `rotation = 90° - chartAngle` | ✅ |
+| **B31** | **Segmento misura scompare su zoom** — con solo 2 punti non-null, quando entrambi uscivano dal viewport ECharts nascondeva la serie | 🟠 Alta | `MeasureSignal.ts` | `computePoints()` ora interpola linearmente tutti i punti tra start/end, non solo i 2 estremi | ✅ |
+
 ### Bug Deferred (prossimo sprint)
 
 | # | Bug | Severità | File | Fix | Note |
 |---|-----|----------|------|-----|------|
 | **B6** | **Nessuna preview tra 1° e 2° click** — manca preview segnale e dati nella tabella durante piazzamento | 🟠 Alta | `MeasurePanel.svelte`, `PriceChartFull.svelte` | Mouse tracking ECharts + linea fantasma + card preview con dati parziali | ~3h, complessità media |
 | **B9** | **Δ%/yr layout responsive** — su schermi wide mostrare colonne extra in layout matrice | 🟢 Bassa | `MeasurePanel.svelte` | Layout a matrice responsive per misure e segnali | Decisione UX |
+| **B32** | **Pagina docs misure** — il `?` nella card misure deve linkare a una pagina mkdocs che spiega come usare i segnali di misura | 🟢 Bassa | `mkdocs_src/`, `MeasurePanel.svelte` | Creare pagina `.md` in mkdocs_src con tutorial misure, aggiungere link nella `?` | ~1h |
 
 ### Confermato funzionante
 
