@@ -84,10 +84,10 @@
         {#if popoverOpen}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <div class="fixed inset-0 z-10" onclick={closePopover}></div>
+            <div class="fixed inset-0 z-40" onclick={closePopover}></div>
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20
+            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50
                 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
                 rounded-lg shadow-lg p-3 w-max"
                 onclick={(e) => e.stopPropagation()}>

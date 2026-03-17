@@ -76,6 +76,9 @@
     // Dirty/discard state
     let showDiscardConfirm = $state(false);
 
+    // Baseline routes for edit mode dirty detection
+    let baselineRoutesJson = $state('[]');
+
     // Populate state when editMode opens, and load routes from backend
     let loadingRoutes = $state(false);
 
@@ -108,10 +111,13 @@
             } else {
                 selectedRoutes = [];
             }
+            // Snapshot baseline for dirty detection
+            baselineRoutesJson = JSON.stringify(selectedRoutes);
         } catch (e) {
             console.error('Failed to load routes for edit mode:', e);
             // Fallback to prop
             selectedRoutes = editRoutes.length > 0 ? [...editRoutes] : [];
+            baselineRoutesJson = JSON.stringify(selectedRoutes);
         } finally {
             loadingRoutes = false;
         }
@@ -125,7 +131,14 @@
     let hasRoutes = $derived(selectedRoutes.length > 0);
     let hasChainRoutes = $derived(selectedRoutes.some(r => r.length > 1));
     let isValid = $derived(hasCurrencies);
-    let isDirty = $derived(baseCurrency !== '' || quoteCurrency !== '' || selectedRoutes.length > 0);
+    let isDirty = $derived.by(() => {
+        if (editMode) {
+            // In edit mode, dirty only if routes changed from baseline
+            return JSON.stringify(selectedRoutes) !== baselineRoutesJson;
+        }
+        // In create mode, dirty if anything is set
+        return baseCurrency !== '' || quoteCurrency !== '' || selectedRoutes.length > 0;
+    });
     /** Slugs of already-configured FX pairs for sorting chain routes */
     let configuredPairSlugs = $derived(getRegisteredPairs());
 
@@ -284,6 +297,7 @@
         quoteCurrency = '';
         selectedRoutes = [];
         createIntermediatePairs = false;
+        baselineRoutesJson = '[]';
         error = null;
         showDiscardConfirm = false;
         onclose?.();
