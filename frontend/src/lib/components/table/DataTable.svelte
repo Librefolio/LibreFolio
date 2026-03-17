@@ -53,6 +53,10 @@
         initialFilters?: Record<string, FilterValue>;
         /** Optional function to add CSS classes to a row based on its data */
         getRowClass?: (row: T) => string;
+        /** Optional function to add inline styles to a row (e.g. CSS custom properties) */
+        getRowStyle?: (row: T) => string;
+        /** Table layout mode: 'fixed' (default) or 'auto' (columns expand to fill space) */
+        tableLayout?: 'fixed' | 'auto';
     }
 
     let {
@@ -84,6 +88,8 @@
         onFiltersChange,
         initialFilters,
         getRowClass,
+        getRowStyle,
+        tableLayout = 'fixed',
     }: Props = $props();
 
     // Derived: effective selection mode
@@ -136,6 +142,9 @@
     // Resize state
     let resizing = $state<{ columnId: string; startX: number; startWidth: number } | null>(null);
 
+    // Filter button refs (for fixed-position popover)
+    let filterBtnRefs = $state<Record<string, HTMLButtonElement | null>>({});
+
     // ============ Storage Helpers ============
 
     function getStorageKey(suffix: string): string {
@@ -165,9 +174,9 @@
     // Default column order
     let defaultColumnOrder = $derived(columns.map(c => c.id));
 
-    // Default column visibility (all visible)
+    // Default column visibility (respects hiddenByDefault)
     let defaultColumnVisibility = $derived(
-        Object.fromEntries(columns.map(c => [c.id, true]))
+        Object.fromEntries(columns.map(c => [c.id, !c.hiddenByDefault]))
     );
 
     // Default column widths
@@ -668,7 +677,7 @@
 
     <!-- Table -->
     <div class="table-wrapper">
-        <table class="datatable">
+        <table class="datatable {tableLayout === 'auto' ? 'layout-auto' : ''}">
             <thead>
             <tr>
                 <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
@@ -694,7 +703,7 @@
                     <th
                             class="th-data"
                             class:sortable={column.sortable !== false && enableSorting}
-                            style="width: {columnWidths[column.id] || column.width || 150}px;"
+                            style="{tableLayout === 'auto' ? 'min-width' : 'width'}: {columnWidths[column.id] || column.width || 150}px;"
                     >
                         <div class="header-content">
                             <button
@@ -720,6 +729,7 @@
                             <!-- Filter button -->
                             {#if column.filterable !== false && enableColumnFilters}
                                 <button
+                                        bind:this={filterBtnRefs[column.id]}
                                         type="button"
                                         class="filter-btn"
                                         class:active={hasFilter}
@@ -750,6 +760,7 @@
                                         initialValue={columnFilters[column.id]}
                                         onApply={(filter) => applyColumnFilter(column.id, filter)}
                                         onClose={() => openFilterColumnId = null}
+                                        anchorElement={filterBtnRefs[column.id] ?? null}
                                 />
                             {/if}
                         </div>
@@ -789,6 +800,7 @@
                     {@const rowId = getRowId(row)}
                     {@const isSelected = rowSelection[rowId]}
                     <tr class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {getRowClass?.(row) ?? ''}"
+                        style={getRowStyle?.(row) ?? ''}
                         onclick={() => handleRowClick(row)}
                         ondblclick={() => handleRowDoubleClick(row)}
                     >
@@ -880,6 +892,10 @@
                                             value={cellContent.value ?? ''}
                                             step={cellContent.step ?? 1}
                                             placeholder={cellContent.placeholder ?? ''}
+                                            oninput={(e) => {
+                                                const raw = e.currentTarget.value;
+                                                cellContent.onchange(raw === '' ? null : Number(raw));
+                                            }}
                                             onblur={(e) => {
                                                 const raw = e.currentTarget.value;
                                                 cellContent.onchange(raw === '' ? null : Number(raw));
@@ -924,8 +940,8 @@
         </table>
     </div>
 
-    <!-- Pagination - always show when enabled and there's data -->
-    {#if enablePagination && filteredData.length > 0}
+    <!-- Pagination - show only when enabled and items exceed smallest page size -->
+    {#if enablePagination && filteredData.length > 0 && filteredData.length > Math.min(...pageSizeOptions.filter(x => x > 0))}
         <DataTablePagination
                 pageIndex={pagination.pageIndex}
                 pageSize={pagination.pageSize}
@@ -979,7 +995,6 @@
         overflow-y: visible;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
-        min-height: 280px;
         background: white;
     }
 
@@ -993,6 +1008,10 @@
         border-collapse: collapse;
         table-layout: fixed;
         background: white;
+    }
+
+    .datatable.layout-auto {
+        table-layout: auto;
     }
 
     :global(.dark) .datatable {
@@ -1589,23 +1608,29 @@
 
     /* Row status classes (used via getRowClass prop) */
     :global(tr.row-deleted) td {
-        background: #fef2f2 !important;
+        background: rgba(239, 68, 68, 0.10) !important;
         text-decoration: line-through;
         opacity: 0.7;
     }
     :global(.dark) :global(tr.row-deleted) td {
-        background: #450a0a !important;
+        background: rgba(239, 68, 68, 0.15) !important;
     }
     :global(tr.row-edited) td {
-        background: #fffbeb !important;
+        background: rgba(59, 130, 246, 0.10) !important;
     }
     :global(.dark) :global(tr.row-edited) td {
-        background: #451a0340 !important;
+        background: rgba(59, 130, 246, 0.15) !important;
     }
     :global(tr.row-appended) td {
-        background: #eff6ff !important;
+        background: rgba(16, 185, 129, 0.10) !important;
     }
     :global(.dark) :global(tr.row-appended) td {
-        background: #1e3a5f40 !important;
+        background: rgba(16, 185, 129, 0.15) !important;
+    }
+    :global(tr.row-stale) td {
+        background: rgba(245, 158, 11, var(--stale-opacity, 0.06)) !important;
+    }
+    :global(.dark) :global(tr.row-stale) td {
+        background: rgba(245, 158, 11, var(--stale-opacity, 0.08)) !important;
     }
 </style>

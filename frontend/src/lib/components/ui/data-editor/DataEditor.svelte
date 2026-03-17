@@ -20,6 +20,7 @@
     import type {ColumnDef, DataRow} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
+    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
 
     // =========================================================================
     // Props
@@ -98,9 +99,25 @@
             case 'edited': return 'row-edited';
             case 'deleted': return 'row-deleted';
             case 'appended': return 'row-appended';
-            default: return '';
+            default: return (row.staleDays && row.staleDays > 0) ? 'row-stale' : '';
         }
     }
+
+    /** Stale opacity: more stale days = more opaque yellow, capped at 0.4 */
+    function staleOpacity(days: number): number {
+        return Math.min(0.4, days * 0.04);
+    }
+
+    /** Row inline style for dynamic stale opacity */
+    function rowStyleFn(row: DataRow): string {
+        if (row.status === 'original' && row.staleDays && row.staleDays > 0) {
+            return `--stale-opacity: ${staleOpacity(row.staleDays)}`;
+        }
+        return '';
+    }
+
+    /** Set of all existing dates for duplicate prevention */
+    let existingDates = $derived(new Set(rows.map(r => r.date)));
 
     let dtColumns: DTColumnDef<DataRow>[] = $derived.by(() => {
         const cols: DTColumnDef<DataRow>[] = [
@@ -108,14 +125,41 @@
                 id: 'date',
                 header: 'Date',
                 type: 'text',
-                cell: (r) => ({
-                    type: 'html',
-                    html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${weekday(r.date)}</span></span>`,
-                }),
+                cell: (r) => {
+                    // Editable date for appended rows
+                    if (r.status === 'appended' && !isReadonly) {
+                        // disabledDates: all dates except this row's current date
+                        const disabled = new Set(existingDates);
+                        disabled.delete(r.date);
+                        return {
+                            type: 'custom',
+                            component: SingleDatePicker,
+                            props: {
+                                value: r.date,
+                                label: '',
+                                compact: true,
+                                disabledDates: disabled,
+                                onchange: (newDate: string) => handleDateChange(r.date, newDate),
+                            },
+                        };
+                    }
+                    const wd = weekday(r.date);
+                    const stale = r.staleDays && r.staleDays > 0 ? r.staleDays : 0;
+                    if (stale > 0) {
+                        return {
+                            type: 'html',
+                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-amber-600 dark:text-amber-400" title="${stale} days stale">⚠️ ${stale}d</span></span>`,
+                        };
+                    }
+                    return {
+                        type: 'html',
+                        html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span></span>`,
+                    };
+                },
                 getValue: (r) => r.date,
                 sortable: true,
-                filterable: false,
-                width: 160,
+                filterable: true,
+                width: 180,
             },
         ];
 
@@ -135,7 +179,7 @@
                     }),
                     getValue: (r) => Number(r.values[col.key] ?? 0),
                     sortable: true,
-                    filterable: false,
+                    filterable: true,
                     width: 140,
                 });
             } else {
@@ -149,7 +193,7 @@
                     }),
                     getValue: (r) => Number(r.values[col.key] ?? 0),
                     sortable: true,
-                    filterable: false,
+                    filterable: true,
                     width: 140,
                 });
             }
@@ -160,6 +204,7 @@
             id: 'status',
             header: 'Status',
             type: 'enum',
+            hiddenByDefault: true,
             enumOptions: [
                 {value: 'original', label: 'Original'},
                 {value: 'edited', label: 'Edited'},
@@ -206,6 +251,18 @@
     // =========================================================================
     // Table Edit Handlers
     // =========================================================================
+
+    /** Change the date of an appended row (via SingleDatePicker) */
+    function handleDateChange(oldDate: string, newDate: string) {
+        if (oldDate === newDate) return;
+        // Prevent duplicate dates
+        if (rows.some(r => r.date === newDate && r.date !== oldDate)) return;
+        const row = rows.find(r => r.date === oldDate && r.status === 'appended');
+        if (!row) return;
+        row.date = newDate;
+        rows = [...rows];
+        emitDirty();
+    }
 
     function handleCellEditByDate(date: string, colKey: string, newValue: unknown) {
         const rowIdx = rows.findIndex(r => r.date === date);
@@ -257,9 +314,26 @@
     }
 
     function handleAddRow() {
-        const today = new Date().toISOString().slice(0, 10);
+        // Calculate date: 1 day after the latest date in the dataset
+        const existingDates = new Set(rows.map(r => r.date));
+        let newDate: string;
+        if (rows.length > 0) {
+            const sortedDates = [...existingDates].sort();
+            const lastDate = sortedDates[sortedDates.length - 1];
+            const d = new Date(lastDate + 'T00:00:00Z');
+            d.setUTCDate(d.getUTCDate() + 1);
+            newDate = d.toISOString().slice(0, 10);
+            // Skip over existing dates
+            while (existingDates.has(newDate)) {
+                const d2 = new Date(newDate + 'T00:00:00Z');
+                d2.setUTCDate(d2.getUTCDate() + 1);
+                newDate = d2.toISOString().slice(0, 10);
+            }
+        } else {
+            newDate = new Date().toISOString().slice(0, 10);
+        }
         const newRow: DataRow = {
-            date: today,
+            date: newDate,
             status: 'appended',
             originalStatus: 'appended',
             values: Object.fromEntries(columns.map(c => [c.key, undefined])),
@@ -394,9 +468,10 @@
             enableColumnVisibility={true}
             enableColumnResize={true}
             enablePagination={true}
-            defaultPageSize={50}
-            pageSizeOptions={[25, 50, 100, 0]}
+            defaultPageSize={10}
+            pageSizeOptions={[10, 25, 50, 100, 0]}
             getRowClass={rowBgClass}
+            getRowStyle={rowStyleFn}
             emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
         />
     </div>
@@ -409,25 +484,3 @@
     onimport={handleImport}
 />
 
-<style>
-    :global(.row-edited) {
-        background-color: rgba(59, 130, 246, 0.05) !important;
-    }
-    :global(.row-deleted) {
-        background-color: rgba(239, 68, 68, 0.05) !important;
-        text-decoration: line-through;
-        opacity: 0.6;
-    }
-    :global(.row-appended) {
-        background-color: rgba(16, 185, 129, 0.05) !important;
-    }
-    :global(.dark .row-edited) {
-        background-color: rgba(59, 130, 246, 0.1) !important;
-    }
-    :global(.dark .row-deleted) {
-        background-color: rgba(239, 68, 68, 0.1) !important;
-    }
-    :global(.dark .row-appended) {
-        background-color: rgba(16, 185, 129, 0.1) !important;
-    }
-</style>

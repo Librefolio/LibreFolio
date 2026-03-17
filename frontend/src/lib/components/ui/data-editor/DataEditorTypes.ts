@@ -42,6 +42,8 @@ export interface DataRow {
     selected: boolean;
     /** Original values for revert (only set when status transitions from 'original') */
     _originalValues?: Record<string, unknown>;
+    /** Number of stale days (backward-fill gap) — 0 or undefined means fresh data */
+    staleDays?: number;
 }
 
 /** A folded gap placeholder in the table view */
