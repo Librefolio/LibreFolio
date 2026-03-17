@@ -24,7 +24,7 @@
         buildMainSeries,
         buildBandSeries,
         buildBarSeries,
-        computeArrowRotation as computeArrowRotationHelper,
+        updateArrowRotations,
     } from './lineChartHelpers';
 
     // =========================================================================
@@ -183,7 +183,10 @@
         if (!resizeObserver) {
             resizeObserver = new ResizeObserver(() => {
                 if (chartOptionSet) {
-                    try { chartInstance?.resize(); } catch (_) { /* ignore coord errors during resize */ }
+                    try {
+                        chartInstance?.resize();
+                        if (chartInstance) updateArrowRotations(chartInstance);
+                    } catch (_) { /* ignore coord errors during resize */ }
                 } else if (chartContainer && data.length > 0) {
                     // Chart not yet initialized (e.g. container was zero-size on first attempt).
                     renderChart();
@@ -208,6 +211,11 @@
                     }
                 });
             }
+
+            // Recompute arrow rotations when zoom changes (aspect ratio shifts)
+            chartInstance.on('dataZoom', () => {
+                if (chartInstance) updateArrowRotations(chartInstance);
+            });
         }
 
         const isDark = document.documentElement.classList.contains('dark');
@@ -332,7 +340,7 @@
                 };
 
                 // Endpoint markers at start/end of signal data
-                // Arrow markers are rotated to follow the line direction at that point.
+                // Arrow rotation is computed post-render by updateArrowRotations() using pixel coords.
                 if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
                     const markData: any[] = [];
 
@@ -340,13 +348,11 @@
                         for (let i = 0; i < signalSeriesData.length; i++) {
                             const v = signalSeriesData[i];
                             if (v !== null && v !== undefined) {
-                                const rotate = signal.markerStart === 'arrow'
-                                    ? computeArrowRotationHelper(signalSeriesData, i, true) : 0;
                                 markData.push({
                                     coord: [dates[i], v],
                                     symbol: signal.markerStart,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
-                                    symbolRotate: rotate,
+                                    symbolRotate: 0, // real rotation set by updateArrowRotations()
                                     itemStyle: {color: signal.color},
                                 });
                                 break;
@@ -357,13 +363,11 @@
                         for (let i = signalSeriesData.length - 1; i >= 0; i--) {
                             const v = signalSeriesData[i];
                             if (v !== null && v !== undefined) {
-                                const rotate = signal.markerEnd === 'arrow'
-                                    ? computeArrowRotationHelper(signalSeriesData, i, false) : 0;
                                 markData.push({
                                     coord: [dates[i], v],
                                     symbol: signal.markerEnd,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
-                                    symbolRotate: rotate,
+                                    symbolRotate: 0, // real rotation set by updateArrowRotations()
                                     itemStyle: {color: signal.color},
                                 });
                                 break;
@@ -677,6 +681,9 @@
 
         chartInstance.setOption(option, true);
         chartOptionSet = true;
+
+        // Compute pixel-accurate arrow rotations after layout is established
+        updateArrowRotations(chartInstance);
 
         // Restore zoom position if the user had zoomed/panned
         if (savedZoom && !compact) {

@@ -410,61 +410,86 @@ export function buildBarSeries(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Compute rotation angle for arrow markers on a signal series.
+ * After `chart.setOption()`, scan all series for arrow markPoints
+ * and recompute their `symbolRotate` using pixel-space coordinates.
  *
- * Uses only the current point and the nearest non-null neighbor to derive
- * a pure direction angle.  No yScale — marker Y-positioning is handled by
- * ECharts via `coord`; this function only computes the arrow orientation.
+ * Each arrow marker is processed independently using its **local slope**:
+ * scan backward for the nearest non-null neighbor, fall back to forward.
+ * The arrow points AWAY from the neighbor (incoming for start, outgoing for end).
  *
- * Algorithm:
- *  1. Scan backward for the first non-null predecessor.
- *  2. If none found (current point is the first valid), scan forward instead.
- *  3. atan2(-dy, dx) → math angle (0° = right).
- *  4. +180° when isStart (arrow points backward / incoming).
- *  5. +90° to convert from math convention to ECharts (0° = up).
- *
- * @param signalData  The full series data array (null for missing points)
- * @param idx         Index of the marker point
- * @param isStart     true → arrow points backward (incoming); false → forward
- * @returns           Rotation in degrees for ECharts symbolRotate
+ * Must be called:
+ *  - After every `chart.setOption()`
+ *  - On `dataZoom` events (zoom changes pixel aspect ratio)
+ *  - On `resize` events
  */
-export function computeArrowRotation(
-    signalData: any[],
-    idx: number,
-    isStart: boolean,
-): number {
-    const MAX_LOOK = 20;
-    let dx: number | undefined;
-    let dy: number | undefined;
+export function updateArrowRotations(chart: echarts.ECharts): void {
+    if (!chart || chart.isDisposed?.()) return;
 
-    // 1. Try to find the previous non-null point
-    for (let j = idx - 1; j >= Math.max(idx - MAX_LOOK, 0); j--) {
-        if (signalData[j] !== null && signalData[j] !== undefined) {
-            dx = idx - j;
-            dy = (signalData[idx] as number) - (signalData[j] as number);
-            break;
-        }
-    }
+    const option = chart.getOption() as any;
+    if (!option?.series) return;
 
-    // 2. Fallback: find the next non-null point (current is the first valid)
-    if (dx === undefined) {
-        for (let j = idx + 1; j < Math.min(idx + MAX_LOOK + 1, signalData.length); j++) {
-            if (signalData[j] !== null && signalData[j] !== undefined) {
-                dx = j - idx;
-                dy = (signalData[j] as number) - (signalData[idx] as number);
-                break;
+    const dates: string[] = Array.isArray(option.xAxis) ? option.xAxis[0]?.data ?? [] : [];
+    let needsUpdate = false;
+
+    for (const series of option.series) {
+        if (!series.markPoint?.data?.length) continue;
+
+        const seriesData: any[] = series.data || [];
+
+        for (const marker of series.markPoint.data) {
+            if (marker.symbol !== 'arrow' || !marker.coord) continue;
+
+            // Resolve the marker's index in the category axis
+            const markerIdx = typeof marker.coord[0] === 'number'
+                ? marker.coord[0]
+                : dates.indexOf(marker.coord[0]);
+            if (markerIdx < 0) continue;
+
+            // Find nearest non-null neighbor: backward first, forward fallback.
+            // - END markers (last non-null): backward finds data → arrow points forward
+            // - START markers (first non-null): backward finds nothing → forward → arrow points backward
+            let neighborIdx = -1;
+            for (let j = markerIdx - 1; j >= Math.max(0, markerIdx - 20); j--) {
+                if (seriesData[j] !== null && seriesData[j] !== undefined) {
+                    neighborIdx = j;
+                    break;
+                }
+            }
+            if (neighborIdx < 0) {
+                for (let j = markerIdx + 1; j < Math.min(seriesData.length, markerIdx + 21); j++) {
+                    if (seriesData[j] !== null && seriesData[j] !== undefined) {
+                        neighborIdx = j;
+                        break;
+                    }
+                }
+            }
+            if (neighborIdx < 0) continue;
+
+            try {
+                const neighborCoord = [dates[neighborIdx], seriesData[neighborIdx]];
+                const pMarker = chart.convertToPixel({gridIndex: 0}, marker.coord) as unknown as number[];
+                const pNeighbor = chart.convertToPixel({gridIndex: 0}, neighborCoord) as unknown as number[];
+                if (!pMarker || !pNeighbor) continue;
+
+                // forwardDeg = math angle from marker toward neighbor (0° = right, CCW)
+                const dx = pNeighbor[0] - pMarker[0];
+                const dy = pNeighbor[1] - pMarker[1];
+                const towardNeighborDeg = (Math.atan2(-dy, dx) * 180) / Math.PI;
+
+                // Arrow points AWAY from neighbor:
+                //   math: towardNeighborDeg + 180°
+                //   ECharts (0° = up, anti-clockwise): math_angle - 90°
+                //   Combined: towardNeighborDeg + 180 - 90 = towardNeighborDeg + 90
+                marker.symbolRotate = towardNeighborDeg + 90;
+                needsUpdate = true;
+            } catch (_) {
+                // convertToPixel can fail if chart not fully laid out
             }
         }
     }
 
-    // 3. No neighbor at all → vertical arrow
-    if (dx === undefined || dy === undefined) return isStart ? 180 : 0;
-
-    // 4. atan2 gives angle where 0° = right.
-    //    ECharts arrow symbol points UP by default, so +90° converts.
-    const angleRad = Math.atan2(-dy, dx);
-    let angleDeg = (angleRad * 180) / Math.PI;
-    if (isStart) angleDeg += 180;
-    return angleDeg - 90;
+    if (needsUpdate) {
+        chart.setOption({series: option.series}, false);
+    }
 }
 

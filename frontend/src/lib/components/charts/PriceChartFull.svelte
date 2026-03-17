@@ -19,7 +19,7 @@
         buildMainSeries,
         buildBandSeries,
         buildBarSeries,
-        computeArrowRotation,
+        updateArrowRotations,
     } from './lineChartHelpers';
 
     // =========================================================================
@@ -182,7 +182,10 @@
         if (!resizeObserver) {
             resizeObserver = new ResizeObserver(() => {
                 if (chartOptionSet) {
-                    try { chartInstance?.resize(); } catch (_) {}
+                    try {
+                        chartInstance?.resize();
+                        if (chartInstance) updateArrowRotations(chartInstance);
+                    } catch (_) {}
                 } else if (chartContainer && data.length > 0) {
                     renderChart();
                 }
@@ -218,6 +221,11 @@
                         }
                     }
                 }
+            });
+
+            // Recompute arrow rotations when zoom changes (aspect ratio shifts)
+            chartInstance.on('dataZoom', () => {
+                if (chartInstance) updateArrowRotations(chartInstance);
             });
         }
 
@@ -295,9 +303,7 @@
                                     coord: [dates[i], signalSeriesData[i]],
                                     symbol: signal.markerStart,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
-                                    symbolRotate: signal.markerStart === 'arrow'
-                                        ? computeArrowRotation(signalSeriesData, i, true)
-                                        : 0,
+                                    symbolRotate: 0, // real rotation set by updateArrowRotations()
                                     itemStyle: {color: signal.color},
                                 });
                                 break;
@@ -311,9 +317,7 @@
                                     coord: [dates[i], signalSeriesData[i]],
                                     symbol: signal.markerEnd,
                                     symbolSize: Math.max(signal.lineWidth * 3, 8),
-                                    symbolRotate: signal.markerEnd === 'arrow'
-                                        ? computeArrowRotation(signalSeriesData, i, false)
-                                        : 0,
+                                    symbolRotate: 0, // real rotation set by updateArrowRotations()
                                     itemStyle: {color: signal.color},
                                 });
                                 break;
@@ -456,6 +460,9 @@
 
         chartInstance.setOption(option, true);
         chartOptionSet = true;
+
+        // Compute pixel-accurate arrow rotations after layout is established
+        updateArrowRotations(chartInstance);
     }
 </script>
 

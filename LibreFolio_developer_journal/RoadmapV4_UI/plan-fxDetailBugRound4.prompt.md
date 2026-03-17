@@ -131,55 +131,36 @@ Rimuovere la prop `pendingData` da PriceChartFull e la relativa logica di serie 
 
 **Il chart NON ricalcola gli altri segnali overlay finché non si salva** — la preview è un segnale puro sovrapposto.
 
-### 6. ⚠️ Fix freccia misura (B30) — RICHIEDE FIX SCALE
+### 6. ✅ Fix freccia misura (B30) — Risolto con convertToPixel post-render
 
 **File**: `frontend/src/lib/components/charts/lineChartHelpers.ts`
 
-**Iterazione 1** (completata): Riscritta `computeArrowRotation` con algoritmo semplificato a 2 punti (punto attuale + precedente non-null). Rimossi: multi-vicini, `allVals.filter()`.
+**Iterazione 1** (completata): Riscritta `computeArrowRotation` con algoritmo semplificato a 2 punti.
 
-**Iterazione 2** (da fare): L'angolo è ancora sbagliato perché `dx` (indice 0..N) e `dy` (dato es. 0.00..0.09) vivono in scale completamente diverse. `atan2(0.09, 100)` ≈ 0.05° → freccia quasi piatta. In più, l'angolo visivamente corretto dipende dalla finestra di zoom (cambia l'aspect ratio Y/X).
+**Iterazione 2** (completata): Identificato root cause: `dx` (indici) e `dy` (valori) in scale diverse → angoli errati. L'angolo visivo dipende dal pixel aspect ratio (cambia con zoom/resize).
 
-**Analisi del problema**:
-- `dx` è in unità indice (0..N punti), `dy` è in unità dato (es. 0.84..0.87)
-- Il rapporto `dy/dx` in coordinate dati NON corrisponde alla pendenza visiva
-- La pendenza visiva dipende da: larghezza pixel griglia / range X visibile, altezza pixel griglia / range Y visibile
-- Quando lo zoom cambia, il range visibile cambia → l'angolo deve cambiare
-- Ergo: l'angolo è funzione dello **stato corrente del chart** (zoom, resize, assi), non solo dei dati
+**Iterazione 3** (completata): Il caso 2-frecce usava la direzione **globale** start→end per entrambe le frecce, rendendo il marker START dipendente dalla scelta del marker END. Fix: eliminato il caso speciale, ogni freccia processata indipendentemente con pendenza locale.
 
-**Approcci proposti**:
+**Soluzione finale**: `updateArrowRotations(chart)` — approccio unificato:
 
-**A. Post-render con `convertToPixel` + aggiornamento su zoom/resize**
-- Dopo ogni render/zoom/resize, iterare tutti i marker con freccia
-- Usare `chart.convertToPixel('grid', [dateIndex, value])` per i 2 punti
-- Calcolare l'angolo da pixel delta → sempre corretto
-- Aggiornare solo `symbolRotate` via `chart.setOption({series: [...]}, {replaceMerge: []})`
-- **Pro**: Massima accuratezza, gestisce zoom/resize/axis-change
-- **Con**: Richiede accesso all'istanza ECharts dentro la funzione di rotazione; potenziale costo su zoom frequenti (mitigabile con `requestAnimationFrame`)
-- **Dove agganciare**: evento `dataZoom` + `resize` su chart, callback in LineChart.svelte
+1. `computeArrowRotation()` **rimossa** (non più placeholder, proprio eliminata)
+2. Tutti i call site ora usano `symbolRotate: 0` (placeholder inline)
+3. `updateArrowRotations(chart)` post-render:
+   - Itera ogni serie → ogni `markPoint.data` con `symbol === 'arrow'`
+   - Per **ogni** freccia indipendentemente: trova il vicino non-null più prossimo (backward-first, forward-fallback)
+   - `convertToPixel` per i 2 punti (marker + vicino) → angolo in pixel-space
+   - `symbolRotate = towardNeighborDeg + 90` (arrow punta AWAY dal vicino, conversione math→ECharts)
+   - Nessun caso speciale 1-freccia vs 2-frecce: la logica backward-first identifica automaticamente START (forward fallback → punta a sinistra) vs END (backward trovato → punta a destra)
+4. Chiamata in 3 punti: post-setOption, su `dataZoom`, su `ResizeObserver`
 
-**B. Custom `renderItem` series per i marker**
-- Sostituire i `symbol` nativi ECharts con una serie `type: 'custom'` + `renderItem`
-- Dentro `renderItem`, `api.coord([x, y])` dà coordinate pixel → calcolo angolo
-- ECharts richiama `renderItem` automaticamente a ogni render/zoom
-- **Pro**: Più pulito, ECharts gestisce tutto il lifecycle
-- **Con**: Refactor significativo di come i segnali renderizzano i marker; la renderizzazione custom è più complessa dei symbol nativi
+**Cleanup**: Rimossi `computeArrowRotation` export + tutti gli import da PriceChartFull e LineChart.
 
-**C. `markLine` con frecce**
-- Usare `markLine` ECharts con `symbol: ['arrow', 'arrow']` ai bordi del segnale
-- ECharts gestisce orientamento freccia lungo la linea automaticamente
-- **Pro**: Nessun calcolo manuale di angoli, feature built-in
-- **Con**: `markLine` è pensato per annotazioni, non per marker per-punto; limitato a coppie di punti; potrebbe non integrarsi con lo stile marker attuale (shape + size configurabili)
+**File modificati**:
+- `lineChartHelpers.ts` — `computeArrowRotation()` eliminata, `updateArrowRotations()` unificata
+- `PriceChartFull.svelte` — rimosso import `computeArrowRotation`, marker usano `symbolRotate: 0`
+- `LineChart.svelte` — rimosso import `computeArrowRotation`, marker usano `symbolRotate: 0`
 
-**D. Passare le dimensioni pixel e i range assi alla funzione**
-- Modificare la signature: `computeArrowRotation(signalData, idx, isStart, xScale, yScale)`
-- `xScale = gridWidthPx / visibleIndexRange`, `yScale = gridHeightPx / visibleYRange`
-- `dx_px = dx * xScale`, `dy_px = dy * yScale` → `atan2(-dy_px, dx_px)`
-- **Pro**: Modifica minimale alla funzione; concettualmente semplice
-- **Con**: Il chiamante deve ottenere le dimensioni pixel e i range assi dal chart, e ricalcolare su ogni zoom/resize (stesse dipendenze dell'approccio A ma con più parametri da passare)
-
-**Raccomandazione**: Approccio **A** — `convertToPixel` è la via più diretta e meno invasiva. La funzione attuale resterebbe quasi invariata (cambia solo la fonte di `dx`/`dy`: pixel anziché dati). L'aggiornamento su zoom si aggancia agli eventi ECharts già presenti nel componente. Se il costo su zoom fosse troppo alto, si può fare debounce o `requestAnimationFrame`.
-
-**⏳ In attesa di review utente per decidere approccio.**
+**Fix aggiuntivo**: `+page.svelte` L138 — ternario rotto `settings.colorByBaseline ? 'absolute' : 'absolute'` → `viewMode` per ricalcolo segnali (EMA, ecc.) su switch abs/%.
 
 ### 7. ✅ Fix ruler tick + colori misure distinti
 
@@ -310,7 +291,7 @@ Usarle nei `getLabel()` dei segnali tramite un helper i18n-aware.
 | Row-folding nel DataEditor? | Rimosso — paginazione DataTable al suo posto. Giorni vuoti = righe con rate null |
 | Chart update su edit? | Solo su Save — finché non si salva il chart non ricalcola segnali overlay |
 | Formattazione pos/neg nelle colonne DataTable? | Usare `CellContent` custom con snippet HTML (non complicare i tipi generici) |
-| Arrow rotation: serve `isStart`? | Sì. Ma il problema principale è la **mismatch di scala**: `dx` (indici) vs `dy` (dati) producono angoli quasi piatti. L'angolo corretto richiede conversione in pixel-space, e cambia con zoom/resize. 4 approcci proposti (A/B/C/D), raccomandata A (`convertToPixel` + update su zoom) |
+| Arrow rotation: serve `isStart`? | **No**, eliminato. Ogni freccia processata indipendentemente con backward-first neighbor scan. La direzione emerge dai dati: START non ha predecessore → fallback forward → punta backward. END ha predecessore → punta forward. `convertToPixel` + formula unica `towardNeighborDeg + 90` |
 | Provider cache: approccio? | Eliminare param `language` da `getCurrencyGraph`/`findConversionPaths`. Sync route dentro `computeRoutes()` dopo popolamento |
 | Measure preview: interpolazione? | No, preview mostra solo start+end. Al 2° click calcola intermedi per la leggenda |
 | DatePicker misure: quale componente? | Potenziare DateRangePicker con prop `showPresets={false}`. Usa 2 date (start+end), stesse logiche assegnazione |
