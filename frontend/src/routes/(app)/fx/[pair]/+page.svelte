@@ -34,7 +34,7 @@
     import {currentLanguage} from '$lib/stores/language';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {
-        getFxStore, apiResultToFxDataPoint, getRegisteredPairs,
+        getFxStore, apiResultToFxDataPoint,
         type FxDataPoint
     } from '$lib/stores/fxStoreRegistry';
 
@@ -93,8 +93,11 @@
     let measurePanel: MeasurePanel | undefined = $state(undefined);
 
     // Data editor
-    let pendingEditPoints: LineDataPoint[] = $state([]);
+    let pendingPreviewSignal: RenderedSignal | null = $state(null);
     let savingEdit = $state(false);
+
+    // All configured FX pair slugs (from backend, for FxPair signal dropdown)
+    let allConfiguredSlugs: string[] = $state([]);
 
     // Panel states before edit mode (to restore when exiting)
     let savedPanelStates: {aesthetics: boolean; measures: boolean; signals: boolean} | null = $state(null);
@@ -144,9 +147,13 @@
     });
 
     /** Combined overlay signals: computed from settings + measure signals */
-    let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals]);
+    let allOverlaySignals: RenderedSignal[] = $derived([
+        ...overlaySignals,
+        ...measureSignals,
+        ...(pendingPreviewSignal ? [pendingPreviewSignal] : []),
+    ]);
 
-    let configuredPairSlugs = $derived(getRegisteredPairs());
+    let configuredPairSlugs = $derived(allConfiguredSlugs);
 
     // Provider config: build editRoutes for the modal
     let editRoutes = $derived.by(() => {
@@ -234,6 +241,17 @@
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
             const items = (response as any)?.items || [];
+
+            // Extract ALL unique configured pair slugs (for FxPair signal dropdown)
+            const slugSet = new Set<string>();
+            for (const i of items) {
+                const b = i.base < i.quote ? i.base : i.quote;
+                const q = i.base < i.quote ? i.quote : i.base;
+                slugSet.add(`${b}-${q}`);
+            }
+            allConfiguredSlugs = [...slugSet].sort();
+
+            // Filter routes for current pair only
             providers = items
                 .filter((i: any) =>
                     ((i.base === data.base && i.quote === data.quote) ||
@@ -326,6 +344,27 @@
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
         setPairSettings(data.slug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
+    }
+
+    async function handleSyncPair(slug: string) {
+        try {
+            syncing = true;
+            const tr = get(t);
+            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                pairs: [slug], start: dateStart, end: dateEnd,
+            });
+            toasts.success(tr('fx.sync.toastSuccess', {values: {pair: slug}}));
+            // If it's our pair, refresh chart
+            if (slug === data.slug) await handleRefresh();
+        } catch (e: any) {
+            toasts.error('Sync failed: ' + (e?.message || 'unknown'));
+        } finally {
+            syncing = false;
+        }
+    }
+
+    function handleDetailPair(slug: string) {
+        goto(`/fx/${slug}`);
     }
 
     // Provider handlers (unchanged logic)
@@ -595,7 +634,7 @@
                             if (showDataEditor) {
                                 // Exiting edit mode: hide editor, restore panel states
                                 showDataEditor = false;
-                                pendingEditPoints = [];
+                                pendingPreviewSignal = null;
                                 if (savedPanelStates) {
                                     showAesthetics = savedPanelStates.aesthetics;
                                     showMeasures = savedPanelStates.measures;
@@ -619,7 +658,6 @@
 
                 <PriceChartFull
                     data={lineData}
-                    pendingData={pendingEditPoints}
                     currency={displayQuote}
                     chartHeight="400px"
                     overlaySignals={allOverlaySignals}
@@ -632,6 +670,7 @@
                     yAxisMax={settings.yAxisMax}
                     measureMode={measureMode}
                     onMeasureClick={handleMeasureClick}
+                    onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
                     hideToolbar={true}
                     externalViewMode={viewMode}
                 />
@@ -666,7 +705,7 @@
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                     onclick={() => {
                         showDataEditor = false;
-                        pendingEditPoints = [];
+                        pendingPreviewSignal = null;
                         if (savedPanelStates) {
                             showAesthetics = savedPanelStates.aesthetics;
                             showMeasures = savedPanelStates.measures;
@@ -695,7 +734,7 @@
                     }}
                     oncancel={() => {
                         showDataEditor = false;
-                        pendingEditPoints = [];
+                        pendingPreviewSignal = null;
                         if (savedPanelStates) {
                             showAesthetics = savedPanelStates.aesthetics;
                             showMeasures = savedPanelStates.measures;
@@ -703,7 +742,7 @@
                             savedPanelStates = null;
                         }
                     }}
-                    onpendingchange={(points) => pendingEditPoints = points}
+                    onpendingchange={(signal) => pendingPreviewSignal = signal}
                 />
             </div>
         </div>
@@ -761,6 +800,8 @@
                     signals={[...signals]}
                     availablePairs={configuredPairSlugs}
                     onchange={handleSignalsChange}
+                    onsyncpair={handleSyncPair}
+                    ondetailpair={handleDetailPair}
                 />
             </div>
         {/if}

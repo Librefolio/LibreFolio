@@ -45,7 +45,8 @@
     "saving": "Salvataggio...",
     "discardChanges": "Annullare le Modifiche?",
     "discardChangesMessage": "Hai modifiche non salvate. Sei sicuro di voler chiudere?",
-    "sync": "Sincronizza"
+    "sync": "Sincronizza",
+    "detail": "Dettaglio"
   },
   "table": {
     "rowsPerPage": "Righe per pagina",
@@ -721,7 +722,15 @@
       "bollingerDesc": "$\\mu \\pm k\\sigma$  (default $k = 2$)",
       "linearDesc": "$y(t) = y_0 \\cdot (1 + r \\cdot t)$",
       "compoundDesc": "$y(t) = y_0 \\cdot (1 + r)^t$",
-      "sineDesc": "$y(t) = A \\sin(2\\pi t / T) + y_0$"
+      "sineDesc": "$y(t) = A \\sin(2\\pi t / T) + y_0$",
+      "linearAbbr": "C.Lin",
+      "compoundAbbr": "C.Comp",
+      "sineAbbr": "Onda Sin",
+      "fxPairAbbr": "Coppia FX",
+      "emaAbbr": "EMA",
+      "macdAbbr": "MACD",
+      "rsiAbbr": "RSI",
+      "bollingerAbbr": "Boll"
     },
     "params": {
       "annualRate": "Tasso Annuo",
@@ -794,7 +803,7 @@
     "addMeasure": "Aggiungi misura",
     "closeEditor": "Chiudi editor",
     "editRatesBtn": "Modifica tassi",
-    "providers": "Fornitori",
+    "providers": "Provider",
     "syncFromProvider": "Sincronizza tassi dal provider",
     "refreshData": "Aggiorna dati"
   }

@@ -28,7 +28,6 @@
 
     interface Props {
         data: LineDataPoint[];
-        pendingData?: LineDataPoint[];
         currency?: string;
         chartHeight?: string;
         initialChartType?: ChartType;
@@ -48,6 +47,8 @@
         /** Measure mode: enables click-to-place measurement points */
         measureMode?: boolean;
         onMeasureClick?: (date: string, value: number) => void;
+        /** Called on mousemove during measure mode (for live preview) */
+        onMeasureHover?: (date: string, value: number) => void;
         /** Hide the built-in toolbar (chart type + view mode toggles) */
         hideToolbar?: boolean;
         /** Externally controlled view mode (when toolbar is hidden) */
@@ -56,7 +57,6 @@
 
     let {
         data = [],
-        pendingData = [],
         currency = '',
         chartHeight = '400px',
         initialChartType = 'line',
@@ -73,6 +73,7 @@
         yAxisMax,
         measureMode = false,
         onMeasureClick,
+        onMeasureHover,
         hideToolbar = false,
         externalViewMode,
     }: Props = $props();
@@ -100,13 +101,6 @@
         const baseValue = data[0].value;
         if (baseValue === 0) return data;
         return data.map(d => ({...d, value: ((d.value - baseValue) / baseValue) * 100}));
-    });
-
-    let displayPending = $derived.by(() => {
-        if (viewMode === 'absolute' || data.length === 0 || !pendingData || pendingData.length === 0) return pendingData;
-        const baseValue = data[0].value;
-        if (baseValue === 0) return pendingData;
-        return pendingData.map(d => ({...d, value: ((d.value - baseValue) / baseValue) * 100}));
     });
 
     // =========================================================================
@@ -137,7 +131,6 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
-            void pendingData;
             tick().then(renderChart);
         }
     });
@@ -223,6 +216,34 @@
                 }
             });
 
+            // Mousemove for live measure preview (throttled via rAF)
+            let hoverRafPending = false;
+            chartInstance.getZr().on('mousemove', (params: any) => {
+                if (!measureMode || !onMeasureHover || !chartInstance || hoverRafPending) return;
+                hoverRafPending = true;
+                requestAnimationFrame(() => {
+                    hoverRafPending = false;
+                    if (!chartInstance) return;
+                    const pointInPixel = [params.offsetX, params.offsetY];
+                    if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
+                        const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
+                        if (pointInGrid) {
+                            const dateIdx = Math.round(pointInGrid[0]);
+                            if (dateIdx >= 0 && dateIdx < displayData.length) {
+                                const point = displayData[dateIdx];
+                                // Convert back from % to absolute if needed
+                                if (viewMode === 'percentage' && data.length > 0) {
+                                    const baseValue = data[0].value;
+                                    onMeasureHover(point.date, baseValue * (1 + point.value / 100));
+                                } else {
+                                    onMeasureHover(point.date, point.value);
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+
             // Recompute arrow rotations when zoom changes (aspect ratio shifts)
             chartInstance.on('dataZoom', () => {
                 if (chartInstance) updateArrowRotations(chartInstance);
@@ -250,19 +271,6 @@
         );
         series.push(...mainSeriesList);
 
-        // Pending edits overlay
-        if (displayPending && displayPending.length > 0) {
-            series.push({
-                type: 'scatter', name: 'Pending', xAxisIndex: 0, yAxisIndex: 0,
-                data: displayPending.map(d => {
-                    const idx = dates.indexOf(d.date);
-                    return idx >= 0 ? [idx, d.value] : null;
-                }).filter(Boolean),
-                symbol: 'diamond', symbolSize: 10,
-                itemStyle: {color: '#f59e0b', borderColor: isDark ? '#1e293b' : '#ffffff', borderWidth: 2},
-                z: 10,
-            });
-        }
 
         // Overlay signals
         if (overlaySignals && overlaySignals.length > 0) {

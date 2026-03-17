@@ -1,25 +1,28 @@
 <!--
-  DataEditor — Generic dual-mode data editor (CSV text ↔ Table) with row-folding and status tracking.
+  DataEditor — Generic dual-mode data editor (CSV text ↔ DataTable) with status tracking.
 
   Features:
-  - Dual view: CSV text (via CsvEditor) and interactive table
+  - Dual view: CSV text (via CsvEditor) and interactive DataTable
   - Row status tracking: original, edited, deleted, appended
-  - Row folding: gaps > 2 days are collapsed with expandable placeholders
+  - DataTable: sorting, pagination, column filters, editable cells, row actions
   - Bulk operations: select multiple rows + mark as deleted
   - Import CSV via DataImportModal
   - Add row (today's date)
   - Configurable columns via ColumnDef[]
   - Dirty row emission for save/preview
+  - Async CSV conversion (chunked to avoid long-running handlers)
 
   Uses Svelte 5 runes ($state, $derived, $props, $effect).
 -->
 <script lang="ts">
     import {tick} from 'svelte';
-    import {Plus, Upload, Trash2, CalendarSearch, Undo2} from 'lucide-svelte';
+    import {Plus, Upload, Trash2, Undo2} from 'lucide-svelte';
     import CsvEditor from '$lib/components/fx/CsvEditor.svelte';
     import type {ParsedRow} from '$lib/components/fx/CsvEditor.svelte';
     import DataImportModal from './DataImportModal.svelte';
-    import type {ColumnDef, DataRow, GapRow, TableRow} from './DataEditorTypes';
+    import type {ColumnDef, DataRow} from './DataEditorTypes';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
 
     // =========================================================================
     // Props
@@ -56,23 +59,13 @@
     }: Props = $props();
 
     // =========================================================================
-    // Constants
-    // =========================================================================
-
-    /** Gap threshold in days — gaps larger than this are folded */
-    const GAP_THRESHOLD_DAYS = 2;
-
-    // =========================================================================
     // State
     // =========================================================================
 
     let csvEditor: CsvEditor | undefined = $state(undefined);
     let csvValue = $state('');
     let importModalOpen = $state(false);
-    let selectAll = $state(false);
-
-    // Track expanded gaps by their startDate
-    let expandedGaps = $state(new Set<string>());
+    let csvConverting = $state(false);
 
     // =========================================================================
     // Derived
@@ -92,72 +85,176 @@
     let deletedCount = $derived(rows.filter(r => r.status === 'deleted').length);
     let appendedCount = $derived(rows.filter(r => r.status === 'appended').length);
 
-    /** Selected count */
-    let selectedCount = $derived(rows.filter(r => r.selected).length);
-
     /** Can switch to table view? (no CSV errors or duplicates) */
     let canSwitchToTable = $state(true);
     let switchBlockReason = $state('');
 
-    /** Table rows with gap folding */
-    let tableRows: TableRow[] = $derived.by(() => {
-        const result: TableRow[] = [];
-        const sortedRows = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+    /** Sorted rows for DataTable display */
+    let sortedRows = $derived(
+        [...rows].sort((a, b) => a.date.localeCompare(b.date))
+    );
 
-        for (let i = 0; i < sortedRows.length; i++) {
-            const row = sortedRows[i];
+    // =========================================================================
+    // DataTable Column Definitions
+    // =========================================================================
 
-            // Check for gap before this row (except first row)
-            if (i > 0) {
-                const prevDate = new Date(sortedRows[i - 1].date + 'T00:00:00Z');
-                const currDate = new Date(row.date + 'T00:00:00Z');
-                const diffDays = Math.round((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+    /** Get abbreviated weekday for a date string */
+    function weekday(dateStr: string): string {
+        try {
+            const d = new Date(dateStr + 'T00:00:00Z');
+            return d.toLocaleDateString('en-US', {weekday: 'short', timeZone: 'UTC'});
+        } catch {
+            return '';
+        }
+    }
 
-                if (diffDays > GAP_THRESHOLD_DAYS) {
-                    const gapKey = sortedRows[i - 1].date;
-                    const isExpanded = expandedGaps.has(gapKey);
+    /** Row background class based on status */
+    function rowBgClass(row: DataRow): string {
+        switch (row.status) {
+            case 'edited': return 'row-edited';
+            case 'deleted': return 'row-deleted';
+            case 'appended': return 'row-appended';
+            default: return '';
+        }
+    }
 
-                    if (isExpanded) {
-                        // Generate empty editable rows for the gap
-                        const gapDate = new Date(prevDate);
-                        for (let d = 1; d < diffDays; d++) {
-                            gapDate.setUTCDate(gapDate.getUTCDate() + 1);
-                            const isoDate = gapDate.toISOString().slice(0, 10);
-                            // Skip if a row already exists for this date
-                            if (!sortedRows.find(r => r.date === isoDate)) {
-                                const gapRow: DataRow = {
-                                    date: isoDate,
-                                    status: 'appended',
-                                    originalStatus: 'appended',
-                                    values: Object.fromEntries(columns.map(c => [c.key, undefined])),
-                                    selected: false,
-                                };
-                                result.push({...gapRow, type: 'data'});
-                            }
-                        }
-                    } else {
-                        result.push({
-                            type: 'gap',
-                            startDate: sortedRows[i - 1].date,
-                            endDate: row.date,
-                            dayCount: diffDays - 1,
-                            expanded: false,
-                        } satisfies GapRow);
-                    }
-                }
+    let dtColumns: DTColumnDef<DataRow>[] = $derived.by(() => {
+        const cols: DTColumnDef<DataRow>[] = [
+            {
+                id: 'date',
+                header: 'Date',
+                type: 'text',
+                cell: (r) => ({
+                    type: 'html',
+                    html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${weekday(r.date)}</span></span>`,
+                }),
+                getValue: (r) => r.date,
+                sortable: true,
+                filterable: false,
+                width: 160,
+            },
+        ];
+
+        // Add data columns (e.g., 'rate')
+        for (const col of columns) {
+            if (col.editable && !isReadonly) {
+                cols.push({
+                    id: col.key,
+                    header: col.label,
+                    type: 'number',
+                    cell: (r) => ({
+                        type: 'editable-number',
+                        value: r.values[col.key] !== undefined && r.values[col.key] !== null ? Number(r.values[col.key]) : null,
+                        step: col.step ?? 0.0001,
+                        placeholder: col.placeholder ?? '',
+                        onchange: (newValue) => handleCellEditByDate(r.date, col.key, newValue),
+                    }),
+                    getValue: (r) => Number(r.values[col.key] ?? 0),
+                    sortable: true,
+                    filterable: false,
+                    width: 140,
+                });
+            } else {
+                cols.push({
+                    id: col.key,
+                    header: col.label,
+                    type: 'number',
+                    cell: (r) => ({
+                        type: 'html',
+                        html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                    }),
+                    getValue: (r) => Number(r.values[col.key] ?? 0),
+                    sortable: true,
+                    filterable: false,
+                    width: 140,
+                });
             }
-
-            result.push({...row, type: 'data'});
         }
 
-        return result;
+        // Status column (hidden by default via column visibility)
+        cols.push({
+            id: 'status',
+            header: 'Status',
+            type: 'enum',
+            enumOptions: [
+                {value: 'original', label: 'Original'},
+                {value: 'edited', label: 'Edited'},
+                {value: 'deleted', label: 'Deleted'},
+                {value: 'appended', label: 'New'},
+            ],
+            cell: (r) => ({
+                type: 'badge',
+                text: r.status === 'appended' ? 'New' : r.status.charAt(0).toUpperCase() + r.status.slice(1),
+                variant: r.status === 'original' ? 'default' : r.status === 'edited' ? 'info' : r.status === 'deleted' ? 'error' : 'success',
+            }),
+            getValue: (r) => r.status,
+            sortable: true,
+            filterable: true,
+            width: 100,
+        });
+
+        return cols;
+    });
+
+    /** Row actions for DataTable */
+    let dtRowActions: DTRowAction<DataRow>[] = $derived.by(() => {
+        if (isReadonly) return [];
+        return [
+            {
+                id: 'delete',
+                icon: Trash2,
+                label: 'Delete',
+                variant: 'danger' as const,
+                onClick: (row) => handleStatusChangeByDate(row.date, 'deleted'),
+                visible: (row) => row.status !== 'deleted',
+            },
+            {
+                id: 'revert',
+                icon: Undo2,
+                label: 'Revert',
+                variant: 'default' as const,
+                onClick: (row) => handleStatusChangeByDate(row.date, 'revert'),
+                visible: (row) => row.status === 'deleted' || row.status === 'edited' || row.status === 'appended',
+            },
+        ];
     });
 
     // =========================================================================
     // Sync CSV ↔ Rows
     // =========================================================================
 
-    /** Convert rows to CSV text */
+    /** Convert rows to CSV text — async chunked to avoid long-running handlers */
+    async function rowsToCsvAsync(): Promise<string> {
+        const header = baseCurrency && quoteCurrency
+            ? `date;${baseCurrency};${quoteCurrency};base2quote`
+            : `date;base;quote;base2quote`;
+
+        const activeRows = rows
+            .filter(r => r.status !== 'deleted')
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+        const CHUNK_SIZE = 500;
+        const lines: string[] = [header];
+
+        for (let i = 0; i < activeRows.length; i += CHUNK_SIZE) {
+            const chunk = activeRows.slice(i, i + CHUNK_SIZE);
+            const chunkLines = chunk.map(r => {
+                const firstCol = columns[0];
+                const val = r.values[firstCol?.key ?? 'rate'] ?? '';
+                return `${r.date};${baseCurrency || 'BASE'};${quoteCurrency || 'QUOTE'};${val}`;
+            });
+            lines.push(...chunkLines);
+
+            // Yield to the event loop between chunks
+            if (i + CHUNK_SIZE < activeRows.length) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        return lines.join('\n');
+    }
+
+    /** Synchronous fallback for small datasets */
     function rowsToCsv(): string {
         const header = baseCurrency && quoteCurrency
             ? `date;${baseCurrency};${quoteCurrency};base2quote`
@@ -178,12 +275,10 @@
     /** Convert CSV parsed rows to DataRow[] */
     function csvToRows(parsedRows: ParsedRow[]): DataRow[] {
         return parsedRows.map(pr => {
-            // Check if this date exists in current rows
             const existing = rows.find(r => r.date === pr.date);
             const firstCol = columns[0];
 
             if (existing && existing.originalStatus === 'original') {
-                // Existing original row — mark as edited if value changed
                 const oldVal = existing.values[firstCol?.key ?? 'rate'];
                 const newVal = pr.value;
                 const isChanged = Number(oldVal) !== newVal;
@@ -210,8 +305,19 @@
     // View Mode Switching
     // =========================================================================
 
-    function switchToText() {
-        csvValue = rowsToCsv();
+    async function switchToText() {
+        csvConverting = true;
+        await tick();
+        try {
+            // Use async chunked conversion for large datasets
+            if (rows.length > 1000) {
+                csvValue = await rowsToCsvAsync();
+            } else {
+                csvValue = rowsToCsv();
+            }
+        } finally {
+            csvConverting = false;
+        }
         viewMode = 'text';
         onviewmodechange?.('text');
     }
@@ -232,7 +338,6 @@
             switchBlockReason = '';
         }
 
-        // Sync CSV changes back to rows when in text mode
         if (viewMode === 'text' && errors === 0 && !duplicates) {
             rows = csvToRows(validRows);
             emitDirty();
@@ -243,38 +348,35 @@
     // Table Edit Handlers
     // =========================================================================
 
-    function handleCellEdit(rowIndex: number, colKey: string, newValue: unknown) {
-        const row = rows[rowIndex];
-        if (!row || isReadonly) return;
+    function handleCellEditByDate(date: string, colKey: string, newValue: unknown) {
+        const rowIdx = rows.findIndex(r => r.date === date);
+        if (rowIdx < 0 || isReadonly) return;
 
+        const row = rows[rowIdx];
         const oldValues = {...row.values};
         row.values[colKey] = newValue;
 
         if (row.originalStatus === 'original' && row.status !== 'deleted') {
-            // Check if value differs from original
-            const hasOriginal = row._originalValues !== undefined;
-            if (!hasOriginal) {
+            if (!row._originalValues) {
                 row._originalValues = oldValues;
             }
-
-            // Compare with original
-            const originalVal = row._originalValues?.[colKey];
             const allMatch = columns.every(c => {
                 const orig = row._originalValues?.[c.key];
                 const curr = row.values[c.key];
                 return String(orig ?? '') === String(curr ?? '');
             });
-
             row.status = allMatch ? 'original' : 'edited';
         }
 
-        rows = [...rows]; // Trigger reactivity
+        rows = [...rows];
         emitDirty();
     }
 
-    function handleStatusChange(rowIndex: number, newStatus: string) {
-        const row = rows[rowIndex];
-        if (!row || isReadonly) return;
+    function handleStatusChangeByDate(date: string, newStatus: string) {
+        const rowIdx = rows.findIndex(r => r.date === date);
+        if (rowIdx < 0 || isReadonly) return;
+
+        const row = rows[rowIdx];
 
         if (newStatus === 'deleted') {
             row.status = 'deleted';
@@ -285,8 +387,7 @@
                     row.values = {...row._originalValues};
                 }
             } else if (row.originalStatus === 'appended') {
-                // Remove appended row entirely
-                rows = rows.filter((_, i) => i !== rowIndex);
+                rows = rows.filter((_, i) => i !== rowIdx);
                 emitDirty();
                 return;
             }
@@ -309,36 +410,19 @@
         emitDirty();
     }
 
-    function handleMarkSelectedDeleted() {
-        for (const row of rows) {
-            if (row.selected) {
+    // =========================================================================
+    // Bulk selection handler (for DataTable selection)
+    // =========================================================================
+
+    function handleBulkDelete(selectedIds: string[]) {
+        for (const date of selectedIds) {
+            const row = rows.find(r => r.date === date);
+            if (row && row.status !== 'deleted') {
                 row.status = 'deleted';
-                row.selected = false;
             }
         }
-        selectAll = false;
         rows = [...rows];
         emitDirty();
-    }
-
-    function handleToggleSelectAll() {
-        selectAll = !selectAll;
-        for (const row of rows) {
-            if (row.status !== 'deleted') {
-                row.selected = selectAll;
-            }
-        }
-        rows = [...rows];
-    }
-
-    function handleToggleGap(gapStartDate: string) {
-        const newSet = new Set(expandedGaps);
-        if (newSet.has(gapStartDate)) {
-            newSet.delete(gapStartDate);
-        } else {
-            newSet.add(gapStartDate);
-        }
-        expandedGaps = newSet;
     }
 
     // =========================================================================
@@ -383,69 +467,18 @@
     }
 
     // =========================================================================
-    // Helpers
-    // =========================================================================
-
-    /** Get abbreviated weekday for a date string */
-    function weekday(dateStr: string): string {
-        try {
-            const d = new Date(dateStr + 'T00:00:00Z');
-            return d.toLocaleDateString('en-US', {weekday: 'short', timeZone: 'UTC'});
-        } catch {
-            return '';
-        }
-    }
-
-    /** Row background class based on status */
-    function rowBgClass(row: DataRow): string {
-        switch (row.status) {
-            case 'edited': return 'bg-blue-50 dark:bg-blue-900/15';
-            case 'deleted': return 'bg-red-50 dark:bg-red-900/15 line-through opacity-60';
-            case 'appended': return 'bg-emerald-50 dark:bg-emerald-900/15';
-            default: return '';
-        }
-    }
-
-    /** Status badge color */
-    function statusBadge(status: string): {text: string; color: string} {
-        switch (status) {
-            case 'original': return {text: 'Original', color: 'text-gray-500 dark:text-gray-400'};
-            case 'edited': return {text: 'Edited', color: 'text-blue-600 dark:text-blue-400'};
-            case 'deleted': return {text: 'Deleted', color: 'text-red-600 dark:text-red-400'};
-            case 'appended': return {text: 'New', color: 'text-emerald-600 dark:text-emerald-400'};
-            default: return {text: status, color: 'text-gray-500'};
-        }
-    }
-
-    /** Available status options based on current row state */
-    function getStatusOptions(row: DataRow): Array<{value: string; label: string}> {
-        const opts: Array<{value: string; label: string}> = [];
-        if (row.status === 'deleted') {
-            opts.push({value: 'revert', label: '↩ Revert'});
-        } else {
-            opts.push({value: 'deleted', label: '🗑 Delete'});
-            if (row.status === 'edited' || row.status === 'appended') {
-                opts.push({value: 'revert', label: '↩ Revert'});
-            }
-        }
-        return opts;
-    }
-
-    // =========================================================================
     // Public API
     // =========================================================================
 
     /** Scroll to a specific date in the table or CSV view */
     export function scrollToDate(date: string) {
         if (viewMode === 'text' && csvEditor) {
-            // Find line number for this date in CSV
             const csvLines = csvValue.split('\n');
             const lineIdx = csvLines.findIndex(l => l.startsWith(date));
             if (lineIdx >= 0) {
                 csvEditor.scrollToLine(lineIdx + 1);
             }
         } else {
-            // Table view — scroll element into view
             tick().then(() => {
                 const el = document.querySelector(`[data-date="${date}"]`);
                 el?.scrollIntoView({behavior: 'smooth', block: 'center'});
@@ -470,7 +503,17 @@
                             ? 'bg-libre-green text-white'
                             : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600'}"
                     onclick={switchToText}
-                >CSV</button>
+                    disabled={csvConverting}
+                >
+                    {#if csvConverting}
+                        <span class="inline-flex items-center gap-1">
+                            <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            CSV
+                        </span>
+                    {:else}
+                        CSV
+                    {/if}
+                </button>
                 <button
                     class="px-3 py-1.5 text-xs font-medium transition-colors
                         {viewMode === 'table'
@@ -499,15 +542,6 @@
                     >
                         <Plus size={13} /> Add Row
                     </button>
-
-                    {#if selectedCount > 0}
-                        <button
-                            class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/30 transition-colors"
-                            onclick={handleMarkSelectedDeleted}
-                        >
-                            <Trash2 size={13} /> Delete ({selectedCount})
-                        </button>
-                    {/if}
                 {/if}
             {/if}
         </div>
@@ -545,141 +579,25 @@
                 />
             </div>
         {:else}
-            <!-- Table View -->
-            <table class="w-full text-sm">
-                <thead class="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-600">
-                    <tr>
-                        {#if !isReadonly}
-                            <th class="w-8 px-2 py-2">
-                                <input
-                                    type="checkbox"
-                                    checked={selectAll}
-                                    onchange={handleToggleSelectAll}
-                                    class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
-                                />
-                            </th>
-                        {/if}
-                        <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Date</th>
-                        {#each columns as col}
-                            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">{col.label}</th>
-                        {/each}
-                        <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide w-24">Status</th>
-                        {#if !isReadonly}
-                            <th class="w-10 px-2 py-2"></th>
-                        {/if}
-                    </tr>
-                </thead>
-                <tbody>
-                    {#each tableRows as tableRow (tableRow.type === 'gap' ? `gap-${tableRow.startDate}` : tableRow.date)}
-                        {#if tableRow.type === 'gap'}
-                            <!-- Gap row (folded) -->
-                            <tr class="bg-gray-50/50 dark:bg-slate-700/20">
-                                {#if !isReadonly}<td></td>{/if}
-                                <td
-                                    colspan={columns.length + 2 + (isReadonly ? 0 : 1)}
-                                    class="px-3 py-1.5 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/40 transition-colors"
-                                    role="button"
-                                    tabindex="0"
-                                    onclick={() => handleToggleGap(tableRow.startDate)}
-                                    onkeydown={(e) => { if (e.key === 'Enter') handleToggleGap(tableRow.startDate); }}
-                                >
-                                    <span class="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                                        ⋯ {tableRow.dayCount} day{tableRow.dayCount !== 1 ? 's' : ''} gap ({tableRow.startDate} → {tableRow.endDate})
-                                    </span>
-                                </td>
-                            </tr>
-                        {:else}
-                            <!-- Data row -->
-                            {@const rowIdx = rows.findIndex(r => r.date === tableRow.date)}
-                            <tr
-                                class="border-b border-gray-100 dark:border-slate-700/50 {rowBgClass(tableRow)} hover:bg-gray-50/50 dark:hover:bg-slate-700/20 transition-colors"
-                                data-date={tableRow.date}
-                            >
-                                {#if !isReadonly}
-                                    <td class="w-8 px-2 py-1.5">
-                                        <input
-                                            type="checkbox"
-                                            checked={tableRow.selected}
-                                            disabled={tableRow.status === 'deleted'}
-                                            onchange={() => { if (rowIdx >= 0) { rows[rowIdx].selected = !rows[rowIdx].selected; rows = [...rows]; }}}
-                                            class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
-                                        />
-                                    </td>
-                                {/if}
-
-                                <!-- Date cell -->
-                                <td class="px-3 py-1.5 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                    {tableRow.date}
-                                    <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">{weekday(tableRow.date)}</span>
-                                </td>
-
-                                <!-- Data columns -->
-                                {#each columns as col}
-                                    <td class="px-3 py-1.5">
-                                        {#if col.editable && !isReadonly && tableRow.status !== 'deleted'}
-                                            <input
-                                                type={col.type === 'number' ? 'number' : 'text'}
-                                                value={tableRow.values[col.key] ?? ''}
-                                                step={col.step ?? 'any'}
-                                                placeholder={col.placeholder ?? ''}
-                                                oninput={(e) => {
-                                                    const target = e.currentTarget;
-                                                    const val = col.type === 'number' ? (target.value ? parseFloat(target.value) : undefined) : target.value;
-                                                    if (rowIdx >= 0) handleCellEdit(rowIdx, col.key, val);
-                                                }}
-                                                class="w-full px-2 py-0.5 text-xs font-mono border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-libre-green/50 focus:border-libre-green"
-                                            />
-                                        {:else}
-                                            <span class="text-xs font-mono text-gray-600 dark:text-gray-400">
-                                                {tableRow.values[col.key] ?? '—'}
-                                            </span>
-                                        {/if}
-                                    </td>
-                                {/each}
-
-                                <!-- Status cell -->
-                                <td class="px-3 py-1.5">
-                                    <span class="text-xs font-medium {statusBadge(tableRow.status).color}">{statusBadge(tableRow.status).text}</span>
-                                </td>
-
-                                <!-- Actions cell -->
-                                {#if !isReadonly}
-                                    <td class="w-10 px-2 py-1.5">
-                                        {#if tableRow.status === 'deleted'}
-                                            <button
-                                                class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors"
-                                                title="Revert"
-                                                onclick={() => { if (rowIdx >= 0) handleStatusChange(rowIdx, 'revert'); }}
-                                            >
-                                                <Undo2 size={14} />
-                                            </button>
-                                        {:else}
-                                            <button
-                                                class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
-                                                title="Delete"
-                                                onclick={() => { if (rowIdx >= 0) handleStatusChange(rowIdx, 'deleted'); }}
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        {/if}
-                                    </td>
-                                {/if}
-                            </tr>
-                        {/if}
-                    {/each}
-
-                    {#if rows.length === 0}
-                        <tr>
-                            <td
-                                colspan={columns.length + 3}
-                                class="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500"
-                            >
-                                No data. Use "Add Row" or "Import CSV" to add data.
-                            </td>
-                        </tr>
-                    {/if}
-                </tbody>
-            </table>
+            <!-- DataTable View -->
+            <DataTable
+                data={sortedRows}
+                columns={dtColumns}
+                getRowId={(r) => r.date}
+                storageKey="data-editor"
+                enableSelection={!isReadonly}
+                enableActions={!isReadonly}
+                rowActions={dtRowActions}
+                enableSorting={true}
+                enableColumnFilters={true}
+                enableColumnVisibility={true}
+                enableColumnResize={true}
+                enablePagination={true}
+                defaultPageSize={50}
+                pageSizeOptions={[25, 50, 100, 0]}
+                getRowClass={rowBgClass}
+                emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
+            />
         {/if}
     </div>
 </div>
@@ -691,6 +609,25 @@
     onimport={handleImport}
 />
 
-
-
-
+<style>
+    :global(.row-edited) {
+        background-color: rgba(59, 130, 246, 0.05) !important;
+    }
+    :global(.row-deleted) {
+        background-color: rgba(239, 68, 68, 0.05) !important;
+        text-decoration: line-through;
+        opacity: 0.6;
+    }
+    :global(.row-appended) {
+        background-color: rgba(16, 185, 129, 0.05) !important;
+    }
+    :global(.dark .row-edited) {
+        background-color: rgba(59, 130, 246, 0.1) !important;
+    }
+    :global(.dark .row-deleted) {
+        background-color: rgba(239, 68, 68, 0.1) !important;
+    }
+    :global(.dark .row-appended) {
+        background-color: rgba(16, 185, 129, 0.1) !important;
+    }
+</style>

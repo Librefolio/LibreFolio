@@ -15,7 +15,7 @@
 import type MultiDirectedGraph from 'graphology';
 import {buildCurrencyGraph, findAllPaths, type ChainStep, type ProviderInfo, type EdgeAttributes} from '$lib/utils/currencyGraph';
 import {zodiosApi} from '$lib/api';
-import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/currencyStore';
+import {ensureCurrenciesLoaded, getAllCurrencies, isCurrenciesLoaded} from '$lib/stores/currencyStore';
 
 // ============================================================================
 // INTERNAL STATE
@@ -47,19 +47,26 @@ let buildPromise: Promise<CurrencyGraph> | null = null;
  * Subsequent calls return the cached graph immediately.
  * Safe to call concurrently — uses a shared promise.
  *
- * @param language - ISO 639-1 language code for currency loading (default 'en')
+ * Note: The graph only uses currency CODES (not localized names), so language
+ * is irrelevant. If currencies are already loaded (in any language), we reuse them.
+ *
  * @returns The MultiDirectedGraph instance
  */
-export async function getCurrencyGraph(language: string = 'en'): Promise<CurrencyGraph> {
+export async function getCurrencyGraph(): Promise<CurrencyGraph> {
     if (cachedGraph) return cachedGraph;
     if (buildPromise) return buildPromise;
 
     buildPromise = (async () => {
         try {
+            // Ensure currencies are loaded (any language is fine — we only need codes)
+            const currenciesReady = isCurrenciesLoaded()
+                ? Promise.resolve()
+                : ensureCurrenciesLoaded();
+
             // Fetch providers and currencies in parallel
             const [providersResponse] = await Promise.all([
                 zodiosApi.list_providers_api_v1_fx_providers_get(),
-                ensureCurrenciesLoaded(language),
+                currenciesReady,
             ]);
 
             // Map API response to ProviderInfo
@@ -111,16 +118,14 @@ export function getCachedProviders(): ProviderInfo[] {
  * @param source - Source currency code (e.g. "RON")
  * @param target - Target currency code (e.g. "USD")
  * @param maxDepth - Maximum chain length (default 4)
- * @param language - ISO 639-1 language code for currency loading
  * @returns Array of paths sorted by length (shortest first)
  */
 export async function findConversionPaths(
     source: string,
     target: string,
     maxDepth: number = 4,
-    language: string = 'en',
 ): Promise<ChainStep[][]> {
-    const graph = await getCurrencyGraph(language);
+    const graph = await getCurrencyGraph();
     return findAllPaths(graph as Parameters<typeof findAllPaths>[0], source, target, maxDepth);
 }
 

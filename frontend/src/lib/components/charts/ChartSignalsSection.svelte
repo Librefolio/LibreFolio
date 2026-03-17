@@ -10,18 +10,18 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {Trash2, ArrowLeftRight, Info} from 'lucide-svelte';
+    import {Trash2, ArrowLeftRight, Info, RefreshCw, ExternalLink} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import SignalStyleEditor from './SignalStyleEditor.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {
         type SignalConfig,
         type SignalStyle,
-        type MarkerType,
         getRegisteredSignalTypes,
         createSignal,
         type SignalTypeInfo,
@@ -38,12 +38,18 @@
         availablePairs?: string[];
         /** Called when signals change */
         onchange?: (signals: SignalConfig[]) => void;
+        /** Called when user clicks Sync on an FxPair signal */
+        onsyncpair?: (slug: string) => void;
+        /** Called when user clicks Detail on an FxPair signal */
+        ondetailpair?: (slug: string) => void;
     }
 
     let {
         signals = $bindable([]),
         availablePairs = [],
         onchange,
+        onsyncpair,
+        ondetailpair,
     }: Props = $props();
 
     // =========================================================================
@@ -61,6 +67,14 @@
     function getSignalName(st: SignalTypeInfo): string {
         const key = SIGNAL_TYPE_I18N_KEY[st.type];
         return key ? $t(`chartSettings.signals.${key}`) : st.displayName;
+    }
+
+    function getSignalAbbr(signalType: string): string {
+        const key = SIGNAL_TYPE_I18N_KEY[signalType];
+        if (!key) return '';
+        const abbrKey = `chartSettings.signals.${key}Abbr`;
+        const abbr = $t(abbrKey);
+        return abbr !== abbrKey ? abbr : '';
     }
 
     function getSignalFullName(signalType: string): string {
@@ -130,19 +144,6 @@
     // =========================================================================
 
     const LINE_TYPES: ('solid' | 'dashed' | 'dotted')[] = ['solid', 'dashed', 'dotted'];
-    const MARKER_OPTIONS: (MarkerType | null)[] = [null, 'arrow', 'circle', 'diamond', 'rect', 'pin'];
-    const MARKER_SYMBOLS_START: Record<string, string> = {arrow: '◁', circle: '●', diamond: '◆', rect: '■', pin: '📍'};
-    const MARKER_SYMBOLS_END: Record<string, string> = {arrow: '▷', circle: '●', diamond: '◆', rect: '■', pin: '📍'};
-
-    let stylePopoverId = $state<string | null>(null);
-
-    function toggleStylePopover(id: string) {
-        stylePopoverId = stylePopoverId === id ? null : id;
-    }
-
-    function closeAllPopovers() {
-        stylePopoverId = null;
-    }
 
     // =========================================================================
     // Signal management
@@ -296,14 +297,38 @@
                                     <DocsLink path={typeInfo.docsPath} label={signalDescText || signalName} math />
                                 {/if}
                             </div>
-                            <button
-                                type="button"
-                                class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
-                                title={$t('chartSettings.removeSignal')}
-                                onclick={() => removeSignal(signal.id)}
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <div class="flex items-center gap-0.5 flex-shrink-0">
+                                {#if signal.signalType === 'fx-pair' && signal.params.currencyPair}
+                                    {#if onsyncpair}
+                                        <button
+                                            type="button"
+                                            class="p-1 rounded text-gray-400 hover:text-blue-500 transition-colors"
+                                            title={$t('common.sync')}
+                                            onclick={() => onsyncpair?.(String(signal.params.currencyPair))}
+                                        >
+                                            <RefreshCw size={13} />
+                                        </button>
+                                    {/if}
+                                    {#if ondetailpair}
+                                        <button
+                                            type="button"
+                                            class="p-1 rounded text-gray-400 hover:text-libre-green transition-colors"
+                                            title={$t('common.detail')}
+                                            onclick={() => ondetailpair?.(String(signal.params.currencyPair))}
+                                        >
+                                            <ExternalLink size={13} />
+                                        </button>
+                                    {/if}
+                                {/if}
+                                <button
+                                    type="button"
+                                    class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
+                                    title={$t('chartSettings.removeSignal')}
+                                    onclick={() => removeSignal(signal.id)}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Parameters -->
@@ -390,104 +415,10 @@
 
                         <!-- Style strip (non-MACD) -->
                         {#if signal.signalType !== 'macd'}
-                            <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700">
-                                <input
-                                    type="color"
-                                    value={signal.style.color}
-                                    class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
-                                    title={$t('chartSettings.style.color')}
-                                    oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
-                                />
-                                <div class="flex-1 relative">
-                                    <button
-                                        type="button"
-                                        class="w-full h-7 flex items-center cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors relative"
-                                        title={$t('chartSettings.style.lineType')}
-                                        onclick={() => toggleStylePopover(signal.id)}
-                                    >
-                                        <svg width="100%" height="24" class="absolute inset-0">
-                                            <line
-                                                x1="2%" y1="14" x2="98%" y2="14"
-                                                stroke={signal.style.color}
-                                                stroke-width={signal.style.lineWidth}
-                                                stroke-dasharray={signal.style.lineType === 'dashed' ? '8,4' : signal.style.lineType === 'dotted' ? '2,4' : 'none'}
-                                            />
-                                        </svg>
-                                    </button>
-
-                                    <!-- Style popover -->
-                                    {#if stylePopoverId === signal.id}
-                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                        <div class="fixed inset-0 z-10" onclick={closeAllPopovers}></div>
-                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20
-                                            bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
-                                            rounded-lg shadow-lg p-3 w-max"
-                                            onclick={(e) => e.stopPropagation()}>
-                                            <div class="flex items-center gap-4">
-                                                <!-- Start marker grid -->
-                                                <div class="flex flex-col items-center">
-                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerStart')}</span>
-                                                    <div class="grid grid-cols-2 gap-1.5">
-                                                        {#each MARKER_OPTIONS as mk}
-                                                            <button type="button" aria-label={mk ?? 'none'}
-                                                                class="w-8 h-8 flex items-center justify-center rounded border transition-colors
-                                                                    {signal.style.markerStart === mk ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'}"
-                                                                onclick={() => updateSignalStyle(signal.id, 'markerStart', mk)}>
-                                                                {#if mk === null}<span class="text-[10px] text-gray-400">✕</span>
-                                                                {:else}<span style="color: {signal.style.color}" class="text-sm leading-none">{MARKER_SYMBOLS_START[mk]}</span>{/if}
-                                                            </button>
-                                                        {/each}
-                                                    </div>
-                                                </div>
-                                                <!-- Line type + Width -->
-                                                <div class="flex flex-col items-center border-x border-gray-200 dark:border-slate-600 px-4">
-                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.lineType')}</span>
-                                                    <div class="flex gap-1.5 mb-3">
-                                                        {#each LINE_TYPES as lt}
-                                                            <button type="button" aria-label={lt}
-                                                                class="w-10 h-6 flex items-center justify-center rounded border transition-colors
-                                                                    {signal.style.lineType === lt ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
-                                                                onclick={() => updateSignalStyle(signal.id, 'lineType', lt)}>
-                                                                <svg width="32" height="6"><line x1="2" y1="3" x2="30" y2="3" stroke={signal.style.color} stroke-width="2"
-                                                                    stroke-dasharray={lt === 'dashed' ? '5,3' : lt === 'dotted' ? '2,3' : 'none'} /></svg>
-                                                            </button>
-                                                        {/each}
-                                                    </div>
-                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.width')}</span>
-                                                    <div class="flex gap-1.5">
-                                                        {#each [1, 2, 3, 4] as w}
-                                                            <button type="button" aria-label="width {w}"
-                                                                class="w-7 h-6 flex items-center justify-center rounded border transition-colors
-                                                                    {signal.style.lineWidth === w ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
-                                                                onclick={() => updateSignalStyle(signal.id, 'lineWidth', w)}>
-                                                                <svg width="20" height="10"><line x1="2" y1="5" x2="18" y2="5" stroke={signal.style.color} stroke-width={w} /></svg>
-                                                            </button>
-                                                        {/each}
-                                                    </div>
-                                                </div>
-                                                <!-- End marker grid -->
-                                                <div class="flex flex-col items-center">
-                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerEnd')}</span>
-                                                    <div class="grid grid-cols-2 gap-1.5">
-                                                        {#each MARKER_OPTIONS as mk}
-                                                            <button type="button" aria-label={mk ?? 'none'}
-                                                                class="w-8 h-8 flex items-center justify-center rounded border transition-colors
-                                                                    {signal.style.markerEnd === mk ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'}"
-                                                                onclick={() => updateSignalStyle(signal.id, 'markerEnd', mk)}>
-                                                                {#if mk === null}<span class="text-[10px] text-gray-400">✕</span>
-                                                                {:else}<span style="color: {signal.style.color}" class="text-sm leading-none">{MARKER_SYMBOLS_END[mk]}</span>{/if}
-                                                            </button>
-                                                        {/each}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    {/if}
-                                </div>
-                            </div>
+                            <SignalStyleEditor
+                                style={signal.style}
+                                onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)}
+                            />
                         {/if}
 
                         <!-- MACD: simplified single color+line style (full MACD popover stays in modal for now) -->
