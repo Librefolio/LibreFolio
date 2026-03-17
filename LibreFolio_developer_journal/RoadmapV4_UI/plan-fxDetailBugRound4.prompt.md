@@ -58,17 +58,20 @@ Aggiungere prop opzionale `getRowClass?: (row: T) => string` all'interfaccia Pro
 
 ### 4. ✅ Migrare tabella riepilogo misure a DataTable
 
-Completato. `MeasurePanel.svelte` usa `DataTable` con `ColumnDef<MeasureSummaryRow>[]` (6 colonne: Signal, Value@Start, Value@End, ΔAbs, Δ%, Δ%/yr). Formattazione pos/neg con `HtmlCell`, `storageKey="measure-summary-{measure.id}"`, sorting e pagination disabilitati.
+Completato. `MeasurePanel.svelte` usa `DataTable` con `ColumnDef<MeasureSummaryRow>[]` (6 colonne: Signal, Value@Start, Value@End, ΔAbs, Δ%, Δ%/yr). Formattazione pos/neg con `HtmlCell`, `storageKey="measure-summary-{measure.id}"`.
+
+**Round 4.1 fix**: Abilitati `enableSorting`, `enableColumnVisibility`, `enableColumnResize` (erano tutti false, ora true). Colonne ora sortabili. Colonna visibility icon (👁) visibile nella toolbar DataTable.
 
 ### 5. ✅ Migrare DataEditor a DataTable
 
-Completato nella sessione precedente. `DataEditor.svelte` già usa `DataTable` internamente con:
+Completato. `DataEditor.svelte` usa `DataTable` internamente con:
 - `DTColumnDef<DataRow>[]` con `editable-number` cells per editing inline
 - `dtRowActions` con delete/revert per azioni riga
 - `getRowClass` (rowBgClass) per sfondo condizionale status (edited=blu, deleted=rosso barrato, appended=verde)
-- CSV async chunking (`rowsToCsvAsync`) con spinner per dataset grandi
 - `DataImportModal` per import CSV
 - Paginazione (25/50/100/all), sorting, column filters, column visibility
+
+**Round 4.1 fix**: Rimossa la vista CSV inline (crash su dataset grandi). Scelta UX: la tabella è l'unica vista, l'import CSV resta disponibile via modale `DataImportModal`. La sync bidirezionale CSV↔Rows (fonte di bug e crash) è stata eliminata.
 
 **5e — Preview come RenderedSignal**: `FxDataEditorSection.svelte` emette un `RenderedSignal` viola (`#a855f7`) con le righe dirty. Il `pendingData` prop è stato rimosso da `PriceChartFull`. Il segnale preview è parte di `allOverlaySignals` nella pagina +page.svelte.
 
@@ -129,9 +132,11 @@ Usare `getIndexColor(measures.length)` da `frontend/src/lib/utils/colors.ts` per
 
 Completato. `SignalStyleEditor.svelte` estratto da `ChartSignalsSection.svelte` (L391-491). Props: `style: SignalStyle`, `onstylechange: (key, value) => void`, `simplified?: boolean`. Integrato in:
 - `ChartSignalsSection.svelte` — sostituisce il codice inline
-- `MeasurePanel.svelte` — sostituisce editor semplificato inline (prop `simplified`)
+- `MeasurePanel.svelte` — sostituisce editor semplificato inline (prop `simplified`, nasconde marker grid per misure)
 
 Formula LaTeX annualizzata: `$(1 + \Delta\%)^{365/d} - 1$` via `Tooltip math={true}` (definita come costante script-level `ANNUALIZED_FORMULA` per evitare interpolazione Svelte).
+
+**Round 4.1 fix**: Z-index del popover alzato da z-10/z-20 a z-40/z-50 per evitare troncatura quando il popover esce dal contenitore della card misura. La card usa `overflow-visible` per permettere al popover di uscire.
 
 ### 9. ✅ Fix cache lingua provider modal (3 sotto-problemi)
 
@@ -140,6 +145,8 @@ Formula LaTeX annualizzata: `$(1 + \Delta\%)^{365/d} - 1$` via `Tooltip math={tr
 **9b ✅ — Sync route timing**: Il `$effect` in `FxProviderSelect.svelte` (L288-306) sincronizza `selectedKeys` con `selectedRoutes` quando entrambi `allRoutes.length > 0` e `selectedRoutes.length > 0`. Funziona reattivamente: sia `computeRoutes()` che `loadRoutesFromBackend()` sono asincroni, ma il sync effect si riattiva quando entrambi completano.
 
 **9c ✅ — list_routes verificato**: `loadRoutesFromBackend()` in `FxPairAddModal.svelte` chiama `list_routes_api` e filtra per coppia. Il timing è gestito dal sistema reattivo Svelte: l'effect si attiva quando `open && editMode && editBase && editQuote` sono tutti truthy.
+
+**Round 4.1 fix — isDirty in edit mode**: Il calcolo `isDirty` ora confronta `selectedRoutes` con un baseline (`baselineRoutesJson`) salvato dopo `loadRoutesFromBackend()`. In edit mode: dirty solo se le route sono cambiate rispetto al backend. In create mode: dirty se qualsiasi campo è stato toccato. Risolve il bug "chiudi senza modificare → chiede conferma discard".
 
 ### 10. ✅ Naming i18n + abbreviazioni segnali
 
@@ -215,8 +222,12 @@ Dopo il 1° click, ogni volta che il mouse passa su un nuovo punto del grafico:
 
 ### F2. ✅ DatePicker per editare punti misura — COMPLETATO
 
-`DateRangePicker` integrato nella card misura espansa di `MeasurePanel.svelte`:
+`DateRangePicker` integrato nell'header della card misura di `MeasurePanel.svelte`:
+- Quando la card è espansa, l'header mostra il DateRangePicker al posto del testo date statiche
 - Props: `showPresets={false}`, `showCustomWindow={false}`, `compact={true}`
+- Limitato a `max-w-[300px]` per non occupare troppo spazio nell'header
 - `onchange` chiama `updateMeasureDates(id, start, end)` che aggiorna `params.startDate/endDate` e chiama `emitRendered()`
 - Validazione: start !== end (misura a zero giorni non ammessa), auto-swap se start > end
-- Il DateRangePicker appare sopra lo style editor nella card espansa
+- Quando la card è collassata, l'header mostra il formato compatto: `📏 date1 → date2 +X.XX% · Nd`
+
+**Round 4.1 fix**: Spostato dall'area espansa all'header della card. Quando la card è collassata mostra le date come testo; quando è espansa, il testo viene sostituito dal DateRangePicker inline con Δ% e giorni accanto.
