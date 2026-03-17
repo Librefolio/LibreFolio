@@ -21,6 +21,7 @@
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
     import type {CalendarHighlights} from './CalendarMonth.svelte';
+    import {SimpleSelect} from '$lib/components/ui/select';
 
     // =========================================================================
     // Types
@@ -44,6 +45,8 @@
         showDateFields?: boolean;
         /** Compact mode (smaller text, tighter spacing) */
         compact?: boolean;
+        /** Show From/To stacked vertically instead of side by side */
+        stacked?: boolean;
         /** Called when dates change */
         onchange?: (start: string, end: string) => void;
     }
@@ -56,6 +59,7 @@
         showCustomWindow = true,
         showDateFields = true,
         compact = false,
+        stacked = false,
         onchange,
     }: Props = $props();
 
@@ -64,13 +68,15 @@
     // =========================================================================
 
     let customAmount = $state(3);
-    let customGranularity: Granularity = $state('months');
+    let customGranularity: Granularity = $state('years');
     let customEditing = $state(false);
 
     // Calendar popover state
     let calendarOpen = $state(false);
     let pendingDate: string | null = $state(null);
     let hoveredDate: string | null = $state(null);
+    let triggerEl = $state<HTMLButtonElement | null>(null);
+    let popoverStyle = $state('');
 
     // Semi-independent left/right month+year
     let calLeftYear = $state(new Date().getFullYear());
@@ -270,7 +276,17 @@
         calRightMonth = now.getMonth();
     }
 
+    function updatePopoverPosition() {
+        if (!triggerEl) return;
+        const rect = triggerEl.getBoundingClientRect();
+        const popW = 560; // approx width of dual-calendar popover
+        const top = rect.bottom + 8;
+        const left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
+        popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; z-index: 9999;`;
+    }
+
     function openCalendar() {
+        // ...existing code for setting calLeft/calRight from start/end...
         if (start) {
             const [y, m] = start.split('-').map(Number);
             calLeftYear = y;
@@ -296,6 +312,7 @@
         pendingDate = null;
         hoveredDate = null;
         calendarOpen = true;
+        requestAnimationFrame(updatePopoverPosition);
     }
 
     function closeCalendar() {
@@ -359,7 +376,7 @@
 
     // Auto-apply custom window when amount or granularity ACTUALLY change (not on every render).
     // We use a plain object (not $state) to track previous values — avoids infinite loops.
-    const _prev = {amt: 3, gran: 'months' as Granularity};
+    const _prev = {amt: 3, gran: 'years' as Granularity};
     $effect(() => {
         const amt = customAmount;
         const gran = customGranularity;
@@ -411,14 +428,13 @@
                          onkeydown={(e) => { if (e.key === 'Escape') customEditing = false; }}>
                         <input type="number" bind:value={customAmount} min="1" max="999"
                             class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                        <select
-                            bind:value={customGranularity}
-                            class="pl-0.5 pr-3 py-0.5 text-xs border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none cursor-pointer"
-                        >
-                            {#each granularitySelectOptions as opt}
-                                <option value={opt.value}>{opt.label}</option>
-                            {/each}
-                        </select>
+                        <SimpleSelect
+                            value={customGranularity}
+                            options={granularitySelectOptions}
+                            onchange={(v) => { customGranularity = v as Granularity; }}
+                            class="inline-block w-auto"
+                            dropdownPosition="auto"
+                        />
                     </div>
                 {:else}
                     <button type="button"
@@ -440,17 +456,22 @@
     {#if showDateFields}
     <div class="relative drp-trigger w-full">
         <button
+            bind:this={triggerEl}
             type="button"
-            class="w-full flex items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
+            class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
             onclick={openCalendar}
         >
-            <div class="flex-1 flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
+            <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
                 <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0" />
                 <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
                 <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(start)}</span>
             </div>
-            <div class="w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
-            <div class="flex-1 flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
+            {#if stacked}
+                <div class="w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
+            {:else}
+                <div class="w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
+            {/if}
+            <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
                 <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0" />
                 <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
                 <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(end)}</span>
@@ -458,7 +479,7 @@
         </button>
 
         {#if calendarOpen}
-            <div class="drp-popover absolute z-50 top-full mt-2 left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4">
+            <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
                     <!-- Left month (semi-independent) -->
                     <CalendarMonth

@@ -1,6 +1,7 @@
 # Plan: Fix Bug Round 5 — FX Detail Page & DataTable
 
 **Dipendenze**: [`plan-fxDetailBugRound4.prompt.md`](plan-fxDetailBugRound4.prompt.md) (Rounds 1–4 completati)
+**Successivo**: [`plan-fxDetailBugRound6.prompt.md`](plan-fxDetailBugRound6.prompt.md)
 
 Risoluzione di 10 issue: rotazione sync, allineamento filter bar, MeasurePanel sorting/filtri, z-index filter popover DataTable, stale indicator DataEditor, colori cella, oninput immediato, colonna nascosta di default, paginazione smart, data nuova riga.
 

@@ -11,12 +11,12 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Trash2, ChevronDown, CircleHelp} from 'lucide-svelte';
+    import {Trash2, ChevronDown, Eye, EyeOff} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
     import type {MeasurementResult} from '$lib/charts/signals/MeasureSignal';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import {hslToHex} from '$lib/utils/colors';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -55,6 +55,7 @@
     let measureActive = $state(false);
     let nextId = $state(0);
     let expandedIds = $state<Set<string>>(new Set());
+    let hiddenTableIds = $state<Set<string>>(new Set());
 
     // =========================================================================
     // Measure mode
@@ -87,7 +88,7 @@
             '__pending__',
             {
                 ...MeasureSignal.getDefaultStyle(),
-                color: `hsl(${(30 + measures.length * 137.5) % 360}, 70%, 55%)`,
+                color: hslToHex((30 + measures.length * 137.5) % 360, 70, 55),
                 lineType: 'dashed',
             },
             {startDate: s, endDate: e},
@@ -111,7 +112,7 @@
                 id,
                 {
                     ...MeasureSignal.getDefaultStyle(),
-                    color: `hsl(${(30 + measures.length * 137.5) % 360}, 70%, 55%)`,
+                    color: hslToHex((30 + measures.length * 137.5) % 360, 70, 55),
                 },
                 {startDate: start, endDate: end},
             );
@@ -206,8 +207,6 @@
         expandedIds = next;
     }
 
-    const ANNUALIZED_FORMULA = '$(1 + \\Delta\\%)^{365/d} - 1$';
-
     // =========================================================================
     // Measure summary table (DataTable)
     // =========================================================================
@@ -259,6 +258,7 @@
         },
         {
             id: 'annualizedPct', header: 'Δ%/yr', type: 'number',
+            headerTooltip: '(1 + Δ%)^(365/days) − 1',
             cell: (r) => r.annualizedPct !== null
                 ? htmlNum(r.annualizedPct, fmtPct)
                 : ({type: 'html', html: '<span class="text-gray-400">—</span>'}),
@@ -372,6 +372,16 @@
                                         simplified
                                     />
                                 </div>
+                                <span
+                                    class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded transition-colors cursor-pointer"
+                                    role="button"
+                                    tabindex="-1"
+                                    title={hiddenTableIds.has(measure.id) ? 'Show table' : 'Hide table'}
+                                    onclick={(e) => { e.stopPropagation(); const next = new Set(hiddenTableIds); if (next.has(measure.id)) next.delete(measure.id); else next.add(measure.id); hiddenTableIds = next; }}
+                                    onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); const next = new Set(hiddenTableIds); if (next.has(measure.id)) next.delete(measure.id); else next.add(measure.id); hiddenTableIds = next; }}}
+                                >
+                                    {#if hiddenTableIds.has(measure.id)}<EyeOff size={13} />{:else}<Eye size={13} />{/if}
+                                </span>
                             {/if}
                             <span
                                 class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
@@ -390,7 +400,7 @@
                     {#if isExpanded}
 
                         <!-- Summary table (DataTable) -->
-                        {#if result}
+                        {#if result && !hiddenTableIds.has(measure.id)}
                         <div class="border-t border-gray-200 dark:border-slate-600">
                             <DataTable
                                 data={buildSummaryRows(result, measure)}

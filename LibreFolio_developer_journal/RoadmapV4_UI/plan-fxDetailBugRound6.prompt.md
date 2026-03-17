@@ -1,6 +1,7 @@
 # Plan: Fix Bug Round 6 — FX Detail Page & DataTable
 
 **Dipendenze**: [`plan-fxDetailBugRound5.prompt.md`](plan-fxDetailBugRound5.prompt.md) (Round 5 completato)
+**Successivo**: [`plan-fxDetailBugRound6-2.prompt.md`](plan-fxDetailBugRound6-2.prompt.md)
 
 Round di fix: colori sfondo celle (root cause trovato: CSS duplicati e invertiti), filtri mancanti, SignalStyleEditor nell'header misura, rimozione min-height, creazione CalendarMonth + SingleDatePicker, gestione date new row, auto-fit colonne misure.
 
@@ -176,16 +177,79 @@ Se si importa una data già esistente: attualmente sovrascrittura con status 'ed
 
 ---
 
-## File modificati
+## Round 6.1 — Fix feedback da test utente (17 Mar 2026)
 
-| File | Modifiche |
-|------|-----------|
-| `frontend/src/lib/components/table/DataTable.svelte` | Fix CSS colori riga, nuova prop `getRowStyle`, rimozione `min-height`, nuova prop `tableLayout`, stile `table-layout: auto` |
-| `frontend/src/lib/components/table/types.ts` | (se serve) aggiunta `tableLayout` al tipo props |
-| `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` | Rimozione CSS `:global(.row-*)`, `filterable: true` su colonne, `getRowStyle` per stale opacity, SingleDatePicker per new rows |
-| `frontend/src/lib/components/charts/MeasurePanel.svelte` | `enableColumnFilters={true}`, header restructure con SignalStyleEditor, `tableLayout="auto"`, `width` su colonne |
-| `frontend/src/lib/components/ui/CalendarMonth.svelte` | **Nuovo** — griglia mese + navigazione, riusabile |
-| `frontend/src/lib/components/ui/SingleDatePicker.svelte` | **Nuovo** — single date picker con 1 CalendarMonth |
-| `frontend/src/lib/components/ui/DateRangePicker.svelte` | Refactor: usa 2 CalendarMonth, rimuove snippet duplicato |
-| `frontend/src/lib/components/fx/FxDataEditorSection.svelte` | `onsave` con `expandedRange` per auto-expand date range |
-| `frontend/src/routes/(app)/fx/[pair]/+page.svelte` | Handler `onsave` con expanded range → aggiorna DateRangePicker |
+### Risultato test utente sugli Step 1-7
+
+| Step | Esito | Note |
+|------|-------|------|
+| 1 | ✅ OK | Colori riga corretti |
+| 2 | ✅ Parziale | Filtri visibili, ma date column usa search testuale anziché DateRangePicker. Rate manca slider logaritmico. Regressione: Status column non più hidden by default |
+| 3 | ✅ Parziale | SignalStyleEditor in header, ma border-t spuria. Color picker non allineato al primo render. Eye icon occupa solo spazio |
+| 4 | ✅ OK | min-height rimossa |
+| 5 | ⚠️ | Colonne visibili ma più larghe del necessario, scrollbar orizzontale |
+| 6 | ⚠️ | DateRangePicker funziona. SingleDatePicker tagliato dalla riga, no auto-focus su Add Row, formato data americano |
+| 7 | ⚠️ | Come step 6 |
+| BUG | 🐛 | Upload da files/broker reports non funziona (nessun POST), funziona da broker detail |
+
+### Fix applicati
+
+#### 2a. ✅ Colonna Date type → 'date' per DateRangePicker filter
+**File**: `DataEditor.svelte`
+- Cambiato tipo colonna date da `'text'` a `'date'` per attivare il filtro data range nel DataTableColumnFilter
+
+#### 2b. ✅ Fix regressione Status column `hiddenByDefault`
+**File**: `DataTable.svelte`
+- `onMount`: merge della visibility salvata in localStorage con i default, rispettando `hiddenByDefault` per colonne nuove non presenti nello stato salvato
+
+#### 3a. ✅ Fix border-t spuria SignalStyleEditor
+**File**: `SignalStyleEditor.svelte`, `ChartSignalsSection.svelte`
+- Rimosso `border-t` e `pt-1.5` da SignalStyleEditor (componente generico)
+- Aggiunto wrapper `<div class="pt-1.5 border-t ...">` nel parent ChartSignalsSection (unico luogo dove serve)
+
+#### 5a. ✅ Fix larghezza colonne in `tableLayout="auto"`
+**File**: `DataTable.svelte`
+- Per `tableLayout="auto"`: usa `column.width` diretto (non `columnWidths` da localStorage che potrebbe avere valori stale/larghi)
+
+#### 6a. ✅ Fix SingleDatePicker z-index e clipping
+**File**: `SingleDatePicker.svelte`
+- Cambiato a `position: fixed` con `getBoundingClientRect()` per posizionamento + `z-index: 9999`
+- Formato data cambiato da MM/DD/YYYY a ISO YYYY-MM-DD
+
+#### 6b. ✅ Auto-scroll su Add Row
+**File**: `DataEditor.svelte`
+- Dopo `handleAddRow`: `tick().then()` + `scrollIntoView({ behavior: 'smooth', block: 'center' })` sulla nuova riga
+
+#### CSS. ✅ Fix 7 warning CSS unused selectors
+**File**: `DataTableColumnFilter.svelte`
+- Rimossi selettori `.date-row`, `.date-label`, `.date-input` inutilizzati dai selettori combinati `.range-row, .date-row` → `.range-row`
+
+#### Upload Bug — files/+page.svelte
+**File**: `files/+page.svelte`
+- Aggiunto `$: canConfirmBrim` reactive var per tracking reattivo dello stato del pulsante Upload
+- **Nota**: il bug è pre-esistente, non introdotto dai round 6. Causa root ancora da investigare (nessun POST emesso dopo click Upload). Il componente usa sintassi Svelte 4 (`on:click`, `$:`) e componenti child Svelte 5 (BrokerSearchSelect con `onchange` prop). Non è possibile mescolare `onclick` e `on:click` nello stesso file Svelte.
+
+### Fix NON ancora applicati (prossima iterazione)
+
+| Issue | Descrizione | Priorità |
+|-------|-------------|----------|
+| Date filter DateRangePicker | Filtro date dovrebbe usare DateRangePicker (non text/date input nativo) | Media |
+| Rate filter slider | Rate dovrebbe avere slider logaritmico come il filtro Size | Media |
+| Eye icon posizione | Spostare eye (visibilità colonne) accanto a trash nel MeasurePanel header | Bassa |
+| SignalStyleEditor color sync | Color picker non allineato al primo render, si allinea dopo primo cambio | Media |
+| Auto-focus chart click | Click su punto grafico → scroll alla riga corrispondente in DataEditor | Media |
+| Upload bug root cause | Investigare perché `confirmBrimUpload` non emette POST da files/+page | Alta |
+
+---
+
+## File modificati (aggiornamento Round 6.1)
+
+| File | Modifiche Round 6.1 |
+|------|---------------------|
+| `frontend/src/lib/components/table/DataTable.svelte` | Fix hiddenByDefault merge onMount, fix column width per tableLayout auto |
+| `frontend/src/lib/components/table/DataTableColumnFilter.svelte` | Rimossi 7 selettori CSS unused (.date-row, .date-label, .date-input) |
+| `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` | Date column type 'date', auto-scroll su Add Row |
+| `frontend/src/lib/components/ui/SingleDatePicker.svelte` | position: fixed, z-index 9999, formato ISO |
+| `frontend/src/lib/components/charts/SignalStyleEditor.svelte` | Rimosso border-t e pt-1.5 |
+| `frontend/src/lib/components/charts/ChartSignalsSection.svelte` | Aggiunto wrapper border-t per SignalStyleEditor |
+| `frontend/src/routes/(app)/files/+page.svelte` | Aggiunto $: canConfirmBrim reactive |

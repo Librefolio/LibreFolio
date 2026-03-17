@@ -196,6 +196,9 @@ export interface ColumnDef<T> {
 
     /** If true, column is hidden by default (user can toggle via column visibility) */
     hiddenByDefault?: boolean;
+
+    /** Optional tooltip text shown on hover over the header (info icon) */
+    headerTooltip?: string | (() => string);
 }
 
 // ============ Action Types ============

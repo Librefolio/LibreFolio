@@ -63,6 +63,8 @@
     let calendarOpen = $state(false);
     let calYear = $state(new Date().getFullYear());
     let calMonth = $state(new Date().getMonth());
+    let triggerEl = $state<HTMLButtonElement | null>(null);
+    let popoverStyle = $state('');
 
     // =========================================================================
     // Helpers
@@ -70,8 +72,16 @@
 
     function displayDate(iso: string): string {
         if (!iso) return '—';
-        const d = new Date(iso + 'T00:00:00');
-        return d.toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'});
+        // Use YYYY-MM-DD format (ISO, non-ambiguous)
+        return iso;
+    }
+
+    function updatePopoverPosition() {
+        if (!triggerEl) return;
+        const rect = triggerEl.getBoundingClientRect();
+        const top = rect.bottom + 4;
+        const left = Math.max(4, Math.min(rect.left, window.innerWidth - 280));
+        popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; z-index: 9999;`;
     }
 
     function openCalendar() {
@@ -85,6 +95,7 @@
             calMonth = now.getMonth();
         }
         calendarOpen = true;
+        requestAnimationFrame(updatePopoverPosition);
     }
 
     function closeCalendar() {
@@ -134,17 +145,18 @@
 
 <div class="relative sdp-trigger inline-block">
     <button
+        bind:this={triggerEl}
         type="button"
         class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
         onclick={(e) => { e.stopPropagation(); openCalendar(); }}
     >
         <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0" />
-        <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{label}</span>
+        {#if label}<span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{label}</span>{/if}
         <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(value)}</span>
     </button>
 
     {#if calendarOpen}
-        <div class="sdp-popover absolute z-50 top-full mt-2 left-0 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4">
+        <div class="sdp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 w-[280px]" style={popoverStyle}>
             <CalendarMonth
                 year={calYear}
                 month={calMonth}

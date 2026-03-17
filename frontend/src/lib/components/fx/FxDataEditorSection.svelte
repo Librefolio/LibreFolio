@@ -73,6 +73,7 @@
     let dataEditor: DataEditor | undefined = $state(undefined);
     let rows: DataRow[] = $state([]);
     let error: string | null = $state(null);
+    let prevChartData: FxDataPoint[] | null = null;
 
     // =========================================================================
     // Convert FxDataPoint[] → DataRow[]
@@ -90,9 +91,12 @@
         }));
     }
 
-    // Initialize rows from chartData
+    // Initialize rows from chartData — only when chartData actually changes (referential)
     $effect(() => {
-        rows = chartDataToRows(chartData);
+        if (chartData !== prevChartData) {
+            prevChartData = chartData;
+            rows = chartDataToRows(chartData);
+        }
     });
 
     // =========================================================================
@@ -144,13 +148,31 @@
         try {
             // Upsert edited + appended rows
             const upsertRows = dirty.filter(r => r.status === 'edited' || r.status === 'appended');
-            if (upsertRows.length > 0) {
+
+            // Validate: filter out rows with invalid rate (undefined, NaN, <= 0)
+            const validUpserts = upsertRows.filter(r => {
+                const rate = Number(r.values.rate);
+                return !isNaN(rate) && rate > 0;
+            });
+            const invalidCount = upsertRows.length - validUpserts.length;
+
+            // Delete rows marked as deleted
+            const deleteRows = dirty.filter(r => r.status === 'deleted');
+
+            // If all upserts invalid and no deletes, show error
+            if (invalidCount > 0 && validUpserts.length === 0 && deleteRows.length === 0) {
+                error = `${invalidCount} row(s) have invalid rate values. Please enter a valid positive rate.`;
+                saving = false;
+                return;
+            }
+
+            if (validUpserts.length > 0) {
                 // Normalize base/quote to alphabetical order (backend convention)
                 const baseNorm = base < quote ? base : quote;
                 const quoteNorm = base < quote ? quote : base;
                 const isInverted = base > quote;
 
-                const rateItems = upsertRows.map(r => ({
+                const rateItems = validUpserts.map(r => ({
                     base: baseNorm,
                     quote: quoteNorm,
                     date: r.date,
@@ -159,8 +181,6 @@
                 await zodiosApi.upsert_rates_endpoint_api_v1_fx_currencies_rate_post(rateItems);
             }
 
-            // Delete rows marked as deleted
-            const deleteRows = dirty.filter(r => r.status === 'deleted');
             if (deleteRows.length > 0) {
                 // Group all date ranges and send in one call
                 const deleteItems = [{

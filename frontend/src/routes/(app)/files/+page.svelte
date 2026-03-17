@@ -29,6 +29,7 @@
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Search, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import type {BrimFile, Broker, BrokerInfo, UploadedFile} from '$lib/types';
@@ -141,6 +142,11 @@
     // URL filter state
     let initialFilters: Record<string, FilterValue> = {};
     let urlInitialized = false;  // Prevent URL update on initial load
+
+    // FilesTable refs for column visibility toggle
+    let staticTableRef: FilesTable;
+    let brimTableRef: FilesTable;
+    $: activeTableRef = activeTab === 'static' ? staticTableRef : brimTableRef;
 
     // BRIM upload with broker selection
     let showBrimUploader = false;
@@ -462,6 +468,9 @@
         return pendingBrimFiles.length > 0;
     }
 
+    // Reactive derived: Svelte needs explicit var refs to track reactivity
+    $: canConfirmBrim = pendingBrimFiles.length > 0 && [...fileBrokerAssignments.values()].every(v => v !== null);
+
     async function confirmBrimUpload() {
         if (!canConfirmBrimUpload()) return;
 
@@ -648,27 +657,32 @@
     </header>
 
     <!-- Tabs -->
-    <div class="tabs" role="tablist">
-        <button
-                aria-selected={activeTab === 'static'}
-                class="tab"
-                class:active={activeTab === 'static'}
-                data-testid="files-tab-static"
-                on:click={() => setActiveTab('static')}
-                role="tab"
-        >
-            {$t('uploads.staticResources')}
-        </button>
-        <button
-                aria-selected={activeTab === 'brim'}
-                class="tab"
-                class:active={activeTab === 'brim'}
-                data-testid="files-tab-brim"
-                on:click={() => setActiveTab('brim')}
-                role="tab"
-        >
-            {$t('uploads.brokerReports')}
-        </button>
+    <div class="flex items-center gap-2">
+        <div class="tabs flex-1" role="tablist">
+            <button
+                    aria-selected={activeTab === 'static'}
+                    class="tab"
+                    class:active={activeTab === 'static'}
+                    data-testid="files-tab-static"
+                    on:click={() => setActiveTab('static')}
+                    role="tab"
+            >
+                {$t('uploads.staticResources')}
+            </button>
+            <button
+                    aria-selected={activeTab === 'brim'}
+                    class="tab"
+                    class:active={activeTab === 'brim'}
+                    data-testid="files-tab-brim"
+                    on:click={() => setActiveTab('brim')}
+                    role="tab"
+            >
+                {$t('uploads.brokerReports')}
+            </button>
+        </div>
+        {#if viewMode === 'list'}
+            <ColumnVisibilityToggle tableRef={activeTableRef?.getTableRef()} />
+        {/if}
     </div>
 
 
@@ -728,6 +742,7 @@
             {:else}
                 <!-- List View with New DataTable -->
                 <FilesTable
+                        bind:this={staticTableRef}
                         files={staticFiles}
                         type="static"
                         onDelete={(id) => deleteFile(id, false)}
@@ -745,6 +760,7 @@
             {:else}
                 <!-- BRIM Table with New DataTable -->
                 <FilesTable
+                        bind:this={brimTableRef}
                         files={brimFiles}
                         type="brim"
                         onDelete={(id) => deleteFile(id, true)}
@@ -855,9 +871,9 @@
                 </button>
                 <button
                         class="btn btn-primary"
-                        class:btn-disabled={!canConfirmBrimUpload()}
+                        class:btn-disabled={!canConfirmBrim}
                         on:click={confirmBrimUpload}
-                        disabled={!canConfirmBrimUpload()}
+                        disabled={!canConfirmBrim}
                 >
                     {$t('uploads.upload')} ({pendingBrimFiles.length})
                 </button>

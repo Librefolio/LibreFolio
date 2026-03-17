@@ -1,7 +1,8 @@
 # Plan: FX Detail Page — Redesign Completo (Rev. 3 Finale)
 
 **Data creazione**: 16 Marzo 2026
-**Status**: 📋 DETTAGLIATO — pronto per implementazione
+**Status**: ✅ COMPLETATO — Rounds 1–3
+**Successivo**: [`plan-fxDetailBugRound4.prompt.md`](plan-fxDetailBugRound4.prompt.md)
 **Priorità**: Alta (prossimo plan attivo Phase 5)
 **Stima**: ~6 giorni
 **Dipendenze**: `plan-fxConversionChain.prompt.md` completato

@@ -1,6 +1,7 @@
 # Plan: Fix Bug Round 4 — FX Detail Page (Piano Definitivo Consolidato)
 
 **Dipendenze**: [`plan-fxDetailPageRedesign.prompt.md`](plan-fxDetailPageRedesign.prompt.md) (Rounds 1–3 completati, vedi sezione Bug Report)
+**Successivo**: [`plan-fxDetailBugRound5.prompt.md`](plan-fxDetailBugRound5.prompt.md)
 
 Risoluzione di 14 issue: rimozione dataZoom residuo, riordino pannelli, migrazione tabella misure e DataEditor a DataTable, fix freccia/ruler/colori, cache lingua, preview come segnale invisibile, stile condiviso, i18n. Ordine di esecuzione ottimizzato: prima i quick-fix, poi la migrazione misure (valida retrocompatibilità DataTable), poi il DataEditor complesso.
 
