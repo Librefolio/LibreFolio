@@ -135,7 +135,7 @@
         for (const cfg of signals) {
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
-            const results = instance.renderMulti(lineData, settings.colorByBaseline ? 'absolute' : 'absolute');
+            const results = instance.renderMulti(lineData, viewMode);
             for (const result of results) {
                 if (result.data.length > 0) rendered.push(result);
             }
