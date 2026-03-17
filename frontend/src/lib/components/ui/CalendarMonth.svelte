@@ -9,6 +9,7 @@
 <script lang="ts">
     import {CalendarCheck, ChevronLeft, ChevronRight} from 'lucide-svelte';
     import {_} from '$lib/i18n';
+    import {SimpleSelect} from '$lib/components/ui/select';
 
     // =========================================================================
     // Types
@@ -81,6 +82,14 @@
         for (let y = currentYear - 10; y <= currentYear + 2; y++) years.push(y);
         return years;
     }
+
+    // SimpleSelect options (derived)
+    let monthSelectOptions = $derived(
+        monthLabels.map((label, i) => ({value: String(i), label}))
+    );
+    let yearSelectOptions = $derived(
+        yearOptions().map(y => ({value: String(y), label: String(y)}))
+    );
 
     function getMonthGrid(y: number, m: number): Array<Array<{day: number; iso: string; inMonth: boolean}>> {
         const firstDay = new Date(y, m, 1);
@@ -203,24 +212,20 @@
             <ChevronLeft size={16} />
         </button>
         <div class="flex items-center gap-1">
-            <select
-                class="text-sm font-semibold text-gray-700 dark:text-gray-200 bg-transparent border-none focus:ring-0 focus:outline-none cursor-pointer px-0 py-0"
-                value={month}
-                onchange={(e) => onSetMonth(parseInt((e.target as HTMLSelectElement).value))}
-            >
-                {#each Array(12) as _, i}
-                    <option value={i}>{monthLabels[i]}</option>
-                {/each}
-            </select>
-            <select
-                class="text-sm font-semibold text-gray-700 dark:text-gray-200 bg-transparent border-none focus:ring-0 focus:outline-none cursor-pointer px-0 py-0"
-                value={year}
-                onchange={(e) => onSetYear(parseInt((e.target as HTMLSelectElement).value))}
-            >
-                {#each yearOptions() as y}
-                    <option value={y}>{y}</option>
-                {/each}
-            </select>
+            <SimpleSelect
+                value={String(month)}
+                options={monthSelectOptions}
+                onchange={(v) => onSetMonth(parseInt(v))}
+                class="inline-block w-auto"
+                dropdownPosition="auto"
+            />
+            <SimpleSelect
+                value={String(year)}
+                options={yearSelectOptions}
+                onchange={(v) => onSetYear(parseInt(v))}
+                class="inline-block w-auto"
+                dropdownPosition="auto"
+            />
         </div>
         <div class="flex items-center gap-0.5">
             {#if onGoToToday}

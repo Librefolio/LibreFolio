@@ -55,7 +55,7 @@
     }
 </script>
 
-<div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700">
+<div class="flex items-center gap-1.5">
     <input
         type="color"
         value={style.color}
@@ -63,7 +63,7 @@
         title={$t('chartSettings.style.color')}
         oninput={(e) => onstylechange('color', e.currentTarget.value)}
     />
-    <div class="flex-1 relative">
+    <div class="flex-1 relative min-w-[100px]">
         <button
             type="button"
             class="w-full h-7 flex items-center cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors relative"

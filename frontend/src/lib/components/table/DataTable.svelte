@@ -14,7 +14,7 @@
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
-    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon} from 'lucide-svelte';
+    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, CircleHelp, ExternalLink, Filter, ImageIcon} from 'lucide-svelte';
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableToolbar from './DataTableToolbar.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
@@ -57,6 +57,8 @@
         getRowStyle?: (row: T) => string;
         /** Table layout mode: 'fixed' (default) or 'auto' (columns expand to fill space) */
         tableLayout?: 'fixed' | 'auto';
+        /** Show or hide the internal column-visibility/bulk-action toolbar (default: true) */
+        showToolbar?: boolean;
     }
 
     let {
@@ -90,6 +92,7 @@
         getRowClass,
         getRowStyle,
         tableLayout = 'fixed',
+        showToolbar = true,
     }: Props = $props();
 
     // Derived: effective selection mode
@@ -400,6 +403,11 @@
         return typeof col.header === 'function' ? col.header() : col.header;
     }
 
+    function getColumnTooltip(col: ColumnDef<T>): string | null {
+        if (!col.headerTooltip) return null;
+        return typeof col.headerTooltip === 'function' ? col.headerTooltip() : col.headerTooltip;
+    }
+
     // ============ Actions ============
 
     function toggleSort(columnId: string) {
@@ -605,7 +613,24 @@
         const storedPageSize = loadFromStorage<number>(getStorageKey('pageSize'), defaultPageSize);
         pagination = {...pagination, pageSize: storedPageSize === 0 ? 999999 : storedPageSize};
 
-        columnVisibility = loadFromStorage(getStorageKey('columnVisibility'), defaultColumnVisibility);
+        const storedVisibility = loadFromStorage<VisibilityState | null>(getStorageKey('columnVisibility'), null);
+        if (storedVisibility) {
+            // Merge: apply stored state, but force hiddenByDefault for columns not previously known
+            const merged = {...defaultColumnVisibility};
+            for (const [id, visible] of Object.entries(storedVisibility)) {
+                if (id in merged) merged[id] = visible;
+            }
+            // Force-hide columns with hiddenByDefault that weren't in the stored state
+            for (const col of columns) {
+                if (col.hiddenByDefault && !(col.id in storedVisibility)) {
+                    merged[col.id] = false;
+                }
+            }
+            columnVisibility = merged;
+        } else {
+            columnVisibility = {...defaultColumnVisibility};
+        }
+
         columnWidths = loadFromStorage(getStorageKey('columnWidths'), defaultColumnWidths);
         columnOrder = loadFromStorage(getStorageKey('columnOrder'), defaultColumnOrder);
 
@@ -652,11 +677,38 @@
             columnWidths = {...defaultColumnWidths};
         }
     });
+
+    // ============ Public API ============
+
+    /**
+     * Navigate to the page containing the row with the given ID, then scroll it into view.
+     * Useful for DataEditor's "Add Row" to jump to the newly appended row.
+     */
+    export function navigateToRowId(rowId: string) {
+        if (!enablePagination) return;
+        const index = sortedData.findIndex(row => getRowId(row) === rowId);
+        if (index < 0) return;
+        const targetPage = Math.floor(index / pagination.pageSize);
+        if (pagination.pageIndex !== targetPage) {
+            pagination = {...pagination, pageIndex: targetPage};
+            saveToStorage(getStorageKey('pageSize'), pagination.pageSize);
+        }
+    }
+
+    /** Get ordered columns info for external visibility control */
+    export function getColumnsForVisibility(): Array<{id: string; header: string | (() => string); visible: boolean}> {
+        return orderedColumns.map(c => ({id: c.id, header: c.header, visible: columnVisibility[c.id] !== false}));
+    }
+
+    /** Toggle a column's visibility (external access) */
+    export function toggleColumnVisibilityById(columnId: string) {
+        toggleColumnVisibility(columnId);
+    }
 </script>
 
 <div class="datatable-container">
     <!-- Toolbar -->
-    {#if enableColumnVisibility || bulkActions.length > 0}
+    {#if showToolbar && (enableColumnVisibility || bulkActions.length > 0)}
         <DataTableToolbar
                 selectedCount={selectedRows.length}
                 columns={orderedColumns.map(c => ({ id: c.id, header: c.header }))}
@@ -703,7 +755,7 @@
                     <th
                             class="th-data"
                             class:sortable={column.sortable !== false && enableSorting}
-                            style="{tableLayout === 'auto' ? 'min-width' : 'width'}: {columnWidths[column.id] || column.width || 150}px;"
+                            style="{tableLayout === 'auto' ? 'min-width' : 'width'}: {tableLayout === 'auto' ? (column.width || 80) : (columnWidths[column.id] || column.width || 150)}px;"
                     >
                         <div class="header-content">
                             <button
@@ -725,6 +777,13 @@
 										</span>
                                 {/if}
                             </button>
+
+                            <!-- Header tooltip (info icon) -->
+                            {#if getColumnTooltip(column)}
+                                <span class="header-tooltip-icon" title={getColumnTooltip(column)}>
+                                    <CircleHelp size={12} />
+                                </span>
+                            {/if}
 
                             <!-- Filter button -->
                             {#if column.filterable !== false && enableColumnFilters}
@@ -1103,6 +1162,18 @@
     .sort-icon {
         display: flex;
         color: #94a3b8;
+    }
+
+    .header-tooltip-icon {
+        display: flex;
+        align-items: center;
+        color: #94a3b8;
+        cursor: help;
+        flex-shrink: 0;
+    }
+
+    :global(.dark) .header-tooltip-icon {
+        color: #64748b;
     }
 
     .filter-btn {
@@ -1609,23 +1680,21 @@
     /* Row status classes (used via getRowClass prop) */
     :global(tr.row-deleted) td {
         background: rgba(239, 68, 68, 0.10) !important;
-        text-decoration: line-through;
-        opacity: 0.7;
     }
     :global(.dark) :global(tr.row-deleted) td {
-        background: rgba(239, 68, 68, 0.15) !important;
+        background: rgba(239, 68, 68, 0.25) !important;
     }
     :global(tr.row-edited) td {
         background: rgba(59, 130, 246, 0.10) !important;
     }
     :global(.dark) :global(tr.row-edited) td {
-        background: rgba(59, 130, 246, 0.15) !important;
+        background: rgba(59, 130, 246, 0.25) !important;
     }
     :global(tr.row-appended) td {
         background: rgba(16, 185, 129, 0.10) !important;
     }
     :global(.dark) :global(tr.row-appended) td {
-        background: rgba(16, 185, 129, 0.15) !important;
+        background: rgba(16, 185, 129, 0.25) !important;
     }
     :global(tr.row-stale) td {
         background: rgba(245, 158, 11, var(--stale-opacity, 0.06)) !important;

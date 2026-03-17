@@ -19,6 +19,7 @@
     import DataImportModal from './DataImportModal.svelte';
     import type {ColumnDef, DataRow} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
 
@@ -55,6 +56,7 @@
     // =========================================================================
 
     let importModalOpen = $state(false);
+    let dataTableRef: DataTable<DataRow> | undefined = $state(undefined);
 
     // =========================================================================
     // Derived
@@ -124,7 +126,7 @@
             {
                 id: 'date',
                 header: 'Date',
-                type: 'text',
+                type: 'date',
                 cell: (r) => {
                     // Editable date for appended rows
                     if (r.status === 'appended' && !isReadonly) {
@@ -341,6 +343,15 @@
         };
         rows = [...rows, newRow];
         emitDirty();
+        // Navigate to the page containing the new row, then scroll into view
+        tick().then(() => {
+            dataTableRef?.navigateToRowId(newRow.date);
+            tick().then(() => {
+                const el = document.querySelector(`[data-testid="data-editor"] tr:last-child`) ??
+                           document.querySelector(`.datatable tbody tr:last-child`);
+                el?.scrollIntoView({behavior: 'smooth', block: 'center'});
+            });
+        });
     }
 
     // =========================================================================
@@ -434,6 +445,8 @@
                     <Plus size={13} /> Add Row
                 </button>
             {/if}
+            <!-- Column visibility toggle (standalone component) -->
+            <ColumnVisibilityToggle tableRef={dataTableRef} />
         </div>
 
         <!-- Right: Counters -->
@@ -456,6 +469,7 @@
 
     <div class="max-h-[500px] overflow-y-auto">
         <DataTable
+            bind:this={dataTableRef}
             data={sortedRows}
             columns={dtColumns}
             getRowId={(r) => r.date}
@@ -473,6 +487,7 @@
             getRowClass={rowBgClass}
             getRowStyle={rowStyleFn}
             emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
+            showToolbar={false}
         />
     </div>
 </div>

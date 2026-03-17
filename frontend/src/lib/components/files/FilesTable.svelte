@@ -33,6 +33,12 @@
 
     let {files, type, onDelete, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange}: Props = $props();
 
+    // Internal DataTable reference (for external column visibility control)
+    let dataTableRef: DataTable<FileData> | undefined = $state(undefined);
+
+    /** Expose the internal DataTable ref for ColumnVisibilityToggle */
+    export function getTableRef() { return dataTableRef; }
+
     // Helper functions
     function getFileName(file: FileData): string {
         return type === 'static' ? (file as UploadedFile).original_name : (file as BrimFile).filename;
@@ -419,6 +425,7 @@
 
 <div data-testid="files-table-{type}">
     <DataTable
+            bind:this={dataTableRef}
             {bulkActions}
             {columns}
             data={files}
@@ -429,6 +436,8 @@
             {onFiltersChange}
             {rowActions}
             storageKey="filesTable_{type}"
+            tableLayout="auto"
+            showToolbar={false}
     />
 </div>
 

@@ -109,3 +109,20 @@ export function getPriorityBadgeStyle(index: number): string {
     return `--badge-bg: ${colors.bg}; --badge-text: ${colors.text}; --badge-dark-bg: ${colors.darkBg}; --badge-dark-text: ${colors.darkText};`;
 }
 
+/**
+ * Convert HSL (hue 0-360, saturation 0-100, lightness 0-100) to hex string (#rrggbb).
+ *
+ * Useful when a CSS hex color is needed (e.g. `<input type="color">`).
+ */
+export function hslToHex(h: number, s: number, l: number): string {
+    s /= 100;
+    l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => {
+        const k = (n + h / 30) % 12;
+        const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+        return Math.round(255 * color).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+}
+
