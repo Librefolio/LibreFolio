@@ -17,6 +17,10 @@
     import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
     import type {MeasurementResult} from '$lib/charts/signals/MeasureSignal';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import SignalStyleEditor from './SignalStyleEditor.svelte';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
 
     // =========================================================================
     // Props
@@ -47,6 +51,7 @@
     let measures: MeasureSignal[] = $state([]);
     let pendingStartDate: string | null = $state(null);
     let pendingStartValue: number | null = $state(null);
+    let pendingMeasure: MeasureSignal | null = $state(null);
     let measureActive = $state(false);
     let nextId = $state(0);
     let expandedIds = $state<Set<string>>(new Set());
@@ -66,7 +71,28 @@
         measureActive = false;
         pendingStartDate = null;
         pendingStartValue = null;
+        pendingMeasure = null;
         onmeasuremodechange?.(false);
+        emitRendered(); // clear pending preview
+    }
+
+    /** Called from parent on mousemove to update live preview line */
+    export function updatePendingEnd(date: string, value: number) {
+        if (!measureActive || pendingStartDate === null) return;
+        if (date === pendingStartDate) return; // no zero-length measure
+        const [s, e] = pendingStartDate <= date
+            ? [pendingStartDate, date]
+            : [date, pendingStartDate];
+        pendingMeasure = new MeasureSignal(
+            '__pending__',
+            {
+                ...MeasureSignal.getDefaultStyle(),
+                color: `hsl(${(30 + measures.length * 137.5) % 360}, 70%, 55%)`,
+                lineType: 'dashed',
+            },
+            {startDate: s, endDate: e},
+        );
+        emitRendered();
     }
 
     export function addPoint(date: string, value: number) {
@@ -104,10 +130,22 @@
         emitRendered();
     }
 
-    function updateMeasureStyle(id: string, key: 'color' | 'lineWidth' | 'lineType', value: string | number) {
+    function updateMeasureStyle(id: string, key: keyof import('$lib/charts/signals').SignalStyle, value: any) {
         const m = measures.find(m => m.id === id);
         if (!m) return;
         (m.style as any)[key] = value;
+        measures = [...measures]; // trigger reactivity
+        emitRendered();
+    }
+
+    function updateMeasureDates(id: string, newStart: string, newEnd: string) {
+        const m = measures.find(m => m.id === id);
+        if (!m) return;
+        // Ensure start <= end
+        const [s, e] = newStart <= newEnd ? [newStart, newEnd] : [newEnd, newStart];
+        if (s === e) return; // measure needs 2 different days
+        m.params.startDate = s;
+        m.params.endDate = e;
         measures = [...measures]; // trigger reactivity
         emitRendered();
     }
@@ -120,6 +158,11 @@
         const rendered: RenderedSignal[] = measures.map(m =>
             m.render(chartData, viewMode),
         ).filter(r => r.data.length > 0);
+        // Include pending preview (live measure during placement)
+        if (pendingMeasure) {
+            const preview = pendingMeasure.render(chartData, viewMode);
+            if (preview.data.length > 0) rendered.push(preview);
+        }
         onmeasureschange?.(rendered);
     }
 
@@ -161,6 +204,97 @@
         if (next.has(id)) next.delete(id);
         else next.add(id);
         expandedIds = next;
+    }
+
+    const ANNUALIZED_FORMULA = '$(1 + \\Delta\\%)^{365/d} - 1$';
+
+    // =========================================================================
+    // Measure summary table (DataTable)
+    // =========================================================================
+
+    interface MeasureSummaryRow {
+        id: string;
+        signal: string;
+        signalColor: string | null;
+        valueStart: number;
+        valueEnd: number;
+        deltaAbs: number;
+        deltaPct: number;
+        annualizedPct: number | null;
+    }
+
+    function colorClass(v: number): string {
+        return v >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+    }
+
+    function htmlNum(v: number, formatter: (n: number) => string): HtmlCell {
+        return {type: 'html', html: `<span class="font-mono ${colorClass(v)}">${formatter(v)}</span>`};
+    }
+
+    const summaryColumns: ColumnDef<MeasureSummaryRow>[] = [
+        {
+            id: 'signal', header: () => $t('measure.table.signal'), type: 'text',
+            cell: (r) => ({type: 'html', html: r.signalColor ? `<span style="color:${r.signalColor}">●</span> ${r.signal}` : `<span class="font-medium">${r.signal}</span>`}),
+            sortable: false, filterable: false,
+        },
+        {
+            id: 'valueStart', header: () => $t('measure.table.start'), type: 'number',
+            cell: (r) => ({type: 'html', html: `<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueStart)}</span>`}),
+            getValue: (r) => r.valueStart, sortable: false, filterable: false,
+        },
+        {
+            id: 'valueEnd', header: () => $t('measure.table.end'), type: 'number',
+            cell: (r) => ({type: 'html', html: `<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueEnd)}</span>`}),
+            getValue: (r) => r.valueEnd, sortable: false, filterable: false,
+        },
+        {
+            id: 'deltaAbs', header: 'Δ Abs', type: 'number',
+            cell: (r) => htmlNum(r.deltaAbs, fmtDelta),
+            getValue: (r) => r.deltaAbs, sortable: false, filterable: false,
+        },
+        {
+            id: 'deltaPct', header: 'Δ %', type: 'number',
+            cell: (r) => htmlNum(r.deltaPct, fmtPct),
+            getValue: (r) => r.deltaPct, sortable: false, filterable: false,
+        },
+        {
+            id: 'annualizedPct', header: () => $t('measure.table.annualized'), type: 'number',
+            cell: (r) => r.annualizedPct !== null
+                ? htmlNum(r.annualizedPct, fmtPct)
+                : ({type: 'html', html: '<span class="text-gray-400">—</span>'}),
+            getValue: (r) => r.annualizedPct ?? 0, sortable: false, filterable: false,
+        },
+    ];
+
+    function buildSummaryRows(result: MeasurementResult, measureObj: MeasureSignal): MeasureSummaryRow[] {
+        const rows: MeasureSummaryRow[] = [
+            {
+                id: 'main',
+                signal: pairLabel,
+                signalColor: null,
+                valueStart: result.startValue,
+                valueEnd: result.endValue,
+                deltaAbs: result.deltaAbs,
+                deltaPct: result.deltaPct,
+                annualizedPct: result.annualizedPct,
+            },
+        ];
+        for (const signal of overlaySignals.filter(s => s.data.length > 0 && (s.yAxisIndex ?? 0) === 0)) {
+            const sigResult = measureObj.getMeasurementForSignal(signal.data);
+            if (sigResult) {
+                rows.push({
+                    id: `sig-${signal.label}`,
+                    signal: signal.label,
+                    signalColor: signal.color,
+                    valueStart: sigResult.startValue,
+                    valueEnd: sigResult.endValue,
+                    deltaAbs: sigResult.deltaAbs,
+                    deltaPct: sigResult.deltaPct,
+                    annualizedPct: null,
+                });
+            }
+        }
+        return rows;
     }
 </script>
 
@@ -210,93 +344,44 @@
 
                     <!-- Expanded content -->
                     {#if isExpanded}
-                        <!-- Style customization row -->
-                        <div class="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800">
-                            <input
-                                type="color"
-                                class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
-                                title="Color"
-                                value={measure.style.color}
-                                oninput={(e) => { updateMeasureStyle(measure.id, 'color', e.currentTarget.value); }}
+                        <!-- Date range editor -->
+                        <div class="px-3 py-2 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800">
+                            <DateRangePicker
+                                start={String(measure.params.startDate)}
+                                end={String(measure.params.endDate)}
+                                showPresets={false}
+                                showCustomWindow={false}
+                                compact={true}
+                                onchange={(s, e) => updateMeasureDates(measure.id, s, e)}
                             />
-                            <div class="flex-1 relative">
-                                <button
-                                    type="button"
-                                    class="w-full h-7 flex items-center cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors relative"
-                                    title="Line style"
-                                    onclick={() => {
-                                        const types = ['solid', 'dashed', 'dotted'];
-                                        const current = measure.style.lineType ?? 'solid';
-                                        const next = types[(types.indexOf(current) + 1) % types.length];
-                                        updateMeasureStyle(measure.id, 'lineType', next);
-                                    }}
-                                >
-                                    <svg width="100%" height="24" class="absolute inset-0">
-                                        <line x1="2%" y1="14" x2="98%" y2="14"
-                                              stroke={measure.style.color}
-                                              stroke-width={measure.style.lineWidth}
-                                              stroke-dasharray={measure.style.lineType === 'dashed' ? '8,4' : measure.style.lineType === 'dotted' ? '2,4' : 'none'}
-                                        />
-                                    </svg>
-                                </button>
-                            </div>
-                            <select
-                                class="text-xs px-1 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300"
-                                value={String(measure.style.lineWidth)}
-                                onchange={(e) => { updateMeasureStyle(measure.id, 'lineWidth', Number(e.currentTarget.value)); }}
-                            >
-                                <option value="1">1px</option>
-                                <option value="2">2px</option>
-                                <option value="3">3px</option>
-                            </select>
                         </div>
 
-                        <!-- Summary table -->
+                        <!-- Style customization row -->
+                        <div class="px-3 py-1.5 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800">
+                            <SignalStyleEditor
+                                style={measure.style}
+                                onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
+                                simplified
+                            />
+                        </div>
+
+                        <!-- Summary table (DataTable) -->
                         {#if result}
-                        <table class="w-full text-xs border-t border-gray-200 dark:border-slate-600">
-                            <thead>
-                                <tr class="bg-gray-50/50 dark:bg-slate-700/30">
-                                    <th class="px-3 py-1.5 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('measure.table.signal')}</th>
-                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">{$t('measure.table.start')}</th>
-                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">{$t('measure.table.end')}</th>
-                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Δ Abs</th>
-                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">Δ %</th>
-                                    <th class="px-2 py-1.5 text-right text-gray-500 dark:text-gray-400 font-medium">
-                                        <span class="inline-flex items-center gap-0.5">
-                                            {$t('measure.table.annualized')}
-                                            <Tooltip text="(1 + Δ%)^(365/days) − 1" position="top" maxWidth="220px">
-                                                <CircleHelp size={11} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
-                                            </Tooltip>
-                                        </span>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr class="border-t border-gray-100 dark:border-slate-700/50">
-                                    <td class="px-3 py-1.5 font-medium text-gray-700 dark:text-gray-200">{pairLabel}</td>
-                                    <td class="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{fmtValue(result.startValue)}</td>
-                                    <td class="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{fmtValue(result.endValue)}</td>
-                                    <td class="px-2 py-1.5 text-right font-mono {result.deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtDelta(result.deltaAbs)}</td>
-                                    <td class="px-2 py-1.5 text-right font-mono {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(result.deltaPct)}</td>
-                                    <td class="px-2 py-1.5 text-right font-mono {result.annualizedPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(result.annualizedPct)}</td>
-                                </tr>
-                                {#each overlaySignals.filter(s => s.data.length > 0 && (s.yAxisIndex ?? 0) === 0) as signal}
-                                    {@const sigResult = measure.getMeasurementForSignal(signal.data)}
-                                    {#if sigResult}
-                                        <tr class="border-t border-gray-100 dark:border-slate-700/50">
-                                            <td class="px-3 py-1.5 text-gray-600 dark:text-gray-300">
-                                                <span style="color: {signal.color}">●</span> {signal.label}
-                                            </td>
-                                            <td class="px-2 py-1.5 text-right font-mono text-gray-500 dark:text-gray-400">{fmtValue(sigResult.startValue)}</td>
-                                            <td class="px-2 py-1.5 text-right font-mono text-gray-500 dark:text-gray-400">{fmtValue(sigResult.endValue)}</td>
-                                            <td class="px-2 py-1.5 text-right font-mono {sigResult.deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtDelta(sigResult.deltaAbs)}</td>
-                                            <td class="px-2 py-1.5 text-right font-mono {sigResult.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">{fmtPct(sigResult.deltaPct)}</td>
-                                            <td class="px-2 py-1.5 text-right font-mono text-gray-400">—</td>
-                                        </tr>
-                                    {/if}
-                                {/each}
-                            </tbody>
-                        </table>
+                        <div class="border-t border-gray-200 dark:border-slate-600">
+                            <DataTable
+                                data={buildSummaryRows(result, measure)}
+                                columns={summaryColumns}
+                                getRowId={(r) => r.id}
+                                storageKey="measure-summary-{measure.id}"
+                                enableSelection={false}
+                                enableActions={false}
+                                enableSorting={false}
+                                enableColumnFilters={false}
+                                enableColumnVisibility={false}
+                                enableColumnResize={false}
+                                enablePagination={false}
+                            />
+                        </div>
                         {/if}
                     {/if}
                 </div>
