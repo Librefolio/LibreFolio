@@ -27,11 +27,16 @@
         onApply: (filter: FilterValue | null) => void;
         onClose: () => void;
         initialValue?: FilterValue | null;
+        /** Anchor element (filter button) for fixed-position popover */
+        anchorElement?: HTMLElement | null;
     }
 
-    let {type, enumOptions = [], numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null}: Props = $props();
+    let {type, enumOptions = [], numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null, anchorElement = null}: Props = $props();
 
     let popoverElement: HTMLDivElement;
+
+    // Fixed positioning state
+    let popoverStyle = $state('');
 
     // Size units conversion (labels are translated via getter)
     const SIZE_UNITS_BASE: { unit: SizeUnit; bytes: number; labelKey: string }[] = [
@@ -304,6 +309,38 @@
             initSizeInputs();
         }
 
+        // Calculate fixed position from anchor element
+        if (anchorElement) {
+            const updatePosition = () => {
+                const rect = anchorElement!.getBoundingClientRect();
+                const popW = popoverElement?.offsetWidth ?? 240;
+                let left = rect.left;
+                // Prevent overflow on right edge
+                if (left + popW > window.innerWidth - 8) {
+                    left = window.innerWidth - popW - 8;
+                }
+                popoverStyle = `position: fixed; top: ${rect.bottom + 4}px; left: ${left}px;`;
+            };
+            updatePosition();
+            // Close on scroll (parent containers)
+            const scrollParent = anchorElement!.closest('.table-wrapper');
+            const handleScroll = () => onClose();
+            scrollParent?.addEventListener('scroll', handleScroll);
+            window.addEventListener('resize', updatePosition);
+
+            const timer = setTimeout(() => {
+                document.addEventListener('click', handleClickOutside, true);
+            }, 100);
+
+            return () => {
+                clearTimeout(timer);
+                document.removeEventListener('click', handleClickOutside, true);
+                scrollParent?.removeEventListener('scroll', handleScroll);
+                window.removeEventListener('resize', updatePosition);
+                if (debounceTimer) clearTimeout(debounceTimer);
+            };
+        }
+
         const timer = setTimeout(() => {
             document.addEventListener('click', handleClickOutside, true);
         }, 100);
@@ -316,7 +353,7 @@
     });
 </script>
 
-<div bind:this={popoverElement} class="filter-popover" transition:fade={{ duration: 100 }}>
+<div bind:this={popoverElement} class="filter-popover" style={popoverStyle} transition:fade={{ duration: 100 }}>
     <div class="filter-header">
         <span class="filter-title">{$t('table.filter')}</span>
         <button class="reset-btn" onclick={clearFilter} title={$t('common.clear')} type="button">
@@ -486,8 +523,8 @@
         background: white;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        z-index: 60;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        z-index: 9999;
     }
 
     :global(.dark) .filter-popover {

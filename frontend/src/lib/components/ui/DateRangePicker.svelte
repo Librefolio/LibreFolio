@@ -16,9 +16,11 @@
   Used by: FX list page, FX detail page, transaction filters, etc.
 -->
 <script lang="ts">
-    import {Calendar, CalendarCheck, ChevronLeft, ChevronRight, Info} from 'lucide-svelte';
+    import {Calendar, Info} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import CalendarMonth from './CalendarMonth.svelte';
+    import type {CalendarHighlights} from './CalendarMonth.svelte';
 
     // =========================================================================
     // Types
@@ -166,41 +168,8 @@
         return d.toISOString().slice(0, 10);
     }
 
-    function formatISO(year: number, month: number, day: number): string {
-        return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    }
-
     function monthOrder(year: number, month: number): number {
         return year * 12 + month;
-    }
-
-    function getMonthGrid(year: number, month: number): Array<Array<{day: number; iso: string; inMonth: boolean}>> {
-        const firstDay = new Date(year, month, 1);
-        let startDow = firstDay.getDay() - 1;
-        if (startDow < 0) startDow = 6;
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const prevMonthDays = new Date(year, month, 0).getDate();
-        const cells: Array<{day: number; iso: string; inMonth: boolean}> = [];
-        for (let i = startDow - 1; i >= 0; i--) {
-            const d = prevMonthDays - i;
-            const prevM = month === 0 ? 11 : month - 1;
-            const prevY = month === 0 ? year - 1 : year;
-            cells.push({day: d, iso: formatISO(prevY, prevM, d), inMonth: false});
-        }
-        for (let d = 1; d <= daysInMonth; d++) {
-            cells.push({day: d, iso: formatISO(year, month, d), inMonth: true});
-        }
-        const remaining = 42 - cells.length;
-        for (let d = 1; d <= remaining; d++) {
-            const nextM = month === 11 ? 0 : month + 1;
-            const nextY = month === 11 ? year + 1 : year;
-            cells.push({day: d, iso: formatISO(nextY, nextM, d), inMonth: false});
-        }
-        const weeks: typeof cells[] = [];
-        for (let i = 0; i < cells.length; i += 7) {
-            weeks.push(cells.slice(i, i + 7));
-        }
-        return weeks;
     }
 
     // =========================================================================
@@ -288,30 +257,6 @@
             onchange?.(newStart, newEnd);
         }
     }
-
-    function isInRange(iso: string): boolean {
-        if (pendingDate && hoveredDate) {
-            const lo = pendingDate <= hoveredDate ? pendingDate : hoveredDate;
-            const hi = pendingDate <= hoveredDate ? hoveredDate : pendingDate;
-            return iso >= lo && iso <= hi;
-        }
-        if (start && end) return iso >= start && iso <= end;
-        return false;
-    }
-
-    function isRangeStart(iso: string): boolean {
-        if (pendingDate && hoveredDate) return iso === (pendingDate <= hoveredDate ? pendingDate : hoveredDate);
-        return iso === start;
-    }
-
-    function isRangeEnd(iso: string): boolean {
-        if (pendingDate && hoveredDate) return iso === (pendingDate <= hoveredDate ? hoveredDate : pendingDate);
-        return iso === end;
-    }
-
-    function isToday(iso: string): boolean { return iso === todayISO(); }
-
-    function isFuture(iso: string): boolean { return iso > todayISO(); }
 
     function goToTodayLeft() {
         const now = new Date();
@@ -432,12 +377,13 @@
         return d.toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'});
     }
 
-    function yearOptions(): number[] {
-        const currentYear = new Date().getFullYear();
-        const years: number[] = [];
-        for (let y = currentYear - 10; y <= currentYear + 2; y++) years.push(y);
-        return years;
-    }
+    /** Highlights object for CalendarMonth instances */
+    let calHighlights: CalendarHighlights = $derived({
+        rangeStart: start || undefined,
+        rangeEnd: end || undefined,
+        pending: pendingDate ?? undefined,
+        hovered: hoveredDate ?? undefined,
+    });
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -515,80 +461,36 @@
             <div class="drp-popover absolute z-50 top-full mt-2 left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4">
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
                     <!-- Left month (semi-independent) -->
-                    <div class="min-w-[240px] flex-1">
-                        <div class="flex items-center justify-between mb-2">
-                            <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={leftPrevMonth}>
-                                <ChevronLeft size={16} />
-                            </button>
-                            <div class="flex items-center gap-1">
-                                <select
-                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200 bg-transparent border-none focus:ring-0 focus:outline-none cursor-pointer px-0 py-0"
-                                    value={calLeftMonth}
-                                    onchange={(e) => setLeftMonth(parseInt((e.target as HTMLSelectElement).value))}
-                                >
-                                    {#each Array(12) as _, i}
-                                        <option value={i}>{monthLabels[i]}</option>
-                                    {/each}
-                                </select>
-                                <select
-                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200 bg-transparent border-none focus:ring-0 focus:outline-none cursor-pointer px-0 py-0"
-                                    value={calLeftYear}
-                                    onchange={(e) => setLeftYear(parseInt((e.target as HTMLSelectElement).value))}
-                                >
-                                    {#each yearOptions() as y}
-                                        <option value={y}>{y}</option>
-                                    {/each}
-                                </select>
-                            </div>
-                            <div class="flex items-center gap-0.5">
-                                <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-gray-500" title={$_('datePicker.today')} onclick={goToTodayLeft}>
-                                    <CalendarCheck size={14} />
-                                </button>
-                                <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={leftNextMonth}>
-                                    <ChevronRight size={16} />
-                                </button>
-                            </div>
-                        </div>
-                        {@render monthGridSnippet(calLeftYear, calLeftMonth)}
-                    </div>
+                    <CalendarMonth
+                        year={calLeftYear}
+                        month={calLeftMonth}
+                        {weekdayLabels}
+                        {monthLabels}
+                        onDayClick={handleDayClick}
+                        onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
+                        onPrevMonth={leftPrevMonth}
+                        onNextMonth={leftNextMonth}
+                        onSetMonth={setLeftMonth}
+                        onSetYear={setLeftYear}
+                        onGoToToday={goToTodayLeft}
+                        highlights={calHighlights}
+                    />
                     <div class="hidden sm:block w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
                     <!-- Right month (semi-independent) -->
-                    <div class="min-w-[240px] flex-1">
-                        <div class="flex items-center justify-between mb-2">
-                            <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={rightPrevMonth}>
-                                <ChevronLeft size={16} />
-                            </button>
-                            <div class="flex items-center gap-1">
-                                <select
-                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200 bg-transparent border-none focus:ring-0 focus:outline-none cursor-pointer px-0 py-0"
-                                    value={calRightMonth}
-                                    onchange={(e) => setRightMonth(parseInt((e.target as HTMLSelectElement).value))}
-                                >
-                                    {#each Array(12) as _, i}
-                                        <option value={i}>{monthLabels[i]}</option>
-                                    {/each}
-                                </select>
-                                <select
-                                    class="text-sm font-semibold text-gray-700 dark:text-gray-200 bg-transparent border-none focus:ring-0 focus:outline-none cursor-pointer px-0 py-0"
-                                    value={calRightYear}
-                                    onchange={(e) => setRightYear(parseInt((e.target as HTMLSelectElement).value))}
-                                >
-                                    {#each yearOptions() as y}
-                                        <option value={y}>{y}</option>
-                                    {/each}
-                                </select>
-                            </div>
-                            <div class="flex items-center gap-0.5">
-                                <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-gray-500" title={$_('datePicker.today')} onclick={goToTodayRight}>
-                                    <CalendarCheck size={14} />
-                                </button>
-                                <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={rightNextMonth}>
-                                    <ChevronRight size={16} />
-                                </button>
-                            </div>
-                        </div>
-                        {@render monthGridSnippet(calRightYear, calRightMonth)}
-                    </div>
+                    <CalendarMonth
+                        year={calRightYear}
+                        month={calRightMonth}
+                        {weekdayLabels}
+                        {monthLabels}
+                        onDayClick={handleDayClick}
+                        onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
+                        onPrevMonth={rightPrevMonth}
+                        onNextMonth={rightNextMonth}
+                        onSetMonth={setRightMonth}
+                        onSetYear={setRightYear}
+                        onGoToToday={goToTodayRight}
+                        highlights={calHighlights}
+                    />
                 </div>
                 {#if pendingDate}
                     <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
@@ -601,47 +503,3 @@
     {/if}
 </div>
 
-{#snippet monthGridSnippet(year: number, month: number)}
-    <table class="w-full table-fixed">
-        <thead>
-            <tr>
-                {#each weekdayLabels as wdLabel}<th class="text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400 pb-1 w-[14.28%]">{wdLabel}</th>{/each}
-            </tr>
-        </thead>
-        <tbody>
-            {#each getMonthGrid(year, month) as week}
-                <tr>
-                    {#each week as cell}
-                        {@const future = isFuture(cell.iso)}
-                        {@const outOfMonth = !cell.inMonth}
-                        <td class="text-center p-0"
-                            onmouseenter={() => { if (pendingDate) hoveredDate = cell.iso; }}>
-                            <button type="button"
-                                class="w-full aspect-square text-xs leading-none rounded-md transition-colors
-                                    {future && outOfMonth
-                                        ? 'text-gray-300/40 dark:text-gray-700/40 cursor-not-allowed'
-                                        : future
-                                            ? 'text-gray-400 dark:text-gray-500 opacity-40 cursor-not-allowed italic'
-                                            : outOfMonth
-                                                ? 'text-gray-300 dark:text-gray-600'
-                                                : 'text-gray-700 dark:text-gray-200'}
-                                    {isRangeStart(cell.iso) || isRangeEnd(cell.iso)
-                                        ? 'bg-libre-green !text-white font-bold !opacity-100 !not-italic'
-                                        : isInRange(cell.iso)
-                                            ? 'bg-libre-green/20 dark:bg-libre-green/25 !text-gray-800 dark:!text-gray-100 !opacity-100 !not-italic'
-                                            : cell.iso === pendingDate
-                                                ? 'bg-libre-green/50 !text-white font-bold !not-italic'
-                                                : future
-                                                    ? ''
-                                                    : 'hover:bg-gray-100 dark:hover:bg-slate-700'}
-                                    {isToday(cell.iso) && !isRangeStart(cell.iso) && !isRangeEnd(cell.iso) && cell.iso !== pendingDate
-                                        ? 'ring-1 ring-libre-green ring-inset font-bold !opacity-100 !not-italic' : ''}"
-                                onclick={() => handleDayClick(cell.iso)}
-                            >{cell.day}</button>
-                        </td>
-                    {/each}
-                </tr>
-            {/each}
-        </tbody>
-    </table>
-{/snippet}

@@ -193,6 +193,9 @@ export interface ColumnDef<T> {
 
     /** URL parameter key for deep-linking filters (default: column id) */
     urlKey?: string;
+
+    /** If true, column is hidden by default (user can toggle via column visibility) */
+    hiddenByDefault?: boolean;
 }
 
 // ============ Action Types ============

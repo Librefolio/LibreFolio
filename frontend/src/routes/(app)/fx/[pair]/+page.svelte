@@ -17,7 +17,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
-    import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCcw, Settings, TrendingDown, TrendingUp, Ruler, Wrench} from 'lucide-svelte';
+    import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Settings, TrendingDown, TrendingUp, Ruler, Wrench} from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
@@ -483,10 +483,10 @@
     <div
         bind:this={filterBarRef}
         class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center justify-between'}"
+               {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
     >
         <!-- Filters block -->
-        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-center'}">
+        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-start flex-1' : 'flex-col items-start'}">
             <!-- DateRangePicker -->
             <div class="max-w-md">
                 <DateRangePicker
@@ -548,7 +548,7 @@
                 disabled={syncing}
                 title={$t('fxDetail.syncFromProvider')}
             >
-                <RotateCcw size={14} class={syncing ? 'animate-spin' : ''} />
+                <RotateCw size={14} class={syncing ? 'animate-spin' : ''} />
                 {#if showActionLabels}<span>{syncing ? $t('fx.actions.syncing') : $t('common.sync')}</span>{/if}
             </button>
             <!-- Row 2, Col 2: Refresh -->
@@ -722,7 +722,12 @@
                     quote={displayQuote}
                     {chartData}
                     bind:saving={savingEdit}
-                    onsave={async () => {
+                    onsave={async (expandedRange) => {
+                        if (expandedRange) {
+                            dateStart = expandedRange.start;
+                            dateEnd = expandedRange.end;
+                            activePreset = null;
+                        }
                         await handleRefresh();
                         showDataEditor = false;
                         if (savedPanelStates) {

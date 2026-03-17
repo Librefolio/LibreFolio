@@ -235,34 +235,34 @@
         {
             id: 'signal', header: () => $t('measure.table.signal'), type: 'text',
             cell: (r) => ({type: 'html', html: r.signalColor ? `<span style="color:${r.signalColor}">●</span> ${r.signal}` : `<span class="font-medium">${r.signal}</span>`}),
-            sortable: true, filterable: false,
+            sortable: false, filterable: false, width: 100,
         },
         {
             id: 'valueStart', header: () => $t('measure.table.start'), type: 'number',
             cell: (r) => ({type: 'html', html: `<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueStart)}</span>`}),
-            getValue: (r) => r.valueStart, sortable: true, filterable: false,
+            getValue: (r) => r.valueStart, sortable: true, filterable: true, width: 90,
         },
         {
             id: 'valueEnd', header: () => $t('measure.table.end'), type: 'number',
             cell: (r) => ({type: 'html', html: `<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueEnd)}</span>`}),
-            getValue: (r) => r.valueEnd, sortable: true, filterable: false,
+            getValue: (r) => r.valueEnd, sortable: true, filterable: true, width: 90,
         },
         {
             id: 'deltaAbs', header: 'Δ Abs', type: 'number',
             cell: (r) => htmlNum(r.deltaAbs, fmtDelta),
-            getValue: (r) => r.deltaAbs, sortable: true, filterable: false,
+            getValue: (r) => r.deltaAbs, sortable: true, filterable: true, width: 80,
         },
         {
             id: 'deltaPct', header: 'Δ %', type: 'number',
             cell: (r) => htmlNum(r.deltaPct, fmtPct),
-            getValue: (r) => r.deltaPct, sortable: true, filterable: false,
+            getValue: (r) => r.deltaPct, sortable: true, filterable: true, width: 80,
         },
         {
             id: 'annualizedPct', header: 'Δ%/yr', type: 'number',
             cell: (r) => r.annualizedPct !== null
                 ? htmlNum(r.annualizedPct, fmtPct)
                 : ({type: 'html', html: '<span class="text-gray-400">—</span>'}),
-            getValue: (r) => r.annualizedPct ?? 0, sortable: true, filterable: false,
+            getValue: (r) => r.annualizedPct ?? 0, sortable: true, filterable: true, width: 80,
         },
     ];
 
@@ -313,32 +313,24 @@
             {#each measurements as {measure, result}}
                 {@const isExpanded = expandedIds.has(measure.id)}
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-visible">
-                    <!-- Card header: clickable summary (button for a11y) -->
+                    <!-- Card header -->
                     <div
-                        class="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
+                        class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
                                     hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                     >
+                        <!-- Left group: chevron + dates/picker + stats -->
                         <button
                             type="button"
-                            class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 text-left min-w-0"
+                            class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 text-left min-w-0 shrink-0"
                             onclick={() => toggleExpand(measure.id)}
                         >
                             <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
-                            {#if !isExpanded}
-                                📏 {measure.params.startDate} → {measure.params.endDate}
-                                {#if result}
-                                    <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                                        {fmtPct(result.deltaPct)}
-                                    </span>
-                                    <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
-                                {/if}
-                            {/if}
                         </button>
                         {#if isExpanded}
                             <!-- Inline DateRangePicker in header when expanded -->
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <div class="flex-1 min-w-0 max-w-[300px]" onclick={(e) => e.stopPropagation()}>
+                            <div class="min-w-0 max-w-[300px]" onclick={(e) => e.stopPropagation()}>
                                 <DateRangePicker
                                     start={String(measure.params.startDate)}
                                     end={String(measure.params.endDate)}
@@ -354,30 +346,48 @@
                                 </span>
                                 <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>
                             {/if}
+                        {:else}
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer" onclick={() => toggleExpand(measure.id)}>
+                                📏 {measure.params.startDate} → {measure.params.endDate}
+                                {#if result}
+                                    <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                        {fmtPct(result.deltaPct)}
+                                    </span>
+                                    <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
+                                {/if}
+                            </span>
                         {/if}
-                        <span
-                            class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors shrink-0"
-                            role="button"
-                            tabindex="-1"
-                            title={$t('measure.remove')}
-                            onclick={(e) => { e.stopPropagation(); removeMeasure(measure.id); }}
-                            onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); removeMeasure(measure.id); }}}
-                        >
-                            <Trash2 size={13} />
-                        </span>
+
+                        <!-- Right group: SignalStyleEditor (when expanded) + trash -->
+                        <div class="flex items-center gap-1.5 ml-auto shrink-0">
+                            {#if isExpanded}
+                                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                <div onclick={(e) => e.stopPropagation()}>
+                                    <SignalStyleEditor
+                                        style={measure.style}
+                                        onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
+                                        simplified
+                                    />
+                                </div>
+                            {/if}
+                            <span
+                                class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
+                                role="button"
+                                tabindex="-1"
+                                title={$t('measure.remove')}
+                                onclick={(e) => { e.stopPropagation(); removeMeasure(measure.id); }}
+                                onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); removeMeasure(measure.id); }}}
+                            >
+                                <Trash2 size={13} />
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Expanded content -->
                     {#if isExpanded}
-
-                        <!-- Style customization row -->
-                        <div class="px-3 py-1.5 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800">
-                            <SignalStyleEditor
-                                style={measure.style}
-                                onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
-                                simplified
-                            />
-                        </div>
 
                         <!-- Summary table (DataTable) -->
                         {#if result}
@@ -390,10 +400,11 @@
                                 enableSelection={false}
                                 enableActions={false}
                                 enableSorting={true}
-                                enableColumnFilters={false}
+                                enableColumnFilters={true}
                                 enableColumnVisibility={true}
                                 enableColumnResize={true}
                                 enablePagination={false}
+                                tableLayout="auto"
                             />
                         </div>
                         {/if}

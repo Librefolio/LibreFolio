@@ -32,8 +32,8 @@
         chartData: FxDataPoint[];
         /** Whether save is in progress */
         saving?: boolean;
-        /** Called after successful save */
-        onsave?: () => void;
+        /** Called after successful save, with optional expanded date range */
+        onsave?: (expandedRange?: {start: string; end: string}) => void;
         /** Called when edit is cancelled */
         oncancel?: () => void;
         /** Dirty rows emitted as a preview RenderedSignal overlay (purple) */
@@ -86,6 +86,7 @@
             values: {rate: dp.rate},
             selected: false,
             _originalValues: {rate: dp.rate},
+            staleDays: dp.backwardFillInfo?.daysBack ?? 0,
         }));
     }
 
@@ -170,7 +171,22 @@
                 await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete(deleteItems);
             }
 
-            onsave?.();
+            // Compute expanded date range if appended rows fall outside current chart range
+            const appendedRows = dirty.filter(r => r.status === 'appended');
+            let expandedRange: {start: string; end: string} | undefined;
+            if (appendedRows.length > 0 && chartData.length > 0) {
+                const chartDates = chartData.map(d => d.date).sort();
+                const chartStart = chartDates[0];
+                const chartEnd = chartDates[chartDates.length - 1];
+                const allDates = [...chartDates, ...appendedRows.map(r => r.date)].sort();
+                const newStart = allDates[0];
+                const newEnd = allDates[allDates.length - 1];
+                if (newStart < chartStart || newEnd > chartEnd) {
+                    expandedRange = {start: newStart, end: newEnd};
+                }
+            }
+
+            onsave?.(expandedRange);
         } catch (e: any) {
             console.error('Failed to save rates:', e);
             error = 'Failed to save: ' + (e?.message || 'unknown error');
