@@ -224,7 +224,7 @@
         loading = true;
         error = null;
         try {
-            const paths = await findConversionPaths(base, quote, 4, language);
+            const paths = await findConversionPaths(base, quote, 4);
             const providers = getCachedProviders();
             const direct: RouteOption[] = [];
             const chain: RouteOption[] = [];

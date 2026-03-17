@@ -56,80 +56,21 @@ Aggiungere prop opzionale `getRowClass?: (row: T) => string` all'interfaccia Pro
 
 **Retrocompatibile**: se non passata, nessun effetto sulle tabelle esistenti.
 
-### 4. Migrare tabella riepilogo misure a DataTable
+### 4. ✅ Migrare tabella riepilogo misure a DataTable
 
-> **DA FARE PRIMA** — semplice, valida retrocompatibilità DataTable prima del refactor più grande.
+Completato. `MeasurePanel.svelte` usa `DataTable` con `ColumnDef<MeasureSummaryRow>[]` (6 colonne: Signal, Value@Start, Value@End, ΔAbs, Δ%, Δ%/yr). Formattazione pos/neg con `HtmlCell`, `storageKey="measure-summary-{measure.id}"`, sorting e pagination disabilitati.
 
-**File**: `frontend/src/lib/components/charts/MeasurePanel.svelte` (L252–296)
+### 5. ✅ Migrare DataEditor a DataTable
 
-Sostituire la `<table>` HTML con `<DataTable>`. Configurazione:
+Completato nella sessione precedente. `DataEditor.svelte` già usa `DataTable` internamente con:
+- `DTColumnDef<DataRow>[]` con `editable-number` cells per editing inline
+- `dtRowActions` con delete/revert per azioni riga
+- `getRowClass` (rowBgClass) per sfondo condizionale status (edited=blu, deleted=rosso barrato, appended=verde)
+- CSV async chunking (`rowsToCsvAsync`) con spinner per dataset grandi
+- `DataImportModal` per import CSV
+- Paginazione (25/50/100/all), sorting, column filters, column visibility
 
-- **Colonne**:
-  - Signal (text, con `●` colorato inline)
-  - Value @ Start (number)
-  - Value @ End (number)
-  - Δ Abs (number, con classe colore pos/neg)
-  - Δ % (number, colore pos/neg)
-  - Δ%/yr (number + Tooltip con `math={true}` e formula `$(1 + \Delta\%)^{365/d} - 1$`)
-- **Props DataTable**:
-  - `enableSelection={false}`, `enableActions={false}`
-  - `enableSorting`, `enableColumnFilters`, `enableColumnVisibility`, `enableColumnResize`
-  - `enablePagination={false}` (poche righe)
-  - `storageKey="measure-summary"`
-- I dati sono costruiti unendo la riga "pair principale" + righe segnali overlay (come ora, L271–294).
-- Formattazione colori pos/neg: usare `CellContent` di tipo `custom` con snippet HTML per evitare di complicare i tipi generici.
-
-### 5. Migrare DataEditor a DataTable
-
-> **DA FARE DOPO** — più complesso, sfrutta validazione dello step 4.
-
-**5a — Tipo riga `FxRateRow`**
-
-**File**: `frontend/src/lib/components/ui/data-editor/DataEditorTypes.ts`
-
-```typescript
-interface FxRateRow {
-    id: string;
-    date: string;
-    dayOfWeek: string;
-    rate: number | null;
-    status: 'original' | 'edited' | 'deleted' | 'appended';
-    _originalRate: number | null;
-}
-```
-
-Giorni vuoti (gap) = righe normali con `rate = null`, `status = 'appended'`, inseriti in ordine cronologico. **Niente row-folding** → paginazione DataTable.
-
-**5b — Colonne DataTable**
-
-- **Data** (`date`, sortable): formattata con giorno settimana abbreviato
-- **Rate** (`editable-number` dallo step 3): `step=0.0001`
-- **Status** (`enum`): badge colorato (verde=original, arancio=edited, rosso=deleted, blu=appended). **Colonna nascosta di default**, filtrabile
-- **Azioni**: pulsante 🗑/↩ che alterna delete↔restore. Per righe appended vuote: nessuna azione
-
-**5c — Props DataTable**
-
-`enableSelection={false}`, `enableActions={true}` (solo azione delete/restore), `enableSorting`, `enableColumnFilters`, `enableColumnVisibility`, `enablePagination`, `getRowClass` per sfondo condizionale basato su status.
-
-**5d — Vista CSV asincrona**
-
-**File**: `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` (~L161)
-
-`rowsToCsv()`: rendere lazy con `setTimeout` chunking per evitare il crash 1073ms. Mostrare spinner durante la conversione.
-
-**5e — Preview come segnale overlay (invisibile in UI)**
-
-Le righe dirty (edited/appended con valore) vengono renderizzate come un `RenderedSignal` aggiuntivo nell'array `allOverlaySignals`:
-
-- Label: `'Preview'`, `lineWidth: 3`, `lineType: 'solid'`
-- Colore distinto: `#a855f7` (viola)
-- I punti del segnale preview usano colori individuali allineati allo status: arancio per edited, blu per appended (`itemStyle` per-point nella serie ECharts)
-
-Questo segnale **non compare** nel pannello Signals/Measures — è aggiunto solo all'array passato a PriceChartFull.
-
-Rimuovere la prop `pendingData` da PriceChartFull e la relativa logica di serie separata.
-
-**Il chart NON ricalcola gli altri segnali overlay finché non si salva** — la preview è un segnale puro sovrapposto.
+**5e — Preview come RenderedSignal**: `FxDataEditorSection.svelte` emette un `RenderedSignal` viola (`#a855f7`) con le righe dirty. Il `pendingData` prop è stato rimosso da `PriceChartFull`. Il segnale preview è parte di `allOverlaySignals` nella pagina +page.svelte.
 
 ### 6. ✅ Fix freccia misura (B30) — Risolto con convertToPixel post-render
 
@@ -184,83 +125,42 @@ onclick={async () => {
 
 Usare `getIndexColor(measures.length)` da `frontend/src/lib/utils/colors.ts` per generare un colore distinto (golden-ratio hue distribution) per ogni nuova misura. Convertire da `ColorSet.text` (HSL string) → hex. Sostituire il colore fisso `#f97316`.
 
-### 8. Estrarre SignalStyleEditor + formula LaTeX (B27 + B28)
+### 8. ✅ Estrarre SignalStyleEditor + formula LaTeX (B27 + B28)
 
-**Nuovo file**: `frontend/src/lib/components/charts/SignalStyleEditor.svelte`
+Completato. `SignalStyleEditor.svelte` estratto da `ChartSignalsSection.svelte` (L391-491). Props: `style: SignalStyle`, `onstylechange: (key, value) => void`, `simplified?: boolean`. Integrato in:
+- `ChartSignalsSection.svelte` — sostituisce il codice inline
+- `MeasurePanel.svelte` — sostituisce editor semplificato inline (prop `simplified`)
 
-Estrarre dal popover stile in `frontend/src/lib/components/charts/ChartSignalsSection.svelte` (L391–491) — color picker + SVG line preview + popover con marker grid/line type/width. Props:
+Formula LaTeX annualizzata: `$(1 + \Delta\%)^{365/d} - 1$` via `Tooltip math={true}` (definita come costante script-level `ANNUALIZED_FORMULA` per evitare interpolazione Svelte).
 
-```typescript
-interface Props {
-    style: SignalStyle;
-    onstylechange: (key: string, value: any) => void;
-}
-```
+### 9. ✅ Fix cache lingua provider modal (3 sotto-problemi)
 
-Riusarlo in:
-- `ChartSignalsSection.svelte` — al posto del codice inline attuale
-- `MeasurePanel.svelte` (L211–249) — al posto dell'editor estetico inline semplificato
+**9a ✅ — Rimosso parametro `language`**: `getCurrencyGraph()` e `findConversionPaths()` in `currencyGraphStore.ts` non accettano più il parametro `language`. Il grafo usa solo codici valuta. `ensureCurrenciesLoaded()` chiamato senza argomento se currencies non sono in cache; se già caricate usa `isCurrenciesLoaded()` per skippare.
 
-**Formula LaTeX**: In `MeasurePanel.svelte` L264, usare il Tooltip con prop `math={true}`:
+**9b ✅ — Sync route timing**: Il `$effect` in `FxProviderSelect.svelte` (L288-306) sincronizza `selectedKeys` con `selectedRoutes` quando entrambi `allRoutes.length > 0` e `selectedRoutes.length > 0`. Funziona reattivamente: sia `computeRoutes()` che `loadRoutesFromBackend()` sono asincroni, ma il sync effect si riattiva quando entrambi completano.
 
-```svelte
-<Tooltip text="$(1 + \Delta\%)^{365/d} - 1$" math={true} position="top" maxWidth="220px">
-    <CircleHelp size={11} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
-</Tooltip>
-```
+**9c ✅ — list_routes verificato**: `loadRoutesFromBackend()` in `FxPairAddModal.svelte` chiama `list_routes_api` e filtra per coppia. Il timing è gestito dal sistema reattivo Svelte: l'effect si attiva quando `open && editMode && editBase && editQuote` sono tutti truthy.
 
-### 9. ✅⚠️ Fix cache lingua provider modal (3 sotto-problemi) — RICHIEDE RE-FIX
+### 10. ✅ Naming i18n + abbreviazioni segnali
 
-**Stato dopo primo fix**: Aggiunto `language={$currentLanguage}` a `FxProviderSelect` e sync effect per `selectedKeys`. Ma il test mostra che la chiamata API currencies usa ancora `language=en`, e le route pre-esistenti non vengono mostrate.
+- **Provider/Fornitori unificato**: `fxDetail.providers` IT cambiato da "Fornitori" a "Provider" per coerenza con il resto delle chiavi.
+- **Abbreviazioni segnali**: Aggiunte 8 chiavi `chartSettings.signals.*Abbr` in tutte e 4 le lingue (EN, IT, FR, ES):
+  - `linearAbbr`: Lin / C.Lin / Lin / Lin
+  - `compoundAbbr`: Comp / C.Comp / Comp / Comp
+  - `sineAbbr`: Sine / Onda Sin / Sin / Sine
+  - `fxPairAbbr`: FX / Coppia FX / FX / FX
+  - `emaAbbr`, `macdAbbr`, `rsiAbbr`: invarianti (sigle internazionali)
+  - `bollingerAbbr`: Boll (tutte le lingue)
+- **Funzione `getSignalAbbr()`**: Aggiunta a `ChartSignalsSection.svelte` per uso futuro nelle legende chart.
+- **Chiave `common.detail`**: Aggiunta (Detail / Dettaglio / Détail / Detalle).
 
-**9a — La lingua è ancora 'en' nonostante il fix**
+### 11. ✅ FxPair signal: lista completa + pulsanti Sync/Detail
 
-Il problema è più profondo del solo `FxProviderSelect`. La catena di chiamate è:
-1. `FxProviderSelect.computeRoutes()` → `findConversionPaths(base, quote, 4, language)`
-2. `findConversionPaths()` → `getCurrencyGraph(language)`
-3. `getCurrencyGraph(language)` → `ensureCurrenciesLoaded(language)`
-
-Ma `getCurrencyGraph` ha default `language = 'en'` (L53 di currencyGraphStore.ts), e anche `findConversionPaths` (L122). Il grafo usa solo codici currency (non nomi localizzati) → **eliminare il parametro `language` da `getCurrencyGraph` e `findConversionPaths`**, e far sì che `ensureCurrenciesLoaded` dentro `getCurrencyGraph` usi la lingua già caricata in cache, oppure la lingua corrente dallo store. In alternativa, non chiamare affatto `ensureCurrenciesLoaded` da `getCurrencyGraph` se le currencies sono già caricate — verificare con `isCurrenciesLoaded()`.
-
-**9b — Route pre-esistenti non mostrate**
-
-`loadRoutesFromBackend()` in FxPairAddModal chiama l'API `list_routes` e imposta `selectedRoutes`. Ma il sync $effect aggiunto in `FxProviderSelect` potrebbe non attivarsi correttamente: le chiavi generate da `selectedRoutes` potrebbero non matchare quelle in `routeMap` (che è costruito da `computeRoutes`). Il problema è di **timing**: `computeRoutes` è asincrono e potrebbe non aver ancora popolato `directRoutes`/`chainRoutes` quando il sync effect tenta il matching. Serve garantire che il sync avvenga DOPO che `computeRoutes` ha completato.
-
-**9c — Route pre-esistenti non richieste**
-
-Verificare nel network tab se `list_routes_api_v1_fx_providers_routes_get` viene effettivamente chiamato. Se non viene chiamato, il problema è che il `$effect` in FxPairAddModal (L81–88) non si attiva — probabilmente perché `open`, `editMode`, `editBase`, `editQuote` non sono tutti truthy al momento giusto.
-
-### 10. Naming i18n + abbreviazioni segnali
-
-**Provider/Fornitori**: unificare in tutte le lingue.
-
-- IT: `fxDetail.providers` → "Provider" (non "Fornitori"), `fx.addPair.titleEdit` → "Modifica Provider"
-- In `frontend/src/lib/i18n/it.json` L797 (`"providers": "Fornitori"`) vs L340 (`"titleEdit": "Modifica Provider Coppia"`) — rendere coerenti
-- Analoghi per EN/FR/ES
-
-**Abbreviazioni segnali**: aggiungere chiavi `chartSettings.signals.*.abbr` per ogni lingua:
-
-| Segnale | IT | EN |
-|---------|----|----|
-| Linear Growth | C.Lin | Lin |
-| Compound Growth | C.Comp | Comp |
-| Sine Wave | Onda Sin | Sine |
-| FX Pair | Coppia FX | FX |
-| EMA | EMA | EMA |
-| MACD | MACD | MACD |
-| RSI | RSI | RSI |
-| Bollinger | Boll | Boll |
-
-Usarle nei `getLabel()` dei segnali tramite un helper i18n-aware.
-
-### 11. FxPair signal: lista completa + pulsanti Sync/Detail
-
-**File**: `frontend/src/lib/components/charts/ChartSignalsSection.svelte`
-
-- Verificare che `getRegisteredPairs()` restituisca **tutte** le coppie configurate nel dropdown FxPair signal (non solo il provider corrente).
-- Sulla card FxPair (L338–366), aggiungere accanto al 🗑 cestino:
-  - Pulsante 🔄 **Sync**: chiama API sync per quella coppia specifica
-  - Pulsante 🔗 **Detail**: naviga a `/fx/{slug}` (abbandona il lavoro corrente sulla pagina)
+- **Fix `getRegisteredPairs()` bug**: `configuredPairSlugs` nella pagina `+page.svelte` ora usa `allConfiguredSlugs` derivato dalla response `list_routes` API (caricata in `loadProviders()`), invece di `getRegisteredPairs()` che mostrava solo le coppie visitate.
+- **Pulsanti Sync/Detail**: Aggiunti in `ChartSignalsSection.svelte` per le card FxPair signal:
+  - 🔄 **Sync**: chiama `sync_rates_api` per la coppia selezionata (callback `onsyncpair`)
+  - 🔗 **Detail**: naviga a `/fx/[pair]` (callback `ondetailpair`)
+- **Handler in +page.svelte**: `handleSyncPair(slug)` e `handleDetailPair(slug)` collegati ai callback.
 
 ---
 
@@ -300,25 +200,23 @@ Usarle nei `getLabel()` dei segnali tramite un helper i18n-aware.
 
 ## Nuovi Feature Request (emersi durante test Round 4)
 
-### F1. Preview live misura durante piazzamento (B6) — CONFERMATO
+### F1. ✅ Preview live misura durante piazzamento (B6) — COMPLETATO
 
 Dopo il 1° click, ogni volta che il mouse passa su un nuovo punto del grafico:
-- Distruggere il segnale misura temporaneo precedente
-- Crearne uno nuovo con stessa configurazione di stile ma con `endDate` = punto corrente sotto il mouse
-- **Semplificazione**: la preview mostra SOLO punto iniziale e finale (nessuna interpolazione intermedia), così il rendering è leggero
-- Al 2° click: calcolare tutti i punti intermedi (interpolazione) per avere la leggenda opportuna con dati completi
-- La tabella riepilogo mostra i dati della preview in tempo reale (solo start/end, senza annualizzazione durante il drag)
+- Crea un `pendingMeasure: MeasureSignal` temporaneo con `startDate` e `endDate` aggiornati in tempo reale
+- La preview mostra la linea misura completa (interpolazione tramite `render()`)
+- Al 2° click, la misura diventa definitiva e il `pendingMeasure` viene cancellato
+- Throttling via `requestAnimationFrame` sul handler `mousemove` per evitare troppi re-render
 
 **Implementazione**:
-- `MeasurePanel`: aggiungere `pendingMeasure: MeasureSignal | null`, metodo `updatePendingEnd(date, value)` chiamato dal parent
-- `PriceChartFull`: collegare `mousemove` ECharts → `onMeasureHover(date, value)` (solo in measureMode e dopo 1° click)
-- `+page.svelte`: wiring callback `onMeasureHover` → `measurePanel.updatePendingEnd()`
+- `MeasurePanel.svelte`: aggiunto `pendingMeasure: MeasureSignal | null`, metodo `export updatePendingEnd(date, value)`. `emitRendered()` include il pending measure nell'output.
+- `PriceChartFull.svelte`: aggiunto prop `onMeasureHover?: (date, value) => void`, listener `getZr().on('mousemove')` con throttle rAF. Conversione da % ad assoluto se in viewMode percentage.
+- `+page.svelte`: wiring `onMeasureHover` → `measurePanel.updatePendingEnd()`.
 
-### F2. DatePicker per editare punti misura — CONFERMATO (potenziare DateRangePicker)
+### F2. ✅ DatePicker per editare punti misura — COMPLETATO
 
-Potenziare il componente `DateRangePicker` esistente per renderlo parametrico:
-- Aggiungere prop per nascondere/mostrare i badge con la selezione della finestra temporale (presets 1W/1M/3M/etc.)
-- Per le misure servono 2 date (start + end, la misura ha senso solo tra 2 giorni diversi)
-- Le logiche di assegnazione (click su giorno, highlight range, validazione) sono identiche al range picker attuale
-- In pratica: `DateRangePicker` con `showPresets={false}` usato inline nella card misura per editare `startDate`/`endDate`
-
+`DateRangePicker` integrato nella card misura espansa di `MeasurePanel.svelte`:
+- Props: `showPresets={false}`, `showCustomWindow={false}`, `compact={true}`
+- `onchange` chiama `updateMeasureDates(id, start, end)` che aggiorna `params.startDate/endDate` e chiama `emitRendered()`
+- Validazione: start !== end (misura a zero giorni non ammessa), auto-swap se start > end
+- Il DateRangePicker appare sopra lo style editor nella card espansa

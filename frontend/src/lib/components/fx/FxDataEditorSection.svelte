@@ -17,6 +17,7 @@
     import type {ColumnDef, DataRow} from '$lib/components/ui/data-editor/DataEditorTypes';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import type {RenderedSignal} from '$lib/charts/signals';
 
     // =========================================================================
     // Props
@@ -35,8 +36,8 @@
         onsave?: () => void;
         /** Called when edit is cancelled */
         oncancel?: () => void;
-        /** Dirty rows emitted for chart preview (pending orange points) */
-        onpendingchange?: (pendingPoints: LineDataPoint[]) => void;
+        /** Dirty rows emitted as a preview RenderedSignal overlay (purple) */
+        onpendingchange?: (previewSignal: RenderedSignal | null) => void;
     }
 
     let {
@@ -98,7 +99,7 @@
     // =========================================================================
 
     function handleDataChange(dirtyRows: DataRow[]) {
-        // Convert edited/appended rows to LineDataPoint[] for chart overlay
+        // Convert edited/appended rows to a RenderedSignal overlay for chart preview
         const pendingPoints: LineDataPoint[] = dirtyRows
             .filter(r => r.status === 'edited' || r.status === 'appended')
             .filter(r => r.values.rate !== undefined && r.values.rate !== null)
@@ -107,7 +108,25 @@
                 value: Number(r.values.rate),
             }));
 
-        onpendingchange?.(pendingPoints);
+        if (pendingPoints.length === 0) {
+            onpendingchange?.(null);
+            return;
+        }
+
+        // Build a RenderedSignal overlay (purple preview line)
+        const previewSignal: RenderedSignal = {
+            id: '__preview__',
+            label: 'Preview',
+            data: pendingPoints.sort((a, b) => a.date.localeCompare(b.date)),
+            color: '#a855f7',
+            lineWidth: 3,
+            lineType: 'solid',
+            markerStart: null,
+            markerEnd: null,
+            yAxisIndex: 0,
+        };
+
+        onpendingchange?.(previewSignal);
     }
 
     // =========================================================================
@@ -163,7 +182,7 @@
     function handleCancel() {
         // Reset rows from original chart data
         rows = chartDataToRows(chartData);
-        onpendingchange?.([]);
+        onpendingchange?.(null);
         oncancel?.();
     }
 

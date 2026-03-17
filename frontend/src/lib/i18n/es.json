@@ -45,7 +45,8 @@
     "saving": "Guardando...",
     "discardChanges": "¿Descartar Cambios?",
     "discardChangesMessage": "Tienes cambios sin guardar. ¿Estás seguro de que quieres cerrar?",
-    "sync": "Sincronizar"
+    "sync": "Sincronizar",
+    "detail": "Detalle"
   },
   "table": {
     "rowsPerPage": "Filas por página",
@@ -721,7 +722,15 @@
       "bollingerDesc": "$\\mu \\pm k\\sigma$  (defecto $k = 2$)",
       "linearDesc": "$y(t) = y_0 \\cdot (1 + r \\cdot t)$",
       "compoundDesc": "$y(t) = y_0 \\cdot (1 + r)^t$",
-      "sineDesc": "$y(t) = A \\sin(2\\pi t / T) + y_0$"
+      "sineDesc": "$y(t) = A \\sin(2\\pi t / T) + y_0$",
+      "linearAbbr": "Lin",
+      "compoundAbbr": "Comp",
+      "sineAbbr": "Sine",
+      "fxPairAbbr": "FX",
+      "emaAbbr": "EMA",
+      "macdAbbr": "MACD",
+      "rsiAbbr": "RSI",
+      "bollingerAbbr": "Boll"
     },
     "params": {
       "annualRate": "Tasa Anual",
