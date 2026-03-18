@@ -809,5 +809,24 @@
     "refreshData": "Actualizar datos",
     "swapConfirmTitle": "Cambios sin guardar",
     "swapConfirmMessage": "Tienes cambios sin guardar en el editor de tasas. Invertir la dirección los descartará. ¿Continuar?"
+  },
+  "csvImport": {
+    "title": "Importar datos CSV",
+    "direction": "Dirección",
+    "ratesInterpretedAs": "Tasas interpretadas como: 1 {from} = X {to}",
+    "dropFile": "Arrastra un archivo .csv o .txt aquí, o haz clic para explorar",
+    "dropReplace": "Arrastra otro archivo para reemplazar",
+    "noValidRows": "No se encontraron filas válidas",
+    "swapDirection": "Invertir dirección",
+    "validRows": "{count} fila(s) válida(s)",
+    "import": "Importar ({count})",
+    "headerMissing": "Encabezado faltante o inválido. Formato esperado: date;{from}>{to}",
+    "headerWrongPair": "Esta página gestiona {pair}. Solo {cur1} y {cur2} están permitidos en el encabezado.",
+    "helpTitle": "Guía de importación CSV",
+    "helpFormat": "Usa el formato de 2 columnas con un encabezado que indica la dirección:",
+    "helpDateFormat": "Las fechas deben usar el formato YYYY-MM-DD",
+    "helpRatePositive": "Las tasas deben ser números positivos",
+    "helpSemicolon": "Usa punto y coma (;) como separador de columnas",
+    "helpDirection": "Usa el botón ⇄ o el encabezado para definir la dirección de la tasa"
   }
 }

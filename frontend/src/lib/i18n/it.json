@@ -809,5 +809,24 @@
     "refreshData": "Aggiorna dati",
     "swapConfirmTitle": "Modifiche non salvate",
     "swapConfirmMessage": "Hai modifiche non salvate nell'editor dei tassi. Invertire la direzione le cancellerà. Continuare?"
+  },
+  "csvImport": {
+    "title": "Importa dati CSV",
+    "direction": "Direzione",
+    "ratesInterpretedAs": "Tassi interpretati come: 1 {from} = X {to}",
+    "dropFile": "Trascina un file .csv o .txt qui, o clicca per sfogliare",
+    "dropReplace": "Trascina un altro file per sostituire",
+    "noValidRows": "Nessuna riga valida trovata",
+    "swapDirection": "Inverti direzione",
+    "validRows": "{count} riga/e valida/e",
+    "import": "Importa ({count})",
+    "headerMissing": "Header mancante o non valido. Formato atteso: date;{from}>{to}",
+    "headerWrongPair": "Questa pagina gestisce {pair}. Solo {cur1} e {cur2} sono ammessi nell'header.",
+    "helpTitle": "Guida importazione CSV",
+    "helpFormat": "Usa il formato a 2 colonne con un header che indica la direzione:",
+    "helpDateFormat": "Le date devono usare il formato YYYY-MM-DD",
+    "helpRatePositive": "I tassi devono essere numeri positivi",
+    "helpSemicolon": "Usa il punto e virgola (;) come separatore di colonne",
+    "helpDirection": "Usa il pulsante ⇄ o l'header per impostare la direzione del tasso"
   }
 }

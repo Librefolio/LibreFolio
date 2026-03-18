@@ -259,8 +259,8 @@
             bind:this={dataEditor}
             columns={fxColumns}
             bind:rows
-            baseCurrency={base}
-            quoteCurrency={quote}
+            displayBase={base}
+            displayQuote={quote}
             onchange={handleDataChange}
     />
 

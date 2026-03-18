@@ -809,5 +809,24 @@
     "refreshData": "Actualiser les donnees",
     "swapConfirmTitle": "Modifications non enregistrées",
     "swapConfirmMessage": "Vous avez des modifications non enregistrées dans l'éditeur de taux. Inverser la direction les supprimera. Continuer ?"
+  },
+  "csvImport": {
+    "title": "Importer des données CSV",
+    "direction": "Direction",
+    "ratesInterpretedAs": "Taux interprétés comme : 1 {from} = X {to}",
+    "dropFile": "Déposez un fichier .csv ou .txt ici, ou cliquez pour parcourir",
+    "dropReplace": "Déposez un autre fichier pour remplacer",
+    "noValidRows": "Aucune ligne valide trouvée",
+    "swapDirection": "Inverser la direction",
+    "validRows": "{count} ligne(s) valide(s)",
+    "import": "Importer ({count})",
+    "headerMissing": "En-tête manquant ou invalide. Format attendu : date;{from}>{to}",
+    "headerWrongPair": "Cette page gère {pair}. Seuls {cur1} et {cur2} sont autorisés dans l'en-tête.",
+    "helpTitle": "Guide d'importation CSV",
+    "helpFormat": "Utilisez le format à 2 colonnes avec un en-tête indiquant la direction :",
+    "helpDateFormat": "Les dates doivent utiliser le format YYYY-MM-DD",
+    "helpRatePositive": "Les taux doivent être des nombres positifs",
+    "helpSemicolon": "Utilisez le point-virgule (;) comme séparateur de colonnes",
+    "helpDirection": "Utilisez le bouton ⇄ ou l'en-tête pour définir la direction du taux"
   }
 }

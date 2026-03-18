@@ -4,7 +4,7 @@
 
 Redesign completo del flusso di import CSV per la pagina FX Detail. Il modale attuale (`DataImportModal`) usa un CSV a 4 colonne (`date;base;quote;base2quote`) che è ridondante ora che il Data Editor è "bloccato" su una coppia FX specifica nella pagina detail. Il redesign semplifica l'UX con un formato a 2 colonne con header semantico.
 
-**Stato**: 🔲 Da iniziare
+**Stato**: ✅ Completato (2026-03-18)
 
 ---
 
@@ -57,43 +57,44 @@ date;EUR>USD
 - **Il sistema scrive sempre `VAL1>VAL2`** quando genera l'header da codice
 - **Solo le 2 valute della pagina** sono ammesse nell'header; altre = errore
 
-### Concept: Layout modale
+### Concept: Layout modale (v2 — post review)
 
 ```
 ┌──────────────────────────────────────────────────────┐
 │  Import CSV Data                              ? ✕    │
 ├──────────────────────────────────────────────────────┤
+│  ┌──────────────────────────────────────────────────┐│
+│  │  📤 Drop .csv/.txt here, or click to browse      ││
+│  └──────────────────────────────────────────────────┘│
 │                                                      │
-│  ┌─ Drop CSV here ─────────────────────────────────┐ │
-│  │  📄 my_rates.csv                                │ │
-│  └─────────────────────────────────────────────────┘ │
+│        [⇄]  🇦🇺 AUD   →   🇪🇺 EUR                    │
 │                                                      │
-│  Direction:                                          │
-│  ┌──────────┐          ┌──────────┐                  │
-│  │ 🇪🇺 EUR  │   ──→    │ 🇺🇸 USD  │                   │
-│  └──────────┘          └──────────┘                  │
-│                                                      │
-│  ┌─────────────────────────────────────────┐ ┌─────┐ │
-│  │ ℹ️ Rates interpreted as: 1 EUR = X USD │ │ ⇄   │ │
-│  └─────────────────────────────────────────┘ └─────┘ │
+│  ℹ️ Rates interpreted as: 1 AUD = X EUR              │
 │                                                      │
 │  ┌─ Preview ───────────────────────────────────────┐ │
-│  │ 1 │ date;EUR>USD           ← Header (green)     │ │
-│  │ 2 │ 2024-01-15;1.0823  ✓                        │ │
-│  │ 3 │ 2024-01-16;1.0845  ✓                        │ │
-│  │ 4 │ 2024-01-17;abc     ✗  Invalid rate          │ │
+│  │ 1 H date;AUD>EUR                                │ │
+│  │ 2 ✓ 2024-01-15;0.6045                           │ │
+│  │ 3 ✓ 2024-01-16;0.6067                           │ │
+│  │ 4 ✗ 2024-01-17;abc     Invalid rate             │ │
 │  └─────────────────────────────────────────────────┘ │
 │                                                      │
-│  3 valid rows              Cancel   Import (3)       │
+│  2 valid rows              Cancel   Import (2)       │
 └──────────────────────────────────────────────────────┘
 ```
 
 **Note layout**:
-- Drop zone **in cima** (prima di tutto)
-- Direction bar sotto la drop zone (currency labels readonly)
-- **Swap button `⇄`** accanto all'InfoBanner, grande e visibile — non nella direction bar
-- InfoBanner + swap button sulla stessa riga
+- Drop zone **compatta** in cima (riga singola, non box alto)
+- **Swap button `⇄` a sinistra** dei badge valuta, centrati sulla riga
+- Nessuna label "Direction:" — i badge parlano da soli
+- Badge valuta con border, flag emoji, centrati
+- **InfoBanner standalone** sotto (interpretazione rate)
 - CsvEditor preview sotto
+
+**Architettura swap — single source of truth**:
+- La direction bar è guidata SOLO da `ondirectiondetect` (emesso dal CsvEditor)
+- `handleSwap()` modifica SOLO l'header nel testo CSV → CsvEditor re-parsa → emette `ondirectiondetect` → label si aggiornano
+- Nessuna mutazione diretta di `directionFrom`/`directionTo` nel handler di swap
+- Init `$effect` usa un guard `wasOpen` per non ri-eseguirsi quando `csvValue` cambia
 
 ### Decisioni progettuali
 
@@ -164,14 +165,14 @@ Quando l'utente trascina/incolla un file:
 
 | Step | Descrizione | Stato | Note |
 |------|-------------|-------|------|
-| **1** | Refactor CsvEditor: formato 2 colonne con header semantico | 🔲 | `date;VAL1>VAL2`, validazione 2-col, error handling header |
-| **2** | Redesign DataImportModal v2 | 🔲 | Drop zone in cima, direction bar, swap header, help |
-| **3** | Auto-detect direzione dall'header del CSV | 🔲 | Parse `>` e `<`, aggiornamento direction bar, errori valute |
-| **4** | Inversione rate automatica al merge | 🔲 | Se direzione modale ≠ canonico, 1/rate prima del save |
-| **5** | Help tooltip con formato atteso | 🔲 | Icona `?` con sezione collassabile, testo i18n |
-| **6** | i18n per tutte le nuove stringhe | 🔲 | EN, IT, FR, ES |
-| **7** | SelectionBar nella pagina files/ | 🔲 | Aggiungere dove manca (before ColumnVisibilityToggle) |
-| **8** | Verifica build + test | 🔲 | `./dev.py front check` + test manuale |
+| **1** | Refactor CsvEditor: formato 2 colonne con header semantico | ✅ | `date;VAL1>VAL2`, validazione 2-col, error handling header |
+| **2** | Redesign DataImportModal v2 | ✅ | Drop zone in cima, direction bar, swap header, help |
+| **3** | Auto-detect direzione dall'header del CSV | ✅ | Parse `>` e `<`, aggiornamento direction bar, errori valute |
+| **4** | Inversione rate automatica al merge | ✅ | Se direzione modale ≠ canonico, 1/rate prima del save |
+| **5** | Help tooltip con formato atteso | ✅ | Icona `?` con sezione collassabile, testo i18n |
+| **6** | i18n per tutte le nuove stringhe | ✅ | EN, IT, FR, ES |
+| **7** | SelectionBar nella pagina files/ | ✅ | Aggiungere dove manca (before ColumnVisibilityToggle) |
+| **8** | Verifica build + test | ✅ | `./dev.py front check` + test manuale |
 
 ---
 
@@ -318,32 +319,35 @@ let headerValid = $state(false);
 let headerError = $state<string | null>(null);
 ```
 
-**Inizializzazione**: quando il modale si apre, pre-popola il CsvEditor con la riga header:
+**Inizializzazione**: quando il modale si apre per la prima volta, pre-popola l'header. Usa un guard `wasOpen` per evitare la re-inizializzazione quando `csvValue` cambia:
 ```ts
+let wasOpen = false;
+
 $effect(() => {
-    if (open) {
+    if (open && !wasOpen) {
+        wasOpen = true;
         directionFrom = displayBase;
         directionTo = displayQuote;
-        // Pre-populate header if editor is empty
-        if (!csvValue.trim()) {
-            csvValue = `date;${directionFrom}>${directionTo}\n`;
-        }
+        csvValue = `date;${displayBase}>${displayQuote}\n`;
+    }
+    if (!open && wasOpen) {
+        wasOpen = false;
     }
 });
 ```
 
-**Swap handler**:
+**Swap handler** (single source of truth — only modifies header text):
 ```ts
 function handleSwap() {
-    const tmp = directionFrom;
-    directionFrom = directionTo;
-    directionTo = tmp;
-    // Update header row in CsvEditor
-    csvEditor?.setHeader(directionFrom, directionTo);
+    // Read current direction, write the opposite
+    const newFrom = directionTo || displayQuote;
+    const newTo = directionFrom || displayBase;
+    csvEditor?.setHeader(newFrom, newTo);
+    // ondirectiondetect will fire from CsvEditor → updates directionFrom/directionTo
 }
 ```
 
-**Nota**: lo swap modifica SOLO la riga header. Le righe dati restano identiche — il significato dei valori cambia perché l'header ora indica la direzione opposta.
+**Nota**: lo swap modifica SOLO la riga header via `setHeader()`. I label della direction bar si aggiornano tramite `ondirectiondetect` emesso dal CsvEditor dopo il re-parse. Le righe dati restano identiche — il significato dei valori cambia perché l'header ora indica la direzione opposta.
 
 **Drop handler**:
 ```ts
