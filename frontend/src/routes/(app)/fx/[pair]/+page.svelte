@@ -95,6 +95,7 @@
     // Data editor
     let pendingPreviewSignal: RenderedSignal | null = $state(null);
     let savingEdit = $state(false);
+    let fxDataEditorRef: FxDataEditorSection | undefined = $state(undefined);
 
     // All configured FX pair slugs (from backend, for FxPair signal dropdown)
     let allConfiguredSlugs: string[] = $state([]);
@@ -673,6 +674,8 @@
                     onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
                     hideToolbar={true}
                     externalViewMode={viewMode}
+                    editMode={showDataEditor}
+                    onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
                 />
             </div>
         {:else}
@@ -718,6 +721,7 @@
             </div>
             <div class="px-4 pb-4 pt-3">
                 <FxDataEditorSection
+                    bind:this={fxDataEditorRef}
                     base={displayBase}
                     quote={displayQuote}
                     {chartData}
