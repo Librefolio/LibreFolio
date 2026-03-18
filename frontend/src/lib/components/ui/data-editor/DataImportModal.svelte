@@ -3,10 +3,11 @@
 
   Features:
   - Compact drop zone for .csv/.txt files — drop overwrites editor content
-  - Direction bar: swap ⇄ + currency badges with flag emoji + info banner
+  - Direction bar: CurrencySearchSelect (disabled) + swap ⇄ + info banner
   - CsvEditor preview with 2-column format (date;rate) + semantic header
   - Auto-detect direction from CSV header (>, < normalized)
   - Help ? toggle with collapsible format guide
+  - Confirm discard if user has edited data and tries to close
   - Footer with valid row count + Cancel/Import
 
   Direction is driven by a SINGLE source of truth: the CsvEditor header.
@@ -17,6 +18,7 @@
 -->
 <script lang="ts">
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import CsvEditor from '$lib/components/fx/CsvEditor.svelte';
     import type {ParsedRow} from '$lib/components/fx/CsvEditor.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -70,6 +72,7 @@
     let isDragOver = $state(false);
     let fileName = $state('');
     let showHelp = $state(false);
+    let showDiscardConfirm = $state(false);
 
     // Direction state — driven ONLY by ondirectiondetect (single source of truth)
     let directionFrom = $state('');
@@ -78,6 +81,9 @@
     // Guard to prevent re-initialization on csvValue changes
     let wasOpen = false;
 
+    // Track the initial header-only text to detect user edits
+    let initialCsvValue = '';
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -85,6 +91,17 @@
     let allowedCurrencies = $derived<[string, string]>([displayBase, displayQuote]);
     let displayFrom = $derived(directionFrom || displayBase);
     let displayTo = $derived(directionTo || displayQuote);
+
+    /** True when user has typed/pasted/dropped something beyond the initial header */
+    let isDirty = $derived.by(() => {
+        const trimmed = csvValue.trim();
+        if (!trimmed) return false;
+        // Compare against initial header-only content
+        if (trimmed === initialCsvValue.trim()) return false;
+        // Also check if only the header line exists (no data rows)
+        const lines = trimmed.split('\n').filter(l => l.trim());
+        return lines.length > 1 || trimmed !== initialCsvValue.trim();
+    });
 
     // =========================================================================
     // Initialize on open (one-shot, not reactive to csvValue)
@@ -96,7 +113,9 @@
             wasOpen = true;
             directionFrom = displayBase;
             directionTo = displayQuote;
-            csvValue = `date;${displayBase}>${displayQuote}\n`;
+            const initValue = `date;${displayBase}>${displayQuote}\n`;
+            csvValue = initValue;
+            initialCsvValue = initValue;
         }
         if (!open && wasOpen) {
             wasOpen = false;
@@ -119,8 +138,19 @@
         directionTo = to;
     }
 
-    function handleClose() {
+    /** Request close — show confirm if dirty, otherwise close immediately */
+    function requestClose() {
+        if (isDirty) {
+            showDiscardConfirm = true;
+        } else {
+            doClose();
+        }
+    }
+
+    /** Actually close and reset all state */
+    function doClose() {
         csvValue = '';
+        initialCsvValue = '';
         validRows = [];
         errorCount = 0;
         hasDuplicates = false;
@@ -128,6 +158,7 @@
         directionFrom = '';
         directionTo = '';
         showHelp = false;
+        showDiscardConfirm = false;
         open = false;
         onclose?.();
     }
@@ -135,16 +166,14 @@
     function handleConfirm() {
         if (validRows.length === 0) return;
         onimport?.(validRows, {from: directionFrom, to: directionTo});
-        handleClose();
+        doClose();
     }
 
     /** Swap: ONLY modifies the header text. ondirectiondetect handles the rest. */
     function handleSwap() {
-        // Read current direction, write the opposite
         const newFrom = directionTo || displayQuote;
         const newTo = directionFrom || displayBase;
         csvEditor?.setHeader(newFrom, newTo);
-        // ondirectiondetect will fire from CsvEditor → updates directionFrom/directionTo
     }
 
     // ── File handling ──
@@ -189,7 +218,7 @@
     }
 </script>
 
-<ModalBase {open} maxWidth="3xl" onRequestClose={handleClose}>
+<ModalBase {open} maxWidth="3xl" onRequestClose={requestClose}>
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-600">
         <div class="flex items-center gap-2">
@@ -205,7 +234,7 @@
         </div>
         <button
             class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded"
-            onclick={handleClose}
+            onclick={requestClose}
             aria-label="Close"
         >✕</button>
     </div>
@@ -325,7 +354,7 @@
         <div class="flex gap-2">
             <button
                 class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
-                onclick={handleClose}
+                onclick={requestClose}
             >{$t('common.cancel')}</button>
             <button
                 class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -336,3 +365,13 @@
     </div>
 </ModalBase>
 
+<!-- Confirm discard modal (stacked above) -->
+<ConfirmModal
+    open={showDiscardConfirm}
+    title={$t('csvImport.discardTitle')}
+    message={$t('csvImport.discardMessage')}
+    warning={true}
+    confirmText={$t('uploads.discardAndClose')}
+    onConfirm={doClose}
+    onCancel={() => showDiscardConfirm = false}
+/>

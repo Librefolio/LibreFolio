@@ -57,7 +57,7 @@ date;EUR>USD
 - **Il sistema scrive sempre `VAL1>VAL2`** quando genera l'header da codice
 - **Solo le 2 valute della pagina** sono ammesse nell'header; altre = errore
 
-### Concept: Layout modale (v2 — post review)
+### Concept: Layout modale (v2 — finale)
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -73,7 +73,7 @@ date;EUR>USD
 │  [⇄]  ℹ️ Rates interpreted as: 1 AUD = X EUR        │
 │                                                      │
 │  ┌─ Preview ───────────────────────────────────────┐ │
-│  │ 0 valid rows    sep: ; · decimals: . or , · _   │ │
+│  │ 0 valid rows   sep [;] · dec [.]/[,] · 000 [_] │ │
 │  │ 1 H date;AUD>EUR                                │ │
 │  │ 2 ✓ 2024-01-15;0.6045                           │ │
 │  │ 3 ✓ 2024-01-16;0,6067                           │ │
@@ -88,13 +88,18 @@ date;EUR>USD
 - Drop zone **compatta** in cima (riga singola, non box alto)
 - **CurrencySearchSelect in modalità disabled** (stile FxPairAddModal editMode) centrati con `↔`
 - **`[⇄]` + InfoBanner sulla stessa riga** sotto i selettori valuta
-- Status bar CsvEditor con nota separatori (`;`, `.`/`,`, `_`) al posto di `date;VAL>VAL`
+- Status bar CsvEditor con **`<kbd>` box individuali** per ogni carattere speciale: sep `[;]` · decimale `[.]`/`[,]` · migliaia `[_]` (label i18n: `csvImport.sep`, `.decimal`, `.thousands`)
 - CsvEditor preview sotto
 
-**Parser numeri flessibile**:
+**Parser numeri flessibile** (`parseNumber()`):
 - `_` come separatore migliaia (stile JS/Rust): `1_000.50`, `1_000_000`
 - Sia `.` che `,` come separatore decimale: `0.6045`, `0,6045`
 - Se entrambi presenti, l'ultimo è il decimale: `1.000,50` → 1000.50, `1,000.50` → 1000.50
+
+**Confirm discard**:
+- Se l'utente ha modificato il CSV (oltre al solo header iniziale) e prova a chiudere (✕, Cancel, backdrop click), appare un `ConfirmModal` (warning amber)
+- Dirty detection: confronta `csvValue` con `initialCsvValue` (testo header-only memorizzato all'apertura)
+- Swap da solo non rende dirty (cambia solo l'header, che viene tracciato come parte dell'init)
 
 **Architettura swap — single source of truth**:
 - La direction bar è guidata SOLO da `ondirectiondetect` (emesso dal CsvEditor)
@@ -472,7 +477,7 @@ date;EUR>USD
 
 ### Step 6 — i18n per tutte le nuove stringhe
 
-Chiavi i18n da aggiungere (4 lingue EN/IT/FR/ES):
+Chiavi i18n aggiunte (4 lingue EN/IT/FR/ES):
 
 ```
 csvImport.title               "Import CSV Data"
@@ -485,13 +490,19 @@ csvImport.noValidRows         "No valid rows found"
 csvImport.validRows           "{count} valid row(s)"
 csvImport.import              "Import ({count})"
 csvImport.headerMissing       "Missing or invalid header. Expected format: date;{from}>{to}"
-csvImport.headerWrongPair     "This page manages {pair}. Only {cur1} and {cur2} are allowed in the header."
+csvImport.headerWrongPair     "This page manages {pair}. Only {cur1} and {cur2} are allowed."
 csvImport.helpTitle           "CSV Import Guide"
 csvImport.helpFormat          "Use 2-column format with a header indicating direction:"
 csvImport.helpDateFormat      "Dates must use YYYY-MM-DD format"
 csvImport.helpRatePositive    "Rates must be positive numbers"
 csvImport.helpSemicolon       "Use semicolon (;) as column separator"
+csvImport.helpDecimals        "Both . and , are accepted as decimal separators. Use _ as optional thousands separator (e.g. 1_000.50)"
 csvImport.helpDirection       "Use the ⇄ button or header to set rate direction"
+csvImport.sep                 "sep"
+csvImport.decimal             "decimal"
+csvImport.thousands           "thousands"
+csvImport.discardTitle        "Discard import?"
+csvImport.discardMessage      "You have edited CSV data. Are you sure you want to close without importing?"
 ```
 
 ---
