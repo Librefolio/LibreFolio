@@ -827,6 +827,8 @@
     "helpDateFormat": "Dates must use YYYY-MM-DD format",
     "helpRatePositive": "Rates must be positive numbers",
     "helpSemicolon": "Use semicolon (;) as column separator",
-    "helpDirection": "Use the ⇄ button or header to set rate direction"
+    "helpDirection": "Use the ⇄ button or header to set rate direction",
+    "separatorHint": "sep: ;  ·  decimals: . or ,  ·  thousands: _",
+    "helpDecimals": "Both . and , are accepted as decimal separators. Use _ as optional thousands separator (e.g. 1_000.50)"
   }
 }
