@@ -46,7 +46,8 @@
     "discardChanges": "¿Descartar Cambios?",
     "discardChangesMessage": "Tienes cambios sin guardar. ¿Estás seguro de que quieres cerrar?",
     "sync": "Sincronizar",
-    "detail": "Detalle"
+    "detail": "Detalle",
+    "continue": "Continuar"
   },
   "table": {
     "rowsPerPage": "Filas por página",
@@ -805,6 +806,8 @@
     "editRatesBtn": "Editar tasas",
     "providers": "Proveedores",
     "syncFromProvider": "Sincronizar tasas",
-    "refreshData": "Actualizar datos"
+    "refreshData": "Actualizar datos",
+    "swapConfirmTitle": "Cambios sin guardar",
+    "swapConfirmMessage": "Tienes cambios sin guardar en el editor de tasas. Invertir la dirección los descartará. ¿Continuar?"
   }
 }

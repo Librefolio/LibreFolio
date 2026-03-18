@@ -276,18 +276,36 @@
         calRightMonth = now.getMonth();
     }
 
+    /** Whether to use single-column layout (viewport too narrow for dual) */
+    let singleColumn = $state(false);
+
     function updatePopoverPosition() {
         if (!triggerEl) return;
         const rect = triggerEl.getBoundingClientRect();
-        const popW = 560; // approx width of dual-calendar popover
-        const popH = 380; // approx height of dual-calendar popover
-        const spaceBelow = window.innerHeight - rect.bottom - 8;
-        const spaceAbove = rect.top - 8;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const DUAL_W = 560;
+        const SINGLE_W = Math.min(280, vw - 16);
+        const MARGIN = 8;
+
+        // Determine if single-column layout is needed
+        singleColumn = vw < DUAL_W + MARGIN * 2;
+        const popW = singleColumn ? SINGLE_W : DUAL_W;
+        const popH = singleColumn ? 420 : 380;
+
+        // Vertical: prefer below, open above if not enough space
+        const spaceBelow = vh - rect.bottom - MARGIN;
+        const spaceAbove = rect.top - MARGIN;
         const openAbove = spaceBelow < popH && spaceAbove > spaceBelow;
-        const top = openAbove ? rect.top - popH - 8 : rect.bottom + 8;
-        const left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
-        const maxW = window.innerWidth - 16; // 8px margin each side
-        popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; max-width: ${maxW}px; z-index: 9999;`;
+        const top = openAbove ? rect.top - popH - MARGIN : rect.bottom + MARGIN;
+
+        // Horizontal: align to trigger left, shift left if overflows right
+        let left = Math.max(MARGIN, rect.left);
+        if (left + popW > vw - MARGIN) {
+            left = Math.max(MARGIN, vw - popW - MARGIN);
+        }
+
+        popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; width: ${popW}px; z-index: 9999;`;
     }
 
     function openCalendar() {
@@ -494,8 +512,8 @@
         </button>
 
         {#if calendarOpen}
-            <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 max-w-[600px]" style={popoverStyle}>
-                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+                <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                     <!-- Left month (semi-independent) -->
                     <CalendarMonth
                         year={calLeftYear}
@@ -511,7 +529,7 @@
                         onGoToToday={goToTodayLeft}
                         highlights={calHighlights}
                     />
-                    <div class="hidden sm:block w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
+                    <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
                     <!-- Right month (semi-independent) -->
                     <CalendarMonth
                         year={calRightYear}

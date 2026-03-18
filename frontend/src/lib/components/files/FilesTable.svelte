@@ -29,15 +29,20 @@
         initialFilters?: Record<string, FilterValue>;
         /** Called when filters change (for URL sync) */
         onFiltersChange?: (filters: Record<string, FilterValue>) => void;
+        /** Called when row selection changes (exposes selected IDs to parent) */
+        onSelectionChange?: (selectedIds: string[]) => void;
     }
 
-    let {files, type, onDelete, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange}: Props = $props();
+    let {files, type, onDelete, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange, onSelectionChange}: Props = $props();
 
     // Internal DataTable reference (for external column visibility control)
     let dataTableRef: DataTable<FileData> | undefined = $state(undefined);
 
     /** Expose the internal DataTable ref for ColumnVisibilityToggle */
     export function getTableRef() { return dataTableRef; }
+
+    /** Clear all selected rows */
+    export function clearSelection() { dataTableRef?.clearSelection(); }
 
     // Helper functions
     function getFileName(file: FileData): string {
@@ -434,6 +439,7 @@
             getRowId={getFileId}
             {initialFilters}
             {onFiltersChange}
+            onSelectionChange={onSelectionChange}
             {rowActions}
             storageKey="filesTable_{type}"
             tableLayout="auto"

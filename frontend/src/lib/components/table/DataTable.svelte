@@ -146,6 +146,9 @@
     // Resize state
     let resizing = $state<{ columnId: string; startX: number; startWidth: number } | null>(null);
 
+    // Highlighted row (set by navigateToRowId, cleared on user interaction)
+    let highlightedRowId = $state<string | null>(null);
+
     // Filter button refs (for fixed-position popover)
     let filterBtnRefs = $state<Record<string, HTMLButtonElement | null>>({});
 
@@ -370,7 +373,7 @@
 
         // If no valid values, use sensible defaults
         if (min === Infinity) min = 0;
-        if (max === -Infinity) max = 100;
+        if (max === -Infinity) max = min + 1;
 
         // Ensure min < max
         if (min >= max) max = min + 1;
@@ -694,6 +697,8 @@
                 pagination = {...pagination, pageIndex: targetPage};
             }
         }
+        // Set highlight — will be cleared on user interaction
+        highlightedRowId = rowId;
         // After pagination update, scroll to the row
         import('svelte').then(({tick}) => tick()).then(() => {
             // Find the row in the visible table by scanning for matching row ID
@@ -737,7 +742,7 @@
 
 <div class="datatable-container">
     <!-- Toolbar: selection counter + bulk actions (shown when rows are selected) -->
-    {#if selectedRows.length > 0 && bulkActions.length > 0}
+    {#if showToolbar && selectedRows.length > 0 && bulkActions.length > 0}
         <DataTableToolbar
                 selectedCount={selectedRows.length}
                 bulkActions={bulkActions.map(a => ({
@@ -752,7 +757,8 @@
     {/if}
 
     <!-- Table -->
-    <div class="table-wrapper">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="table-wrapper" onkeydown={() => { highlightedRowId = null; }}>
         <table class="datatable {tableLayout === 'auto' ? 'layout-auto' : ''}">
             <thead>
             <tr>
@@ -885,9 +891,9 @@
                 {#each paginatedData as row}
                     {@const rowId = getRowId(row)}
                     {@const isSelected = rowSelection[rowId]}
-                    <tr class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {getRowClass?.(row) ?? ''}"
+                    <tr class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
                         style={getRowStyle?.(row) ?? ''}
-                        onclick={() => handleRowClick(row)}
+                        onclick={() => { highlightedRowId = null; handleRowClick(row); }}
                         ondblclick={() => handleRowDoubleClick(row)}
                     >
                         <!-- Selection cell (multi mode only - shows checkboxes) -->
@@ -1311,6 +1317,31 @@
 
     :global(.dark) tbody :global(tr.clickable.selected) {
         background: #14532d;
+    }
+
+    /* Highlighted row (navigateToRowId) — purple, highest priority */
+    tbody :global(tr.highlighted) {
+        background: #f3e8ff !important;
+    }
+
+    tbody :global(tr.highlighted):hover {
+        background: #f3e8ff !important;
+    }
+
+    :global(.dark) tbody :global(tr.highlighted) {
+        background: rgba(147, 51, 234, 0.25) !important;
+    }
+
+    :global(.dark) tbody :global(tr.highlighted):hover {
+        background: rgba(147, 51, 234, 0.25) !important;
+    }
+
+    :global(tr.highlighted) td {
+        border-bottom-color: #e9d5ff;
+    }
+
+    :global(.dark) :global(tr.highlighted) td {
+        border-bottom-color: #7e22ce;
     }
 
     td {

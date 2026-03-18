@@ -189,7 +189,14 @@
     $effect(() => {
         void chartData;
         void viewMode;
-        if (measures.length > 0) emitRendered();
+        if (measures.length > 0) {
+            // Auto-delete measures whose start/end dates are no longer in chartData
+            const valid = measures.filter(m => m.getMeasurement(chartData) !== null);
+            if (valid.length < measures.length) {
+                measures = valid;
+            }
+            emitRendered();
+        }
     });
 
     // =========================================================================
@@ -387,7 +394,7 @@
                             {/if}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <div class="ml-auto w-[200px] min-w-[100px] shrink" onclick={(e) => e.stopPropagation()}>
+                            <div class="{isNarrow ? 'w-full' : 'ml-auto flex-1 min-w-[100px] max-w-[400px]'}" onclick={(e) => e.stopPropagation()}>
                                 <SignalStyleEditor
                                     style={measure.style}
                                     onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}

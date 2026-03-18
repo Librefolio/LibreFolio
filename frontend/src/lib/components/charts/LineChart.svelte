@@ -324,6 +324,7 @@
                     smooth: false,
                     symbol: 'none',
                     showSymbol: false,
+                    sampling: 'lttb',
                     yAxisIndex: signal.yAxisIndex ?? 0,
                     lineStyle: {
                         color: signal.color,
@@ -399,6 +400,7 @@
                 data: baselineData,
                 symbol: 'none',
                 showSymbol: false,
+                sampling: 'lttb',
                 lineStyle: {
                     color: isDark ? '#64748b' : '#9ca3af',
                     type: 'dashed',
@@ -439,6 +441,12 @@
                 left: 10,
                 containLabel: true,
             };
+
+        // Pre-compute stale lookup map for O(1) tooltip access (instead of O(n) data.find per hover)
+        const staleLookup = new Map<string, number>();
+        for (const d of data) {
+            if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
+        }
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -648,9 +656,9 @@
                     }
 
                     // Stale warning for main series
-                    const dataPoint = data.find(d => d.date === date);
-                    if (dataPoint?.staleDays && dataPoint.staleDays > 0) {
-                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: dataPoint.staleDays}})}</span>`;
+                    const staleDays = staleLookup.get(date);
+                    if (staleDays !== undefined) {
+                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
                     }
                     if (isPercentage) {
                         html += `<br/><span style="color:#94a3b8;font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;

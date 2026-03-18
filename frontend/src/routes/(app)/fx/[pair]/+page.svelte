@@ -17,7 +17,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
-    import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Settings, TrendingDown, TrendingUp, Ruler, Wrench} from 'lucide-svelte';
+    import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingDown, TrendingUp, Wrench} from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
@@ -25,26 +25,29 @@
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import FxDataEditorSection from '$lib/components/fx/FxDataEditorSection.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
     import {signalFromConfig} from '$lib/charts/signals';
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {getCurrencyInfo, ensureCurrenciesLoaded, isCurrenciesLoaded} from '$lib/stores/currencyStore';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {
-        getFxStore, apiResultToFxDataPoint,
-        type FxDataPoint
-    } from '$lib/stores/fxStoreRegistry';
+    import {apiResultToFxDataPoint, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
 
     // =========================================================================
     // Page data
     // =========================================================================
 
     interface Props {
-        data: {base: string; quote: string; slug: string};
+        data: {
+            urlBase: string; urlQuote: string;
+            canonicalBase: string; canonicalQuote: string; canonicalSlug: string;
+            inverted: boolean;
+        };
     }
+
     let {data}: Props = $props();
 
     // =========================================================================
@@ -54,20 +57,26 @@
     let chartData: FxDataPoint[] = $state([]);
     let loading = $state(true);
     let error: string | null = $state(null);
-    let inverted = $state(false);
     let syncing = $state(false);
+
+    // Confirm modal for swap while editing
+    let showSwapConfirm = $state(false);
 
     // Date range (default 3M)
     let dateEnd = $state(new Date().toISOString().slice(0, 10));
-    let dateStart = $state((() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10); })());
+    let dateStart = $state((() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 3);
+        return d.toISOString().slice(0, 10);
+    })());
     let activePreset: any = $state('3M');
 
     // View mode (abs/%) — controlled by the page, not by chart toolbar
     let viewMode: ViewMode = $state('absolute');
 
     // Provider config
-    let providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}> = $state([]);
-    let availableProviders: Array<{code: string; name: string}> = $state([]);
+    let providers: Array<{ providerCode: string; priority: number; chainSteps?: Array<{ from: string; to: string; provider: string }> }> = $state([]);
+    let availableProviders: Array<{ code: string; name: string }> = $state([]);
 
     // Foldable panels
     let showAesthetics = $state(false);
@@ -83,8 +92,8 @@
     let layoutMode = $state<'wide' | 'tablet' | 'mobile'>('tablet');
     let showActionLabels = $state(true);
 
-    // Chart settings (from store) — derived so they react to slug changes
-    let settings = $derived(getSettingsForPair(data.slug));
+    // Chart settings (from store) — keyed by canonical slug (not URL direction)
+    let settings = $derived(getSettingsForPair(data.canonicalSlug));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
 
     // Measure panel
@@ -96,19 +105,21 @@
     let pendingPreviewSignal: RenderedSignal | null = $state(null);
     let savingEdit = $state(false);
     let fxDataEditorRef: FxDataEditorSection | undefined = $state(undefined);
+    let editorDirtyCount = $state(0);
 
     // All configured FX pair slugs (from backend, for FxPair signal dropdown)
     let allConfiguredSlugs: string[] = $state([]);
 
     // Panel states before edit mode (to restore when exiting)
-    let savedPanelStates: {aesthetics: boolean; measures: boolean; signals: boolean} | null = $state(null);
+    let savedPanelStates: { aesthetics: boolean; measures: boolean; signals: boolean } | null = $state(null);
 
     // =========================================================================
     // Derived
     // =========================================================================
 
-    let displayBase = $derived(inverted ? data.quote : data.base);
-    let displayQuote = $derived(inverted ? data.base : data.quote);
+    let inverted = $derived(data.inverted);
+    let displayBase = $derived(data.urlBase);
+    let displayQuote = $derived(data.urlQuote);
 
     let lastRate = $derived.by(() => {
         if (chartData.length === 0) return null;
@@ -158,7 +169,7 @@
 
     // Provider config: build editRoutes for the modal
     let editRoutes = $derived.by(() => {
-        return providers.map(p => p.chainSteps ?? [{from: data.base, to: data.quote, provider: p.providerCode}]);
+        return providers.map(p => p.chainSteps ?? [{from: data.canonicalBase, to: data.canonicalQuote, provider: p.providerCode}]);
     });
 
     // =========================================================================
@@ -178,8 +189,14 @@
 
     // Trigger flag re-evaluation when currencies finish loading
     let flagVersion = $state(0);
-    let baseFlag = $derived.by(() => { void flagVersion; return getCurrencyInfo(displayBase).flag_emoji; });
-    let quoteFlag = $derived.by(() => { void flagVersion; return getCurrencyInfo(displayQuote).flag_emoji; });
+    let baseFlag = $derived.by(() => {
+        void flagVersion;
+        return getCurrencyInfo(displayBase).flag_emoji;
+    });
+    let quoteFlag = $derived.by(() => {
+        void flagVersion;
+        return getCurrencyInfo(displayQuote).flag_emoji;
+    });
 
     // ResizeObserver for adaptive filter bar layout (same breakpoints as FX list page)
     $effect(() => {
@@ -187,7 +204,7 @@
         if (!el) return;
         const ro = new ResizeObserver(([entry]) => {
             const w = entry.contentRect.width;
-            if (w >= 810) layoutMode = 'wide';
+            if (w >= 730) layoutMode = 'wide';
             else if (w >= 550) layoutMode = 'tablet';
             else layoutMode = 'mobile';
             showActionLabels = w >= 600;
@@ -203,7 +220,7 @@
     async function loadChartData() {
         loading = true;
         error = null;
-        const store = getFxStore(data.slug);
+        const store = getFxStore(data.canonicalSlug);
         const gaps = store.getMissingIntervals(dateStart, dateEnd);
 
         if (gaps.length === 0) {
@@ -214,8 +231,8 @@
 
         try {
             const convertRequests = gaps.map(gap => ({
-                from_amount: {code: data.base, amount: 1},
-                to: data.quote,
+                from_amount: {code: data.canonicalBase, amount: 1},
+                to: data.canonicalQuote,
                 date_range: {start: gap.start, end: gap.end},
             }));
             const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
@@ -255,8 +272,8 @@
             // Filter routes for current pair only
             providers = items
                 .filter((i: any) =>
-                    ((i.base === data.base && i.quote === data.quote) ||
-                    (i.base === data.quote && i.quote === data.base)) &&
+                    ((i.base === data.canonicalBase && i.quote === data.canonicalQuote) ||
+                        (i.base === data.canonicalQuote && i.quote === data.canonicalBase)) &&
                     !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')
                 )
                 .sort((a: any, b: any) => a.priority - b.priority)
@@ -289,7 +306,7 @@
     // =========================================================================
 
     async function handleRefresh() {
-        const store = getFxStore(data.slug);
+        const store = getFxStore(data.canonicalSlug);
         store.invalidateRange(dateStart, dateEnd);
         await loadChartData();
     }
@@ -298,16 +315,23 @@
         syncing = true;
         try {
             const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                pairs: [data.slug],
+                pairs: [data.canonicalSlug],
                 start: dateStart,
                 end: dateEnd,
             });
             const r = (response as any)?.results?.[0];
             if (r) {
-                const label = data.slug.replace('-', '/');
+                const label = data.canonicalSlug.replace('-', '/');
                 const tr = get(t);
                 if (r.status === 'ok') {
-                    toasts.success(tr('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}}));
+                    toasts.success(tr('fx.sync.toastOk', {
+                        values: {
+                            pair: label,
+                            fetched: r.points_fetched ?? 0,
+                            changed: r.points_changed ?? 0,
+                            provider: r.provider_used ?? '?'
+                        }
+                    }));
                 } else if (r.status === 'partial') {
                     toasts.warning(tr('fx.sync.toastPartial', {values: {pair: label, changed: r.points_changed ?? 0}}));
                 } else if (r.status === 'skipped') {
@@ -340,11 +364,11 @@
         staleGradient: boolean; yAxisMode: 'auto' | 'include0' | 'custom';
         yAxisMin: number | undefined; yAxisMax: number | undefined;
     }) {
-        setPairSettings(data.slug, {...settings, ...values, signals: [...signals]});
+        setPairSettings(data.canonicalSlug, {...settings, ...values, signals: [...signals]});
     }
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
-        setPairSettings(data.slug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
+        setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
     }
 
     async function handleSyncPair(slug: string) {
@@ -356,7 +380,7 @@
             });
             toasts.success(tr('fx.sync.toastSuccess', {values: {pair: slug}}));
             // If it's our pair, refresh chart
-            if (slug === data.slug) await handleRefresh();
+            if (slug === data.canonicalSlug) await handleRefresh();
         } catch (e: any) {
             toasts.error('Sync failed: ' + (e?.message || 'unknown'));
         } finally {
@@ -369,11 +393,11 @@
     }
 
     // Provider handlers (unchanged logic)
-    async function handleAddProvider(detail: {providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}) {
+    async function handleAddProvider(detail: { providerCode: string; priority: number; chainSteps?: Array<{ from: string; to: string; provider: string }> }) {
         try {
-            const steps = detail.chainSteps ?? [{from: data.base, to: data.quote, provider: detail.providerCode}];
+            const steps = detail.chainSteps ?? [{from: data.canonicalBase, to: data.canonicalQuote, provider: detail.providerCode}];
             await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([{
-                base: data.base, quote: data.quote, chain_steps: steps, priority: detail.priority,
+                base: data.canonicalBase, quote: data.canonicalQuote, chain_steps: steps, priority: detail.priority,
             }]);
             await loadProviders();
         } catch (e: any) {
@@ -381,7 +405,7 @@
         }
     }
 
-    async function handleRemoveProvider(detail: {providerCode: string}) {
+    async function handleRemoveProvider(detail: { providerCode: string }) {
         try {
             await applyProviderDiff(providers.filter(p => p.providerCode !== detail.providerCode));
             await loadProviders();
@@ -390,7 +414,7 @@
         }
     }
 
-    async function handleSaveProviderOrder(reorderedProviders: Array<{providerCode: string; priority: number}>) {
+    async function handleSaveProviderOrder(reorderedProviders: Array<{ providerCode: string; priority: number }>) {
         try {
             await applyProviderDiff(reorderedProviders);
             await loadProviders();
@@ -399,24 +423,24 @@
         }
     }
 
-    async function applyProviderDiff(desired: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}>) {
+    async function applyProviderDiff(desired: Array<{ providerCode: string; priority: number; chainSteps?: Array<{ from: string; to: string; provider: string }> }>) {
         const desiredNormalized = desired.map((p, idx) => ({
             providerCode: p.providerCode,
             priority: idx + 1,
-            chainSteps: p.chainSteps ?? [{from: data.base, to: data.quote, provider: p.providerCode}],
+            chainSteps: p.chainSteps ?? [{from: data.canonicalBase, to: data.canonicalQuote, provider: p.providerCode}],
         }));
 
         if (desiredNormalized.length > 0) {
             await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(
                 desiredNormalized.map(p => ({
-                    base: data.base, quote: data.quote, chain_steps: p.chainSteps, priority: p.priority,
+                    base: data.canonicalBase, quote: data.canonicalQuote, chain_steps: p.chainSteps, priority: p.priority,
                 }))
             );
         }
 
         const freshResp = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
         const freshForPair = (freshResp.items ?? []).filter(
-            (s: any) => s.base === data.base && s.quote === data.quote
+            (s: any) => s.base === data.canonicalBase && s.quote === data.canonicalQuote
         );
 
         const desiredPriorities = new Set(desiredNormalized.map(p => p.priority));
@@ -424,15 +448,42 @@
 
         if (toDelete.length > 0) {
             await zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete(
-                toDelete.map((s: any) => ({base: data.base, quote: data.quote, priority: s.priority}))
+                toDelete.map((s: any) => ({base: data.canonicalBase, quote: data.canonicalQuote, priority: s.priority}))
             );
         }
     }
 
     /** Handle provider modal save — reload providers after edit */
-    async function handleProviderModalCreated(detail: {base: string; quote: string; hasRealProvider: boolean}) {
+    async function handleProviderModalCreated(detail: { base: string; quote: string; hasRealProvider: boolean }) {
         await loadProviders();
         showProviderModal = false;
+    }
+
+    // =========================================================================
+    // Swap direction (Step 8+9)
+    // =========================================================================
+
+    function doSwap() {
+        // Exit edit mode if active
+        if (showDataEditor) {
+            showDataEditor = false;
+            pendingPreviewSignal = null;
+            if (savedPanelStates) {
+                showAesthetics = savedPanelStates.aesthetics;
+                showMeasures = savedPanelStates.measures;
+                showSignals = savedPanelStates.signals;
+                savedPanelStates = null;
+            }
+        }
+        goto(`/fx/${displayQuote}-${displayBase}`, {replaceState: true});
+    }
+
+    function handleSwapDirection() {
+        if (!showDataEditor || editorDirtyCount === 0) {
+            doSwap();
+        } else {
+            showSwapConfirm = true;
+        }
     }
 </script>
 
@@ -442,11 +493,11 @@
     <!-- ======================================================================= -->
     <div class="flex items-center gap-3">
         <button
-            class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors"
-            onclick={() => goto('/fx')}
-            title={$t('fxDetail.backToList')}
+                class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors"
+                onclick={() => goto('/fx')}
+                title={$t('fxDetail.backToList')}
         >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={20}/>
         </button>
         <div class="flex items-center gap-2">
             <span class="text-2xl">{baseFlag}</span>
@@ -455,11 +506,11 @@
             <span class="text-2xl">{quoteFlag}</span>
             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayQuote}</h2>
             <button
-                class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                onclick={() => inverted = !inverted}
-                title={$t('fxDetail.swapDirection')}
+                    class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    onclick={handleSwapDirection}
+                    title={$t('fxDetail.swapDirection')}
             >
-                <ArrowLeftRight size={16} />
+                <ArrowLeftRight size={16}/>
             </button>
         </div>
     </div>
@@ -482,8 +533,8 @@
     <!--         [ actions-row      ]                                                            -->
     <!-- ======================================================================= -->
     <div
-        bind:this={filterBarRef}
-        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
+            bind:this={filterBarRef}
+            class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
                {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
     >
         <!-- Filters block -->
@@ -491,23 +542,23 @@
             <!-- DateRangePicker -->
             <div class="max-w-md">
                 <DateRangePicker
-                    bind:start={dateStart}
-                    bind:end={dateEnd}
-                    bind:activePreset
-                    compact={true}
-                    onchange={handleDateRangeChange}
+                        bind:start={dateStart}
+                        bind:end={dateEnd}
+                        bind:activePreset
+                        compact={true}
+                        onchange={handleDateRangeChange}
                 />
             </div>
 
             <!-- Pair Summary (rate + delta) — no date, already in DateRangePicker -->
             {#if lastRate !== null}
-                <div class="flex items-center gap-2 px-3 {layoutMode === 'wide' ? 'border-l border-r border-gray-200 dark:border-slate-600' : ''}">
+                <div class="flex items-center gap-2 px-3 {layoutMode === 'wide' ? 'border-l border-r border-gray-200 dark:border-slate-600' : ''} {layoutMode === 'tablet' ? 'w-full justify-center' : ''}">
                     <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
                         {lastRate.toFixed(4)}
                     </span>
                     {#if deltaPercent !== null}
                         <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                            {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
+                            {#if deltaPercent >= 0}<TrendingUp size={12}/>{:else}<TrendingDown size={12}/>{/if}
                             {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
                         </span>
                     {/if}
@@ -521,45 +572,47 @@
             <!-- Row 1, Col 1: Abs/% segmented toggle -->
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
-                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute'
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute'
                         ? 'bg-libre-green text-white'
                         : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => { viewMode = 'absolute'; }}
-                >Abs</button>
+                        onclick={() => { viewMode = 'absolute'; }}
+                >Abs
+                </button>
                 <button
-                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'percentage'
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'percentage'
                         ? 'bg-libre-green text-white'
                         : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => { viewMode = 'percentage'; }}
-                >%</button>
+                        onclick={() => { viewMode = 'percentage'; }}
+                >%
+                </button>
             </div>
             <!-- Row 1, Col 2: Providers -->
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={() => showProviderModal = true}
-                title={$t('fxDetail.providers')}
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={() => showProviderModal = true}
+                    title={$t('fxDetail.providers')}
             >
-                <Wrench size={14} />
+                <Wrench size={14}/>
                 {#if showActionLabels}<span>{$t('fxDetail.providers')}</span>{/if}
             </button>
             <!-- Row 2, Col 1: Sync -->
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={handleSync}
-                disabled={syncing}
-                title={$t('fxDetail.syncFromProvider')}
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={handleSync}
+                    disabled={syncing}
+                    title={$t('fxDetail.syncFromProvider')}
             >
-                <RotateCw size={14} class={syncing ? 'animate-spin' : ''} />
+                <RotateCw size={14} class={syncing ? 'animate-spin' : ''}/>
                 {#if showActionLabels}<span>{syncing ? $t('fx.actions.syncing') : $t('common.sync')}</span>{/if}
             </button>
             <!-- Row 2, Col 2: Refresh -->
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={handleRefresh}
-                disabled={loading}
-                title={$t('fxDetail.refreshData')}
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={handleRefresh}
+                    disabled={loading}
+                    title={$t('fxDetail.refreshData')}
             >
-                <RefreshCw size={14} class={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={14} class={loading ? 'animate-spin' : ''}/>
                 {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
         </div>
@@ -570,26 +623,26 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
-            class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-            onclick={() => showAesthetics = !showAesthetics}
+                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+                onclick={() => showAesthetics = !showAesthetics}
         >
             <span class="flex items-center gap-2">
-                <Settings size={15} class="text-libre-green" />
+                <Settings size={15} class="text-libre-green"/>
                 {$t('fxDetail.aesthetics')}
             </span>
-            <ChevronDown size={15} class="transition-transform {showAesthetics ? 'rotate-180' : ''}" />
+            <ChevronDown size={15} class="transition-transform {showAesthetics ? 'rotate-180' : ''}"/>
         </button>
         {#if showAesthetics}
             <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartAestheticsSection
-                    colorByBaseline={settings.colorByBaseline}
-                    areaFill={settings.areaFill}
-                    gridLines={settings.gridLines}
-                    staleGradient={settings.staleGradient}
-                    yAxisMode={settings.yAxisMode}
-                    yAxisMin={settings.yAxisMin}
-                    yAxisMax={settings.yAxisMax}
-                    onchange={handleAestheticsChange}
+                        colorByBaseline={settings.colorByBaseline}
+                        areaFill={settings.areaFill}
+                        gridLines={settings.gridLines}
+                        staleGradient={settings.staleGradient}
+                        yAxisMode={settings.yAxisMode}
+                        yAxisMin={settings.yAxisMin}
+                        yAxisMax={settings.yAxisMax}
+                        onchange={handleAestheticsChange}
                 />
             </div>
         {/if}
@@ -602,7 +655,7 @@
         {#if loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
-                    <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
+                    <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2"/>
                     <p class="text-sm text-gray-500 dark:text-gray-400">{$t('fxDetail.loadingRates')}</p>
                 </div>
             </div>
@@ -611,10 +664,10 @@
                 <!-- Action buttons: top-right corner of chart -->
                 <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
                     <button
-                        class="p-1.5 rounded-lg transition-colors {measureMode
+                            class="p-1.5 rounded-lg transition-colors {measureMode
                             ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={async () => {
+                            onclick={async () => {
                             if (measureMode) {
                                 measurePanel?.stopMeasureMode();
                             } else {
@@ -623,15 +676,15 @@
                                 measurePanel?.startMeasureMode();
                             }
                         }}
-                        title={measureMode ? $t('fxDetail.exitMeasure') : $t('fxDetail.addMeasure')}
+                            title={measureMode ? $t('fxDetail.exitMeasure') : $t('fxDetail.addMeasure')}
                     >
-                        <Ruler size={16} />
+                        <Ruler size={16}/>
                     </button>
                     <button
-                        class="p-1.5 rounded-lg transition-colors {showDataEditor
+                            class="p-1.5 rounded-lg transition-colors {showDataEditor
                             ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                        onclick={() => {
+                            onclick={() => {
                             if (showDataEditor) {
                                 // Exiting edit mode: hide editor, restore panel states
                                 showDataEditor = false;
@@ -651,31 +704,31 @@
                                 showDataEditor = true;
                             }
                         }}
-                        title={showDataEditor ? $t('fxDetail.closeEditor') : $t('fxDetail.editRatesBtn')}
+                            title={showDataEditor ? $t('fxDetail.closeEditor') : $t('fxDetail.editRatesBtn')}
                     >
-                        <Pencil size={16} />
+                        <Pencil size={16}/>
                     </button>
                 </div>
 
                 <PriceChartFull
-                    data={lineData}
-                    currency={displayQuote}
-                    chartHeight="400px"
-                    overlaySignals={allOverlaySignals}
-                    colorByBaseline={settings.colorByBaseline}
-                    areaFill={settings.areaFill}
-                    showGridLines={settings.gridLines}
-                    showGradient={settings.staleGradient}
-                    yAxisMode={settings.yAxisMode}
-                    yAxisMin={settings.yAxisMin}
-                    yAxisMax={settings.yAxisMax}
-                    measureMode={measureMode}
-                    onMeasureClick={handleMeasureClick}
-                    onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
-                    hideToolbar={true}
-                    externalViewMode={viewMode}
-                    editMode={showDataEditor}
-                    onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
+                        data={lineData}
+                        currency={displayQuote}
+                        chartHeight="400px"
+                        overlaySignals={allOverlaySignals}
+                        colorByBaseline={settings.colorByBaseline}
+                        areaFill={settings.areaFill}
+                        showGridLines={settings.gridLines}
+                        showGradient={settings.staleGradient}
+                        yAxisMode={settings.yAxisMode}
+                        yAxisMin={settings.yAxisMin}
+                        yAxisMax={settings.yAxisMax}
+                        measureMode={measureMode}
+                        onMeasureClick={handleMeasureClick}
+                        onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
+                        hideToolbar={true}
+                        externalViewMode={viewMode}
+                        editMode={showDataEditor}
+                        onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
                 />
             </div>
         {:else}
@@ -683,9 +736,9 @@
                 <div class="text-center">
                     <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('fxDetail.noData')}</p>
                     <button
-                        class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                        onclick={handleSync}
-                        disabled={syncing}
+                            class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                            onclick={handleSync}
+                            disabled={syncing}
                     >
                         {syncing ? $t('fx.actions.syncing') : $t('fxDetail.syncRates')}
                     </button>
@@ -699,14 +752,14 @@
     <!-- ======================================================================= -->
     {#if showDataEditor}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/30 rounded-t-xl">
-                <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
-                    <Pencil size={15} />
-                    {$t('fxDetail.editRates')}
+            <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
+    <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+                    <Pencil size={15}/>
+        {$t('fxDetail.editRates')}
                 </span>
                 <button
-                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    onclick={() => {
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        onclick={() => {
                         showDataEditor = false;
                         pendingPreviewSignal = null;
                         if (savedPanelStates) {
@@ -716,17 +769,19 @@
                             savedPanelStates = null;
                         }
                     }}
-                    title={$t('fxDetail.closeEditor')}
-                >✕</button>
+                        title={$t('fxDetail.closeEditor')}
+                >✕
+                </button>
             </div>
             <div class="px-4 pb-4 pt-3">
                 <FxDataEditorSection
-                    bind:this={fxDataEditorRef}
-                    base={displayBase}
-                    quote={displayQuote}
-                    {chartData}
-                    bind:saving={savingEdit}
-                    onsave={async (expandedRange) => {
+                        bind:this={fxDataEditorRef}
+                        base={displayBase}
+                        quote={displayQuote}
+                        {chartData}
+                        bind:saving={savingEdit}
+                        bind:dirtyCount={editorDirtyCount}
+                        onsave={async (expandedRange) => {
                         if (expandedRange) {
                             dateStart = expandedRange.start;
                             dateEnd = expandedRange.end;
@@ -741,7 +796,7 @@
                             savedPanelStates = null;
                         }
                     }}
-                    oncancel={() => {
+                        oncancel={() => {
                         showDataEditor = false;
                         pendingPreviewSignal = null;
                         if (savedPanelStates) {
@@ -751,7 +806,7 @@
                             savedPanelStates = null;
                         }
                     }}
-                    onpendingchange={(signal) => pendingPreviewSignal = signal}
+                        onpendingchange={(signal) => pendingPreviewSignal = signal}
                 />
             </div>
         </div>
@@ -762,21 +817,21 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
-            class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-            onclick={() => showMeasures = !showMeasures}
+                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+                onclick={() => showMeasures = !showMeasures}
         >
             <span class="flex items-center gap-2">
-                <Ruler size={15} class="text-violet-500" />
+                <Ruler size={15} class="text-violet-500"/>
                 {$t('fxDetail.measures')}
                 {#if measureMode}
                     <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
             </span>
-            <ChevronDown size={15} class="transition-transform {showMeasures ? 'rotate-180' : ''}" />
+            <ChevronDown size={15} class="transition-transform {showMeasures ? 'rotate-180' : ''}"/>
         </button>
-        {#if showMeasures}
-            <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <MeasurePanel
+        <!-- Single MeasurePanel instance — always mounted, hidden via CSS to preserve state -->
+        <div class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"}>
+            <MeasurePanel
                     bind:this={measurePanel}
                     chartData={lineData}
                     overlaySignals={overlaySignals}
@@ -784,9 +839,8 @@
                     onmeasureschange={(m) => measureSignals = m}
                     onmeasuremodechange={(active) => measureMode = active}
                     {viewMode}
-                />
-            </div>
-        {/if}
+            />
+        </div>
     </div>
 
     <!-- ======================================================================= -->
@@ -794,23 +848,23 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
-            class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-            onclick={() => showSignals = !showSignals}
+                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+                onclick={() => showSignals = !showSignals}
         >
             <span class="flex items-center gap-2">
-                <TrendingUp size={15} class="text-blue-500" />
+                <TrendingUp size={15} class="text-blue-500"/>
                 {$t('fxDetail.signals')}
             </span>
-            <ChevronDown size={15} class="transition-transform {showSignals ? 'rotate-180' : ''}" />
+            <ChevronDown size={15} class="transition-transform {showSignals ? 'rotate-180' : ''}"/>
         </button>
         {#if showSignals}
             <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection
-                    signals={[...signals]}
-                    availablePairs={configuredPairSlugs}
-                    onchange={handleSignalsChange}
-                    onsyncpair={handleSyncPair}
-                    ondetailpair={handleDetailPair}
+                        signals={[...signals]}
+                        availablePairs={configuredPairSlugs}
+                        onchange={handleSignalsChange}
+                        onsyncpair={handleSyncPair}
+                        ondetailpair={handleDetailPair}
                 />
             </div>
         {/if}
@@ -821,15 +875,27 @@
     <!-- Provider Configuration Modal (reuses FxPairAddModal in editMode) -->
     <!-- ======================================================================= -->
     <FxPairAddModal
-        bind:open={showProviderModal}
-        editMode={true}
-        editBase={data.base}
-        editQuote={data.quote}
-        {editRoutes}
-        dateStart={dateStart}
-        dateEnd={dateEnd}
-        oncreated={handleProviderModalCreated}
-        onclose={() => showProviderModal = false}
+            bind:open={showProviderModal}
+            editMode={true}
+            editBase={data.canonicalBase}
+            editQuote={data.canonicalQuote}
+            {editRoutes}
+            dateStart={dateStart}
+            dateEnd={dateEnd}
+            oncreated={handleProviderModalCreated}
+            onclose={() => showProviderModal = false}
+    />
+
+    <!-- Confirm modal for swap direction while editing -->
+    <ConfirmModal
+            open={showSwapConfirm}
+            title={$t('fxDetail.swapConfirmTitle')}
+            message={$t('fxDetail.swapConfirmMessage')}
+            confirmText={$t('common.continue')}
+            cancelText={$t('common.cancel')}
+            warning={true}
+            onConfirm={() => { showSwapConfirm = false; doSwap(); }}
+            onCancel={() => showSwapConfirm = false}
     />
 </div>
 

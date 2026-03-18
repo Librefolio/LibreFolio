@@ -192,11 +192,19 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
 
-            // Series line double-click for edit mode
-            chartInstance.on('dblclick', 'series.line', (params: any) => {
-                if (params.dataIndex !== undefined && displayData[params.dataIndex]) {
-                    const point = displayData[params.dataIndex];
-                    handlePointClick(point.date, point.value);
+            // Global dblclick handler for edit mode — catches double-clicks anywhere on the chart area
+            chartInstance.getZr().on('dblclick', (params: any) => {
+                if (!editMode || !onPointClick || !chartInstance) return;
+                const pointInPixel = [params.offsetX, params.offsetY];
+                if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
+                    const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
+                    if (pointInGrid) {
+                        const dateIdx = Math.round(pointInGrid[0]);
+                        if (dateIdx >= 0 && dateIdx < displayData.length) {
+                            const point = displayData[dateIdx];
+                            handlePointClick(point.date, point.value);
+                        }
+                    }
                 }
             });
 
@@ -248,6 +256,55 @@
             chartInstance.on('dataZoom', () => {
                 if (chartInstance) updateArrowRotations(chartInstance);
             });
+
+            // Long-press handler for mobile (1s hold = double-click equivalent)
+            let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+            let touchStartPos: {x: number; y: number} | null = null;
+
+            function clearLongPress() {
+                if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+                touchStartPos = null;
+            }
+
+            function onTouchStart(e: TouchEvent) {
+                if (!chartInstance || e.touches.length !== 1) { clearLongPress(); return; }
+                const touch = e.touches[0];
+                touchStartPos = {x: touch.clientX, y: touch.clientY};
+                longPressTimer = setTimeout(() => {
+                    if (!chartInstance || !chartContainer || !touchStartPos) return;
+                    const rect = chartContainer.getBoundingClientRect();
+                    const offsetX = touchStartPos.x - rect.left;
+                    const offsetY = touchStartPos.y - rect.top;
+                    const pointInPixel = [offsetX, offsetY];
+                    if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
+                        const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
+                        if (pointInGrid) {
+                            const dateIdx = Math.round(pointInGrid[0]);
+                            if (dateIdx >= 0 && dateIdx < displayData.length) {
+                                const point = displayData[dateIdx];
+                                navigator.vibrate?.(50);
+                                handlePointClick(point.date, point.value);
+                            }
+                        }
+                    }
+                    clearLongPress();
+                }, 800);
+            }
+
+            function onTouchMove(e: TouchEvent) {
+                if (!touchStartPos || !longPressTimer) return;
+                const touch = e.touches[0];
+                const dx = touch.clientX - touchStartPos.x;
+                const dy = touch.clientY - touchStartPos.y;
+                if (dx * dx + dy * dy > 100) clearLongPress(); // 10px threshold
+            }
+
+            function onTouchEnd() { clearLongPress(); }
+
+            chartContainer.addEventListener('touchstart', onTouchStart, {passive: true});
+            chartContainer.addEventListener('touchmove', onTouchMove, {passive: true});
+            chartContainer.addEventListener('touchend', onTouchEnd);
+            chartContainer.addEventListener('touchcancel', onTouchEnd);
         }
 
         const isDark = document.documentElement.classList.contains('dark');
@@ -295,6 +352,7 @@
                 const overlaySeries: any = {
                     type: 'line', name: signal.label, data: signalSeriesData,
                     connectNulls: true, smooth: false, symbol: 'none', showSymbol: false,
+                    sampling: 'lttb',
                     xAxisIndex: 0, yAxisIndex: signal.yAxisIndex ?? 0,
                     lineStyle: {color: signal.color, width: signal.lineWidth, type: signal.lineType},
                     itemStyle: {color: signal.color},
@@ -346,7 +404,7 @@
                 type: 'line', name: '__baseline__',
                 data: displayData.map(() => baselineValue),
                 xAxisIndex: 0, yAxisIndex: 0,
-                symbol: 'none', showSymbol: false,
+                symbol: 'none', showSymbol: false, sampling: 'lttb',
                 lineStyle: {color: isDark ? '#64748b' : '#9ca3af', type: 'dashed', width: 1},
                 itemStyle: {color: 'transparent'},
                 emphasis: {disabled: true}, tooltip: {show: false}, silent: true, z: 0,
@@ -379,6 +437,12 @@
                     }
                 }
             } catch (_) {}
+        }
+
+        // Pre-compute stale lookup map for O(1) tooltip access (instead of O(n) data.find per hover)
+        const staleLookup = new Map<string, number>();
+        for (const d of data) {
+            if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
         }
 
         const option: echarts.EChartsOption = {
@@ -456,9 +520,9 @@
                             }
                         }
                     }
-                    const dataPoint = data.find(d => d.date === date);
-                    if (dataPoint?.staleDays && dataPoint.staleDays > 0) {
-                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ Stale: ${dataPoint.staleDays}d</span>`;
+                    const dataPoint = staleLookup.get(date);
+                    if (dataPoint !== undefined) {
+                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ Stale: ${dataPoint}d</span>`;
                     }
                     return html;
                 },
