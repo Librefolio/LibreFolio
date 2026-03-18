@@ -73,9 +73,17 @@
         const openAbove = spaceBelow < dropH && spaceAbove > spaceBelow;
         const top = openAbove ? 'auto' : `${rect.bottom + 4}px`;
         const bottom = openAbove ? `${window.innerHeight - rect.top + 4}px` : 'auto';
-        const left = Math.max(8, rect.right - 220); // align right edge to trigger
-        dropdownStyle = `position: fixed; top: ${top}; bottom: ${bottom}; left: ${left}px; z-index: 9999;`;
+        const right = window.innerWidth - rect.right;
+        dropdownStyle = `position: fixed; top: ${top}; bottom: ${bottom}; right: ${right}px; z-index: 9999;`;
     }
+
+    // Close dropdown on scroll (capture phase catches all scrollable containers)
+    $effect(() => {
+        if (!open) return;
+        const handleScroll = () => close();
+        window.addEventListener('scroll', handleScroll, true);
+        return () => window.removeEventListener('scroll', handleScroll, true);
+    });
 
     function handleToggleColumn(columnId: string) {
         tableRef?.toggleColumnVisibilityById(columnId);

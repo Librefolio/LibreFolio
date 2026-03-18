@@ -266,7 +266,7 @@
             <Save size={15} /> {saving ? 'Saving...' : `Save (${dirtyCount})`}
         </button>
         <button
-            class="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
+            class="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
             onclick={handleCancel}
         >
             <X size={15} /> Cancel
