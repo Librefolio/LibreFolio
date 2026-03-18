@@ -24,13 +24,19 @@
         oncancel,
     }: Props = $props();
 
-    let csvValue = $state(`date;base;quote;base2quote`);
+    let defaultHeader = $derived(`date;${base}>${quote}`);
+    let csvValue = $state('');
     let parsedRows: ParsedRow[] = $state([]);
     let csvEditor: CsvEditor | undefined = $state(undefined);
     let hasEdits = $state(false);
     let showAddForm = $state(false);
     let newDate = $state(new Date().toISOString().slice(0, 10));
     let newRate = $state('');
+
+    // Initialize csvValue with header (runs once and when base/quote change)
+    $effect(() => {
+        csvValue = defaultHeader;
+    });
 
     function handleCsvChange(validRows: ParsedRow[], _errorCount: number, _hasDuplicates: boolean) {
         parsedRows = validRows;
@@ -40,7 +46,7 @@
     function handleAddPoint() {
         const rateNum = parseFloat(newRate);
         if (!newDate || isNaN(rateNum) || rateNum <= 0) return;
-        csvEditor?.appendRow(newDate, base, quote, rateNum);
+        csvEditor?.appendRow(newDate, rateNum);
         showAddForm = false;
         newRate = '';
     }
@@ -51,14 +57,14 @@
     }
 
     function handleCancel() {
-        csvValue = `date;base;quote;base2quote`;
+        csvValue = defaultHeader;
         parsedRows = [];
         hasEdits = false;
         oncancel?.();
     }
 
     export function onPointEdit(date: string, value: number) {
-        csvEditor?.appendRow(date, base, quote, value);
+        csvEditor?.appendRow(date, value);
     }
 
     export function scrollToLine(lineNumber: number) {
@@ -78,7 +84,7 @@
         Click on chart points to edit, paste CSV data below, or use the + button. Changes are saved only when you click "Save All".
     </p>
 
-    <CsvEditor bind:this={csvEditor} bind:value={csvValue} onvalidchange={handleCsvChange} minHeight="180px" />
+    <CsvEditor bind:this={csvEditor} bind:value={csvValue} allowedCurrencies={[base, quote]} onvalidchange={handleCsvChange} minHeight="180px" />
 
     {#if showAddForm}
         <div class="flex items-end gap-2 p-3 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600">

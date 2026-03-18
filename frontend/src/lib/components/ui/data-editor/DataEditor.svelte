@@ -17,6 +17,7 @@
     import {Plus, Upload, Trash2, Undo2} from 'lucide-svelte';
     import type {ParsedRow} from '$lib/components/fx/CsvEditor.svelte';
     import DataImportModal from './DataImportModal.svelte';
+    import type {ImportDirection} from './DataImportModal.svelte';
     import type {ColumnDef, DataRow} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -34,10 +35,10 @@
         rows?: DataRow[];
         /** Read-only mode */
         readonly?: boolean;
-        /** Base currency for CSV header */
-        baseCurrency?: string;
-        /** Quote currency for CSV header */
-        quoteCurrency?: string;
+        /** Display base currency (follows page direction) */
+        displayBase?: string;
+        /** Display quote currency (follows page direction) */
+        displayQuote?: string;
         /** Emits only dirty rows (status !== 'original') */
         onchange?: (dirtyRows: DataRow[]) => void;
     }
@@ -46,8 +47,8 @@
         columns,
         rows = $bindable([]),
         readonly: isReadonly = false,
-        baseCurrency = '',
-        quoteCurrency = '',
+        displayBase = '',
+        displayQuote = '',
         onchange,
     }: Props = $props();
 
@@ -63,11 +64,6 @@
     // Derived
     // =========================================================================
 
-    let csvHeader = $derived(
-        baseCurrency && quoteCurrency
-            ? `date;${baseCurrency.toLowerCase()};${quoteCurrency.toLowerCase()};base2quote`
-            : `date;base;quote;base2quote`
-    );
 
     /** Dirty rows for emission */
     let dirtyRows = $derived(rows.filter(r => r.status !== 'original'));
@@ -380,9 +376,16 @@
     // Import
     // =========================================================================
 
-    function handleImport(importedRows: ParsedRow[]) {
+    function handleImport(importedRows: ParsedRow[], direction: ImportDirection) {
         const firstCol = columns[0];
+
+        // Determine if rates need inversion:
+        // If the import direction differs from the display page direction, invert rates (1/value)
+        const needsInversion = displayBase && displayQuote &&
+            direction.from === displayQuote && direction.to === displayBase;
+
         for (const pr of importedRows) {
+            const rateValue = needsInversion ? 1 / pr.value : pr.value;
             const existingIdx = rows.findIndex(r => r.date === pr.date);
             if (existingIdx >= 0) {
                 const existing = rows[existingIdx];
@@ -390,17 +393,17 @@
                     if (!existing._originalValues) {
                         existing._originalValues = {...existing.values};
                     }
-                    existing.values[firstCol?.key ?? 'rate'] = pr.value;
+                    existing.values[firstCol?.key ?? 'rate'] = rateValue;
                     existing.status = 'edited';
                 } else {
-                    existing.values[firstCol?.key ?? 'rate'] = pr.value;
+                    existing.values[firstCol?.key ?? 'rate'] = rateValue;
                 }
             } else {
                 rows.push({
                     date: pr.date,
                     status: 'appended',
                     originalStatus: 'appended',
-                    values: {[firstCol?.key ?? 'rate']: pr.value},
+                    values: {[firstCol?.key ?? 'rate']: rateValue},
                     selected: false,
                 });
             }
@@ -517,7 +520,8 @@
 <!-- Import Modal -->
 <DataImportModal
     bind:open={importModalOpen}
-    header={csvHeader}
+    displayBase={displayBase}
+    displayQuote={displayQuote}
     onimport={handleImport}
 />
 
