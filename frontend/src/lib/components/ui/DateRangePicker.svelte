@@ -468,11 +468,11 @@
     {/if}
 
     {#if showDateFields}
-    <div class="relative drp-trigger {stacked ? 'inline-block' : 'w-full'}">
+    <div class="relative drp-trigger w-full">
         <button
             bind:this={triggerEl}
             type="button"
-            class="{stacked ? 'inline-flex' : 'w-full flex'} {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
+            class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
             onclick={openCalendar}
         >
             <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">

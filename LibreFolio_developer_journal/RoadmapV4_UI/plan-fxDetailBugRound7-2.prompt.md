@@ -4,7 +4,7 @@
 
 Refinements basati su feedback utente dopo Round 7.1.
 
-**Stato**: 🔲 Da implementare
+**Stato**: ✅ Completato
 
 ---
 
@@ -39,42 +39,86 @@ $effect(() => {
 
 ---
 
-### 3. DateRangePicker nel filtro DataTableColumnFilter — Larghezza piena
+### 3. DateRangePicker — Ripristino width + max-w-fit per compact
 
 **File**: `frontend/src/lib/components/ui/DateRangePicker.svelte`
 
-**Problema**: Con il fix `inline-block` / `inline-flex` per il caso `stacked`, il DateRangePicker usato nei filtri DataTable (con `stacked={true}`) ora si restringe al centro del pannello filtro invece di occupare tutta la larghezza.
+**Problema duplice**:
+- Il fix `inline-block`/`inline-flex` di Round 7.1 per il caso `stacked` ha rotto il DateRangePicker nel filtro DataTable (si restringe al centro, occupa 1/3 del pannello).
+- Il DateRangePicker nel MeasurePanel (compact, non stacked) si allarga a tutta larghezza pagina.
 
-**Soluzione**: Il fix `stacked` introdotto in Round 7.1 era troppo aggressivo. Invece di cambiare il comportamento per tutti i casi `stacked`, la soluzione giusta è:
-- Riportare il container a `w-full` sempre
-- Il trigger button: usare `w-full flex flex-col` per stacked (non `inline-flex`)
-- Per il MeasurePanel dove serve il contenimento, il parent (`max-w-[300px]`) già lo vincola
+**Soluzione**: Riportare il container e il trigger a `w-full` in TUTTI i casi (come era originalmente). Il contenimento nel MeasurePanel avviene tramite il parent `max-w-[300px]` che già lo vincola. Nessun `inline-block` o `max-w-fit`.
 
----
-
-### 4. DataEditor — Selezione righe con counter + deselect
-
-**File**: `frontend/src/lib/components/ui/data-editor/DataEditor.svelte`
-
-**Problema**: La selezione di righe funziona ma non compare mai il contatore di righe selezionate con il bottone per deselezionarle (come in FilesTable). `showToolbar={false}` nasconde la toolbar interna DataTable che contiene il counter.
-
-**Soluzione**: Aggiungere nella toolbar del DataEditor, tra i contatori delle modifiche e l'occhio:
-- Un callback `onSelectionChange` che aggiorna uno stato locale `selectedCount`
-- Se `selectedCount > 0`: mostrare un badge cliccabile `"N selected ✕"` che chiama `clearSelection` via DataTable ref
-- Aggiungere `export function clearSelection()` a DataTable se non esiste
+Concretamente:
+- Container: `<div class="relative drp-trigger w-full">` (sempre `w-full`)
+- Trigger: `<button class="w-full flex {stacked ? 'flex-col' : ''} ...">` (sempre `w-full flex`)
 
 ---
 
-### 5. DataEditor / DataTable — Scroll al click punto grafico (chart → table)
+### 4. DataTable — Rimuovere column visibility dalla toolbar, tenere solo selection counter + bulk actions
 
-**File**: `frontend/src/routes/(app)/fx/[pair]/+page.svelte`, `frontend/src/lib/components/fx/FxDataEditorSection.svelte`
+**File**: `frontend/src/lib/components/table/DataTable.svelte`, `frontend/src/lib/components/table/DataTableToolbar.svelte`
+
+**Problema**: `showToolbar={false}` nasconde l'intera `DataTableToolbar` che contiene sia il dropdown colonne sia il counter selezione + bulk actions. L'utente seleziona righe ma non vede feedback.
+
+**Analisi — nessuna istanza usa il dropdown colonne interno**:
+
+| # | Componente | `showToolbar` | `enableColumnVisibility` | `bulkActions` | Column Visibility |
+|---|---|---|---|---|---|
+| 1 | **FilesTable** | `false` | `true` | ✅ Download+Delete | **esterna** (`ColumnVisibilityToggle` in `+page.svelte`) |
+| 2 | **DataEditor** | `false` | `true` | ✅ Delete | **esterna** (`ColumnVisibilityToggle` nel toolbar custom) |
+| 3 | **MeasurePanel** | `false` | `true` | ❌ | **esterna** (`ColumnVisibilityToggle` nel header) |
+| 4 | **AssetPickerModal** | `true` (default) | `false` | ❌ | non serve |
+| 5 | **BrokerImportFilesModal** | via FilesTable → `false` | `true` | ✅ | **esterna** (via FilesTable) |
+
+Nessuna DataTable nel progetto usa il dropdown colonne INTERNO della toolbar. Tutte usano il componente esterno `ColumnVisibilityToggle`.
+
+**Soluzione — semplificare radicalmente**:
+
+1. **DataTableToolbar.svelte** — **rimuovere completamente** il dropdown colonne:
+   - Rimuovere le props `columns`, `columnVisibility`, `onToggleColumn`, `onResetColumns`, `onReorderColumns`
+   - Rimuovere tutto il codice drag & drop, `showColumnDropdown`, `handleClickOutside`, etc.
+   - Rimuovere tutta la sezione `<div class="column-dropdown-container">` dal template
+   - Rimuovere tutti i CSS relativi (`.column-dropdown`, `.column-option`, `.col-drag`, etc.)
+   - **Tenere solo**: `selectedCount`, `bulkActions`, `onClearSelection`
+   - Il componente mostra: `[N selected ×] [bulk action buttons]`
+
+2. **DataTable.svelte** — semplificare la condizione e le props:
+   ```svelte
+   <!-- PRIMA: -->
+   {#if showToolbar && (enableColumnVisibility || bulkActions.length > 0)}
+       <DataTableToolbar columns={...} columnVisibility={...} ... />
+
+   <!-- DOPO: -->
+   {#if selectedRows.length > 0 && bulkActions.length > 0}
+       <DataTableToolbar
+           selectedCount={selectedRows.length}
+           bulkActions={...}
+           onClearSelection={clearAllSelection}
+       />
+   {/if}
+   ```
+   La toolbar si mostra **solo** quando ci sono righe selezionate e bulk actions disponibili.
+   La prop `showToolbar` e `enableColumnVisibility` non influenzano più la toolbar (restano per backward compat ma non controllano la selezione).
+
+3. **Rimozione prop `showToolbar`**: valutare se rimuoverla del tutto o lasciarla come no-op. Per ora la lasciamo ma non la usiamo più per la condizione toolbar.
+
+**Risultato**: La `DataTableToolbar` diventa un componente compatto (solo counter + bulk actions), sempre visibile quando ci sono righe selezionate. Funziona identicamente per tutte le tabelle senza configurazione.
+
+---
+
+### 5. DataEditor / FxDataEditorSection / +page — Scroll al click punto grafico (chart → table)
+
+**File**: `frontend/src/lib/components/ui/data-editor/DataEditor.svelte`, `frontend/src/lib/components/fx/FxDataEditorSection.svelte`, `frontend/src/routes/(app)/fx/[pair]/+page.svelte`
 
 **Problema**: Cliccando su un punto del grafico mentre si è in edit mode, la tabella non scrolla al corrispondente dato.
 
-**Soluzione**: 
-- FxDataEditorSection: esporre un metodo `scrollToDate(date: string)` che chiama `dataEditorRef.scrollToDate(date)` → che a sua volta chiama `dataTableRef.navigateToRowId(date)`
-- DataEditor: il `scrollToDate` esistente deve usare `dataTableRef?.navigateToRowId(date)` (non `querySelector`)
-- +page.svelte: nel handler click del grafico (se `showDataEditor` è true), chiamare `fxDataEditorRef.scrollToDate(clickedDate)`
+**Soluzione a 3 livelli**:
+1. **DataEditor**: la funzione `scrollToDate(date)` esistente deve usare `dataTableRef?.navigateToRowId(date)` (che ora include auto-scroll)
+2. **FxDataEditorSection**: esporre `scrollToDate(date)` che delega al DataEditor interno
+3. **+page.svelte**: nel handler click del grafico, se `showDataEditor` è true, chiamare `fxDataEditorSectionRef.scrollToDate(clickedDate)`
+
+**Nota**: Da verificare se il chart emette già un evento click con la data del punto cliccato. Se no, va aggiunto il handler click al chart.
 
 ---
 
@@ -82,95 +126,156 @@ $effect(() => {
 
 **File**: `frontend/src/lib/components/table/ColumnVisibilityToggle.svelte`
 
-**Problema**: Il dropdown si apre traslato a sinistra (`left: 576px` con `rect.right - 220`) lasciando un gap vuoto a destra. La logica `rect.right - 220` è fissa e non si adatta al contenuto `w-max`.
+**Problema**: Il dropdown si apre traslato a sinistra (`left: 576px` con `rect.right - 220`) lasciando un gap vuoto a destra.
 
-**Soluzione**: Allineare il bordo destro del dropdown al bordo destro del trigger button:
-```ts
-const left = Math.max(8, rect.right - dropdownEl.offsetWidth);
-```
-Dato che il dropdown non esiste ancora quando calcoliamo, usare un approccio a 2 fasi:
-1. Posizionare inizialmente allineato a destra del trigger
-2. Dopo il render, misurare la larghezza effettiva e riposizionare se necessario
-Oppure: usare `right` invece di `left`:
+**Soluzione**: Usare `right` nel CSS fixed per allineare il bordo destro del dropdown al bordo destro del trigger:
 ```ts
 const right = window.innerWidth - rect.right;
-dropdownStyle = `position:fixed; right:${right}px; ...`;
+dropdownStyle = `position:fixed; right:${right}px; top:${top}; bottom:${bottom}; z-index:9999;`;
 ```
+Rimuovere `left` dal calcolo.
 
 ---
 
-### 7. MeasurePanel header — Schema layout responsive (da confermare)
+### 7. MeasurePanel header — Layout responsive a 2 breakpoint
 
 **File**: `frontend/src/lib/components/charts/MeasurePanel.svelte`
 
-Layout del measure card header in 3 breakpoint:
+Layout del measure card header in 2 breakpoint implementati (+ 1 pianificato, non implementato fino a conferma utente):
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-WIDE (>640px) — tutto su una riga:
-┌──────────────────────────────────────────────────────────────┐
-│ ▾  📅 From: Jul 21 | To: Mar 23   -5.59%  · 245d  ██─── 👁 🗑│
-└──────────────────────────────────────────────────────────────┘
- ↑chevron  ↑DateRangePicker(compact)  ↑stats   ↑style ↑col ↑del
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WIDE (≥640px) — tutto su una riga:
+┌────────────────────────────────────────────────────────────────────┐
+│ ▾  📅 From: Jul 21 | To: Mar 23  -5.59%  · 245d   ██──────── 👁 🗑│
+└────────────────────────────────────────────────────────────────────┘
+ ↑chevron  ↑DateRangePicker(compact)  ↑stats       ↑style  ↑col ↑del
+                                                    ↑allineato a DESTRA
+                                                    max-w-[200px]
+                                                    min-w-[100px]
+                                                    si comprime quando
+                                                    i giorni arrivano
+                                                    a toccarlo
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TABLET (~400-640px) — 2 righe:
-┌──────────────────────────────────────────────────────┐
-│ ▾  📅 From: Jul 21 | To: Mar 23   -5.59%  · 245d    │
-│    ██────────────────────────────────────── 👁 🗑     │
-└──────────────────────────────────────────────────────┘
- riga1: chevron + date + stats (basis-full wraps)
- riga2: style (flex-1, grows to fill) + col + trash
+Elementi in ordine nel flex:
+[chevron] [DateRangePicker compact] [stats (Δ% · days)] [spacer flex-1] [style] [👁] [🗑]
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MOBILE (<400px) — 2 righe, date stacked:
-┌──────────────────────────────────────┐
-│ ▾  📅 From: Jul 21  -5.59%  · 245d  │
-│       To: Mar 23                     │
-│    ██──────────────────── 👁 🗑       │
-└──────────────────────────────────────┘
- riga1: chevron + date(stacked) + stats
- riga2: style + col + trash
+Il gruppo style+col+trash è allineato a DESTRA (spacer flex-1 prima di style).
+Lo style editor: flex-shrink, min-w-[100px], max-w-[200px].
+Si comprime elasticamente quando lo spazio diminuisce, fino a min 100px.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TABLET (<640px) — 2 righe (l'altezza viene dal DRP stacked):
+┌──────────────────────────────────────────────────────────────────────┐
+│ ▾  📅 From: Jul 21       -5.59%  · 245d                         🗑   │
+│       To: Mar 23        ██────────────────────────────────      👁   │
+└──────────────────────────────────────────────────────────────────────┘
+ ↑chevron | ↑DateRangePicker(stacked) | ↑ blocco con 2 righe:          | ↑blocco con 2 righe:
+          |  Allineato a sinistra     |   stats sopra, style sotto     |   cestino sopra, occhio sotto
+          |                           |   allineato a destra come      |   allineati a destra come
+          |                           |   blocco, stats text-left      |   blocco, in colonna
+
+Il DRP stacked crea naturalmente 2 righe visive di altezza. Gli altri elementi
+si organizzano internamente in 2 righe per occupare la stessa altezza.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MOBILE (<400px) — ⚠️ PIANIFICATO, NON IMPLEMENTARE:
+⚠️ Da implementare SOLO dopo conferma utente che il layout tablet
+   è troppo stretto su schermi molto piccoli.
+
+┌──────────────────────────────────┐
+│ 📅 From: Jul 21 | To: Mar 23  🗑│  ← riga 1: DRP compact orizzontale + trash
+│ -5.59%  · 245d                👁 │  ← riga 2: stats
+│ ██──────────────────           │  ← riga 3: style + col visibility
+└──────────────────────────────────┘
+
+Cestino in alto a destra, occhio appena sotto.
+DateRangePicker torna compact (orizzontale) per risparmiare spazio verticale.
 ```
 
-Il punto chiave è che la linea style (SignalStyleEditor) deve:
-- **Wide**: avere width naturale (min-w-[80px]) e stare nella stessa riga
-- **Tablet/mobile**: occupare tutto lo spazio disponibile nella riga 2 (`flex-1`)
+**Implementazione dettagliata**:
 
-L'attuale `basis-full sm:basis-auto` sulla riga 1 è corretto. Il problema è che il gruppo riga 2 ha `ml-auto` che lo tiene a destra — quando fa wrap deve diventare `w-full` per occupare tutta la riga.
+1. **Breakpoint reattivo** — `matchMedia` in MeasurePanel per `isNarrow`:
+   ```ts
+   let isNarrow = $state(false);
+   $effect(() => {
+       const mql = window.matchMedia('(max-width: 639px)');
+       isNarrow = mql.matches;
+       const handler = (e: MediaQueryListEvent) => { isNarrow = e.matches; };
+       mql.addEventListener('change', handler);
+       return () => mql.removeEventListener('change', handler);
+   });
+   ```
+   Poi passare `stacked={isNarrow}` al DateRangePicker di ogni misura.
 
-**Soluzione**: Struttura container con `flex-wrap` e 2 gruppi:
-- Gruppo 1 (dates): `flex items-center gap-2 flex-1 min-w-[200px]`
-- Gruppo 2 (style+controls): `flex items-center gap-1.5 flex-1 min-w-[120px]`
-  - SignalStyleEditor wrapper: `flex-1 min-w-[50px] max-w-[200px]`
+2. **Struttura HTML — un unico flex row per entrambi i breakpoint**:
+   ```svelte
+   <!-- Container: una sola riga flex. L'altezza viene dal DRP stacked (2 righe). -->
+   <div class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2">
+
+       <!-- 1. Chevron (sempre centrato verticalmente) -->
+       <button class="self-center">▾</button>
+
+       <!-- 2. DateRangePicker -->
+       <DateRangePicker stacked={isNarrow} />
+
+       <!-- 3. Stats + Style wrapper (flex-1 occupa tutto lo spazio rimanente) -->
+       <div class="flex-1 flex {isNarrow
+           ? 'flex-col justify-between'     ← narrow: stats sopra, style sotto
+           : 'items-center gap-2'           ← wide:  stats e style in riga
+       }">
+           <span class="whitespace-nowrap text-xs">-5.59% · 245d</span>
+           {#if !isNarrow}<div class="flex-1" />{/if}   ← spacer solo in wide
+           <SignalStyleEditor class="min-w-[100px] max-w-[200px] flex-shrink" />
+       </div>
+
+       <!-- 4. Icons: eye e trash -->
+       <div class="flex {isNarrow
+           ? 'flex-col-reverse justify-between'  ← narrow: 🗑 sopra, 👁 sotto
+           : 'items-center'                      ← wide: 👁, 🗑 in riga
+       } gap-1">
+           <ColumnVisibilityToggle />   <!-- 👁 -->
+           <button>🗑</button>          <!-- trash -->
+       </div>
+   </div>
+   ```
+
+3. **Come funziona il layout tablet senza flex-wrap**:
+   - Il container è `flex items-stretch` → tutti i figli hanno la stessa altezza
+   - Il DRP stacked è naturalmente alto 2 righe → detta l'altezza del container
+   - Il wrapper stats+style è `flex-col justify-between` → stats in alto, style in basso
+   - Le icone sono `flex-col-reverse justify-between` → trash (ultimo nel DOM) in alto, eye in basso
+
+4. **Ordine icone nel DOM**: `[👁 eye] [🗑 trash]`
+   - Wide (`flex-row`): 👁 poi 🗑 (left-to-right) ✓
+   - Narrow (`flex-col-reverse`): 🗑 sopra, 👁 sotto ✓
 
 ---
 
-### 8. Tooltip headerTooltip — Formato frazione LaTeX
+### 8. Tooltip headerTooltip — Formato frazione LaTeX grande
 
 **File**: `frontend/src/lib/components/charts/MeasurePanel.svelte`
 
-**Problema**: La formula `$(1 + \Delta\%)^{365/d} - 1$` mostra `365/d` in riga, non come una vera frazione, e il testo è piccolo.
+**Problema**: La formula `$(1 + \Delta\%)^{365/d} - 1$` mostra `365/d` in riga (non come vera frazione) e il testo è piccolo.
 
-**Soluzione**: Usare `\frac{365}{d}` per una vera frazione LaTeX e aggiungere `\large` per ingrandire:
+**Soluzione**: Usare `\frac{365}{d}` per una vera frazione e `\large` per ingrandire:
 ```
 $\large (1 + \Delta\%)^{\frac{365}{d}} - 1$
 ```
 
 ---
 
-### 9. MeasurePanel — Auto-delete misura su range invalido (fix #15)
+### 9. MeasurePanel — Auto-delete misura su range invalido (fix corretto)
 
 **File**: `frontend/src/lib/components/charts/MeasurePanel.svelte`
 
-**Problema**: `updateMeasureDates` controlla se ci sono dati generici nel range, ma la card della misura rimane visibile anche se `getMeasurement` torna `null` (perché le date esatte start/end non hanno un data point). La card mostra l'header ma senza tabella.
+**Problema**: `updateMeasureDates` controllava se ci sono dati generici nel range (`chartData.some(d => d.date >= s && d.date <= e)`), ma la card della misura restava visibile quando `getMeasurement` tornava `null` (le date esatte start/end non avevano un data point). L'utente si aspetta che il cambio date range cancelli automaticamente la misura se invalida.
 
-**Soluzione**: Dopo l'update delle date, verificare se `getMeasurement` torna `null` — se sì, rimuovere la misura:
+**Soluzione**: Dopo update date, verificare con `getMeasurement`. Se ritorna `null`, rimuovere la misura:
 ```ts
 m.params.startDate = s;
 m.params.endDate = e;
 measures = [...measures];
-// Auto-delete if new range produces no valid measurement
 const check = m.getMeasurement(chartData);
 if (!check) {
     removeMeasure(id);
@@ -181,34 +286,19 @@ emitRendered();
 
 ---
 
-### 10. DateRangePicker stacked — Ripristino width vincolata
-
-**File**: `frontend/src/lib/components/ui/DateRangePicker.svelte`
-
-**Problema**: Il DateRangePicker nella MeasurePanel (con `compact=true`, senza `stacked`) si allarga a tutta la larghezza della pagina. Il fix `inline-block` della Round 7.1 doveva risolvere solo il caso stacked nel filtro, ma ha rotto il caso non-stacked.
-
-**Soluzione**: Combinato con step 3 — riportare sempre `w-full` sul container, ma aggiungere la classe `max-w-fit` solo quando `compact` è true (senza stacked), così il DateRangePicker non si allarga oltre il suo contenuto naturale in contesti come il MeasurePanel header.
-
-Concretamente: il container `<div class="relative drp-trigger ...">` dovrebbe avere:
-- Default: `w-full` (come prima)
-- Se `compact && !stacked`: aggiungere anche `max-w-fit` per limitare la crescita
-
----
-
 ## Decisioni confermate
 
 | # | Feedback | Decisione |
 |---|----------|-----------|
-| 1 | Bottone Cancel dark mode | `dark:text-gray-100` per testo più contrastante |
-| 2 | Scroll chiude ColumnVisibilityToggle | Listener `scroll` capture come DateRangePicker/SingleDatePicker |
-| 3 | DateRangePicker filtro troppo stretto | Riportare `w-full` sempre, il compact per MeasurePanel usa `max-w-fit` |
-| 4 | Selezione righe senza counter | Aggiungere counter + deselect nella toolbar DataEditor |
-| 5 | Click grafico → scroll tabella | Esporre `scrollToDate` su FxDataEditorSection, collegare al click chart |
-| 6 | ColumnVisibility dropdown traslato | Usare `right` per allineare bordo destro |
-| 7 | MeasurePanel layout responsive | 2 gruppi con `flex-wrap`, style `flex-1 min-w-[50px] max-w-[200px]` |
-| 8 | Formula in vera frazione | `\frac{365}{d}` + `\large` in LaTeX |
-| 9 | Auto-delete misura range invalido | Check `getMeasurement` dopo update, remove se null |
-| 10 | DateRangePicker allarga troppo | `max-w-fit` su compact non-stacked |
+| 1 | Cancel dark mode | `dark:text-gray-100` |
+| 2 | ColumnVisibilityToggle scroll | Close on scroll (capture listener) |
+| 3 | DateRangePicker width | Riportare `w-full` sempre, parent controlla contenimento |
+| 4 | Selection counter | **Rimuovere** column visibility dalla `DataTableToolbar` (nessuna istanza la usa). La toolbar diventa solo counter + bulk actions, mostrata **sempre** quando ci sono righe selezionate. |
+| 5 | Chart click → table scroll | Chain: +page → FxDataEditorSection → DataEditor → DataTable.navigateToRowId |
+| 6 | ColumnVisibility posizione | Usare `right` per allineare bordo destro |
+| 7 | MeasurePanel layout | 2 breakpoint: wide ≥640px (1 riga flex, style allineato a destra con spacer flex-1, min 100px max 200px) + tablet <640px (stessa riga flex ma con DRP stacked che crea 2 righe visive, stats/style in flex-col, icone in flex-col-reverse). Mobile pianificato ma NON implementato. |
+| 8 | Formula LaTeX | `\frac{365}{d}` + `\large` |
+| 9 | Auto-delete misura | `getMeasurement` check dopo update, remove se null |
 
 ---
 
@@ -217,10 +307,26 @@ Concretamente: il container `<div class="relative drp-trigger ...">` dovrebbe av
 | File | Modifiche |
 |------|-----------|
 | `FxDataEditorSection.svelte` | Cancel button dark text, esporre `scrollToDate` |
-| `ColumnVisibilityToggle.svelte` | Close on scroll, posizione allineata a destra |
-| `DateRangePicker.svelte` | Ripristino `w-full`, `max-w-fit` per compact |
-| `DataEditor.svelte` | Counter selezione + deselect, `scrollToDate` via DataTable |
-| `MeasurePanel.svelte` | Header 2 gruppi responsive, formula LaTeX, auto-delete |
-| `DataTable.svelte` | `clearSelection` public API (se necessario) |
+| `ColumnVisibilityToggle.svelte` | Close on scroll, posizione allineata a destra (`right`) |
+| `DateRangePicker.svelte` | Ripristino `w-full` sempre |
+| `DataTableToolbar.svelte` | **Rimuovere** dropdown colonne + drag&drop. Tenere solo: `selectedCount`, `bulkActions`, `onClearSelection` |
+| `DataTable.svelte` | Condizione toolbar: `selectedRows.length > 0 && bulkActions.length > 0` (indipendente da `showToolbar`) |
+| `DataEditor.svelte` | `scrollToDate` via `navigateToRowId` |
+| `MeasurePanel.svelte` | `matchMedia` per `isNarrow`, header responsive 2 breakpoint, `stacked={isNarrow}`, formula LaTeX `\frac`, auto-delete |
 | `+page.svelte` (fx/[pair]) | Collegamento click chart → scrollToDate |
 
+---
+
+## Domande risolte
+
+| Q | Domanda | Risposta |
+|---|---------|----------|
+| Q1 | DRP stacked nel tablet | **Opzione A**: `matchMedia('(max-width: 639px)')` → `stacked={isNarrow}`. DEVE essere stacked sotto 640px. |
+| Q2 | Cestino posizione tablet | `flex-col-reverse` sul wrapper icone: DOM `[👁] [🗑]` → wide: riga [👁 🗑], narrow: colonna inversa [🗑 sopra, 👁 sotto]. Nessun `absolute`, nessun padding extra. |
+
+---
+
+## Domande aperte
+
+### Q3. Step 5 — Click punto grafico
+Il chart emette già un evento click con la data del punto cliccato? Da verificare nel codice di PriceChartFull/LineChart durante l'implementazione. Se non esiste, va aggiunto.

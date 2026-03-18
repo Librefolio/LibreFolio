@@ -731,12 +731,10 @@
 </script>
 
 <div class="datatable-container">
-    <!-- Toolbar -->
-    {#if showToolbar && (enableColumnVisibility || bulkActions.length > 0)}
+    <!-- Toolbar: selection counter + bulk actions (shown when rows are selected) -->
+    {#if selectedRows.length > 0 && bulkActions.length > 0}
         <DataTableToolbar
                 selectedCount={selectedRows.length}
-                columns={orderedColumns.map(c => ({ id: c.id, header: c.header }))}
-                {columnVisibility}
                 bulkActions={bulkActions.map(a => ({
 				id: a.id,
 				icon: a.icon,
@@ -744,9 +742,6 @@
 				variant: a.variant,
 				onClick: () => handleBulkAction(a),
 			}))}
-                onToggleColumn={toggleColumnVisibility}
-                onResetColumns={resetColumns}
-                onReorderColumns={reorderColumns}
                 onClearSelection={clearAllSelection}
         />
     {/if}

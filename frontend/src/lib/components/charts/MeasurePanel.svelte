@@ -58,6 +58,16 @@
     let expandedIds = $state<Set<string>>(new Set());
     let measureTableRefs = $state<Record<string, DataTable<MeasureSummaryRow> | undefined>>({});
 
+    // Responsive breakpoint for tablet layout (<640px)
+    let isNarrow = $state(false);
+    $effect(() => {
+        const mql = window.matchMedia('(max-width: 639px)');
+        isNarrow = mql.matches;
+        const handler = (e: MediaQueryListEvent) => { isNarrow = e.matches; };
+        mql.addEventListener('change', handler);
+        return () => mql.removeEventListener('change', handler);
+    });
+
     // =========================================================================
     // Measure mode
     // =========================================================================
@@ -146,16 +156,16 @@
         // Ensure start <= end
         const [s, e] = newStart <= newEnd ? [newStart, newEnd] : [newEnd, newStart];
         if (s === e) return; // measure needs 2 different days
-        // Check if new range covers any chart data
-        const hasData = chartData.some(d => d.date >= s && d.date <= e);
-        if (!hasData) {
-            // Auto-delete: new range doesn't cover any data points
-            removeMeasure(id);
-            return;
-        }
         m.params.startDate = s;
         m.params.endDate = e;
         measures = [...measures]; // trigger reactivity
+        // Check if the new range produces a valid measurement (exact date matches needed)
+        const check = m.getMeasurement(chartData);
+        if (!check) {
+            // Auto-delete: range doesn't have matching data points for start/end
+            removeMeasure(id);
+            return;
+        }
         emitRendered();
     }
 
@@ -266,7 +276,7 @@
         },
         {
             id: 'annualizedPct', header: 'Δ%/yr', type: 'number',
-            headerTooltip: '$(1 + \\Delta\\%)^{365/d} - 1$',
+            headerTooltip: '$\\large (1 + \\Delta\\%)^{\\frac{365}{d}} - 1$',
             cell: (r) => r.annualizedPct !== null
                 ? htmlNum(r.annualizedPct, fmtPct)
                 : ({type: 'html', html: '<span class="text-gray-400">—</span>'}),
@@ -321,66 +331,78 @@
             {#each measurements as {measure, result}}
                 {@const isExpanded = expandedIds.has(measure.id)}
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-visible">
-                    <!-- Card header -->
+                    <!-- Card header: responsive layout (wide=1 row, tablet=2 rows via stacked DRP) -->
                     <div
-                        class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
+                        class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
                                     hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                     >
-                        <!-- Row 1: chevron + dates/picker + stats -->
-                        <div class="flex items-center gap-2 min-w-0 flex-1 basis-full sm:basis-auto">
-                            <button
-                                type="button"
-                                class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0"
-                                onclick={() => toggleExpand(measure.id)}
-                            >
-                                <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
-                            </button>
-                            {#if isExpanded}
-                                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                <div class="min-w-0 max-w-[300px]" onclick={(e) => e.stopPropagation()}>
-                                    <DateRangePicker
-                                        start={String(measure.params.startDate)}
-                                        end={String(measure.params.endDate)}
-                                        showPresets={false}
-                                        showCustomWindow={false}
-                                        compact={true}
-                                        onchange={(s, e) => updateMeasureDates(measure.id, s, e)}
-                                    />
-                                </div>
+                        <!-- 1. Chevron -->
+                        <button
+                            type="button"
+                            class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0 self-center"
+                            onclick={() => toggleExpand(measure.id)}
+                        >
+                            <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
+                        </button>
+
+                        <!-- 2. DateRangePicker (or collapsed summary) -->
+                        {#if isExpanded}
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <div class="min-w-0 max-w-[300px] shrink-0 self-center" onclick={(e) => e.stopPropagation()}>
+                                <DateRangePicker
+                                    start={String(measure.params.startDate)}
+                                    end={String(measure.params.endDate)}
+                                    showPresets={false}
+                                    showCustomWindow={false}
+                                    compact={true}
+                                    stacked={isNarrow}
+                                    onchange={(s, e) => updateMeasureDates(measure.id, s, e)}
+                                />
+                            </div>
+                        {:else}
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
+                                📏 {measure.params.startDate} → {measure.params.endDate}
                                 {#if result}
+                                    <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                        {fmtPct(result.deltaPct)}
+                                    </span>
+                                    <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
+                                {/if}
+                            </span>
+                        {/if}
+
+                        <!-- 3. Stats + Style wrapper (flex-1 fills remaining space) -->
+                        <div class="flex-1 flex {isNarrow ? 'flex-col justify-between' : 'items-center gap-2'} min-w-0">
+                            {#if isExpanded && result}
+                                <div class="flex items-center gap-2 shrink-0">
                                     <span class="text-xs font-mono shrink-0 {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                                         {fmtPct(result.deltaPct)}
                                     </span>
                                     <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>
-                                {/if}
-                            {:else}
-                                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer" onclick={() => toggleExpand(measure.id)}>
-                                    📏 {measure.params.startDate} → {measure.params.endDate}
-                                    {#if result}
-                                        <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                                            {fmtPct(result.deltaPct)}
-                                        </span>
-                                        <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
-                                    {/if}
-                                </span>
+                                </div>
+                            {:else if !isExpanded}
+                                <!-- spacer when collapsed (no stats shown, already in collapsed summary) -->
                             {/if}
-                        </div>
-
-                        <!-- Row 2 (wraps on narrow): style editor + column visibility + trash -->
-                        <div class="flex items-center gap-1.5 ml-auto">
+                            {#if !isNarrow}<div class="flex-1"></div>{/if}
                             {#if isExpanded}
                                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                                 <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                <div class="flex items-center min-w-[80px] max-w-[200px] flex-1" onclick={(e) => e.stopPropagation()}>
+                                <div class="flex items-center min-w-[100px] max-w-[200px] flex-shrink" onclick={(e) => e.stopPropagation()}>
                                     <SignalStyleEditor
                                         style={measure.style}
                                         onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
                                         simplified
                                     />
                                 </div>
+                            {/if}
+                        </div>
+
+                        <!-- 4. Icons: eye + trash (flex-col-reverse in narrow → trash on top, eye on bottom) -->
+                        <div class="flex {isNarrow ? 'flex-col-reverse justify-between' : 'items-center'} gap-1 shrink-0">
+                            {#if isExpanded}
                                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                                 <div onclick={(e) => e.stopPropagation()}>

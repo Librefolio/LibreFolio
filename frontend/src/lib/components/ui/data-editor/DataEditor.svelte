@@ -422,10 +422,7 @@
 
     /** Scroll to a specific date in the table */
     export function scrollToDate(date: string) {
-        tick().then(() => {
-            const el = document.querySelector(`[data-date="${date}"]`);
-            el?.scrollIntoView({behavior: 'smooth', block: 'center'});
-        });
+        dataTableRef?.navigateToRowId(date);
     }
 </script>
 
