@@ -239,6 +239,7 @@ export function buildMainSeries(
             smooth: false,
             symbol: 'none',
             showSymbol: false,
+            sampling: 'lttb',
             yAxisIndex: 0,
             lineStyle: {width: lineWidth, color: lineColor},
             itemStyle: {color: itemColor},

@@ -46,7 +46,8 @@
     "discardChanges": "Annuler les Modifications?",
     "discardChangesMessage": "Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir fermer?",
     "sync": "Synchroniser",
-    "detail": "Détail"
+    "detail": "Détail",
+    "continue": "Continuer"
   },
   "table": {
     "rowsPerPage": "Lignes par page",
@@ -805,6 +806,8 @@
     "editRatesBtn": "Modifier les taux",
     "providers": "Fournisseurs",
     "syncFromProvider": "Synchroniser les taux",
-    "refreshData": "Actualiser les donnees"
+    "refreshData": "Actualiser les donnees",
+    "swapConfirmTitle": "Modifications non enregistrées",
+    "swapConfirmMessage": "Vous avez des modifications non enregistrées dans l'éditeur de taux. Inverser la direction les supprimera. Continuer ?"
   }
 }

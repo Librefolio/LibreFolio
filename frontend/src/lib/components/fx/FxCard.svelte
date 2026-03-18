@@ -12,6 +12,7 @@
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
+    import {isCardInverted, setCardInverted} from '$lib/stores/fxCardInversionStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
@@ -68,7 +69,12 @@
     // State
     // =========================================================================
 
-    let inverted = $state(false);
+    // Helper to read persisted inversion state (avoids Svelte warning about capturing props in $state)
+    function getInitialInversion(): boolean {
+        return isCardInverted(slug);
+    }
+
+    let inverted = $state(getInitialInversion());
     let localViewModeOverride = $state<'absolute' | 'percentage' | null>(null);
 
     // Card view mode: local override takes precedence, otherwise follows global
@@ -151,7 +157,9 @@
     // =========================================================================
 
     function handleCardClick() {
-        goto(`/fx/${slug}`);
+        // If inverted, navigate to the inverted URL — detail page reads direction from URL
+        const target = inverted ? `${displayBase}-${displayQuote}` : slug;
+        goto(`/fx/${target}`);
     }
 
     function stop(e: MouseEvent) { e.stopPropagation(); }
@@ -179,7 +187,7 @@
 
                 <button
                     class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    onclick={(e) => { stop(e); inverted = !inverted; }}
+                    onclick={(e) => { stop(e); inverted = !inverted; setCardInverted(slug, inverted); }}
                     title="Swap direction"
                 >
                     <ArrowLeftRight size={14} />

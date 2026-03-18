@@ -46,7 +46,8 @@
     "discardChanges": "Annullare le Modifiche?",
     "discardChangesMessage": "Hai modifiche non salvate. Sei sicuro di voler chiudere?",
     "sync": "Sincronizza",
-    "detail": "Dettaglio"
+    "detail": "Dettaglio",
+    "continue": "Continua"
   },
   "table": {
     "rowsPerPage": "Righe per pagina",
@@ -805,6 +806,8 @@
     "editRatesBtn": "Modifica tassi",
     "providers": "Provider",
     "syncFromProvider": "Sincronizza tassi dal provider",
-    "refreshData": "Aggiorna dati"
+    "refreshData": "Aggiorna dati",
+    "swapConfirmTitle": "Modifiche non salvate",
+    "swapConfirmMessage": "Hai modifiche non salvate nell'editor dei tassi. Invertire la direzione le cancellerà. Continuare?"
   }
 }

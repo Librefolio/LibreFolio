@@ -46,7 +46,8 @@
     "discardChanges": "Discard Changes?",
     "discardChangesMessage": "You have unsaved changes. Are you sure you want to close?",
     "sync": "Sync",
-    "detail": "Detail"
+    "detail": "Detail",
+    "continue": "Continue"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -805,6 +806,8 @@
     "editRatesBtn": "Edit rates",
     "providers": "Providers",
     "syncFromProvider": "Sync rates from provider",
-    "refreshData": "Refresh data"
+    "refreshData": "Refresh data",
+    "swapConfirmTitle": "Unsaved changes",
+    "swapConfirmMessage": "You have unsaved changes in the rate editor. Swapping direction will discard them. Continue?"
   }
 }

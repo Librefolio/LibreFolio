@@ -32,8 +32,10 @@
         chartData: FxDataPoint[];
         /** Whether save is in progress */
         saving?: boolean;
+        /** Number of dirty (modified) rows — exposed for parent to read */
+        dirtyCount?: number;
         /** Called after successful save, with optional expanded date range */
-        onsave?: (expandedRange?: {start: string; end: string}) => void;
+        onsave?: (expandedRange?: { start: string; end: string }) => void;
         /** Called when edit is cancelled */
         oncancel?: () => void;
         /** Dirty rows emitted as a preview RenderedSignal overlay (purple) */
@@ -45,6 +47,7 @@
         quote,
         chartData,
         saving = $bindable(false),
+        dirtyCount = $bindable(0),
         onsave,
         oncancel,
         onpendingchange,
@@ -193,7 +196,7 @@
 
             // Compute expanded date range if appended rows fall outside current chart range
             const appendedRows = dirty.filter(r => r.status === 'appended');
-            let expandedRange: {start: string; end: string} | undefined;
+            let expandedRange: { start: string; end: string } | undefined;
             if (appendedRows.length > 0 && chartData.length > 0) {
                 const chartDates = chartData.map(d => d.date).sort();
                 const chartStart = chartDates[0];
@@ -235,7 +238,12 @@
     // Derived
     // =========================================================================
 
-    let dirtyCount = $derived(rows.filter(r => r.status !== 'original').length);
+    let _dirtyCount = $derived(rows.filter(r => r.status !== 'original').length);
+
+    // Sync internal dirty count to bindable prop
+    $effect(() => {
+        dirtyCount = _dirtyCount;
+    });
 </script>
 
 <div class="space-y-3">
@@ -248,29 +256,31 @@
 
     <!-- Data Editor -->
     <DataEditor
-        bind:this={dataEditor}
-        columns={fxColumns}
-        bind:rows
-        baseCurrency={base}
-        quoteCurrency={quote}
-        onchange={handleDataChange}
+            bind:this={dataEditor}
+            columns={fxColumns}
+            bind:rows
+            baseCurrency={base}
+            quoteCurrency={quote}
+            onchange={handleDataChange}
     />
 
     <!-- Save / Cancel bar -->
     <div class="flex items-center justify-end gap-2 px-1">
         <button
-            class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors"
-            onclick={handleSave}
-            disabled={saving || dirtyCount === 0}
+                class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors"
+                onclick={handleSave}
+                disabled={saving || _dirtyCount === 0}
         >
-            <Save size={15} /> {saving ? 'Saving...' : `Save (${dirtyCount})`}
+            <Save size={15}/> {saving ? 'Saving...' : `Save (${_dirtyCount})`}
         </button>
         <button
-            class="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
-            onclick={handleCancel}
+                class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                onclick={handleCancel}
         >
-            <X size={15} /> Cancel
+            <X size={15}/>
+            Cancel
         </button>
+
     </div>
 </div>
 

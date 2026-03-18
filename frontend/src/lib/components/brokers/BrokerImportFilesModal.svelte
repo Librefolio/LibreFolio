@@ -19,6 +19,9 @@
     import {FileEditModal} from '$lib/components/ui/media';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import SelectionBar from '$lib/components/table/SelectionBar.svelte';
+    import {Trash2} from 'lucide-svelte';
     import type {BrimFile} from '$lib/types';
 
     interface Props {
@@ -49,6 +52,10 @@
     let editingFile = $state<File | null>(null);
     let editingFileIndex = $state<number>(-1);
     let showFileEdit = $state(false);
+
+    // FilesTable ref + selection tracking
+    let filesTableRef: FilesTable | undefined = $state(undefined);
+    let selectedFileIds = $state<string[]>([]);
 
     // Load files when modal opens or brokerId changes
     $effect(() => {
@@ -188,7 +195,13 @@
                         {$_('brokers.importFiles')} - {brokerName}
                     </h2>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <SelectionBar
+                        selectedCount={selectedFileIds.length}
+                        actions={[{id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: () => { handleDeleteMultiple(selectedFileIds); filesTableRef?.clearSelection(); }}]}
+                        onClearSelection={() => filesTableRef?.clearSelection()}
+                    />
+                    <ColumnVisibilityToggle tableRef={filesTableRef?.getTableRef()} />
                     <a
                             href="/files?tab=brim&broker={brokerId}"
                             class="manage-link"
@@ -245,11 +258,13 @@
                     </div>
                 {:else}
                     <FilesTable
+                            bind:this={filesTableRef}
                             {files}
                             type="brim"
                             onDelete={handleDelete}
                             onDeleteMultiple={handleDeleteMultiple}
                             showBrokerColumn={false}
+                            onSelectionChange={(ids) => selectedFileIds = ids}
                     />
                 {/if}
             </div>
