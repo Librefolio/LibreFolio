@@ -205,7 +205,7 @@
     }
 </script>
 
-<div class="min-w-[240px] flex-1">
+<div class="min-w-[240px]">
     <!-- Month/Year navigation header -->
     <div class="flex items-center justify-between mb-2">
         <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={onPrevMonth}>
@@ -218,6 +218,8 @@
                 onchange={(v) => onSetMonth(parseInt(v))}
                 class="inline-block w-auto"
                 dropdownPosition="auto"
+                compact
+                showChevron={false}
             />
             <SimpleSelect
                 value={String(year)}
@@ -225,6 +227,8 @@
                 onchange={(v) => onSetYear(parseInt(v))}
                 class="inline-block w-auto"
                 dropdownPosition="auto"
+                compact
+                showChevron={false}
             />
         </div>
         <div class="flex items-center gap-0.5">

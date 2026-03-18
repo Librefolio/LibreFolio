@@ -111,6 +111,7 @@
         return Math.round(((value - numberMin) / (numberMax - numberMin)) * 100);
     }
 
+    // LINEAR scale: number slider maps 0-100 position linearly to [numberMin, numberMax]
     function sliderPosToNum(pos: number): number {
         const raw = numberMin + (pos / 100) * (numberMax - numberMin);
         // Round to reasonable precision
@@ -205,7 +206,7 @@
     }
 
 
-    // Logarithmic scale for slider (0-100 position to bytes)
+    // LOGARITHMIC scale: size slider maps 0-100 position logarithmically to [numberMin, numberMax]
     function sliderPosToBytes(pos: number): number {
         if (pos <= 0) return numberMin;
         if (pos >= 100) return numberMax;

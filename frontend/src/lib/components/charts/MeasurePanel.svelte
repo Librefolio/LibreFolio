@@ -11,7 +11,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Trash2, ChevronDown, Eye, EyeOff} from 'lucide-svelte';
+    import {Trash2, ChevronDown} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
@@ -20,6 +20,7 @@
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
 
     // =========================================================================
@@ -55,7 +56,7 @@
     let measureActive = $state(false);
     let nextId = $state(0);
     let expandedIds = $state<Set<string>>(new Set());
-    let hiddenTableIds = $state<Set<string>>(new Set());
+    let measureTableRefs = $state<Record<string, DataTable<MeasureSummaryRow> | undefined>>({});
 
     // =========================================================================
     // Measure mode
@@ -145,6 +146,13 @@
         // Ensure start <= end
         const [s, e] = newStart <= newEnd ? [newStart, newEnd] : [newEnd, newStart];
         if (s === e) return; // measure needs 2 different days
+        // Check if new range covers any chart data
+        const hasData = chartData.some(d => d.date >= s && d.date <= e);
+        if (!hasData) {
+            // Auto-delete: new range doesn't cover any data points
+            removeMeasure(id);
+            return;
+        }
         m.params.startDate = s;
         m.params.endDate = e;
         measures = [...measures]; // trigger reactivity
@@ -258,7 +266,7 @@
         },
         {
             id: 'annualizedPct', header: 'Δ%/yr', type: 'number',
-            headerTooltip: '(1 + Δ%)^(365/days) − 1',
+            headerTooltip: '$(1 + \\Delta\\%)^{365/d} - 1$',
             cell: (r) => r.annualizedPct !== null
                 ? htmlNum(r.annualizedPct, fmtPct)
                 : ({type: 'html', html: '<span class="text-gray-400">—</span>'}),
@@ -315,73 +323,69 @@
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-visible">
                     <!-- Card header -->
                     <div
-                        class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
+                        class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
                                     hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                     >
-                        <!-- Left group: chevron + dates/picker + stats -->
-                        <button
-                            type="button"
-                            class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 text-left min-w-0 shrink-0"
-                            onclick={() => toggleExpand(measure.id)}
-                        >
-                            <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
-                        </button>
-                        {#if isExpanded}
-                            <!-- Inline DateRangePicker in header when expanded -->
-                            <!-- svelte-ignore a11y_no_static_element_interactions -->
-                            <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <div class="min-w-0 max-w-[300px]" onclick={(e) => e.stopPropagation()}>
-                                <DateRangePicker
-                                    start={String(measure.params.startDate)}
-                                    end={String(measure.params.endDate)}
-                                    showPresets={false}
-                                    showCustomWindow={false}
-                                    compact={true}
-                                    onchange={(s, e) => updateMeasureDates(measure.id, s, e)}
-                                />
-                            </div>
-                            {#if result}
-                                <span class="text-xs font-mono shrink-0 {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                                    {fmtPct(result.deltaPct)}
-                                </span>
-                                <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>
-                            {/if}
-                        {:else}
-                            <!-- svelte-ignore a11y_no_static_element_interactions -->
-                            <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer" onclick={() => toggleExpand(measure.id)}>
-                                📏 {measure.params.startDate} → {measure.params.endDate}
-                                {#if result}
-                                    <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                                        {fmtPct(result.deltaPct)}
-                                    </span>
-                                    <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
-                                {/if}
-                            </span>
-                        {/if}
-
-                        <!-- Right group: SignalStyleEditor (when expanded) + trash -->
-                        <div class="flex items-center gap-1.5 ml-auto shrink-0">
+                        <!-- Row 1: chevron + dates/picker + stats -->
+                        <div class="flex items-center gap-2 min-w-0 flex-1 basis-full sm:basis-auto">
+                            <button
+                                type="button"
+                                class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0"
+                                onclick={() => toggleExpand(measure.id)}
+                            >
+                                <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
+                            </button>
                             {#if isExpanded}
                                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                                 <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                <div onclick={(e) => e.stopPropagation()}>
+                                <div class="min-w-0 max-w-[300px]" onclick={(e) => e.stopPropagation()}>
+                                    <DateRangePicker
+                                        start={String(measure.params.startDate)}
+                                        end={String(measure.params.endDate)}
+                                        showPresets={false}
+                                        showCustomWindow={false}
+                                        compact={true}
+                                        onchange={(s, e) => updateMeasureDates(measure.id, s, e)}
+                                    />
+                                </div>
+                                {#if result}
+                                    <span class="text-xs font-mono shrink-0 {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                        {fmtPct(result.deltaPct)}
+                                    </span>
+                                    <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>
+                                {/if}
+                            {:else}
+                                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer" onclick={() => toggleExpand(measure.id)}>
+                                    📏 {measure.params.startDate} → {measure.params.endDate}
+                                    {#if result}
+                                        <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                            {fmtPct(result.deltaPct)}
+                                        </span>
+                                        <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
+                                    {/if}
+                                </span>
+                            {/if}
+                        </div>
+
+                        <!-- Row 2 (wraps on narrow): style editor + column visibility + trash -->
+                        <div class="flex items-center gap-1.5 ml-auto">
+                            {#if isExpanded}
+                                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                <div class="flex items-center min-w-[80px] max-w-[200px] flex-1" onclick={(e) => e.stopPropagation()}>
                                     <SignalStyleEditor
                                         style={measure.style}
                                         onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
                                         simplified
                                     />
                                 </div>
-                                <span
-                                    class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded transition-colors cursor-pointer"
-                                    role="button"
-                                    tabindex="-1"
-                                    title={hiddenTableIds.has(measure.id) ? 'Show table' : 'Hide table'}
-                                    onclick={(e) => { e.stopPropagation(); const next = new Set(hiddenTableIds); if (next.has(measure.id)) next.delete(measure.id); else next.add(measure.id); hiddenTableIds = next; }}
-                                    onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); const next = new Set(hiddenTableIds); if (next.has(measure.id)) next.delete(measure.id); else next.add(measure.id); hiddenTableIds = next; }}}
-                                >
-                                    {#if hiddenTableIds.has(measure.id)}<EyeOff size={13} />{:else}<Eye size={13} />{/if}
-                                </span>
+                                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                <div onclick={(e) => e.stopPropagation()}>
+                                    <ColumnVisibilityToggle tableRef={measureTableRefs[measure.id]} />
+                                </div>
                             {/if}
                             <span
                                 class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
@@ -400,9 +404,10 @@
                     {#if isExpanded}
 
                         <!-- Summary table (DataTable) -->
-                        {#if result && !hiddenTableIds.has(measure.id)}
+                        {#if result}
                         <div class="border-t border-gray-200 dark:border-slate-600">
                             <DataTable
+                                bind:this={measureTableRefs[measure.id]}
                                 data={buildSummaryRows(result, measure)}
                                 columns={summaryColumns}
                                 getRowId={(r) => r.id}
@@ -415,6 +420,7 @@
                                 enableColumnResize={true}
                                 enablePagination={false}
                                 tableLayout="auto"
+                                showToolbar={false}
                             />
                         </div>
                         {/if}
