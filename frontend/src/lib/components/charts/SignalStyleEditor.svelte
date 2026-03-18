@@ -45,6 +45,7 @@
     // =========================================================================
 
     let popoverOpen = $state(false);
+    let colorDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     function togglePopover() {
         popoverOpen = !popoverOpen;
@@ -52,6 +53,12 @@
 
     function closePopover() {
         popoverOpen = false;
+    }
+
+    function handleColorInput(e: Event) {
+        const value = (e.currentTarget as HTMLInputElement).value;
+        if (colorDebounceTimer) clearTimeout(colorDebounceTimer);
+        colorDebounceTimer = setTimeout(() => onstylechange('color', value), 100);
     }
 </script>
 
@@ -61,9 +68,10 @@
         value={style.color}
         class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
         title={$t('chartSettings.style.color')}
-        oninput={(e) => onstylechange('color', e.currentTarget.value)}
+        oninput={handleColorInput}
+        onchange={(e) => onstylechange('color', (e.currentTarget as HTMLInputElement).value)}
     />
-    <div class="flex-1 relative min-w-[100px]">
+    <div class="flex-1 relative min-w-[50px]">
         <button
             type="button"
             class="w-full h-7 flex items-center cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors relative"

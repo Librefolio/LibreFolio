@@ -1,6 +1,7 @@
 # Plan: Round 6.2 — Fix feedback test utente FX Detail Page
 
 **Dipendenze**: [`plan-fxDetailBugRound6.prompt.md`](plan-fxDetailBugRound6.prompt.md) (Round 6 + 6.1 completati)
+**Successivo**: [`plan-fxDetailBugRound7.prompt.md`](plan-fxDetailBugRound7.prompt.md)
 
 Bug-fix round basato sul feedback utente post Round 6/6.1. Corregge 10 aree: CSS righe DataTable, positioning filtri, sostituzione select nativi con `SimpleSelect`, popover DateRangePicker, larghezza SingleDatePicker, errore 422 su save, auto-scroll con pagination, eye icon (componente standalone), colore HSL→hex, auto-fit colonne Files, headerTooltip per formula.
 

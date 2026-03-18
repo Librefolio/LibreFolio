@@ -14,7 +14,8 @@
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
-    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, CircleHelp, ExternalLink, Filter, ImageIcon} from 'lucide-svelte';
+    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableToolbar from './DataTableToolbar.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
@@ -682,17 +683,25 @@
 
     /**
      * Navigate to the page containing the row with the given ID, then scroll it into view.
-     * Useful for DataEditor's "Add Row" to jump to the newly appended row.
+     * Reusable: called from DataEditor's "Add Row", chart point click, etc.
      */
     export function navigateToRowId(rowId: string) {
-        if (!enablePagination) return;
         const index = sortedData.findIndex(row => getRowId(row) === rowId);
         if (index < 0) return;
-        const targetPage = Math.floor(index / pagination.pageSize);
-        if (pagination.pageIndex !== targetPage) {
-            pagination = {...pagination, pageIndex: targetPage};
-            saveToStorage(getStorageKey('pageSize'), pagination.pageSize);
+        if (enablePagination) {
+            const targetPage = Math.floor(index / pagination.pageSize);
+            if (pagination.pageIndex !== targetPage) {
+                pagination = {...pagination, pageIndex: targetPage};
+            }
         }
+        // After pagination update, scroll to the row
+        import('svelte').then(({tick}) => tick()).then(() => {
+            // Find the row in the visible table by scanning for matching row ID
+            const rows = document.querySelectorAll('.datatable tbody tr');
+            const positionInPage = enablePagination ? index % pagination.pageSize : index;
+            const targetRow = rows[positionInPage];
+            targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
+        });
     }
 
     /** Get ordered columns info for external visibility control */
@@ -703,6 +712,21 @@
     /** Toggle a column's visibility (external access) */
     export function toggleColumnVisibilityById(columnId: string) {
         toggleColumnVisibility(columnId);
+    }
+
+    /** Get ordered column IDs */
+    export function getColumnOrder(): string[] {
+        return [...columnOrder];
+    }
+
+    /** Set column order (reorder columns) */
+    export function setColumnOrder(newOrder: string[]) {
+        reorderColumns(newOrder);
+    }
+
+    /** Reset column visibility, order and widths to defaults */
+    export function resetColumnLayout() {
+        resetColumns();
     }
 </script>
 
@@ -780,9 +804,12 @@
 
                             <!-- Header tooltip (info icon) -->
                             {#if getColumnTooltip(column)}
-                                <span class="header-tooltip-icon" title={getColumnTooltip(column)}>
-                                    <CircleHelp size={12} />
-                                </span>
+                                {@const tooltipText = getColumnTooltip(column) ?? ''}
+                                <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
+                                    <span class="header-tooltip-icon">
+                                        <Info size={12} />
+                                    </span>
+                                </Tooltip>
                             {/if}
 
                             <!-- Filter button -->
@@ -1168,7 +1195,7 @@
         display: flex;
         align-items: center;
         color: #94a3b8;
-        cursor: help;
+        cursor: pointer;
         flex-shrink: 0;
     }
 
@@ -1622,13 +1649,13 @@
     :global(.dark) .action-btn {
         background: #1e293b;
         border-color: #334155;
-        color: #94a3b8;
+        color: #cbd5e1;
     }
 
     :global(.dark) .action-btn:hover {
         background: #334155;
         border-color: #475569;
-        color: #f1f5f9;
+        color: #f8fafc;
     }
 
     :global(.dark) .action-btn.danger {
@@ -1679,25 +1706,27 @@
 
     /* Row status classes (used via getRowClass prop) */
     :global(tr.row-deleted) td {
-        background: rgba(239, 68, 68, 0.10) !important;
+        background: rgba(239, 68, 68, 0.06) !important;
+        opacity: 0.55;
     }
     :global(.dark) :global(tr.row-deleted) td {
-        background: rgba(239, 68, 68, 0.25) !important;
+        background: rgba(239, 68, 68, 0.20) !important;
+        opacity: 0.55;
     }
     :global(tr.row-edited) td {
-        background: rgba(59, 130, 246, 0.10) !important;
+        background: rgba(59, 130, 246, 0.06) !important;
     }
     :global(.dark) :global(tr.row-edited) td {
-        background: rgba(59, 130, 246, 0.25) !important;
+        background: rgba(59, 130, 246, 0.20) !important;
     }
     :global(tr.row-appended) td {
-        background: rgba(16, 185, 129, 0.10) !important;
+        background: rgba(16, 185, 129, 0.06) !important;
     }
     :global(.dark) :global(tr.row-appended) td {
-        background: rgba(16, 185, 129, 0.25) !important;
+        background: rgba(16, 185, 129, 0.20) !important;
     }
     :global(tr.row-stale) td {
-        background: rgba(245, 158, 11, var(--stale-opacity, 0.06)) !important;
+        background: rgba(245, 158, 11, var(--stale-opacity, 0.04)) !important;
     }
     :global(.dark) :global(tr.row-stale) td {
         background: rgba(245, 158, 11, var(--stale-opacity, 0.08)) !important;

@@ -280,7 +280,11 @@
         if (!triggerEl) return;
         const rect = triggerEl.getBoundingClientRect();
         const popW = 560; // approx width of dual-calendar popover
-        const top = rect.bottom + 8;
+        const popH = 380; // approx height of dual-calendar popover
+        const spaceBelow = window.innerHeight - rect.bottom - 8;
+        const spaceAbove = rect.top - 8;
+        const openAbove = spaceBelow < popH && spaceAbove > spaceBelow;
+        const top = openAbove ? rect.top - popH - 8 : rect.bottom + 8;
         const left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
         popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; z-index: 9999;`;
     }
@@ -320,6 +324,14 @@
         pendingDate = null;
         hoveredDate = null;
     }
+
+    // Close popover on scroll (position: fixed doesn't follow the trigger)
+    $effect(() => {
+        if (!calendarOpen) return;
+        const handleScroll = () => closeCalendar();
+        window.addEventListener('scroll', handleScroll, true);
+        return () => window.removeEventListener('scroll', handleScroll, true);
+    });
 
     // Ref for the custom edit container to detect click-outside reliably
     let customEditRef = $state<HTMLDivElement | null>(null);
@@ -434,6 +446,8 @@
                             onchange={(v) => { customGranularity = v as Granularity; }}
                             class="inline-block w-auto"
                             dropdownPosition="auto"
+                            compact
+                            showChevron={false}
                         />
                     </div>
                 {:else}
@@ -454,11 +468,11 @@
     {/if}
 
     {#if showDateFields}
-    <div class="relative drp-trigger w-full">
+    <div class="relative drp-trigger {stacked ? 'inline-block' : 'w-full'}">
         <button
             bind:this={triggerEl}
             type="button"
-            class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
+            class="{stacked ? 'inline-flex' : 'w-full flex'} {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
             onclick={openCalendar}
         >
             <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
@@ -479,7 +493,7 @@
         </button>
 
         {#if calendarOpen}
-            <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+            <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 max-w-[600px]" style={popoverStyle}>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
                     <!-- Left month (semi-independent) -->
                     <CalendarMonth

@@ -79,7 +79,12 @@
     function updatePopoverPosition() {
         if (!triggerEl) return;
         const rect = triggerEl.getBoundingClientRect();
-        const top = rect.bottom + 4;
+        const popoverHeight = 330; // estimated height of calendar popover
+        const spaceBelow = window.innerHeight - rect.bottom - 8;
+        const spaceAbove = rect.top - 8;
+        // Open above if not enough space below and more space above
+        const openAbove = spaceBelow < popoverHeight && spaceAbove > spaceBelow;
+        const top = openAbove ? rect.top - popoverHeight - 4 : rect.bottom + 4;
         const left = Math.max(4, Math.min(rect.left, window.innerWidth - 280));
         popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; z-index: 9999;`;
     }
@@ -101,6 +106,14 @@
     function closeCalendar() {
         calendarOpen = false;
     }
+
+    // Close popover on scroll (position: fixed doesn't follow the trigger)
+    $effect(() => {
+        if (!calendarOpen) return;
+        const handleScroll = () => closeCalendar();
+        window.addEventListener('scroll', handleScroll, true);
+        return () => window.removeEventListener('scroll', handleScroll, true);
+    });
 
     function handleDayClick(iso: string) {
         value = iso;

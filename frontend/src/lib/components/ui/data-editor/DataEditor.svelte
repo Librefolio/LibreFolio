@@ -318,6 +318,7 @@
     function handleAddRow() {
         // Calculate date: 1 day after the latest date in the dataset
         const existingDates = new Set(rows.map(r => r.date));
+        const todayStr = new Date().toISOString().slice(0, 10);
         let newDate: string;
         if (rows.length > 0) {
             const sortedDates = [...existingDates].sort();
@@ -331,8 +332,18 @@
                 d2.setUTCDate(d2.getUTCDate() + 1);
                 newDate = d2.toISOString().slice(0, 10);
             }
+            // Cap to today: future dates cause sync errors ("End date cannot be in the future")
+            if (newDate > todayStr) {
+                newDate = todayStr;
+                // If today is already occupied, search backwards for first free date
+                while (existingDates.has(newDate)) {
+                    const d3 = new Date(newDate + 'T00:00:00Z');
+                    d3.setUTCDate(d3.getUTCDate() - 1);
+                    newDate = d3.toISOString().slice(0, 10);
+                }
+            }
         } else {
-            newDate = new Date().toISOString().slice(0, 10);
+            newDate = todayStr;
         }
         const newRow: DataRow = {
             date: newDate,
@@ -343,14 +354,9 @@
         };
         rows = [...rows, newRow];
         emitDirty();
-        // Navigate to the page containing the new row, then scroll into view
+        // Navigate to the page containing the new row + scroll into view
         tick().then(() => {
             dataTableRef?.navigateToRowId(newRow.date);
-            tick().then(() => {
-                const el = document.querySelector(`[data-testid="data-editor"] tr:last-child`) ??
-                           document.querySelector(`.datatable tbody tr:last-child`);
-                el?.scrollIntoView({behavior: 'smooth', block: 'center'});
-            });
         });
     }
 
@@ -445,11 +451,9 @@
                     <Plus size={13} /> Add Row
                 </button>
             {/if}
-            <!-- Column visibility toggle (standalone component) -->
-            <ColumnVisibilityToggle tableRef={dataTableRef} />
         </div>
 
-        <!-- Right: Counters -->
+        <!-- Right: Counters + Column visibility -->
         <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
             {#if modifiedCount > 0}
                 <span class="text-blue-600 dark:text-blue-400">{modifiedCount} modified</span>
@@ -460,6 +464,7 @@
             {#if appendedCount > 0}
                 <span class="text-emerald-600 dark:text-emerald-400">{appendedCount} new</span>
             {/if}
+            <ColumnVisibilityToggle tableRef={dataTableRef} />
         </div>
     </div>
 
