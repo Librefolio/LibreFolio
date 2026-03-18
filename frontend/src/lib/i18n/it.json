@@ -827,6 +827,8 @@
     "helpDateFormat": "Le date devono usare il formato YYYY-MM-DD",
     "helpRatePositive": "I tassi devono essere numeri positivi",
     "helpSemicolon": "Usa il punto e virgola (;) come separatore di colonne",
-    "helpDirection": "Usa il pulsante ⇄ o l'header per impostare la direzione del tasso"
+    "helpDirection": "Usa il pulsante ⇄ o l'header per impostare la direzione del tasso",
+    "separatorHint": "sep: ;  ·  decimali: . o ,  ·  migliaia: _",
+    "helpDecimals": "Sia . che , sono accettati come separatori decimali. Usa _ come separatore opzionale delle migliaia (es. 1_000,50)"
   }
 }

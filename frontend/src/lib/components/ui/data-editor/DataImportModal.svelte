@@ -20,7 +20,7 @@
     import CsvEditor from '$lib/components/fx/CsvEditor.svelte';
     import type {ParsedRow} from '$lib/components/fx/CsvEditor.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {Upload, FileText, ArrowRight, HelpCircle} from 'lucide-svelte';
     import {t} from '$lib/i18n';
 
@@ -82,8 +82,6 @@
     // Derived
     // =========================================================================
 
-    let fromInfo = $derived(getCurrencyInfo(directionFrom || displayBase));
-    let toInfo = $derived(getCurrencyInfo(directionTo || displayQuote));
     let allowedCurrencies = $derived<[string, string]>([displayBase, displayQuote]);
     let displayFrom = $derived(directionFrom || displayBase);
     let displayTo = $derived(directionTo || displayQuote);
@@ -227,6 +225,7 @@
                     <li>{$t('csvImport.helpDateFormat')}</li>
                     <li>{$t('csvImport.helpRatePositive')}</li>
                     <li>{$t('csvImport.helpSemicolon')}</li>
+                    <li>{$t('csvImport.helpDecimals')}</li>
                     <li>{$t('csvImport.helpDirection')}</li>
                 </ul>
             </div>
@@ -262,9 +261,25 @@
             </div>
         </div>
 
-        <!-- Direction row: Swap ⇄ + currency badges centered -->
-        <div class="flex items-center justify-center gap-3">
-            <!-- Swap button (left) -->
+        <!-- Direction: currency badges (readonly CurrencySearchSelect, centered) -->
+        <div class="flex items-center justify-center gap-2">
+            <div class="w-44">
+                <CurrencySearchSelect
+                    value={displayFrom}
+                    disabled={true}
+                />
+            </div>
+            <ArrowRight size={18} class="text-gray-400 dark:text-gray-500 shrink-0" />
+            <div class="w-44">
+                <CurrencySearchSelect
+                    value={displayTo}
+                    disabled={true}
+                />
+            </div>
+        </div>
+
+        <!-- Swap ⇄ + InfoBanner on the same row -->
+        <div class="flex items-center gap-2">
             <button
                 class="flex items-center justify-center w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600
                        text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200
@@ -273,27 +288,12 @@
                 title={$t('csvImport.swapDirection')}
                 aria-label={$t('csvImport.swapDirection')}
             >⇄</button>
-
-            <!-- From currency badge -->
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-600">
-                <span class="text-base">{fromInfo.flag_emoji}</span>
-                <span>{displayFrom}</span>
-            </span>
-
-            <!-- Arrow -->
-            <ArrowRight size={16} class="text-gray-400 dark:text-gray-500 shrink-0" />
-
-            <!-- To currency badge -->
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-600">
-                <span class="text-base">{toInfo.flag_emoji}</span>
-                <span>{displayTo}</span>
-            </span>
+            <div class="flex-1">
+                <InfoBanner variant="info">
+                    <span>{$t('csvImport.ratesInterpretedAs', {values: {from: displayFrom, to: displayTo}})}</span>
+                </InfoBanner>
+            </div>
         </div>
-
-        <!-- InfoBanner (rate interpretation) -->
-        <InfoBanner variant="info">
-            <span>{$t('csvImport.ratesInterpretedAs', {values: {from: displayFrom, to: displayTo}})}</span>
-        </InfoBanner>
 
         <!-- CSV Editor preview -->
         <CsvEditor

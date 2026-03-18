@@ -17,6 +17,7 @@
 -->
 <script lang="ts">
     import {tick} from 'svelte';
+    import {t} from '$lib/i18n';
 
     // =========================================================================
     // Types (exported for external use)
@@ -26,6 +27,39 @@
         date: string;
         value: number;
         lineNumber: number;
+    }
+
+    // =========================================================================
+    // Number parsing — supports . and , as decimal, _ as thousands separator
+    // =========================================================================
+
+    /**
+     * Parse a number string with flexible formatting:
+     * - `_` stripped (thousands separator, like JS/Rust: 1_000_000)
+     * - Both `.` and `,` present: last one = decimal separator, other = thousands
+     * - Only `,`: treated as decimal separator (0,6045 → 0.6045)
+     * - Only `.`: standard parseFloat
+     */
+    function parseNumber(raw: string): number {
+        let s = raw.replace(/_/g, '');
+        const lastDot = s.lastIndexOf('.');
+        const lastComma = s.lastIndexOf(',');
+
+        if (lastDot >= 0 && lastComma >= 0) {
+            // Both present: last one is the decimal separator
+            if (lastComma > lastDot) {
+                // 1.000,50 → remove dots (thousands), replace comma (decimal)
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else {
+                // 1,000.50 → remove commas (thousands)
+                s = s.replace(/,/g, '');
+            }
+        } else if (lastComma >= 0) {
+            // Only comma: treat as decimal (0,6045 → 0.6045)
+            s = s.replace(',', '.');
+        }
+
+        return parseFloat(s);
     }
 
     // =========================================================================
@@ -178,8 +212,8 @@
                 return {lineNumber, text: line, valid: false, error: `Invalid date: "${dateStr}"`};
             }
 
-            // Validate rate (positive number)
-            const numValue = parseFloat(valueStr);
+            // Validate rate (positive number — supports . , _ formatting)
+            const numValue = parseNumber(valueStr);
             if (isNaN(numValue) || numValue <= 0) {
                 return {lineNumber, text: line, valid: false, error: `Invalid rate: "${valueStr}". Must be > 0`};
             }
@@ -320,7 +354,7 @@
                 <span class="text-amber-500 dark:text-amber-400 ml-2">• duplicate dates</span>
             {/if}
         </span>
-        <span class="font-mono text-gray-400 dark:text-gray-500">date;{allowedCurrencies[0]}>{allowedCurrencies[1]}</span>
+        <span class="text-gray-400 dark:text-gray-500">{$t('csvImport.separatorHint')}</span>
     </div>
 
     <!-- Editor area -->

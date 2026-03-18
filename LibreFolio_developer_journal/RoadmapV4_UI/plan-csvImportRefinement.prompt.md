@@ -67,14 +67,16 @@ date;EUR>USD
 │  │  📤 Drop .csv/.txt here, or click to browse      ││
 │  └──────────────────────────────────────────────────┘│
 │                                                      │
-│               🇦🇺 AUD   →   🇪🇺 EUR                    │
+│         [🇦🇺 AUD ▾]    ->    [🇪🇺 EUR ▾]               │
+│        (CurrencySearchSelect disabled, readonly)     │
 │                                                      │
-│  [⇄]    ℹ️ Rates interpreted as: 1 AUD = X EUR       │
+│  [⇄]  ℹ️ Rates interpreted as: 1 AUD = X EUR        │
 │                                                      │
 │  ┌─ Preview ───────────────────────────────────────┐ │
+│  │ 0 valid rows    sep: ; · decimals: . or , · _   │ │
 │  │ 1 H date;AUD>EUR                                │ │
 │  │ 2 ✓ 2024-01-15;0.6045                           │ │
-│  │ 3 ✓ 2024-01-16;0.6067                           │ │
+│  │ 3 ✓ 2024-01-16;0,6067                           │ │
 │  │ 4 ✗ 2024-01-17;abc     Invalid rate             │ │
 │  └─────────────────────────────────────────────────┘ │
 │                                                      │
@@ -84,11 +86,15 @@ date;EUR>USD
 
 **Note layout**:
 - Drop zone **compatta** in cima (riga singola, non box alto)
-- **Swap button `⇄` a sinistra** dei badge valuta, centrati sulla riga
-- Nessuna label "Direction:" — i badge parlano da soli
-- Badge valuta con border, flag emoji, centrati
-- **InfoBanner standalone** sotto (interpretazione rate)
+- **CurrencySearchSelect in modalità disabled** (stile FxPairAddModal editMode) centrati con `↔`
+- **`[⇄]` + InfoBanner sulla stessa riga** sotto i selettori valuta
+- Status bar CsvEditor con nota separatori (`;`, `.`/`,`, `_`) al posto di `date;VAL>VAL`
 - CsvEditor preview sotto
+
+**Parser numeri flessibile**:
+- `_` come separatore migliaia (stile JS/Rust): `1_000.50`, `1_000_000`
+- Sia `.` che `,` come separatore decimale: `0.6045`, `0,6045`
+- Se entrambi presenti, l'ultimo è il decimale: `1.000,50` → 1000.50, `1,000.50` → 1000.50
 
 **Architettura swap — single source of truth**:
 - La direction bar è guidata SOLO da `ondirectiondetect` (emesso dal CsvEditor)
@@ -544,4 +550,3 @@ Test manuale:
 - **CsvEditor location**: è sotto `components/fx/` ma è usato dal generico `DataImportModal`. Potrebbe avere senso spostarlo in `components/ui/data-editor/` per coerenza — da valutare durante l'implementazione.
 - **Inversione rate: 2 livelli**: (1) all'import, il modale allinea i rate alla direzione display della pagina; (2) al save API, `FxDataEditorSection` normalizza verso il canonico. Non devono duplicarsi.
 - **Testo intatto al drop**: quando l'utente fa drop di un file, il testo è inserito verbatim. Solo lo swap `⇄` o l'edit manuale modificano il contenuto.
-
