@@ -67,9 +67,9 @@ date;EUR>USD
 │  │  📤 Drop .csv/.txt here, or click to browse      ││
 │  └──────────────────────────────────────────────────┘│
 │                                                      │
-│        [⇄]  🇦🇺 AUD   →   🇪🇺 EUR                    │
+│               🇦🇺 AUD   →   🇪🇺 EUR                    │
 │                                                      │
-│  ℹ️ Rates interpreted as: 1 AUD = X EUR              │
+│  [⇄]    ℹ️ Rates interpreted as: 1 AUD = X EUR       │
 │                                                      │
 │  ┌─ Preview ───────────────────────────────────────┐ │
 │  │ 1 H date;AUD>EUR                                │ │
