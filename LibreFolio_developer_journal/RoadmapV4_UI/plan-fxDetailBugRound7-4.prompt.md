@@ -14,11 +14,15 @@ Correzioni basate su feedback utente dopo Round 7.3. 3 step concreti + step rima
 |------|-------------|-------|------|
 | **1** | FxCard navigazione invertita (bug logico) | ✅ Completato | Fix: `${displayBase}-${displayQuote}` (era invertito) |
 | **1b** | FxCard inversione persistente su back-navigation | ✅ Completato | `fxCardInversionStore.ts` module-level Map, card legge/scrive su toggle |
+| **1c** | Detail page swap → aggiornamento store inversione | ✅ Completato | `setCardInverted()` in `doSwap()` di `+page.svelte` detail; card riflette lo swap al ritorno su `/fx` |
+| **1d** | Detail page onMount → sync store da URL | ✅ Completato | `setCardInverted(data.canonicalSlug, data.inverted)` in `onMount()`: accesso diretto via URL persiste inversione per card |
+| **1e** | FX list settings preview → rispetta inversione card | ✅ Completato | `pairData` e `pairsDataMap` in `ChartSettingsModal` usano `isCardInverted()` per invertire rate nella preview |
 | **2** | DataTable highlight viola su navigateToRowId | ✅ Completato | `highlightedRowId` state, CSS `.highlighted` viola, reset su click/keydown |
 | **3** | Chart long-press per mobile (1s) | ✅ Completato | Touch handlers con timer 800ms, threshold 10px, vibrate feedback |
 | **4** | SelectionBar componente | ✅ Completato | Nuovo `SelectionBar.svelte` Tailwind standalone + fix DataTable `showToolbar` prop |
 | **7** | MeasurePanel auto-delete DRP | ✅ Completato | Auto-filter misure invalide nel `$effect` su `chartData` |
 | **11** | BrokerImportFilesModal | ✅ Completato | `ColumnVisibilityToggle` + `SelectionBar` nell'header, `onSelectionChange` in FilesTable |
+| **V1** | Glitch visivo: rate/% non centrato verticalmente in wide mode | ✅ Completato | Cambiato `items-start` → `items-center` nel filter bar wide layout |
 
 ---
 
@@ -140,5 +144,7 @@ Refactoring del modal di import file broker. Dipende da step 4.
 | `frontend/src/lib/components/table/index.ts` | Export `SelectionBar` |
 | `frontend/src/lib/components/files/FilesTable.svelte` | Aggiunta prop `onSelectionChange` + metodo `clearSelection()` |
 | `frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte` | `ColumnVisibilityToggle` + `SelectionBar` nell'header, `bind:this` su FilesTable |
+| `frontend/src/routes/(app)/fx/[pair]/+page.svelte` | `setCardInverted()` in `doSwap()` per persistenza inversione al ritorno su `/fx`; `setCardInverted()` in `onMount()` per sync da URL; fix `items-center` in filter bar wide mode |
+| `frontend/src/routes/(app)/fx/+page.svelte` | `isCardInverted()` in `pairData`/`pairsDataMap` del `ChartSettingsModal` per preview con inversione corretta |
 
 

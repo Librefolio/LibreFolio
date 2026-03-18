@@ -35,6 +35,7 @@
     import {currentLanguage} from '$lib/stores/language';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultToFxDataPoint, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {setCardInverted} from '$lib/stores/fxCardInversionStore';
 
     // =========================================================================
     // Page data
@@ -177,6 +178,9 @@
     // =========================================================================
 
     onMount(async () => {
+        // Persist the inversion state from the URL so FxCard reflects it on back-navigation
+        setCardInverted(data.canonicalSlug, data.inverted);
+
         await Promise.all([
             ensureCurrenciesLoaded(get(currentLanguage)),
             loadChartData(),
@@ -475,6 +479,8 @@
                 savedPanelStates = null;
             }
         }
+        // Persist inversion state so FxCard shows the same direction on back-navigation
+        setCardInverted(data.canonicalSlug, !inverted);
         goto(`/fx/${displayQuote}-${displayBase}`, {replaceState: true});
     }
 
@@ -538,7 +544,7 @@
                {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
     >
         <!-- Filters block -->
-        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-start flex-1' : 'flex-col items-start'}">
+        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-start'}">
             <!-- DateRangePicker -->
             <div class="max-w-md">
                 <DateRangePicker

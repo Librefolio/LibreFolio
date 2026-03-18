@@ -34,6 +34,7 @@
         apiResultToFxDataPoint,
         type FxDataPoint, type FxPairConfig
     } from '$lib/stores/fxStoreRegistry';
+    import {isCardInverted} from '$lib/stores/fxCardInversionStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
 
     // =========================================================================
@@ -690,12 +691,22 @@
     mode={settingsTargetSlug ? 'pair' : 'global'}
     availablePairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
     pairData={settingsTargetSlug
-        ? pairs.find(p => p.config.slug === settingsTargetSlug)?.data?.map(d => ({date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0}))
+        ? pairs.find(p => p.config.slug === settingsTargetSlug)?.data?.map(d => {
+            const inv = isCardInverted(settingsTargetSlug ?? '');
+            const rate = inv && d.rate !== 0 ? 1 / d.rate : d.rate;
+            return {date: d.date, value: rate, staleDays: d.backwardFillInfo?.daysBack ?? 0};
+        })
         : undefined}
     pairsDataMap={Object.fromEntries(
         pairs
             .filter(p => p.data.length > 0)
-            .map(p => [p.config.slug, p.data.map(d => ({date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0}))])
+            .map(p => {
+                const inv = isCardInverted(p.config.slug);
+                return [p.config.slug, p.data.map(d => {
+                    const rate = inv && d.rate !== 0 ? 1 / d.rate : d.rate;
+                    return {date: d.date, value: rate, staleDays: d.backwardFillInfo?.daysBack ?? 0};
+                })];
+            })
     )}
     onsave={handleSettingsSave}
     onclose={() => { settingsModalOpen = false; settingsTargetSlug = null; }}
