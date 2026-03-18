@@ -31,8 +31,35 @@ La documentazione MkDocs va completata DOPO i test e gli screenshot. Include: in
 - `user/settings.en.md` — profilo, preferenze, password
 - `admin/global-settings.en.md` — parametri globali
 - `user/fx-rates.en.md` — pagina FX, chart, sync, edit, provider, **chain**
-- `user/fx-csv-format.en.md` — formato CSV, esempi, errori
+- `user/fx-csv-import.en.md` — **Guida import CSV per FX** (vedi sotto)
 - Aggiornare `user/index.en.md` + nav in `mkdocs.yml`
+
+### B5b. Pagina manuale utente: Import CSV FX
+
+**Rif.**: [`plan-csvImportRefinement.prompt.md`](plan-csvImportRefinement.prompt.md)
+
+Pagina dedicata che spiega all'utente come importare dati FX via CSV. Deve coprire:
+
+1. **Come arrivarci**: navigare a `/fx` → cliccare su una coppia → entrare in Edit mode (icona matita) → cliccare "Import CSV"
+2. **Struttura del file CSV**:
+   - Formato 2 colonne: `date;VAL1>VAL2`
+   - Header obbligatorio con direzione (es. `date;EUR>USD`)
+   - Separatore `;`, date in formato `YYYY-MM-DD`, rate positivi
+   - Supporto `<` come alternativa a `>` (normalizzato automaticamente)
+3. **Esempi concreti**:
+   - Esempio file minimo valido
+   - Esempio con errori e come correggerli
+   - Esempio con direzione invertita (`date;USD>EUR` vs `date;EUR>USD`)
+4. **Direzione e swap**:
+   - Cosa significano i currency label nel modale
+   - Come usare il pulsante swap `⇄`
+   - Come l'header determina la direzione automaticamente
+5. **Errori comuni**:
+   - Header con valute non della pagina
+   - Header mancante o malformato
+   - Date duplicate
+   - Rate non numerici o negativi
+6. **Screenshot**: modale import con drop zone, direction bar, CsvEditor preview, errori
 
 ### B12. Documentazione Backend FX
 - Flusso sync con fallback e chain
