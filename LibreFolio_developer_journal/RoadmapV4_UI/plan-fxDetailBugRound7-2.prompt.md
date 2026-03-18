@@ -4,7 +4,7 @@
 
 Refinements basati su feedback utente dopo Round 7.1.
 
-**Stato**: ✅ Completato
+**Stato**: ✅ Completato → Seguito da hotfix Round 7.2.1 (stessa sessione)
 
 ---
 

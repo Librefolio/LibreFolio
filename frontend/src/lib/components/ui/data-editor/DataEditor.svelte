@@ -57,6 +57,7 @@
 
     let importModalOpen = $state(false);
     let dataTableRef: DataTable<DataRow> | undefined = $state(undefined);
+    let selectedIds = $state<string[]>([]);
 
     // =========================================================================
     // Derived
@@ -450,7 +451,7 @@
             {/if}
         </div>
 
-        <!-- Right: Counters + Column visibility -->
+        <!-- Right: Selection bar + Counters + Column visibility -->
         <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
             {#if modifiedCount > 0}
                 <span class="text-blue-600 dark:text-blue-400">{modifiedCount} modified</span>
@@ -460,6 +461,24 @@
             {/if}
             {#if appendedCount > 0}
                 <span class="text-emerald-600 dark:text-emerald-400">{appendedCount} new</span>
+            {/if}
+            {#if selectedIds.length > 0}
+                <button
+                    type="button"
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-libre-green/10 text-libre-green dark:bg-emerald-400/10 dark:text-emerald-400 font-medium hover:bg-libre-green/20 dark:hover:bg-emerald-400/20 transition-colors"
+                    onclick={() => { dataTableRef?.clearSelection(); selectedIds = []; }}
+                    title="Clear selection"
+                >
+                    {selectedIds.length} selected <span class="opacity-60">×</span>
+                </button>
+                <button
+                    type="button"
+                    class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                    onclick={() => { handleBulkDelete(selectedIds); dataTableRef?.clearSelection(); selectedIds = []; }}
+                    title="Delete selected"
+                >
+                    <Trash2 size={14} />
+                </button>
             {/if}
             <ColumnVisibilityToggle tableRef={dataTableRef} />
         </div>
@@ -490,6 +509,7 @@
             getRowStyle={rowStyleFn}
             emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
             showToolbar={false}
+            onSelectionChange={(ids) => selectedIds = ids}
         />
     </div>
 </div>

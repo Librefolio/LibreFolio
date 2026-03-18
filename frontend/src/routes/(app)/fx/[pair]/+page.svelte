@@ -699,7 +699,7 @@
     <!-- ======================================================================= -->
     {#if showDataEditor}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 rounded-t-xl">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/30 rounded-t-xl">
                 <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
                     <Pencil size={15} />
                     {$t('fxDetail.editRates')}
