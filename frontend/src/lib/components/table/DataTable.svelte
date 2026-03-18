@@ -728,6 +728,11 @@
     export function resetColumnLayout() {
         resetColumns();
     }
+
+    /** Clear all selected rows (external access) */
+    export function clearSelection() {
+        clearAllSelection();
+    }
 </script>
 
 <div class="datatable-container">

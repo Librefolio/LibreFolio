@@ -192,8 +192,8 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
 
-            // Series line click for edit mode
-            chartInstance.on('click', 'series.line', (params: any) => {
+            // Series line double-click for edit mode
+            chartInstance.on('dblclick', 'series.line', (params: any) => {
                 if (params.dataIndex !== undefined && displayData[params.dataIndex]) {
                     const point = displayData[params.dataIndex];
                     handlePointClick(point.date, point.value);

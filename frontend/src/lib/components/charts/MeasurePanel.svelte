@@ -156,16 +156,17 @@
         // Ensure start <= end
         const [s, e] = newStart <= newEnd ? [newStart, newEnd] : [newEnd, newStart];
         if (s === e) return; // measure needs 2 different days
+        // Update dates on the object (mutation, no reactivity trigger yet)
         m.params.startDate = s;
         m.params.endDate = e;
-        measures = [...measures]; // trigger reactivity
-        // Check if the new range produces a valid measurement (exact date matches needed)
+        // Check if the new range produces a valid measurement BEFORE triggering reactivity
         const check = m.getMeasurement(chartData);
         if (!check) {
             // Auto-delete: range doesn't have matching data points for start/end
             removeMeasure(id);
             return;
         }
+        measures = [...measures]; // trigger reactivity only if valid
         emitRendered();
     }
 
@@ -375,33 +376,28 @@
                         {/if}
 
                         <!-- 3. Stats + Style wrapper (flex-1 fills remaining space) -->
-                        <div class="flex-1 flex {isNarrow ? 'flex-col justify-between' : 'items-center gap-2'} min-w-0">
-                            {#if isExpanded && result}
-                                <div class="flex items-center gap-2 shrink-0">
+                        <div class="flex-1 flex {isNarrow ? 'flex-col justify-between items-end' : 'items-center gap-2'} min-w-0">
+                            {#if result}
+                                <div class="flex items-center gap-2 shrink-0 {isExpanded ? '' : 'hidden'}">
                                     <span class="text-xs font-mono shrink-0 {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                                         {fmtPct(result.deltaPct)}
                                     </span>
                                     <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>
                                 </div>
-                            {:else if !isExpanded}
-                                <!-- spacer when collapsed (no stats shown, already in collapsed summary) -->
                             {/if}
-                            {#if !isNarrow}<div class="flex-1"></div>{/if}
-                            {#if isExpanded}
-                                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                <div class="flex items-center min-w-[100px] max-w-[200px] flex-shrink" onclick={(e) => e.stopPropagation()}>
-                                    <SignalStyleEditor
-                                        style={measure.style}
-                                        onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
-                                        simplified
-                                    />
-                                </div>
-                            {/if}
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <div class="ml-auto w-[200px] min-w-[100px] shrink" onclick={(e) => e.stopPropagation()}>
+                                <SignalStyleEditor
+                                    style={measure.style}
+                                    onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
+                                    simplified
+                                />
+                            </div>
                         </div>
 
                         <!-- 4. Icons: eye + trash (flex-col-reverse in narrow → trash on top, eye on bottom) -->
-                        <div class="flex {isNarrow ? 'flex-col-reverse justify-between' : 'items-center'} gap-1 shrink-0">
+                        <div class="flex {isNarrow ? 'flex-col-reverse justify-between items-center' : 'items-center'} gap-1 shrink-0">
                             {#if isExpanded}
                                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                                 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -410,7 +406,7 @@
                                 </div>
                             {/if}
                             <span
-                                class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
+                                class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex items-center justify-center"
                                 role="button"
                                 tabindex="-1"
                                 title={$t('measure.remove')}

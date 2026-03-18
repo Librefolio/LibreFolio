@@ -286,7 +286,8 @@
         const openAbove = spaceBelow < popH && spaceAbove > spaceBelow;
         const top = openAbove ? rect.top - popH - 8 : rect.bottom + 8;
         const left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
-        popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; z-index: 9999;`;
+        const maxW = window.innerWidth - 16; // 8px margin each side
+        popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; max-width: ${maxW}px; z-index: 9999;`;
     }
 
     function openCalendar() {
