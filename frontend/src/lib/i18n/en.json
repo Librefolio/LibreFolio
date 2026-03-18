@@ -809,5 +809,24 @@
     "refreshData": "Refresh data",
     "swapConfirmTitle": "Unsaved changes",
     "swapConfirmMessage": "You have unsaved changes in the rate editor. Swapping direction will discard them. Continue?"
+  },
+  "csvImport": {
+    "title": "Import CSV Data",
+    "direction": "Direction",
+    "ratesInterpretedAs": "Rates interpreted as: 1 {from} = X {to}",
+    "dropFile": "Drop a .csv or .txt file here, or click to browse",
+    "dropReplace": "Drop another file to replace",
+    "noValidRows": "No valid rows found",
+    "swapDirection": "Swap direction",
+    "validRows": "{count} valid row(s)",
+    "import": "Import ({count})",
+    "headerMissing": "Missing or invalid header. Expected format: date;{from}>{to}",
+    "headerWrongPair": "This page manages {pair}. Only {cur1} and {cur2} are allowed in the header.",
+    "helpTitle": "CSV Import Guide",
+    "helpFormat": "Use 2-column format with a header indicating direction:",
+    "helpDateFormat": "Dates must use YYYY-MM-DD format",
+    "helpRatePositive": "Rates must be positive numbers",
+    "helpSemicolon": "Use semicolon (;) as column separator",
+    "helpDirection": "Use the ⇄ button or header to set rate direction"
   }
 }

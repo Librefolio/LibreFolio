@@ -2,13 +2,15 @@
   CsvEditor — Mini code-editor-like CSV textarea with line numbers and live validation.
 
   Features:
+  - 2-column format: date;rate with semantic header (date;VAL1>VAL2)
+  - Header parsing with > and < direction support (< is normalized)
   - Line numbers on the left
   - Live validation per row (green ✓ / red ✗)
-  - Header row awareness (first line = header, skipped in validation)
   - Duplicate date detection (yellow highlight)
   - Parsed valid points emitted via onvalidchange callback
+  - Direction detection emitted via ondirectiondetect callback
   - Scroll-to-line API for bidirectional sync with chart
-  - setText() API for programmatic import
+  - setHeader() API for programmatic header update (swap button)
   - Error messages per line
 
   Uses Svelte 5 runes ($state, $derived, $props).
@@ -22,8 +24,6 @@
 
     export interface ParsedRow {
         date: string;
-        base: string;
-        quote: string;
         value: number;
         lineNumber: number;
     }
@@ -33,10 +33,10 @@
     // =========================================================================
 
     interface Props {
-        /** Expected CSV header */
-        header?: string;
         /** Current CSV text content (bindable) */
         value?: string;
+        /** The two currencies of the page context (used for header validation) */
+        allowedCurrencies: [string, string];
         /** Whether the editor is read-only */
         readonly?: boolean;
         /** Minimum height of the textarea */
@@ -45,6 +45,8 @@
         placeholder?: string;
         /** Called when valid parsed rows change */
         onvalidchange?: (validRows: ParsedRow[], errorCount: number, hasDuplicates: boolean) => void;
+        /** Called when direction is detected from header */
+        ondirectiondetect?: (from: string, to: string) => void;
         /** Called on every input (raw text) */
         oninput?: (text: string) => void;
         /** Called when text content changes (for bind:value replacement) */
@@ -52,12 +54,13 @@
     }
 
     let {
-        header = 'date;base;quote;base2quote',
         value = $bindable(''),
+        allowedCurrencies,
         readonly: isReadonly = false,
         minHeight = '200px',
         placeholder = '',
         onvalidchange,
+        ondirectiondetect,
         oninput,
         onchange,
     }: Props = $props();
@@ -70,6 +73,43 @@
     let lineNumbersEl: HTMLDivElement | undefined = $state(undefined);
 
     // =========================================================================
+    // Header parsing
+    // =========================================================================
+
+    interface HeaderResult {
+        valid: true;
+        from: string;
+        to: string;
+    }
+    interface HeaderError {
+        valid: false;
+        error: string;
+    }
+
+    function parseHeader(line: string): HeaderResult | HeaderError {
+        const trimmed = line.trim().toLowerCase();
+        // Match: date;VAL1>VAL2 or date;VAL1<VAL2
+        const match = trimmed.match(/^date;([a-z]{3})([><])([a-z]{3})$/);
+        if (!match) return {valid: false, error: 'Invalid header format. Expected: date;' + allowedCurrencies[0] + '>' + allowedCurrencies[1]};
+
+        const [, cur1, sep, cur2] = match;
+        // Normalize: always emit the semantic from→to direction
+        // date;EUR>USD → from=EUR, to=USD
+        // date;USD<EUR → from=EUR, to=USD (normalized: < means read backwards)
+        const from = (sep === '>' ? cur1 : cur2).toUpperCase();
+        const to = (sep === '>' ? cur2 : cur1).toUpperCase();
+
+        // Check currencies are in the allowed pair
+        const allowed = new Set(allowedCurrencies);
+        if (!allowed.has(from) || !allowed.has(to)) {
+            return {valid: false, error: `Only ${allowedCurrencies[0]} and ${allowedCurrencies[1]} are allowed on this page`};
+        }
+        if (from === to) return {valid: false, error: 'Base and quote must differ'};
+
+        return {valid: true, from, to};
+    }
+
+    // =========================================================================
     // Derived
     // =========================================================================
 
@@ -80,10 +120,23 @@
         error?: string;
         parsed?: ParsedRow;
         duplicate?: boolean;
+        isHeader?: boolean;
     }
 
     let lines = $derived(value.split('\n'));
     let lineCount = $derived(lines.length);
+
+    /** Parsed header result (null if no header found yet) */
+    let headerResult = $derived.by<HeaderResult | HeaderError | null>(() => {
+        // Find first non-empty line
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed) return parseHeader(trimmed);
+        }
+        return null;
+    });
+
+    let headerValid = $derived(headerResult !== null && headerResult.valid);
 
     let validations: LineValidation[] = $derived.by(() => {
         const result: LineValidation[] = lines.map((line, i): LineValidation => {
@@ -93,20 +146,30 @@
             // Empty line
             if (!trimmed) return {lineNumber, text: line, valid: true};
 
-            // Header line (first non-empty line matching expected header)
-            if (i === 0 && trimmed.toLowerCase().replace(/\s/g, '') === header.toLowerCase().replace(/\s/g, '')) {
-                return {lineNumber, text: line, valid: true};
+            // Header line (first non-empty line) — validate as header
+            if (i === lines.findIndex(l => l.trim() !== '')) {
+                const hr = parseHeader(trimmed);
+                if (hr.valid) {
+                    return {lineNumber, text: line, valid: true, isHeader: true};
+                } else {
+                    return {lineNumber, text: line, valid: false, error: hr.error, isHeader: true};
+                }
             }
 
-            // Parse data row
+            // If header is invalid, don't validate data rows
+            if (!headerValid) {
+                return {lineNumber, text: line, valid: false, error: 'Fix header first'};
+            }
+
+            // Parse data row (2 columns: date;rate)
             const parts = trimmed.split(';');
-            if (parts.length !== 4) {
-                return {lineNumber, text: line, valid: false, error: `Expected 4 columns, got ${parts.length}`};
+            if (parts.length !== 2) {
+                return {lineNumber, text: line, valid: false, error: `Expected 2 columns (date;rate), got ${parts.length}`};
             }
 
-            const [dateStr, baseStr, quoteStr, valueStr] = parts.map(p => p.trim());
+            const [dateStr, valueStr] = parts.map(p => p.trim());
 
-            // Validate date
+            // Validate date (YYYY-MM-DD)
             if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
                 return {lineNumber, text: line, valid: false, error: `Invalid date format: "${dateStr}". Use YYYY-MM-DD`};
             }
@@ -115,30 +178,17 @@
                 return {lineNumber, text: line, valid: false, error: `Invalid date: "${dateStr}"`};
             }
 
-            // Validate currencies (ISO 4217: 3 uppercase letters)
-            const baseCurrency = baseStr.toUpperCase();
-            const quoteCurrency = quoteStr.toUpperCase();
-            if (!/^[A-Z]{3}$/.test(baseCurrency)) {
-                return {lineNumber, text: line, valid: false, error: `Invalid base currency: "${baseStr}"`};
-            }
-            if (!/^[A-Z]{3}$/.test(quoteCurrency)) {
-                return {lineNumber, text: line, valid: false, error: `Invalid quote currency: "${quoteStr}"`};
-            }
-            if (baseCurrency === quoteCurrency) {
-                return {lineNumber, text: line, valid: false, error: `Base and quote must differ`};
-            }
-
-            // Validate value
+            // Validate rate (positive number)
             const numValue = parseFloat(valueStr);
             if (isNaN(numValue) || numValue <= 0) {
-                return {lineNumber, text: line, valid: false, error: `Invalid value: "${valueStr}". Must be > 0`};
+                return {lineNumber, text: line, valid: false, error: `Invalid rate: "${valueStr}". Must be > 0`};
             }
 
             return {
                 lineNumber,
                 text: line,
                 valid: true,
-                parsed: {date: dateStr, base: baseCurrency, quote: quoteCurrency, value: numValue, lineNumber},
+                parsed: {date: dateStr, value: numValue, lineNumber},
             };
         });
 
@@ -175,6 +225,13 @@
             .filter(v => v.parsed && !v.duplicate)
             .map(v => v.parsed!);
         onvalidchange?.(validRows, errorCount, hasDuplicates);
+    });
+
+    // Emit direction when header is valid
+    $effect(() => {
+        if (headerResult && headerResult.valid) {
+            ondirectiondetect?.(headerResult.from, headerResult.to);
+        }
     });
 
     // =========================================================================
@@ -219,29 +276,34 @@
     }
 
     /** Append a new CSV row at the end */
-    export function appendRow(date: string, base: string, quote: string, rate: number) {
-        const newLine = `${date};${base};${quote};${rate}`;
+    export function appendRow(date: string, rate: number) {
+        const newLine = `${date};${rate}`;
         if (value.trim()) {
             value = value.trimEnd() + '\n' + newLine;
         } else {
-            value = header + '\n' + newLine;
+            // Pre-populate with header + new line
+            value = `date;${allowedCurrencies[0]}>${allowedCurrencies[1]}\n` + newLine;
         }
         handleInput();
-    }
-
-    /** Update a specific line (1-based) with new values */
-    export function updateLine(lineNumber: number, date: string, base: string, quote: string, rate: number) {
-        const lineArray = value.split('\n');
-        if (lineNumber > 0 && lineNumber <= lineArray.length) {
-            lineArray[lineNumber - 1] = `${date};${base};${quote};${rate}`;
-            value = lineArray.join('\n');
-            handleInput();
-        }
     }
 
     /** Programmatically set the entire text content (for import) */
     export function setText(text: string) {
         value = text;
+        handleInput();
+    }
+
+    /** Update only the header row (called by swap button). Always writes with > */
+    export function setHeader(from: string, to: string) {
+        const lineArray = value.split('\n');
+        // Find first non-empty line (the header)
+        const headerIdx = lineArray.findIndex(l => l.trim() !== '');
+        if (headerIdx >= 0) {
+            lineArray[headerIdx] = `date;${from}>${to}`;
+        } else {
+            lineArray.unshift(`date;${from}>${to}`);
+        }
+        value = lineArray.join('\n');
         handleInput();
     }
 </script>
@@ -258,7 +320,7 @@
                 <span class="text-amber-500 dark:text-amber-400 ml-2">• duplicate dates</span>
             {/if}
         </span>
-        <span class="font-mono text-gray-400 dark:text-gray-500">{header}</span>
+        <span class="font-mono text-gray-400 dark:text-gray-500">date;{allowedCurrencies[0]}>{allowedCurrencies[1]}</span>
     </div>
 
     <!-- Editor area -->
@@ -271,10 +333,10 @@
             {#each validations as v}
                 <div
                     class="h-5 flex items-center justify-end pr-2 text-xs font-mono leading-5
-                        {v.duplicate ? 'bg-amber-50 dark:bg-amber-900/20' : v.valid ? '' : 'bg-red-50 dark:bg-red-900/20'}"
+                        {v.duplicate ? 'bg-amber-50 dark:bg-amber-900/20' : v.isHeader && v.valid ? 'bg-emerald-50 dark:bg-emerald-900/10' : v.valid ? '' : 'bg-red-50 dark:bg-red-900/20'}"
                     title={v.error || ''}
                 >
-                    <span class="{v.parsed && !v.duplicate ? 'text-emerald-500' : v.duplicate ? 'text-amber-500' : v.valid ? 'text-gray-400 dark:text-gray-500' : 'text-red-500'}">{v.lineNumber}</span>
+                    <span class="{v.parsed && !v.duplicate ? 'text-emerald-500' : v.duplicate ? 'text-amber-500' : v.isHeader && v.valid ? 'text-emerald-600 dark:text-emerald-400' : v.valid ? 'text-gray-400 dark:text-gray-500' : 'text-red-500'}">{v.lineNumber}</span>
                 </div>
             {/each}
         </div>
@@ -283,7 +345,9 @@
         <div class="flex-shrink-0 w-5">
             {#each validations as v}
                 <div class="h-5 flex items-center justify-center text-xs leading-5" title={v.error || ''}>
-                    {#if v.parsed && !v.duplicate}
+                    {#if v.isHeader && v.valid}
+                        <span class="text-emerald-600 dark:text-emerald-400">H</span>
+                    {:else if v.parsed && !v.duplicate}
                         <span class="text-emerald-500">✓</span>
                     {:else if v.duplicate}
                         <span class="text-amber-500">⚠</span>

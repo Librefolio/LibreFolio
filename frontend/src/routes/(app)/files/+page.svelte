@@ -30,6 +30,7 @@
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Search, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import type {BrimFile, Broker, BrokerInfo, UploadedFile} from '$lib/types';
@@ -147,6 +148,9 @@
     let staticTableRef: FilesTable;
     let brimTableRef: FilesTable;
     $: activeTableRef = activeTab === 'static' ? staticTableRef : brimTableRef;
+
+    // Selection state for SelectionBar
+    let selectedFileIds: string[] = [];
 
     // BRIM upload with broker selection
     let showBrimUploader = false;
@@ -584,6 +588,24 @@
         }
     }
 
+    async function handleBulkDeleteFiles() {
+        const isBrim = activeTab === 'brim';
+        try {
+            for (const fileId of selectedFileIds) {
+                if (isBrim) {
+                    await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}});
+                } else {
+                    await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
+                }
+            }
+            selectedFileIds = [];
+            activeTableRef?.getTableRef()?.clearSelection();
+            await loadFiles();
+        } catch (e) {
+            error = e instanceof Error ? e.message : 'Delete failed';
+        }
+    }
+
 
     function formatDate(dateStr: string): string {
         return new Date(dateStr).toLocaleDateString(undefined, {
@@ -681,6 +703,20 @@
             </button>
         </div>
         {#if viewMode === 'list'}
+            <SelectionBar
+                selectedCount={selectedFileIds.length}
+                actions={[{
+                    id: 'delete',
+                    icon: Trash2,
+                    label: $t('common.delete') || 'Delete',
+                    variant: 'danger',
+                    onClick: handleBulkDeleteFiles,
+                }]}
+                onClearSelection={() => {
+                    selectedFileIds = [];
+                    activeTableRef?.getTableRef()?.clearSelection();
+                }}
+            />
             <ColumnVisibilityToggle tableRef={activeTableRef?.getTableRef()} />
         {/if}
     </div>
@@ -748,6 +784,7 @@
                         onDelete={(id) => deleteFile(id, false)}
                         {initialFilters}
                         onFiltersChange={handleFiltersChange}
+                        onSelectionChange={(ids) => selectedFileIds = ids}
                 />
             {/if}
         {:else}
@@ -767,6 +804,7 @@
                         brokers={brokerMap}
                         {initialFilters}
                         onFiltersChange={handleFiltersChange}
+                        onSelectionChange={(ids) => selectedFileIds = ids}
                 />
             {/if}
         {/if}
