@@ -828,7 +828,11 @@
     "helpRatePositive": "Las tasas deben ser números positivos",
     "helpSemicolon": "Usa punto y coma (;) como separador de columnas",
     "helpDirection": "Usa el botón ⇄ o el encabezado para definir la dirección de la tasa",
-    "separatorHint": "sep: ;  ·  decimales: . o ,  ·  miles: _",
-    "helpDecimals": "Tanto . como , se aceptan como separadores decimales. Usa _ como separador opcional de miles (ej. 1_000.50)"
+    "helpDecimals": "Tanto . como , se aceptan como separadores decimales. Usa _ como separador opcional de miles (ej. 1_000.50)",
+    "discardTitle": "¿Descartar la importación?",
+    "discardMessage": "Has editado los datos CSV. ¿Estás seguro de que quieres cerrar sin importar?",
+    "sep": "sep",
+    "decimal": "decimal",
+    "thousands": "miles"
   }
 }

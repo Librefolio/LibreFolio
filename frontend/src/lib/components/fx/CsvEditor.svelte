@@ -354,7 +354,12 @@
                 <span class="text-amber-500 dark:text-amber-400 ml-2">• duplicate dates</span>
             {/if}
         </span>
-        <span class="text-gray-400 dark:text-gray-500">{$t('csvImport.separatorHint')}</span>
+        <span class="inline-flex items-center gap-1.5 text-gray-400 dark:text-gray-500 text-[10px]">
+            {$t('csvImport.sep')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">;</kbd>
+            · {$t('csvImport.decimal')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">.</kbd>
+            / <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">,</kbd>
+            · {$t('csvImport.thousands')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">_</kbd>
+        </span>
     </div>
 
     <!-- Editor area -->
