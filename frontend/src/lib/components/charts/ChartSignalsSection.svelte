@@ -383,7 +383,7 @@
                                                         type="button"
                                                         class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors
                                                             {signal.params._inverted ? 'text-libre-green' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
-                                                        title="Swap direction"
+                                                        title={$t('common.swapDirection')}
                                                         onclick={() => updateSignalParam(signal.id, '_inverted', !signal.params._inverted)}
                                                     >
                                                         <ArrowLeftRight size={12} />
@@ -430,7 +430,7 @@
                                     type="color"
                                     value={signal.style.color}
                                     class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
-                                    title="MACD Line Color"
+                                    title={$t('chartSettings.macdLineColor')}
                                     oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
                                 />
                                 <span class="text-[10px] text-gray-400 dark:text-gray-500">MACD</span>

@@ -667,9 +667,9 @@
 <!-- Delete Confirm Dialog -->
 <ConfirmModal
     open={deleteDialogOpen}
-    title="Delete FX Pair"
-    message="Are you sure you want to delete {deletingPair?.base ?? ''}/{deletingPair?.quote ?? ''}? This will remove the provider configuration and all historical exchange rates."
-    confirmText="Delete"
+    title={$_('fx.deletePairTitle')}
+    message={$_('fx.deletePairMessage', {values: {pair: `${deletingPair?.base ?? ''}/${deletingPair?.quote ?? ''}`}})}
+    confirmText={$_('common.delete')}
     danger={true}
     onConfirm={confirmDelete}
     onCancel={() => { deleteDialogOpen = false; deletingPair = null; }}

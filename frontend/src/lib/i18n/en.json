@@ -312,7 +312,12 @@
       "hideRoutes": "Hide available routes"
     },
     "syncing": "Syncing...",
-    "providers": "Providers"
+    "providers": "Providers",
+    "editPairConfig": "Edit pair config",
+    "deletePair": "Delete pair",
+    "deletePairTitle": "Delete FX Pair",
+    "deletePairMessage": "Are you sure you want to delete {pair}? This will remove the provider configuration and all historical exchange rates.",
+    "removeProvider": "Remove provider"
   },
   "settings": {
     "profile": "Profile",
@@ -615,7 +620,8 @@
       "multiplier": "Number of standard deviations ($k \\cdot \\sigma$). $k=2$ covers ~95% of values assuming normal distribution.",
       "overbought": "Level above which the asset is considered overbought. Standard: 70. Values near 100 indicate strong buying pressure.",
       "oversold": "Level below which the asset is considered oversold. Standard: 30. Values near 0 indicate strong selling pressure."
-    }
+    },
+    "macdLineColor": "MACD Line Color"
   },
   "chart": {
     "tooltip": {
@@ -623,7 +629,9 @@
       "percentNote": "% relative to range start date",
       "upper": "Upper",
       "lower": "Lower"
-    }
+    },
+    "showPercentage": "Show percentage",
+    "showAbsolute": "Show absolute"
   },
   "measure": {
     "pending": "Start: {startDate} ({startValue}) — click chart for end point",
@@ -671,5 +679,9 @@
     "sep": "sep",
     "decimal": "decimal",
     "thousands": "thousands"
+  },
+  "dataEditor": {
+    "clearSelection": "Clear selection",
+    "deleteSelected": "Delete selected"
   }
 }

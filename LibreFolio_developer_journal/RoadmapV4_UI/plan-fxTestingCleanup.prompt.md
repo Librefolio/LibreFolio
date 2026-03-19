@@ -2,7 +2,7 @@
 
 **Data creazione**: 12 Marzo 2026
 **Ultima revisione**: 19 Marzo 2026
-**Status**: ✅ Steps 0-10,12A-C COMPLETATI, Step 2C (razionalizzazione) ✅ COMPLETATO (735→583 chiavi, 60→19 duplicati residui KEEP) — Steps 2D/11 da fare
+**Status**: ✅ Steps 0-10,12A-C COMPLETATI, Step 2C ✅ COMPLETATO (735→583), Step 2D ✅ COMPLETATO (18 stringhe hardcoded → i18n, 583→593 chiavi) — Step 11 da fare
 **Priorità**: Media (copertura E2E FX completa, restano i18n rationalization, gallery)
 **Stima**: ~5-6 giorni
 **Dipendenze**: Tutti i plan Phase 5 FX completati (13+ sub-plan, 7 round bug-fix)
@@ -58,6 +58,7 @@ Il sottosistema FX è completo a livello funzionale: 2 pagine route (~1400+ righ
 | 19 Mar 2026 | ✅ Step 2C.2 | Migrazione coerenza `filter.*` → `common.*`: `filter.bytes/kilobytes/gigabytes/min` → `common.bytes/kilobytes/gigabytes/min`. Fix stale ref `filter.megabytes` in upload.ts |
 | 19 Mar 2026 | ✅ Step 2C.3 | Migrazione coerenza preset array: `uploads.presetIcon` → `common.icon`, 3× "Custom" (`uploads.presetCustom`, `datePicker.custom`, `chartSettings.yAxisCustom`) → `common.custom`. 585 → 583 chiavi |
 | 19 Mar 2026 | 📋 Step 2C.4 | Analisi 19 gruppi duplicati residui — tutti classificati come KEEP (prefissi dinamici, semantica diversa, o duplicato linguistico accettabile) |
+| 19 Mar 2026 | ✅ Step 2D | 18 stringhe hardcoded → i18n in 6 file (FxCard, FxProviderConfig, ChartSignalsSection, ChartAestheticsSection, fx/+page, DataEditor). 10 nuove chiavi + 5 riuso existing. 583 → 593 chiavi |
 
 ---
 
@@ -514,16 +515,25 @@ Dopo tutte le migrazioni: **583 chiavi, 19 gruppi duplicati**. Tutti classificat
 | IT "Coppia FX" ×2 | 2 | KEEP (dinamico) | Prefisso dinamico `chartSettings.signals.*` — fxPair e fxPairAbbr |
 | IT "Ripristina" ×2 | 2 | KEEP | `common.reset` e `common.undo` — EN/FR/ES tutti diversi, coincidono solo in IT — duplicato linguistico accettabile |
 
-### 2D. Stringhe hardcoded → i18n — ⏳ DA FARE
+### 2D. ✅ Stringhe hardcoded → i18n — COMPLETATO
 
-Grep sistematico nei file FX per stringhe hardcoded da tradurre.
-Casi già identificati nel piano originale (MeasurePanel headers).
-Da eseguire dopo completamento 2C.
+18 stringhe hardcoded trovate e tradotte in 6 file:
+- **FxCard.svelte** (6): Swap direction, Show %/abs, No data, Refresh, Edit pair config, Delete pair
+- **FxProviderConfig.svelte** (1): Remove provider
+- **ChartSignalsSection.svelte** (2): Swap direction, MACD Line Color
+- **ChartAestheticsSection.svelte** (4): aria-label toggle → riuso chiavi `chartSettings.*`
+- **fx/+page.svelte** (3): ConfirmModal title/message/confirmText
+- **DataEditor.svelte** (3): Clear selection, selected text, Delete selected + aggiunta import i18n
+
+10 nuove chiavi create: `chart.showPercentage`, `chart.showAbsolute`, `fx.editPairConfig`, `fx.deletePair`, `fx.deletePairTitle`, `fx.deletePairMessage`, `fx.removeProvider`, `chartSettings.macdLineColor`, `dataEditor.clearSelection`, `dataEditor.deleteSelected`
+5 chiavi esistenti riutilizzate: `common.swapDirection`, `common.refresh`, `common.noData`, `common.delete`, `common.selected`
+583 → 593 chiavi totali
 
 ### 2E. ✅ Verificare completezza 4 lingue — COMPLETATO
 
 - Post Step 2B: `./dev.py i18n audit` → 624/624 keys (100.0% tutte le lingue)
 - Post Step 2C: `./dev.py i18n audit` → 583/583 keys (100.0% tutte le lingue)
+- Post Step 2D: `./dev.py i18n audit` → 593/593 keys (100.0% tutte le lingue)
 - 0 chiavi mancanti, 0 chiavi unused, 19 gruppi duplicati residui (tutti KEEP)
 
 ---

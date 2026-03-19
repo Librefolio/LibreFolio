@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
     import {tick} from 'svelte';
+    import {_ as t} from '$lib/i18n';
     import {Plus, Upload, Trash2, Undo2} from 'lucide-svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
     import DataImportModal from './DataImportModal.svelte';
@@ -470,15 +471,15 @@
                     type="button"
                     class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-libre-green/10 text-libre-green dark:bg-emerald-400/10 dark:text-emerald-400 font-medium hover:bg-libre-green/20 dark:hover:bg-emerald-400/20 transition-colors"
                     onclick={() => { dataTableRef?.clearSelection(); selectedIds = []; }}
-                    title="Clear selection"
+                    title={$t('dataEditor.clearSelection')}
                 >
-                    {selectedIds.length} selected <span class="opacity-60">×</span>
+                    {selectedIds.length} {$t('common.selected')} <span class="opacity-60">×</span>
                 </button>
                 <button
                     type="button"
                     class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                     onclick={() => { handleBulkDelete(selectedIds); dataTableRef?.clearSelection(); selectedIds = []; }}
-                    title="Delete selected"
+                    title={$t('dataEditor.deleteSelected')}
                 >
                     <Trash2 size={14} />
                 </button>

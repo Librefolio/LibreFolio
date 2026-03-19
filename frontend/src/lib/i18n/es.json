@@ -312,7 +312,12 @@
       "hideRoutes": "Ocultar rutas disponibles"
     },
     "syncing": "Sincronizando...",
-    "providers": "Proveedores"
+    "providers": "Proveedores",
+    "editPairConfig": "Editar configuración del par",
+    "deletePair": "Eliminar par",
+    "deletePairTitle": "Eliminar Par FX",
+    "deletePairMessage": "¿Estás seguro de que quieres eliminar {pair}? Esto eliminará la configuración de proveedores y todos los tipos de cambio históricos.",
+    "removeProvider": "Eliminar proveedor"
   },
   "settings": {
     "profile": "Perfil",
@@ -615,7 +620,8 @@
       "multiplier": "Número de desviaciones estándar ($k \\cdot \\sigma$). $k=2$ cubre ~95% de los valores asumiendo distribución normal.",
       "overbought": "Nivel por encima del cual el activo se considera sobrecomprado. Estándar: 70. Valores cercanos a 100 indican fuerte presión compradora.",
       "oversold": "Nivel por debajo del cual el activo se considera sobrevendido. Estándar: 30. Valores cercanos a 0 indican fuerte presión vendedora."
-    }
+    },
+    "macdLineColor": "Color Línea MACD"
   },
   "chart": {
     "tooltip": {
@@ -623,7 +629,9 @@
       "percentNote": "% relativo a la fecha de inicio del rango",
       "upper": "Superior",
       "lower": "Inferior"
-    }
+    },
+    "showPercentage": "Mostrar porcentaje",
+    "showAbsolute": "Mostrar absoluto"
   },
   "measure": {
     "pending": "Inicio: {startDate} ({startValue}) — haga clic en el gráfico para el punto final",
@@ -671,5 +679,9 @@
     "sep": "sep",
     "decimal": "decimal",
     "thousands": "miles"
+  },
+  "dataEditor": {
+    "clearSelection": "Borrar selección",
+    "deleteSelected": "Eliminar seleccionados"
   }
 }

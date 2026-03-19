@@ -299,7 +299,7 @@
                         <button
                             class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all ml-auto"
                             onclick={() => handleRemove(item.providerCode)}
-                            title="Remove provider"
+                            title={$t('fx.removeProvider')}
                         >
                             <Trash2 size={14} />
                         </button>
