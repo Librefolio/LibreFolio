@@ -145,6 +145,8 @@
     }
 
     function translateStatus(status: string): string {
+        // 'error' is a common concept, use common.error
+        if (status === 'error') return $t('common.error');
         const key = `fileStatus.${status}`;
         const translated = $t(key);
         return translated !== key ? translated : status.charAt(0).toUpperCase() + status.slice(1);
@@ -378,7 +380,7 @@
             onClick: (file) => onDelete(getFileId(file)),
             variant: 'danger',
             requireConfirm: true,
-            confirmMessage: () => $t('uploads.deleteConfirmSingle'),
+            confirmMessage: () => $t('uploads.deleteConfirm'),
         });
 
         return actions;

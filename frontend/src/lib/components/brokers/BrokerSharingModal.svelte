@@ -628,7 +628,7 @@
                 {:else}
                     <Save size={16} />
                 {/if}
-                {$_('brokers.sharing.save')}
+                {$_('common.saveConfiguration')}
             </button>
         </div>
     </div>
@@ -648,9 +648,9 @@
 <!-- Confirm Discard Changes Dialog -->
 <ConfirmModal
     open={confirmCloseOpen}
-    title={$_('brokers.discardChanges')}
+    title={$_('common.discardChanges')}
     message={$_('brokers.unsavedChanges')}
-    confirmText={$_('brokers.discardAndClose')}
+    confirmText={$_('common.discardAndClose')}
     danger={false}
     warning={true}
     onConfirm={confirmDiscard}

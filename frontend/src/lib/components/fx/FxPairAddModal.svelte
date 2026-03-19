@@ -462,11 +462,11 @@
             >
                 {#if syncing}
                     <RotateCcw size={14} class="animate-spin" />
-                    {$_('fx.actions.syncing')}
+                    {$_('fx.syncing')}
                 {:else if saving}
                     {$_('common.saving')}
                 {:else}
-                    {$_('fx.addPair.saveConfiguration')}
+                    {$_('common.saveConfiguration')}
                 {/if}
             </button>
         </div>

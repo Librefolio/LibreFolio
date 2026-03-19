@@ -571,7 +571,6 @@
             <!-- Settings -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                title={$_('fx.actions.settings')}
                 onclick={handleGlobalSettings}
                 data-testid="fx-chart-settings-button"
             >
@@ -582,7 +581,6 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleSyncAll}
-                title={$_('fx.actions.syncAll')}
                 data-testid="fx-sync-all-button"
             >
                 <RotateCw size={14} />
@@ -592,7 +590,6 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleRefreshAll}
-                title={$_('fx.actions.refreshAll')}
                 data-testid="fx-refresh-all-button"
             >
                 <RefreshCw size={14} />

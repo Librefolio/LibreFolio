@@ -103,7 +103,7 @@
                     {#if !simplified}
                     <!-- Start marker grid -->
                     <div class="flex flex-col items-center">
-                        <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerStart')}</span>
+                        <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('common.start')}</span>
                         <div class="grid grid-cols-2 gap-1.5">
                             {#each MARKER_OPTIONS as mk}
                                 <button type="button" aria-label={mk ?? 'none'}
@@ -146,7 +146,7 @@
                     {#if !simplified}
                     <!-- End marker grid -->
                     <div class="flex flex-col items-center">
-                        <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerEnd')}</span>
+                        <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('common.end')}</span>
                         <div class="grid grid-cols-2 gap-1.5">
                             {#each MARKER_OPTIONS as mk}
                                 <button type="button" aria-label={mk ?? 'none'}

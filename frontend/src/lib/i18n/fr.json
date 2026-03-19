@@ -19,7 +19,7 @@
     "undoAll": "Annuler Tout",
     "saveAll": "Enregistrer Tout",
     "resetAll": "Réinitialiser Tout",
-    "undo": "Annuler",
+    "undo": "Rétablir",
     "reset": "Réinitialiser",
     "confirmDelete": "Confirmer la Suppression",
     "confirm": "Confirmer",
@@ -27,7 +27,7 @@
     "selectAll": "Tout Sélectionner",
     "clearAll": "Tout Désélectionner",
     "multipleFiles": "Fichiers multiples autorisés",
-    "remove": "Supprimer",
+    "remove": "Retirer",
     "discard": "Abandonner",
     "refresh": "Actualiser",
     "restore": "Restaurer l'original",
@@ -39,11 +39,26 @@
     "sync": "Synchroniser",
     "detail": "Détail",
     "continue": "Continuer",
-    "dismiss": "Fermer"
+    "discardAndClose": "Annuler et Fermer",
+    "continueEditing": "Continuer la Modification",
+    "aesthetics": "Esthétique",
+    "swapDirection": "Inverser la direction",
+    "saveConfiguration": "Enregistrer la Configuration",
+    "totalValue": "Valeur Totale",
+    "selected": "sélectionnés",
+    "start": "Début",
+    "end": "Fin",
+    "max": "Max",
+    "megabytes": "Mo",
+    "avatar": "Avatar",
+    "bytes": "o",
+    "kilobytes": "Ko",
+    "gigabytes": "Go",
+    "min": "Min",
+    "icon": "Icône",
+    "custom": "Personnalisé"
   },
   "table": {
-    "noData": "Aucune donnée disponible",
-    "selected": "sélectionnés",
     "clearSelection": "Effacer la sélection",
     "perPage": "par page",
     "items": "éléments",
@@ -55,19 +70,12 @@
     "contains": "Contient",
     "startsWith": "Commence par",
     "endsWith": "Finit par",
-    "equals": "Égal à",
-    "min": "Min",
-    "max": "Max",
-    "bytes": "o",
-    "kilobytes": "Ko",
-    "megabytes": "Mo",
-    "gigabytes": "Go"
+    "equals": "Égal à"
   },
   "fileStatus": {
     "uploaded": "Téléchargé",
     "parsed": "Analysé",
-    "failed": "Échoué",
-    "error": "Erreur"
+    "failed": "Échoué"
   },
   "error": {
     "pageNotFound": "Page Non Trouvée",
@@ -127,11 +135,6 @@
   },
   "nav": {
     "dashboard": "Tableau de bord",
-    "brokers": "Courtiers",
-    "assets": "Actifs",
-    "transactions": "Transactions",
-    "fx": "Taux de Change",
-    "files": "Fichiers",
     "settings": "Paramètres"
   },
   "help": {
@@ -145,7 +148,6 @@
     "welcomeSubtitle": "Voici un aperçu de votre portefeuille",
     "welcomeTitle": "Bienvenue sur LibreFolio",
     "welcomeMessage": "Votre gestionnaire de portefeuille auto-hébergé. Commencez par ajouter un courtier et importer vos transactions.",
-    "totalValue": "Valeur Totale",
     "totalGain": "Gain Total",
     "assetCount": "Actifs",
     "quickActions": "Actions Rapides"
@@ -196,14 +198,10 @@
     "forceDelete": "Supprimer de Force",
     "createFailed": "Échec de la création du courtier",
     "updateFailed": "Échec de la mise à jour du courtier",
-    "totalValue": "Valeur Totale",
     "assets": "{count} actif(s)",
     "currencies": "{count} devise(s)",
     "unsavedChanges": "Vous avez des modifications non enregistrées. Les abandonner ?",
-    "discardChanges": "Annuler les Modifications ?",
     "discardChangesWarning": "Vous avez des modifications non enregistrées pour ce courtier. Voulez-vous les annuler ?",
-    "continueEditing": "Continuer la Modification",
-    "discardAndClose": "Annuler et Fermer",
     "loadFailed": "Échec du chargement du courtier",
     "importFiles": "Fichiers d'Importation",
     "noImportFiles": "Aucun fichier d'importation",
@@ -228,7 +226,6 @@
       "owners": "Propriétaires",
       "editors": "Éditeurs",
       "viewers": "Lecteurs",
-      "save": "Enregistrer la Configuration",
       "saveFailed": "Échec de l'enregistrement de la configuration",
       "roleOwnerShort": "Propriétaire",
       "roleEditorShort": "Éditeur",
@@ -259,8 +256,7 @@
       "syncAll": "Sync. Tout",
       "refreshAll": "Actualiser Tout",
       "settings": "Paramètres",
-      "addPair": "Ajouter Paire",
-      "syncing": "Synchronisation..."
+      "addPair": "Ajouter Paire"
     },
     "empty": {
       "noPairsTitle": "Aucune Paire FX Configurée",
@@ -280,7 +276,6 @@
       "baseCurrency": "Devise de Base",
       "quoteCurrency": "Devise Cotée",
       "providerDisabledHint": "Sélectionnez d'abord les deux devises",
-      "saveConfiguration": "Enregistrer la Configuration",
       "providerInfoBanner": "Les fournisseurs récupèrent automatiquement les taux de change des banques centrales. Sans fournisseur, vous devrez saisir les taux manuellement.",
       "noProviderWarning": "Aucun fournisseur configuré. Vous devrez saisir manuellement les taux de change pour chaque date.",
       "createIntermediatePairs": "Créer aussi les paires intermédiaires",
@@ -291,7 +286,6 @@
       "title": "Synchroniser les taux FX",
       "description": "Synchroniser les taux de change des fournisseurs configurés pour la plage de dates sélectionnée.",
       "synced": "Synchronisé",
-      "syncing": "Synchronisation...",
       "start": "Démarrer la synchronisation",
       "pairsCount": "paires",
       "timeout": "Délai d'attente",
@@ -315,9 +309,10 @@
       "searchPlaceholder": "Rechercher fournisseurs, devises, pays…",
       "noSearchResults": "Aucune route ne correspond à la recherche",
       "addRoute": "Ajouter une route de conversion",
-      "hideRoutes": "Masquer les routes disponibles",
-      "providersLabel": "Fournisseurs"
-    }
+      "hideRoutes": "Masquer les routes disponibles"
+    },
+    "syncing": "Synchronisation...",
+    "providers": "Fournisseurs"
   },
   "settings": {
     "profile": "Profil",
@@ -328,9 +323,7 @@
     "profileDescription": "Gérez les détails de votre compte",
     "enableEditing": "Activer la modification",
     "disableEditing": "Désactiver la modification",
-    "discardChanges": "Annuler les Modifications ?",
     "discardChangesWarning": "Vous avez des modifications non enregistrées. Voulez-vous les annuler ?",
-    "continueEditing": "Continuer la Modification",
     "discardAndLock": "Annuler et Verrouiller",
     "savedSuccessfully": "enregistré avec succès",
     "accountCreated": "Compte Créé",
@@ -386,11 +379,7 @@
     "globalSettingsWarning": "Les modifications des paramètres globaux affectent tous les utilisateurs. Assurez-vous de comprendre l'impact avant de sauvegarder.",
     "noGlobalSettings": "Aucun paramètre global configuré. Exécutez la commande d'initialisation.",
     "readOnlyMode": "Lecture seule (accès Admin requis)",
-    "saveAll": "Tout Enregistrer",
-    "undoAll": "Tout Annuler",
     "resetAllToDefault": "Tout Réinitialiser",
-    "undo": "Annuler",
-    "resetToDefault": "Réinitialiser par Défaut",
     "adminRequired": "Accès admin requis pour modifier les paramètres globaux",
     "saveFailed": "Échec de l'enregistrement",
     "clickToEdit": "Cliquer pour déverrouiller et modifier",
@@ -398,10 +387,8 @@
     "discardChangesConfirm": "Vous avez des modifications non enregistrées. Abandonner toutes les modifications?",
     "globalSettingCategories": {
       "session": "Session",
-      "security": "Sécurité",
       "sync": "Synchronisation",
-      "defaults": "Valeurs par Défaut",
-      "all": "Tous les Paramètres"
+      "defaults": "Valeurs par Défaut"
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durée de Session",
@@ -411,7 +398,6 @@
       "auto_sync_fx_rates": "Synchronisation Auto Taux FX",
       "auto_sync_prices": "Synchronisation Auto Prix",
       "price_sync_interval_hours": "Intervalle Synchronisation Prix",
-      "default_currency": "Devise par Défaut",
       "default_language": "Langue par Défaut"
     },
     "globalSettingDescriptions": {
@@ -427,8 +413,7 @@
     },
     "globalSettingUnits": {
       "session_ttl_hours": "heures",
-      "price_sync_interval_hours": "heures",
-      "max_file_upload_mb": "Mo"
+      "price_sync_interval_hours": "heures"
     },
     "selectCurrency": "Sélectionner une devise...",
     "userPreferences": "Préférences Utilisateur",
@@ -440,7 +425,6 @@
     "defaultCurrencyHint": "Devise utilisée par défaut pour les nouvelles transactions et calculs",
     "themeHint": "Choisissez votre thème préféré",
     "category": "Catégorie",
-    "avatar": "Avatar",
     "avatarHint": "Cliquez pour télécharger une photo de profil",
     "removeAvatarTitle": "Supprimer l'avatar ?",
     "removeAvatarMessage": "Êtes-vous sûr de vouloir supprimer votre avatar ?",
@@ -449,7 +433,6 @@
   "uploads": {
     "dropOrClick": "Déposer un fichier ici ou cliquer pour parcourir",
     "maxSize": "Taille max: {size}Mo",
-    "maxSizeLabel": "Max",
     "imageSize": "Taille de l'image",
     "upload": "Téléverser",
     "title": "Fichiers",
@@ -465,12 +448,10 @@
     "download": "Télécharger",
     "copyLink": "Copier le Lien",
     "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce fichier?",
-    "deleteConfirmSingle": "Êtes-vous sûr de vouloir supprimer ce fichier?",
     "deleteConfirmMultiple": "Êtes-vous sûr de vouloir supprimer ces fichiers?",
     "files": "fichiers",
     "filesToDelete": "Fichiers à supprimer",
     "selectBroker": "Sélectionner le Courtier",
-    "selected": "sélectionnés",
     "chooseBroker": "-- Choisir le courtier --",
     "assignAll": "Assigner tous à",
     "assignBrokers": "Assigner les Courtiers",
@@ -484,9 +465,6 @@
     "cropAndUpload": "Recadrer et télécharger",
     "aspectRatio": "Format",
     "outputSize": "Sortie",
-    "presetAvatar": "Avatar",
-    "presetIcon": "Icône",
-    "presetCustom": "Personnalisé",
     "outputPreset": "Préréglage de sortie",
     "flipHorizontal": "Retourner horizontal",
     "flipVertical": "Retourner vertical",
@@ -494,9 +472,6 @@
     "selectionSize": "Sélection",
     "resetAll": "Tout réinitialiser",
     "crop": "Recadrer",
-    "discardChanges": "Annuler les modifications ?",
-    "discardChangesMessage": "Vous avez des modifications non enregistrées. Voulez-vous vraiment fermer ?",
-    "discardAndClose": "Annuler et fermer",
     "editFile": "Modifier le fichier",
     "rename": "Renommer",
     "renameAndUpload": "Renommer et télécharger",
@@ -505,7 +480,6 @@
     "selectAsset": "Sélectionner une Image",
     "existingFiles": "Existants",
     "fromUrl": "URL",
-    "uploadNew": "Téléverser",
     "imageUrl": "URL de l'Image",
     "useSelected": "Utiliser la Sélection",
     "selectIcon": "Sélectionner une Icône",
@@ -514,7 +488,6 @@
   "datePicker": {
     "from": "Du",
     "to": "Au",
-    "custom": "Personnalisé",
     "selectSecondDate": "Cliquez sur une autre date pour compléter la plage",
     "weekdays": {
       "mo": "Lu",
@@ -545,7 +518,7 @@
       "weeks": "Semaines",
       "weeksShort": "S",
       "months": "Mois",
-      "monthsShort": "D",
+      "monthsShort": "M",
       "years": "Annes",
       "yearsShort": "A"
     },
@@ -556,7 +529,6 @@
     "title": "Paramètres du Graphique",
     "titleLocal": "Paramètres du Graphique (Local)",
     "globalWarning": "Ces paramètres remplaceront toutes les personnalisations par carte.",
-    "aesthetics": "Esthétique",
     "baselineColors": "Couleurs de Référence",
     "baselineColorsDesc": "Vert au-dessus / Rouge en-dessous",
     "areaFill": "Remplissage",
@@ -570,9 +542,7 @@
     "style": {
       "color": "Couleur",
       "width": "Épaisseur",
-      "lineType": "Style",
-      "markerStart": "Début",
-      "markerEnd": "Fin"
+      "lineType": "Style"
     },
     "apply": "Appliquer",
     "discardTitle": "Rejeter les modifications ?",
@@ -632,7 +602,6 @@
     "yAxisScale": "Échelle Axe Y",
     "yAxisScaleDesc": "Contrôle de la plage de l'axe primaire",
     "yAxisInclude0": "Inclure 0",
-    "yAxisCustom": "Personnalisé",
     "tooltips": {
       "annualRate": "Taux de croissance annuel en pourcentage. Appliqué linéairement ou exponentiellement selon le type de signal.",
       "amplitude": "Plage d'oscillation crête-à-crête en pourcentage de la valeur de base.",
@@ -662,17 +631,13 @@
     "active": "Active — cliquez sur le graphique",
     "table": {
       "signal": "Signal",
-      "start": "Début",
-      "end": "Fin",
       "deltaAbs": "Δ Abs",
       "deltaPct": "Δ %",
       "annualized": "Δ%/an"
     },
-    "remove": "Supprimer",
     "days": "{days}j"
   },
   "fxDetail": {
-    "aesthetics": "Esthétique",
     "measures": "Mesures",
     "signals": "Signaux",
     "editRates": "Modifier les taux",
@@ -680,14 +645,9 @@
     "noData": "Aucune donnée de taux disponible pour cette plage.",
     "syncRates": "Synchroniser les taux",
     "backToList": "Retour à la liste FX",
-    "swapDirection": "Inverser la direction",
     "exitMeasure": "Quitter le mode mesure",
     "addMeasure": "Ajouter une mesure",
     "closeEditor": "Fermer l'éditeur",
-    "editRatesBtn": "Modifier les taux",
-    "providers": "Fournisseurs",
-    "syncFromProvider": "Synchroniser les taux",
-    "refreshData": "Actualiser les donnees",
     "swapConfirmTitle": "Modifications non enregistrées",
     "swapConfirmMessage": "Vous avez des modifications non enregistrées dans l'éditeur de taux. Inverser la direction les supprimera. Continuer ?"
   },
@@ -697,7 +657,6 @@
     "dropFile": "Déposez un fichier .csv ou .txt ici, ou cliquez pour parcourir",
     "dropReplace": "Déposez un autre fichier pour remplacer",
     "noValidRows": "Aucune ligne valide trouvée",
-    "swapDirection": "Inverser la direction",
     "validRows": "{count} ligne(s) valide(s)",
     "import": "Importer ({count})",
     "helpTitle": "Guide d'importation CSV",

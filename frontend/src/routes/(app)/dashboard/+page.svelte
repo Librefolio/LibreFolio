@@ -12,7 +12,7 @@
         {
             href: '/brokers',
             icon: Briefcase,
-            titleKey: 'nav.brokers',
+            titleKey: 'brokers.title',
             descKey: 'dashboard.manageBrokers',
             bgClass: 'bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50',
             iconClass: 'text-blue-600 dark:text-blue-400'
@@ -20,7 +20,7 @@
         {
             href: '/assets',
             icon: BarChart3,
-            titleKey: 'nav.assets',
+            titleKey: 'assets.title',
             descKey: 'dashboard.manageAssets',
             bgClass: 'bg-green-100 dark:bg-green-900/30 group-hover:bg-green-200 dark:group-hover:bg-green-900/50',
             iconClass: 'text-green-600 dark:text-green-400'
@@ -28,7 +28,7 @@
         {
             href: '/transactions',
             icon: ArrowRightLeft,
-            titleKey: 'nav.transactions',
+            titleKey: 'transactions.title',
             descKey: 'dashboard.manageTransactions',
             bgClass: 'bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50',
             iconClass: 'text-purple-600 dark:text-purple-400'
@@ -36,7 +36,7 @@
         {
             href: '/fx',
             icon: Coins,
-            titleKey: 'nav.fx',
+            titleKey: 'fx.title',
             descKey: 'dashboard.manageFx',
             bgClass: 'bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50',
             iconClass: 'text-amber-600 dark:text-amber-400'
@@ -76,7 +76,7 @@
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('dashboard.totalValue')}</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('common.totalValue')}</p>
                     <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">€ --,---.--</p>
                 </div>
                 <div class="p-3 bg-libre-green/10 dark:bg-libre-green/20 rounded-lg">

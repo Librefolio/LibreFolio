@@ -63,7 +63,7 @@
             onclick={() => onClearSelection?.()}
             title={$t('table.clearSelection')}
         >
-            <span>{selectedCount} {$t('table.selected')}</span>
+            <span>{selectedCount} {$t('common.selected')}</span>
             <span class="text-base leading-none opacity-60 hover:opacity-100">×</span>
         </button>
 

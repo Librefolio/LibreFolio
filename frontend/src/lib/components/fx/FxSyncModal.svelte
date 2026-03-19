@@ -244,7 +244,7 @@
                 <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span class="flex items-center gap-1.5">
                         <Clock size={13} class="animate-pulse" />
-                        {$t('fx.sync.syncing') ?? 'Syncing...'}
+                        {$t('fx.syncing') ?? 'Syncing...'}
                     </span>
                     <span class="font-mono tabular-nums">{formatTime(remainingSec)}</span>
                 </div>
@@ -354,7 +354,7 @@
                 {#if failedPairs.length > 0 && hasResults}
                     {$t('common.retry') ?? 'Retry'} {failedPairs.length} failed
                 {:else if syncing}
-                    {$t('fx.sync.syncing') ?? 'Syncing...'}
+                    {$t('fx.syncing') ?? 'Syncing...'}
                 {:else}
                     {$t('fx.sync.start') ?? 'Start Sync'}
                 {/if}

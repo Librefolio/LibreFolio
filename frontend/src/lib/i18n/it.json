@@ -19,7 +19,7 @@
     "undoAll": "Annulla Tutto",
     "saveAll": "Salva Tutto",
     "resetAll": "Ripristina Tutto",
-    "undo": "Annulla",
+    "undo": "Ripristina",
     "reset": "Ripristina",
     "confirmDelete": "Conferma Eliminazione",
     "confirm": "Conferma",
@@ -39,11 +39,26 @@
     "sync": "Sincronizza",
     "detail": "Dettaglio",
     "continue": "Continua",
-    "dismiss": "Chiudi"
+    "discardAndClose": "Annulla e Chiudi",
+    "continueEditing": "Continua Modifica",
+    "aesthetics": "Estetica",
+    "swapDirection": "Inverti direzione",
+    "saveConfiguration": "Salva Configurazione",
+    "totalValue": "Valore Totale",
+    "selected": "selezionati",
+    "start": "Inizio",
+    "end": "Fine",
+    "max": "Max",
+    "megabytes": "MB",
+    "avatar": "Avatar",
+    "bytes": "B",
+    "kilobytes": "KB",
+    "gigabytes": "GB",
+    "min": "Min",
+    "icon": "Icona",
+    "custom": "Personalizzato"
   },
   "table": {
-    "noData": "Nessun dato disponibile",
-    "selected": "selezionati",
     "clearSelection": "Deseleziona tutto",
     "perPage": "per pagina",
     "items": "elementi",
@@ -55,19 +70,12 @@
     "contains": "Contiene",
     "startsWith": "Inizia con",
     "endsWith": "Finisce con",
-    "equals": "Uguale a",
-    "min": "Min",
-    "max": "Max",
-    "bytes": "B",
-    "kilobytes": "KB",
-    "megabytes": "MB",
-    "gigabytes": "GB"
+    "equals": "Uguale a"
   },
   "fileStatus": {
     "uploaded": "Caricato",
     "parsed": "Elaborato",
-    "failed": "Fallito",
-    "error": "Errore"
+    "failed": "Fallito"
   },
   "error": {
     "pageNotFound": "Pagina Non Trovata",
@@ -91,7 +99,7 @@
     "noAccount": "Non hai un account?",
     "hasAccount": "Hai già un account?",
     "registerHere": "Registrati qui",
-    "loginHere": "Accedi",
+    "loginHere": "Accedi qui",
     "usernameOrEmail": "Nome utente o Email",
     "accountCreated": "Account creato con successo! Effettua l'accesso.",
     "registrationFailed": "Registrazione fallita. Riprova.",
@@ -127,11 +135,6 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "brokers": "Broker",
-    "assets": "Asset",
-    "transactions": "Transazioni",
-    "fx": "Tassi di Cambio",
-    "files": "File",
     "settings": "Impostazioni"
   },
   "help": {
@@ -145,7 +148,6 @@
     "welcomeSubtitle": "Ecco una panoramica del tuo portfolio",
     "welcomeTitle": "Benvenuto in LibreFolio",
     "welcomeMessage": "Il tuo portfolio tracker self-hosted. Inizia aggiungendo un broker e importando le tue transazioni.",
-    "totalValue": "Valore Totale",
     "totalGain": "Guadagno Totale",
     "assetCount": "Asset",
     "quickActions": "Azioni Rapide"
@@ -196,14 +198,10 @@
     "forceDelete": "Elimina Forzatamente",
     "createFailed": "Errore nella creazione del broker",
     "updateFailed": "Errore nell'aggiornamento del broker",
-    "totalValue": "Valore Totale",
     "assets": "{count} asset",
     "currencies": "{count} valuta/e",
     "unsavedChanges": "Ci sono modifiche non salvate. Vuoi scartarle?",
-    "discardChanges": "Annullare le Modifiche?",
     "discardChangesWarning": "Hai modifiche non salvate a questo broker. Vuoi annullarle?",
-    "continueEditing": "Continua Modifica",
-    "discardAndClose": "Annulla e Chiudi",
     "loadFailed": "Errore nel caricamento del broker",
     "importFiles": "File di Importazione",
     "noImportFiles": "Nessun file di importazione",
@@ -228,7 +226,6 @@
       "owners": "Proprietari",
       "editors": "Editor",
       "viewers": "Visualizzatori",
-      "save": "Salva Configurazione",
       "saveFailed": "Errore nel salvataggio della configurazione",
       "roleOwnerShort": "Proprietario",
       "roleEditorShort": "Editor",
@@ -259,8 +256,7 @@
       "syncAll": "Sinc. Tutto",
       "refreshAll": "Aggiorna Tutto",
       "settings": "Impostazioni",
-      "addPair": "Aggiungi Coppia",
-      "syncing": "Sincronizzazione..."
+      "addPair": "Aggiungi Coppia"
     },
     "empty": {
       "noPairsTitle": "Nessuna Coppia FX Configurata",
@@ -280,7 +276,6 @@
       "baseCurrency": "Valuta Base",
       "quoteCurrency": "Valuta Quotata",
       "providerDisabledHint": "Seleziona prima entrambe le valute",
-      "saveConfiguration": "Salva Configurazione",
       "providerInfoBanner": "I provider recuperano automaticamente i tassi di cambio dalle banche centrali. Senza un provider, dovrai inserire i tassi manualmente.",
       "noProviderWarning": "Nessun provider configurato. Dovrai inserire manualmente i tassi di cambio per ogni data.",
       "createIntermediatePairs": "Crea anche le coppie intermedie",
@@ -291,7 +286,6 @@
       "title": "Sincronizza Tassi FX",
       "description": "Sincronizza i tassi di cambio dai provider configurati per l'intervallo di date selezionato.",
       "synced": "Sincronizzati",
-      "syncing": "Sincronizzazione...",
       "start": "Avvia Sincronizzazione",
       "pairsCount": "coppie",
       "timeout": "Timeout",
@@ -315,9 +309,10 @@
       "searchPlaceholder": "Cerca provider, valute, paesi…",
       "noSearchResults": "Nessun percorso corrisponde alla ricerca",
       "addRoute": "Aggiungi percorso di conversione",
-      "hideRoutes": "Nascondi percorsi disponibili",
-      "providersLabel": "Provider"
-    }
+      "hideRoutes": "Nascondi percorsi disponibili"
+    },
+    "syncing": "Sincronizzazione...",
+    "providers": "Provider"
   },
   "settings": {
     "profile": "Profilo",
@@ -328,9 +323,7 @@
     "profileDescription": "Gestisci i dettagli del tuo account",
     "enableEditing": "Abilita modifica",
     "disableEditing": "Disabilita modifica",
-    "discardChanges": "Annullare le Modifiche?",
     "discardChangesWarning": "Hai modifiche non salvate. Vuoi annullarle?",
-    "continueEditing": "Continua Modifica",
     "discardAndLock": "Annulla e Blocca",
     "savedSuccessfully": "salvato con successo",
     "accountCreated": "Account Creato",
@@ -386,11 +379,7 @@
     "globalSettingsWarning": "Le modifiche alle impostazioni globali influenzano tutti gli utenti. Assicurati di comprendere l'impatto prima di salvare.",
     "noGlobalSettings": "Nessuna impostazione globale configurata. Esegui il comando di inizializzazione.",
     "readOnlyMode": "Sola lettura (richiesto accesso Admin)",
-    "saveAll": "Salva Tutto",
-    "undoAll": "Annulla Tutto",
     "resetAllToDefault": "Ripristina Tutto",
-    "undo": "Annulla",
-    "resetToDefault": "Ripristina Default",
     "adminRequired": "Accesso admin richiesto per modificare le impostazioni globali",
     "saveFailed": "Errore nel salvataggio",
     "clickToEdit": "Clicca per sbloccare e modificare",
@@ -398,10 +387,8 @@
     "discardChangesConfirm": "Hai modifiche non salvate. Vuoi scartare tutte le modifiche?",
     "globalSettingCategories": {
       "session": "Sessione",
-      "security": "Sicurezza",
       "sync": "Sincronizzazione",
-      "defaults": "Valori Predefiniti",
-      "all": "Tutte le Impostazioni"
+      "defaults": "Valori Predefiniti"
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durata Sessione",
@@ -411,7 +398,6 @@
       "auto_sync_fx_rates": "Sincronizzazione Tassi FX",
       "auto_sync_prices": "Sincronizzazione Prezzi",
       "price_sync_interval_hours": "Intervallo Sincronizzazione Prezzi",
-      "default_currency": "Valuta Predefinita",
       "default_language": "Lingua Predefinita"
     },
     "globalSettingDescriptions": {
@@ -427,8 +413,7 @@
     },
     "globalSettingUnits": {
       "session_ttl_hours": "ore",
-      "price_sync_interval_hours": "ore",
-      "max_file_upload_mb": "MB"
+      "price_sync_interval_hours": "ore"
     },
     "selectCurrency": "Seleziona valuta...",
     "userPreferences": "Preferenze Utente",
@@ -440,7 +425,6 @@
     "defaultCurrencyHint": "Valuta usata per nuove transazioni e calcoli",
     "themeHint": "Scegli il tema preferito",
     "category": "Categoria",
-    "avatar": "Avatar",
     "avatarHint": "Clicca per caricare un'immagine del profilo",
     "removeAvatarTitle": "Rimuovere avatar?",
     "removeAvatarMessage": "Sei sicuro di voler rimuovere il tuo avatar?",
@@ -449,7 +433,6 @@
   "uploads": {
     "dropOrClick": "Trascina un file qui o clicca per sfogliare",
     "maxSize": "Dimensione max: {size}MB",
-    "maxSizeLabel": "Max",
     "imageSize": "Dimensione immagine",
     "upload": "Carica",
     "title": "File",
@@ -465,12 +448,10 @@
     "download": "Scarica",
     "copyLink": "Copia Link",
     "deleteConfirm": "Sei sicuro di voler eliminare questo file?",
-    "deleteConfirmSingle": "Sei sicuro di voler eliminare questo file?",
     "deleteConfirmMultiple": "Sei sicuro di voler eliminare questi file?",
     "files": "file",
     "filesToDelete": "File da eliminare",
     "selectBroker": "Seleziona Broker",
-    "selected": "selezionati",
     "chooseBroker": "-- Seleziona broker --",
     "assignAll": "Assegna tutti a",
     "assignBrokers": "Assegna Broker",
@@ -483,10 +464,7 @@
     "editAvatar": "Carica Avatar",
     "cropAndUpload": "Ritaglia e Carica",
     "aspectRatio": "Proporzioni",
-    "outputSize": "Dimensione",
-    "presetAvatar": "Avatar",
-    "presetIcon": "Icona",
-    "presetCustom": "Personalizzato",
+    "outputSize": "Output",
     "outputPreset": "Preset output",
     "flipHorizontal": "Capovolgi orizzontale",
     "flipVertical": "Capovolgi verticale",
@@ -494,9 +472,6 @@
     "selectionSize": "Selezione",
     "resetAll": "Reimposta tutto",
     "crop": "Ritaglia",
-    "discardChanges": "Annullare le modifiche?",
-    "discardChangesMessage": "Hai modifiche non salvate. Sei sicuro di voler chiudere?",
-    "discardAndClose": "Annulla e chiudi",
     "editFile": "Modifica File",
     "rename": "Rinomina",
     "renameAndUpload": "Rinomina e Carica",
@@ -505,7 +480,6 @@
     "selectAsset": "Seleziona Immagine",
     "existingFiles": "Esistenti",
     "fromUrl": "URL",
-    "uploadNew": "Carica",
     "imageUrl": "URL Immagine",
     "useSelected": "Usa Selezionato",
     "selectIcon": "Seleziona Icona",
@@ -514,7 +488,6 @@
   "datePicker": {
     "from": "Dal",
     "to": "Al",
-    "custom": "Personalizzato",
     "selectSecondDate": "Clicca un'altra data per completare l'intervallo",
     "weekdays": {
       "mo": "Lu",
@@ -545,7 +518,7 @@
       "weeks": "Settimane",
       "weeksShort": "S",
       "months": "Mesi",
-      "monthsShort": "D",
+      "monthsShort": "M",
       "years": "Anni",
       "yearsShort": "A"
     },
@@ -556,7 +529,6 @@
     "title": "Impostazioni Grafico",
     "titleLocal": "Impostazioni Grafico (Locale)",
     "globalWarning": "Queste impostazioni sovrascriveranno tutte le personalizzazioni delle singole card.",
-    "aesthetics": "Estetica",
     "baselineColors": "Colori Riferimento",
     "baselineColorsDesc": "Verde sopra / Rosso sotto",
     "areaFill": "Riempimento Area",
@@ -570,9 +542,7 @@
     "style": {
       "color": "Colore",
       "width": "Spessore",
-      "lineType": "Stile",
-      "markerStart": "Inizio",
-      "markerEnd": "Fine"
+      "lineType": "Stile"
     },
     "apply": "Applica",
     "discardTitle": "Scartare le modifiche?",
@@ -632,7 +602,6 @@
     "yAxisScale": "Scala Asse Y",
     "yAxisScaleDesc": "Controllo intervallo asse primario",
     "yAxisInclude0": "Includi 0",
-    "yAxisCustom": "Personalizzato",
     "tooltips": {
       "annualRate": "Tasso di crescita annuale in percentuale. Applicato linearmente o esponenzialmente a seconda del tipo di segnale.",
       "amplitude": "Intervallo di oscillazione picco-picco come percentuale del valore base.",
@@ -662,17 +631,13 @@
     "active": "Attiva — clicca sul grafico",
     "table": {
       "signal": "Segnale",
-      "start": "Inizio",
-      "end": "Fine",
       "deltaAbs": "Δ Ass",
       "deltaPct": "Δ %",
       "annualized": "Δ%/anno"
     },
-    "remove": "Rimuovi",
     "days": "{days}g"
   },
   "fxDetail": {
-    "aesthetics": "Estetica",
     "measures": "Misure",
     "signals": "Segnali",
     "editRates": "Modifica tassi",
@@ -680,14 +645,9 @@
     "noData": "Nessun tasso disponibile per questo intervallo.",
     "syncRates": "Sincronizza tassi",
     "backToList": "Torna alla lista FX",
-    "swapDirection": "Inverti direzione",
     "exitMeasure": "Esci dalla modalità misura",
     "addMeasure": "Aggiungi misura",
     "closeEditor": "Chiudi editor",
-    "editRatesBtn": "Modifica tassi",
-    "providers": "Provider",
-    "syncFromProvider": "Sincronizza tassi dal provider",
-    "refreshData": "Aggiorna dati",
     "swapConfirmTitle": "Modifiche non salvate",
     "swapConfirmMessage": "Hai modifiche non salvate nell'editor dei tassi. Invertire la direzione le cancellerà. Continuare?"
   },
@@ -697,7 +657,6 @@
     "dropFile": "Trascina un file .csv o .txt qui, o clicca per sfogliare",
     "dropReplace": "Trascina un altro file per sostituire",
     "noValidRows": "Nessuna riga valida trovata",
-    "swapDirection": "Inverti direzione",
     "validRows": "{count} riga/e valida/e",
     "import": "Importa ({count})",
     "helpTitle": "Guida importazione CSV",

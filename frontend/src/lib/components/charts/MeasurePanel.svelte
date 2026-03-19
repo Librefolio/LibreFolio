@@ -263,12 +263,12 @@
             sortable: false, filterable: false, width: 100,
         },
         {
-            id: 'valueStart', header: () => $t('measure.table.start'), type: 'number',
+            id: 'valueStart', header: () => $t('common.start'), type: 'number',
             cell: (r) => ({type: 'html', html: `<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueStart)}</span>`}),
             getValue: (r) => r.valueStart, sortable: true, filterable: true, width: 90,
         },
         {
-            id: 'valueEnd', header: () => $t('measure.table.end'), type: 'number',
+            id: 'valueEnd', header: () => $t('common.end'), type: 'number',
             cell: (r) => ({type: 'html', html: `<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueEnd)}</span>`}),
             getValue: (r) => r.valueEnd, sortable: true, filterable: true, width: 90,
         },
@@ -416,7 +416,7 @@
                                 class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex items-center justify-center"
                                 role="button"
                                 tabindex="-1"
-                                title={$t('measure.remove')}
+                                title={$t('common.remove')}
                                 onclick={(e) => { e.stopPropagation(); removeMeasure(measure.id); }}
                                 onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); removeMeasure(measure.id); }}}
                             >

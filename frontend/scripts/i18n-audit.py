@@ -433,6 +433,29 @@ def _find_duplicate_groups(
                 all_key_groups[ks] = {}
             all_key_groups[ks][lang] = lang_data[keys[0]]
 
+    # ------------------------------------------------------------------
+    # Fix: re-verify each group against ALL languages.
+    # A language may not have produced this exact frozenset (it may have
+    # a superset group instead), but the keys in this group may still
+    # all share the same value in that language.
+    # ------------------------------------------------------------------
+    for key_set in list(all_key_groups.keys()):
+        for lang in LANGUAGES:
+            if lang in all_key_groups[key_set]:
+                continue  # already matched
+            lang_data = translations.get(lang, {})
+            values = set()
+            for key in key_set:
+                val = lang_data.get(key, "")
+                if not isinstance(val, str) or not val.strip():
+                    break
+                values.add(val.strip().lower())
+            else:
+                # All keys exist and have values — check if all same
+                if len(values) == 1:
+                    # This language also has all keys matching
+                    all_key_groups[key_set][lang] = lang_data[sorted(key_set)[0]]
+
     sorted_groups: list[DuplicateGroup] = sorted(
         all_key_groups.items(),
         key=lambda x: (-len(x[1]), -len(x[0]), sorted(x[0])[0]),

@@ -41,10 +41,10 @@
 
     // Size units conversion (labels are translated via getter)
     const SIZE_UNITS_BASE: { unit: SizeUnit; bytes: number; labelKey: string }[] = [
-        {unit: 'B', bytes: 1, labelKey: 'filter.bytes'},
-        {unit: 'KB', bytes: 1024, labelKey: 'filter.kilobytes'},
-        {unit: 'MB', bytes: 1024 * 1024, labelKey: 'filter.megabytes'},
-        {unit: 'GB', bytes: 1024 * 1024 * 1024, labelKey: 'filter.gigabytes'},
+        {unit: 'B', bytes: 1, labelKey: 'common.bytes'},
+        {unit: 'KB', bytes: 1024, labelKey: 'common.kilobytes'},
+        {unit: 'MB', bytes: 1024 * 1024, labelKey: 'common.megabytes'},
+        {unit: 'GB', bytes: 1024 * 1024 * 1024, labelKey: 'common.gigabytes'},
     ];
 
     // Reactive translated size units
@@ -449,11 +449,11 @@
         {:else if type === 'number'}
             <div class="number-filter">
                 <div class="range-row">
-                    <label class="range-label" for="number-min-input">{$t('filter.min')}</label>
+                    <label class="range-label" for="number-min-input">{$t('common.min')}</label>
                     <input type="number" class="range-input" bind:value={numMin} min={numberMin} max={numMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }} id="number-min-input"/>
                 </div>
                 <div class="range-row">
-                    <label class="range-label" for="number-max-input">{$t('filter.max')}</label>
+                    <label class="range-label" for="number-max-input">{$t('common.max')}</label>
                     <input type="number" class="range-input" bind:value={numMax} min={numMin} max={numberMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }} id="number-max-input"/>
                 </div>
                 <!-- Dual range slider -->
@@ -498,7 +498,7 @@
             <div class="size-filter">
                 <!-- Min size input -->
                 <div class="size-row">
-                    <label class="size-label" for="size-min-input">{$t('filter.min')}</label>
+                    <label class="size-label" for="size-min-input">{$t('common.min')}</label>
                     <div class="size-input-group">
                         <input
                                 type="number"
@@ -518,7 +518,7 @@
 
                 <!-- Max size input -->
                 <div class="size-row">
-                    <label class="size-label" for="size-max-input">{$t('filter.max')}</label>
+                    <label class="size-label" for="size-max-input">{$t('common.max')}</label>
                     <div class="size-input-group">
                         <input
                                 type="number"

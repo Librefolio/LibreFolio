@@ -38,9 +38,9 @@
     }>();
 
     const presetOptions: Array<{value: PresetName; labelKey: string}> = [
-        {value: 'avatar', labelKey: 'uploads.presetAvatar'},
-        {value: 'broker-icon', labelKey: 'uploads.presetIcon'},
-        {value: 'custom', labelKey: 'uploads.presetCustom'},
+        {value: 'avatar', labelKey: 'common.avatar'},
+        {value: 'broker-icon', labelKey: 'common.icon'},
+        {value: 'custom', labelKey: 'common.custom'},
     ];
 
     const aspectOptions: Array<{value: number; label: string}> = [
@@ -482,17 +482,17 @@
          <div class="confirm-dialog" data-testid="image-edit-confirm-dialog">
             <div class="confirm-header">
                 <span class="confirm-icon">⚠️</span>
-                <h3>{$_('uploads.discardChanges') || 'Discard changes?'}</h3>
+                <h3>{$_('common.discardChanges') || 'Discard changes?'}</h3>
             </div>
             <p class="confirm-message">
-                {$_('uploads.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
+                {$_('common.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
             </p>
             <div class="confirm-actions">
                 <button class="btn btn-secondary" on:click={cancelClose}>
                     {$_('common.cancel') || 'Cancel'}
                 </button>
                 <button class="btn btn-warning" on:click={confirmClose}>
-                    {$_('uploads.discardAndClose') || 'Discard'}
+                    {$_('common.discardAndClose') || 'Discard & Close'}
                 </button>
             </div>
         </div>
