@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, delete as sql_delete
 
-from backend.app.db.models import FxConversionRoute, FxRate
+from backend.app.api.v1.auth import get_current_user
+from backend.app.db.models import FxConversionRoute, FxRate, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
@@ -90,6 +91,7 @@ def _build_providers_description() -> str:
 @router_providers.get("", response_model=List[FXProviderInfo], description=_build_providers_description())
 async def list_providers(
     providers: Optional[List[str]] = Query(None, description="Optional list of provider codes to filter. If empty, returns all providers.", ),
+    _current_user: User = Depends(get_current_user),
     ):
     """Get the list of available FX rate providers, optionally filtered."""
     try:
@@ -146,6 +148,7 @@ async def list_providers(
 async def sync_rates(
     body: FXSyncPairRequest,
     session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Synchronize FX rates for specified currency pairs and date range.
@@ -195,7 +198,8 @@ async def sync_rates(
 
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)
 async def upsert_rates_endpoint(
-    rates: List[FXUpsertItem], session: AsyncSession = Depends(get_session_generator)
+    rates: List[FXUpsertItem], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Manually insert or update one or more FX rates (bulk operation).
@@ -268,7 +272,8 @@ async def upsert_rates_endpoint(
 
 @router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)
 async def delete_rates_endpoint(
-    deletions: List[FXDeleteItem], session: AsyncSession = Depends(get_session_generator)
+    deletions: List[FXDeleteItem], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Delete one or more FX rates (bulk operation).
@@ -473,7 +478,8 @@ def _compress_convert_errors(errors: list[str]) -> list[str]:
 
 @router_currencies.post("/convert", response_model=FXConvertResponse)
 async def convert_currency_bulk(
-    request: List[FXConversionRequest], session: AsyncSession = Depends(get_session_generator)
+    request: List[FXConversionRequest], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Convert one or more amounts between currencies (bulk operation).
@@ -591,7 +597,8 @@ async def convert_currency_bulk(
 
 
 @router_providers.get("/routes", response_model=FXConversionRoutesResponse)
-async def list_routes(session: AsyncSession = Depends(get_session_generator)):
+async def list_routes(session: AsyncSession = Depends(get_session_generator),
+                      _current_user: User = Depends(get_current_user)):
     """
     Get the list of configured conversion routes.
 
@@ -621,7 +628,8 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator)):
 
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
 async def create_routes_bulk(
-    routes: List[FXConversionRouteItem], session: AsyncSession = Depends(get_session_generator)
+    routes: List[FXConversionRouteItem], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Create or update multiple conversion routes in a single atomic transaction.
@@ -766,7 +774,8 @@ async def create_routes_bulk(
 
 @router_providers.delete("/routes", response_model=FXDeleteRoutesResponse)
 async def delete_routes_bulk(
-    routes: List[FXDeleteRouteItem], session: AsyncSession = Depends(get_session_generator)
+    routes: List[FXDeleteRouteItem], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Delete multiple conversion routes.
