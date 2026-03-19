@@ -1504,23 +1504,23 @@ def front_fx_settings(verbose: bool = False, ui: bool = False, headed: bool = Fa
 
 def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
     """Run all FX tests (unit + E2E)."""
-    print_header("All FX Tests (Unit + E2E)")
-    results = []
-    results.append(("FX Unit", front_fx_unit(verbose=verbose)))
-    results.append(("FX List", front_fx_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)))
-    results.append(("FX Add Pair", front_fx_add_pair(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)))
-    results.append(("FX Detail", front_fx_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)))
-    results.append(("FX Editor", front_fx_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)))
-    results.append(("FX Sync", front_fx_sync(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)))
-    results.append(("FX API", front_fx_api(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)))
-    results.append(("FX Settings", front_fx_settings(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)))
-    all_passed = all(r[1] for r in results)
-    if all_passed:
-        print_success("All FX tests passed! 🎉")
-    else:
-        failed = [r[0] for r in results if not r[1]]
-        print_error(f"Failed FX tests: {', '.join(failed)}")
-    return all_passed
+    return _run_test_suite(
+        suite_name="All FX Tests (Unit + E2E)",
+        tests=[
+            ("FX Unit (Vitest)", lambda: front_fx_unit(verbose=verbose)),
+            ("FX List Page", lambda: front_fx_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Add Pair Modal", lambda: front_fx_add_pair(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Detail Page", lambda: front_fx_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Data Editor", lambda: front_fx_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Sync Modal", lambda: front_fx_sync(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX API Routes", lambda: front_fx_api(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Chart Settings", lambda: front_fx_settings(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+        ],
+        verbose=verbose,
+        header_msg="All FX Tests (Unit + E2E)",
+        summary_title="FX Test Summary",
+        success_msg="All FX tests passed! 🎉",
+    )
 
 
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:

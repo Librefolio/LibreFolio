@@ -2,8 +2,8 @@
 
 **Data creazione**: 12 Marzo 2026
 **Ultima revisione**: 19 Marzo 2026
-**Status**: 🔧 IN PROGRESS — Steps 1-9 verificati (3 fix in fx-list.spec.ts da rivalidare), Steps 10-12 da fare
-**Priorità**: Alta (zero copertura E2E FX, 2 bug noti da fixare)
+**Status**: ✅ Steps 0-10,12A-C COMPLETATI — Step 2C (razionalizzazione chiavi) IN PIANIFICAZIONE, Steps 2D/11 da fare
+**Priorità**: Media (copertura E2E FX completa, restano i18n rationalization, gallery)
 **Stima**: ~5-6 giorni
 **Dipendenze**: Tutti i plan Phase 5 FX completati (13+ sub-plan, 7 round bug-fix)
 **Riferimenti**:
@@ -23,31 +23,37 @@ Il sottosistema FX è completo a livello funzionale: 2 pagine route (~1400+ righ
 |------|------|----------|
 | 12 Mar 2026 | 📋 Stub creato | Task pendenti C1-C7 |
 | 19 Mar 2026 | 📋 Piano dettagliato | Analisi completa codice, 12 step, ~70 test, 2 bug trovati |
-| 19 Mar 2026 | 🔍 Pre-Step 0A | Eliminato `FxEditSection.svelte` (dead code) — UNDER REVIEW |
-| 19 Mar 2026 | 🔍 Pre-Step 0B | Spostato `CsvEditor.svelte` in `ui/data-editor/` — UNDER REVIEW |
-| 19 Mar 2026 | 🔍 Pre-Step 0C | 20 `data-testid` aggiunti nella pagina FX detail — UNDER REVIEW |
-| 19 Mar 2026 | 🔍 Pre-Step 0D | Eliminato `fx-routes.spec.ts`, creato `e2e/fx/fx-helpers.ts` — UNDER REVIEW |
-| 19 Mar 2026 | 🔍 Pre-Step 0E | Fix FxPairSignal nella detail page (`_resolvedData`) — UNDER REVIEW |
-| 19 Mar 2026 | 🔍 Pre-Step 0F | Fix `annualizedPct` in `MeasureSignal.getMeasurementForSignal()` — UNDER REVIEW |
+| 19 Mar 2026 | ✅ Pre-Step 0A | Eliminato `FxEditSection.svelte` (dead code) — verificato: file non esiste |
+| 19 Mar 2026 | ✅ Pre-Step 0B | Spostato `CsvEditor.svelte` in `ui/data-editor/` — verificato: nuovo path esiste |
+| 19 Mar 2026 | ✅ Pre-Step 0C | 20 `data-testid` aggiunti nella pagina FX detail — verificato: 20 occorrenze |
+| 19 Mar 2026 | ✅ Pre-Step 0D | Eliminato `fx-routes.spec.ts`, creato `e2e/fx/fx-helpers.ts` — verificato: file non esiste |
+| 19 Mar 2026 | ✅ Pre-Step 0E | Fix FxPairSignal nella detail page (`_resolvedData`) — verificato: presente |
+| 19 Mar 2026 | ✅ Pre-Step 0F | Fix `annualizedPct` in `MeasureSignal.getMeasurementForSignal()` — verificato: 6 occorrenze |
 | 19 Mar 2026 | ✅ Step 1 | 27 unit test Vitest (15 TimeSeriesStore + 12 EditBuffer) — **PASSED** (27/27) |
-| 19 Mar 2026 | 🔍 Step 2 | i18n: stringhe hardcoded tradotte (MeasurePanel, FxDetail, BrokerDetail) — UNDER REVIEW |
-| 19 Mar 2026 | 🔧 Step 3 | E2E FX List Page — 7/10 passed, 3 failed (badge count, filter, reset) — fix applicati |
+| 19 Mar 2026 | 🔍 Step 2 | i18n: stringhe hardcoded tradotte in MeasurePanel — UNDER REVIEW (2A/2B/2C/2E non eseguiti) |
+| 19 Mar 2026 | ✅ Step 3 | E2E FX List Page — **PASSED** (10/10) dopo 3 fix (testid collision, SearchSelect selector, badge logic) |
 | 19 Mar 2026 | ✅ Step 4 | E2E FX Add Pair Modal — **PASSED** (5/5) |
 | 19 Mar 2026 | ✅ Step 5 | E2E FX Detail Page — **PASSED** (12/12) |
 | 19 Mar 2026 | ✅ Step 6 | E2E FX Data Editor — **PASSED** (3/3) |
 | 19 Mar 2026 | ✅ Step 7 | E2E FX Sync — **PASSED** (3/3) |
 | 19 Mar 2026 | ✅ Step 8 | E2E FX API Routes — **PASSED** (3/3) |
 | 19 Mar 2026 | ✅ Step 9 | E2E FX Chart Settings — **PASSED** (3/3) |
-| 19 Mar 2026 | 🔍 Step 10 | Registrazione in `dev.py test` + riorganizzazione categorie (front-utility, front-user, front-fx) — UNDER REVIEW |
+| 19 Mar 2026 | ✅ Step 10 | Registrazione in `dev.py test` — verificata, `front_fx()` ora usa `_run_test_suite` con summary |
 | 19 Mar 2026 | ✅ Step 12A | 14 plan file spostati in `phases/phase-05-subplan/` |
 | 19 Mar 2026 | ✅ Step 12B | `phase-05-fx.md` riscritto come summary |
-| 19 Mar 2026 | 🔍 Step 12C | Aggiornato TODO_Completati.md e TODO_FUTURI.md — UNDER REVIEW |
+| 19 Mar 2026 | ✅ Step 12C | Aggiornato TODO_Completati.md e TODO_FUTURI.md — verificato: voci rimosse |
 | 19 Mar 2026 | ✅ Fix port | `--force` flag aggiunto a `./dev.py server` + `playwright.config.ts` usa `--force` |
 | 19 Mar 2026 | ✅ Fix testid | `data-testid` aggiunti: `fx-currency-filter`, `fx-reset-filters`, `fx-date-range-picker`, `fx-pair-label`, `fx-swap-btn` |
 | 19 Mar 2026 | ✅ Fix tests | Test 4/7/8/10 in `fx-list.spec.ts` resi reali (rimossi if-guard, asserzioni dirette) |
 | 19 Mar 2026 | 🔧 Fix tests | Test 3: card count collision (testid prefix `fx-card-` matchava figli) → rinominati a `fx-pair-label`/`fx-swap-btn` |
 | 19 Mar 2026 | 🔧 Fix tests | Test 4/5: `SearchSelect` usa `<button>` non `[role=option]` → corretto selettore |
 | 19 Mar 2026 | ✅ Fix dev.py | `_print_port_help()` estratta come funzione condivisa, usata da entrambi i path (force/non-force) |
+| 19 Mar 2026 | ✅ Step 2A | i18n-audit: regex migliorate (tooltip, 3-segment strings), unused report split in Dynamic/Unused |
+| 19 Mar 2026 | ✅ Step 2A+ | i18n-audit: `--duplicates`/`-d` flag — analisi valori duplicati cross-lingua, 60 gruppi unici trovati |
+| 19 Mar 2026 | ✅ Step 2A+ | i18n-audit: export Excel con tab per severità (Dup ALL, 3-4, 2-4, 1), tabelle impilate con stile |
+| 19 Mar 2026 | ✅ Step 2B | 111 chiavi morte rimosse da tutte e 4 le lingue (735 → 624 keys, 0 unused, 100% coverage) |
+| 19 Mar 2026 | ✅ Step 2E | Verificata completezza: 624/624 keys in EN/IT/FR/ES (100%) |
+| 19 Mar 2026 | 📋 Step 2C | Piano razionalizzazione chiavi scritto — **IN ATTESA DI REVIEW** |
 
 ---
 
@@ -248,53 +254,199 @@ const annualizedPct = days > 0
 
 ## Step 2 — i18n Audit & Razionalizzazione
 
-### 2A. Migliorare lo strumento i18n-audit
+### 2A. ✅ Migliorare lo strumento i18n-audit — COMPLETATO
 
 **File**: `frontend/scripts/i18n-audit.py`
 
-Le regex `patterns_dynamic` (righe 98-103) catturano prefissi da template literal (`` `prefix.${var}` ``) e concatenazione (`'prefix.' + var`). Tuttavia mancano alcuni pattern usati nel codice:
+Migliorie effettuate:
+- Regex: aggiunto `tooltip` a indirect patterns, pattern per stringhe 3-segment, pattern `key:` / `tooltip:` in oggetti
+- Report unused: split in "Potentially Dynamic" e "Likely Unused"
+- **Nuovo flag `--duplicates` / `-d`**: analisi valori duplicati cross-lingua con:
+  - Raggruppamento per frozenset di chiavi (de-duplica tra lingue)
+  - Ordinamento per severità: ALL langs → 3/4 → 2/4 → 1/4
+  - Tabella per gruppo: righe = chiavi, colonne = EN/IT/FR/ES, titolo indica quali lingue matchano
+  - Breakdown summary: `60 groups: ALL langs: 28 · 3/4: 9 · 2/4: 11 · 1/4: 12`
+- **Export Excel con duplicati**: un tab per tier di severità, tabelle impilate con titolo merged giallo, header verde, celle duplicate highlight verde chiaro
 
-1. **Chiavi con suffisso variabile**: `$t(\`chartSettings.signals.\${type}Abbr\`)` — il prefisso catturato è `chartSettings.signals` ma il suffisso composito (`emaAbbr`, `rsiAbbr`) non viene matchato individualmente. Le chiavi finali sono coperte dal prefix matching, ma il report dovrebbe segnalarle come "match parziale (dinamico)".
+### 2B. ✅ Pulizia chiavi non usate — COMPLETATO
 
-2. **Concatenazione a 2+ segmenti**: `$t('chartSettings.signals.' + key)` — la regex attuale cattura `chartSettings.signals` come prefisso. Verificare che funzioni per concatenazioni su 2+ livelli di profondità.
+- 111 chiavi morte rimosse da tutte e 4 le lingue con `./dev.py i18n remove KEY -f`
+- Risultato: **735 → 624 keys, 0 unused, 100% coverage**
+- Tutte le 111 chiavi verificate con grep: zero riferimenti nel sorgente
 
-3. **Nuovo output**: aggiungere una sezione **"⚠️ Partial Match (Dynamic)"** nel report che elenca chiavi marcate come "non usate" il cui prefisso fino al penultimo segmento appare tra i pattern dinamici rilevati. Messaggio: "Possibile match dinamico, verifica manuale necessaria".
+### 2C. 📋 Razionalizzazione chiavi duplicate — IN PIANIFICAZIONE
 
-- [ ] Aggiungere regex per pattern `$t(prefix + '.' + suffix + key)` con 2+ segmenti
-- [ ] Aggiungere sezione "Partial Match (Dynamic)" nel report `generate_unused_keys_report()`
-- [ ] Testare con `./dev.py i18n audit` e verificare che i falsi positivi diminuiscano
+**Riferimento audit**: `i18n-audit-duplicate.md` (generato 19 Mar 2026, 60 gruppi)
+**Comando**: `./dev.py i18n audit --duplicates`
 
-### 2B. Pulizia chiavi non usate
+> ⚠️ **ATTENZIONE**: Ogni merge richiede aggiornamento di tutti i `$t()` / `$_()` nel sorgente.
+> Procedere gruppo per gruppo, con `./dev.py front check` dopo ogni batch.
+> Se qualcosa non torna nell'UI, ripristinare la chiave con `./dev.py i18n add`.
 
-- [ ] Eseguire `./dev.py i18n audit`, analizzare output
-- [ ] Distinguere chiavi veramente morte da falsi positivi dinamici (usando la nuova sezione 2A)
-- [ ] Eliminare chiavi confermate inutilizzate con `./dev.py i18n remove`
+---
 
-### 2C. Razionalizzazione chiavi
+#### Fase 0 — Gruppi NON unificabili (prefisso dinamico) — SKIP
 
-- [ ] Verificare consistenza categorizzazione: `fx.*`, `fxDetail.*`, `chartSettings.*`, `measure.*`, `chart.*`, `csvImport.*`
-- [ ] Cercare chiavi duplicate/sovrapponibili tra sezioni (es. `common.save` vs potenziali duplicati)
-- [ ] Consolidare o duplicare esplicitamente dove serve
+Questi gruppi sono sotto prefissi risolti dinamicamente (`$t(\`prefix.${var}\`)`). NON possono essere mergiati.
 
-### 2D. Stringhe hardcoded → i18n
+| Prefisso dinamico | Chiavi coinvolte | Motivo |
+|---|---|---|
+| `chartSettings.signals.*` | `ema`/`emaAbbr`, `macd`/`macdAbbr`, `rsi`/`rsiAbbr`, `fxPair`/`fxPairAbbr` | Signal name + abbreviation risolti con `${type}` e `${type}Abbr` |
+| `fileStatus.*` | `fileStatus.error` ↔ `common.error` | Status risolto con `$t(\`fileStatus.${status}\`)` |
+| `fileStatus.*` | `fileStatus.uploaded` ↔ `uploads.uploadDate` | Idem |
+| `settings.globalSettingNames.*` | `default_currency` ↔ `settings.defaultCurrency` | Setting names risolti dinamicamente |
+| `settings.globalSettingCategories.*` | `security` ↔ `settings.security`; `all` ↔ `settings.all` | Categorie risolte dinamicamente |
+| `settings.globalSettingUnits.*` | `price_sync_interval_hours` ↔ `session_ttl_hours`; `max_file_upload_mb` ↔ `filter.megabytes` | Unità risolte dinamicamente |
 
-Grep sistematico nei file FX per stringhe hardcoded da tradurre:
+**Totale: ~12 gruppi da IGNORARE**
 
-**File da ispezionare**:
-- `frontend/src/lib/components/fx/*.svelte`
-- `frontend/src/lib/components/charts/*.svelte`
-- `frontend/src/routes/(app)/fx/**/*.svelte`
-- `frontend/src/lib/components/ui/data-editor/*.svelte`
+---
 
-Casi già identificati:
-- `MeasurePanel.svelte` righe 276/281/286 — header colonne `'Δ Abs'`, `'Δ %'`, `'Δ%/yr'` non i18n (le altre colonne usano `$t()`)
-- Cercare altri con: `grep -rn '"[A-Z][a-z]' --include="*.svelte"` nei file sopra
-- Annotare stringhe backend hardcoded (es. "System Broker creation") come TODO futuri
+#### Fase 1 — Merge sicuri (ALL languages, stessa semantica)
 
-### 2E. Verificare completezza 4 lingue
+Chiavi con valori identici in tutte e 4 le lingue, stessa semantica, nessun prefisso dinamico.
+Azione: scegliere chiave canonica, aggiornare riferimenti, eliminare duplicato.
 
-- [ ] `./dev.py i18n audit` — tutte le chiavi devono avere valore in EN/IT/FR/ES
-- [ ] Aggiungere chiavi mancanti con `./dev.py i18n add`
+| Canonico (KEEP) | Da eliminare (REMOVE) | Valore (EN) | Riferimenti da aggiornare |
+|---|---|---|---|
+| `common.continueEditing` ← **NEW** | `brokers.continueEditing`, `settings.continueEditing` | Continue Editing | BrokerForm, SettingsPage |
+| `common.noData` | `table.noData` | No data available | DataTable.svelte (1 uso) |
+| `common.remove` | `measure.remove` | Remove | MeasurePanel.svelte (1 uso) |
+| `common.discardChangesMessage` | `uploads.discardChangesMessage` | You have unsaved changes... | uploads discard modal |
+| `fxDetail.editRates` | `fxDetail.editRatesBtn` | Edit Rates | fx/[pair]/+page.svelte riga 740 (title attr) |
+| `fx.syncing` ← **NEW** | `fx.actions.syncing`, `fx.sync.syncing` | Syncing... | FxCard, FxSyncModal |
+| `fx.providers` ← **NEW** | `fx.route.providersLabel`, `fxDetail.providers` | Providers | FxProviderSelect, fx detail |
+| `uploads.deleteConfirm` | `uploads.deleteConfirmSingle` | Are you sure you want to delete this file? | FilesTable.svelte riga 381 |
+| `uploads.upload` | `uploads.uploadNew` | Upload | AssetPickerModal.svelte (1 uso) |
+
+**Pattern nav/title** — stesse parole usate sia nel nav sidebar che come titolo pagina:
+
+| Canonico (KEEP) | Da eliminare (REMOVE) | Valore (EN) | Note |
+|---|---|---|---|
+| `fx.title` | `nav.fx` | FX Rates | |
+| `transactions.title` | `nav.transactions` | Transactions | |
+| `assets.title` | `nav.assets`, `dashboard.assetCount` | Assets | dashboard usa come label widget |
+
+> ❓ **DOMANDA**: Il pattern nav/title (3 gruppi sopra) implica che il sidebar nav usi chiavi del
+> dominio (`fx.title`, `assets.title`) anziché `nav.*`. È accettabile dal punto di vista
+> architetturale? Se in futuro il nav volesse abbreviare (es. "FX" anziché "FX Rates"), servirebbero
+> chiavi separate. Preferisci: **(A)** mergiarli ora, **(B)** tenerli separati come duplicato intenzionale?
+
+**Casi "stesso testo ma contesti diversi" — KEEP separati (duplicato intenzionale)**:
+
+| Chiavi | Valore (EN) | Motivo per tenerle separate |
+|---|---|---|
+| `chartSettings.yAxisCustom`, `datePicker.custom`, `uploads.presetCustom` | Custom | 3 contesti completamente diversi (scala asse Y, date picker, preset upload) |
+| `filter.max`, `uploads.maxSizeLabel` | Max | Filtro generico vs label dimensione upload |
+| `settings.avatar`, `uploads.presetAvatar` | Avatar | Settings label vs upload preset name |
+| `brokers.totalValue`, `dashboard.totalValue` | Total Value | Broker page vs dashboard widget |
+| `table.selected`, `uploads.selected` | selected | Tabella generica vs file manager |
+| `chartSettings.aesthetics`, `fxDetail.aesthetics` | Aesthetics | Chart settings modal vs FX detail panel |
+| `csvImport.swapDirection`, `fxDetail.swapDirection` | Swap direction | CSV import vs FX detail header |
+| `chartSettings.style.markerEnd`/`Start`, `measure.table.end`/`start` | End/Start | Chart markers vs measure table headers |
+| `brokers.sharing.save`, `fx.addPair.saveConfiguration` | Save Configuration | Broker sharing vs FX pair setup |
+
+> ❓ **DOMANDA**: Alcuni di questi (es. `Aesthetics`, `Swap direction`, `Save Configuration`) 
+> potrebbero ragionevolmente diventare `common.*`. Vuoi che li consolidi in chiavi common,
+> oppure preferisci tenerli separati per avere flessibilità futura sulle traduzioni?
+
+---
+
+#### Fase 2 — 3/4 lingue: la lingua divergente è probabilmente una svista
+
+Gruppi dove 3 lingue hanno lo stesso valore e 1 diverge leggermente. Da verificare se la divergenza è intenzionale.
+
+| Chiavi | 3 lingue uguali | Lingua divergente | Problema | Azione proposta |
+|---|---|---|---|---|
+| `common.saveAll` / `settings.saveAll` | EN, IT, ES | **FR**: "Enregistrer Tout" vs "Tout Enregistrer" | Ordine parole invertito | Allineare FR → "Enregistrer Tout", poi merge a `common.saveAll` |
+| `common.undoAll` / `settings.undoAll` | EN, IT, ES | **FR**: "Annuler Tout" vs "Tout Annuler" | Ordine parole invertito | Allineare FR → "Annuler Tout", poi merge a `common.undoAll` |
+| `common.close` / `common.dismiss` | IT, FR, ES | **EN**: "Close" vs "Dismiss" | Distinzione semantica SOLO in EN | ❓ Vedi sotto |
+| `fx.actions.settings` / `nav.settings` | EN, IT, FR | **ES**: "Ajustes" vs "Configuración" | ES ha termini diversi per contesti diversi | KEEP separati — ES distingue correttamente |
+| `nav.files` / `uploads.title` | EN, FR, ES | **IT** (group size diverso per singular "file") | Pattern nav/title, già coperto in Fase 1 | Parte del pattern nav/title |
+| `nav.brokers` / `brokers.title` | EN, FR, ES | **IT** (group size diverso per `uploads.broker`) | Pattern nav/title | Parte del pattern nav/title |
+
+> ❓ **DOMANDA su `common.close` vs `common.dismiss`**:
+> - EN: "Close" (chiudere un pannello/modale) vs "Dismiss" (chiudere un alert/notifica)
+> - IT/FR/ES: entrambi tradotti come "Chiudi"/"Fermer"/"Cerrar"
+> - `common.dismiss` è usato SOLO in 1 punto: bottone per chiudere un alert nella FX detail page
+> - Opzioni: **(A)** tenere separate e aggiungere traduzioni distinte in IT/FR/ES (es. IT: "Ignora"),
+>   **(B)** mergiarle a `common.close` perché la distinzione non è significativa nell'UI
+
+---
+
+#### Fase 3 — 2/4 e 1/4 lingue: analisi contestuale
+
+Gruppi dove la coincidenza è in poche lingue. Spesso rivelano problemi di qualità traduzione.
+
+**Merge dopo allineamento traduzioni:**
+
+| Chiavi | Problema | Azione |
+|---|---|---|
+| `brokers.discardChanges`, `common.discardChanges`, `settings.discardChanges`, `uploads.discardChanges` | EN: maiuscolo inconsistente ("Changes?" vs "changes?"); FR: spazio prima di "?" inconsistente | Allineare case/spazi, merge a `common.discardChanges` |
+| `common.undo` / `settings.undo` | Identici in EN+ES, merge naturale | Merge a `common.undo` |
+| `common.resetAll` / `settings.resetAllToDefault` / `uploads.resetAll` | EN diversi ("Reset All to Defaults" vs "Reset All") | KEEP separati — semantica diversa |
+| `common.reset` / `settings.resetToDefault` | EN: entrambi "Reset to Default", IT: "Ripristina" vs "Ripristina Default" | ❓ Merge o keep? Semantica quasi identica |
+
+**Problemi di qualità traduzione trovati (da fixare):**
+
+| Chiavi | Lingua | Problema | Fix proposto |
+|---|---|---|---|
+| `common.cancel` / `common.undo` | **IT**: entrambi "Annulla"; **FR**: entrambi "Annuler" | Cancel ≠ Undo! IT/FR perdono la distinzione | ❓ IT: "Cancella" vs "Annulla"? O accettabile in contesto italiano? |
+| `brokers.discardAndClose` / `uploads.discardAndClose` | **EN**: "Discard & Close" vs "Discard" | `uploads` manca "& Close" in EN/ES | Allineare: entrambi "Discard & Close" o entrambi "Discard" |
+| `fxDetail.syncFromProvider` / `fxDetail.syncRates` | **FR/ES**: stessa traduzione | FR/ES perdono "from provider" | Fix FR/ES: aggiungere "du fournisseur" / "del proveedor" |
+| `auth.login` / `auth.loginHere` | **IT**: entrambi "Accedi" | EN: "Login" vs "Sign in" (distinti) | Fix IT: "Accedi" vs "Accedi qui" o "Entra" |
+| `uploads.fileSize` / `uploads.outputSize` | **IT**: entrambi "Dimensione" | EN: "Size" vs "Output" (diversi!) | Fix IT: "Dimensione" vs "Output" o "Dim. Output" |
+| `common.delete` / `common.remove` | **FR**: entrambi "Supprimer"; **ES**: entrambi "Eliminar" | EN/IT distinguono Delete/Remove | Valutare: FR/ES potrebbero andare bene così (Romance languages) |
+
+---
+
+#### Fase 4 — 🐛 Bug trovato: `datePicker.granularity.monthsShort`
+
+| Chiave | EN | IT | FR | ES | Atteso |
+|---|---|---|---|---|---|
+| `datePicker.granularity.daysShort` | D | G | J | D | ✅ Corretto |
+| `datePicker.granularity.monthsShort` | **D** | **D** | **D** | **D** | ❌ Dovrebbe essere **M** |
+
+**Usato in**: `DateRangePicker.svelte` riga 136 — abbreviazione della granularità "Months" nel selettore.
+Attualmente mostra "D" (che è l'abbreviazione di Days), rendendo impossibile distinguere Days da Months nel selettore compatto.
+
+**Fix**: `./dev.py i18n update datePicker.granularity.monthsShort --en M --it M --fr M --es M`
+
+---
+
+#### Riepilogo quantitativo
+
+| Categoria | Gruppi | Azione |
+|---|---|---|
+| Fase 0 — Prefisso dinamico | ~12 | SKIP |
+| Fase 1 — Merge sicuri | ~9 (+3 nav/title ❓) | MERGE dopo review |
+| Fase 1 — Duplicati intenzionali | ~9 | KEEP |
+| Fase 2 — 3/4 lingue | ~6 | 2 MERGE + allinea FR, 4 KEEP/❓ |
+| Fase 3 — 2/4 e 1/4 | ~8 | 2 MERGE, 6 fix traduzioni |
+| Fase 4 — Bug | 1 | FIX immediato |
+| **Stima chiavi da eliminare** | | **~15-20 chiavi** (624 → ~605) |
+
+#### Ordine di esecuzione proposto
+
+```
+1. Fix bug monthsShort (Fase 4) — immediato, zero rischio
+2. Merge sicuri Fase 1 (9 gruppi) — dopo review domande ❓
+3. Allineamento FR + merge Fase 2 (saveAll, undoAll)
+4. Fix qualità traduzioni Fase 3 — batch separato
+5. Merge Fase 3 (discardChanges, undo)
+6. Review domande ❓ aperte
+```
+
+### 2D. Stringhe hardcoded → i18n — ⏳ DA FARE
+
+Grep sistematico nei file FX per stringhe hardcoded da tradurre.
+Casi già identificati nel piano originale (MeasurePanel headers).
+Da eseguire dopo completamento 2C.
+
+### 2E. ✅ Verificare completezza 4 lingue — COMPLETATO
+
+- `./dev.py i18n audit` → 624/624 keys in EN/IT/FR/ES (100.0% tutte le lingue)
+- 0 chiavi mancanti, 0 chiavi unused
 
 ---
 
