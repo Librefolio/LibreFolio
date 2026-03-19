@@ -180,7 +180,7 @@
                     <AlertTriangle size={20} class="text-amber-600 dark:text-amber-400"/>
                 </div>
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                    {$_('brokers.discardChanges')}
+                    {$_('common.discardChanges')}
                 </h2>
             </div>
             <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
@@ -191,13 +191,13 @@
                         on:click={cancelDiscard}
                         class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
-                    {$_('brokers.continueEditing')}
+                    {$_('common.continueEditing')}
                 </button>
                 <button
                         on:click={confirmDiscard}
                         class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
                 >
-                    {$_('brokers.discardAndClose')}
+                    {$_('common.discardAndClose')}
                 </button>
             </div>
         </div>

@@ -476,7 +476,7 @@
                                 ? 'bg-amber-500 text-white shadow-sm'
                                 : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
                         onclick={(e) => toggleCustomEdit(e)}
-                    >{activePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find(o => o.value === customGranularity)?.shortKey ?? 'datePicker.custom').toUpperCase()}` : $_('datePicker.custom')}</button>
+                    >{activePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find(o => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button>
                 {/if}
             {/if}
             <!-- Info tooltip -->

@@ -240,11 +240,35 @@
         });
     }
 
+    // Override map: backend setting keys whose label already exists under settings.*
+    const SETTING_LABEL_OVERRIDES: Record<string, string> = {
+        default_currency: 'settings.defaultCurrency',
+    };
+
+    // Override map: category ids whose label already exists under settings.*
+    const CATEGORY_LABEL_OVERRIDES: Record<string, string> = {
+        security: 'settings.security',
+        all: 'settings.all',
+    };
+
     function getSettingLabel(key: string): string {
+        // Check override first (collapsed duplicates)
+        if (SETTING_LABEL_OVERRIDES[key]) {
+            return $_(SETTING_LABEL_OVERRIDES[key]);
+        }
         // Try to get localized name, fallback to key
         const localizedKey = `settings.globalSettingNames.${key}`;
         const localized = $_(localizedKey);
         return localized !== localizedKey ? localized : key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    function getCategoryLabel(id: string): string {
+        if (CATEGORY_LABEL_OVERRIDES[id]) {
+            return $_(CATEGORY_LABEL_OVERRIDES[id]);
+        }
+        const key = `settings.globalSettingCategories.${id}`;
+        const localized = $_(key);
+        return localized !== key ? localized : id.replace(/\b\w/g, l => l.toUpperCase());
     }
 
     function getSettingUnit(key: string): string {
@@ -298,9 +322,7 @@
     let dropdownRef: HTMLDivElement | null = null;
 
     // Get selected category label for mobile display
-    $: selectedCategoryLabel = selectedCategory === 'all'
-        ? $_('settings.globalSettingCategories.all')
-        : $_(`settings.globalSettingCategories.${selectedCategory}`);
+    $: selectedCategoryLabel = getCategoryLabel(selectedCategory);
 
     // Get selected category icon
     $: selectedCategoryIcon = selectedCategory === 'all'
@@ -366,7 +388,7 @@
                                ? 'bg-libre-green/10 text-libre-green font-medium'
                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                 >
-                    <span class="flex-1">{$_('settings.globalSettingCategories.all')}</span>
+                    <span class="flex-1">{getCategoryLabel('all')}</span>
                     {#if selectedCategory === 'all'}
                         <ChevronRight size={16}/>
                     {/if}
@@ -383,7 +405,7 @@
                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                     >
                         <svelte:component this={cat.icon} size={16} class="{selectedCategory === cat.id ? 'text-libre-green' : 'text-gray-400'}"/>
-                        <span class="flex-1">{$_(`settings.globalSettingCategories.${cat.id}`)}</span>
+                        <span class="flex-1">{getCategoryLabel(cat.id)}</span>
                         {#if selectedCategory === cat.id}
                             <ChevronRight size={16}/>
                         {/if}
@@ -405,7 +427,7 @@
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                     on:click={() => selectedCategory = 'all'}
             >
-                <span class="flex-1 text-left">{$_('settings.globalSettingCategories.all')}</span>
+                <span class="flex-1 text-left">{getCategoryLabel('all')}</span>
                 {#if selectedCategory === 'all'}
                     <ChevronRight size={16}/>
                 {/if}
@@ -420,7 +442,7 @@
                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 >
                     <svelte:component this={cat.icon} size={16} class="mr-2"/>
-                    <span class="flex-1 text-left">{$_(`settings.globalSettingCategories.${cat.id}`)}</span>
+                    <span class="flex-1 text-left">{getCategoryLabel(cat.id)}</span>
                     {#if selectedCategory === cat.id}
                         <ChevronRight size={16}/>
                     {/if}
@@ -443,14 +465,14 @@
                                         on:click={saveAll}
                                         disabled={isSaving}
                                         class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
-                                        title={$_('settings.saveAll')}
+                                        title={$_('common.saveAll')}
                                 >
                                     <Save size={18}/>
                                 </button>
                                 <button
                                         on:click={undoAll}
                                         class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
-                                        title={$_('settings.undoAll')}
+                                        title={$_('common.undoAll')}
                                 >
                                     <Undo size={18}/>
                                 </button>
@@ -519,9 +541,7 @@
                                     {#if category}
                                         <svelte:component this={category.icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
                                     {/if}
-                                    {$_(`settings.globalSettingNames.${setting.key}`) !== `settings.globalSettingNames.${setting.key}`
-                                        ? $_(`settings.globalSettingNames.${setting.key}`)
-                                        : setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                    {getSettingLabel(setting.key)}
                                 </label>
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                     {$_(`settings.globalSettingDescriptions.${setting.key}`) !== `settings.globalSettingDescriptions.${setting.key}`
@@ -546,7 +566,7 @@
                                                 <button
                                                         on:click={() => undoSetting(setting.key)}
                                                         class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('settings.undo')}
+                                                        title={$_('common.undo')}
                                                 >
                                                     <Undo size={14}/>
                                                 </button>
@@ -555,7 +575,7 @@
                                                 <button
                                                         on:click={() => resetSettingToDefault(setting.key)}
                                                         class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('settings.resetToDefault')}
+                                                        title={$_('common.reset')}
                                                 >
                                                     <RotateCcw size={14}/>
                                                 </button>
@@ -601,7 +621,7 @@
                                                 <button
                                                         on:click={() => undoSetting(setting.key)}
                                                         class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('settings.undo')}
+                                                        title={$_('common.undo')}
                                                 >
                                                     <Undo size={14}/>
                                                 </button>
@@ -610,7 +630,7 @@
                                                 <button
                                                         on:click={() => resetSettingToDefault(setting.key)}
                                                         class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('settings.resetToDefault')}
+                                                        title={$_('common.reset')}
                                                 >
                                                     <RotateCcw size={14}/>
                                                 </button>
@@ -659,8 +679,8 @@
                                                             ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
                                                             : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green'}"
                                                 >
-                                                    <option value="MB">{$_('filter.megabytes') || 'MB'}</option>
-                                                    <option value="GB">{$_('filter.gigabytes') || 'GB'}</option>
+                                                    <option value="MB">{$_('common.megabytes') || 'MB'}</option>
+                                                    <option value="GB">{$_('common.gigabytes') || 'GB'}</option>
                                                 </select>
                                             {:else}
                                                 <input
@@ -708,7 +728,7 @@
                                                 <button
                                                         on:click={() => undoSetting(setting.key)}
                                                         class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('settings.undo')}
+                                                        title={$_('common.undo')}
                                                 >
                                                     <Undo size={14}/>
                                                 </button>
@@ -717,7 +737,7 @@
                                                 <button
                                                         on:click={() => resetSettingToDefault(setting.key)}
                                                         class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('settings.resetToDefault')}
+                                                        title={$_('common.reset')}
                                                 >
                                                     <RotateCcw size={14}/>
                                                 </button>
@@ -750,7 +770,7 @@
                                                 <button
                                                         on:click={() => undoSetting(setting.key)}
                                                         class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('settings.undo')}
+                                                        title={$_('common.undo')}
                                                 >
                                                     <Undo size={14}/>
                                                 </button>
@@ -759,7 +779,7 @@
                                                 <button
                                                         on:click={() => resetSettingToDefault(setting.key)}
                                                         class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('settings.resetToDefault')}
+                                                        title={$_('common.reset')}
                                                 >
                                                     <RotateCcw size={14}/>
                                                 </button>
@@ -791,7 +811,7 @@
                                                 <button
                                                         on:click={() => undoSetting(setting.key)}
                                                         class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('settings.undo')}
+                                                        title={$_('common.undo')}
                                                 >
                                                     <Undo size={14}/>
                                                 </button>
@@ -800,7 +820,7 @@
                                                 <button
                                                         on:click={() => resetSettingToDefault(setting.key)}
                                                         class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('settings.resetToDefault')}
+                                                        title={$_('common.reset')}
                                                 >
                                                     <RotateCcw size={14}/>
                                                 </button>

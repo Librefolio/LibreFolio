@@ -240,17 +240,17 @@
     <div class="confirm-content">
         <div class="confirm-header">
             <span class="confirm-icon">⚠️</span>
-            <h3>{$_('uploads.discardChanges') || 'Discard changes?'}</h3>
+            <h3>{$_('common.discardChanges') || 'Discard changes?'}</h3>
         </div>
         <p class="confirm-message">
-            {$_('uploads.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
+            {$_('common.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
         </p>
         <div class="confirm-actions">
             <button class="btn btn-secondary" on:click={cancelClose}>
                 {$_('common.cancel') || 'Cancel'}
             </button>
             <button class="btn btn-warning" on:click={confirmClose}>
-                {$_('uploads.discardAndClose') || 'Discard'}
+                {$_('common.discardAndClose') || 'Discard & Close'}
             </button>
         </div>
     </div>

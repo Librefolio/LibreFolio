@@ -212,7 +212,7 @@
                     avatar_url: editedAvatarUrl
                 });
             }
-            successItems = [$_('settings.avatar')];
+            successItems = [$_('common.avatar')];
             setTimeout(() => successItems = [], 3000);
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveAvatarField failed', e);
@@ -370,7 +370,7 @@
         </div>
         <!-- Avatar Info -->
         <div class="flex-1">
-            <h4 class="font-medium text-gray-900 dark:text-white">{$_('settings.avatar')}</h4>
+            <h4 class="font-medium text-gray-900 dark:text-white">{$_('common.avatar')}</h4>
             <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.avatarHint')}</p>
             {#if !isLocked && editedAvatarUrl}
                 <button
@@ -622,7 +622,7 @@
                 on:keydown|stopPropagation
         >
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
-                {$_('settings.discardChanges')}
+                {$_('common.discardChanges')}
             </h2>
             <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
                 {$_('settings.discardChangesWarning')}
@@ -632,7 +632,7 @@
                         on:click={cancelDiscard}
                         class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
-                    {$_('settings.continueEditing')}
+                    {$_('common.continueEditing')}
                 </button>
                 <button
                         on:click={confirmDiscard}

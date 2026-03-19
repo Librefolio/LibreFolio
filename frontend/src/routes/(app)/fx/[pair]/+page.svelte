@@ -534,7 +534,7 @@
                     data-testid="fx-detail-swap-btn"
                     class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                     onclick={handleSwapDirection}
-                    title={$t('fxDetail.swapDirection')}
+                    title={$t('common.swapDirection')}
             >
                 <ArrowLeftRight size={16}/>
             </button>
@@ -545,7 +545,7 @@
     {#if error}
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
             <span>⚠️</span> <span>{error}</span>
-            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => error = null}>{$t('common.dismiss')}</button>
+            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => error = null}>{$t('common.close')}</button>
         </div>
     {/if}
 
@@ -618,10 +618,9 @@
                     data-testid="fx-detail-provider-btn"
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={() => showProviderModal = true}
-                    title={$t('fxDetail.providers')}
             >
                 <Wrench size={14}/>
-                {#if showActionLabels}<span>{$t('fxDetail.providers')}</span>{/if}
+                {#if showActionLabels}<span>{$t('fx.providers')}</span>{/if}
             </button>
             <!-- Row 2, Col 1: Sync -->
             <button
@@ -629,10 +628,9 @@
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={handleSync}
                     disabled={syncing}
-                    title={$t('fxDetail.syncFromProvider')}
             >
                 <RotateCw size={14} class={syncing ? 'animate-spin' : ''}/>
-                {#if showActionLabels}<span>{syncing ? $t('fx.actions.syncing') : $t('common.sync')}</span>{/if}
+                {#if showActionLabels}<span>{syncing ? $t('fx.syncing') : $t('common.sync')}</span>{/if}
             </button>
             <!-- Row 2, Col 2: Refresh -->
             <button
@@ -640,7 +638,6 @@
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={handleRefresh}
                     disabled={loading}
-                    title={$t('fxDetail.refreshData')}
             >
                 <RefreshCw size={14} class={loading ? 'animate-spin' : ''}/>
                 {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
@@ -659,7 +656,7 @@
         >
             <span class="flex items-center gap-2">
                 <Settings size={15} class="text-libre-green"/>
-                {$t('fxDetail.aesthetics')}
+                {$t('common.aesthetics')}
             </span>
             <ChevronDown size={15} class="transition-transform {showAesthetics ? 'rotate-180' : ''}"/>
         </button>
@@ -737,7 +734,7 @@
                                 showDataEditor = true;
                             }
                         }}
-                            title={showDataEditor ? $t('fxDetail.closeEditor') : $t('fxDetail.editRatesBtn')}
+                            title={showDataEditor ? $t('fxDetail.closeEditor') : $t('fxDetail.editRates')}
                     >
                         <Pencil size={16}/>
                     </button>
@@ -773,7 +770,7 @@
                             onclick={handleSync}
                             disabled={syncing}
                     >
-                        {syncing ? $t('fx.actions.syncing') : $t('fxDetail.syncRates')}
+                        {syncing ? $t('fx.syncing') : $t('fxDetail.syncRates')}
                     </button>
                 </div>
             </div>
