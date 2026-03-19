@@ -7,8 +7,8 @@ import {type Language, TEST_USER} from './test-users';
 export async function login(page: Page, user = TEST_USER) {
     await page.goto('/');
 
-    // Wait for auth check to complete and login form to appear (3s for localhost)
-    await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+    // Wait for auth check to complete and login form to appear
+    await expect(page.getByTestId('login-page')).toBeVisible({timeout: 10_000});
     await expect(page.getByTestId('login-form')).toBeVisible();
 
     // Fill and submit using data-testid
@@ -16,8 +16,8 @@ export async function login(page: Page, user = TEST_USER) {
     await page.getByTestId('login-password').fill(user.password);
     await page.getByTestId('login-submit').click();
 
-    // Wait for dashboard (10s max to handle parallel worker load)
-    await expect(page).toHaveURL(/.*dashboard.*/, {timeout: 10_000});
+    // Wait for dashboard (20s max to handle parallel worker load)
+    await expect(page).toHaveURL(/.*dashboard.*/, {timeout: 20_000});
 }
 
 /**

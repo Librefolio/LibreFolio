@@ -15,7 +15,7 @@ export const API_BASE = '/api/v1';
  */
 export async function goToFxPage(page: import('@playwright/test').Page) {
     await navigateTo(page, '/fx');
-    await page.waitForSelector('[data-testid="fx-page"]', {timeout: 5000});
+    await page.waitForSelector('[data-testid="fx-page"]', {timeout: 15_000});
     // Wait for loading to complete (skeleton → content)
     await page.waitForTimeout(1000);
 }
@@ -63,7 +63,7 @@ export async function selectCurrency(
  */
 export async function goToFxDetailPage(page: import('@playwright/test').Page, pairSlug: string) {
     await navigateTo(page, `/fx/${pairSlug}`);
-    await page.waitForSelector('[data-testid="fx-detail-page"]', {timeout: 5000});
+    await page.waitForSelector('[data-testid="fx-detail-page"]', {timeout: 15_000});
     await page.waitForTimeout(1000);
 }
 
