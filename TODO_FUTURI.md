@@ -410,3 +410,11 @@ reali dagli asset source provider (yfinance, JustETF).
 - Per FX il toggle Line/Candlestick resta disabilitato (`disableCandlestick={true}`)
 - L'OHLC sintetizzato (O=prev close) non ha valore informativo per FX
 
+
+
+## Ripulire tutte le traduzioni non usate con i18n prima di aggiungere nuove lingue
+Verificare e poi eliminare le chiavi che il tool da noi scritto crede non siano usate da i18n
+Fare un lavoro di razzionalizzazione delle chiavi, dividendole per categorie, eliminando quelle completamente sovrapponibili e duplicando, se serve, quelle che compaiono in parti di codice completamente diverse e che beneficierebbero di questa duplicazione per una maggiore consistenza e leggibilità
+Cercare tutte le frasi hardcodate nel codice e trasformale in traduzioni
+- System Broker creation
+- ...
