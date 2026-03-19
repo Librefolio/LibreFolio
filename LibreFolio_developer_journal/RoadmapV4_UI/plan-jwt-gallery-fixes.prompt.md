@@ -17,6 +17,8 @@
 | 19 Mar 2026 | ✅ Step 4 | Warning in auth_service.py aggiornato con spiegazione JWT |
 | 19 Mar 2026 | ✅ Step 5 | Gallery fix: Add Pair routes/chain ora apre il route picker prima dello screenshot. Provider Config wait 500ms→2000ms |
 | 19 Mar 2026 | ✅ Step 6 | FxProviderSelect: rimosso `<img>` per icon_url, sempre initials (sigla provider). Rimossa funzione `getProviderIconUrl` inutilizzata |
+| 20 Mar 2026 | ✅ Fix critical | **JWT secret non condiviso tra worker!** macOS usa `spawn` (non `fork`) → ogni worker re-importa i moduli → genera secret diverso. Fix: secret letto da env var `JWT_SECRET`, generato da `dev.py` prima di lanciare uvicorn. |
+| 20 Mar 2026 | ✅ Doc | Aggiunta nota JWT + tabella endpoint privati/pubblici in `plan-fxDocumentation.prompt.md` |
 
 ---
 

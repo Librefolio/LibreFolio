@@ -4,6 +4,7 @@ Authentication Service
 Provides password hashing/verification and JWT token management.
 """
 
+import os
 import secrets
 from datetime import timedelta
 from typing import Optional
@@ -66,17 +67,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # =============================================================================
 # JWT Token Management (Stateless)
 #
-# Tokens are signed with a random secret generated once at module load.
-# With uvicorn multi-worker (fork), the secret is created in the parent
-# process BEFORE fork() → all workers inherit the same secret → tokens
-# are valid across any worker.
+# Tokens are signed with HMAC-SHA256 using a shared secret.
 #
-# On server restart, a new secret is generated → all existing tokens are
-# invalidated (same behavior as the previous in-memory session store).
+# The secret is read from the JWT_SECRET environment variable, which must
+# be set by the launcher (dev.py) BEFORE starting uvicorn. This is critical
+# for multi-worker: on macOS Python uses 'spawn' (not fork), so each worker
+# is a fresh process that re-imports all modules. Without a shared env var,
+# each worker would generate its own random secret → tokens from worker A
+# would be invalid on worker B.
+#
+# If JWT_SECRET is not set (e.g. single-worker dev mode), a random one is
+# generated. On server restart, a new secret = all tokens invalidated.
 # =============================================================================
 
-# Random secret generated once at startup (pre-fork for multi-worker)
-_JWT_SECRET: str = secrets.token_urlsafe(64)
+# Shared secret: from env var (multi-worker safe) or random (single-worker fallback)
+_JWT_SECRET: str = os.environ.get("JWT_SECRET") or secrets.token_urlsafe(64)
 _JWT_ALGORITHM: str = "HS256"
 
 
