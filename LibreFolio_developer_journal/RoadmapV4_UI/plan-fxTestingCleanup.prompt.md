@@ -2,7 +2,7 @@
 
 **Data creazione**: 12 Marzo 2026
 **Ultima revisione**: 19 Marzo 2026
-**Status**: 📋 DETTAGLIATO — pronto per implementazione
+**Status**: 🔍 UNDER REVIEW — implementato, da testare uno per uno
 **Priorità**: Alta (zero copertura E2E FX, 2 bug noti da fixare)
 **Stima**: ~5-6 giorni
 **Dipendenze**: Tutti i plan Phase 5 FX completati (13+ sub-plan, 7 round bug-fix)
@@ -23,6 +23,19 @@ Il sottosistema FX è completo a livello funzionale: 2 pagine route (~1400+ righ
 |------|------|----------|
 | 12 Mar 2026 | 📋 Stub creato | Task pendenti C1-C7 |
 | 19 Mar 2026 | 📋 Piano dettagliato | Analisi completa codice, 12 step, ~70 test, 2 bug trovati |
+| 19 Mar 2026 | 🔍 Pre-Step 0A | Eliminato `FxEditSection.svelte` (dead code) — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Pre-Step 0B | Spostato `CsvEditor.svelte` in `ui/data-editor/` — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Pre-Step 0C | 20 `data-testid` aggiunti nella pagina FX detail — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Pre-Step 0D | Eliminato `fx-routes.spec.ts`, creato `e2e/fx/fx-helpers.ts` — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Pre-Step 0E | Fix FxPairSignal nella detail page (`_resolvedData`) — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Pre-Step 0F | Fix `annualizedPct` in `MeasureSignal.getMeasurementForSignal()` — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Step 1 | 27 unit test Vitest (15 TimeSeriesStore + 12 EditBuffer), config Vitest — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Step 2 | i18n: stringhe hardcoded tradotte (MeasurePanel, FxDetail, BrokerDetail) — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Steps 3-9 | 7 file E2E spec Playwright creati — UNDER REVIEW |
+| 19 Mar 2026 | 🔍 Step 10 | Registrazione in `dev.py test` + riorganizzazione categorie (front-utility, front-user, front-fx) — UNDER REVIEW |
+| 19 Mar 2026 | ✅ Step 12A | 14 plan file spostati in `phases/phase-05-subplan/` |
+| 19 Mar 2026 | ✅ Step 12B | `phase-05-fx.md` riscritto come summary |
+| 19 Mar 2026 | 🔍 Step 12C | Aggiornato TODO_Completati.md e TODO_FUTURI.md — UNDER REVIEW |
 
 ---
 

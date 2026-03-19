@@ -19,8 +19,8 @@
 <script lang="ts">
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import CsvEditor from '$lib/components/fx/CsvEditor.svelte';
-    import type {ParsedRow} from '$lib/components/fx/CsvEditor.svelte';
+    import CsvEditor from './CsvEditor.svelte';
+    import type {ParsedRow} from './CsvEditor.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {Upload, FileText, ArrowRight, HelpCircle} from 'lucide-svelte';

@@ -463,7 +463,7 @@
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$_('fx.title')}
                 {#if pairs.length > 0}
-                    <span class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{pairs.length}</span>
+                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{pairs.length}</span>
                 {/if}
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
@@ -561,6 +561,7 @@
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 title={$_('fx.actions.settings')}
                 onclick={handleGlobalSettings}
+                data-testid="fx-chart-settings-button"
             >
                 <Settings size={14} />
                 {#if showActionLabels}<span>{$_('fx.actions.settings')}</span>{/if}
@@ -570,6 +571,7 @@
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleSyncAll}
                 title={$_('fx.actions.syncAll')}
+                data-testid="fx-sync-all-button"
             >
                 <RotateCw size={14} />
                 {#if showActionLabels}<span>{$_('fx.actions.syncAll')}</span>{/if}
@@ -579,6 +581,7 @@
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleRefreshAll}
                 title={$_('fx.actions.refreshAll')}
+                data-testid="fx-refresh-all-button"
             >
                 <RefreshCw size={14} />
                 {#if showActionLabels}<span>{$_('fx.actions.refreshAll')}</span>{/if}

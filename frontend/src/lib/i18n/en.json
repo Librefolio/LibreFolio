@@ -47,7 +47,8 @@
     "discardChangesMessage": "You have unsaved changes. Are you sure you want to close?",
     "sync": "Sync",
     "detail": "Detail",
-    "continue": "Continue"
+    "continue": "Continue",
+    "dismiss": "Dismiss"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -288,7 +289,8 @@
       "ownerDesc": "Full control + ownership %",
       "editorDesc": "Can modify transactions",
       "viewerDesc": "Read only"
-    }
+    },
+    "createdInSystem": "Created in System"
   },
   "assets": {
     "title": "Assets",

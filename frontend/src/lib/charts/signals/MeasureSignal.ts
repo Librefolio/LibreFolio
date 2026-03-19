@@ -127,7 +127,7 @@ export class MeasureSignal extends ChartSignal {
      */
     getMeasurementForSignal(
         signalData: LineDataPoint[],
-    ): {startValue: number; endValue: number; deltaAbs: number; deltaPct: number} | null {
+    ): {startValue: number; endValue: number; deltaAbs: number; deltaPct: number; annualizedPct: number} | null {
         const startDate = String(this.params.startDate || '');
         const endDate = String(this.params.endDate || '');
         if (!startDate || !endDate) return null;
@@ -138,7 +138,11 @@ export class MeasureSignal extends ChartSignal {
 
         const deltaAbs = end.value - start.value;
         const deltaPct = start.value !== 0 ? (deltaAbs / start.value) * 100 : 0;
-        return {startValue: start.value, endValue: end.value, deltaAbs, deltaPct};
+        const days = ChartSignal.daysBetween(startDate, endDate);
+        const annualizedPct = days > 0
+            ? (Math.pow(1 + deltaPct / 100, 365 / days) - 1) * 100
+            : 0;
+        return {startValue: start.value, endValue: end.value, deltaAbs, deltaPct, annualizedPct};
     }
 }
 
