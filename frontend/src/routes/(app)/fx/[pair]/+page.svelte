@@ -151,6 +151,24 @@
         for (const cfg of signals) {
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
+
+            // For FxPairSignal: resolve data from the TimeSeriesStore before rendering
+            if (cfg.signalType === 'fx-pair') {
+                const pairSlug = String(cfg.params.pairSlug || '');
+                if (!pairSlug) continue;
+                try {
+                    const store = getFxStore(pairSlug);
+                    const storeData = store.getAllSorted();
+                    if (storeData.length === 0) continue;
+                    instance.params._resolvedData = storeData.map(d => ({
+                        date: d.date,
+                        value: d.rate,
+                    }));
+                } catch {
+                    continue; // Store not available for this pair
+                }
+            }
+
             const results = instance.renderMulti(lineData, viewMode);
             for (const result of results) {
                 if (result.data.length > 0) rendered.push(result);
@@ -493,25 +511,27 @@
     }
 </script>
 
-<div class="space-y-4">
+<div class="space-y-4" data-testid="fx-detail-page">
     <!-- ======================================================================= -->
     <!-- Header: pair info + back button -->
     <!-- ======================================================================= -->
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-3" data-testid="fx-detail-header">
         <button
+                data-testid="fx-detail-back-btn"
                 class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors"
                 onclick={() => goto('/fx')}
                 title={$t('fxDetail.backToList')}
         >
             <ArrowLeft size={20}/>
         </button>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2" data-testid="fx-detail-pair-label">
             <span class="text-2xl">{baseFlag}</span>
             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayBase}</h2>
             <span class="text-gray-400 dark:text-gray-500 text-lg">→</span>
             <span class="text-2xl">{quoteFlag}</span>
             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayQuote}</h2>
             <button
+                    data-testid="fx-detail-swap-btn"
                     class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                     onclick={handleSwapDirection}
                     title={$t('fxDetail.swapDirection')}
@@ -525,7 +545,7 @@
     {#if error}
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
             <span>⚠️</span> <span>{error}</span>
-            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => error = null}>Dismiss</button>
+            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => error = null}>{$t('common.dismiss')}</button>
         </div>
     {/if}
 
@@ -540,6 +560,7 @@
     <!-- ======================================================================= -->
     <div
             bind:this={filterBarRef}
+            data-testid="fx-detail-filter-bar"
             class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
                {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
     >
@@ -594,6 +615,7 @@
             </div>
             <!-- Row 1, Col 2: Providers -->
             <button
+                    data-testid="fx-detail-provider-btn"
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={() => showProviderModal = true}
                     title={$t('fxDetail.providers')}
@@ -603,6 +625,7 @@
             </button>
             <!-- Row 2, Col 1: Sync -->
             <button
+                    data-testid="fx-detail-sync-btn"
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={handleSync}
                     disabled={syncing}
@@ -613,6 +636,7 @@
             </button>
             <!-- Row 2, Col 2: Refresh -->
             <button
+                    data-testid="fx-detail-refresh-btn"
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={handleRefresh}
                     disabled={loading}
@@ -629,6 +653,7 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
+                data-testid="fx-detail-aesthetics-toggle"
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
                 onclick={() => showAesthetics = !showAesthetics}
         >
@@ -639,7 +664,7 @@
             <ChevronDown size={15} class="transition-transform {showAesthetics ? 'rotate-180' : ''}"/>
         </button>
         {#if showAesthetics}
-            <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+            <div data-testid="fx-detail-aesthetics-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartAestheticsSection
                         colorByBaseline={settings.colorByBaseline}
                         areaFill={settings.areaFill}
@@ -657,7 +682,7 @@
     <!-- ======================================================================= -->
     <!-- Chart with overlay action buttons (Edit + Add Measure) -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4">
+    <div data-testid="fx-detail-chart" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4">
         {#if loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
@@ -670,6 +695,7 @@
                 <!-- Action buttons: top-right corner of chart -->
                 <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
                     <button
+                            data-testid="fx-detail-measure-btn"
                             class="p-1.5 rounded-lg transition-colors {measureMode
                             ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
@@ -687,6 +713,7 @@
                         <Ruler size={16}/>
                     </button>
                     <button
+                            data-testid="fx-detail-edit-btn"
                             class="p-1.5 rounded-lg transition-colors {showDataEditor
                             ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
@@ -757,7 +784,7 @@
     <!-- Data Editor (shown only when toggled via pencil button) -->
     <!-- ======================================================================= -->
     {#if showDataEditor}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
+        <div data-testid="fx-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
             <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
     <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
                     <Pencil size={15}/>
@@ -823,6 +850,7 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
+                data-testid="fx-detail-measures-toggle"
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
                 onclick={() => showMeasures = !showMeasures}
         >
@@ -836,7 +864,7 @@
             <ChevronDown size={15} class="transition-transform {showMeasures ? 'rotate-180' : ''}"/>
         </button>
         <!-- Single MeasurePanel instance — always mounted, hidden via CSS to preserve state -->
-        <div class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"}>
+        <div data-testid="fx-detail-measures-panel" class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"}>
             <MeasurePanel
                     bind:this={measurePanel}
                     chartData={lineData}
@@ -854,6 +882,7 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
+                data-testid="fx-detail-signals-toggle"
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
                 onclick={() => showSignals = !showSignals}
         >
@@ -864,7 +893,7 @@
             <ChevronDown size={15} class="transition-transform {showSignals ? 'rotate-180' : ''}"/>
         </button>
         {#if showSignals}
-            <div class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+            <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection
                         signals={[...signals]}
                         availablePairs={configuredPairSlugs}
@@ -880,6 +909,7 @@
     <!-- ======================================================================= -->
     <!-- Provider Configuration Modal (reuses FxPairAddModal in editMode) -->
     <!-- ======================================================================= -->
+    <div data-testid="fx-detail-provider-modal">
     <FxPairAddModal
             bind:open={showProviderModal}
             editMode={true}
@@ -891,6 +921,7 @@
             oncreated={handleProviderModalCreated}
             onclose={() => showProviderModal = false}
     />
+    </div>
 
     <!-- Confirm modal for swap direction while editing -->
     <ConfirmModal

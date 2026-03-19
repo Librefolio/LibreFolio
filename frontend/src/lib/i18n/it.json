@@ -47,7 +47,8 @@
     "discardChangesMessage": "Hai modifiche non salvate. Sei sicuro di voler chiudere?",
     "sync": "Sincronizza",
     "detail": "Dettaglio",
-    "continue": "Continua"
+    "continue": "Continua",
+    "dismiss": "Chiudi"
   },
   "table": {
     "rowsPerPage": "Righe per pagina",
@@ -288,7 +289,8 @@
       "ownerDesc": "Controllo totale + % possesso",
       "editorDesc": "Può modificare transazioni",
       "viewerDesc": "Sola lettura"
-    }
+    },
+    "createdInSystem": "Creato nel Sistema"
   },
   "assets": {
     "title": "Asset",

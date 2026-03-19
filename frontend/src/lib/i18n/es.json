@@ -47,7 +47,8 @@
     "discardChangesMessage": "Tienes cambios sin guardar. ¿Estás seguro de que quieres cerrar?",
     "sync": "Sincronizar",
     "detail": "Detalle",
-    "continue": "Continuar"
+    "continue": "Continuar",
+    "dismiss": "Cerrar"
   },
   "table": {
     "rowsPerPage": "Filas por página",
@@ -288,7 +289,8 @@
       "ownerDesc": "Control total + % propiedad",
       "editorDesc": "Puede modificar transacciones",
       "viewerDesc": "Solo lectura"
-    }
+    },
+    "createdInSystem": "Creado en el Sistema"
   },
   "assets": {
     "title": "Activos",

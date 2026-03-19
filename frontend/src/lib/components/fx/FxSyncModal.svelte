@@ -187,7 +187,7 @@
     }
 </script>
 
-<ModalBase {open} onRequestClose={onclose} maxWidth="max-w-md">
+<ModalBase {open} onRequestClose={onclose} maxWidth="max-w-md" testId="fx-sync-modal">
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-center gap-2.5">

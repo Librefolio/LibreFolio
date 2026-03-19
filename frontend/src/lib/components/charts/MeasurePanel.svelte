@@ -273,17 +273,17 @@
             getValue: (r) => r.valueEnd, sortable: true, filterable: true, width: 90,
         },
         {
-            id: 'deltaAbs', header: 'Δ Abs', type: 'number',
+            id: 'deltaAbs', header: () => $t('measure.table.deltaAbs'), type: 'number',
             cell: (r) => htmlNum(r.deltaAbs, fmtDelta),
             getValue: (r) => r.deltaAbs, sortable: true, filterable: true, width: 80,
         },
         {
-            id: 'deltaPct', header: 'Δ %', type: 'number',
+            id: 'deltaPct', header: () => $t('measure.table.deltaPct'), type: 'number',
             cell: (r) => htmlNum(r.deltaPct, fmtPct),
             getValue: (r) => r.deltaPct, sortable: true, filterable: true, width: 80,
         },
         {
-            id: 'annualizedPct', header: 'Δ%/yr', type: 'number',
+            id: 'annualizedPct', header: () => $t('measure.table.annualized'), type: 'number',
             headerTooltip: '$\\large (1 + \\Delta\\%)^{\\frac{365}{d}} - 1$',
             cell: (r) => r.annualizedPct !== null
                 ? htmlNum(r.annualizedPct, fmtPct)
@@ -316,7 +316,7 @@
                     valueEnd: sigResult.endValue,
                     deltaAbs: sigResult.deltaAbs,
                     deltaPct: sigResult.deltaPct,
-                    annualizedPct: null,
+                    annualizedPct: sigResult.annualizedPct,
                 });
             }
         }

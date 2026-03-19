@@ -15,7 +15,7 @@
 <script lang="ts">
     import {tick} from 'svelte';
     import {Plus, Upload, Trash2, Undo2} from 'lucide-svelte';
-    import type {ParsedRow} from '$lib/components/fx/CsvEditor.svelte';
+    import type {ParsedRow} from './CsvEditor.svelte';
     import DataImportModal from './DataImportModal.svelte';
     import type {ImportDirection} from './DataImportModal.svelte';
     import type {ColumnDef, DataRow} from './DataEditorTypes';

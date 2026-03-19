@@ -413,8 +413,13 @@ reali dagli asset source provider (yfinance, JustETF).
 
 
 ## Ripulire tutte le traduzioni non usate con i18n prima di aggiungere nuove lingue
-Verificare e poi eliminare le chiavi che il tool da noi scritto crede non siano usate da i18n
-Fare un lavoro di razzionalizzazione delle chiavi, dividendole per categorie, eliminando quelle completamente sovrapponibili e duplicando, se serve, quelle che compaiono in parti di codice completamente diverse e che beneficierebbero di questa duplicazione per una maggiore consistenza e leggibilità
-Cercare tutte le frasi hardcodate nel codice e trasformale in traduzioni
-- System Broker creation
-- ...
+
+**Status**: ⏳ DA FARE  
+**Nota**: Lo Step 2 del `plan-fxTestingCleanup.prompt.md` ha tradotto alcune stringhe hardcoded (MeasurePanel, FxDetail, BrokerDetail), ma la pulizia completa delle 146+ chiavi potenzialmente non usate e la razionalizzazione delle categorie NON è stata eseguita.
+
+**Attività pendenti**:
+1. Verificare e poi eliminare le chiavi che il tool da noi scritto crede non siano usate da i18n (distinguendo falsi positivi da chiavi davvero morte)
+2. Fare un lavoro di razionalizzazione delle chiavi, dividendole per categorie, eliminando quelle completamente sovrapponibili e duplicando, se serve, quelle che compaiono in parti di codice completamente diverse
+3. Cercare tutte le frasi hardcodate nel codice e trasformarle in traduzioni
+   - System Broker creation (backend)
+   - Eventuali altre stringhe trovate con grep

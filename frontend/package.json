@@ -17,6 +17,8 @@
     "i18n:audit:md": "python scripts/i18n-audit.py --format md",
     "i18n:audit:both": "python scripts/i18n-audit.py --format both",
     "test:e2e": "playwright test",
+    "test:unit": "vitest run",
+    "test:unit:list": "vitest list",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "PWDEBUG=1 playwright test --headed",
@@ -37,7 +39,8 @@
     "svelte-check": "^4.3.4",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
-    "vite": "^7.2.2"
+    "vite": "^7.2.2",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@tanstack/table-core": "^8.21.3",
