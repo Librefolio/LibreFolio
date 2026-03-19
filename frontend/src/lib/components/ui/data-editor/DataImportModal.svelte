@@ -314,8 +314,8 @@
                        text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200
                        transition-colors text-base font-bold shrink-0"
                 onclick={handleSwap}
-                title={$t('csvImport.swapDirection')}
-                aria-label={$t('csvImport.swapDirection')}
+                title={$t('common.swapDirection')}
+                aria-label={$t('common.swapDirection')}
             >⇄</button>
             <div class="flex-1">
                 <InfoBanner variant="info">
@@ -371,7 +371,7 @@
     title={$t('csvImport.discardTitle')}
     message={$t('csvImport.discardMessage')}
     warning={true}
-    confirmText={$t('uploads.discardAndClose')}
+    confirmText={$t('common.discardAndClose')}
     onConfirm={doClose}
     onCancel={() => showDiscardConfirm = false}
 />

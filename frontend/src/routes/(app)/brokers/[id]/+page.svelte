@@ -394,7 +394,7 @@
                         {@const totalValue = safeCurrency(broker.total_value_base_currency)}
                         {#if totalValue}
                             <div class="mt-4 pt-4 border-t border-gray-100">
-                                <div class="text-sm text-gray-500">{$_('brokers.totalValue')}</div>
+                                <div class="text-sm text-gray-500">{$_('common.totalValue')}</div>
                                 <div class="text-2xl font-bold text-libre-green">
                                     {formatCurrency(totalValue.amount, totalValue.code)}
                                 </div>

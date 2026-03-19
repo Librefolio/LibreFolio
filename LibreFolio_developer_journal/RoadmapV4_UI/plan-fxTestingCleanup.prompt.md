@@ -2,7 +2,7 @@
 
 **Data creazione**: 12 Marzo 2026
 **Ultima revisione**: 19 Marzo 2026
-**Status**: ✅ Steps 0-10,12A-C COMPLETATI — Step 2C (razionalizzazione chiavi) IN PIANIFICAZIONE, Steps 2D/11 da fare
+**Status**: ✅ Steps 0-10,12A-C COMPLETATI, Step 2C (razionalizzazione) ✅ COMPLETATO (735→583 chiavi, 60→19 duplicati residui KEEP) — Steps 2D/11 da fare
 **Priorità**: Media (copertura E2E FX completa, restano i18n rationalization, gallery)
 **Stima**: ~5-6 giorni
 **Dipendenze**: Tutti i plan Phase 5 FX completati (13+ sub-plan, 7 round bug-fix)
@@ -53,7 +53,11 @@ Il sottosistema FX è completo a livello funzionale: 2 pagine route (~1400+ righ
 | 19 Mar 2026 | ✅ Step 2A+ | i18n-audit: export Excel con tab per severità (Dup ALL, 3-4, 2-4, 1), tabelle impilate con stile |
 | 19 Mar 2026 | ✅ Step 2B | 111 chiavi morte rimosse da tutte e 4 le lingue (735 → 624 keys, 0 unused, 100% coverage) |
 | 19 Mar 2026 | ✅ Step 2E | Verificata completezza: 624/624 keys in EN/IT/FR/ES (100%) |
-| 19 Mar 2026 | 📋 Step 2C | Piano razionalizzazione chiavi scritto — **IN ATTESA DI REVIEW** |
+| 19 Mar 2026 | 📋 Step 2C | Piano razionalizzazione scritto — review completata, **TUTTE LE DECISIONI PRESE** |
+| 19 Mar 2026 | ✅ Step 2C.1 | Eseguito piano Fasi 1-3: merge sicuri, nav/title, common, allineamento FR, merge discard/undo/reset/discardAndClose. 624 → 585 chiavi |
+| 19 Mar 2026 | ✅ Step 2C.2 | Migrazione coerenza `filter.*` → `common.*`: `filter.bytes/kilobytes/gigabytes/min` → `common.bytes/kilobytes/gigabytes/min`. Fix stale ref `filter.megabytes` in upload.ts |
+| 19 Mar 2026 | ✅ Step 2C.3 | Migrazione coerenza preset array: `uploads.presetIcon` → `common.icon`, 3× "Custom" (`uploads.presetCustom`, `datePicker.custom`, `chartSettings.yAxisCustom`) → `common.custom`. 585 → 583 chiavi |
+| 19 Mar 2026 | 📋 Step 2C.4 | Analisi 19 gruppi duplicati residui — tutti classificati come KEEP (prefissi dinamici, semantica diversa, o duplicato linguistico accettabile) |
 
 ---
 
@@ -302,7 +306,7 @@ Questi gruppi sono sotto prefissi risolti dinamicamente (`$t(\`prefix.${var}\`)`
 
 ---
 
-#### Fase 1 — Merge sicuri (ALL languages, stessa semantica)
+#### Fase 1 — Merge sicuri (ALL languages, stessa semantica) — ✅ APPROVATO
 
 Chiavi con valori identici in tutte e 4 le lingue, stessa semantica, nessun prefisso dinamico.
 Azione: scegliere chiave canonica, aggiornare riferimenti, eliminare duplicato.
@@ -319,7 +323,7 @@ Azione: scegliere chiave canonica, aggiornare riferimenti, eliminare duplicato.
 | `uploads.deleteConfirm` | `uploads.deleteConfirmSingle` | Are you sure you want to delete this file? | FilesTable.svelte riga 381 |
 | `uploads.upload` | `uploads.uploadNew` | Upload | AssetPickerModal.svelte (1 uso) |
 
-**Pattern nav/title** — stesse parole usate sia nel nav sidebar che come titolo pagina:
+**Pattern nav/title** — ✅ APPROVATO merge (se mai servirà un titolo diverso, si ri-crea la chiave):
 
 | Canonico (KEEP) | Da eliminare (REMOVE) | Valore (EN) | Note |
 |---|---|---|---|
@@ -327,76 +331,91 @@ Azione: scegliere chiave canonica, aggiornare riferimenti, eliminare duplicato.
 | `transactions.title` | `nav.transactions` | Transactions | |
 | `assets.title` | `nav.assets`, `dashboard.assetCount` | Assets | dashboard usa come label widget |
 
-> ❓ **DOMANDA**: Il pattern nav/title (3 gruppi sopra) implica che il sidebar nav usi chiavi del
-> dominio (`fx.title`, `assets.title`) anziché `nav.*`. È accettabile dal punto di vista
-> architetturale? Se in futuro il nav volesse abbreviare (es. "FX" anziché "FX Rates"), servirebbero
-> chiavi separate. Preferisci: **(A)** mergiarli ora, **(B)** tenerli separati come duplicato intenzionale?
+**Migrazione in `common.*`** — ✅ APPROVATO per chiavi con stessa semantica cross-contesto:
 
-**Casi "stesso testo ma contesti diversi" — KEEP separati (duplicato intenzionale)**:
-
-| Chiavi | Valore (EN) | Motivo per tenerle separate |
-|---|---|---|
-| `chartSettings.yAxisCustom`, `datePicker.custom`, `uploads.presetCustom` | Custom | 3 contesti completamente diversi (scala asse Y, date picker, preset upload) |
-| `filter.max`, `uploads.maxSizeLabel` | Max | Filtro generico vs label dimensione upload |
-| `settings.avatar`, `uploads.presetAvatar` | Avatar | Settings label vs upload preset name |
-| `brokers.totalValue`, `dashboard.totalValue` | Total Value | Broker page vs dashboard widget |
-| `table.selected`, `uploads.selected` | selected | Tabella generica vs file manager |
-| `chartSettings.aesthetics`, `fxDetail.aesthetics` | Aesthetics | Chart settings modal vs FX detail panel |
-| `csvImport.swapDirection`, `fxDetail.swapDirection` | Swap direction | CSV import vs FX detail header |
-| `chartSettings.style.markerEnd`/`Start`, `measure.table.end`/`start` | End/Start | Chart markers vs measure table headers |
-| `brokers.sharing.save`, `fx.addPair.saveConfiguration` | Save Configuration | Broker sharing vs FX pair setup |
-
-> ❓ **DOMANDA**: Alcuni di questi (es. `Aesthetics`, `Swap direction`, `Save Configuration`) 
-> potrebbero ragionevolmente diventare `common.*`. Vuoi che li consolidi in chiavi common,
-> oppure preferisci tenerli separati per avere flessibilità futura sulle traduzioni?
-
----
-
-#### Fase 2 — 3/4 lingue: la lingua divergente è probabilmente una svista
-
-Gruppi dove 3 lingue hanno lo stesso valore e 1 diverge leggermente. Da verificare se la divergenza è intenzionale.
-
-| Chiavi | 3 lingue uguali | Lingua divergente | Problema | Azione proposta |
-|---|---|---|---|---|
-| `common.saveAll` / `settings.saveAll` | EN, IT, ES | **FR**: "Enregistrer Tout" vs "Tout Enregistrer" | Ordine parole invertito | Allineare FR → "Enregistrer Tout", poi merge a `common.saveAll` |
-| `common.undoAll` / `settings.undoAll` | EN, IT, ES | **FR**: "Annuler Tout" vs "Tout Annuler" | Ordine parole invertito | Allineare FR → "Annuler Tout", poi merge a `common.undoAll` |
-| `common.close` / `common.dismiss` | IT, FR, ES | **EN**: "Close" vs "Dismiss" | Distinzione semantica SOLO in EN | ❓ Vedi sotto |
-| `fx.actions.settings` / `nav.settings` | EN, IT, FR | **ES**: "Ajustes" vs "Configuración" | ES ha termini diversi per contesti diversi | KEEP separati — ES distingue correttamente |
-| `nav.files` / `uploads.title` | EN, FR, ES | **IT** (group size diverso per singular "file") | Pattern nav/title, già coperto in Fase 1 | Parte del pattern nav/title |
-| `nav.brokers` / `brokers.title` | EN, FR, ES | **IT** (group size diverso per `uploads.broker`) | Pattern nav/title | Parte del pattern nav/title |
-
-> ❓ **DOMANDA su `common.close` vs `common.dismiss`**:
-> - EN: "Close" (chiudere un pannello/modale) vs "Dismiss" (chiudere un alert/notifica)
-> - IT/FR/ES: entrambi tradotti come "Chiudi"/"Fermer"/"Cerrar"
-> - `common.dismiss` è usato SOLO in 1 punto: bottone per chiudere un alert nella FX detail page
-> - Opzioni: **(A)** tenere separate e aggiungere traduzioni distinte in IT/FR/ES (es. IT: "Ignora"),
->   **(B)** mergiarle a `common.close` perché la distinzione non è significativa nell'UI
-
----
-
-#### Fase 3 — 2/4 e 1/4 lingue: analisi contestuale
-
-Gruppi dove la coincidenza è in poche lingue. Spesso rivelano problemi di qualità traduzione.
-
-**Merge dopo allineamento traduzioni:**
-
-| Chiavi | Problema | Azione |
-|---|---|---|
-| `brokers.discardChanges`, `common.discardChanges`, `settings.discardChanges`, `uploads.discardChanges` | EN: maiuscolo inconsistente ("Changes?" vs "changes?"); FR: spazio prima di "?" inconsistente | Allineare case/spazi, merge a `common.discardChanges` |
-| `common.undo` / `settings.undo` | Identici in EN+ES, merge naturale | Merge a `common.undo` |
-| `common.resetAll` / `settings.resetAllToDefault` / `uploads.resetAll` | EN diversi ("Reset All to Defaults" vs "Reset All") | KEEP separati — semantica diversa |
-| `common.reset` / `settings.resetToDefault` | EN: entrambi "Reset to Default", IT: "Ripristina" vs "Ripristina Default" | ❓ Merge o keep? Semantica quasi identica |
-
-**Problemi di qualità traduzione trovati (da fixare):**
-
-| Chiavi | Lingua | Problema | Fix proposto |
+| Canonico (KEEP/NEW) | Da eliminare (REMOVE) | Valore (EN) | Riferimenti |
 |---|---|---|---|
-| `common.cancel` / `common.undo` | **IT**: entrambi "Annulla"; **FR**: entrambi "Annuler" | Cancel ≠ Undo! IT/FR perdono la distinzione | ❓ IT: "Cancella" vs "Annulla"? O accettabile in contesto italiano? |
-| `brokers.discardAndClose` / `uploads.discardAndClose` | **EN**: "Discard & Close" vs "Discard" | `uploads` manca "& Close" in EN/ES | Allineare: entrambi "Discard & Close" o entrambi "Discard" |
-| `fxDetail.syncFromProvider` / `fxDetail.syncRates` | **FR/ES**: stessa traduzione | FR/ES perdono "from provider" | Fix FR/ES: aggiungere "du fournisseur" / "del proveedor" |
-| `auth.login` / `auth.loginHere` | **IT**: entrambi "Accedi" | EN: "Login" vs "Sign in" (distinti) | Fix IT: "Accedi" vs "Accedi qui" o "Entra" |
-| `uploads.fileSize` / `uploads.outputSize` | **IT**: entrambi "Dimensione" | EN: "Size" vs "Output" (diversi!) | Fix IT: "Dimensione" vs "Output" o "Dim. Output" |
-| `common.delete` / `common.remove` | **FR**: entrambi "Supprimer"; **ES**: entrambi "Eliminar" | EN/IT distinguono Delete/Remove | Valutare: FR/ES potrebbero andare bene così (Romance languages) |
+| `common.aesthetics` ← **NEW** | `chartSettings.aesthetics`, `fxDetail.aesthetics` | Aesthetics | ChartAestheticsSection, fx detail panel |
+| `common.swapDirection` ← **NEW** | `csvImport.swapDirection`, `fxDetail.swapDirection` | Swap direction | DataImportModal, fx detail header |
+| `common.saveConfiguration` ← **NEW** | `brokers.sharing.save`, `fx.addPair.saveConfiguration` | Save Configuration | BrokerSharingModal, FxPairAddModal |
+| `common.totalValue` ← **NEW** | `brokers.totalValue`, `dashboard.totalValue` | Total Value | BrokerCard/Page, Dashboard widget |
+| `common.selected` ← **NEW** | `table.selected`, `uploads.selected` | selected | DataTable, FilesTable/uploads |
+| `common.start` ← **NEW** | `chartSettings.style.markerStart`, `measure.table.start` | Start | Chart style settings, MeasurePanel |
+| `common.end` ← **NEW** | `chartSettings.style.markerEnd`, `measure.table.end` | End | Chart style settings, MeasurePanel |
+
+**Casi KEEP separati (duplicato intenzionale — contesti troppo diversi)**:
+
+| Chiavi | Valore (EN) | Motivo |
+|---|---|---|
+| `chartSettings.yAxisCustom`, `datePicker.custom`, `uploads.presetCustom` | Custom | 3 contesti completamente diversi |
+| `filter.max`, `uploads.maxSizeLabel` | Max | Filtro vs upload limit |
+| `settings.avatar`, `uploads.presetAvatar` | Avatar | Settings label vs upload preset |
+
+---
+
+#### Fase 2 — 3/4 lingue — ✅ DECISIONI PRESE
+
+| Chiavi | Azione | Stato |
+|---|---|---|
+| `common.saveAll` / `settings.saveAll` | Allineare FR → "Enregistrer Tout", merge a `common.saveAll` | ✅ APPROVATO |
+| `common.undoAll` / `settings.undoAll` | Allineare FR → "Annuler Tout", merge a `common.undoAll` | ✅ APPROVATO |
+| `common.close` / `common.dismiss` | Merge a `common.close` (distinzione non significativa) | ✅ APPROVATO |
+| `fx.actions.settings` / `nav.settings` | KEEP — ES distingue correttamente "Ajustes" vs "Configuración" | ✅ KEEP |
+| `nav.files`/`uploads.title`, `nav.brokers`/`brokers.title` | Parte del pattern nav/title (Fase 1) | ✅ Coperto |
+
+---
+
+#### Fase 3 — 2/4 e 1/4 lingue — ✅ TUTTE LE DECISIONI PRESE
+
+**Merge approvati:**
+
+| Chiavi | Azione | Stato |
+|---|---|---|
+| `brokers.discardChanges`, `common.discardChanges`, `settings.discardChanges`, `uploads.discardChanges` | Allineare case/spazi EN/FR, merge a `common.discardChanges` | ✅ APPROVATO |
+| `common.undo` / `settings.undo` | Merge a `common.undo` (ha 12 usi vs 6 di settings.undo) | ✅ APPROVATO |
+| `common.reset` / `settings.resetToDefault` | Merge a `common.reset` (4 usi vs 1) | ✅ APPROVATO |
+| `brokers.discardAndClose` / `uploads.discardAndClose` | Merge a `common.discardAndClose`, allineare EN a "Discard & Close" | ✅ APPROVATO |
+| `common.resetAll` / `settings.resetAllToDefault` / `uploads.resetAll` | KEEP separati — semantica diversa | ✅ KEEP |
+
+**Fix qualità traduzione — ✅ TUTTE DECISE:**
+
+**1. `common.cancel` vs `common.undo`** — ✅ Aumentare distanza semantica
+- IT: `common.undo` → **"Ripristina"** (nota: `common.reset` IT è anche "Ripristina" ma contesto diverso: ↩ field vs button reset)
+- FR: `common.undo` → **"Rétablir"** (non esiste altrove — pulito)
+- `common.cancel` resta invariato ("Annulla" / "Annuler")
+
+**2. `brokers.discardAndClose` / `uploads.discardAndClose`** — ✅ Merge a `common.discardAndClose`
+- Fix EN `uploads.discardAndClose`: "Discard" → "Discard & Close" (allineare)
+- Fix IT `uploads.discardAndClose`: "Annulla e chiudi" → "Annulla e Chiudi" (allineare case)
+- Fix ES `uploads.discardAndClose`: "Descartar" → "Descartar y Cerrar" (allineare)
+- Merge entrambi a `common.discardAndClose`
+- Aggiornare: BrokerModal, BrokerSharingModal, DataImportModal, FileEditModal, ImageEditModal (5 file)
+- Nota: i message (warning/confirm) restano specifici per contesto (broker-specific, settings-specific, etc.)
+
+**3. `fxDetail.syncFromProvider`** — ✅ Eliminare + rimuovere tooltip dai bottoni 2x2
+- Rimuovere TUTTI i `title=` dai bottoni 2x2 in entrambe le pagine:
+  - `fx/+page.svelte`: righe 574, 585, 595 (Settings, Sync All, Refresh All)
+  - `fx/[pair]/+page.svelte`: righe 621, 632, 643 (Providers, Sync, Refresh)
+- Chiavi che diventano unused dopo rimozione tooltip:
+  - `fxDetail.syncFromProvider` — SOLO usato come title= → **RIMUOVERE**
+  - `fxDetail.refreshData` — SOLO usato come title= → **RIMUOVERE**
+- Chiavi che restano usate (hanno anche label `{#if showActionLabels}`):
+  - `fx.actions.settings`, `fx.actions.syncAll`, `fx.actions.refreshAll` → KEEP
+  - `fxDetail.providers` → KEEP (usato anche come label)
+
+**4. `auth.loginHere`** — ✅ Opzione B
+- IT: "Accedi" → **"Accedi qui"**
+- ES: già sufficientemente distinto ("Iniciar Sesión" vs "Inicia sesión" — forma verbale diversa) → **no modifiche ES**
+- FR: già distinto ("Connexion" vs "Connectez-vous") → **no modifiche FR**
+
+**5. `uploads.outputSize`** — ✅ Opzione A
+- IT: "Dimensione" → **"Output"** (anglicismo accettabile in contesto tecnico editing immagini)
+- Aggiornare in: `ImageEditModal.svelte:380`
+
+**6. `common.delete` vs `common.remove`** — ✅ Opzione A, aumentare distanza
+- FR: `common.remove` "Supprimer" → **"Retirer"** (`common.delete` resta "Supprimer")
+- ES: `common.remove` "Eliminar" → **"Quitar"** (`common.delete` resta "Eliminar")
+- Aggiornare in: MeasurePanel (1 uso), BrokerForm (1 uso), FileUploader (1 uso), ProfileTab (2 usi)
 
 ---
 
@@ -416,26 +435,84 @@ Attualmente mostra "D" (che è l'abbreviazione di Days), rendendo impossibile di
 
 #### Riepilogo quantitativo
 
-| Categoria | Gruppi | Azione |
+| Categoria | Gruppi | Stato |
 |---|---|---|
 | Fase 0 — Prefisso dinamico | ~12 | SKIP |
-| Fase 1 — Merge sicuri | ~9 (+3 nav/title ❓) | MERGE dopo review |
-| Fase 1 — Duplicati intenzionali | ~9 | KEEP |
-| Fase 2 — 3/4 lingue | ~6 | 2 MERGE + allinea FR, 4 KEEP/❓ |
-| Fase 3 — 2/4 e 1/4 | ~8 | 2 MERGE, 6 fix traduzioni |
-| Fase 4 — Bug | 1 | FIX immediato |
-| **Stima chiavi da eliminare** | | **~15-20 chiavi** (624 → ~605) |
+| Fase 1 — Merge sicuri | 9 | ✅ ESEGUITO |
+| Fase 1 — Pattern nav/title | 3 | ✅ ESEGUITO |
+| Fase 1 — Migrazione common | 7 | ✅ ESEGUITO |
+| Fase 1 — Duplicati intenzionali | 3 | KEEP |
+| Fase 2 — Merge + allinea FR | 3 | ✅ ESEGUITO |
+| Fase 2 — KEEP | 1 | KEEP |
+| Fase 3 — Merge (discard, undo, reset, discardAndClose) | 5 | ✅ ESEGUITO |
+| Fase 3 — Fix qualità traduzione (6 issue) | 6 | ✅ ESEGUITO |
+| Fase 3 — Rimozione tooltip FX + chiavi unused | 2 chiavi | ✅ ESEGUITO |
+| Fase 4 — Bug monthsShort | 1 | ✅ ESEGUITO |
+| Fase 5 — Coerenza array (filter→common, preset→common, Custom→common) | 8 chiavi | ✅ ESEGUITO |
+| **Chiavi eliminate** | | **624 → 583** (41 eliminate, 2 nuove create) |
 
 #### Ordine di esecuzione proposto
 
+✅ **COMPLETATO** — Tutte le fasi eseguite (19 Mar 2026):
+
 ```
-1. Fix bug monthsShort (Fase 4) — immediato, zero rischio
-2. Merge sicuri Fase 1 (9 gruppi) — dopo review domande ❓
-3. Allineamento FR + merge Fase 2 (saveAll, undoAll)
-4. Fix qualità traduzioni Fase 3 — batch separato
-5. Merge Fase 3 (discardChanges, undo)
-6. Review domande ❓ aperte
+1. Fix bug monthsShort (Fase 4)                                       ✅ ESEGUITO
+2. Rimozione tooltip FX + chiavi unused (Fase 3, punto 3)              ✅ ESEGUITO
+3. Fix qualità traduzione: undo, loginHere, outputSize, remove (Fase 3) ✅ ESEGUITO
+4. Fix discardAndClose allineamento EN/IT/ES (Fase 3, punto 2)         ✅ ESEGUITO
+5. Merge sicuri Fase 1 (9 gruppi base)                                 ✅ ESEGUITO
+6. Merge nav/title Fase 1 (3 gruppi)                                   ✅ ESEGUITO
+7. Migrazione common Fase 1 (7 gruppi)                                 ✅ ESEGUITO
+8. Allineamento FR + merge Fase 2 (saveAll, undoAll, close/dismiss)    ✅ ESEGUITO
+9. Merge Fase 3 (discardChanges×4, undo, reset, discardAndClose)       ✅ ESEGUITO
+10. Coerenza filter.* → common.* (bytes,KB,GB,min)                     ✅ ESEGUITO
+11. Coerenza preset → common.* (icon, custom×3)                        ✅ ESEGUITO
 ```
+
+---
+
+#### Fase 6 — Analisi 19 gruppi duplicati residui (post-esecuzione)
+
+Dopo tutte le migrazioni: **583 chiavi, 19 gruppi duplicati**. Tutti classificati:
+
+**🔴 ALL languages (6 gruppi) — KEEP:**
+
+| Gruppo | Chiavi | Verdetto | Motivo |
+|--------|--------|----------|--------|
+| `assets.title` / `dashboard.assetCount` | 2 | KEEP | `dashboard.assetCount` è label widget dashboard — se mai cambiasse in "Asset Count" la chiave resterebbe |
+| `chartSettings.signals.ema` / `.emaAbbr` | 2 | KEEP (dinamico) | Risolte con `$t(\`chartSettings.signals.${type}\`)` e `${type}Abbr` — acronimo = nome completo per EMA |
+| `chartSettings.signals.macd` / `.macdAbbr` | 2 | KEEP (dinamico) | Idem — MACD non ha abbreviazione diversa |
+| `chartSettings.signals.rsi` / `.rsiAbbr` | 2 | KEEP (dinamico) | Idem — RSI non ha abbreviazione diversa |
+| `settings.globalSettingUnits.price_sync_interval_hours` / `.session_ttl_hours` | 2 | KEEP (dinamico) | Risolte con `$t(\`settings.globalSettingUnits.${key}\`)` |
+| `uploads.files` / `uploads.title` | 2 | KEEP | `files` = plurale count ("3 files"), `title` = titolo pagina ("Files") — case diverso in IT/EN |
+
+**🟠 3/4 languages (4 gruppi) — KEEP:**
+
+| Gruppo | Chiavi | Verdetto | Motivo |
+|--------|--------|----------|--------|
+| `chartSettings.discard` / `common.discard` | 2 | KEEP | FR distingue "Rejeter" (chart) vs "Abandonner" (generico) — distinzione semantica valida |
+| `fileStatus.uploaded` / `uploads.uploadDate` | 2 | KEEP (dinamico) | `fileStatus.*` risolto con `$t(\`fileStatus.${status}\`)` |
+| `fx.actions.settings` / `nav.settings` | 2 | KEEP | ES distingue "Ajustes" (FX context) vs "Configuración" (nav globale) |
+| `settings.resetAllToDefault` / `uploads.resetAll` | 2 | KEEP | Semantica diversa: "Reset All" (global settings) vs "Reset All" (uploads selezione) — IT distingue "Ripristina Tutto" vs "Reimposta tutto" |
+
+**🟡 2/4 languages (2 gruppi) — KEEP:**
+
+| Gruppo | Chiavi | Verdetto | Motivo |
+|--------|--------|----------|--------|
+| `common.resetAll` / `settings.resetAllToDefault` | 2 | KEEP | EN distingue "Reset All to Defaults" vs "Reset All" — 3 chiavi reset con semantica scalare |
+| `common.retry` / `error.tryAgain` | 2 | KEEP | EN distingue "Retry" vs "Try Again" — contesti diversi (azione puntuale vs suggerimento) |
+
+**🟢 1 language only (7 gruppi) — KEEP:**
+
+| Gruppo | Chiavi | Verdetto | Motivo |
+|--------|--------|----------|--------|
+| ES "Restablecer Todo" ×3 | 3 | KEEP | Stesse 3 chiavi reset di sopra — duplicato solo in ES |
+| IT "File" ×3 | 3 | KEEP | `file`/`files`/`title` — singolare/plurale/titolo in IT coincidono |
+| IT "Editor" ×2 | 2 | KEEP | `editors` (plurale ruolo) vs `roleEditorShort` (label ruolo singolo) — EN distingue "Editors"/"Editor" |
+| IT "Broker" ×2 | 2 | KEEP | `brokers.title` (pagina) vs `uploads.broker` (colonna tabella) — EN distingue "Brokers"/"Broker" |
+| EN "Discard Changes?" ×2 | 2 | KEEP | `chartSettings.discardTitle` usa FR "Rejeter les modifications" vs `common.discardChanges` usa "Annuler les Modifications" — stili diversi |
+| IT "Coppia FX" ×2 | 2 | KEEP (dinamico) | Prefisso dinamico `chartSettings.signals.*` — fxPair e fxPairAbbr |
+| IT "Ripristina" ×2 | 2 | KEEP | `common.reset` e `common.undo` — EN/FR/ES tutti diversi, coincidono solo in IT — duplicato linguistico accettabile |
 
 ### 2D. Stringhe hardcoded → i18n — ⏳ DA FARE
 
@@ -445,8 +522,9 @@ Da eseguire dopo completamento 2C.
 
 ### 2E. ✅ Verificare completezza 4 lingue — COMPLETATO
 
-- `./dev.py i18n audit` → 624/624 keys in EN/IT/FR/ES (100.0% tutte le lingue)
-- 0 chiavi mancanti, 0 chiavi unused
+- Post Step 2B: `./dev.py i18n audit` → 624/624 keys (100.0% tutte le lingue)
+- Post Step 2C: `./dev.py i18n audit` → 583/583 keys (100.0% tutte le lingue)
+- 0 chiavi mancanti, 0 chiavi unused, 19 gruppi duplicati residui (tutti KEEP)
 
 ---
 

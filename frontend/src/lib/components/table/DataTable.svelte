@@ -884,7 +884,7 @@
                             colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)}
                             class="td-empty"
                     >
-                        {emptyMessage || $t('table.noData') || 'No data available'}
+                        {emptyMessage || $t('common.noData') || 'No data available'}
                     </td>
                 </tr>
             {:else}

@@ -57,7 +57,7 @@
 </script>
 
 <div>
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{$t('chartSettings.aesthetics')}</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{$t('common.aesthetics')}</h3>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <!-- Color by baseline -->
         <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
@@ -145,7 +145,7 @@
                         type="button"
                         class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'custom' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => { yAxisMode = 'custom'; emitChange(); }}
-                    >{$t('chartSettings.yAxisCustom')}</button>
+                    >{$t('common.custom')}</button>
                 </div>
                 {#if yAxisMode === 'custom'}
                     <div class="flex items-center gap-1.5 text-xs">

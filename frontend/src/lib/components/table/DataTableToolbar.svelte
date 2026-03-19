@@ -36,7 +36,7 @@
                     onclick={() => onClearSelection?.()}
                     title={$t('table.clearSelection') || 'Clear selection'}
             >
-                <span class="count-text">{selectedCount} {$t('table.selected')}</span>
+                <span class="count-text">{selectedCount} {$t('common.selected')}</span>
                 <span class="clear-icon">×</span>
             </button>
             <div class="bulk-actions">

@@ -228,7 +228,7 @@
             <Upload size={32} class="upload-icon"/>
             <p class="drop-text">{$t('uploads.dropOrClick')}</p>
             <p class="drop-hint">
-                {$t('uploads.maxSizeLabel') || 'Max'}: {maxSizeMB}MB
+                {$t('common.max') || 'Max'}: {maxSizeMB}MB
                 {#if multiple} • {$t('common.multipleFiles')}{/if}
             </p>
         {:else}

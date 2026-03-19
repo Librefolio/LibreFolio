@@ -251,7 +251,7 @@
                         on:click={handleUploadClick}
                         data-testid="asset-picker-upload-tab">
                     <Upload size={14} />
-                    {$_('uploads.uploadNew') || 'Upload'}
+                    {$_('uploads.upload') || 'Upload'}
                 </button>
                 <input type="file" bind:this={uploadInput} accept="image/*"
                        on:change={handleFileSelected} class="hidden-input" />

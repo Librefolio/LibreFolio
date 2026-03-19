@@ -869,7 +869,7 @@
                 <!-- File list with individual broker selection -->
                 <div class="files-list">
                     <p class="files-count">
-                        {pendingBrimFiles.length} {pendingBrimFiles.length === 1 ? $t('uploads.file') || 'file' : $t('uploads.files') || 'files'} {$t('uploads.selected') || 'selected'}
+                        {pendingBrimFiles.length} {pendingBrimFiles.length === 1 ? $t('uploads.file') || 'file' : $t('uploads.files') || 'files'} {$t('common.selected') || 'selected'}
                     </p>
 
                     {#each pendingBrimFiles as file, index}
