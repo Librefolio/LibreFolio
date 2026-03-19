@@ -228,6 +228,13 @@ def cmd_server(args):
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
 
+    # Generate a shared JWT secret for all workers.
+    # On macOS, Python uses 'spawn' (not fork) for multiprocessing, so each
+    # uvicorn worker is a fresh process. Without a shared env var, each worker
+    # would generate its own random secret → tokens invalid across workers.
+    import secrets as _secrets
+    env.setdefault("JWT_SECRET", _secrets.token_urlsafe(64))
+
     uvicorn_cmd = [
         "pipenv", "run", "uvicorn",
         "backend.app.main:app",
