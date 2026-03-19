@@ -2,7 +2,7 @@
 
 **Data creazione**: 12 Marzo 2026
 **Ultima revisione**: 19 Marzo 2026
-**Status**: 🔍 UNDER REVIEW — implementato, da testare uno per uno
+**Status**: 🔧 IN PROGRESS — Steps 1-9 verificati (3 fix in fx-list.spec.ts da rivalidare), Steps 10-12 da fare
 **Priorità**: Alta (zero copertura E2E FX, 2 bug noti da fixare)
 **Stima**: ~5-6 giorni
 **Dipendenze**: Tutti i plan Phase 5 FX completati (13+ sub-plan, 7 round bug-fix)
@@ -29,13 +29,25 @@ Il sottosistema FX è completo a livello funzionale: 2 pagine route (~1400+ righ
 | 19 Mar 2026 | 🔍 Pre-Step 0D | Eliminato `fx-routes.spec.ts`, creato `e2e/fx/fx-helpers.ts` — UNDER REVIEW |
 | 19 Mar 2026 | 🔍 Pre-Step 0E | Fix FxPairSignal nella detail page (`_resolvedData`) — UNDER REVIEW |
 | 19 Mar 2026 | 🔍 Pre-Step 0F | Fix `annualizedPct` in `MeasureSignal.getMeasurementForSignal()` — UNDER REVIEW |
-| 19 Mar 2026 | 🔍 Step 1 | 27 unit test Vitest (15 TimeSeriesStore + 12 EditBuffer), config Vitest — UNDER REVIEW |
+| 19 Mar 2026 | ✅ Step 1 | 27 unit test Vitest (15 TimeSeriesStore + 12 EditBuffer) — **PASSED** (27/27) |
 | 19 Mar 2026 | 🔍 Step 2 | i18n: stringhe hardcoded tradotte (MeasurePanel, FxDetail, BrokerDetail) — UNDER REVIEW |
-| 19 Mar 2026 | 🔍 Steps 3-9 | 7 file E2E spec Playwright creati — UNDER REVIEW |
+| 19 Mar 2026 | 🔧 Step 3 | E2E FX List Page — 7/10 passed, 3 failed (badge count, filter, reset) — fix applicati |
+| 19 Mar 2026 | ✅ Step 4 | E2E FX Add Pair Modal — **PASSED** (5/5) |
+| 19 Mar 2026 | ✅ Step 5 | E2E FX Detail Page — **PASSED** (12/12) |
+| 19 Mar 2026 | ✅ Step 6 | E2E FX Data Editor — **PASSED** (3/3) |
+| 19 Mar 2026 | ✅ Step 7 | E2E FX Sync — **PASSED** (3/3) |
+| 19 Mar 2026 | ✅ Step 8 | E2E FX API Routes — **PASSED** (3/3) |
+| 19 Mar 2026 | ✅ Step 9 | E2E FX Chart Settings — **PASSED** (3/3) |
 | 19 Mar 2026 | 🔍 Step 10 | Registrazione in `dev.py test` + riorganizzazione categorie (front-utility, front-user, front-fx) — UNDER REVIEW |
 | 19 Mar 2026 | ✅ Step 12A | 14 plan file spostati in `phases/phase-05-subplan/` |
 | 19 Mar 2026 | ✅ Step 12B | `phase-05-fx.md` riscritto come summary |
 | 19 Mar 2026 | 🔍 Step 12C | Aggiornato TODO_Completati.md e TODO_FUTURI.md — UNDER REVIEW |
+| 19 Mar 2026 | ✅ Fix port | `--force` flag aggiunto a `./dev.py server` + `playwright.config.ts` usa `--force` |
+| 19 Mar 2026 | ✅ Fix testid | `data-testid` aggiunti: `fx-currency-filter`, `fx-reset-filters`, `fx-date-range-picker`, `fx-pair-label`, `fx-swap-btn` |
+| 19 Mar 2026 | ✅ Fix tests | Test 4/7/8/10 in `fx-list.spec.ts` resi reali (rimossi if-guard, asserzioni dirette) |
+| 19 Mar 2026 | 🔧 Fix tests | Test 3: card count collision (testid prefix `fx-card-` matchava figli) → rinominati a `fx-pair-label`/`fx-swap-btn` |
+| 19 Mar 2026 | 🔧 Fix tests | Test 4/5: `SearchSelect` usa `<button>` non `[role=option]` → corretto selettore |
+| 19 Mar 2026 | ✅ Fix dev.py | `_print_port_help()` estratta come funzione condivisa, usata da entrambi i path (force/non-force) |
 
 ---
 

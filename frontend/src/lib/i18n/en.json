@@ -327,7 +327,8 @@
     "filter": {
       "filterCurrency": "Filter currency",
       "secondCurrency": "Second currency",
-      "allCurrencies": "All currencies"
+      "allCurrencies": "All currencies",
+      "resetFilters": "Reset filters"
     },
     "addPair": {
       "title": "Add New Currency Pair",

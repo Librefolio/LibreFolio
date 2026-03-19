@@ -41,15 +41,17 @@ test.describe('FX List Page', () => {
     // ========================================================================
     test('pair count badge matches card count', async ({page}) => {
         await goToFxPage(page);
-        const cards = page.locator('[data-testid^="fx-card-"]');
+        // Count only card containers (not their children — pair-label, swap-btn etc.)
+        const cards = page.locator('[data-testid^="fx-card-"]').filter({
+            has: page.locator('[data-testid="fx-pair-label"]'),
+        });
         const cardCount = await cards.count();
 
         // The badge shows the count of configured pairs
         const badge = page.getByTestId('fx-pair-count-badge');
-        if (await badge.isVisible()) {
-            const badgeText = await badge.textContent();
-            expect(badgeText).toContain(String(cardCount));
-        }
+        await expect(badge).toBeVisible();
+        const badgeText = await badge.textContent();
+        expect(badgeText).toContain(String(cardCount));
     });
 
     // ========================================================================
@@ -60,28 +62,29 @@ test.describe('FX List Page', () => {
         const allCards = page.locator('[data-testid^="fx-card-"]');
         const totalBefore = await allCards.count();
 
-        // Click first currency filter dropdown and type EUR
+        // Currency filter containers should exist
         const filterContainers = page.locator('[data-testid="fx-currency-filter"]');
-        if (await filterContainers.count() > 0) {
-            const firstFilter = filterContainers.first();
-            await firstFilter.locator('[role="combobox"]').click();
-            await page.waitForTimeout(200);
-            const searchInput = firstFilter.locator('input[type="text"]');
-            await searchInput.fill('EUR');
-            await page.waitForTimeout(500);
-            const listbox = page.locator('[role="listbox"]');
-            if (await listbox.isVisible()) {
-                const option = listbox.locator('[role="option"]').filter({hasText: 'EUR'}).first();
-                await option.click();
-                await page.waitForTimeout(500);
+        await expect(filterContainers.first()).toBeVisible();
 
-                // All visible cards should contain "EUR"
-                const filtered = page.locator('[data-testid^="fx-card-"]');
-                const filteredCount = await filtered.count();
-                expect(filteredCount).toBeGreaterThan(0);
-                expect(filteredCount).toBeLessThanOrEqual(totalBefore);
-            }
-        }
+        const firstFilter = filterContainers.first();
+        await firstFilter.locator('[role="combobox"]').click();
+        await page.waitForTimeout(200);
+        const searchInput = firstFilter.locator('input[type="text"]');
+        await searchInput.fill('EUR');
+        await page.waitForTimeout(500);
+
+        // SearchSelect uses <button> inside [role="listbox"], not [role="option"]
+        const listbox = page.locator('[role="listbox"]');
+        await expect(listbox).toBeVisible();
+        const option = listbox.locator('button').filter({hasText: 'EUR'}).first();
+        await option.click();
+        await page.waitForTimeout(500);
+
+        // All visible cards should contain "EUR"
+        const filtered = page.locator('[data-testid^="fx-card-"]');
+        const filteredCount = await filtered.count();
+        expect(filteredCount).toBeGreaterThan(0);
+        expect(filteredCount).toBeLessThanOrEqual(totalBefore);
     });
 
     // ========================================================================
@@ -92,14 +95,30 @@ test.describe('FX List Page', () => {
         const allCards = page.locator('[data-testid^="fx-card-"]');
         const totalBefore = await allCards.count();
 
-        // If there is a clear/reset button, click it
+        // Apply a EUR filter first
+        const filterContainers = page.locator('[data-testid="fx-currency-filter"]');
+        const firstFilter = filterContainers.first();
+        await firstFilter.locator('[role="combobox"]').click();
+        await page.waitForTimeout(200);
+        const searchInput = firstFilter.locator('input[type="text"]');
+        await searchInput.fill('EUR');
+        await page.waitForTimeout(500);
+
+        // SearchSelect uses <button> inside [role="listbox"], not [role="option"]
+        const listbox = page.locator('[role="listbox"]');
+        const option = listbox.locator('button').filter({hasText: 'EUR'}).first();
+        await option.click();
+        await page.waitForTimeout(500);
+
+        // Click reset filters button
         const resetBtn = page.getByTestId('fx-reset-filters');
-        if (await resetBtn.isVisible()) {
-            await resetBtn.click();
-            await page.waitForTimeout(500);
-            const afterReset = await allCards.count();
-            expect(afterReset).toBe(totalBefore);
-        }
+        await expect(resetBtn).toBeVisible();
+        await resetBtn.click();
+        await page.waitForTimeout(500);
+
+        // All cards should be restored
+        const afterReset = await allCards.count();
+        expect(afterReset).toBe(totalBefore);
     });
 
     // ========================================================================
@@ -108,18 +127,17 @@ test.describe('FX List Page', () => {
     test('DateRangePicker preset changes date display', async ({page}) => {
         await goToFxPage(page);
         const datePicker = page.getByTestId('fx-date-range-picker');
-        if (await datePicker.isVisible()) {
-            // Click the date range trigger to open
-            await datePicker.click();
-            await page.waitForTimeout(300);
+        await expect(datePicker).toBeVisible();
 
-            // Try clicking "1Y" preset
-            const yearPreset = page.getByRole('button', {name: /1Y/});
-            if (await yearPreset.isVisible()) {
-                await yearPreset.click();
-                await page.waitForTimeout(500);
-            }
-        }
+        // Click "1Y" preset button
+        const yearPreset = datePicker.getByRole('button', {name: /1Y/});
+        await expect(yearPreset).toBeVisible();
+        await yearPreset.click();
+        await page.waitForTimeout(500);
+
+        // After clicking 1Y, the preset should be active (styled differently)
+        // Verify the 1Y button has the active class
+        await expect(yearPreset).toHaveClass(/bg-libre-green/);
     });
 
     // ========================================================================
@@ -132,20 +150,18 @@ test.describe('FX List Page', () => {
 
         // Get the initial pair label
         const pairLabel = firstCard.locator('[data-testid$="-pair-label"]');
-        if (await pairLabel.isVisible()) {
-            const labelBefore = await pairLabel.textContent();
+        await expect(pairLabel).toBeVisible();
+        const labelBefore = await pairLabel.textContent();
 
-            // Click swap button on the card
-            const swapBtn = firstCard.locator('[data-testid$="-swap-btn"]');
-            if (await swapBtn.isVisible()) {
-                await swapBtn.click();
-                await page.waitForTimeout(500);
+        // Click swap button on the card
+        const swapBtn = firstCard.locator('[data-testid$="-swap-btn"]');
+        await expect(swapBtn).toBeVisible();
+        await swapBtn.click();
+        await page.waitForTimeout(500);
 
-                const labelAfter = await pairLabel.textContent();
-                // Labels should differ after swap
-                expect(labelAfter).not.toBe(labelBefore);
-            }
-        }
+        const labelAfter = await pairLabel.textContent();
+        // Labels should differ after swap
+        expect(labelAfter).not.toBe(labelBefore);
     });
 
     // ========================================================================

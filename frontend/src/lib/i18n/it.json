@@ -327,7 +327,8 @@
     "filter": {
       "filterCurrency": "Filtra valuta",
       "secondCurrency": "Seconda valuta",
-      "allCurrencies": "Tutte le valute"
+      "allCurrencies": "Tutte le valute",
+      "resetFilters": "Azzera filtri"
     },
     "addPair": {
       "title": "Aggiungi Nuova Coppia FX",
