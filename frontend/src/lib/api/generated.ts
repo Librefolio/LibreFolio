@@ -2732,6 +2732,8 @@ type ValidationError = {
   loc: Array<(string | number) | Array<string | number>>;
   msg: string;
   type: string;
+  input?: unknown | undefined;
+  ctx?: {} | undefined;
 };
 type SystemInfoResponse = {
   app_version: string;
@@ -3177,6 +3179,8 @@ const ValidationError: z.ZodType<ValidationError> = z
     loc: z.array(z.union([z.string(), z.number()])),
     msg: z.string(),
     type: z.string(),
+    input: z.unknown().optional(),
+    ctx: z.object({}).partial().passthrough().optional(),
   })
   .passthrough();
 const HTTPValidationError: z.ZodType<HTTPValidationError> = z
@@ -3286,7 +3290,7 @@ const SystemInfoResponse: z.ZodType<SystemInfoResponse> = z
   .passthrough();
 const Body_upload_file_api_v1_uploads_post = z
   .object({
-    file: z.instanceof(File),
+    file: z.string(),
     description: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
@@ -5254,7 +5258,7 @@ const BRAccessBulkResponse: z.ZodType<BRAccessBulkResponse> = z.object({
     .optional(),
 });
 const Body_upload_file_api_v1_brokers_import_upload_post = z
-  .object({ file: z.instanceof(File).describe("Broker report file to upload") })
+  .object({ file: z.string().describe("Broker report file to upload") })
   .passthrough();
 const BRIMFileStatus = z.enum(["uploaded", "parsed", "failed"]);
 const BRIMFileInfo: z.ZodType<BRIMFileInfo> = z
@@ -6730,7 +6734,8 @@ Returns user info and sets session cookie.`,
     method: "post",
     path: "/api/v1/auth/logout",
     alias: "logout_api_v1_auth_logout_post",
-    description: `Logout current user and destroy session.`,
+    description: `Logout current user and clear session cookie.
+JWT is stateless — logout simply clears the cookie client-side.`,
     requestFormat: "json",
     response: z
       .object({ message: z.string().default("Logged out successfully") })
@@ -7408,9 +7413,7 @@ Returns file metadata including compatible plugins.`,
         name: "body",
         type: "Body",
         schema: z
-          .object({
-            file: z.instanceof(File).describe("Broker report file to upload"),
-          })
+          .object({ file: z.string().describe("Broker report file to upload") })
           .passthrough(),
       },
       {

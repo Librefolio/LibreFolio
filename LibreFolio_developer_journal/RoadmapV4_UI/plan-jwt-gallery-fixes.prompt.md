@@ -1,10 +1,22 @@
 # Plan: JWT Auth Migration + Gallery Screenshot Fixes + Provider Icon Fallback
 
 **Data creazione**: 19 Marzo 2026
-**Status**: 📋 PIANIFICATO
+**Status**: ✅ COMPLETATO (Step 0-6 implementati, Step 7 da eseguire manualmente)
 **Priorità**: Alta (blocca gallery multi-worker + miglioramento UX provider icons)
 **Stima**: ~3-4 ore
 **Dipendenze**: `plan-fxTestingCleanup.prompt.md` Step 11 (gallery screenshots) completato
+
+### Progress Log
+
+| Data | Step | Dettagli |
+|------|------|----------|
+| 19 Mar 2026 | ✅ Step 0 | PyJWT 2.12.1 installato via Pipfile |
+| 19 Mar 2026 | ✅ Step 1 | `auth_service.py` riscritto: rimosso `_sessions` dict, aggiunti `create_jwt_token()` + `decode_jwt_token()` con HMAC-SHA256. Secret random pre-fork. Fix: `sub` deve essere stringa per spec JWT |
+| 19 Mar 2026 | ✅ Step 2 | `auth.py`: imports aggiornati, login usa `create_jwt_token`, get_current_user usa `decode_jwt_token`, logout rimuove solo cookie (stateless) |
+| 19 Mar 2026 | ✅ Step 3 | `user_service.py`: rimosso import e 3 chiamate a `delete_user_sessions` (non esiste più con JWT stateless) |
+| 19 Mar 2026 | ✅ Step 4 | Warning in auth_service.py aggiornato con spiegazione JWT |
+| 19 Mar 2026 | ✅ Step 5 | Gallery fix: Add Pair routes/chain ora apre il route picker prima dello screenshot. Provider Config wait 500ms→2000ms |
+| 19 Mar 2026 | ✅ Step 6 | FxProviderSelect: rimosso `<img>` per icon_url, sempre initials (sigla provider). Rimossa funzione `getProviderIconUrl` inutilizzata |
 
 ---
 

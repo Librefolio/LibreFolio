@@ -13,7 +13,7 @@
   - Chain routes organized in collapsible menus by step count
   - Chains sorted by provider count (ascending), then alphabetically
   - Full-text search (AND logic per space-separated token)
-  - Provider icons (from icon_url) with initials fallback
+  - Provider initials badges with color-coded backgrounds
   - Currency flag emojis on route items
   - OrderableList for selected route priority (drag & drop)
   - MANUAL provider is never shown (backend-only sentinel)
@@ -306,12 +306,8 @@
     });
 
     // =========================================================================
-    // Provider icon helper
+    // Provider display helpers
     // =========================================================================
-
-    function getProviderIconUrl(code: string): string | null {
-        return providerMap.get(code)?.icon_url ?? null;
-    }
 
     function getProviderInitials(code: string): string {
         return code.slice(0, 2).toUpperCase();
@@ -586,7 +582,6 @@
                         </span>
                         <div class="flex items-center gap-1.5 flex-wrap">
                             {#each usedProviders as prov}
-                                {@const iconUrl = prov.icon_url}
                                 {@const provColor = getProviderColor(prov.code)}
                                 {@const provWarning = getProviderWarning(prov.code)}
                                 <Tooltip html={legendTooltipHtml(prov)} position="top">
@@ -597,11 +592,7 @@
                                         class="inline-flex items-center gap-1 px-1.5 py-1 rounded border transition-all cursor-pointer hover:shadow-sm"
                                         style="background: {provColor.bg}; border-color: {provColor.border}"
                                     >
-                                        {#if iconUrl}
-                                            <img src={iconUrl} alt={prov.code} class="w-4 h-4 rounded object-contain flex-shrink-0" />
-                                        {:else}
-                                            <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(prov.code)}</span>
-                                        {/if}
+                                        <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(prov.code)}</span>
                                         <span class="text-[10px] font-semibold text-gray-600 dark:text-gray-300">{prov.code}</span>
                                         {#if provWarning}
                                             <AlertTriangle size={10} class="text-amber-500 flex-shrink-0" />
