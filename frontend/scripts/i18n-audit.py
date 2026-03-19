@@ -6,13 +6,14 @@ This script analyzes translation files and generates a comparison table
 showing all translation keys across all languages, highlighting missing translations.
 
 Usage:
-    python scripts/i18n-audit.py [--format md|xlsx|both] [--output path]
+    python scripts/i18n-audit.py [--format md|xlsx|both] [--output path] [--duplicates]
 
 Examples:
     python scripts/i18n-audit.py                    # Markdown to stdout
     python scripts/i18n-audit.py --format xlsx     # Excel file in current dir
     python scripts/i18n-audit.py --format both     # Both formats in current dir
     python scripts/i18n-audit.py -o ./reports/     # Output to specific directory
+    python scripts/i18n-audit.py --duplicates      # Include duplicate value analysis
 """
 
 import json
@@ -86,12 +87,15 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
     # Patterns for INDIRECT keys (passed as props/variables)
     # These are keys stored in objects/arrays and later passed to $t/$_
     patterns_indirect = [
-        # labelKey: 'nav.dashboard', titleKey: 'settings.title', etc.
-        re.compile(r"(?:label|title|text|message|hint|description|placeholder)Key['\"]?\s*[:=]\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
-        # key: 'common.save' in objects
-        re.compile(r"['\"]?key['\"]?\s*:\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
+        # labelKey: 'nav.dashboard', titleKey: 'settings.title', tooltipKey: '...', etc.
+        re.compile(r"(?:label|title|text|message|hint|description|placeholder|tooltip)Key['\"]?\s*[:=]\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
+        # key: 'common.save' or tooltip: 'chartSettings.tooltips.period' in objects
+        re.compile(r"['\"]?(?:key|tooltip)['\"]?\s*:\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
         # i18n key strings in arrays: ['common.yes', 'common.no']
         re.compile(r"\[\s*['\"]([a-zA-Z0-9_.]+)['\"](?:\s*,\s*['\"]([a-zA-Z0-9_.]+)['\"])*\s*\]"),
+        # Individual i18n-like strings in const arrays (e.g., WEEKDAY_KEYS, MONTH_KEYS)
+        # Matches strings like 'datePicker.weekdays.mo' in array/object contexts
+        re.compile(r"['\"]([a-zA-Z]+\.[a-zA-Z]+\.[a-zA-Z]+)['\"]"),
         ]
 
     # Patterns for DYNAMIC keys (template literals / concatenation)
@@ -306,6 +310,7 @@ def generate_unused_keys_report(
     ) -> tuple[str, list[str]]:
     """
     Generate a report of translation keys that exist but are not used in the codebase.
+    Splits keys into "Potentially Dynamic" (prefix match) and "Likely Unused" categories.
 
     Returns:
         Tuple of (report string, list of unused keys)
@@ -317,6 +322,23 @@ def generate_unused_keys_report(
 
     if len(unused_keys) == 0:
         return "\n## ✅ No Unused Translation Keys\n\nAll translation keys are used in the codebase.\n", []
+
+    # Split unused keys: those whose prefix (up to penultimate segment) matches a dynamic pattern
+    likely_dynamic = []
+    likely_unused = []
+    for key in unused_keys:
+        parts = key.split(".")
+        is_dynamic = False
+        # Check if any parent prefix (1 level, 2 levels, ...) matches a dynamic pattern
+        for i in range(1, len(parts)):
+            parent = ".".join(parts[:i])
+            if parent in prefix_patterns:
+                is_dynamic = True
+                break
+        if is_dynamic:
+            likely_dynamic.append(key)
+        else:
+            likely_unused.append(key)
 
     lines = [
         f"\n## ⚠️ Potentially Unused Translation Keys ({len(unused_keys)})\n",
@@ -331,28 +353,190 @@ def generate_unused_keys_report(
         lines.append(f"**Dynamic prefixes detected:** `{', '.join(sorted(prefix_patterns))}`\n")
         lines.append("Keys under these prefixes are marked as potentially used.\n\n")
 
-    # Group by section
-    sections: dict[str, list[str]] = {}
-    for key in unused_keys:
-        section = extract_section(key)
-        if section not in sections:
-            sections[section] = []
-        sections[section].append(key)
+    # Section 1: Likely dynamic (probably false positives)
+    if likely_dynamic:
+        lines.append(f"\n### 🔄 Potentially Dynamic ({len(likely_dynamic)} keys)\n")
+        lines.append("These keys are under a detected dynamic prefix — likely used via `$t(\\`prefix.${var}\\`)`.\n")
+        sections_dyn: dict[str, list[str]] = {}
+        for key in likely_dynamic:
+            section = extract_section(key)
+            sections_dyn.setdefault(section, []).append(key)
+        for section in sorted(sections_dyn.keys()):
+            lines.append(f"\n**{section}**\n")
+            for key in sorted(sections_dyn[section]):
+                lines.append(f"- `{key}`")
+            lines.append("")
 
-    for section in sorted(sections.keys()):
-        lines.append(f"\n### {section}\n")
-        for key in sorted(sections[section]):
-            lines.append(f"- `{key}`")
-        lines.append("")
+    # Section 2: Likely unused (probably dead code)
+    if likely_unused:
+        lines.append(f"\n### ❌ Likely Unused ({len(likely_unused)} keys)\n")
+        lines.append("These keys have no source code reference and no dynamic prefix match.\n")
+        sections_dead: dict[str, list[str]] = {}
+        for key in likely_unused:
+            section = extract_section(key)
+            sections_dead.setdefault(section, []).append(key)
+        for section in sorted(sections_dead.keys()):
+            lines.append(f"\n**{section}**\n")
+            for key in sorted(sections_dead[section]):
+                lines.append(f"- `{key}`")
+            lines.append("")
 
     return "\n".join(lines), unused_keys
+
+
+DuplicateGroup = tuple[frozenset[str], dict[str, str]]
+"""A duplicate group: (set of keys sharing a value, {lang: original_value})."""
+
+
+def _get_tier_info(n_langs: int) -> tuple[str, str, str]:
+    """
+    Return (emoji, label, sheet_name_suffix) for a given number of matching languages.
+    """
+    total = len(LANGUAGES)
+    if n_langs == total:
+        return "🔴", "ALL languages", f"ALL ({total}-{total})"
+    elif n_langs >= total - 1:
+        return "🟠", f"{n_langs}/{total} languages", f"{n_langs}-{total} langs"
+    elif n_langs >= 2:
+        return "🟡", f"{n_langs}/{total} languages", f"{n_langs}-{total} langs"
+    else:
+        return "🟢", "1 language only", "1 lang only"
+
+
+def _find_duplicate_groups(
+    translations: dict[str, dict[str, str]]
+    ) -> tuple[list[DuplicateGroup], dict[int, int]]:
+    """
+    Analyze all languages for keys sharing the same value (case-insensitive).
+
+    Returns:
+        Tuple of:
+        - sorted list of DuplicateGroup (most severe first)
+        - tier_counts: {n_matching_langs: count_of_groups}
+    """
+    all_key_groups: dict[frozenset[str], dict[str, str]] = {}
+
+    for lang in LANGUAGES:
+        lang_data = translations.get(lang, {})
+        value_to_keys: dict[str, list[str]] = {}
+        for key, value in lang_data.items():
+            if not isinstance(value, str) or not value.strip():
+                continue
+            norm = value.strip().lower()
+            value_to_keys.setdefault(norm, []).append(key)
+
+        for _norm_val, keys in value_to_keys.items():
+            if len(keys) < 2:
+                continue
+            ks = frozenset(keys)
+            if ks not in all_key_groups:
+                all_key_groups[ks] = {}
+            all_key_groups[ks][lang] = lang_data[keys[0]]
+
+    sorted_groups: list[DuplicateGroup] = sorted(
+        all_key_groups.items(),
+        key=lambda x: (-len(x[1]), -len(x[0]), sorted(x[0])[0]),
+        )
+
+    tier_counts: dict[int, int] = {}
+    for _ks, lang_matches in sorted_groups:
+        n = len(lang_matches)
+        tier_counts[n] = tier_counts.get(n, 0) + 1
+
+    return sorted_groups, tier_counts
+
+
+def _make_group_title(lang_matches: dict[str, str]) -> str:
+    """Build a human-readable title for a duplicate group."""
+    matching_langs = sorted(lang_matches.keys(), key=lambda l: LANGUAGES.index(l))
+    title_langs = ", ".join(l.upper() for l in matching_langs)
+
+    values_parts = []
+    for l in matching_langs:
+        val = lang_matches[l]
+        if len(val) > 35:
+            val = val[:32] + "..."
+        values_parts.append(f'{l.upper()}="{val}"')
+    values_str = " · ".join(values_parts)
+
+    return f"{title_langs} — {values_str}"
+
+
+def generate_duplicate_values_report(translations: dict[str, dict[str, str]]) -> tuple[str, int, list[DuplicateGroup]]:
+    """
+    Analyze all languages for keys sharing the same value (case-insensitive).
+
+    Generates one table per duplicate-key group, with keys as rows and
+    language values as columns.  Tables are organised by severity:
+    groups duplicated in ALL languages first, then 3, 2, 1.
+
+    Returns:
+        Tuple of (markdown report string, total number of unique groups, sorted groups data)
+    """
+    lines: list[str] = ["\n## 🔄 Duplicate Value Analysis\n"]
+    lines.append("Keys with identical values (case-insensitive). "
+                 "Not necessarily a problem — helps spot repeated or unoptimised keys.\n")
+
+    sorted_groups, tier_counts = _find_duplicate_groups(translations)
+    total_groups = len(sorted_groups)
+
+    if total_groups == 0:
+        lines.append("\n**✅ No duplicate values found in any language.**\n")
+        return "\n".join(lines), 0, []
+
+    lines.append(f"**{total_groups} duplicate groups found.**  ")
+    tier_parts = []
+    for n in sorted(tier_counts.keys(), reverse=True):
+        label = "ALL" if n == len(LANGUAGES) else f"{n}/{len(LANGUAGES)}"
+        tier_parts.append(f"{label} langs: {tier_counts[n]}")
+    lines.append("Breakdown: " + " · ".join(tier_parts) + "\n")
+
+    # ------------------------------------------------------------------
+    # Render tables, grouped by severity tier
+    # ------------------------------------------------------------------
+    current_tier: int | None = None
+
+    for key_set, lang_matches in sorted_groups:
+        n_langs = len(lang_matches)
+
+        # Section header when tier changes
+        if n_langs != current_tier:
+            current_tier = n_langs
+            severity, lang_label, _ = _get_tier_info(n_langs)
+            lines.append(f"\n---\n\n### {severity} Duplicates in {lang_label}\n")
+
+        # Title
+        title = _make_group_title(lang_matches)
+        n_keys = len(key_set)
+        lines.append(f"\n**{title}** ({n_keys} keys)\n")
+
+        # Build table: rows = keys, columns = EN | IT | FR | ES
+        keys = sorted(key_set)
+        table_data = []
+        for key in keys:
+            row = [f"`{key}`"]
+            for lang in LANGUAGES:
+                value = translations[lang].get(key, "—")
+                if isinstance(value, str) and len(value) > 45:
+                    value = value[:42] + "..."
+                row.append(value if value else "—")
+            table_data.append(row)
+
+        headers = ["Key"] + [l.upper() for l in LANGUAGES]
+        table_str = tabulate(table_data, headers=headers, tablefmt="github")
+        lines.append(table_str)
+        lines.append("")
+
+    lines.append(f"\n**Total: {total_groups} duplicate groups across all languages.**\n")
+    return "\n".join(lines), total_groups, sorted_groups
 
 
 def export_markdown(
     df: pd.DataFrame,
     output_path: Path | None,
     include_full_table: bool = True,
-    unused_keys_report: str = ""
+    unused_keys_report: str = "",
+    duplicates_report: str = ""
     ) -> None:
     """
     Export the translation table to Markdown format using tabulate.
@@ -369,9 +553,7 @@ def export_markdown(
     # Prepare DataFrame for tabulate (truncate long values)
     display_df = df.copy()
     for col in display_df.columns:
-        display_df[col] = display_df[col].apply(
-            lambda x: (str(x)[:10] + "...") if len(str(x)) > 13 else str(x)
-            )
+        display_df[col] = display_df[col].apply(lambda x: (str(x)[:10] + "...") if len(str(x)) > 13 else str(x))
 
     # Generate markdown table using tabulate
     table_md = tabulate(
@@ -392,6 +574,9 @@ def export_markdown(
     if unused_keys_report:
         parts.append(unused_keys_report)
 
+    if duplicates_report:
+        parts.append(duplicates_report)
+
     if include_full_table:
         parts.extend([
             "\n## 📋 Complete Translation Table\n",
@@ -411,13 +596,20 @@ def export_markdown(
         print(content)
 
 
-def export_excel(df: pd.DataFrame, output_path: Path) -> None:
+def export_excel(
+    df: pd.DataFrame,
+    output_path: Path,
+    dup_groups: list[DuplicateGroup] | None = None,
+    translations: dict[str, dict[str, str]] | None = None,
+    ) -> None:
     """
     Export the translation table to Excel format with formatting.
+
+    If dup_groups is provided, also creates one sheet per severity tier
+    with duplicate-value tables stacked vertically.
     """
     try:
-        from openpyxl.styles import PatternFill, Font, Alignment
-        from openpyxl.utils.dataframe import dataframe_to_rows
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     except ImportError:
         print("❌ openpyxl is required for Excel export.")
         print("   Install with: pip install openpyxl")
@@ -448,14 +640,27 @@ def export_excel(df: pd.DataFrame, output_path: Path) -> None:
         summary_df = pd.DataFrame(summary_data)
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
 
-        # Apply formatting
+        # -----------------------------------------------------------
+        # Duplicate value sheets: one tab per severity tier
+        # -----------------------------------------------------------
+        if dup_groups and translations:
+            _write_duplicate_sheets(writer.book, dup_groups, translations)
+
+        # -----------------------------------------------------------
+        # Apply formatting to all sheets
+        # -----------------------------------------------------------
         workbook = writer.book
 
         # Format header row
         header_fill = PatternFill(start_color="1A4D3E", end_color="1A4D3E", fill_type="solid")
         header_font = Font(color="FFFFFF", bold=True)
 
+        # Only format the standard sheets (Summary, All Translations, Missing)
+        # Duplicate sheets have their own formatting applied by _write_duplicate_sheets
+        standard_sheets = {"All Translations", "Missing", "Summary"}
         for sheet_name in workbook.sheetnames:
+            if sheet_name not in standard_sheets:
+                continue
             sheet = workbook[sheet_name]
             for cell in sheet[1]:
                 cell.fill = header_fill
@@ -470,7 +675,7 @@ def export_excel(df: pd.DataFrame, output_path: Path) -> None:
                     try:
                         if len(str(cell.value)) > max_length:
                             max_length = len(str(cell.value))
-                    except:
+                    except Exception:
                         pass
                 adjusted_width = min(max_length + 2, 50)
                 sheet.column_dimensions[column_letter].width = adjusted_width
@@ -478,7 +683,109 @@ def export_excel(df: pd.DataFrame, output_path: Path) -> None:
     print(f"\n✅ Excel report saved to: {output_path}")
 
 
-def run_audit(format_type: str = "none", output: str | None = None) -> int:
+def _write_duplicate_sheets(
+    workbook,
+    dup_groups: list[DuplicateGroup],
+    translations: dict[str, dict[str, str]],
+    ) -> None:
+    """
+    Create one Excel sheet per severity tier with duplicate-value tables
+    stacked vertically.  Each table has a title row, a header row, then
+    data rows, followed by a blank separator row.
+    """
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+
+    # Styles
+    title_fill = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")  # warm yellow
+    title_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color="1A4D3E", end_color="1A4D3E", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True, size=10)
+    header_align = Alignment(horizontal="center")
+    dup_highlight = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")  # light green
+    thin_border = Border(
+        bottom=Side(style="thin", color="CCCCCC"),
+        )
+
+    headers = ["Key"] + [l.upper() for l in LANGUAGES]
+    n_cols = len(headers)
+
+    # Group by tier (n_langs)
+    tier_groups: dict[int, list[DuplicateGroup]] = {}
+    for key_set, lang_matches in dup_groups:
+        n = len(lang_matches)
+        tier_groups.setdefault(n, []).append((key_set, lang_matches))
+
+    for n_langs in sorted(tier_groups.keys(), reverse=True):
+        groups = tier_groups[n_langs]
+        _emoji, label, sheet_suffix = _get_tier_info(n_langs)
+        sheet_name = f"Dup {sheet_suffix}"
+        # Excel sheet names max 31 chars
+        if len(sheet_name) > 31:
+            sheet_name = sheet_name[:31]
+
+        ws = workbook.create_sheet(title=sheet_name)
+        row_cursor = 1  # 1-based row index
+
+        for key_set, lang_matches in groups:
+            keys = sorted(key_set)
+            title = _make_group_title(lang_matches)
+            title_text = f"{title} ({len(keys)} keys)"
+
+            # --- Title row ---
+            ws.cell(row=row_cursor, column=1, value=title_text)
+            for col_idx in range(1, n_cols + 1):
+                cell = ws.cell(row=row_cursor, column=col_idx)
+                cell.fill = title_fill
+                cell.font = title_font
+            # Merge title across all columns
+            if n_cols > 1:
+                ws.merge_cells(
+                    start_row=row_cursor, start_column=1,
+                    end_row=row_cursor, end_column=n_cols,
+                    )
+            row_cursor += 1
+
+            # --- Header row ---
+            for col_idx, hdr in enumerate(headers, start=1):
+                cell = ws.cell(row=row_cursor, column=col_idx, value=hdr)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_align
+            row_cursor += 1
+
+            # --- Data rows ---
+            matching_lang_set = set(lang_matches.keys())
+            for key in keys:
+                ws.cell(row=row_cursor, column=1, value=key)
+                for col_idx, lang in enumerate(LANGUAGES, start=2):
+                    value = translations[lang].get(key, "—")
+                    cell = ws.cell(row=row_cursor, column=col_idx, value=value)
+                    # Highlight columns where the value is duplicated
+                    if lang in matching_lang_set:
+                        cell.fill = dup_highlight
+                row_cursor += 1
+
+            # --- Separator (empty row with bottom border) ---
+            for col_idx in range(1, n_cols + 1):
+                cell = ws.cell(row=row_cursor, column=col_idx, value="")
+                cell.border = thin_border
+            row_cursor += 1
+
+        # Auto-adjust column widths (skip merged cells)
+        from openpyxl.utils import get_column_letter as gcl
+        for col_idx in range(1, n_cols + 1):
+            max_length = 0
+            for row_cells in ws.iter_rows(min_col=col_idx, max_col=col_idx):
+                for cell in row_cells:
+                    try:
+                        if cell.value and len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except Exception:
+                        pass
+            ws.column_dimensions[gcl(col_idx)].width = min(max_length + 2, 55)
+
+
+def run_audit(format_type: str = "none", output: str | None = None, duplicates: bool = False) -> int:
     """Run the i18n audit with specified format and output."""
     # Determine output directory (PWD by default)
     if output:
@@ -515,29 +822,39 @@ def run_audit(format_type: str = "none", output: str | None = None) -> int:
     print(f"   Found {len(unused_keys)} potentially unused keys")
     print()
 
+    # Duplicate values analysis
+    dup_report = ""
+    dup_count = 0
+    dup_groups: list[DuplicateGroup] = []
+    if duplicates:
+        print("🔄 Analyzing duplicate values across languages...")
+        dup_report, dup_count, dup_groups = generate_duplicate_values_report(translations)
+        print(f"   Found {dup_count} unique duplicate groups")
+        print()
+
     # Generate output based on format
     if format_type == "none":
         # Only show summary and warnings, no full table
-        export_markdown(df, None, include_full_table=False, unused_keys_report=unused_report)
+        export_markdown(df, None, include_full_table=False, unused_keys_report=unused_report, duplicates_report=dup_report)
     elif format_type in ["md", "both"]:
         if output and output.endswith(".md"):
             md_path = Path(output)
         elif format_type == "md" and output is None:
             # Print to stdout if no output specified for md-only
-            export_markdown(df, None, include_full_table=True, unused_keys_report=unused_report)
+            export_markdown(df, None, include_full_table=True, unused_keys_report=unused_report, duplicates_report=dup_report)
             md_path = None
         else:
             md_path = output_dir / "i18n-audit.md"
 
         if md_path:
-            export_markdown(df, md_path, include_full_table=True, unused_keys_report=unused_report)
+            export_markdown(df, md_path, include_full_table=True, unused_keys_report=unused_report, duplicates_report=dup_report)
 
     if format_type in ["xlsx", "both"]:
         if output and output.endswith(".xlsx"):
             xlsx_path = Path(output)
         else:
             xlsx_path = output_dir / "i18n-audit.xlsx"
-        export_excel(df, xlsx_path)
+        export_excel(df, xlsx_path, dup_groups=dup_groups or None, translations=translations if dup_groups else None)
 
     # Print summary
     print("\n" + "=" * 60)
@@ -549,6 +866,8 @@ def run_audit(format_type: str = "none", output: str | None = None) -> int:
     print(f"  Complete:   {complete} ✅")
     print(f"  Incomplete: {incomplete} {'⚠️' if incomplete > 0 else ''}")
     print(f"  Unused:     {len(unused_keys)} {'⚠️' if len(unused_keys) > 0 else ''}")
+    if duplicates:
+        print(f"  Duplicates: {dup_count} unique group{'s' if dup_count != 1 else ''} {'ℹ️' if dup_count > 0 else ''}")
     print()
 
     return 0
@@ -568,13 +887,20 @@ def add_arguments(parser) -> None:
         default=None,
         help="Output directory or file path (default: current directory for file output)"
         )
+    parser.add_argument(
+        "--duplicates", "-d",
+        action="store_true",
+        default=False,
+        help="Analyze duplicate values: find keys sharing the same translation (case-insensitive)"
+        )
 
 
 def run_from_args(args) -> int:
     """Execute the command from parsed args."""
     return run_audit(
         format_type=getattr(args, 'format', 'none'),
-        output=getattr(args, 'output', None)
+        output=getattr(args, 'output', None),
+        duplicates=getattr(args, 'duplicates', False)
         )
 
 
@@ -592,6 +918,7 @@ Examples:
   python i18n-audit.py --format xlsx      Generate Excel file in current dir
   python i18n-audit.py --format both      Generate both formats in current dir
   python i18n-audit.py -o ./reports/      Save to specific directory
+  python i18n-audit.py --duplicates       Include duplicate value analysis
         """
         )
     add_arguments(parser)
