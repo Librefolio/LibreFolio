@@ -11,7 +11,7 @@
     import {_, locale} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
-    import {Coins, Plus, RefreshCw, RotateCw, Settings} from 'lucide-svelte';
+    import {Coins, Plus, RefreshCw, RotateCw, Settings, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
@@ -493,7 +493,7 @@
         <!-- Filters block -->
         <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-center'}">
             <!-- DateRangePicker -->
-            <div class="max-w-md">
+            <div class="max-w-md" data-testid="fx-date-range-picker">
                 <DateRangePicker
                     bind:start={dateStart}
                     bind:end={dateEnd}
@@ -505,7 +505,7 @@
 
             <!-- Currency Filters — always grouped as a pair -->
             <div class="flex items-center gap-3">
-                <div class="w-40">
+                <div class="w-40" data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                         bind:value={filterCurrency1}
                         includeAll={true}
@@ -525,7 +525,7 @@
                         }}
                     />
                 </div>
-                <div class="w-40 transition-opacity {filterCurrency1 ? '' : 'opacity-50'}">
+                <div class="w-40 transition-opacity {filterCurrency1 ? '' : 'opacity-50'}" data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                         bind:value={filterCurrency2}
                         includeAll={true}
@@ -535,6 +535,18 @@
                         maxVisibleItems={6}
                     />
                 </div>
+                <!-- Reset filters button -->
+                <button
+                    class="p-1.5 rounded-md transition-colors {filterCurrency1
+                        ? 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400'
+                        : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}"
+                    onclick={() => { filterCurrency1 = ''; filterCurrency2 = ''; }}
+                    disabled={!filterCurrency1}
+                    title={$_('fx.filter.resetFilters')}
+                    data-testid="fx-reset-filters"
+                >
+                    <X size={16} />
+                </button>
             </div>
         </div>
 

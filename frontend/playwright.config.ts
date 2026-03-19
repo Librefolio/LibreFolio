@@ -55,9 +55,9 @@ export default defineConfig({
         },
     ],
 
-    // Server avviato automaticamente in test mode
+    // Server avviato automaticamente in test mode (--force kills stale servers)
     webServer: {
-        command: 'cd .. && ./dev.py server --test',
+        command: 'cd .. && ./dev.py server --test --force',
         url: `${BASE_URL}/api/v1/system/health`,
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000,

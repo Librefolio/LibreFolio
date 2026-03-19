@@ -327,7 +327,8 @@
     "filter": {
       "filterCurrency": "Filtrer devise",
       "secondCurrency": "Deuxième devise",
-      "allCurrencies": "Toutes les devises"
+      "allCurrencies": "Toutes les devises",
+      "resetFilters": "Réinitialiser filtres"
     },
     "addPair": {
       "title": "Ajouter une Paire de Devises",

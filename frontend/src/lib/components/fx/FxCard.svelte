@@ -179,16 +179,19 @@
     <div class="px-4 pt-3 pb-1">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-1.5">
-                <span class="text-lg">{currencyFlag(displayBase)}</span>
-                <span class="font-semibold text-gray-800 dark:text-gray-100">{displayBase}</span>
-                <span class="text-gray-400 dark:text-gray-500 text-sm">→</span>
-                <span class="text-lg">{currencyFlag(displayQuote)}</span>
-                <span class="font-semibold text-gray-800 dark:text-gray-100">{displayQuote}</span>
+                <span data-testid="fx-pair-label" class="inline-flex items-center gap-1.5">
+                    <span class="text-lg">{currencyFlag(displayBase)}</span>
+                    <span class="font-semibold text-gray-800 dark:text-gray-100">{displayBase}</span>
+                    <span class="text-gray-400 dark:text-gray-500 text-sm">→</span>
+                    <span class="text-lg">{currencyFlag(displayQuote)}</span>
+                    <span class="font-semibold text-gray-800 dark:text-gray-100">{displayQuote}</span>
+                </span>
 
                 <button
                     class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                     onclick={(e) => { stop(e); inverted = !inverted; setCardInverted(slug, inverted); }}
                     title="Swap direction"
+                    data-testid="fx-swap-btn"
                 >
                     <ArrowLeftRight size={14} />
                 </button>

@@ -103,11 +103,31 @@ def check_port_in_use(port: int) -> list:
     return processes
 
 
+def _print_port_help(port: int, processes: list):
+    """Print help message for port-in-use errors."""
+    print()
+    print(f"{Colors.YELLOW}Processes using port {port}:{Colors.NC}")
+    pids = []
+    for pid, proc_name in processes:
+        pids.append(str(pid))
+        print(f"  • PID {pid} ({proc_name})")
+    print()
+    print(f"{Colors.BLUE}To view details:{Colors.NC}")
+    print(f"  lsof -i :{port}")
+    print()
+    print(f"{Colors.BLUE}To kill these processes:{Colors.NC}")
+    print(f"  kill -9 {' '.join(pids)}")
+    print()
+    print(f"{Colors.YELLOW}Tip:{Colors.NC} This often happens when a previous server didn't shut down cleanly.")
+    print(f"{Colors.YELLOW}     Use --force to automatically kill blocking processes.{Colors.NC}")
+
+
 def cmd_server(args):
     """Start the development server."""
     test_mode = getattr(args, 'test', False)
     rebuild = getattr(args, 'rebuild', False)
     debug_mode = getattr(args, 'debug', False)
+    force = getattr(args, 'force', False)
 
     if test_mode:
         port = get_test_server_port()
@@ -120,22 +140,34 @@ def cmd_server(args):
     # Check if port is already in use
     processes_using_port = check_port_in_use(port)
     if processes_using_port:
-        print_error(f"Port {port} is already in use!")
-        print()
-        print(f"{Colors.YELLOW}Processes using port {port}:{Colors.NC}")
-        pids = []
-        for pid, proc_name in processes_using_port:
-            pids.append(str(pid))
-            print(f"  • PID {pid} ({proc_name})")
-        print()
-        print(f"{Colors.BLUE}To view details:{Colors.NC}")
-        print(f"  lsof -i :{port}")
-        print()
-        print(f"{Colors.BLUE}To kill these processes:{Colors.NC}")
-        print(f"  kill -9 {' '.join(pids)}")
-        print()
-        print(f"{Colors.YELLOW}Tip:{Colors.NC} This often happens when a previous server didn't shut down cleanly.")
-        return 1
+        if force:
+            # --force: kill blocking processes and continue
+            import signal
+            pids = [pid for pid, _ in processes_using_port]
+            print_warning(f"Port {port} is in use — killing {len(pids)} blocking process(es)...")
+            for pid, proc_name in processes_using_port:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    print(f"  ✗ Killed PID {pid} ({proc_name})")
+                except ProcessLookupError:
+                    pass  # already dead
+                except PermissionError:
+                    print_error(f"  Cannot kill PID {pid} ({proc_name}) — permission denied")
+                    return 1
+            # Wait briefly for port to be released
+            import time
+            time.sleep(1)
+            # Verify port is now free
+            still_in_use = check_port_in_use(port)
+            if still_in_use:
+                print_error(f"Port {port} still in use after killing processes!")
+                _print_port_help(port, still_in_use)
+                return 1
+            print_success(f"Port {port} is now free")
+        else:
+            print_error(f"Port {port} is already in use!")
+            _print_port_help(port, processes_using_port)
+            return 1
 
     # Handle frontend rebuild
     if rebuild:
@@ -764,6 +796,7 @@ Examples:
     p.add_argument("--test", "-t", action="store_true", help="Use test database (port 8001)")
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
+    p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
     p.set_defaults(func=cmd_server)
 
     # Database
