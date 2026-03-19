@@ -443,12 +443,14 @@
                 <button
                     class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={() => importModalOpen = true}
+                    data-testid="fx-data-import-btn"
                 >
                     <Upload size={13} /> Import CSV
                 </button>
                 <button
                     class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={handleAddRow}
+                    data-testid="fx-data-add-row-btn"
                 >
                     <Plus size={13} /> Add Row
                 </button>

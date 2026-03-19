@@ -218,7 +218,7 @@
     }
 </script>
 
-<ModalBase {open} maxWidth="3xl" onRequestClose={requestClose}>
+<ModalBase {open} maxWidth="3xl" onRequestClose={requestClose} testId="fx-data-import-modal">
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-600">
         <div class="flex items-center gap-2">
