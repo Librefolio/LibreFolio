@@ -187,6 +187,106 @@ Manage co-ownership and access roles with the sharing modal, optimized for mobil
 
 ---
 
+## 💱 FX Rates
+
+### FX List
+
+All configured currency pairs with mini-charts, optimized for mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="list" alt="FX List Page">
+</div>
+
+### FX List Filtered
+
+Currency pairs filtered by base currency.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="FX List Filtered">
+</div>
+
+### Add Pair — Direct Routes
+
+Add a new currency pair with direct provider routes (e.g. USD/CHF via FED).
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Add Pair - Direct Routes">
+</div>
+
+### Add Pair — Chain
+
+Add a pair using conversion chain through an intermediate currency (e.g. NOK/CHF via EUR).
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Add Pair - Chain">
+</div>
+
+### Sync All
+
+Sync all configured pairs from their providers.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Sync All Progress">
+</div>
+
+### Detail Chart
+
+Full-size interactive chart for a currency pair.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="FX Detail Chart">
+</div>
+
+### Signals Overlay
+
+Technical indicator signals panel overlaid on the chart.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Detail Signals Overlay">
+</div>
+
+### Measures Panel
+
+Click-to-click measurement tool.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Detail Measures Panel">
+</div>
+
+### Data Editor
+
+Inline data editor for rate values on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Data Editor">
+</div>
+
+### CSV Import
+
+Import rate data from CSV files.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="CSV Import Modal">
+</div>
+
+### Chart Settings
+
+Chart aesthetics and signal overlay settings.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
+</div>
+
+### Provider Config
+
+Configure provider priority and conversion routes.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
+</div>
+
+---
+
 
 <style>
 .screenshot-container {

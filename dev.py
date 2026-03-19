@@ -531,7 +531,7 @@ def cmd_mkdocs_gallery(args):
         # Populate test database with realistic data (creates fresh DB with --force)
         print(f"\n{Colors.CYAN}🗄️  Populating test database with sample data...{Colors.NC}")
         result = subprocess.run(
-            ["python", "dev.py", "test", "db", "populate", "--force"],
+            ["python", "dev.py", "test", "db", "populate", "--force", "--clean", "--with-static", "--with-reports"],
             cwd=PROJECT_ROOT
         )
         if result.returncode != 0:
@@ -550,24 +550,36 @@ def cmd_mkdocs_gallery(args):
         print(f"{Colors.YELLOW}⏭️  Skipping DB population (--no-populate){Colors.NC}")
 
     failures = []
-    for viewport, label in viewports:
-        print(f"\n{Colors.CYAN}{label}{Colors.NC}")
-        cmd = ["npm", "run", "test:e2e", "--", "gallery.spec.ts", "--project", viewport, "--headed"]
-        if filter_text:
-            cmd.extend(["-g", filter_text])
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", capture_output=True, text=True)
-        # Always print stdout (contains screenshot paths and pass/fail info)
-        if result.stdout:
-            print(result.stdout)
-        if result.returncode != 0:
-            failures.append(viewport)
-            print_error(f"{viewport.capitalize()} gallery generation had failures (see above)")
-            # Print stderr summary (contains error details)
-            if result.stderr:
-                # Filter to show only relevant lines (skip dotenv tips etc.)
-                for line in result.stderr.splitlines():
-                    if 'Error' in line or 'error' in line or 'FAIL' in line:
-                        print(f"  {Colors.RED}{line}{Colors.NC}")
+    # Determine worker count: CPU count - 1, minimum 1
+    import os as _os
+    worker_count = max(1, (_os.cpu_count() or 2) - 1)
+    print(f"{Colors.BLUE}Workers: {worker_count}{Colors.NC}")
+
+    # Build a single Playwright command with all requested projects.
+    # This shares one webServer process across desktop+mobile, avoiding port conflicts.
+    cmd = [
+        "npm", "run", "test:e2e", "--",
+        "gallery.spec.ts",
+        "--headed",
+        "--workers", str(worker_count),
+    ]
+    for viewport, _label in viewports:
+        cmd.extend(["--project", viewport])
+    if filter_text:
+        cmd.extend(["-g", filter_text])
+
+    viewport_labels = ', '.join(v[0] for v in viewports)
+    print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
+    result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", capture_output=True, text=True)
+    if result.stdout:
+        print(result.stdout)
+    if result.returncode != 0:
+        failures = [v[0] for v in viewports]
+        print_error(f"Gallery generation had failures (see above)")
+        if result.stderr:
+            for line in result.stderr.splitlines():
+                if 'Error' in line or 'error' in line or 'FAIL' in line:
+                    print(f"  {Colors.RED}{line}{Colors.NC}")
 
     if failures:
         print(f"\n{Colors.YELLOW}⚠️  Gallery generation completed with failures in: {', '.join(failures)}{Colors.NC}")

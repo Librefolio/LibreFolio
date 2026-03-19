@@ -63,7 +63,8 @@ from backend.app.db import (
     )
 from backend.app.services.auth_service import hash_password
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
-from backend.app.services.static_uploads import seed_default_avatars, get_uploads_dir
+from backend.app.services.static_uploads import seed_default_avatars, get_uploads_dir, save_upload
+from backend.app.config import get_data_dir
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
 # This ensures we use the test database, not the production one
@@ -1254,11 +1255,104 @@ def configure_user_avatars(session: Session):
         print(f"  ✅ {username} avatar → {avatar_filename} ({avatar_url})")
 
 
+def clean_data_dirs():
+    """Remove all files from custom-uploads and broker_reports subdirs."""
+    import shutil
+
+    data_dir = get_data_dir()
+    dirs_to_clean = [
+        data_dir / "custom-uploads",
+        data_dir / "broker_reports" / "uploaded",
+        data_dir / "broker_reports" / "parsed",
+        data_dir / "broker_reports" / "failed",
+    ]
+
+    print("\n🧹 Cleaning data directories...")
+    print("-" * 60)
+    for d in dirs_to_clean:
+        if d.exists():
+            count = sum(1 for f in d.iterdir() if f.is_file())
+            for f in d.iterdir():
+                if f.is_file():
+                    f.unlink()
+                elif f.is_dir():
+                    shutil.rmtree(f)
+            print(f"  ✅ Cleaned {d.relative_to(data_dir)} ({count} files)")
+        else:
+            d.mkdir(parents=True, exist_ok=True)
+            print(f"  ✅ Created {d.relative_to(data_dir)} (empty)")
+
+
+def upload_static_resources(session: Session):
+    """Upload static resource files (avatars) to custom-uploads."""
+
+    print("\n📁 Uploading static resources...")
+    print("-" * 60)
+
+    # Seed default avatar images
+    count = seed_default_avatars()
+    if count > 0:
+        print(f"  ✅ Seeded {count} default avatar images")
+    else:
+        print(f"  ℹ️  Avatars already seeded (marker exists)")
+
+    # Note: broker icons are NOT set here on purpose — the frontend
+    # automatically fetches icons from Clearbit/similar services when
+    # icon_url is null, which produces better-looking screenshots.
+
+
+def upload_broker_reports(session: Session):
+    """Copy sample BRIM report files into broker_reports/uploaded/."""
+    from backend.app.config import PROJECT_ROOT
+
+    print("\n📄 Uploading broker report samples...")
+    print("-" * 60)
+
+    samples_dir = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+    if not samples_dir.exists():
+        print(f"  ⚠️  Sample reports directory not found")
+        return
+
+    # Map broker names to sample report files
+    report_map = {
+        "Interactive Brokers": "ibkr-trades-export.csv",
+        "DEGIRO": "degiro-export.csv",
+        "Directa SIM": "directa-export.csv",
+        "eToro": "etoro-export.csv",
+        "Coinbase": "coinbase-export.csv",
+        "Recrowd": "generic_simple.csv",
+    }
+
+    data_dir = get_data_dir()
+    brokers = session.exec(select(Broker)).all()
+
+    for broker in brokers:
+        sample_filename = report_map.get(broker.name)
+        if not sample_filename:
+            continue
+
+        sample_path = samples_dir / sample_filename
+        if not sample_path.exists():
+            print(f"  ⚠️  Sample not found: {sample_filename}")
+            continue
+
+        # Copy to broker_reports/uploaded/
+        dest_dir = data_dir / "broker_reports" / "uploaded"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_file = dest_dir / f"broker_{broker.id}_{sample_filename}"
+        import shutil
+        shutil.copy2(sample_path, dest_file)
+        print(f"  ✅ {broker.name} → {sample_filename}")
+
+
 def main():
     """Populate database with mock data for testing."""
     # Parse arguments
     parser = argparse.ArgumentParser(description="Populate database with mock data")
     parser.add_argument("--force", action="store_true", help="Delete existing database and create fresh one")
+    parser.add_argument("--clean", action="store_true", help="Clean all files from custom-uploads and broker_reports before populating")
+    parser.add_argument("--with-static", action="store_true", help="Upload static resources (avatars, broker icons)")
+    parser.add_argument("--with-reports", action="store_true", help="Upload sample broker report files")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -1277,6 +1371,10 @@ def main():
     else:
         print("❌ Error: This script only works with SQLite databases")
         return 1
+
+    # Clean data dirs if requested (before anything else)
+    if args.clean:
+        clean_data_dirs()
 
     # Check if database file exists
     if db_path.exists() and db_path.stat().st_size > 0:
@@ -1316,6 +1414,14 @@ def main():
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
             configure_user_avatars(session)
+
+            # Optional: upload static resources (avatars, broker icons)
+            if args.with_static:
+                upload_static_resources(session)
+
+            # Optional: upload broker report samples
+            if args.with_reports:
+                upload_broker_reports(session)
 
             print("\n💾 Committing all data to database...")
             session.commit()

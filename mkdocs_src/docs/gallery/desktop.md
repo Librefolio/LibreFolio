@@ -184,6 +184,106 @@ Manage co-ownership and access roles with a visual half-donut chart showing owne
 
 ---
 
+## 💱 FX Rates
+
+### FX List
+
+All configured currency pairs with mini-charts showing recent trends.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="list" alt="FX List Page">
+</div>
+
+### FX List Filtered
+
+Currency pairs filtered by base currency.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="FX List Filtered">
+</div>
+
+### Add Pair — Direct Routes
+
+Add a new currency pair with direct provider routes (e.g. USD/CHF via FED).
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Add Pair - Direct Routes">
+</div>
+
+### Add Pair — Chain
+
+Add a pair using conversion chain through an intermediate currency (e.g. NOK/CHF via EUR).
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Add Pair - Chain">
+</div>
+
+### Sync All
+
+Sync all configured pairs from their providers with progress tracking.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Sync All Progress">
+</div>
+
+### Detail Chart
+
+Full-size interactive chart for a currency pair with line/candlestick toggle.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="FX Detail Chart">
+</div>
+
+### Signals Overlay
+
+Technical indicator signals panel (EMA, MACD, RSI, Bollinger) overlaid on the chart.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Detail Signals Overlay">
+</div>
+
+### Measures Panel
+
+Click-to-click measurement tool with delta, percentage, and annualized return.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Detail Measures Panel">
+</div>
+
+### Data Editor
+
+Inline data editor for viewing and modifying individual rate values.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Data Editor">
+</div>
+
+### CSV Import
+
+Modal for importing rate data from CSV files with preview and validation.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="CSV Import Modal">
+</div>
+
+### Chart Settings
+
+Global and per-chart settings for aesthetics and signal overlay configuration.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
+</div>
+
+### Provider Config
+
+Configure provider priority and conversion routes for a currency pair.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
+</div>
+
+---
+
 
 <style>
 .screenshot-container {

@@ -216,7 +216,7 @@ async def test_pair_sources_crud(test_server):
         create_request_sources = [_route_json("EUR", "USD", "ECB", priority=2)]
         response = await client.post(
             f"{API_BASE}/fx/providers/routes",
-            json=[s.model_dump(mode="json") for s in create_request_sources],
+            json=create_request_sources,
             timeout=TIMEOUT,
             )
         assert response.status_code == 201, f"POST failed: {response.status_code}: {response.text}"
@@ -240,7 +240,7 @@ async def test_pair_sources_crud(test_server):
         update_request_sources = [_route_json("EUR", "USD", "ECB", priority=3)]
         response = await client.post(
             f"{API_BASE}/fx/providers/routes",
-            json=[s.model_dump(mode="json") for s in update_request_sources],
+            json=update_request_sources,
             timeout=TIMEOUT,
             )
         assert response.status_code == 201, f"POST failed: {response.status_code}"

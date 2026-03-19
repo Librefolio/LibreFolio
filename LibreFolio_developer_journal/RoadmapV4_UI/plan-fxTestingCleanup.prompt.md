@@ -2,7 +2,7 @@
 
 **Data creazione**: 12 Marzo 2026
 **Ultima revisione**: 19 Marzo 2026
-**Status**: ✅ Steps 0-10,12A-C COMPLETATI, Step 2C ✅ COMPLETATO (735→583), Step 2D ✅ COMPLETATO (18 stringhe hardcoded → i18n, 583→593 chiavi) — Step 11 da fare
+**Status**: ✅ ALL STEPS COMPLETATI (0-12). Step 11 ✅ COMPLETATO (96 FX screenshot, 3 nuovi flag db populate, MkDocs da aggiornare)
 **Priorità**: Media (copertura E2E FX completa, restano i18n rationalization, gallery)
 **Stima**: ~5-6 giorni
 **Dipendenze**: Tutti i plan Phase 5 FX completati (13+ sub-plan, 7 round bug-fix)
@@ -59,6 +59,29 @@ Il sottosistema FX è completo a livello funzionale: 2 pagine route (~1400+ righ
 | 19 Mar 2026 | ✅ Step 2C.3 | Migrazione coerenza preset array: `uploads.presetIcon` → `common.icon`, 3× "Custom" (`uploads.presetCustom`, `datePicker.custom`, `chartSettings.yAxisCustom`) → `common.custom`. 585 → 583 chiavi |
 | 19 Mar 2026 | 📋 Step 2C.4 | Analisi 19 gruppi duplicati residui — tutti classificati come KEEP (prefissi dinamici, semantica diversa, o duplicato linguistico accettabile) |
 | 19 Mar 2026 | ✅ Step 2D | 18 stringhe hardcoded → i18n in 6 file (FxCard, FxProviderConfig, ChartSignalsSection, ChartAestheticsSection, fx/+page, DataEditor). 10 nuove chiavi + 5 riuso existing. 583 → 593 chiavi |
+| 19 Mar 2026 | ✅ Step 11A | Part A — 3 nuovi flag `--clean`, `--with-static`, `--with-reports` aggiunti a `populate_mock_data.py` (argparse + 3 nuove funzioni: `clean_data_dirs()`, `upload_static_resources()`, `upload_broker_reports()`) |
+| 19 Mar 2026 | ✅ Step 11A | Propagazione flag in `test_runner.py`: `db_populate()` accetta i 3 nuovi kwargs, parser db con `add_argument`, `dispatch_to_category()` estrae i flag |
+| 19 Mar 2026 | ✅ Step 11A | `dev.py` `cmd_mkdocs_gallery()` aggiornato: chiama `--force --clean --with-static --with-reports` |
+| 19 Mar 2026 | ✅ Step 11A | `db-helpers.ts`: nuova funzione `resetDatabaseForGallery()` con tutti i flag |
+| 19 Mar 2026 | ✅ Step 11B | Part B — `test.describe('FX')` aggiunto a `gallery.spec.ts` (righe 588-918) con 12 test scene, `beforeEach` login admin |
+| 19 Mar 2026 | ✅ Step 11B | Import `goToFxPage`, `goToFxDetailPage`, `openAddPairModal` da `./fx/fx-helpers` in gallery.spec.ts |
+| 19 Mar 2026 | ✅ Step 11B | 12 scene: list, list-filtered, add-pair-routes, add-pair-chain, sync-progress, detail-chart, detail-signals, detail-measures, detail-editor, detail-csv-import, chart-settings, provider-config |
+| 19 Mar 2026 | ✅ Step 11B | Ogni scena con `forEachLanguageAndTheme()` o loop manuale per 4 lingue × 2 temi = 8 varianti |
+| 19 Mar 2026 | ✅ Step 11B | Scene ECharts (6-8, 11) usano `waitForSelector('canvas')` + `waitForTimeout(2000)` per rendering canvas |
+| 19 Mar 2026 | ✅ Step 11B | Scena 4 (chain) usa GBP/JPY via USD invece di RON/USD (route già presente nei mock data) |
+| 19 Mar 2026 | ✅ Step 11B | **96/96 screenshot generati** — 12 scene × 4 lingue × 2 temi, tutti verificati ✅ |
+| 19 Mar 2026 | ✅ Fix test | `test_fx_api.py` `test_pair_sources_crud`: `_route_json()` ritorna dict, non Pydantic model → rimosso `.model_dump()` sulle 2 chiamate `_route_json` (20/20 test passano) |
+| 19 Mar 2026 | ✅ Fix gallery | `gallery.spec.ts` add-pair-routes/chain: selettore `[role="option"]` → `button` (SearchSelect usa `<button>`, non `role="option"`) + ricerca inline via `input[type="text"]`.fill() per selezione affidabile |
+| 19 Mar 2026 | ✅ Fix gallery | `gallery.spec.ts` list-filtered: stessa fix `[role="option"]` → `button` per il filtro valuta |
+| 19 Mar 2026 | ✅ Fix gallery | `gallery.spec.ts` detail-signals: aggiunto `scrollIntoViewIfNeeded()` sul pannello segnali dopo toggle per mostrare il contenuto |
+| 19 Mar 2026 | ✅ Step 11A fix | `upload_static_resources()`: rimossa assegnazione `broker.icon_url` — il frontend già fetcha icone dal portale quando icon_url è null, risultato migliore |
+| 19 Mar 2026 | ✅ Step 11 perf | Gallery parallelizzata: `test.describe.configure({mode: 'parallel'})` + `--workers CPU-1` + desktop/mobile in parallelo con `ThreadPoolExecutor` |
+| 19 Mar 2026 | ✅ MkDocs | Sezione `## 💱 FX Rates` aggiunta a `desktop.md` (12 img), `mobile.md` (12 img mobile), `index.md` (feature listing) |
+| 19 Mar 2026 | ✅ Fix gallery | add-pair-routes: EUR→USD cambiato in USD/CHF (EUR esclusa da base — già configurata nei mock) |
+| 19 Mar 2026 | ✅ Fix gallery | add-pair-chain: GBP/JPY cambiato in NOK/CHF (GBP esclusa da base — GBP-PLN nei mock) |
+| 19 Mar 2026 | ✅ Fix gallery | `auth-helpers.ts` login timeout: 3s→10s per gestire carico parallelo con 9 worker |
+| 19 Mar 2026 | ✅ Fix gallery | `dev.py`: desktop+mobile in singolo comando Playwright (`--project desktop --project mobile`) — condivide webServer, evita conflitto porta |
+| 19 Mar 2026 | ✅ MkDocs | Titoli FX in desktop.md e mobile.md convertiti da bilingue EN/IT a solo inglese |
 
 ---
 
@@ -818,34 +841,75 @@ if kwargs.get('list', False):
 
 ---
 
-## Step 11 — Gallery screenshot FX
+## Step 11 — ✅ Gallery screenshot FX — COMPLETATO
 
-**File da modificare**:
-- `frontend/e2e/gallery.spec.ts` — aggiungere `test.describe('FX')`
-- `mkdocs_src/docs/gallery/desktop.md` — nuova sezione
-- `mkdocs_src/docs/gallery/mobile.md` — nuova sezione
-- `mkdocs_src/docs/gallery/index.md` — aggiungere FX alla lista features
+### Part A — Nuovi flag per db populate — ✅ COMPLETATO
 
-Aggiungere un `test.describe('FX')` nella gallery con screenshot:
+**File modificati**:
+- `backend/test_scripts/test_db/populate_mock_data.py` — 3 nuovi flag argparse + 3 nuove funzioni
+- `scripts/test_runner.py` — propagazione flag in `db_populate()`, parser db, `dispatch_to_category()`
+- `dev.py` — `cmd_mkdocs_gallery()` aggiornato con `--force --clean --with-static --with-reports`
+- `frontend/e2e/fixtures/db-helpers.ts` — nuova funzione `resetDatabaseForGallery()`
 
-| # | Screenshot | Categoria | Nome | Note |
-|---|---|---|---|---|
-| 1 | FX list page con card | `fx` | `list` | 4-6 card con mini-chart |
-| 2 | FX list con filtro valuta | `fx` | `list-filtered` | Filtro EUR attivo |
-| 3 | Add Pair modal con route dirette | `fx` | `add-pair-routes` | EUR/USD con ECB visibile |
-| 4 | Add Pair modal con catena | `fx` | `add-pair-chain` | RON/USD con catena via EUR |
-| 5 | Sync All modal | `fx` | `sync-progress` | Con risultati per coppia |
-| 6 | FX detail page con chart | `fx` | `detail-chart` | Grafico linea con dati |
-| 7 | FX detail con segnale overlay | `fx` | `detail-signals` | Pannello segnali aperto con EMA |
-| 8 | FX detail con misure | `fx` | `detail-measures` | MeasurePanel con tabella riepilogo |
-| 9 | FX detail Data Editor | `fx` | `detail-editor` | DataEditor con righe colorate |
-| 10 | FX detail CSV Import modal | `fx` | `detail-csv-import` | DataImportModal con preview |
-| 11 | ChartSettingsModal | `fx` | `chart-settings` | Settings con EMA + Bollinger |
-| 12 | Provider config (edit mode) | `fx` | `provider-config` | FxPairAddModal con catena |
+**Dettagli implementazione**:
 
-Ogni screenshot: 4 lingue × 2 temi = 8 varianti × 12 = **96 nuovi screenshot**.
+1. **`clean_data_dirs()`** (riga ~1258): Svuota `custom-uploads/` e `broker_reports/{uploaded,parsed,failed}/` usando `get_data_dir()`. Elimina file e sotto-directory. Crea la directory se non esiste.
 
-Aggiornare `desktop.md` e `mobile.md` con sezione `## 💱 FX Rates` contenente tutti i nuovi screenshot con descrizioni bilingue.
+2. **`upload_static_resources(session)`** (riga ~1286): Chiama `seed_default_avatars()` per avatar utente. Per ogni broker, usa un avatar PNG da `staticResources/Avatars/` come placeholder icon, caricato con `save_upload()` e associato al broker via `broker.icon_url = /api/v1/uploads/file/{id}`.
+
+3. **`upload_broker_reports(session)`** (riga ~1332): Copia report di esempio da `brim_providers/sample_reports/` in `broker_reports/uploaded/`. Map esplicita: IBKR→`ibkr-trades-export.csv`, DEGIRO→`degiro-export.csv`, Directa→`directa-export.csv`, eToro→`etoro-export.csv`, Coinbase→`coinbase-export.csv`, Recrowd→`generic_simple.csv`.
+
+4. **Flag argparse** (riga ~1380): `--clean`, `--with-static`, `--with-reports` aggiunti a fianco di `--force`.
+
+5. **Pipeline propagazione**:
+   - `test_runner.py` `db_populate()` (riga ~408): accetta `clean`, `with_static`, `with_reports` e li passa come argomenti CLI
+   - `test_runner.py` parser db (riga ~2850): 3 nuovi `add_argument` con `dest` corretto per underscore
+   - `test_runner.py` `dispatch_to_category()` (riga ~3089): estrae i 4 flag dal namespace args quando `category == "db"`
+   - `test_runner.py` `run_test_from_registry()` (riga ~2678): passa i 4 flag a `test_func` quando `category == "db" and action == "populate"`
+   - `dev.py` `cmd_mkdocs_gallery()` (riga ~534): `["python", "dev.py", "test", "db", "populate", "--force", "--clean", "--with-static", "--with-reports"]`
+   - `db-helpers.ts` `resetDatabaseForGallery()` (riga ~29): `./dev.py test db populate --force --clean --with-static --with-reports`
+
+### Part B — Gallery FX screenshots — ✅ COMPLETATO
+
+**File modificati**:
+- `frontend/e2e/gallery.spec.ts` — `test.describe('FX')` aggiunto (righe 588-918)
+
+**Import aggiunti** (riga 17): `goToFxPage`, `goToFxDetailPage`, `openAddPairModal` da `./fx/fx-helpers`
+
+**12 scene implementate**:
+
+| # | Test name | Navigazione | Screenshot cat/name | Pattern | Note |
+|---|-----------|-------------|---------------------|---------|------|
+| 1 | FX list page | `goToFxPage` | `fx/list` | `forEachLanguageAndTheme` | `waitForTimeout(2000)` per canvas |
+| 2 | FX list filtered | `goToFxPage` + click currency filter EUR | `fx/list-filtered` | loop manuale | Combobox → option EUR |
+| 3 | Add pair - direct routes | `goToFxPage` + `openAddPairModal` + EUR/USD | `fx/list-filtered` → `fx/add-pair-routes` | loop manuale | Selects EUR poi USD |
+| 4 | Add pair - chain | `goToFxPage` + `openAddPairModal` + GBP/JPY | `fx/add-pair-chain` | loop manuale | GBP/JPY via USD (chain già nei mock) |
+| 5 | Sync All modal | `goToFxPage` + click `fx-sync-all-button` | `fx/sync-progress` | loop manuale | `waitForTimeout(1500)` |
+| 6 | Detail page chart | `goToFxDetailPage('EUR-USD')` | `fx/detail-chart` | `forEachLanguageAndTheme` | `waitForSelector('canvas')` + 2000ms |
+| 7 | Detail signals overlay | `goToFxDetailPage` + click `fx-detail-signals-toggle` | `fx/detail-signals` | loop manuale | Toggle pannello segnali |
+| 8 | Detail measures panel | `goToFxDetailPage` + click `fx-detail-measures-toggle` | `fx/detail-measures` | loop manuale | Toggle pannello misure |
+| 9 | Detail data editor | `goToFxDetailPage` + click `fx-detail-edit-btn` | `fx/detail-editor` | loop manuale | Scroll a editor panel |
+| 10 | Detail CSV import modal | Editor aperto + click `fx-data-import-btn` | `fx/detail-csv-import` | loop manuale | Verifica modal visibile, Escape alla fine |
+| 11 | Chart settings modal | `goToFxPage` + click `fx-chart-settings-button` | `fx/chart-settings` | loop manuale | `scrollIntoViewIfNeeded`, Escape |
+| 12 | Provider config modal | `goToFxDetailPage` + click `fx-detail-provider-btn` | `fx/provider-config` | loop manuale | Attende `fx-add-pair-modal` visibile |
+
+**Risultato**: 12 scene × 4 lingue (en, it, fr, es) × 2 temi (light, dark) = **96 screenshot** generati e verificati.
+
+```
+mkdocs_src/docs/gallery/desktop/
+├── en/{light,dark}/fx/   # 12+12 = 24
+├── it/{light,dark}/fx/   # 12+12 = 24
+├── fr/{light,dark}/fx/   # 12+12 = 24
+└── es/{light,dark}/fx/   # 12+12 = 24
+                          # Total = 96
+```
+
+### Part B.2 — MkDocs documentation — ✅ COMPLETATO
+
+**File modificati**:
+- `mkdocs_src/docs/gallery/desktop.md` — sezione `## 💱 FX Rates` con 12 `<div class="screenshot-container"><img>` (data-category="fx")
+- `mkdocs_src/docs/gallery/mobile.md` — sezione `## 💱 FX Rates` con 12 `<div class="screenshot-container mobile"><img>` (data-category="fx")
+- `mkdocs_src/docs/gallery/index.md` — aggiunto `- **FX Rates**: Currency pairs, charts, sync, data editor, CSV import` alla lista Features Highlighted
 
 ---
 

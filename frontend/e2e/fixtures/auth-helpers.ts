@@ -16,8 +16,8 @@ export async function login(page: Page, user = TEST_USER) {
     await page.getByTestId('login-password').fill(user.password);
     await page.getByTestId('login-submit').click();
 
-    // Wait for dashboard
-    await expect(page).toHaveURL(/.*dashboard.*/, {timeout: 3000});
+    // Wait for dashboard (10s max to handle parallel worker load)
+    await expect(page).toHaveURL(/.*dashboard.*/, {timeout: 10_000});
 }
 
 /**

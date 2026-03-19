@@ -14,6 +14,7 @@
 import {expect, Page, test} from '@playwright/test';
 import {login, navigateTo, setLanguage} from './fixtures/auth-helpers';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN} from './fixtures/test-users';
+import {goToFxPage, goToFxDetailPage, openAddPairModal} from './fx/fx-helpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import {fileURLToPath} from 'url';
@@ -106,6 +107,10 @@ test.describe('Gallery Screenshots', () => {
     // Gallery tests iterate over 4 languages × 2 themes = 8 screenshots per test
     // Some tests also navigate (broker detail, import modal) so need extra time
     test.setTimeout(180_000); // 3 minutes per test
+
+    // Each gallery test is independent (logs in fresh, navigates, screenshots).
+    // Run in parallel across workers for faster generation.
+    test.describe.configure({mode: 'parallel'});
 
     test.describe('Auth Pages', () => {
         test('login page - all languages and themes', async ({page}, testInfo) => {
@@ -579,6 +584,365 @@ test.describe('Gallery Screenshots', () => {
                             await page.waitForTimeout(200);
                         }
                     }
+                }
+            }
+        });
+    });
+
+    test.describe('FX', () => {
+        test.beforeEach(async ({page}) => {
+            await login(page, TEST_ADMIN);
+        });
+
+        test('FX list page', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await goToFxPage(page);
+                await freezeAnimations(page);
+                // Wait for charts (canvas) to render
+                await page.waitForTimeout(2000);
+                await screenshot(page, viewport, lang, theme, 'fx', 'list');
+            });
+        });
+
+        test('FX list filtered', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Apply currency filter (EUR)
+                    const filterSelect = page.getByTestId('fx-currency-filter').first();
+                    if (await filterSelect.isVisible({timeout: 2000}).catch(() => false)) {
+                        await filterSelect.locator('[role="combobox"]').click();
+                        await page.waitForTimeout(300);
+                        const option = page.locator('[role="listbox"] button').filter({hasText: 'EUR'}).first();
+                        if (await option.isVisible({timeout: 1000}).catch(() => false)) {
+                            await option.click();
+                            await page.waitForTimeout(1500); // Wait for charts to re-render
+                        }
+                    }
+                    await screenshot(page, viewport, lang, theme, 'fx', 'list-filtered');
+                }
+            }
+        });
+
+        test('Add pair - direct routes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await openAddPairModal(page);
+                    const modal = page.getByTestId('fx-add-pair-modal');
+                    const selects = modal.locator('[role="combobox"]');
+                    await expect(selects.first()).toBeVisible({timeout: 3000});
+
+                    // Select USD as base (not excluded — EUR is excluded because EUR-USD exists)
+                    await selects.first().click();
+                    await page.waitForTimeout(300);
+                    const searchInput1 = modal.locator('input[type="text"]').first();
+                    if (await searchInput1.isVisible({timeout: 500}).catch(() => false)) {
+                        await searchInput1.fill('USD');
+                        await page.waitForTimeout(400);
+                    }
+                    const usdOption = page.locator('[role="listbox"] button').filter({hasText: 'USD'}).first();
+                    await expect(usdOption).toBeVisible({timeout: 2000});
+                    await usdOption.click();
+                    await page.waitForTimeout(500);
+
+                    // Select CHF as quote (not excluded — FED provides USD→CHF direct)
+                    await selects.nth(1).click();
+                    await page.waitForTimeout(300);
+                    const searchInput2 = modal.locator('input[type="text"]').first();
+                    if (await searchInput2.isVisible({timeout: 500}).catch(() => false)) {
+                        await searchInput2.fill('CHF');
+                        await page.waitForTimeout(400);
+                    }
+                    const chfOption = page.locator('[role="listbox"] button').filter({hasText: 'CHF'}).first();
+                    await expect(chfOption).toBeVisible({timeout: 2000});
+                    await chfOption.click();
+                    await page.waitForTimeout(1500); // Wait for route discovery
+
+                    await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-routes');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                }
+            }
+        });
+
+        test('Add pair - chain', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await openAddPairModal(page);
+                    const modal = page.getByTestId('fx-add-pair-modal');
+                    const selects = modal.locator('[role="combobox"]');
+                    await expect(selects.first()).toBeVisible({timeout: 3000});
+
+                    // Select NOK as base (not excluded)
+                    await selects.first().click();
+                    await page.waitForTimeout(300);
+                    const searchInput1 = modal.locator('input[type="text"]').first();
+                    if (await searchInput1.isVisible({timeout: 500}).catch(() => false)) {
+                        await searchInput1.fill('NOK');
+                        await page.waitForTimeout(400);
+                    }
+                    const nokOption = page.locator('[role="listbox"] button').filter({hasText: 'NOK'}).first();
+                    await expect(nokOption).toBeVisible({timeout: 2000});
+                    await nokOption.click();
+                    await page.waitForTimeout(500);
+
+                    // Select CHF as quote (not excluded — chain route: ECB NOK→EUR + ECB EUR→CHF)
+                    await selects.nth(1).click();
+                    await page.waitForTimeout(300);
+                    const searchInput2 = modal.locator('input[type="text"]').first();
+                    if (await searchInput2.isVisible({timeout: 500}).catch(() => false)) {
+                        await searchInput2.fill('CHF');
+                        await page.waitForTimeout(400);
+                    }
+                    const chfOption = page.locator('[role="listbox"] button').filter({hasText: 'CHF'}).first();
+                    await expect(chfOption).toBeVisible({timeout: 2000});
+                    await chfOption.click();
+                    await page.waitForTimeout(1500); // Wait for route discovery (chain)
+
+                    await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-chain');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                }
+            }
+        });
+
+        test('Sync All modal', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Click sync all button
+                    const syncBtn = page.getByTestId('fx-sync-all-button');
+                    if (await syncBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await syncBtn.click();
+                        // Wait for sync modal to appear and show progress
+                        await page.waitForTimeout(1500);
+                        await screenshot(page, viewport, lang, theme, 'fx', 'sync-progress');
+                        // Close modal
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                    }
+                }
+            }
+        });
+
+        test('Detail page chart', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await goToFxDetailPage(page, 'EUR-USD');
+                await freezeAnimations(page);
+                // Wait for ECharts canvas to render
+                await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                await page.waitForTimeout(2000);
+                await screenshot(page, viewport, lang, theme, 'fx', 'detail-chart');
+            });
+        });
+
+        test('Detail signals overlay', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxDetailPage(page, 'EUR-USD');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Wait for chart canvas
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1500);
+
+                    // Toggle signals panel
+                    const signalsToggle = page.getByTestId('fx-detail-signals-toggle');
+                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await signalsToggle.click();
+                        await page.waitForTimeout(500);
+                        // Scroll down to make signals panel content visible
+                        const signalsPanel = page.getByTestId('fx-detail-signals-panel');
+                        if (await signalsPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                            await signalsPanel.scrollIntoViewIfNeeded();
+                            await page.waitForTimeout(300);
+                        }
+                    }
+                    await screenshot(page, viewport, lang, theme, 'fx', 'detail-signals');
+                }
+            }
+        });
+
+        test('Detail measures panel', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxDetailPage(page, 'EUR-USD');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Wait for chart canvas
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1500);
+
+                    // Toggle measures panel
+                    const measuresToggle = page.getByTestId('fx-detail-measures-toggle');
+                    if (await measuresToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await measuresToggle.click();
+                        await page.waitForTimeout(500);
+                    }
+                    await screenshot(page, viewport, lang, theme, 'fx', 'detail-measures');
+                }
+            }
+        });
+
+        test('Detail data editor', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxDetailPage(page, 'EUR-USD');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Wait for chart canvas
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1000);
+
+                    // Click edit button to open data editor
+                    const editBtn = page.getByTestId('fx-detail-edit-btn');
+                    if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await editBtn.click();
+                        await page.waitForTimeout(500);
+                        // Scroll to editor panel for full view
+                        const editorPanel = page.getByTestId('fx-detail-editor-panel');
+                        if (await editorPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                            await editorPanel.scrollIntoViewIfNeeded();
+                            await page.waitForTimeout(300);
+                        }
+                    }
+                    await screenshot(page, viewport, lang, theme, 'fx', 'detail-editor');
+                }
+            }
+        });
+
+        test('Detail CSV import modal', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxDetailPage(page, 'EUR-USD');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Wait for chart
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1000);
+
+                    // Open data editor first
+                    const editBtn = page.getByTestId('fx-detail-edit-btn');
+                    await editBtn.scrollIntoViewIfNeeded();
+                    await expect(editBtn).toBeVisible({timeout: 3000});
+                    await editBtn.click();
+                    await page.waitForTimeout(800);
+
+                    // Scroll to editor panel to make Import CSV button visible
+                    const editorPanel = page.getByTestId('fx-detail-editor-panel');
+                    await editorPanel.scrollIntoViewIfNeeded();
+                    await page.waitForTimeout(300);
+
+                    // Click Import CSV button
+                    const importBtn = page.getByTestId('fx-data-import-btn');
+                    await importBtn.scrollIntoViewIfNeeded();
+                    await expect(importBtn).toBeVisible({timeout: 3000});
+                    await importBtn.click();
+                    const importModal = page.getByTestId('fx-data-import-modal');
+                    await expect(importModal).toBeVisible({timeout: 3000});
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'fx', 'detail-csv-import');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('Chart settings modal', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(1500);
+
+                    // Click chart settings button (scroll to it first)
+                    const settingsBtn = page.getByTestId('fx-chart-settings-button');
+                    await settingsBtn.scrollIntoViewIfNeeded();
+                    await expect(settingsBtn).toBeVisible({timeout: 3000});
+                    await settingsBtn.click();
+                    const settingsModal = page.getByTestId('chart-settings-modal');
+                    await expect(settingsModal).toBeVisible({timeout: 3000});
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'fx', 'chart-settings');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('Provider config modal', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxDetailPage(page, 'EUR-USD');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(1000);
+
+                    // Click provider button (scroll to it first)
+                    const providerBtn = page.getByTestId('fx-detail-provider-btn');
+                    await providerBtn.scrollIntoViewIfNeeded();
+                    await expect(providerBtn).toBeVisible({timeout: 3000});
+                    await providerBtn.click();
+                    // Wait for the inner modal (FxPairAddModal in editMode)
+                    const addPairModal = page.getByTestId('fx-add-pair-modal');
+                    await expect(addPairModal).toBeVisible({timeout: 5000});
+                    await page.waitForTimeout(500);
+                    await screenshot(page, viewport, lang, theme, 'fx', 'provider-config');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
                 }
             }
         });

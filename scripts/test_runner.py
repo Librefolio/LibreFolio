@@ -405,7 +405,9 @@ def db_validate(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Schema validation", verbose=verbose)
 
 
-def db_populate(verbose: bool = False, force: bool = False) -> bool:
+def db_populate(verbose: bool = False, force: bool = False,
+                clean: bool = False, with_static: bool = False,
+                with_reports: bool = False) -> bool:
     """
     Populate database with mock data for testing.
     Inserts comprehensive sample data (useful for frontend development).
@@ -413,6 +415,9 @@ def db_populate(verbose: bool = False, force: bool = False) -> bool:
     Args:
         verbose: Show verbose output
         force: Delete existing database and recreate from scratch
+        clean: Clean data dirs (custom-uploads, broker_reports) before populating
+        with_static: Upload static resources (avatars, broker icons)
+        with_reports: Upload sample broker report files
     """
     print_section("Database Mock Data Population")
 
@@ -425,6 +430,12 @@ def db_populate(verbose: bool = False, force: bool = False) -> bool:
     cmd = ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.populate_mock_data"]
     if force:
         cmd.append("--force")
+    if clean:
+        cmd.append("--clean")
+    if with_static:
+        cmd.append("--with-static")
+    if with_reports:
+        cmd.append("--with-reports")
 
     success = run_command(
         cmd,
@@ -2664,10 +2675,14 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
     test_func = test_info["func"]
     accepts_test_names = test_info.get("test_names", False)
 
-    # Special case for db populate (has force flag)
+    # Special case for db populate (has force, clean, with-static, with-reports flags)
     if category == "db" and action == "populate":
         force = kwargs.get("force", False)
-        return test_func(verbose=verbose, force=force)
+        clean = kwargs.get("clean", False)
+        with_static = kwargs.get("with_static", False)
+        with_reports = kwargs.get("with_reports", False)
+        return test_func(verbose=verbose, force=force, clean=clean,
+                         with_static=with_static, with_reports=with_reports)
 
     # Handle --list for any category
     list_tests = kwargs.get("list_tests", False)
@@ -2832,6 +2847,29 @@ def create_parser() -> argparse.ArgumentParser:
                 "default": False,
                 }
                 ))
+            extra_args.append((
+                "--clean", {
+                "action": "store_true",
+                "help": "[populate only] Clean custom-uploads and broker_reports dirs",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--with-static", {
+                "action": "store_true",
+                "dest": "with_static",
+                "help": "[populate only] Upload static resources (avatars, broker icons)",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--with-reports", {
+                "action": "store_true",
+                "dest": "with_reports",
+                "help": "[populate only] Upload sample broker report files",
+                "default": False,
+                }
+                ))
         elif category in ("front-utility", "front-user", "front-fx"):
             extra_args.extend([
                 (
@@ -2952,6 +2990,29 @@ def register_subparser(parent_subparsers):
                 "default": False,
                 }
                 ))
+            extra_args.append((
+                "--clean", {
+                "action": "store_true",
+                "help": "[populate only] Clean custom-uploads and broker_reports dirs",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--with-static", {
+                "action": "store_true",
+                "dest": "with_static",
+                "help": "[populate only] Upload static resources (avatars, broker icons)",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--with-reports", {
+                "action": "store_true",
+                "dest": "with_reports",
+                "help": "[populate only] Upload sample broker report files",
+                "default": False,
+                }
+                ))
         elif category in ("front-utility", "front-user", "front-fx"):
             extra_args.extend([
                 (
@@ -3040,6 +3101,9 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
             kwargs['list_tests'] = getattr(args, 'list_tests', False)
             if category == "db":
                 kwargs['force'] = getattr(args, 'force', False)
+                kwargs['clean'] = getattr(args, 'clean', False)
+                kwargs['with_static'] = getattr(args, 'with_static', False)
+                kwargs['with_reports'] = getattr(args, 'with_reports', False)
             elif category in ("front-utility", "front-user", "front-fx"):
                 kwargs['ui'] = getattr(args, 'ui', False)
                 kwargs['headed'] = getattr(args, 'headed', False)
