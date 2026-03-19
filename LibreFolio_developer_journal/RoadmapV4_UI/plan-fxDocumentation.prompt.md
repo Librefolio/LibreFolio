@@ -152,15 +152,15 @@ cookie `session` con JWT valido. Da documentare come sezione "Private API".
 | **Auth** | `/auth/register` | POST | Registrazione |
 | **System** | `/system/health` | GET | Health check |
 | **System** | `/system/info` | GET | Info sistema |
-| **FX** | `/fx/*` | tutti | Tutti pubblici (dati di mercato) |
-| **Assets** | `/assets/*` | tutti | Tutti pubblici (dati asset) |
-| **Transactions** | `/transactions` | GET | Lista (senza login) |
-| **Transactions** | `/transactions/types` | GET | Metadati tipi |
-| **Backup** | `/backup/*` | tutti | Export/restore |
+| **Utilities** | `/utilities/*` | GET | Dati di riferimento (paesi, valute, settori) |
 | **Uploads** | `/uploads/file/{id}` | GET | Serve file statico |
 | **Uploads** | `/uploads/plugin/{type}/{path}` | GET | Plugin assets |
 | **BRIM** | `/brim/plugins` | GET | Lista plugin disponibili |
-| **Utilities** | `/utilities/*` | tutti | Endpoint utilità |
+
+> **Nota**: Tutti gli altri endpoint (FX, Assets, Transactions, Brokers,
+> Settings, Backup, BRIM, Uploads CRUD, Users) richiedono il cookie `session`
+> con JWT valido. Vedi `plan-api-auth-guard.prompt.md` per il piano di
+> protezione dei ~32 endpoint attualmente pubblici.
 
 **Ordine globale di esecuzione Phase 5:**
 ```
