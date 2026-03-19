@@ -64,6 +64,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # =============================================================================
 # Session Management (In-Memory)
+#
+# ⚠️  WARNING: Sessions are stored in a per-process dict. This means uvicorn
+# with multiple workers causes session loss (login on worker A, next request
+# on worker B → 401).
+#
+# MIGRATION PLANNED → JWT stateless tokens (see plan-jwt-gallery-fixes.prompt.md)
+# JWT tokens are signed with a shared secret generated at module load (pre-fork),
+# so all workers can validate any token without shared state.
 # =============================================================================
 
 # Session storage: {session_id: {"user_id": int, "created_at": datetime, "expires_at": datetime}}

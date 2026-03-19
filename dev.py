@@ -128,6 +128,7 @@ def cmd_server(args):
     rebuild = getattr(args, 'rebuild', False)
     debug_mode = getattr(args, 'debug', False)
     force = getattr(args, 'force', False)
+    workers = getattr(args, 'workers', 1)
 
     if test_mode:
         port = get_test_server_port()
@@ -217,6 +218,8 @@ def cmd_server(args):
         print_success("Frontend build found - UI available at /")
     else:
         print_warning("No frontend build - run './dev.py front build' to enable UI")
+    if workers > 1:
+        print(f"{Colors.BLUE}Workers: {workers}{Colors.NC}")
     print()
 
     env = os.environ.copy()
@@ -225,13 +228,18 @@ def cmd_server(args):
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
 
-    return run_command_live([
+    uvicorn_cmd = [
         "pipenv", "run", "uvicorn",
         "backend.app.main:app",
-        "--reload",
         "--host", "0.0.0.0",
-        "--port", str(port)
-    ], env=env)
+        "--port", str(port),
+    ]
+    if workers > 1:
+        uvicorn_cmd.extend(["--workers", str(workers)])
+    else:
+        uvicorn_cmd.append("--reload")
+
+    return run_command_live(uvicorn_cmd, env=env)
 
 
 # =============================================================================
@@ -550,10 +558,15 @@ def cmd_mkdocs_gallery(args):
         print(f"{Colors.YELLOW}⏭️  Skipping DB population (--no-populate){Colors.NC}")
 
     failures = []
-    # Determine worker count: CPU count - 1, minimum 1
+    # Determine worker count: --workers flag or CPU count
     import os as _os
-    worker_count = max(1, (_os.cpu_count() or 2) - 1)
-    print(f"{Colors.BLUE}Workers: {worker_count}{Colors.NC}")
+    import math
+    explicit_workers = getattr(args, 'workers', None)
+    cpu_count = _os.cpu_count() or 2
+    worker_count = explicit_workers if explicit_workers else max(2, cpu_count)
+    # Server workers: 1 per 4 browser workers, minimum 1
+    server_workers = max(1, math.ceil(worker_count / 4))
+    print(f"{Colors.BLUE}Browser workers: {worker_count}  |  Server workers: {server_workers}{Colors.NC}")
 
     # Build a single Playwright command with all requested projects.
     # This shares one webServer process across desktop+mobile, avoiding port conflicts.
@@ -570,16 +583,19 @@ def cmd_mkdocs_gallery(args):
 
     viewport_labels = ', '.join(v[0] for v in viewports)
     print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
-    result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", capture_output=True, text=True)
-    if result.stdout:
-        print(result.stdout)
+    # Pass server worker count via env so playwright.config.ts can use it
+    # Stream output live to terminal (no capture_output) so user sees progress
+    gallery_env = _os.environ.copy()
+    gallery_env["GALLERY_SERVER_WORKERS"] = str(server_workers)
+    try:
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", env=gallery_env)
+    except KeyboardInterrupt:
+        print(f"\n{Colors.YELLOW}⚠️  Gallery interrupted by user (Ctrl+C){Colors.NC}")
+        print(f"{Colors.YELLOW}Partial screenshots may have been saved to mkdocs_src/docs/gallery/{Colors.NC}")
+        return 1
     if result.returncode != 0:
         failures = [v[0] for v in viewports]
         print_error(f"Gallery generation had failures (see above)")
-        if result.stderr:
-            for line in result.stderr.splitlines():
-                if 'Error' in line or 'error' in line or 'FAIL' in line:
-                    print(f"  {Colors.RED}{line}{Colors.NC}")
 
     if failures:
         print(f"\n{Colors.YELLOW}⚠️  Gallery generation completed with failures in: {', '.join(failures)}{Colors.NC}")
@@ -809,6 +825,7 @@ Examples:
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
+    p.add_argument("--workers", "-w", type=int, default=1, help="Number of uvicorn workers (default: 1)")
     p.set_defaults(func=cmd_server)
 
     # Database
@@ -904,6 +921,8 @@ Examples:
                        help="Only generate mobile screenshots")
     mk_p.add_argument("--no-populate", action="store_true",
                        help="Skip DB population (faster for re-runs)")
+    mk_p.add_argument("--workers", "-w", type=int, default=None,
+                       help="Number of Playwright workers (default: CPU count)")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
     # =========================================================================

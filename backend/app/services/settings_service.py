@@ -8,6 +8,7 @@ from typing import Optional
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import GlobalSetting, UserSettings
@@ -187,27 +188,32 @@ async def initialize_global_settings(session: AsyncSession) -> int:
     Initialize global settings with defaults.
     Only creates settings that don't exist yet.
 
+    Uses INSERT ... ON CONFLICT DO NOTHING to be safe for concurrent
+    multi-worker startup (e.g. Uvicorn with multiple workers).
+
     Returns: Number of settings created.
     """
     created = 0
 
     for key, config in GLOBAL_SETTINGS_DEFAULTS.items():
-        # Check if exists
-        result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
-        if result.scalar_one_or_none() is None:
-            # Create
-            setting = GlobalSetting(
+        stmt = (
+            sqlite_insert(GlobalSetting)
+            .values(
                 key=key,
                 value=config["value"],
                 value_type=config["type"],
                 description=config["description"],
                 updated_at=utcnow(),
                 )
-            session.add(setting)
+            .on_conflict_do_nothing(index_elements=["key"])
+            )
+        result = await session.execute(stmt)
+        if result.rowcount and result.rowcount > 0:
             created += 1
 
+    await session.commit()
+
     if created > 0:
-        await session.commit()
         logger.info("Initialized global settings", created=created)
 
     return created

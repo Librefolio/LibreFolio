@@ -82,6 +82,11 @@ Il sottosistema FX è completo a livello funzionale: 2 pagine route (~1400+ righ
 | 19 Mar 2026 | ✅ Fix gallery | `auth-helpers.ts` login timeout: 3s→10s per gestire carico parallelo con 9 worker |
 | 19 Mar 2026 | ✅ Fix gallery | `dev.py`: desktop+mobile in singolo comando Playwright (`--project desktop --project mobile`) — condivide webServer, evita conflitto porta |
 | 19 Mar 2026 | ✅ MkDocs | Titoli FX in desktop.md e mobile.md convertiti da bilingue EN/IT a solo inglese |
+| 19 Mar 2026 | ✅ Feature | `dev.py server --workers N`: flag per uvicorn workers (default 1, con N>1 disabilita --reload) |
+| 19 Mar 2026 | ✅ Feature | `dev.py mkdocs gallery --workers N`: flag per browser workers (default CPU count). Server workers auto-calcolati: ceil(browser/4) |
+| 19 Mar 2026 | ✅ Feature | `playwright.config.ts`: webServer command legge `GALLERY_SERVER_WORKERS` env var per avviare server con più worker |
+| 19 Mar 2026 | ✅ Fix gallery | Output streaming live (no `capture_output`), gestione Ctrl+C con `KeyboardInterrupt`. Formula worker: CPU×2→CPU (20 headed Chrome = troppi, resource exhaustion) |
+| 19 Mar 2026 | 📋 Plan JWT | **36 test fail root cause**: sessioni in-memory (`_sessions: dict`) incompatibili con multi-worker uvicorn. Piano migrazione a JWT stateless scritto in `plan-jwt-gallery-fixes.prompt.md` (7 step: PyJWT, auth_service rewrite, API update, gallery fix, provider icon fallback). Timeout login 10s→20s, FX helpers 5s→15s applicati. |
 
 ---
 
