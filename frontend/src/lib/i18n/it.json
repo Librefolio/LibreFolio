@@ -312,7 +312,12 @@
       "hideRoutes": "Nascondi percorsi disponibili"
     },
     "syncing": "Sincronizzazione...",
-    "providers": "Provider"
+    "providers": "Provider",
+    "editPairConfig": "Modifica configurazione coppia",
+    "deletePair": "Elimina coppia",
+    "deletePairTitle": "Elimina Coppia FX",
+    "deletePairMessage": "Sei sicuro di voler eliminare {pair}? Questo rimuoverà la configurazione dei provider e tutti i tassi di cambio storici.",
+    "removeProvider": "Rimuovi provider"
   },
   "settings": {
     "profile": "Profilo",
@@ -615,7 +620,8 @@
       "multiplier": "Numero di deviazioni standard ($k \\cdot \\sigma$). $k=2$ copre ~95% dei valori assumendo distribuzione normale.",
       "overbought": "Livello sopra il quale l'asset è considerato ipercomprato. Standard: 70. Valori vicini a 100 indicano forte pressione d'acquisto.",
       "oversold": "Livello sotto il quale l'asset è considerato ipervenduto. Standard: 30. Valori vicini a 0 indicano forte pressione di vendita."
-    }
+    },
+    "macdLineColor": "Colore Linea MACD"
   },
   "chart": {
     "tooltip": {
@@ -623,7 +629,9 @@
       "percentNote": "% relativo alla data di inizio intervallo",
       "upper": "Superiore",
       "lower": "Inferiore"
-    }
+    },
+    "showPercentage": "Mostra percentuale",
+    "showAbsolute": "Mostra assoluto"
   },
   "measure": {
     "pending": "Inizio: {startDate} ({startValue}) — clicca sul grafico per il punto finale",
@@ -671,5 +679,9 @@
     "sep": "sep",
     "decimal": "decimale",
     "thousands": "migliaia"
+  },
+  "dataEditor": {
+    "clearSelection": "Deseleziona",
+    "deleteSelected": "Elimina selezionati"
   }
 }

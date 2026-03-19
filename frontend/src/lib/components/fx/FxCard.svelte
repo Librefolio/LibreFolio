@@ -190,7 +190,7 @@
                 <button
                     class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                     onclick={(e) => { stop(e); inverted = !inverted; setCardInverted(slug, inverted); }}
-                    title="Swap direction"
+                    title={$t('common.swapDirection')}
                     data-testid="fx-swap-btn"
                 >
                     <ArrowLeftRight size={14} />
@@ -201,7 +201,7 @@
                         ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400'
                         : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
                     onclick={(e) => { stop(e); localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute'; }}
-                    title={cardViewMode === 'absolute' ? 'Show percentage' : 'Show absolute'}
+                    title={cardViewMode === 'absolute' ? $t('chart.showPercentage') : $t('chart.showAbsolute')}
                 >
                     <Percent size={14} />
                 </button>
@@ -254,7 +254,7 @@
             </div>
         {:else}
             <div class="h-20 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
-                No data
+                {$t('common.noData')}
             </div>
         {/if}
     </div>
@@ -280,7 +280,7 @@
             <button
                 class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
                 onclick={(e) => { stop(e); onrefresh?.({ slug }); }}
-                title="Refresh"
+                title={$t('common.refresh')}
             >
                 <RefreshCw size={15} />
             </button>
@@ -289,14 +289,14 @@
             <button
                 class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-600 transition-colors"
                 onclick={(e) => { stop(e); onedit?.({ base, quote, slug }); }}
-                title="Edit pair config"
+                title={$t('fx.editPairConfig')}
             >
                 <Pencil size={15} />
             </button>
             <button
                 class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
                 onclick={(e) => { stop(e); ondelete?.({ base, quote, slug }); }}
-                title="Delete pair"
+                title={$t('fx.deletePair')}
             >
                 <Trash2 size={15} />
             </button>

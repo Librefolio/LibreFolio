@@ -69,7 +69,7 @@
                 type="button"
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
                 onclick={() => { colorByBaseline = !colorByBaseline; emitChange(); }}
-                aria-label="Toggle baseline colors"
+                aria-label={$t('chartSettings.baselineColors')}
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {colorByBaseline ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
@@ -85,7 +85,7 @@
                 type="button"
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
                 onclick={() => { areaFill = !areaFill; emitChange(); }}
-                aria-label="Toggle area fill"
+                aria-label={$t('chartSettings.areaFill')}
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {areaFill ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
@@ -101,7 +101,7 @@
                 type="button"
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
                 onclick={() => { gridLines = !gridLines; emitChange(); }}
-                aria-label="Toggle grid lines"
+                aria-label={$t('chartSettings.gridLines')}
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {gridLines ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
@@ -117,7 +117,7 @@
                 type="button"
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
                 onclick={() => { staleGradient = !staleGradient; emitChange(); }}
-                aria-label="Toggle stale gradient"
+                aria-label={$t('chartSettings.staleGradient')}
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {staleGradient ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
