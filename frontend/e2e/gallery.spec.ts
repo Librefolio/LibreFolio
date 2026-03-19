@@ -671,7 +671,15 @@ test.describe('Gallery Screenshots', () => {
                     const chfOption = page.locator('[role="listbox"] button').filter({hasText: 'CHF'}).first();
                     await expect(chfOption).toBeVisible({timeout: 2000});
                     await chfOption.click();
-                    await page.waitForTimeout(1500); // Wait for route discovery
+                    await page.waitForTimeout(1500); // Wait for route discovery (DFS pathfinding)
+
+                    // Open route picker to show discovered routes
+                    const routeSelect = modal.locator('[data-testid="fx-route-select"]');
+                    const addRouteBtn = routeSelect.locator('button').filter({hasText: /add|aggiungi|ajouter|añadir/i}).first();
+                    if (await addRouteBtn.isVisible({timeout: 3000}).catch(() => false)) {
+                        await addRouteBtn.click();
+                        await page.waitForTimeout(2000); // Wait for routes to render with provider icons
+                    }
 
                     await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-routes');
                     await page.keyboard.press('Escape');
@@ -720,6 +728,14 @@ test.describe('Gallery Screenshots', () => {
                     await expect(chfOption).toBeVisible({timeout: 2000});
                     await chfOption.click();
                     await page.waitForTimeout(1500); // Wait for route discovery (chain)
+
+                    // Open route picker to show discovered chain routes
+                    const routeSelect = modal.locator('[data-testid="fx-route-select"]');
+                    const addRouteBtn = routeSelect.locator('button').filter({hasText: /add|aggiungi|ajouter|añadir/i}).first();
+                    if (await addRouteBtn.isVisible({timeout: 3000}).catch(() => false)) {
+                        await addRouteBtn.click();
+                        await page.waitForTimeout(2000); // Wait for chain routes to render
+                    }
 
                     await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-chain');
                     await page.keyboard.press('Escape');
@@ -939,7 +955,7 @@ test.describe('Gallery Screenshots', () => {
                     // Wait for the inner modal (FxPairAddModal in editMode)
                     const addPairModal = page.getByTestId('fx-add-pair-modal');
                     await expect(addPairModal).toBeVisible({timeout: 5000});
-                    await page.waitForTimeout(500);
+                    await page.waitForTimeout(2000); // Extra time for provider icons and route loading
                     await screenshot(page, viewport, lang, theme, 'fx', 'provider-config');
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);

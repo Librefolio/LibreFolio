@@ -40,6 +40,7 @@ python-magic = "*"
 argcomplete = "*"
 pillow = "*"
 mkdocs-static-i18n = "*"
+PyJWT = "*"
 
 [dev-packages]
 pytest = "*"
