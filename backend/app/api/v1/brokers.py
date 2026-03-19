@@ -797,7 +797,7 @@ async def parse_file(
 
 
 @brim_router.get("/plugins", response_model=List[BRIMPluginInfo])
-async def list_plugins() -> List[BRIMPluginInfo]:
+async def list_plugins(_current_user: User = Depends(get_current_user)) -> List[BRIMPluginInfo]:
     """
     List all available import plugins.
 

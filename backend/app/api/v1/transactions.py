@@ -128,6 +128,7 @@ async def query_transactions(
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ) -> List[TXReadItem]:
     """
     Query transactions with filters.
@@ -171,7 +172,7 @@ async def query_transactions(
 
 
 @tx_router.get("/types", response_model=List[TXTypeMetadata])
-async def get_transaction_types() -> List[TXTypeMetadata]:
+async def get_transaction_types(_current_user: User = Depends(get_current_user)) -> List[TXTypeMetadata]:
     """
     Get metadata for all transaction types.
 
@@ -188,6 +189,7 @@ async def get_transaction_types() -> List[TXTypeMetadata]:
 async def get_transaction(
     tx_id: int,
     session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ) -> TXReadItem:
     """
     Get a single transaction by ID.
@@ -219,6 +221,7 @@ async def get_transaction(
 async def update_transactions(
     items: List[TXUpdateItem],
     session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ) -> TXBulkUpdateResponse:
     """
     Update multiple transactions.
@@ -256,6 +259,7 @@ async def update_transactions(
 async def delete_transactions(
     ids: List[int] = Query(..., description="Transaction IDs to delete"),
     session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ) -> TXBulkDeleteResponse:
     """
     Delete multiple transactions.

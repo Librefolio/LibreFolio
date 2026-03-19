@@ -11,8 +11,11 @@ Status: 501 Not Implemented
 from enum import Enum
 from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+
+from backend.app.api.v1.auth import get_current_user
+from backend.app.db.models import User
 
 backup_router = APIRouter(
     prefix="/backup",
@@ -82,7 +85,7 @@ class RestoreResponse(BaseModel):
 
 
 @backup_router.post("/export", response_model=ExportResponse)
-async def export_data(request: ExportRequest):
+async def export_data(request: ExportRequest, _current_user: User = Depends(get_current_user)):
     """
     Export portfolio data to file.
 
@@ -106,7 +109,7 @@ async def export_data(request: ExportRequest):
 
 
 @backup_router.post("/restore", response_model=RestoreResponse)
-async def restore_data(request: RestoreRequest):
+async def restore_data(request: RestoreRequest, _current_user: User = Depends(get_current_user)):
     """
     Restore portfolio data from backup file.
 
@@ -126,7 +129,7 @@ async def restore_data(request: RestoreRequest):
 
 
 @backup_router.get("/formats")
-async def list_export_formats():
+async def list_export_formats(_current_user: User = Depends(get_current_user)):
     """
     List available export formats.
 
@@ -160,7 +163,7 @@ async def list_export_formats():
 
 
 @backup_router.get("/status")
-async def backup_status():
+async def backup_status(_current_user: User = Depends(get_current_user)):
     """
     Get backup/export system status.
 
