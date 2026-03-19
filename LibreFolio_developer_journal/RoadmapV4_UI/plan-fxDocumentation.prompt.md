@@ -87,6 +87,81 @@ Pagina dedicata che spiega all'utente come importare dati FX via CSV. Deve copri
 
 Questo plan è l'ultimo della catena Phase 5 FX. Una volta completato, Phase 5 può essere chiusa.
 
+### ⚠️ Aggiornamento necessario: Auth JWT
+
+La documentazione backend deve essere aggiornata per riflettere la migrazione
+da sessioni in-memory a **JWT tokens** (vedi `plan-jwt-gallery-fixes.prompt.md`).
+
+Punti da documentare:
+1. **Come funziona il login**: `POST /api/v1/auth/login` → ritorna un cookie `session`
+   che contiene un JWT firmato (HMAC-SHA256), non più un session ID opaco
+2. **Come inviare richieste autenticate con curl**:
+   ```bash
+   # Login e salva cookie
+   curl -c cookies.txt -X POST http://localhost:8000/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username": "user", "password": "pass"}'
+
+   # Usa il cookie per endpoint protetti
+   curl -b cookies.txt http://localhost:8000/api/v1/auth/me
+   ```
+3. **JWT_SECRET env var**: in multi-worker, deve essere settato dal launcher
+   (dev.py lo genera automaticamente). In produzione può essere un valore fisso.
+4. **Scadenza**: il token scade dopo N ore (configurabile in global_settings).
+   Al riavvio del server il secret cambia → tutti i token vengono invalidati.
+5. **Logout**: il server cancella il cookie; il token resta valido fino a scadenza
+   (accettabile, non c'è blacklist server-side per ora)
+
+### Endpoint privati (richiedono login)
+
+Tutti gli endpoint che usano `Depends(get_current_user)` — devono avere il
+cookie `session` con JWT valido. Da documentare come sezione "Private API".
+
+| Modulo | Endpoint | Metodo | Note |
+|--------|----------|--------|------|
+| **Auth** | `/auth/me` | GET | Info utente corrente |
+| **Auth** | `/auth/change-password` | POST | |
+| **Auth** | `/auth/profile` | PUT | Modifica username/email |
+| **Auth** | `/auth/users/me` | DELETE | Cancellazione account |
+| **Settings** | `/settings/user` | GET | Preferenze utente |
+| **Settings** | `/settings/user` | PUT | Modifica preferenze |
+| **Settings** | `/settings/global` | GET | Elenco settings globali |
+| **Settings** | `/settings/global/{key}` | GET/PUT | Lettura/modifica singolo setting |
+| **Settings** | `/settings/global/initialize` | POST | Admin: init defaults |
+| **Brokers** | `/brokers` | POST/GET/DELETE | CRUD broker (bulk) |
+| **Brokers** | `/brokers/{id}` | GET/PATCH | Dettaglio/modifica broker |
+| **Brokers** | `/brokers/{id}/summary` | GET | Summary broker |
+| **Brokers** | `/brokers/{id}/access` | GET/PUT | Gestione accessi (sharing) |
+| **BRIM** | `/brim/upload` | POST | Upload file import |
+| **BRIM** | `/brim/files` | GET | Lista file importati |
+| **BRIM** | `/brim/files/{id}` | GET/DELETE | Dettaglio/elimina file |
+| **BRIM** | `/brim/files/{id}/download` | GET | Download file |
+| **BRIM** | `/brim/files/{id}/last-parse` | GET | Ultimo risultato parse |
+| **BRIM** | `/brim/files/{id}/parse` | POST | Esegui parse file |
+| **Transactions** | `/transactions` | POST/PATCH/DELETE | CRUD transazioni (bulk) |
+| **Uploads** | `/uploads` | POST/GET | Upload e lista file |
+| **Uploads** | `/uploads/{id}` | GET/DELETE | Dettaglio/elimina file |
+| **Users** | `/users` | GET | Ricerca utenti |
+
+### Endpoint pubblici (nessun login richiesto)
+
+| Modulo | Endpoint | Metodo | Note |
+|--------|----------|--------|------|
+| **Auth** | `/auth/login` | POST | Login |
+| **Auth** | `/auth/logout` | POST | Logout (cancella cookie) |
+| **Auth** | `/auth/register` | POST | Registrazione |
+| **System** | `/system/health` | GET | Health check |
+| **System** | `/system/info` | GET | Info sistema |
+| **FX** | `/fx/*` | tutti | Tutti pubblici (dati di mercato) |
+| **Assets** | `/assets/*` | tutti | Tutti pubblici (dati asset) |
+| **Transactions** | `/transactions` | GET | Lista (senza login) |
+| **Transactions** | `/transactions/types` | GET | Metadati tipi |
+| **Backup** | `/backup/*` | tutti | Export/restore |
+| **Uploads** | `/uploads/file/{id}` | GET | Serve file statico |
+| **Uploads** | `/uploads/plugin/{type}/{path}` | GET | Plugin assets |
+| **BRIM** | `/brim/plugins` | GET | Lista plugin disponibili |
+| **Utilities** | `/utilities/*` | tutti | Endpoint utilità |
+
 **Ordine globale di esecuzione Phase 5:**
 ```
 1. plan-fxConversionChain.prompt.md       (chain/route-based)
