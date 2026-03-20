@@ -2,18 +2,18 @@
 
 This guide covers setting up a local development environment. For production deployment, see the [User Manual Installation](../user/installation.md).
 
-## Prerequisites
+## ✅ Prerequisites
 
-- **Python 3.11+**
-- **Node.js 18+**
-- **Pipenv** (Python package manager)
-- **Docker** (Optional, for production deployment)
+- 🐍 **Python 3.11+**
+- 📦 **Node.js 18+**
+- 📋 **Pipenv** (Python package manager)
+- 🐳 **Docker** (Optional, for production deployment)
 
-## Setup Instructions
+## 📋 Setup Instructions
 
 The project includes a main orchestration script, `dev.py`, to automate all tasks.
 
-### 1. Install Dependencies
+### 📦 1. Install Dependencies
 
 This command installs all Python and Node.js dependencies for both the backend and frontend.
 
@@ -27,7 +27,7 @@ This will:
 2. Install frontend packages via `npm`.
 3. Install Playwright browsers for E2E testing.
 
-### 2. Initialize the Database
+### 🗃️ 2. Initialize the Database
 
 Before starting the server for the first time, create the database:
 
@@ -37,7 +37,7 @@ Before starting the server for the first time, create the database:
 
 This command creates a fresh SQLite database with the initial schema.
 
-### 3. Configure Environment
+### ⚙️ 3. Configure Environment
 
 Copy the example environment file:
 
@@ -47,7 +47,7 @@ cp .env.example .env
 
 The default settings work out of the box. Edit `.env` if you need to change port or data directory.
 
-### 4. Start the Server
+### 🚀 4. Start the Server
 
 To start the FastAPI server with auto-reload:
 
@@ -65,7 +65,7 @@ For frontend development with Hot Module Replacement, start a second terminal:
 
 The dev server runs at `http://localhost:5173` and proxies API calls to the backend.
 
-### 5. Create a User
+### 👤 5. Create a User
 
 To log in, you need to create a user account. The first user automatically becomes the superuser.
 
@@ -77,12 +77,12 @@ Replace `<username>`, `<email>`, and `<password>` with your desired credentials.
 
 ---
 
-## Development Workflow
+## 🔄 Development Workflow
 
 Once installed, `dev.py` is your single entry point for every development task.
 Run `./dev.py --help` for the full command tree.
 
-### Frontend
+### 🖥️ Frontend
 
 | Command | Description | Details |
 |---------|-------------|---------|
@@ -91,7 +91,7 @@ Run `./dev.py --help` for the full command tree.
 | `./dev.py front check` | Run `svelte-check` type checker | [Frontend Development](frontend/index.md) |
 | `./dev.py front preview` | Preview production build locally | |
 
-### API Client
+### 🔗 API Client
 
 | Command | Description | Details |
 |---------|-------------|---------|
@@ -99,7 +99,7 @@ Run `./dev.py --help` for the full command tree.
 | `./dev.py api client` | Generate TypeScript client from schema | [API Overview](api/overview.md) |
 | `./dev.py api sync` | Schema export + client generation in one step | [API Overview](api/overview.md) |
 
-### Internationalization
+### 🌍 Internationalization
 
 | Command | Description | Details |
 |---------|-------------|---------|
@@ -110,7 +110,7 @@ Run `./dev.py --help` for the full command tree.
 | `./dev.py i18n search QUERY` | Search keys/values | [i18n](frontend/i18n.md) |
 | `./dev.py i18n tree [PREFIX]` | Show key tree structure | [i18n](frontend/i18n.md) |
 
-### Database
+### 🗃️ Database
 
 | Command | Description | Details |
 |---------|-------------|---------|
@@ -121,7 +121,7 @@ Run `./dev.py --help` for the full command tree.
 | `./dev.py db check` | Verify CHECK constraints | |
 | `./dev.py db current` | Show current migration revision | |
 
-### Testing
+### 🧪 Testing
 
 | Command | Description | Details |
 |---------|-------------|---------|
@@ -129,7 +129,7 @@ Run `./dev.py --help` for the full command tree.
 | `./dev.py test <category> all` | Run a single category (e.g., `api`, `e2e`, `front-fx`) | [Test Walkthrough](test-walkthrough/index.md) |
 | `./dev.py test <category> --list` | List available tests without running them | [Test Walkthrough](test-walkthrough/index.md) |
 
-### Other Tools
+### 🧰 Other Tools
 
 | Command | Description |
 |---------|-------------|

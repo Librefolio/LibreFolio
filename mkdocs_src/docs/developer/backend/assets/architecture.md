@@ -2,9 +2,9 @@
 
 The Asset system in LibreFolio is responsible for managing financial instruments (Stocks, ETFs, Crypto, etc.), fetching their prices, and maintaining their metadata.
 
-## Core Components
+## 🧱 Core Components
 
-### 1. `AssetSourceManager`
+### 1️⃣ `AssetSourceManager`
 
 This is the central service that coordinates all asset-related operations. It handles:
 
@@ -13,7 +13,7 @@ This is the central service that coordinates all asset-related operations. It ha
 - **Backward Filling**: Filling gaps in historical data (e.g., weekends/holidays) with the last known price.
 - **Caching**: Storing fetched prices in the `price_history` table to minimize external API calls.
 
-### 2. `AssetMetadataService`
+### 2️⃣ `AssetMetadataService`
 
 This service manages the descriptive information about assets.
 
@@ -21,11 +21,11 @@ This service manages the descriptive information about assets.
 - **Merging**: Merges metadata fetched from providers with existing user-defined data.
 - **Patching**: Supports partial updates to asset metadata.
 
-### 3. `AssetProviderRegistry`
+### 3️⃣ `AssetProviderRegistry`
 
 Uses the [Registry Pattern](../../architecture/patterns/registry_pattern.md) to manage available asset providers.
 
-## Data Flow: Fetching Prices
+## 🔄 Data Flow: Fetching Prices
 
 ```mermaid
 graph TD
@@ -47,7 +47,7 @@ graph TD
     Manager -- "Final Data" --> API
 ```
 
-## Backward Fill Logic
+## 📊 Backward Fill Logic
 
 Financial markets are closed on weekends and holidays. To provide a continuous price series for charts and calculations, LibreFolio uses a **backward-fill** strategy.
 

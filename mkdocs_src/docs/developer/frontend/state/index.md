@@ -1,14 +1,14 @@
-# 🔄 State Management
+# 📦 State Management
 
 *Status: Implemented (Feb 2026)*
 
-## Overview
+## 📖 Overview
 
 LibreFolio uses Svelte stores and Svelte 5 runes for state management.
 
-## Stores
+## 🗄️ Stores
 
-### Auth Store (`$lib/stores/auth.ts`)
+### 🔐 Auth Store (`$lib/stores/auth.ts`)
 
 Manages authentication state:
 
@@ -18,7 +18,7 @@ Manages authentication state:
 - `checkAuth()` - Validates session cookie against backend
 - `login()` / `logout()` - Auth actions with store updates
 
-### Settings Store (`$lib/stores/settings.ts`)
+### ⚙️ Settings Store (`$lib/stores/settings.ts`)
 
 User preferences store with backend sync:
 
@@ -29,7 +29,7 @@ User preferences store with backend sync:
 - `setDirect()` - Immediate update without API call (used at login)
 - Auto-loads from API after authentication
 
-### Global Settings Store (`$lib/stores/globalSettings.ts`)
+### 🌍 Global Settings Store (`$lib/stores/globalSettings.ts`)
 
 App-wide configuration (admin-only write):
 
@@ -38,7 +38,7 @@ App-wide configuration (admin-only write):
 - Other system-wide settings
 - Loaded in `(app)/+layout.svelte` after auth check
 
-### Language Store (`$lib/stores/language.ts`)
+### 🗣️ Language Store (`$lib/stores/language.ts`)
 
 Reactive language management:
 
@@ -46,7 +46,7 @@ Reactive language management:
 - Updates `svelte-i18n` locale
 - Persists to `localStorage` for non-authenticated pages
 
-## Svelte 5 Runes
+## ⚡ Svelte 5 Runes
 
 LibreFolio uses Svelte 5 runes:
 
@@ -55,7 +55,7 @@ LibreFolio uses Svelte 5 runes:
 - `$effect` - Side effects
 - `$props` - Component props
 
-## Patterns
+## 📐 Patterns
 
 - **Local state**: `$state` for component-level reactivity
 - **Global state**: Svelte stores for cross-component data

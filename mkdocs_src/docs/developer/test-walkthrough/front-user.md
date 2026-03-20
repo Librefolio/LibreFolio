@@ -2,7 +2,7 @@
 
 Frontend E2E tests for user-facing broker and multi-user features.
 
-## What's Tested
+## 🔍 What's Tested
 
 These Playwright tests cover the broker management UI and multi-user collaboration features:
 
@@ -12,7 +12,7 @@ These Playwright tests cover the broker management UI and multi-user collaborati
 | **Multi-User** | Multiple user accounts, visibility rules, data isolation |
 | **Sharing** | Broker sharing modal, RBAC roles (Owner, Editor, Viewer), share percentage |
 
-## Running
+## 🚀 Running
 
 ```bash
 # Run all front-user tests
@@ -28,7 +28,7 @@ These Playwright tests cover the broker management UI and multi-user collaborati
 ./dev.py test front-user all --headed
 ```
 
-## Test Location
+## 📂 Test Location
 
 ```
 frontend/e2e/
