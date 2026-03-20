@@ -157,8 +157,62 @@ cookie `session` con JWT valido. Da documentare come sezione "Private API".
 | **Uploads** | `/uploads/plugin/{type}/{path}` | GET | Plugin assets |
 | **BRIM** | `/brim/plugins` | GET | Lista plugin disponibili |
 
-> **Nota**: Tutti gli altri endpoint (FX, Assets, Transactions, Brokers,
-> Settings, Backup, BRIM, Uploads CRUD, Users) richiedono il cookie `session`
+### Endpoint privati — FX (prefisso `/fx`)
+
+| Sub-router | Endpoint | Metodo | Note |
+|------------|----------|--------|------|
+| **Providers** | `/fx/providers` | GET | Lista provider FX installati (codice, valute supportate, icon) |
+| **Providers** | `/fx/providers/routes` | GET | Lista conversion routes configurate per l'utente |
+| **Providers** | `/fx/providers/routes` | POST | Crea nuove conversion routes (direct o chain) |
+| **Providers** | `/fx/providers/routes` | DELETE | Elimina conversion routes (bulk) |
+| **Currencies** | `/fx/currencies/sync` | POST | Sync tassi FX per coppie configurate |
+| **Currencies** | `/fx/currencies/rate` | POST | Upsert tassi FX (bulk) |
+| **Currencies** | `/fx/currencies/rate` | DELETE | Elimina tassi FX (bulk) |
+| **Currencies** | `/fx/currencies/convert` | POST | Conversione valuta (con chain/fallback) |
+
+### Endpoint privati — Assets (prefisso `/assets`)
+
+| Sub-router | Endpoint | Metodo | Note |
+|------------|----------|--------|------|
+| **CRUD** | `/assets` | POST | Creazione asset (bulk) |
+| **CRUD** | `/assets` | GET | Lista asset con filtri, paginazione, ordinamento |
+| **CRUD** | `/assets` | PATCH | Aggiornamento asset (bulk) |
+| **CRUD** | `/assets` | DELETE | Eliminazione asset (bulk) |
+| **CRUD** | `/assets/all` | GET | Lista completa asset (senza paginazione) |
+| **CRUD** | `/assets/query` | GET | Ricerca asset per ISIN/ticker/nome |
+| **Prices** | `/assets/prices` | POST | Upsert prezzi asset (bulk) |
+| **Prices** | `/assets/prices` | DELETE | Elimina prezzi asset (bulk) |
+| **Prices** | `/assets/prices/{asset_id}` | GET | Storico prezzi singolo asset |
+| **Prices** | `/assets/prices/refresh` | POST | Refresh prezzi da provider esterni |
+| **Provider** | `/assets/provider` | GET | Lista provider asset disponibili |
+| **Provider** | `/assets/provider` | POST | Assegna provider ad asset (bulk) |
+| **Provider** | `/assets/provider` | DELETE | Rimuovi assegnazioni provider (bulk) |
+| **Provider** | `/assets/provider/search` | GET | Cerca asset su provider esterno |
+| **Provider** | `/assets/provider/assignments` | GET | Lista assegnazioni provider correnti |
+| **Provider** | `/assets/provider/refresh` | POST | Refresh metadata asset da provider |
+
+### Endpoint privati — Transactions (prefisso `/transactions`)
+
+| Endpoint | Metodo | Note |
+|----------|--------|------|
+| `/transactions` | POST | Creazione transazioni (bulk) |
+| `/transactions` | GET | Lista transazioni con filtri |
+| `/transactions` | PATCH | Aggiornamento transazioni (bulk) |
+| `/transactions` | DELETE | Eliminazione transazioni (bulk) |
+| `/transactions/types` | GET | Metadata tipi transazione |
+| `/transactions/{id}` | GET | Dettaglio singola transazione |
+
+### Endpoint privati — Backup (prefisso `/backup`)
+
+| Endpoint | Metodo | Note |
+|----------|--------|------|
+| `/backup/export` | POST | Esporta dati utente |
+| `/backup/restore` | POST | Ripristina dati da backup |
+| `/backup/formats` | GET | Lista formati export disponibili |
+| `/backup/status` | GET | Stato ultimo backup/restore |
+
+> **Nota**: Tutti gli endpoint FX, Assets, Transactions, Brokers, BRIM,
+> Settings, Backup, Uploads CRUD e Users richiedono il cookie `session`
 > con JWT valido. Vedi `plan-api-auth-guard.prompt.md` per il piano di
 > protezione dei ~32 endpoint attualmente pubblici.
 

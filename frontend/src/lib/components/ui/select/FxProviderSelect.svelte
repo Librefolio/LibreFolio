@@ -313,6 +313,11 @@
         return code.slice(0, 2).toUpperCase();
     }
 
+    /** Get provider icon URL (or null if not available) */
+    function getProviderIconUrl(code: string): string | null {
+        return providerMap.get(code)?.icon_url ?? null;
+    }
+
     /** Get the provider description for the current language, with 'en' fallback */
     function getProviderDescription(prov: ProviderInfo): string {
         if (prov.description_i18n && Object.keys(prov.description_i18n).length > 0) {
@@ -570,7 +575,7 @@
         {/if}
 
         {#if pickerOpen && hasUnselectedRoutes}
-            <div class="space-y-2 p-3 bg-gray-50/50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+            <div class="space-y-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700" data-testid="fx-route-picker">
 
                 <!-- ========================================================= -->
                 <!-- PROVIDER INFO BAR — Icons with tooltips + docs links      -->

@@ -87,6 +87,7 @@ Il sottosistema FX è completo a livello funzionale: 2 pagine route (~1400+ righ
 | 19 Mar 2026 | ✅ Feature | `playwright.config.ts`: webServer command legge `GALLERY_SERVER_WORKERS` env var per avviare server con più worker |
 | 19 Mar 2026 | ✅ Fix gallery | Output streaming live (no `capture_output`), gestione Ctrl+C con `KeyboardInterrupt`. Formula worker: CPU×2→CPU (20 headed Chrome = troppi, resource exhaustion) |
 | 19 Mar 2026 | ✅ JWT migration | Sessioni in-memory → JWT stateless (PyJWT HMAC-SHA256). Secret random pre-fork condiviso tra worker. `auth_service.py` riscritto, `auth.py` + `user_service.py` aggiornati. Gallery fix: route picker aperto per screenshot Add Pair, provider initials instead of img. Vedi `plan-jwt-gallery-fixes.prompt.md` |
+| 20 Mar 2026 | ✅ Fix gallery | add-pair-routes/chain: **ROOT CAUSE** — `getProviderIconUrl()` non definita in FxProviderSelect.svelte. Svelte crashava silenziosamente al render del picker content (ReferenceError), impedendo la comparsa delle route section. Fix: aggiunta funzione `getProviderIconUrl(code)` che legge `icon_url` dalla `providerMap`. Test gallery aggiornati: `waitFor` robusti su `fx-route-select` + scroll modal body dopo click "Add route". Pinnato `mkdocs>=1.6,<2` in Pipfile per evitare upgrade a MkDocs 2.0 |
 
 ---
 
@@ -887,8 +888,8 @@ if kwargs.get('list', False):
 |---|-----------|-------------|---------------------|---------|------|
 | 1 | FX list page | `goToFxPage` | `fx/list` | `forEachLanguageAndTheme` | `waitForTimeout(2000)` per canvas |
 | 2 | FX list filtered | `goToFxPage` + click currency filter EUR | `fx/list-filtered` | loop manuale | Combobox → option EUR |
-| 3 | Add pair - direct routes | `goToFxPage` + `openAddPairModal` + EUR/USD | `fx/list-filtered` → `fx/add-pair-routes` | loop manuale | Selects EUR poi USD |
-| 4 | Add pair - chain | `goToFxPage` + `openAddPairModal` + GBP/JPY | `fx/add-pair-chain` | loop manuale | GBP/JPY via USD (chain già nei mock) |
+| 3 | Add pair - direct routes | `goToFxPage` + `openAddPairModal` + EUR/USD | `fx/list-filtered` → `fx/add-pair-routes` | loop manuale | Selects EUR poi USD. `waitFor` su `fx-route-direct-section` visible |
+| 4 | Add pair - chain | `goToFxPage` + `openAddPairModal` + GBP/JPY | `fx/add-pair-chain` | loop manuale | GBP/JPY via USD. `waitFor` su `fx-route-chain-section*` visible |
 | 5 | Sync All modal | `goToFxPage` + click `fx-sync-all-button` | `fx/sync-progress` | loop manuale | `waitForTimeout(1500)` |
 | 6 | Detail page chart | `goToFxDetailPage('EUR-USD')` | `fx/detail-chart` | `forEachLanguageAndTheme` | `waitForSelector('canvas')` + 2000ms |
 | 7 | Detail signals overlay | `goToFxDetailPage` + click `fx-detail-signals-toggle` | `fx/detail-signals` | loop manuale | Toggle pannello segnali |
