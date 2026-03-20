@@ -10,19 +10,35 @@ How to create a new **FX Rate Provider** to fetch exchange rates from a new cent
 
 ## Flow
 
-```mermaid
-graph LR
-    SYNC["Sync request"] --> CURR["get_supported_currencies()<br/><small>What pairs can we fetch?</small>"]
-    CURR --> FETCH["fetch_rates(date_range, currencies)<br/><small>Get raw rates from API</small>"]
-    FETCH --> RAW["Returns:<br/>dict[currency → rates[]]<br/><small>Raw, unnormalized</small>"]
-    RAW --> NORM["Service layer normalizes<br/><small>Alphabetical base&lt;quote,<br/>multi-unit adjustment</small>"]
-    NORM --> DB["Stored in FX_RATE table"]
+The system calls provider methods in two distinct phases:
 
-    style SYNC fill:#e3f2fd
-    style FETCH fill:#e8f5e9
-    style RAW fill:#fff3e0
-    style DB fill:#f3e5f5
+```mermaid
+graph TD
+    subgraph "Phase 1 — Exploration"
+        E1["get_supported_currencies()"] --> E2["Returns: list[str]<br/><small>e.g., ['USD','GBP','JPY','CHF']</small>"]
+        E2 --> E3["Frontend builds<br/>currency graph<br/><small>Available pairs for routing</small>"]
+    end
+
+    subgraph "Phase 2 — Sync"
+        S1["fetch_rates(<br/>date_range,<br/>currencies,<br/>base_currency)"] --> S2["Returns raw rates<br/><small>dict[currency →<br/>(date, base, quote, rate)[]]</small>"]
+        S2 --> S3["Service normalizes<br/><small>Alphabetical base&lt;quote<br/>Multi-unit ÷100</small>"]
+        S3 --> S4["Stored in<br/>FX_RATE table"]
+    end
+
+    E3 ~~~ S1
+
+    style E1 fill:#e3f2fd,stroke:#1565c0
+    style E2 fill:#e3f2fd,stroke:#1565c0
+    style E3 fill:#e3f2fd,stroke:#1565c0
+    style S1 fill:#e8f5e9,stroke:#2e7d32
+    style S2 fill:#fff3e0,stroke:#e65100
+    style S3 fill:#fff3e0,stroke:#e65100
+    style S4 fill:#f3e5f5,stroke:#7b1fa2
 ```
+
+**Phase 1** happens when a user adds a new currency pair — the system queries providers to discover which currencies they support.
+
+**Phase 2** happens during sync — the system requests actual rate data for specific date ranges.
 
 **Plugin responsibility**: Fetch raw rates from the provider's API. Apply multi-unit adjustment (e.g., JPY ÷ 100). Return data in the provider's native format (no inversion, no alphabetical ordering).
 **Core responsibility**: Normalize for storage (alphabetical `base < quote`), skip duplicates, handle fallback chains.

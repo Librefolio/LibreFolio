@@ -6,7 +6,7 @@ This section documents the reusable UI components in LibreFolio, organized by fu
 
 | Category | Components | Details |
 |----------|-----------|---------|
-| **[UI Base](ui-base.md)** | ModalBase, ConfirmModal, Tooltip, ToastContainer, DateRangePicker, DataEditor, and more | Generic building blocks used by all composite components |
+| **[UI Base](ui-base/index.md)** | ModalBase, ConfirmModal, Tooltip, ToastContainer, DateRangePicker, DataEditor, and more | Generic building blocks used by all composite components |
 | **[DataTable](data-table.md)** | DataTable, Pagination, Toolbar, ColumnFilter, ModalBase, ConfirmModal | Advanced data grid with sorting, filtering, column management |
 | **[Authentication](auth.md)** | LoginCard, RegisterCard, ForgotPasswordCard, PasswordStrengthMeter | Card-style auth forms with validation |
 | **[Settings](settings.md)** | SettingsLayout, PreferencesTab, ProfileTab, GlobalSettingsTab, AboutTab | Two-column settings with categories |

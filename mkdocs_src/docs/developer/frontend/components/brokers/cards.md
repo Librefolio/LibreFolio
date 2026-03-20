@@ -2,6 +2,13 @@
 
 Display components for the broker list and detail pages.
 
+```mermaid
+graph LR
+    BC["BrokerCard"] --> BI["BrokerIcon<br/><small>4-step fallback</small>"]
+    BC --> RB["Role Badge<br/><small>👑 Owner · ✏️ Editor · 👁️ Viewer</small>"]
+    CBC["CashBalanceCard"] --> CF["Currency Flags<br/><small>Multi-currency rows</small>"]
+```
+
 ---
 
 ## BrokerCard
