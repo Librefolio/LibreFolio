@@ -1,6 +1,29 @@
 # 🪟 Broker Modals
 
-All broker-related modal dialogs. Each extends [ModalBase](../ui-base.md#modalbase).
+All broker-related modal dialogs. Each extends [ModalBase](../ui-base/modals.md).
+
+```mermaid
+graph TD
+    MB["ModalBase"]
+
+    BM["BrokerModal"] --> BF["BrokerForm"]
+    BM --> MB
+
+    BSM["BrokerSharingModal"] --> SrS["SearchSelect<br/><small>user search</small>"]
+    BSM --> MB
+
+    BIM["BrokerImportFilesModal"] --> IPS["ImportPluginSelect"]
+    BIM --> FU["FileUploader"]
+    BIM --> MB
+
+    DBD["DeleteBrokerDialog"] --> CM["ConfirmModal"]
+
+    CTM["CashTransactionModal"] --> CSS["CurrencySearchSelect"]
+    CTM --> SDP["SingleDatePicker"]
+    CTM --> MB
+
+    style MB fill:#f3e5f5,stroke:#7b1fa2
+```
 
 ---
 
@@ -10,7 +33,7 @@ Modal wrapper for creating or editing a broker.
 
 - **Create mode**: Empty form, calls `POST /brokers` on save
 - **Edit mode**: Pre-fills [BrokerForm](forms.md) with existing data, calls `PATCH /brokers/{id}`
-- Shows [InfoBanner](../ui-base.md#infobanner) for validation errors
+- Shows [InfoBanner](../ui-base/feedback.md#infobanner) for validation errors
 - Closes on successful save and emits `created` or `updated` event
 
 ### Props
@@ -27,7 +50,7 @@ Modal wrapper for creating or editing a broker.
 Modal for managing broker sharing with RBAC permissions.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="brokers" data-name="sharing" alt="Broker Sharing Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ### Features
@@ -54,7 +77,7 @@ Modal for importing broker report files via the BRIM system.
 ### Features
 
 - **Plugin selection** via [ImportPluginSelect](../select.md#importpluginselect) — choose the parser for this broker's CSV/Excel format
-- **File upload** with drag & drop via [FileUploader](../ui-base.md#dataeditor)
+- **File upload** with drag & drop via [FileUploader](../file-upload.md)
 - Preview of uploaded files with status indicators
 - Triggers BRIM parsing pipeline on submit
 
@@ -69,7 +92,7 @@ For details on the BRIM plugin system, see [Registry & Plugin System](../../../a
 
 ## DeleteBrokerDialog
 
-A [ConfirmModal](../ui-base.md#confirmmodal) for broker deletion.
+A [ConfirmModal](../ui-base/modals.md#confirmmodal) for broker deletion.
 
 - Shows broker name in the warning message
 - Warns about irreversible data loss (transactions, reports, access)
@@ -89,7 +112,7 @@ Modal for recording cash operations.
 | **Type** | Radio | Deposit or Withdrawal |
 | **Amount** | Number input | Transaction amount |
 | **Currency** | [CurrencySearchSelect](../select.md#currencysearchselect) | Transaction currency |
-| **Date** | [SingleDatePicker](../ui-base.md#singledatepicker) | Transaction date |
+| **Date** | [SingleDatePicker](../ui-base/pickers.md#singledatepicker) | Transaction date |
 | **Notes** | Textarea | Optional description |
 
 ### API Call

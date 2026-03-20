@@ -10,16 +10,36 @@ How to create a new **Broker Report Import Manager** plugin to support a new bro
 
 ## Flow
 
-```mermaid
-graph LR
-    FILE["Broker CSV/Excel<br/>file uploaded"] --> CAN["can_parse(file)<br/><small>Quick header check</small>"]
-    CAN -->|true| PARSE["parse(file, broker_id)<br/><small>Full parsing</small>"]
-    PARSE --> OUT["Returns:<br/>• transactions[]<br/>• warnings[]<br/>• extracted_assets{}"]
+The system calls plugin methods in two distinct phases:
 
-    style FILE fill:#e3f2fd
-    style PARSE fill:#e8f5e9
-    style OUT fill:#fff3e0
+```mermaid
+graph TD
+    subgraph "Phase 1 — Detection (file uploaded)"
+        D1["File uploaded"] --> D2["can_parse(file_path)<br/><small>Quick header/extension check</small>"]
+        D2 -->|true| D3["Plugin listed as<br/>compatible option"]
+        D2 -->|false| D4["Skip"]
+    end
+
+    subgraph "Phase 2 — Parsing (user selects plugin)"
+        P1["parse(file_path, broker_id)<br/><small>Full parsing</small>"] --> P2["Returns:<br/>• transactions[]<br/>• warnings[]<br/>• extracted_assets{}"]
+        P2 --> P3["User reviews<br/>in preview UI"]
+        P3 --> P4["POST /transactions<br/><small>Core handles persist</small>"]
+    end
+
+    D3 ~~~ P1
+
+    style D1 fill:#e3f2fd,stroke:#1565c0
+    style D2 fill:#e3f2fd,stroke:#1565c0
+    style D3 fill:#e3f2fd,stroke:#1565c0
+    style P1 fill:#e8f5e9,stroke:#2e7d32
+    style P2 fill:#fff3e0,stroke:#e65100
+    style P3 fill:#fff3e0,stroke:#e65100
+    style P4 fill:#f3e5f5,stroke:#7b1fa2
 ```
+
+**Phase 1** runs automatically when a file is uploaded — every registered plugin is asked if it can parse the file. Compatible plugins are listed for the user.
+
+**Phase 2** runs when the user selects a specific plugin — the plugin parses the file, the user reviews the results, and confirms the import.
 
 **Plugin responsibility**: Read the broker-specific file format and convert to standard `TXCreateItem` DTOs.
 **Core responsibility**: File storage, asset matching, duplicate detection, database persistence.

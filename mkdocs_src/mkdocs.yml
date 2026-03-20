@@ -157,7 +157,13 @@ nav:
           - Overview: developer/frontend/index.md
           - Components:
               - Overview: developer/frontend/components/index.md
-              - UI Base: developer/frontend/components/ui-base.md
+              - UI Base:
+                  - Overview: developer/frontend/components/ui-base/index.md
+                  - Modals: developer/frontend/components/ui-base/modals.md
+                  - Feedback: developer/frontend/components/ui-base/feedback.md
+                  - Date Pickers: developer/frontend/components/ui-base/datePickers.md
+                  - Atoms: developer/frontend/components/ui-base/atoms.md
+                  - Datapoint Editor: developer/frontend/components/ui-base/data-editor.md
               - DataTable: developer/frontend/components/data-table.md
               - Authentication: developer/frontend/components/auth.md
               - Settings: developer/frontend/components/settings.md

@@ -1,7 +1,7 @@
 # Plan: Documentazione LibreFolio — Rifinitura completa
 
 **Data creazione**: 20 Marzo 2026
-**Status**: ⏳ IN CORSO — Batch 1, 3, 4, 5 completati ✅. Batch 2 (emoji H2/H3/bullet) pendente. Rifinimenti strutturali completati (vedi `plan-docsStructuralRefinements.prompt.md` ✅).
+**Status**: ⏳ IN CORSO — Batch 1, 3, 4, 5 completati ✅. Batch 2 (emoji H2/H3/bullet) pendente. Batch 1 fix (brokers/index.md + fx/sync.md) completati durante sessioni precedenti. Rifinimenti strutturali completati (vedi `plan-docsStructuralRefinements.prompt.md` ✅).
 **Priorità**: Alta
 **Stima residua**: ~2 ore (solo Batch 2)
 **Dipendenze**: `plan-fxDocumentation.prompt.md` Fasi 1-2.5 completate ✅

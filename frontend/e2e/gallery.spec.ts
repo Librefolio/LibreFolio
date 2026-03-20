@@ -228,6 +228,12 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
                 await freezeAnimations(page);
+                // Click preferences tab explicitly (default tab may be profile)
+                const prefsTab = page.getByTestId('settings-tab-preferences');
+                if (await prefsTab.isVisible().catch(() => false)) {
+                    await prefsTab.click();
+                    await page.waitForTimeout(300);
+                }
                 await screenshot(page, viewport, lang, theme, 'settings', 'user-preferences');
             });
         });
