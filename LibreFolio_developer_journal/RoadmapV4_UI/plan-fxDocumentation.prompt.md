@@ -2,10 +2,10 @@
 
 **Data creazione**: 12 Marzo 2026
 **Ultimo aggiornamento**: 20 Marzo 2026
-**Status**: 📋 DETTAGLIATO — pronto per esecuzione
+**Status**: ⏳ IN CORSO — Fasi 1, 2, 2.5 completate. Fase 3 (i18n Pipeline) pendente.
 **Priorità**: Media (ultima fase di Phase 5)
 **Stima**: ~4-5 giorni
-**Dipendenze**: `plan-fxTestingCleanup.prompt.md` completato ✅ (screenshot da E2E, JWT, gallery)
+**Dipendenze**: `phases/phase-05-subplan/plan-fxTestingCleanup.prompt.md` completato ✅ (screenshot da E2E, JWT, gallery)
 **Riferimenti**:
 - `phases/phase-05-subplan/05FX_outofdate_plan/plan-phase05Fx.prompt.md` Steps 7, 8 — interamente pendenti
 - `phases/phase-05-subplan/05FX_outofdate_plan/phase05-pending-audit.md` §B (Documentazione)
@@ -464,30 +464,33 @@ Le traduzioni `.it.md`, `.fr.md`, `.es.md` vengono create progressivamente:
 ```
 mkdocs_src/docs/
 ├── user/
-│   ├── index.md              # Overview (riscritta)
-│   ├── installation.md       # Esistente
-│   ├── getting-started.md    # NUOVO — onboarding
-│   ├── broker-sharing.md     # NUOVO — RBAC sharing
-│   ├── files.md              # NUOVO — uploads & reports
-│   ├── fx-rates.md           # NUOVO — coppie FX
-│   ├── fx-csv-import.md      # NUOVO — import CSV
+│   ├── index.md              # Overview (con screenshot dashboard)
+│   ├── getting-started.md    # Onboarding (registrazione, login, primo broker)
+│   ├── installation.md       # Esistente (Docker deploy)
+│   ├── brokers/
+│   │   ├── index.md          # Overview broker (card, creazione, stato features)
+│   │   └── sharing.md        # RBAC sharing, share %, scenari d'uso
+│   ├── files/
+│   │   └── index.md          # Static uploads vs broker reports, drag&drop
+│   ├── fx/
+│   │   ├── index.md          # Panoramica FX, Add Pair, chain, detail
+│   │   └── csv-import.md     # Import CSV formato, direzione, errori
 │   └── misc/
-│       └── image-crop.md     # NUOVO — crop tool
+│       └── image-crop.md     # Crop tool: preset, zoom, rotation
 ├── admin/
-│   ├── index.md              # Overview (aggiornata)
-│   ├── cli_tools.md          # Aggiornata
-│   ├── settings.md           # NUOVO — global settings
-│   ├── filesystem.md         # NUOVO — struttura dati
+│   ├── index.md              # Overview (aggiornata con JWT mention)
+│   ├── cli_tools.md          # Aggiornata (3 categorie front, --force, --workers)
+│   ├── settings.md           # Global settings tabella + categorie
+│   ├── filesystem.md         # Struttura dati, backup, manutenzione
 │   ├── docker_advanced.md    # Esistente
 │   └── tailscale_exposure.md # Esistente
 └── developer/
+    ├── dev-installation.md   # Spostato da getting-started/ (setup sviluppatore)
     ├── architecture/
-    │   └── security.md       # Aggiornata (JWT)
-    ├── api/
-    │   └── overview.md       # Aggiornata (tabelle endpoint)
+    │   └── security.md       # Riscritta (JWT auth, endpoint tables, curl examples)
     └── backend/
         └── fx/
-            └── providers_list.md  # Espansa (capitoletti per provider)
+            └── providers_list.md  # Espansa (ECB, FED, BOE, SNB capitoletti)
 ```
 
 ### Dipendenze da completare prima

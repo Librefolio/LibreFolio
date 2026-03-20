@@ -1,4 +1,4 @@
-# Database Migrations (Alembic)
+# 🗃️ Database Migrations (Alembic)
 
 LibreFolio uses **Alembic** to manage database schema changes. Alembic is a lightweight database migration tool for SQLAlchemy that provides a versioning system for your database
 schema.
@@ -9,9 +9,9 @@ The basic workflow for making a schema change is:
 
 1. **Modify SQLAlchemy Models**: Make changes to your `db/models.py` files (e.g., add a new column, create a new table).
 
-2. **Generate a Migration Script**: Run the `dev.sh` command to automatically generate a new migration script.
+2. **Generate a Migration Script**: Run the `dev.py` command to automatically generate a new migration script.
    ```bash
-   ./dev.sh db:migrate "Your descriptive message"
+   ./dev.py db migrate "Your descriptive message"
    ```
    This command compares your SQLAlchemy models to the current state of the database and generates a Python script in `backend/alembic/versions/` that contains the necessary
    `upgrade()` and `downgrade()` functions.
@@ -20,7 +20,7 @@ The basic workflow for making a schema change is:
 
 4. **Apply the Migration**: Run the `upgrade` command to apply the changes to your database.
    ```bash
-   ./dev.sh db:upgrade
+   ./dev.py db upgrade
    ```
 
 ## SQLite and Alembic Limitations
@@ -72,4 +72,4 @@ def downgrade() -> None:
         batch_op.drop_constraint('check_quantity_positive', type_='check')
 ```
 
-The `dev.sh db:upgrade` command includes a post-flight check that will warn you if `CHECK` constraints are missing after a migration, guiding you to fix the issue.
+The `dev.py db upgrade` command includes a post-flight check that will warn you if `CHECK` constraints are missing after a migration, guiding you to fix the issue.

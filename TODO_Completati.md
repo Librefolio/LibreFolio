@@ -88,7 +88,7 @@ Phase 5 FX Management completata funzionalmente. Necessario cleanup, bug fix, e 
 - **Step 10**: Registrazione in `dev.py test front` (9 nuove entry: fx-unit, fx-list, fx-detail, fx-add-pair, fx-editor, fx-sync, fx-api, fx-settings, fx)
 
 ### Riferimento
-Vedi `LibreFolio_developer_journal/RoadmapV4_UI/plan-fxTestingCleanup.prompt.md`.
+Vedi `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-05-subplan/plan-fxTestingCleanup.prompt.md`.
 
 ---
 

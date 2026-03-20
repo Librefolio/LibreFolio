@@ -1,4 +1,4 @@
-# API Endpoint Tests (`api`)
+# 📡 API Endpoint Tests (`api`)
 
 These are integration tests that run against a live backend server. They verify the full request-response cycle.
 
@@ -11,7 +11,7 @@ To ensure that the API endpoints are reachable, return the correct status codes,
 The backend server must be running in **test mode**:
 
 ```bash
-./dev.sh server:test
+./dev.py server --test
 ```
 
 ## Key Tests
@@ -23,5 +23,5 @@ The backend server must be running in **test mode**:
 ## Running
 
 ```bash
-./dev.sh test api
+./dev.py test api
 ```

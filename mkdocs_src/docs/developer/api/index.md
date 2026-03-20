@@ -1,4 +1,4 @@
-# API Reference
+# 📡 API Reference
 
 LibreFolio provides a comprehensive RESTful API built with **FastAPI**.
 

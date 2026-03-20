@@ -1,4 +1,4 @@
-# Settings System
+# ⚙️ Settings System
 
 LibreFolio uses a two-tiered settings system to manage configuration: **Global Settings** and **User Settings**.
 
@@ -27,7 +27,7 @@ Global settings are system-wide configurations that apply to all users. They are
 Global settings are initialized with default values using the CLI:
 
 ```bash
-./dev.sh user:init-settings
+./dev.py user init-settings
 ```
 
 Future versions will allow administrators to modify these settings through an admin UI.

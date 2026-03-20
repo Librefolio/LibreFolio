@@ -1,4 +1,4 @@
-# Frontend Development
+# 🎨 Frontend Development
 
 This section covers the SvelteKit frontend architecture, components, and development patterns.
 
@@ -81,6 +81,40 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 - [State Management](state/index.md) - Stores and reactive state
 - [Internationalization](i18n.md) - Multi-language support
 - [Styling](styling.md) - Tailwind CSS and theming
+
+---
+
+## Build & Development
+
+Frontend tasks are managed via `dev.py front`:
+
+```bash
+# Start Vite dev server with Hot Module Replacement
+./dev.py front dev
+
+# Build for production (output in frontend/build/)
+./dev.py front build
+
+# Build with source maps for debugging
+./dev.py front build --debug
+
+# Type-check with svelte-check
+./dev.py front check
+
+# Preview production build locally
+./dev.py front preview
+```
+
+| Command | Description |
+|---------|-------------|
+| `front dev` | Starts Vite at `localhost:5173`, proxies API calls to backend |
+| `front build` | Production build with minification and tree-shaking |
+| `front build --debug` | Build with source maps (useful for debugging deployed code) |
+| `front check` | Runs `svelte-check` for TypeScript and Svelte diagnostics |
+| `front preview` | Serves the production build locally for testing |
+
+!!! tip "Development workflow"
+    Run `./dev.py server` in one terminal and `./dev.py front dev` in another. The Vite dev server proxies `/api` calls to the backend automatically.
 
 ## Quick Links
 

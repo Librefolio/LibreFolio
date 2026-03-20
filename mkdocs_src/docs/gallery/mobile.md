@@ -169,6 +169,14 @@ Detailed broker view optimized for mobile.
     <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail">
 </div>
 
+### Broker Edit
+
+Edit broker details — name, icon, base currency, and configuration.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Modal">
+</div>
+
 ### Import Modal
 
 Import transactions directly from your phone.

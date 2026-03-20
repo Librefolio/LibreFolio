@@ -1,4 +1,4 @@
-# Styling & Design System
+# 🎨 Styling & Design System
 
 LibreFolio uses **Tailwind CSS v4** for styling, providing a utility-first approach with a custom design system.
 

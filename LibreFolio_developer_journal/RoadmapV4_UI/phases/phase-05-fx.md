@@ -1,7 +1,8 @@
 # Phase 5: FX Management — Summary
 
 **Status**: ✅ Completata (Gennaio–Marzo 2026)  
-**Piano attivo (ultimo)**: [`plan-fxTestingCleanup.prompt.md`](../plan-fxTestingCleanup.prompt.md)
+**Ultimo piano completato**: [`plan-fxTestingCleanup.prompt.md`](phase-05-subplan/plan-fxTestingCleanup.prompt.md)  
+**Piano documentazione (in corso)**: [`plan-fxDocumentation.prompt.md`](../plan-fxDocumentation.prompt.md)
 
 ---
 
@@ -66,7 +67,9 @@ Tutti archiviati in [`phases/phase-05-subplan/`](phase-05-subplan/).
 
 ## Piano attivo: Testing & Cleanup
 
-Il piano corrente [`plan-fxTestingCleanup.prompt.md`](../plan-fxTestingCleanup.prompt.md) copre:
+Il piano corrente [`plan-fxDocumentation.prompt.md`](../plan-fxDocumentation.prompt.md) copre la documentazione finale.
+
+I test sono completati — vedi [`plan-fxTestingCleanup.prompt.md`](phase-05-subplan/plan-fxTestingCleanup.prompt.md):
 
 1. **Step 1** — Test E2E Playwright per tutte le pagine FX
 2. **Step 2** — Pulizia i18n (chiavi orfane, traduzioni mancanti)
@@ -95,7 +98,7 @@ Il piano corrente [`plan-fxTestingCleanup.prompt.md`](../plan-fxTestingCleanup.p
 ## Struttura file di riferimento
 
 ```
-phases/phase-05-subplan/          ← 21 sub-plan completati
+phases/phase-05-subplan/          ← 24 sub-plan completati (incl. testing, JWT, auth-guard)
   05FX_outofdate_plan/            ← plan legacy pre-redesign
-plan-fxTestingCleanup.prompt.md   ← piano attivo (testing & cleanup)
+plan-fxDocumentation.prompt.md    ← piano attivo (documentazione MkDocs)
 ```

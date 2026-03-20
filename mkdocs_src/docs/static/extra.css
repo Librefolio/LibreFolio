@@ -181,9 +181,11 @@
     display: none !important;
 }
 
-/* Also hide in nested nav contexts (mobile drawer) */
-.md-nav__item--section > label.md-nav__link > .md-nav__icon {
-    display: none !important;
+/* Also hide in nested nav contexts (desktop only) */
+@media screen and (min-width: 76.25em) {
+    .md-nav__item--section > label.md-nav__link > .md-nav__icon {
+        display: none !important;
+    }
 }
 
 /* Dark mode Level 1 sections - dark background with green accent */
@@ -210,20 +212,22 @@
     margin-top: 0.5rem;
 }
 
-/* Specific styling for Level 2 headers */
-.md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav > .md-nav__list > .md-nav__item--section > .md-nav__link {
-    font-size: 0.9rem !important;
-    font-weight: 700 !important;
-    color: var(--md-primary-fg-color) !important;
-    border-bottom: 1px solid var(--md-default-fg-color--lightest);
-    margin-top: 0.8rem;
-    margin-bottom: 0.3rem;
-    padding-bottom: 0.2rem;
-    text-transform: none;
-    background: none;
-    box-shadow: none;
-    padding-left: 0;
-    text-align: left; /* Keep level 2 left-aligned */
+/* Specific styling for Level 2 headers (desktop only) */
+@media screen and (min-width: 76.25em) {
+    .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav > .md-nav__list > .md-nav__item--section > .md-nav__link {
+        font-size: 0.9rem !important;
+        font-weight: 700 !important;
+        color: var(--md-primary-fg-color) !important;
+        border-bottom: 1px solid var(--md-default-fg-color--lightest);
+        margin-top: 0.8rem;
+        margin-bottom: 0.3rem;
+        padding-bottom: 0.2rem;
+        text-transform: none;
+        background: none;
+        box-shadow: none;
+        padding-left: 0;
+        text-align: left; /* Keep level 2 left-aligned */
+    }
 }
 
 /* Active link styling */
@@ -253,10 +257,12 @@
     border-left-color: #22c55e; /* Use accent green for visibility */
 }
 
-/* Dark mode Level 2 sidebar headers - use accent green for visibility */
-[data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav > .md-nav__list > .md-nav__item--section > .md-nav__link {
-    color: #22c55e !important;
-    border-bottom-color: #334155;
+/* Dark mode Level 2 sidebar headers - use accent green for visibility (desktop only) */
+@media screen and (min-width: 76.25em) {
+    [data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav > .md-nav__list > .md-nav__item--section > .md-nav__link {
+        color: #22c55e !important;
+        border-bottom-color: #334155;
+    }
 }
 
 /* Dark mode sidebar expand arrows */
@@ -364,7 +370,7 @@
         overflow: visible !important;
     }
 
-    /* Hide the expand/collapse icon arrow in mobile section labels - we handle clicks via the label */
+    /* Hide the expand/collapse icon arrow in mobile TOP-LEVEL section labels only */
     .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link > .md-nav__icon {
         display: none !important;
     }
@@ -401,6 +407,7 @@
         color: #22c55e !important;
         border-left-color: #22c55e;
     }
+
 }
 
 /* --- RIGHT SIDEBAR (Table of Contents) --- */

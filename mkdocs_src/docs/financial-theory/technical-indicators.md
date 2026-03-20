@@ -1,4 +1,4 @@
-# Technical Indicators
+# 📉 Technical Indicators
 
 This page documents the technical analysis indicators available as chart overlays in
 LibreFolio's FX module. Each indicator is explained from two complementary perspectives:

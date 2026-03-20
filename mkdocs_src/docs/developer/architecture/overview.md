@@ -60,7 +60,7 @@ graph TD
 
 For detailed architectural documentation of specific subsystems, see:
 
-- **[Database Schema](database.md)**: Data models and relationships.
+- **[Database Schema](database/index.md)**: Data models and relationships.
 - **[Users & Brokers](users_and_brokers.md)**: Authentication and multi-user access control.
 - **[Access Control (RBAC)](access_control.md)**: Role-based broker access (Owner/Editor/Viewer).
 - **[Settings System](settings.md)**: User preferences and global settings.
@@ -79,3 +79,29 @@ For detailed architectural documentation of specific subsystems, see:
 5. If currency conversion is needed, the backend calls the **FX Provider Plugin** to get the latest exchange rate.
 6. The backend processes the data, calculates portfolio metrics, and returns a JSON response to the frontend.
 7. The **Frontend** receives the JSON data and renders the portfolio dashboard.
+
+---
+
+## Tech Stack
+
+### Backend
+
+- **[FastAPI](https://fastapi.tiangolo.com/)**: A high-performance web framework for building APIs with Python 3.11+, based on standard Python type hints. It provides automatic interactive documentation (Swagger UI and ReDoc).
+- **[SQLAlchemy](https://www.sqlalchemy.org/)**: The SQL toolkit and Object-Relational Mapper (ORM) used for all database interactions. LibreFolio uses SQLAlchemy's **asyncio support** for non-blocking database queries.
+- **[Pydantic](https://docs.pydantic.dev/)**: A data validation and settings management library. Used extensively for defining data schemas, validating API requests, and managing application settings.
+- **[Alembic](https://alembic.sqlalchemy.org/)**: A lightweight database migration tool for SQLAlchemy. See [Database Migrations](patterns/alembic.md).
+- **[SQLite](https://www.sqlite.org/)**: The default database engine. Simple, serverless, and perfect for a self-hosted application. Configured in WAL (Write-Ahead Logging) mode for better concurrency.
+
+### Frontend
+
+- **[SvelteKit](https://kit.svelte.dev/)**: A web application framework for building fast, modern user interfaces with server-side rendering, routing, and great developer experience.
+- **[TypeScript](https://www.typescriptlang.org/)**: A statically typed superset of JavaScript that adds type safety to the frontend codebase.
+- **[TailwindCSS](https://tailwindcss.com/)**: A utility-first CSS framework for rapidly building custom designs.
+- **[Vite](https://vitejs.dev/)**: The build tool and development server. Provides extremely fast Hot Module Replacement (HMR).
+
+### Testing
+
+- **[Pytest](https://docs.pytest.org/)**: The framework used for writing and running backend tests.
+- **[Playwright](https://playwright.dev/)**: A framework for end-to-end testing of the web application.
+- **[Coverage.py](https://coverage.readthedocs.io/)**: A tool for measuring code coverage of Python programs.
+

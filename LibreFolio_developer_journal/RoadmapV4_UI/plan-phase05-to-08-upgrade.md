@@ -256,10 +256,11 @@ frontend/src/lib/components/brokers/BrokerSharingModal.svelte   # Modale sharing
 **Status**: 🔄 IN CORSO — Pagina lista FX ✅, sub-plan completati, chain/detail/docs/test pendenti.
 
 > **📌 Plan modulari Phase 5** (soppiantano il vecchio `plan-phase05Fx.prompt.md`, ora in `phases/phase-05-subplan/05FX_outofdate_plan/`):
-> 1. `plan-fxConversionChain.prompt.md` — Route-based multi-step conversion (data model → frontend)
-> 2. `plan-fxDetailPageRedesign.prompt.md` — Redesign completo: chart unificato, DataEditor duale, MeasureSignal, pannelli inline, provider edit
-> 3. `plan-fxTestingCleanup.prompt.md` — E2E Playwright, unit test, i18n audit, gallery
-> 4. `plan-fxDocumentation.prompt.md` — MkDocs i18n globale, documentazione utente, traduzioni
+> 1. `plan-fxConversionChain.prompt.md` ✅ — Route-based multi-step conversion (data model → frontend)
+> 2. `plan-fxDetailPageRedesign.prompt.md` ✅ — Redesign completo: chart unificato, DataEditor duale, MeasureSignal, pannelli inline, provider edit
+> 3. `plan-fxTestingCleanup.prompt.md` ✅ — E2E Playwright, unit test, i18n audit, gallery, JWT migration
+> 4. `plan-fxDocumentation.prompt.md` 📋 — MkDocs i18n globale, documentazione utente, traduzioni
+> Tutti i plan completati sono in `phases/phase-05-subplan/`.
 > Il componente PriceChartShared (§5.0) DEVE essere creato come primo step (§9 per la spec dettagliata).
 > Il gradiente opacità per dati stale deve seguire la formula: `max(0.3, 1.0 - staleDays * 0.15)`.
 > Verificare che `user_role` dal broker condizioni i permessi (VIEWER = sola lettura chart, no sync).

@@ -1,4 +1,4 @@
-# Asset Providers List
+# 📦 Asset Providers List
 
 This page lists the asset pricing providers currently available in LibreFolio.
 

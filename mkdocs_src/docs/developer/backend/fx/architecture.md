@@ -1,4 +1,4 @@
-# FX Architecture
+# 🏗️ FX Architecture
 
 The Foreign Exchange (FX) system is responsible for fetching, storing, and providing exchange rates for currency conversion.
 

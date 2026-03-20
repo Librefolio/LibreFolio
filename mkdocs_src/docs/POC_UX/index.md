@@ -1,4 +1,4 @@
-# Proof of Concept - UI Mockups
+# 🧪 Proof of Concept - UI Mockups
 
 This page collects the UI mockups generated for LibreFolio, along with the prompts used to create them.
 

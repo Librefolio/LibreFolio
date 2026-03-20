@@ -84,6 +84,9 @@ class FEDProvider(FXRateProvider):
     def icon(self) -> str | None:
         return "https://fred.stlouisfed.org/favicon.ico"
 
+    @property
+    def docs_url(self) -> str | None:
+        return "/mkdocs/developer/backend/fx/providers_list/#fed-federal-reserve-fred"
 
     @property
     def base_currency(self) -> str:

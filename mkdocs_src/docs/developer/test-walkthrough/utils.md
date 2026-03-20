@@ -1,4 +1,4 @@
-# Utility Module Tests (`utils`)
+# 🔧 Utility Module Tests (`utils`)
 
 These tests verify the helper functions and utility modules used throughout the application.
 
@@ -15,5 +15,5 @@ To ensure that low-level utilities are robust and handle edge cases correctly.
 ## Running
 
 ```bash
-./dev.sh test utils
+./dev.py test utils
 ```
