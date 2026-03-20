@@ -9,11 +9,12 @@ erDiagram
     BROKER ||--o{ TRANSACTION : "contains"
     TRANSACTION |o--o| TRANSACTION : "related to"
     TRANSACTION }o--o| ASSET : "references"
+    TRANSACTION }o..o| FX_RATE : "currency (logical)"
 
     BROKER {
         int id PK
         string name
-        string base_currency
+        string base_currency "ISO 4217"
         string icon_url
         bool allow_cash_overdraft
     }
@@ -28,7 +29,14 @@ erDiagram
         decimal quantity
         decimal unit_price
         decimal amount
-        string currency
+        string currency "ISO 4217"
+    }
+
+    FX_RATE {
+        date date
+        string base "ISO 4217"
+        string quote "ISO 4217"
+        decimal rate
     }
 ```
 
@@ -49,6 +57,22 @@ The single source of truth for all financial operations. Each transaction belong
 - **`related_transaction_id`**: Self-referencing foreign key for paired operations:
     - **Transfers**: Links the WITHDRAWAL from Broker A to the DEPOSIT in Broker B
     - **FX Conversions**: Links the sell-side to the buy-side of a currency exchange
+
+---
+
+## Currency & FX Integration
+
+The `currency` field in `TRANSACTION` and `base_currency` in `BROKER` are **ISO 4217 strings** (e.g., `EUR`, `USD`, `JPY`). There is **no foreign key** to an FX table — currencies are standard codes validated in the backend using the ISO 4217 reference list from `pycountry`.
+
+The dotted line in the ER diagram represents a **logical relationship**, not a relational one:
+
+- When the system needs to **convert between currencies** (e.g., aggregating a multi-currency portfolio into a single display currency), it queries the [FX Rates subsystem](fx_rates.md) for the appropriate exchange rate.
+- The backend resolves conversion chains automatically — for example, to convert RON → JPY, it may route through EUR as an intermediate currency.
+
+!!! info "Why no currency table?"
+    Currencies are an international standard (ISO 4217) with a fixed, well-known list. Storing them as strings avoids unnecessary joins while keeping validation strict at the application layer.
+
+For details on how FX conversion works, see [FX Architecture](../../backend/fx/architecture.md) and [FX Configuration & Routing](../../backend/fx/configuration.md).
 
 ## Related Documentation
 

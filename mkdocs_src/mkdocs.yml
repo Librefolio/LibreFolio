@@ -118,7 +118,11 @@ nav:
           - System Overview: developer/architecture/overview.md
           - Technologies & Patterns:
               - Async Architecture: developer/architecture/patterns/async.md
-              - Registry & Plugin System: developer/architecture/patterns/registry_pattern.md
+              - Registry & Plugin System:
+                  - Overview: developer/architecture/patterns/registry_pattern.md
+                  - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
+                  - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
+                  - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
               - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
               - Configuration: developer/architecture/patterns/configuration.md
           - Core Systems:
@@ -153,12 +157,17 @@ nav:
           - Overview: developer/frontend/index.md
           - Components:
               - Overview: developer/frontend/components/index.md
+              - UI Base: developer/frontend/components/ui-base.md
               - DataTable: developer/frontend/components/data-table.md
               - Authentication: developer/frontend/components/auth.md
               - Settings: developer/frontend/components/settings.md
               - File Upload & Media: developer/frontend/components/file-upload.md
               - Select & Dropdowns: developer/frontend/components/select.md
-              - Brokers: developer/frontend/components/brokers.md
+              - Brokers:
+                  - Overview: developer/frontend/components/brokers/index.md
+                  - Cards: developer/frontend/components/brokers/cards.md
+                  - Forms: developer/frontend/components/brokers/forms.md
+                  - Modals: developer/frontend/components/brokers/modals.md
           - FX Chain Algorithm: developer/frontend/fx-chain-algorithm.md
           - Pages: developer/frontend/pages/index.md
           - State Management: developer/frontend/state/index.md

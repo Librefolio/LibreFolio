@@ -7,7 +7,7 @@ This section documents the components used for the Settings pages (User Preferen
         <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences" style="width: 100%; display: block;">
     </div>
     <div class="screenshot-container" style="flex: 1; min-width: 280px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-        <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab" style="width: 100%; display: block;">
+        <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings (Admin)" style="width: 100%; display: block;">
     </div>
 </div>
 

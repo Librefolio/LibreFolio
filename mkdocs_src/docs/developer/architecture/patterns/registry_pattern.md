@@ -1,121 +1,98 @@
 # 🧩 Registry Pattern and Plugin System
 
-LibreFolio uses a **Registry Pattern** to create a flexible and extensible plugin system. This allows new functionality—such as support for new brokers, asset pricing sources, or
-FX providers—to be added without modifying the core application code.
+LibreFolio uses a **Registry Pattern** to create a flexible and extensible plugin system. This allows new functionality—such as support for new brokers, asset pricing sources, or FX providers—to be added without modifying the core application code.
 
 ## How it Works
 
 The system is based on three key components:
 
-1. **Abstract Base Class (ABC)**: A template class that defines the interface a plugin must implement (e.g., `AssetSourceProvider`, `BRIMProvider`).
+1. **Abstract Base Class (ABC)**: A template class that defines the interface a plugin must implement (e.g., `AssetSourceProvider`, `BRIMProvider`, `FXRateProvider`).
 2. **Provider Registry**: A central class that discovers and stores all available plugins (e.g., `AssetProviderRegistry`).
 3. **`@register_provider` Decorator**: A simple decorator that automatically registers a plugin with its corresponding registry.
 
-### The Flow
+### High-Level Flow
 
 ```mermaid
 graph TD
-    subgraph Plugin Definition
-        A[YahooFinanceProvider Class] -- Implements --> B(AssetSourceProvider ABC)
-        A -- Decorated with --> C["@register_provider"]
+    subgraph "1. Plugin Definition"
+        DEV["Developer creates<br/>MyProvider.py"] --> ABC["Inherits from<br/>ABC base class"]
+        DEV --> DEC["Decorates with<br/>@register_provider(Registry)"]
     end
 
-    subgraph Application Startup
-        D[Registry Auto-Discovery] -- Scans --> E["/services/asset_source_providers/"]
-        E -- Imports module --> A
-        C -- On import --> F{AssetProviderRegistry}
-        F -- "Stores 'yfinance' -> YahooFinanceProvider" --> F
+    subgraph "2. Application Startup"
+        BOOT["App starts"] --> SCAN["Registry.auto_discover()<br/>scans plugin folder"]
+        SCAN --> IMPORT["Imports each .py file"]
+        IMPORT --> REG["@register_provider fires<br/>stores class in dict"]
     end
 
-    subgraph Runtime Usage
-        G[AssetSourceManager] -- Needs 'yfinance' --> F
-        F -- Returns --> H[YahooFinanceProvider Instance]
-        G -- Calls methods on --> H
+    subgraph "3. Runtime Usage"
+        SVC["Service needs provider"] --> GET["Registry.get_provider(code)"]
+        GET --> INST["Returns provider instance"]
+        SVC --> CALL["Calls abstract methods<br/>(fetch, parse, etc.)"]
     end
+
+    DEV -.-> IMPORT
+    REG -.-> GET
 ```
 
-1. **Discovery**: When the application starts, the `ProviderRegistry` scans its designated plugin folder (e.g., `backend/app/services/brim_providers/`).
-2. **Registration**: As Python imports each plugin file, the `@register_provider` decorator is executed, adding the plugin class to the registry's internal dictionary, keyed by its
-   unique `provider_code`.
-3. **Usage**: When the application needs a specific provider, it asks the registry for an instance of it. The registry finds the class by its code and returns an instantiated
-   object.
+### Discovery Process
 
-## Guide: How to Create a New Plugin
+1. **Scan**: On first access, `auto_discover()` scans the designated plugin folder (e.g., `backend/app/services/fx_providers/`).
+2. **Import**: Each `.py` file (except `__init__.py`) is loaded with `importlib`.
+3. **Register**: The `@register_provider` decorator fires on import, calling `Registry.register(class)` which reads `provider_code` and stores the class in `_providers[code] = class`.
+4. **Lazy**: Discovery happens once, on first `get_provider()` call. Subsequent calls use the cached dictionary.
 
-This guide walks through creating a new **Asset Source Provider**. The process is nearly identical for **BRIM** and **FX** providers—just use the corresponding base class and
-registry.
+## Core Components
 
-### Step 1: Create the Plugin File
+### `AbstractProviderRegistry`
 
-Create a new Python file in the appropriate directory:
+The base class for all registries. Provides:
 
-- **Asset Providers**: `backend/app/services/asset_source_providers/`
-- **BRIM Providers**: `backend/app/services/brim_providers/`
-- **FX Providers**: `backend/app/services/fx_providers/`
+| Method | Description |
+|--------|-------------|
+| `register(cls, provider_class)` | Store a provider class, keyed by its `provider_code` |
+| `get_provider(cls, code)` | Get provider class by code (triggers auto-discovery if needed) |
+| `get_provider_instance(cls, code)` | Returns an **instantiated** provider object |
+| `list_providers(cls)` | List all registered providers with `code` and `name` |
+| `auto_discover(cls)` | Scan plugin folder and import all modules |
 
-For this example, we'll create `my_new_provider.py` in `asset_source_providers/`.
+### Registry Specializations
 
-### Step 2: Implement the Provider Class
+| Registry | Plugin Folder | Base Class | Purpose |
+|----------|--------------|------------|---------|
+| `BRIMProviderRegistry` | `brim_providers/` | `BRIMProvider` | Parse broker CSV/Excel files |
+| `AssetProviderRegistry` | `asset_source_providers/` | `AssetSourceProvider` | Fetch asset prices |
+| `FXProviderRegistry` | `fx_providers/` | `FXRateProvider` | Fetch exchange rates |
 
-In your new file, define a class that inherits from the correct base class and implement the required abstract methods.
+### `@register_provider` Decorator
 
 ```python
-# backend/app/services/asset_source_providers/my_new_provider.py
-
-from backend.app.services.asset_source import AssetSourceProvider
-from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
-from backend.app.schemas.assets import FACurrentValue, FAHistoricalData
-
-# The decorator that makes it all work!
 @register_provider(AssetProviderRegistry)
-class MyNewProvider(AssetSourceProvider):
-
-    @property
-    def provider_code(self) -> str:
-        """A unique, lowercase identifier for your provider."""
-        return "my_new_provider"
-
-    @property
-    def provider_name(self) -> str:
-        """A human-readable name for the UI."""
-        return "My New Awesome Provider"
-
-    # --- Implement the required methods ---
-
-    async def get_current_value(self, identifier: str, ...) -> FACurrentValue:
-        # Your logic to fetch the current price
-        # ...
-        pass
-
-    async def get_history_value(self, identifier: str, ...) -> FAHistoricalData:
-        # Your logic to fetch historical prices
-        # ...
-        pass
-
-    def validate_params(self, params: dict | None) -> None:
-        # Your logic to validate provider-specific parameters
-        # ...
-        pass
-
-    # ... and other abstract methods ...
+class MyProvider(AssetSourceProvider):
+    ...
 ```
 
-### Step 3: Auto-Discovery
+The decorator is a factory that calls `registry_class.register(provider_class)` at import time.
 
-That's it! The next time you start the application, the `AssetProviderRegistry` will automatically discover and register `MyNewProvider`. It will then be available to be assigned
-to assets and used for fetching prices.
+---
 
-This plugin-based architecture makes LibreFolio highly extensible and easy to contribute to.
+## Plugin Development Guides
+
+Each subsystem has its own detailed guide with ABC method tables, flow diagrams, and implementation examples:
+
+| Subsystem | Guide | Base Class | What It Does |
+|-----------|-------|------------|-------------|
+| **BRIM** | [BRIM Plugin Guide](brim_plugin_guide.md) | `BRIMProvider` | Parse broker export files (CSV, Excel) into transactions |
+| **Assets** | [Asset Plugin Guide](asset_plugin_guide.md) | `AssetSourceProvider` | Fetch current and historical asset prices |
+| **FX** | [FX Plugin Guide](fx_plugin_guide.md) | `FXRateProvider` | Fetch exchange rates from central banks |
 
 ---
 
 ## Subsystem Documentation
 
-The Registry Pattern powers three subsystems. Each has its own architecture page, provider list, and configuration docs:
+Each plugin subsystem also has architecture docs, provider lists, and configuration pages:
 
 ### BRIM (Broker Report Import Manager)
-
-Parses CSV/Excel broker export files into standardized transactions.
 
 - [Architecture](../../backend/brim/architecture.md) — Pipeline design, parsing flow
 - [Generic CSV Provider](../../backend/brim/generic_csv.md) — User-configurable CSV mapper
@@ -123,15 +100,11 @@ Parses CSV/Excel broker export files into standardized transactions.
 
 ### Assets (Pricing & Metadata)
 
-Fetches current and historical prices for financial instruments.
-
 - [Architecture](../../backend/assets/architecture.md) — Provider interface, caching, refresh logic
 - [System Providers](../../backend/assets/system_providers.md) — Built-in providers (Scheduled Investment, Manual)
 - [Providers List](../../backend/assets/providers_list.md) — All available providers (Yahoo Finance, etc.)
 
 ### FX (Foreign Exchange)
-
-Fetches exchange rates from central bank APIs with multi-provider fallback.
 
 - [Architecture](../../backend/fx/architecture.md) — Multi-provider design, sync process
 - [Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm, priority fallback

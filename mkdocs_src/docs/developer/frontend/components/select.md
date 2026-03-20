@@ -4,6 +4,39 @@ This section documents the reusable dropdown and select components in `lib/compo
 
 All select components are built on `BaseDropdown`, which provides the shared logic for open/close state, click-outside dismissal, keyboard navigation, and dynamic positioning.
 
+## Component Hierarchy
+
+```mermaid
+graph TD
+    BD["<b>BaseDropdown</b><br/><small>Open/close · Click-outside · Keyboard nav<br/>Positioning (top/bottom/auto)</small>"]
+
+    BD --> SS["<b>SimpleSelect</b><br/><small>+ Option list · Checkmark active<br/>+ Custom rendering via snippets</small>"]
+
+    BD --> SrS["<b>SearchSelect</b><br/><small>+ Fuzzy search · Max visible items<br/>+ Inline search mode · Loading state</small>"]
+
+    SrS --> CSS["<b>CurrencySearchSelect</b><br/><small>+ Flag emoji · ISO code + name<br/>📡 <code>/utilities/currencies</code></small>"]
+
+    SrS --> FPS["<b>FxProviderSelect</b><br/><small>+ Provider icon · Info bar + docs link<br/>📡 <code>/fx/providers</code></small>"]
+
+    SrS --> IPS["<b>ImportPluginSelect</b><br/><small>+ Plugin icon · Format badges<br/>📡 <code>/brim/plugins</code></small>"]
+
+    SrS --> BSS["<b>BrokerSearchSelect</b><br/><small>+ BrokerIcon · Inline search<br/>📡 <code>/brokers</code></small>"]
+
+    style BD fill:#e3f2fd,stroke:#1565c0
+    style SS fill:#e8f5e9,stroke:#2e7d32
+    style SrS fill:#e8f5e9,stroke:#2e7d32
+    style CSS fill:#fff3e0,stroke:#e65100
+    style FPS fill:#fff3e0,stroke:#e65100
+    style IPS fill:#fff3e0,stroke:#e65100
+    style BSS fill:#fff3e0,stroke:#e65100
+```
+
+Each level adds features on top of the previous:
+
+- 🔵 **BaseDropdown** — Pure dropdown logic (headless)
+- 🟢 **SimpleSelect / SearchSelect** — Generic selects with rendering
+- 🟠 **Specialized selects** — Domain-specific with API data loading
+
 ---
 
 ## BaseDropdown
@@ -58,6 +91,7 @@ A specialized `SearchSelect` for currency selection.
 - Auto-selects the first match
 
 **Used in**: Add Pair modal (base/quote currency), Broker form (base currency).
+**Data source**: `GET /api/v1/utilities/currencies` — ISO 4217 reference list.
 
 ---
 
@@ -70,6 +104,7 @@ A specialized select for FX data providers.
 - Reads `docs_url` from provider metadata to generate the documentation link
 
 **Used in**: `FxProviderConfig` component on the FX detail page.
+**Data source**: `GET /api/v1/fx/providers` — registered FX provider plugins.
 
 ---
 
@@ -82,6 +117,7 @@ A select for BRIM import plugins.
 - Displays supported file formats (CSV, Excel)
 
 **Used in**: `BrokerImportFilesModal` — selecting which parser to use for a broker report.
+**Data source**: `GET /api/v1/brim/plugins` — registered BRIM provider plugins.
 
 ---
 
@@ -94,4 +130,5 @@ A `SearchSelect` specialized for broker selection.
 - Loads brokers from the API with user access filtering
 
 **Used in**: Transaction filters, transfer/FX conversion forms (selecting source/destination broker).
+**Data source**: `GET /api/v1/brokers` — user's accessible brokers (filtered by RBAC).
 
