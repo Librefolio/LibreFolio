@@ -4,9 +4,9 @@ LibreFolio has a set of **system-wide settings** that affect all users. These ar
 
 ---
 
-## Viewing & Editing Settings
+## 👁️ Viewing & Editing Settings
 
-### From the UI
+### 🖥️ From the UI
 
 1. Navigate to **Settings** (gear icon in the sidebar)
 2. Click the **Global Settings** tab (visible only to admin/superuser)
@@ -20,7 +20,7 @@ LibreFolio has a set of **system-wide settings** that affect all users. These ar
 !!! warning "Admin Only"
     Only users with **superuser** privileges can modify global settings. Regular users see a read-only view.
 
-### From the CLI
+### 💻 From the CLI
 
 To initialize default settings (creates only missing ones):
 
@@ -30,7 +30,7 @@ To initialize default settings (creates only missing ones):
 
 ---
 
-## Available Settings
+## 📋 Available Settings
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -46,33 +46,32 @@ To initialize default settings (creates only missing ones):
 
 ---
 
-## Categories
+## 🗂️ Categories
 
 Settings are grouped into categories in the UI:
 
 ### 🕐 Session
-- `session_ttl_hours` — Controls how long a login session lasts
+- ⏱️ `session_ttl_hours` — Controls how long a login session lasts
 
 ### 🛡️ Security
-- `enable_registration` — Open/close registration
-- `require_email_verification` — Email verification gate
+- 📝 `enable_registration` — Open/close registration
+- ✉️ `require_email_verification` — Email verification gate
 
 ### 📤 Sync & Uploads
-- `auto_sync_fx_rates` — Automatic FX rate sync
-- `auto_sync_prices` — Automatic asset price sync
-- `price_sync_interval_hours` — Price sync frequency
-- `max_file_upload_mb` — File size limit
+- 💱 `auto_sync_fx_rates` — Automatic FX rate sync
+- 📈 `auto_sync_prices` — Automatic asset price sync
+- ⏰ `price_sync_interval_hours` — Price sync frequency
+- 📦 `max_file_upload_mb` — File size limit
 
 ### 🌍 Defaults
-- `default_currency` — New user default currency
-- `default_language` — New user default language
+- 💰 `default_currency` — New user default currency
+- 🗣️ `default_language` — New user default language
 
 ---
 
-## Technical Notes
+## 🔧 Technical Notes
 
-- Settings are stored as **key-value pairs** in the `global_settings` table
-- Values are stored as strings and converted to the appropriate type (`int`, `bool`, `str`) when read
-- On multi-worker startup, settings are initialized with `INSERT ... ON CONFLICT DO NOTHING` to avoid race conditions
-- Changes take effect **immediately** — no server restart required
-
+- 🗃️ Settings are stored as **key-value pairs** in the `global_settings` table
+- 🔀 Values are stored as strings and converted to the appropriate type (`int`, `bool`, `str`) when read
+- 🔒 On multi-worker startup, settings are initialized with `INSERT ... ON CONFLICT DO NOTHING` to avoid race conditions
+- ⚡ Changes take effect **immediately** — no server restart required

@@ -6,7 +6,7 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
     <img class="gallery-img" data-category="files" data-name="static-tab" alt="DataTable in Files page" style="width: 100%; display: block;">
 </div>
 
-## Features
+## ⚡ Features
 
 - **Sorting**: Click column headers to sort ASC/DESC.
 - **Filtering**: Excel-style column filters (Text, Number, Date, Enum, Size).
@@ -17,7 +17,7 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 - **Actions**: Support for per-row actions and bulk actions on selected rows.
 - **Sticky Columns**: Selection and Action columns are sticky.
 
-## Usage
+## 💻 Usage
 
 ```svelte
 <script lang="ts">
@@ -81,7 +81,7 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 />
 ```
 
-## Props
+## 📋 Props
 
 | Prop                  | Type                  | Default      | Description                              |
 |:----------------------|:----------------------|:-------------|:-----------------------------------------|
@@ -101,7 +101,7 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 | `onRowClick`          | `(row: T) => void`    | `undefined`  | Callback when a row is clicked.          |
 | `onRowDoubleClick`    | `(row: T) => void`    | `undefined`  | Callback when a row is double-clicked.   |
 
-## Column Definition (`ColumnDef<T>`)
+## 🔧 Column Definition (`ColumnDef<T>`)
 
 | Field         | Type                                               | Description                                       |
 |:--------------|:---------------------------------------------------|:--------------------------------------------------|
@@ -114,7 +114,7 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 | `width`       | `number`                                           | Initial width in pixels.                          |
 | `enumOptions` | `string[]`                                         | Options for 'enum' filter type.                   |
 
-## Cell Content Types
+## 🎨 Cell Content Types
 
 The `cell` function can return a simple string/number or a structured object:
 
@@ -127,11 +127,10 @@ The `cell` function can return a simple string/number or a structured object:
 - **Link**: `{ type: 'link', text: string, href: string, external: boolean }`
 - **Custom**: `{ type: 'custom', component: Component, props: object }`
 
-## State Management (Internal)
+## 📦 State Management (Internal)
 
 The component uses Svelte 5 Runes for internal state:
 
 - `$state` for sorting, pagination, filters, and selection.
 - `$derived` for calculating filtered/sorted/paginated data efficiently.
 - `$effect` for syncing state with `localStorage`.
-

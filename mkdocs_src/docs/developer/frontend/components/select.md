@@ -4,7 +4,7 @@ This section documents the reusable dropdown and select components in `lib/compo
 
 All select components are built on `BaseDropdown`, which provides the shared logic for open/close state, click-outside dismissal, keyboard navigation, and dynamic positioning.
 
-## Component Hierarchy
+## 🏗️ Component Hierarchy
 
 ```mermaid
 graph TD
@@ -39,7 +39,7 @@ Each level adds features on top of the previous:
 
 ---
 
-## BaseDropdown
+## 📦 BaseDropdown
 
 The foundation for all dropdown components. A headless component that manages:
 
@@ -54,7 +54,7 @@ Uses **Svelte 5 Snippets** (`trigger` and `content`) for fully customizable rend
 
 ---
 
-## SimpleSelect
+## 📋 SimpleSelect
 
 A basic dropdown for selecting from a fixed list of options, similar to a native `<select>`.
 
@@ -67,7 +67,7 @@ A basic dropdown for selecting from a fixed list of options, similar to a native
 
 ---
 
-## SearchSelect
+## 🔎 SearchSelect
 
 A dropdown with integrated **fuzzy search**. The user can type to filter options.
 
@@ -81,7 +81,7 @@ A dropdown with integrated **fuzzy search**. The user can type to filter options
 
 ---
 
-## CurrencySearchSelect
+## 💰 CurrencySearchSelect
 
 A specialized `SearchSelect` for currency selection.
 
@@ -95,7 +95,7 @@ A specialized `SearchSelect` for currency selection.
 
 ---
 
-## FxProviderSelect
+## 🔌 FxProviderSelect
 
 A specialized select for FX data providers.
 
@@ -108,7 +108,7 @@ A specialized select for FX data providers.
 
 ---
 
-## ImportPluginSelect
+## 📥 ImportPluginSelect
 
 A select for BRIM import plugins.
 
@@ -121,7 +121,7 @@ A select for BRIM import plugins.
 
 ---
 
-## BrokerSearchSelect
+## 🏦 BrokerSearchSelect
 
 A `SearchSelect` specialized for broker selection.
 
@@ -131,4 +131,3 @@ A `SearchSelect` specialized for broker selection.
 
 **Used in**: Transaction filters, transfer/FX conversion forms (selecting source/destination broker).
 **Data source**: `GET /api/v1/brokers` — user's accessible brokers (filtered by RBAC).
-

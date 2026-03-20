@@ -3,7 +3,7 @@
 LibreFolio implements a granular **Role-Based Access Control (RBAC)** system for Brokers. This allows users to share access to their brokerage accounts with other users (e.g.,
 family members, accountants) while maintaining control over permissions.
 
-## Overview
+## 📖 Overview
 
 Access is managed via the `BrokerUserAccess` table, which links a `User` to a `Broker` with a specific `UserRole`.
 
@@ -19,7 +19,7 @@ erDiagram
     }
 ```
 
-## Roles and Permissions
+## 🛡️ Roles and Permissions
 
 There are three roles with increasing levels of privilege:
 
@@ -34,16 +34,15 @@ There are three roles with increasing levels of privilege:
 | **Manage Access (Add/Remove Users)** |   ❌    |   ❌    |   ✅   |
 | **Delete Broker**                    |   ❌    |   ❌    |   ✅   |
 
-### Role Definitions
+### 📋 Role Definitions
 
-1. **VIEWER**: Read-only access. Ideal for sharing portfolio visibility without risk of data modification.
-2. **EDITOR**: Operational access. Can manage the day-to-day data (transactions, imports) and broker settings (name, icon), but cannot perform destructive administrative actions (
-   deleting the broker) or change who has access.
-3. **OWNER**: Administrative access. Full control over the broker.
+1. 👁️ **VIEWER**: Read-only access. Ideal for sharing portfolio visibility without risk of data modification.
+2. ✏️ **EDITOR**: Operational access. Can manage the day-to-day data (transactions, imports) and broker settings (name, icon), but cannot perform destructive administrative actions (deleting the broker) or change who has access.
+3. 👑 **OWNER**: Administrative access. Full control over the broker.
 
-## Key Rules & Constraints
+## 📏 Key Rules & Constraints
 
-### The "Last Owner" Rule
+### 🔒 The "Last Owner" Rule
 
 To prevent brokers from becoming "orphaned" (inaccessible by anyone with admin rights), the system enforces a strict rule:
 
@@ -51,25 +50,25 @@ To prevent brokers from becoming "orphaned" (inaccessible by anyone with admin r
 
 If a broker has only one user with the `OWNER` role:
 
-- That user **cannot** remove themselves.
-- That user **cannot** change their role to `EDITOR` or `VIEWER`.
-- To leave the broker, they must first promote another user to `OWNER` or delete the broker entirely.
+- ❌ That user **cannot** remove themselves.
+- ❌ That user **cannot** change their role to `EDITOR` or `VIEWER`.
+- ✅ To leave the broker, they must first promote another user to `OWNER` or delete the broker entirely.
 
-### Self-Management
+### 🔧 Self-Management
 
-- **Leaving**: Any user (except the last OWNER) can remove *themselves* from a broker at any time.
-- **Downgrading**: Users cannot change their own role (except to leave). Only an OWNER can change roles.
+- 🚪 **Leaving**: Any user (except the last OWNER) can remove *themselves* from a broker at any time.
+- ⬇️ **Downgrading**: Users cannot change their own role (except to leave). Only an OWNER can change roles.
 
-## Implementation Details
+## 🔧 Implementation Details
 
 The logic is centralized in `backend/app/services/broker_service.py`.
 
-- **`_check_user_access(broker_id, user_id, min_role)`**: Core internal method to verify permissions.
-- **`add_access()`**: Grants access to a new user (OWNER only).
-- **`update_access()`**: Changes an existing user's role (OWNER only).
-- **`remove_access()`**: Revokes access (OWNER can remove anyone; others can only remove themselves).
+- 🔍 **`_check_user_access(broker_id, user_id, min_role)`**: Core internal method to verify permissions.
+- ➕ **`add_access()`**: Grants access to a new user (OWNER only).
+- 🔄 **`update_access()`**: Changes an existing user's role (OWNER only).
+- ❌ **`remove_access()`**: Revokes access (OWNER can remove anyone; others can only remove themselves).
 
-### API Endpoints
+### 🌐 API Endpoints
 
 Access management is exposed via the following endpoints:
 

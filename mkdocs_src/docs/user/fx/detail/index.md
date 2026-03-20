@@ -6,7 +6,7 @@ The detail page is organized into several features, each accessible from the too
 
 ---
 
-## Features
+## 🧭 Features
 
 ### 📈 [Interactive Chart](chart.md)
 
@@ -30,8 +30,7 @@ Change the data provider for this pair, add fallback routes, or reconfigure the 
 
 ---
 
-## Related
+## 🔗 Related
 
-- **[Chart Settings](../chart-settings.md)** — Customize chart appearance, colors, and signal overlay configuration
-- **[FX Overview](../index.md)** — Back to the FX list page
-
+- ⚙️ **[Chart Settings](../chart-settings.md)** — Customize chart appearance, colors, and signal overlay configuration
+- 📋 **[FX Overview](../index.md)** — Back to the FX list page

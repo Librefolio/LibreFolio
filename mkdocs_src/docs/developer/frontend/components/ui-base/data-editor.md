@@ -1,4 +1,4 @@
-# 📊 Datapoint Editor Components
+# ✏️ Datapoint Editor Components
 
 Inline editing and CSV import components for financial datapoints. Located in `lib/components/ui/data-editor/`.
 
@@ -21,7 +21,7 @@ graph TD
 
 ---
 
-## DataEditor
+## ✏️ DataEditor
 
 An **inline tabular editor** for structured data (add, edit, delete rows).
 
@@ -34,7 +34,7 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
 
 ---
 
-## CsvEditor
+## 📄 CsvEditor
 
 A **CSV preview and editor** with column detection and per-row validation.
 
@@ -47,7 +47,7 @@ A **CSV preview and editor** with column detection and per-row validation.
 
 ---
 
-## DataImportModal
+## 📥 DataImportModal
 
 A **modal for importing data from CSV files**. Extends [ModalBase](modals.md).
 
@@ -57,4 +57,3 @@ A **modal for importing data from CSV files**. Extends [ModalBase](modals.md).
 - Validation summary before import
 
 **Used by**: FX detail page — "Import CSV" action. See [FX CSV Import](../../../../user/fx/detail/data-editor.md) for user documentation.
-

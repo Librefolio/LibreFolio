@@ -2,7 +2,7 @@
 
 Components in `lib/components/brokers/` that power the broker management UI.
 
-## Overview
+## 📖 Overview
 
 ```mermaid
 graph LR
@@ -20,7 +20,7 @@ graph LR
 
 Each sub-section has its own detailed composition diagram. See the pages below.
 
-## Sub-sections
+## 📑 Sub-sections
 
 | Section | Components | Description |
 |---------|-----------|-------------|
@@ -29,4 +29,3 @@ Each sub-section has its own detailed composition diagram. See the pages below.
 | **[Modals](modals.md)** | BrokerModal, BrokerSharingModal, BrokerImportFilesModal, DeleteBrokerDialog, CashTransactionModal | All broker-related modal dialogs |
 
 All modals extend [ModalBase](../ui-base/modals.md) from the UI Base components.
-

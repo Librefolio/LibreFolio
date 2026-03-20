@@ -11,11 +11,11 @@ This section documents the components used for the Settings pages (User Preferen
     </div>
 </div>
 
-## Architecture
+## 🏗️ Architecture
 
 The settings system uses a modular architecture based on a common layout and reusable field components.
 
-### SettingsLayout
+### 📐 SettingsLayout
 
 The `SettingsLayout` component provides the structural shell for all settings tabs.
 
@@ -34,11 +34,11 @@ The `SettingsLayout` component provides the structural shell for all settings ta
 - `hasNonDefaults`: Boolean to show Reset button.
 - `isLocked`: Boolean state of the edit lock.
 
-### PreferencesTab
+### 🎨 PreferencesTab
 
 Manages user-specific settings (Language, Currency, Theme).
 
-### ProfileTab
+### 👤 ProfileTab
 
 Manages user profile information:
 
@@ -47,7 +47,7 @@ Manages user profile information:
 - **Password change**: Opens `PasswordChangeModal`
 - Edit mode toggle to prevent accidental changes
 
-### GlobalSettingsTab (Admin only)
+### 🌍 GlobalSettingsTab (Admin only)
 
 System-wide configuration with lock toggle:
 
@@ -55,7 +55,7 @@ System-wide configuration with lock toggle:
 - Registration toggle
 - Other app-wide settings
 
-### AboutTab
+### ℹ️ AboutTab
 
 Read-only system information:
 
@@ -74,7 +74,7 @@ Read-only system information:
     - `isNonDefault`: `originalValues !== globalDefaults` (Shows Reset).
 4. **Persistence**: Saves to `/settings/user` via `PUT`.
 
-### Field Components
+### 🔧 Field Components
 
 Each setting type has a specialized component that handles its own UI and events.
 
@@ -93,7 +93,7 @@ Each setting type has a specialized component that handles its own UI and events
 - `isNonDefault`: Shows a "Reset to Default" indicator.
 - `isLocked`: Disables input.
 
-## Usage Example
+## 💻 Usage Example
 
 ```svelte
 <script>
@@ -120,4 +120,3 @@ Each setting type has a specialized component that handles its own UI and events
   />
 </SettingsLayout>
 ```
-

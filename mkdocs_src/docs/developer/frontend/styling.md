@@ -2,17 +2,17 @@
 
 LibreFolio uses **Tailwind CSS v4** for styling, providing a utility-first approach with a custom design system.
 
-## Technology Stack
+## 🧰 Technology Stack
 
 - **Tailwind CSS v4**: The latest version of the utility-first CSS framework.
 - **CSS Variables**: Used for theming (Dark/Light mode) and brand colors.
 - **Inter Font**: The primary typeface for the application.
 
-## Design System
+## 🎯 Design System
 
 The design system is defined in `src/app.css` using the `@theme` directive.
 
-### Brand Colors
+### 🎨 Brand Colors
 
 | Color Name    | Hex       | Usage                                        |
 |:--------------|:----------|:---------------------------------------------|
@@ -21,7 +21,7 @@ The design system is defined in `src/app.css` using the `@theme` directive.
 | `libre-sage`  | `#9caf9c` | Secondary accents, borders.                  |
 | `libre-dark`  | `#111111` | Text, dark mode backgrounds.                 |
 
-### Usage
+### 💻 Usage
 
 You can use these colors directly in Tailwind classes:
 
@@ -35,11 +35,11 @@ You can use these colors directly in Tailwind classes:
 </div>
 ```
 
-## Dark Mode
+## 🌙 Dark Mode
 
 Dark mode is implemented using the `dark` class on the `<html>` element. We use CSS variables to handle color switching automatically.
 
-### Theme Variables
+### 🔧 Theme Variables
 
 Instead of hardcoding colors for dark mode (e.g., `dark:bg-slate-900`), we prefer using semantic CSS variables defined in `app.css`:
 
@@ -57,7 +57,7 @@ html.dark {
 
 This allows components to adapt automatically without cluttering the markup with `dark:` modifiers.
 
-## Component Styling
+## 🧱 Component Styling
 
 We aim for consistency by reusing common patterns:
 

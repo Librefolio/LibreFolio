@@ -8,7 +8,7 @@ How to create a new **Broker Report Import Manager** plugin to support a new bro
 
 ---
 
-## Flow
+## 🔄 Flow
 
 The system calls plugin methods in two distinct phases:
 
@@ -46,9 +46,9 @@ graph TD
 
 ---
 
-## ABC Methods
+## 📋 ABC Methods
 
-### Required (Abstract)
+### ✅ Required (Abstract)
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
@@ -58,7 +58,7 @@ graph TD
 | `can_parse(file_path)` | `→ bool` | Quick check if this plugin can parse the file (check extension, header row) |
 | `parse(file_path, broker_id)` | `→ Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]` | Full parsing — returns transactions, warnings, and extracted asset info |
 
-### Optional (Override)
+### 🔧 Optional (Override)
 
 | Method | Default | Description |
 |--------|---------|-------------|
@@ -69,7 +69,7 @@ graph TD
 
 ---
 
-## Implementation Example
+## 💻 Implementation Example
 
 ```python
 # backend/app/services/brim_providers/my_broker.py
@@ -113,13 +113,13 @@ class MyBrokerProvider(BRIMProvider):
         return transactions, warnings, extracted_assets
 ```
 
-### Auto-Discovery
+### 🔍 Auto-Discovery
 
 Place the file in `brim_providers/` and restart the app. The `BRIMProviderRegistry` will automatically discover and register it. The plugin will appear in the [ImportPluginSelect](../../frontend/components/select.md#importpluginselect) dropdown.
 
 ---
 
-## Related Documentation
+## 🔗 Related Documentation
 
 - [BRIM Architecture](../../backend/brim/architecture.md) — Full pipeline design
 - [Generic CSV Provider](../../backend/brim/generic_csv.md) — User-configurable CSV mapper (reference implementation)

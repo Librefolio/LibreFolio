@@ -2,11 +2,11 @@
 
 *Status: Implemented (Feb 2026)*
 
-## Overview
+## 📖 Overview
 
 Application pages and routing structure. All authenticated routes are under `(app)/`.
 
-## Page Structure
+## 🗺️ Page Structure
 
 ```
 frontend/src/routes/
@@ -34,9 +34,9 @@ frontend/src/routes/
 │       └── +page.svelte      # Settings (4 tabs)
 ```
 
-## Pages
+## 📋 Pages
 
-### Login Page (`/`)
+### 🔐 Login Page (`/`)
 
 - Public access
 - **LoginCard** / **RegisterCard** / **ForgotPasswordCard** (card-style, not modals)
@@ -44,7 +44,7 @@ frontend/src/routes/
 - Redirect to dashboard after login
 - User preferences (language, theme) applied on login
 
-### Dashboard (`/dashboard`)
+### 📊 Dashboard (`/dashboard`)
 
 <div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
     <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard" style="width: 100%; display: block;">
@@ -54,7 +54,7 @@ frontend/src/routes/
 - Quick stats cards
 - *(Charts with ECharts to be implemented in Phase 8)*
 
-### Brokers (`/brokers`)
+### 🏦 Brokers (`/brokers`)
 
 <div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
     <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List" style="width: 100%; display: block;">
@@ -65,7 +65,7 @@ frontend/src/routes/
 - Broker icon editable by clicking → **AssetPickerModal**
 - Delete with confirmation dialog
 
-### Broker Detail (`/brokers/[id]`)
+### 🔍 Broker Detail (`/brokers/[id]`)
 
 - Header with icon, name, status
 - Cash balances with deposit/withdraw
@@ -73,7 +73,7 @@ frontend/src/routes/
 - Recent transactions
 - Import files section (BRIM) with plugin selection
 
-### Files (`/files`)
+### 📁 Files (`/files`)
 
 <div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
     <img class="gallery-img" data-category="files" data-name="static-tab" alt="Files Page" style="width: 100%; display: block;">
@@ -88,7 +88,7 @@ frontend/src/routes/
 - Copy link, download, delete actions
 - File thumbnails via `?img_preview=` API
 
-### Settings (`/settings`)
+### ⚙️ Settings (`/settings`)
 
 <div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Settings Page" style="width: 100%; display: block;">

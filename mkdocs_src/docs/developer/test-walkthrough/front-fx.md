@@ -2,7 +2,7 @@
 
 Frontend E2E and unit tests for the FX (Foreign Exchange) module.
 
-## What's Tested
+## 🔍 What's Tested
 
 The FX module has the most extensive frontend test coverage, with 7 Playwright spec files:
 
@@ -16,7 +16,7 @@ The FX module has the most extensive frontend test coverage, with 7 Playwright s
 | **FX API** | Backend API integration (rates, routes, providers) |
 | **FX Settings** | Chart settings, signal configuration, benchmarks |
 
-## Running
+## 🚀 Running
 
 ```bash
 # Run all front-fx tests
@@ -32,7 +32,7 @@ The FX module has the most extensive frontend test coverage, with 7 Playwright s
 ./dev.py test front-fx all --ui
 ```
 
-## Test Location
+## 📂 Test Location
 
 ```
 frontend/e2e/

@@ -16,7 +16,7 @@ instantly.
 
 ---
 
-## The "Fast" vs "Slow" Intuition
+## ⚡ The "Fast" vs "Slow" Intuition
 
 In finance, *fast* and *slow* refer to the **time constant** ($\tau$) of the underlying
 filter.
@@ -30,9 +30,9 @@ filter.
 
 ---
 
-## EMA — Exponential Moving Average { #ema }
+## 📉 EMA — Exponential Moving Average { #ema }
 
-### Financial Meaning
+### 💡 Financial Meaning
 
 The EMA tracks the **trend** by smoothing daily price noise, giving more weight to
 recent observations than older ones. Traders overlay EMAs of different periods on a
@@ -40,7 +40,7 @@ price chart: when a short-period EMA crosses *above* a long-period EMA, it signa
 upward momentum (a "golden cross"); the opposite crossing signals a slowdown ("death
 cross").
 
-### Mathematical Formula
+### 🔢 Mathematical Formula
 
 The EMA is defined by the first-order recurrence:
 
@@ -69,14 +69,14 @@ $$
 
 For example, $N = 14 \implies \alpha = 2/15 \approx 0.133$.
 
-### Parameters
+### ⚙️ Parameters
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
 | Period ($N$) | `period` | 14 | Lookback window in days. Higher → smoother, slower. |
 | Offset | `offset` | 0 | Vertical shift as % of base value. |
 
-### Signal Processing Equivalent — First-Order IIR Low-Pass Filter
+### 🎛️ Signal Processing Equivalent — First-Order IIR Low-Pass Filter
 
 The recurrence $y[n] = \alpha\,x[n] + (1-\alpha)\,y[n-1]$ is precisely a **first-order
 IIR (Infinite Impulse Response) low-pass filter**. Its transfer function in the
@@ -104,9 +104,9 @@ but the DC component (the long-run trend).
 
 ---
 
-## MACD — Moving Average Convergence Divergence { #macd }
+## 📊 MACD — Moving Average Convergence Divergence { #macd }
 
-### Financial Meaning
+### 💡 Financial Meaning
 
 The MACD answers: *"Is the trend accelerating or losing steam?"* It does **not** tell
 you the price is rising (you can see that already); it tells you whether the *rate of
@@ -114,7 +114,7 @@ change* of the trend is positive or negative. Traders watch for the MACD line cr
 the Signal line — a bullish crossover suggests increasing momentum, a bearish one
 suggests exhaustion.
 
-### Mathematical Formulas
+### 🔢 Mathematical Formulas
 
 The MACD system produces three series:
 
@@ -136,7 +136,7 @@ The MACD system produces three series:
     Histogram_t = MACD_t - Signal_t
     $$
 
-### Parameters
+### ⚙️ Parameters
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
@@ -144,7 +144,7 @@ The MACD system produces three series:
 | Slow Period | `slowPeriod` | 26 | Long-term EMA window (days). |
 | Signal Period | `signalPeriod` | 9 | EMA smoothing applied to the MACD line. |
 
-### Signal Processing Equivalent — Band-Pass Filter (Smoothed Derivative)
+### 🎛️ Signal Processing Equivalent — Band-Pass Filter (Smoothed Derivative)
 
 Subtracting two low-pass filters with different cut-off frequencies produces a
 **band-pass filter**. $EMA_{fast} - EMA_{slow}$ cancels the DC component (the
@@ -172,9 +172,9 @@ detections.
 
 ---
 
-## RSI — Relative Strength Index { #rsi }
+## 💪 RSI — Relative Strength Index { #rsi }
 
-### Financial Meaning
+### 💡 Financial Meaning
 
 The RSI measures whether buyers or sellers have dominated *recently*. It answers:
 *"Over the last $N$ days, how much of the total price movement was upward vs
@@ -184,7 +184,7 @@ downward?"* The result is squeezed into a 0–100 range:
   likely.
 - **RSI < 30** → Oversold — the spring is compressed, a bounce is likely.
 
-### Mathematical Formulas
+### 🔢 Mathematical Formulas
 
 1.  **Decompose** daily changes into gains and losses:
 
@@ -210,7 +210,7 @@ downward?"* The result is squeezed into a 0–100 range:
 The normalisation $100 - 100/(1+RS)$ is a monotonically increasing sigmoid that maps
 $RS \in [0, \infty)$ to $RSI \in [0, 100)$.
 
-### Parameters
+### ⚙️ Parameters
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
@@ -218,7 +218,7 @@ $RS \in [0, \infty)$ to $RSI \in [0, 100)$.
 | Overbought | `overbought` | 70 | Threshold for overbought zone. |
 | Oversold | `oversold` | 30 | Threshold for oversold zone. |
 
-### Signal Processing Equivalent — Duty Cycle / Saturation Indicator
+### 🎛️ Signal Processing Equivalent — Duty Cycle / Saturation Indicator
 
 Imagine splitting the price delta signal $\Delta P[n]$ into its positive and negative
 half-wave rectified components, then low-pass filtering each. The RSI is the **ratio
@@ -238,16 +238,16 @@ the stronger the restoring force — hence the mean-reverting property traders e
 
 ---
 
-## Bollinger Bands { #bollinger-bands }
+## 📏 Bollinger Bands { #bollinger-bands }
 
-### Financial Meaning
+### 💡 Financial Meaning
 
 Bollinger Bands dynamically measure **volatility** and draw an adaptive "normality
 fence" around the price. When the bands are wide, the market is volatile; when they
 squeeze together, a breakout is imminent. A price touching the upper band signals
 statistical exuberance; touching the lower band signals an abnormal dip.
 
-### Mathematical Formulas
+### 🔢 Mathematical Formulas
 
 1.  **Middle Band** (expected value):
 
@@ -272,14 +272,14 @@ With $k = 2$, if returns were normally distributed the price would stay inside t
 ~95.4% of the time. In practice, financial returns have *fat tails* (leptokurtosis), so
 breaches are more frequent — but still statistically significant.
 
-### Parameters
+### ⚙️ Parameters
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
 | Period ($N$) | `period` | 20 | SMA window for expected value. |
 | Multiplier ($k$) | `multiplier` | 2 | Number of standard deviations. |
 
-### Signal Processing Equivalent — Adaptive Confidence Interval Tracker
+### 🎛️ Signal Processing Equivalent — Adaptive Confidence Interval Tracker
 
 The Middle Band is a **FIR (Finite Impulse Response) moving average filter** — the
 simplest low-pass with a rectangular window of length $N$. The bands add a

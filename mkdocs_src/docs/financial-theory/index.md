@@ -2,12 +2,12 @@
 
 This section documents the financial models, conventions, and definitions used throughout LibreFolio.
 
-## Overview
+## 📖 Overview
 
 Accurate financial calculations are critical for a portfolio tracker. LibreFolio implements standard financial conventions to ensure consistency with broker reports and real-world
 data. This section covers the core concepts from asset types to the formulas used for performance analysis.
 
-## Key Concepts
+## 🔑 Key Concepts
 
 - **[Asset Types](asset-types.md)**: Definitions of all supported asset classes (Stocks, ETFs, Crypto, etc.).
 - **[Transaction Types](transaction-types.md)**: Definitions of all financial operations (Buy, Sell, Dividend, etc.).

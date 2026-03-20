@@ -4,7 +4,7 @@ The **Files** page (`/files`) is your central hub for managing all uploaded cont
 
 ---
 
-## Two Tabs, Two Purposes
+## 📂 Two Tabs, Two Purposes
 
 ### 📁 Static Resources
 
@@ -14,9 +14,9 @@ The **Files** page (`/files`) is your central hub for managing all uploaded cont
 
 Static resources are **visible to all users** in the system. This is where you'll find:
 
-- User **avatars** and profile pictures
-- Broker **icons** and logos
-- Any **shared documents** or images uploaded by users
+- 🖼️ User **avatars** and profile pictures
+- 🏷️ Broker **icons** and logos
+- 📄 Any **shared documents** or images uploaded by users
 
 These files live in the `custom-uploads/` directory on the server.
 
@@ -34,13 +34,13 @@ You can switch between **list view** and **grid view** for a visual preview of i
 
 Broker reports have **restricted visibility** — you can only see reports for brokers you have access to (as Owner, Editor, or Viewer). These files include:
 
-- CSV or Excel **transaction exports** from your broker
-- **Parsed results** from the automatic import system (BRIM)
-- Files that **failed parsing** (kept for debugging)
+- 📋 CSV or Excel **transaction exports** from your broker
+- ✅ **Parsed results** from the automatic import system (BRIM)
+- ❌ Files that **failed parsing** (kept for debugging)
 
 ---
 
-## Uploading Files
+## ⬆️ Uploading Files
 
 To upload a file:
 
@@ -57,7 +57,7 @@ To upload a file:
 
 ---
 
-## Uploading Broker Reports
+## 📤 Uploading Broker Reports
 
 If you want to import transactions from your broker:
 
@@ -70,10 +70,9 @@ If you want to import transactions from your broker:
 
 ---
 
-## Security
+## 🔒 Security
 
-- **Static files** are accessible to anyone with a LibreFolio account
-- **Broker reports** respect the broker's access control — only users with access to that broker can view its reports
-- **Executable files** (`.exe`, `.sh`, `.py`, etc.) are blocked for security
-- File **MIME type** is validated server-side to prevent masquerading (e.g., renaming a `.exe` to `.jpg`)
-
+- 🌐 **Static files** are accessible to anyone with a LibreFolio account
+- 🔐 **Broker reports** respect the broker's access control — only users with access to that broker can view its reports
+- 🚫 **Executable files** (`.exe`, `.sh`, `.py`, etc.) are blocked for security
+- 🔍 File **MIME type** is validated server-side to prevent masquerading (e.g., renaming a `.exe` to `.jpg`)
