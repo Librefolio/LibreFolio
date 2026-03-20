@@ -283,12 +283,14 @@ async def serve_file(
     offset: Optional[int] = None,
     window: Optional[int] = None,
     img_preview: Optional[str] = None,
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Serve the actual file content.
 
-    This endpoint does not require authentication to allow
-    embedding in images/documents.
+    Requires authentication via session cookie.
+    Browser <img> tags automatically include cookies,
+    so embedded images work seamlessly.
 
     Preview modes:
     - Text preview: ?offset=0&window=1000 (returns first 1000 chars)
@@ -432,9 +434,15 @@ async def serve_file(
 
 
 @router.get("/plugin/{provider_type}/{path:path}")
-async def serve_plugin_static(provider_type: str, path: str):
+async def serve_plugin_static(
+    provider_type: str,
+    path: str,
+    _current_user: User = Depends(get_current_user),
+    ):
     """
     Serve static assets from plugin directories.
+
+    Requires authentication via session cookie.
 
     Plugin developers can place static files (icons, images, etc.)
     in their plugin's static/ folder.

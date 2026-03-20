@@ -57,6 +57,10 @@ class ECBProvider(FXRateProvider):
         return "https://www.ecb.europa.eu/favicon-32.png"
 
     @property
+    def docs_url(self) -> str | None:
+        return "/mkdocs/developer/backend/fx/providers_list/#ecb-european-central-bank"
+
+    @property
     def description_i18n(self) -> dict[str, str]:
         return {
             "en": "European Central Bank — publishes daily reference exchange rates for 30+ currencies against EUR. Updated every business day around 16:00 CET. One data point per day.",

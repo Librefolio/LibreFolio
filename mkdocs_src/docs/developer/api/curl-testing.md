@@ -1,4 +1,4 @@
-# API Testing with cURL
+# 🧪 API Testing with cURL
 
 This guide explains how to test LibreFolio's REST API using cURL from the terminal.
 

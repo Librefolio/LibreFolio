@@ -381,6 +381,42 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
+        test('broker edit modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    // Navigate fresh each iteration to ensure clean state
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Wait for cards to load
+                    await page.waitForTimeout(1000);
+
+                    const card = page.locator('[data-testid^="broker-card-"]').first();
+                    await expect(card).toBeVisible({timeout: 3000});
+                    await card.click();
+                    await page.waitForLoadState('networkidle');
+                    await page.waitForTimeout(500);
+
+                    // Click edit button to open BrokerModal
+                    const editBtn = page.getByTestId('broker-edit-button');
+                    if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await editBtn.click();
+                        await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 3000});
+                        await page.waitForTimeout(500);
+                        await screenshot(page, viewport, lang, theme, 'brokers', 'edit-modal');
+
+                        // Close modal
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                    }
+                }
+            }
+        });
+
         test('import modal - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 

@@ -1,4 +1,4 @@
-# Authentication Components
+# 🔐 Authentication Components
 
 This section documents the authentication UI components used for login, registration, and password management.
 

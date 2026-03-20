@@ -1,4 +1,4 @@
-# Asynchronous Architecture
+# ⚡ Asynchronous Architecture
 
 LibreFolio is built from the ground up using an asynchronous architecture to ensure high performance and efficiency, especially when dealing with I/O-bound operations like database
 queries and external API calls.

@@ -1,4 +1,4 @@
-# Users, Authentication, and Brokers
+# 👥 Users, Authentication, and Brokers
 
 This section explains the authentication model, user roles, and how data is segregated between users and brokers.
 

@@ -1,4 +1,4 @@
-# BRIM Architecture
+# 📊 BRIM Architecture
 
 **BRIM (Broker Report Import Manager)** is the system responsible for importing transaction data from CSV files exported by various brokers. It is designed to be robust,
 user-friendly, and extensible.

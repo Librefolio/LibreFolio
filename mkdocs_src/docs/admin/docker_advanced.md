@@ -1,4 +1,4 @@
-# Advanced Docker Guide
+# 🐳 Advanced Docker Guide
 
 This guide provides a deeper look into the Docker configuration for LibreFolio, intended for users who want to customize their deployment.
 

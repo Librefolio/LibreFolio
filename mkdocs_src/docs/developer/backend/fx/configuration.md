@@ -1,4 +1,4 @@
-# FX Configuration & Routing
+# 🔀 FX Configuration & Routing
 
 LibreFolio supports a sophisticated multi-provider routing system for Foreign Exchange (FX) rates. This allows administrators to define exactly which provider should be used for each currency pair, with automatic fallback capabilities and **multi-step conversion chains**.
 

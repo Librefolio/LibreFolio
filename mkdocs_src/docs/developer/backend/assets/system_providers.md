@@ -1,4 +1,4 @@
-# System Providers (Assets)
+# 🔧 System Providers (Assets)
 
 LibreFolio includes two powerful "system" providers for asset pricing that do not rely on a specific external API. They provide flexibility for tracking a wide range of assets.
 

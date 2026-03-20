@@ -1,4 +1,4 @@
-# Broker Access Control (RBAC)
+# 🔐 Broker Access Control (RBAC)
 
 LibreFolio implements a granular **Role-Based Access Control (RBAC)** system for Brokers. This allows users to share access to their brokerage accounts with other users (e.g.,
 family members, accountants) while maintaining control over permissions.

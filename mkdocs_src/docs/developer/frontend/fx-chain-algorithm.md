@@ -1,4 +1,4 @@
-# FX Conversion Chain — Pathfinding Algorithm
+# 🔗 FX Conversion Chain — Pathfinding Algorithm
 
 *Status: Implemented (Mar 2026)*
 

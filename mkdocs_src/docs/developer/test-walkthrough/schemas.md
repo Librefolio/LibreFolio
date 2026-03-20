@@ -1,4 +1,4 @@
-# Schema Validation Tests (`schemas`)
+# 📋 Schema Validation Tests (`schemas`)
 
 These tests verify the Pydantic models used for data validation.
 
@@ -14,5 +14,5 @@ To ensure that invalid data is rejected before it reaches the business logic or 
 ## Running
 
 ```bash
-./dev.sh test schemas
+./dev.py test schemas
 ```

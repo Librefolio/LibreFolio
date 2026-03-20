@@ -106,3 +106,34 @@ That's it! The next time you start the application, the `AssetProviderRegistry` 
 to assets and used for fetching prices.
 
 This plugin-based architecture makes LibreFolio highly extensible and easy to contribute to.
+
+---
+
+## Subsystem Documentation
+
+The Registry Pattern powers three subsystems. Each has its own architecture page, provider list, and configuration docs:
+
+### BRIM (Broker Report Import Manager)
+
+Parses CSV/Excel broker export files into standardized transactions.
+
+- [Architecture](../../backend/brim/architecture.md) — Pipeline design, parsing flow
+- [Generic CSV Provider](../../backend/brim/generic_csv.md) — User-configurable CSV mapper
+- [Providers List](../../backend/brim/providers_list.md) — All supported brokers (Directa, Degiro, IBKR, etc.)
+
+### Assets (Pricing & Metadata)
+
+Fetches current and historical prices for financial instruments.
+
+- [Architecture](../../backend/assets/architecture.md) — Provider interface, caching, refresh logic
+- [System Providers](../../backend/assets/system_providers.md) — Built-in providers (Scheduled Investment, Manual)
+- [Providers List](../../backend/assets/providers_list.md) — All available providers (Yahoo Finance, etc.)
+
+### FX (Foreign Exchange)
+
+Fetches exchange rates from central bank APIs with multi-provider fallback.
+
+- [Architecture](../../backend/fx/architecture.md) — Multi-provider design, sync process
+- [Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm, priority fallback
+- [Providers List](../../backend/fx/providers_list.md) — ECB, FED, BOE, SNB details
+

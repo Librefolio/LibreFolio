@@ -1,4 +1,4 @@
-# Frontend Pages
+# 📄 Frontend Pages
 
 *Status: Implemented (Feb 2026)*
 

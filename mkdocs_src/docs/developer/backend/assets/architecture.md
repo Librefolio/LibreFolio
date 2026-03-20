@@ -1,4 +1,4 @@
-# Asset Pricing & Metadata Architecture
+# 💰 Asset Pricing & Metadata Architecture
 
 The Asset system in LibreFolio is responsible for managing financial instruments (Stocks, ETFs, Crypto, etc.), fetching their prices, and maintaining their metadata.
 
@@ -23,7 +23,7 @@ This service manages the descriptive information about assets.
 
 ### 3. `AssetProviderRegistry`
 
-Uses the [Registry Pattern](../../architecture/registry_pattern.md) to manage available asset providers.
+Uses the [Registry Pattern](../../architecture/patterns/registry_pattern.md) to manage available asset providers.
 
 ## Data Flow: Fetching Prices
 

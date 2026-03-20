@@ -1,4 +1,4 @@
-# Frequently Asked Questions (FAQ)
+# ❓ Frequently Asked Questions (FAQ)
 
 Welcome to the LibreFolio FAQ. Here you'll find answers to common questions.
 
@@ -27,7 +27,7 @@ LibreFolio supports:
 
 ### How do I install LibreFolio?
 
-See our [Installation Guide](getting-started/installation.md) for detailed instructions.
+See our [Installation Guide](developer/dev-installation.md) for detailed instructions.
 
 ### How do I create an account?
 

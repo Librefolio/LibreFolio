@@ -1,4 +1,4 @@
-# BRIM Providers List
+# 📦 BRIM Providers List
 
 This page lists all the broker import plugins (BRIM Providers) currently available in LibreFolio.
 

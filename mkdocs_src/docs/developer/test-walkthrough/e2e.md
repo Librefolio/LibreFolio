@@ -1,4 +1,4 @@
-# End-to-End Tests (`e2e`)
+# 🎯 End-to-End Tests (`e2e`)
 
 These tests verify the full application stack, from the frontend UI down to the database.
 
@@ -8,8 +8,8 @@ To ensure that user flows (e.g., logging in, viewing the dashboard) work correct
 
 ## Prerequisites
 
-1. Backend server running in test mode (`./dev.sh server:test`).
-2. Frontend built (`./dev.sh fe:build`).
+1. Backend server running in test mode (`./dev.py server --test`).
+2. Frontend built (`./dev.py front build`).
 
 ## Key Tests
 
@@ -19,5 +19,5 @@ To ensure that user flows (e.g., logging in, viewing the dashboard) work correct
 ## Running
 
 ```bash
-./dev.sh test e2e
+./dev.py test e2e
 ```

@@ -1,4 +1,4 @@
-# External Services Tests (`external`)
+# 🌐 External Services Tests (`external`)
 
 These tests verify integrations with external APIs and data sources. They do **not** require the backend server to be running, but they do require an internet connection.
 
@@ -14,5 +14,5 @@ To ensure that external providers (like Yahoo Finance, ECB, etc.) are reachable 
 ## Running
 
 ```bash
-./dev.sh test external
+./dev.py test external
 ```
