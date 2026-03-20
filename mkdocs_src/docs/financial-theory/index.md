@@ -1,4 +1,4 @@
-# Financial Theory
+# 📚 Financial Theory
 
 This section documents the financial models, conventions, and definitions used throughout LibreFolio.
 

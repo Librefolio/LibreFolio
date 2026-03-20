@@ -1,4 +1,4 @@
-# Exposing LibreFolio via Tailscale (WIP)
+# 🌐 Exposing LibreFolio via Tailscale (WIP)
 
 > 🚧 **Work In Progress**: This guide is planned for a future release.
 

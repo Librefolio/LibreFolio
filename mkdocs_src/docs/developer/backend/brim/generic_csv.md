@@ -1,4 +1,4 @@
-# Case Study: The Generic CSV Provider
+# 📋 Case Study: The Generic CSV Provider
 
 The **Generic CSV Provider** (`broker_generic_csv`) is the fallback import plugin for BRIM. It is designed to be highly flexible and serves as an excellent case study for
 understanding the BRIM plugin architecture.

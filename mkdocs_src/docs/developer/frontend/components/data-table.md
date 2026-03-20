@@ -1,4 +1,4 @@
-# DataTable Component
+# 📊 DataTable Component
 
 The `DataTable` is a powerful, generic table component built with Svelte 5 Runes. It provides a rich set of features similar to Excel or advanced data grids.
 

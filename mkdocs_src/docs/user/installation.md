@@ -1,4 +1,4 @@
-# Installation (User)
+# 🐳 Installation (User)
 
 This guide explains how to deploy LibreFolio for regular use using Docker. This is the recommended method for users who do not intend to modify the source code.
 

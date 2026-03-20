@@ -32,9 +32,9 @@
 
         // Known top-level doc sections that appear right after the base path
         var knownSegments = [
-            '/gallery/', '/developer/', '/user-manual/', '/admin-manual/',
+            '/gallery/', '/developer/', '/user/', '/admin/',
             '/getting-started/', '/tutorials/', '/financial-theory/',
-            '/poc-ux/', '/faq/'
+            '/POC_UX/', '/credits-legal/', '/faq/'
         ];
 
         for (var i = 0; i < knownSegments.length; i++) {

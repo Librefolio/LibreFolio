@@ -1,4 +1,4 @@
-# Day Count Conventions
+# 📅 Day Count Conventions
 
 A **Day Count Convention** determines how interest accrues over time for a variety of financial instruments, such as bonds, loans, and mortgages. It defines two things:
 

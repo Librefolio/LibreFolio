@@ -1,4 +1,4 @@
-# File Upload & Media Components
+# 📤 File Upload & Media Components
 
 *Status: Implemented and documented (Feb 2026)*
 

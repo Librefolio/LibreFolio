@@ -1,4 +1,4 @@
-# Configuration
+# 📝 Configuration
 
 LibreFolio uses a `.env` file for configuration, powered by Pydantic's `BaseSettings`. This allows for easy management of environment variables for both local development and
 Docker deployments.

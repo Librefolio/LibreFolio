@@ -1,4 +1,4 @@
-# Synthetic Benchmarks
+# 🎯 Synthetic Benchmarks
 
 LibreFolio can overlay **synthetic benchmark curves** on any FX chart. Unlike technical
 indicators (which are computed *from* market data), synthetic benchmarks are generated

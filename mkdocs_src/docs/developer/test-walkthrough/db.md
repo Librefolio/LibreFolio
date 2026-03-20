@@ -1,4 +1,4 @@
-# Database Layer Tests (`db`)
+# 🗄️ Database Layer Tests (`db`)
 
 These tests interact directly with the SQLite database file to verify its integrity and behavior. They do **not** require the backend server to be running.
 
@@ -15,5 +15,5 @@ To ensure the database schema, constraints, and data persistence are working cor
 ## Running
 
 ```bash
-./dev.sh test db all
+./dev.py test db all
 ```

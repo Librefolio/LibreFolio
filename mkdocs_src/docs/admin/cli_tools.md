@@ -1,84 +1,111 @@
-# Command-Line Tools
+# 🛠️ Command-Line Tools
 
-This section provides detailed information on the command-line tools available in LibreFolio.
+LibreFolio provides the `dev.py` script for administration tasks. This page covers the commands most relevant to **system administrators**.
 
-## `dev.py`
+!!! info "👩‍💻 For Developers"
+    For development-specific commands (frontend build, test runner, API sync, i18n audit), see the [Developer Installation Guide](../developer/dev-installation.md).
 
-`dev.py` is the main orchestration script for development and maintenance tasks. It provides a convenient wrapper around common commands with a tree-structured help system.
+---
 
-### Common Commands
+## 🚀 Installation
 
-- **`./dev.py install`**: Installs all project dependencies (Python and Node.js).
-- **`./dev.py server`**: Starts the FastAPI server with auto-reload.
-- **`./dev.py server --test`**: Starts in test mode (isolated test data).
-- **`./dev.py db upgrade`**: Applies database migrations.
-- **`./dev.py db migrate "message"`**: Creates a new database migration.
-- **`./dev.py db create-clean`**: Recreate database from scratch.
-- **`./dev.py test all`**: Runs the complete test suite.
-- **`./dev.py front build`**: Builds the frontend for production.
-- **`./dev.py front check`**: Type-checks Svelte/TypeScript.
-- **`./dev.py front dev`**: Starts the frontend dev server with HMR.
-- **`./dev.py api sync`**: Exports OpenAPI schema + generates TypeScript client.
-- **`./dev.py i18n audit`**: Audit translation coverage.
-- **`./dev.py mkdocs deploy`**: Deploys the documentation to GitHub Pages.
+Install all project dependencies (Python and Node.js):
 
-For a full command tree, run:
+```bash
+./dev.py install
+```
+
+---
+
+## 🖥️ Server (Production)
+
+### Starting the Server
+
+```bash
+# Standard start
+./dev.py server
+
+# With auto-calculated workers (2 × (CPU-1))
+./dev.py server --workers N
+
+# Kill existing process on port before starting
+./dev.py server --force
+```
+
+!!! tip "Multi-worker"
+    For production, use `--workers` to run multiple Uvicorn workers. This improves throughput and is recommended for any deployment with more than 1 CPU core.
+
+---
+
+## 👤 User Management
+
+User management is done via `./dev.py user` subcommands:
+
+```bash
+# Create a user (first user becomes admin automatically)
+./dev.py user create <username> <email> <password>
+
+# List all users
+./dev.py user list
+
+# Reset a user's password
+./dev.py user reset <username> <new_password>
+
+# Promote a user to admin
+./dev.py user promote <username>
+
+# Demote an admin to regular user
+./dev.py user demote <username>
+```
+
+---
+
+## ⚙️ System Management
+
+### Initialize Global Settings
+
+```bash
+./dev.py user init-settings
+```
+
+Populates the database with default [Global Settings](settings.md) if they don't already exist.
+
+### Database Migrations
+
+```bash
+# Apply pending migrations
+./dev.py db upgrade
+```
+
+!!! warning "🗄️ Database reset"
+    `./dev.py db create-clean` recreates the database from scratch — **all data is lost**. Use only if you need a fresh start.
+
+---
+
+## 📚 Documentation
+
+```bash
+# Build and deploy MkDocs documentation to GitHub Pages
+./dev.py mkdocs deploy
+
+# Generate gallery screenshots (requires running server + test data)
+./dev.py mkdocs gallery
+```
+
+---
+
+## 📋 Full Command Tree
+
+For a complete list of all available commands:
 
 ```bash
 ./dev.py --help
 ```
 
-## User Management
+!!! info "👩‍💻 Developer Commands"
+    Additional commands for development workflows:
 
-User management is done via `./dev.py user` subcommands:
-
-- **Create a User** (first user becomes admin):
-  ```bash
-  ./dev.py user create <username> <email> <password>
-  ```
-
-- **Reset a User's Password**:
-  ```bash
-  ./dev.py user reset <username> <new_password>
-  ```
-
-- **List All Users**:
-  ```bash
-  ./dev.py user list
-  ```
-
-- **Promote a User to Admin**:
-  ```bash
-  ./dev.py user promote <username>
-  ```
-
-- **Demote an Admin**:
-  ```bash
-  ./dev.py user demote <username>
-  ```
-
-### System Management
-
-- **Initialize Global Settings**:
-  ```bash
-  ./dev.py user init-settings
-  ```
-  This command populates the database with default global settings if they don't already exist.
-
-## `test_runner.py`
-
-The test runner orchestrates the complete test suite. It is invoked via `./dev.py test`.
-
-### Test Categories
-
-| Category | Command                      | Description                       |
-|----------|------------------------------|-----------------------------------|
-| External | `./dev.py test external all` | Provider tests (FX, assets, BRIM) |
-| Database | `./dev.py test db all`       | Database layer tests              |
-| Services | `./dev.py test services all` | Service logic tests               |
-| Utils    | `./dev.py test utils all`    | Utility tests                     |
-| Schemas  | `./dev.py test schemas all`  | Schema validation tests           |
-| API      | `./dev.py test api all`      | API endpoint tests                |
-| E2E      | `./dev.py test e2e all`      | Backend end-to-end tests          |
-| Frontend | `./dev.py test front all`    | Playwright E2E tests              |
-| **All**  | `./dev.py test all`          | Run everything                    |
+    - **Frontend**: `./dev.py front build`, `front dev`, `front check` — see [Frontend Development](../developer/frontend/index.md)
+    - **Testing**: `./dev.py test all` — see [Test Walkthrough](../developer/test-walkthrough/index.md)
+    - **API Client**: `./dev.py api sync` — see [API Overview](../developer/api/overview.md)
+    - **i18n**: `./dev.py i18n audit` — see [Internationalization](../developer/frontend/i18n.md)

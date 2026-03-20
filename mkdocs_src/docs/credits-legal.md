@@ -1,4 +1,4 @@
-# Credits & Legal
+# ⚖️ Credits & Legal
 
 ## Credits
 

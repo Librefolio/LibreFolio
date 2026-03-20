@@ -1,4 +1,4 @@
-# Settings Components
+# ⚙️ Settings Components
 
 This section documents the components used for the Settings pages (User Preferences, Global Settings, Profile).
 

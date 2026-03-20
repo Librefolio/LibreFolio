@@ -1,4 +1,4 @@
-# Asset Types
+# 📊 Asset Types
 
 LibreFolio supports a wide range of asset classes to cover a diversified portfolio. Each asset type has specific behaviors regarding pricing, dividends, and tax handling.
 

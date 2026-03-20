@@ -166,6 +166,14 @@ Detailed view of a single broker with cash balances and transactions.
     <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail">
 </div>
 
+### Broker Edit
+
+Edit broker details — name, icon, base currency, and configuration.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Modal">
+</div>
+
 ### Import Modal
 
 Easily import transactions from your broker's export files.
