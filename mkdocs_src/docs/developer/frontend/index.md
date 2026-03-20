@@ -2,7 +2,7 @@
 
 This section covers the SvelteKit frontend architecture, components, and development patterns.
 
-## Overview
+## 📖 Overview
 
 LibreFolio's frontend is built with:
 
@@ -12,7 +12,7 @@ LibreFolio's frontend is built with:
 - **TypeScript** - Type safety
 - **lucide-svelte** - Icon library
 
-## Directory Structure
+## 📂 Directory Structure
 
 ```
 frontend/src/
@@ -48,11 +48,11 @@ frontend/src/
 └── static/           # Static assets
 ```
 
-## Svelte 5 Runes
+## ⚡ Svelte 5 Runes
 
 LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the legacy `let` and `$` syntax.
 
-### Key Runes Used
+### 🔑 Key Runes Used
 
 - **`$state`**: Declares reactive state.
   ```typescript
@@ -73,7 +73,7 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
   let { title, active = false } = $props();
   ```
 
-## Documentation Sections
+## 📚 Documentation Sections
 
 - [Components](components/index.md) - Reusable UI components
 - [FX Chain Algorithm](fx-chain-algorithm.md) - DFS pathfinding for currency conversion chains
@@ -84,7 +84,7 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 
 ---
 
-## Build & Development
+## 🏗️ Build & Development
 
 Frontend tasks are managed via `dev.py front`:
 
@@ -116,7 +116,7 @@ Frontend tasks are managed via `dev.py front`:
 !!! tip "Development workflow"
     Run `./dev.py server` in one terminal and `./dev.py front dev` in another. The Vite dev server proxies `/api` calls to the backend automatically.
 
-## Quick Links
+## 🔗 Quick Links
 
 | Topic                                    | Description                                        |
 |------------------------------------------|----------------------------------------------------|

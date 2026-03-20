@@ -1,4 +1,4 @@
-# 📅 Date Pickers
+# 📅 Date Picker Components
 
 Date selection components built on a shared `CalendarMonth` grid.
 
@@ -20,7 +20,7 @@ graph TD
 
 ---
 
-## CalendarMonth
+## 📅 CalendarMonth
 
 A **monthly calendar grid** component — the visual building block for date pickers.
 
@@ -33,7 +33,7 @@ A **monthly calendar grid** component — the visual building block for date pic
 
 ---
 
-## SingleDatePicker
+## 📆 SingleDatePicker { #singledatepicker }
 
 A **single-date picker** dropdown with calendar.
 
@@ -46,7 +46,7 @@ A **single-date picker** dropdown with calendar.
 
 ---
 
-## DateRangePicker
+## 📅 DateRangePicker
 
 A **date range picker** with start and end dates.
 

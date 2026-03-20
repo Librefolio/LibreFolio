@@ -4,7 +4,7 @@ Form and input components for broker creation and editing.
 
 ---
 
-## BrokerForm
+## 📝 BrokerForm
 
 The create/edit form for a broker. Used inside `BrokerModal`.
 
@@ -12,7 +12,7 @@ The create/edit form for a broker. Used inside `BrokerModal`.
     <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-### Fields
+### 📋 Fields
 
 | Field | Component | Required | Description |
 |-------|-----------|----------|-------------|
@@ -24,14 +24,14 @@ The create/edit form for a broker. Used inside `BrokerModal`.
 | **Default Plugin** | [ImportPluginSelect](../select.md#importpluginselect) | ❌ | Default BRIM parser for this broker |
 | **Allow Overdraft** | Toggle | ❌ | Allow negative cash balance |
 
-### Validation
+### ✅ Validation
 
 - **Name**: Required, minimum 1 character
 - **Currency**: Required, must be a valid ISO 4217 code
 
 ---
 
-## BrokerIcon
+## 🖼️ BrokerIcon
 
 A smart icon component with a **4-step fallback chain**:
 
@@ -47,7 +47,7 @@ graph LR
     style D fill:#f3e5f5,stroke:#7b1fa2
 ```
 
-### Sizes
+### 📏 Sizes
 
 | Size | Dimensions | Used in |
 |------|-----------|---------|
@@ -55,7 +55,7 @@ graph LR
 | `md` | 32×32 px | BrokerCard, list items |
 | `lg` | 48×48 px | Broker detail page header |
 
-### Key Props
+### 📋 Key Props
 
 | Prop | Type | Description |
 |------|------|-------------|
@@ -66,4 +66,3 @@ graph LR
 | `altText` | `string` | Accessible alt text |
 
 **Used by**: [BrokerCard](cards.md), [BrokerSearchSelect](../select.md#brokersearchselect), broker detail page.
-

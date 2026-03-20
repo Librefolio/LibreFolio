@@ -5,7 +5,7 @@ A **Day Count Convention** determines how interest accrues over time for a varie
 1. How to calculate the number of days between two dates.
 2. How to calculate the number of days in a year.
 
-## Usage in LibreFolio
+## 🔧 Usage in LibreFolio
 
 Day count conventions are actively used by the **Scheduled Investment** asset source
 provider (`backend/app/services/asset_source_providers/scheduled_investment.py`) for
@@ -15,28 +15,28 @@ synthetic yield calculations. The function `calculate_day_count_fraction()` in
 
 The default convention is **ACT/365**.
 
-## ACT/365 (Actual/365)
+## 📅 ACT/365 (Actual/365)
 
 - **Days**: The actual number of days between two dates.
 - **Year**: Assumed to be 365 days.
 - **Formula**: $t = \frac{\text{actual days}}{365}$
 - **Usage**: Common in UK money markets and for some government bonds. **Default in LibreFolio.**
 
-## ACT/360 (Actual/360)
+## 📅 ACT/360 (Actual/360)
 
 - **Days**: The actual number of days between two dates.
 - **Year**: Assumed to be 360 days.
 - **Formula**: $t = \frac{\text{actual days}}{360}$
 - **Usage**: Very common in US money markets and for commercial loans.
 
-## 30/360 (Bond Basis)
+## 📐 30/360 (Bond Basis)
 
 - **Days**: Calculated assuming every month has 30 days.
 - **Year**: Assumed to be 360 days.
 - **Formula**: $t = \frac{360(Y_2 - Y_1) + 30(M_2 - M_1) + (D_2 - D_1)}{360}$
 - **Usage**: Standard for US corporate bonds and many municipal bonds.
 
-## ACT/ACT (Actual/Actual)
+## 📅 ACT/ACT (Actual/Actual)
 
 - **Days**: The actual number of days between two dates.
 - **Year**: The actual number of days in the year (365 or 366 for leap years).

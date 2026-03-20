@@ -1,9 +1,9 @@
 # Plan: Documentazione LibreFolio — Rifinitura completa
 
 **Data creazione**: 20 Marzo 2026
-**Status**: ⏳ IN CORSO — Batch 1, 3, 4, 5 completati ✅. Batch 2 (emoji H2/H3/bullet) pendente. Batch 1 fix (brokers/index.md + fx/sync.md) completati durante sessioni precedenti. Rifinimenti strutturali completati (vedi `plan-docsStructuralRefinements.prompt.md` ✅).
-**Priorità**: Alta
-**Stima residua**: ~2 ore (solo Batch 2)
+**Status**: ✅ COMPLETATO — Tutti i 5 batch completati. Batch 2 (emoji H2/H3/bullet) completato il 20 Marzo 2026.
+**Priorità**: —
+**Stima residua**: 0
 **Dipendenze**: `plan-fxDocumentation.prompt.md` Fasi 1-2.5 completate ✅
 
 ---
@@ -45,19 +45,22 @@ Due problemi:
 
 ---
 
-## Batch 2 — ✨ Emoji minuziose su H2/H3/bullet (tutti i file)
+## Batch 2 — ✨ Emoji minuziose su H2/H3/bullet (tutti i file) ✅
 
-**Stima**: ~2 ore per ~80 file minuziosi
+**Status**: ✅ COMPLETATO — 20 Marzo 2026
+**Stima originale**: ~2 ore per ~80 file | **Tempo effettivo**: ~2 sessioni AI
 
-Per ciascuno dei ~80 file `.md` sotto `mkdocs_src/docs/`, leggere e aggiungere emoji manualmente ai titoli H2, H3 e alle bullet list dove ha senso. Ogni file va letto, capito, e decorato con emoji tematiche coerenti.
+Per ciascuno dei ~80 file `.md` sotto `mkdocs_src/docs/`, letto e aggiunto emoji manualmente ai titoli H2, H3 e alle bullet list dove ha senso. Ogni file letto, capito, e decorato con emoji tematiche coerenti.
 
-### File da processare per area:
+### File processati per area:
 
-- **user/** (13 file): brokers, sharing, files, fx, chart, signals, measures, data-editor, provider, add-pair, sync, chart-settings, image-crop
-- **admin/** (6 file): index, cli_tools, settings, filesystem, docker_advanced, tailscale
-- **developer/** (~30 file): architecture, technologies, api, backend (brim/fx/assets), frontend, test-walkthrough
-- **financial-theory/** (7 file): index, asset-types, transaction-types, day-count, returns, technical-indicators, synthetic-benchmarks
-- **gallery/** (3 file), `faq.md`, `credits-legal.md`, **tutorials/** (2 file), **POC_UX/**
+- ✅ **user/** (17 file): index, getting-started, installation, brokers/index, brokers/sharing, files/index, misc/image-crop, fx/index, fx/add-pair, fx/sync, fx/chart-settings, fx/detail/index, fx/detail/chart, fx/detail/signals, fx/detail/measures, fx/detail/data-editor, fx/detail/provider
+- ✅ **admin/** (6 file): index, cli_tools, settings, filesystem, docker_advanced, tailscale_exposure
+- ✅ **developer/** (~45 file): index, dev-installation, architecture/* (7), database/* (5), patterns/* (7), backend/brim/* (3), backend/fx/* (3), backend/assets/* (3), api/* (3), frontend/* (4), frontend/components/* (6), frontend/components/brokers/* (4), frontend/components/ui-base/* (6), frontend/pages/index, frontend/state/index, test-walkthrough/* (12)
+- ✅ **financial-theory/** (7 file): index, asset-types, transaction-types, day-count, returns, technical-indicators, synthetic-benchmarks
+- ✅ **gallery/** (3 file): index, desktop, mobile
+- ✅ **faq.md**, **credits-legal.md**
+- ✅ **POC_UX/index.md**
 
 ---
 
@@ -172,12 +175,12 @@ Il diagramma ad albero va scritto come `mermaid graph TD` con le categorie test 
 
 ### Tempo stimato totale
 
-| Batch | Stima |
-|-------|-------|
-| 1 — Fix immediati | ~10 min |
-| 3 — Developer Manual comandi | ~1 ora |
-| 4 — Developer index rewrite | ~15 min |
-| 2 — Emoji H2/H3/bullet pass | ~2 ore |
-| 5 — Verifica filesystem links | ~15 min |
-| **Totale** | **~3.5 ore** |
+| Batch | Stima | Status |
+|-------|-------|--------|
+| 1 — Fix immediati | ~10 min | ✅ |
+| 3 — Developer Manual comandi | ~1 ora | ✅ |
+| 4 — Developer index rewrite | ~15 min | ✅ |
+| 2 — Emoji H2/H3/bullet pass | ~2 ore | ✅ |
+| 5 — Verifica filesystem links | ~15 min | ✅ |
+| **Totale** | **~3.5 ore** | **✅ COMPLETATO** |
 

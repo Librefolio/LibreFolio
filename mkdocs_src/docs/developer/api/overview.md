@@ -2,7 +2,7 @@
 
 This section explains how the SvelteKit frontend communicates with the FastAPI backend, ensuring type safety and consistency across the stack.
 
-## Architecture
+## 🏗️ Architecture
 
 LibreFolio uses a strict **OpenAPI-first** approach (generated from code) to synchronize the backend and frontend.
 
@@ -17,7 +17,7 @@ graph LR
     TSClient -- "HTTP Request" --> Backend
 ```
 
-## The Synchronization Workflow
+## 🔄 The Synchronization Workflow
 
 The synchronization process is automated via `dev.py`:
 
@@ -28,7 +28,7 @@ The synchronization process is automated via `dev.py`:
 !!! tip "One-step sync"
     Use `./dev.py api sync` to run both steps (schema export + client generation) in a single command. This is the recommended workflow after any backend API change.
 
-### CLI Commands
+### 💻 CLI Commands
 
 ```bash
 # Export OpenAPI schema only
@@ -41,7 +41,7 @@ The synchronization process is automated via `dev.py`:
 ./dev.py api sync
 ```
 
-### Generated Client Features
+### ⚡ Generated Client Features
 
 The generated client provides:
 
@@ -49,7 +49,7 @@ The generated client provides:
 - **Zod Schemas**: Runtime validation schemas for API responses.
 - **API Functions**: Typed functions for each endpoint (e.g., `api.getAssets()`).
 
-## Usage in Frontend
+## 🖥️ Usage in Frontend
 
 In the SvelteKit frontend, developers import the generated client to make API calls.
 

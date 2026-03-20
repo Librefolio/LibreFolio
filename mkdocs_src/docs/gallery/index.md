@@ -2,7 +2,7 @@
 
 Welcome to the LibreFolio visual gallery! Here you can explore all the features of our portfolio management platform through screenshots.
 
-## Choose Your View
+## 👁️ Choose Your View
 
 <div class="gallery-cards">
     <a href="desktop/" class="gallery-card">
@@ -17,7 +17,7 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
     </a>
 </div>
 
-## Features Highlighted
+## ✨ Features Highlighted
 
 !!! tip "What You'll See"
 
@@ -30,7 +30,7 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
     - **Media & Upload**: Image crop/edit, asset picker, file renaming
     - **FX Rates**: Currency pairs, charts, sync, data editor, CSV import
 
-## Language Support
+## 🌍 Language Support
 
 LibreFolio is available in:
 

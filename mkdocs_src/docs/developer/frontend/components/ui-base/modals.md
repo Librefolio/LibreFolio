@@ -21,7 +21,7 @@ graph TD
 
 ---
 
-## ModalBase
+## 🏗️ ModalBase
 
 The **foundation for all modals** in LibreFolio.
 
@@ -36,7 +36,7 @@ The **foundation for all modals** in LibreFolio.
 
 ---
 
-## ConfirmModal
+## ⚠️ ConfirmModal
 
 A confirmation dialog for **destructive actions**. Extends `ModalBase`.
 

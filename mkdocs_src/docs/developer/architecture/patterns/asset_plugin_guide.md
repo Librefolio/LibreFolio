@@ -8,7 +8,7 @@ How to create a new **Asset Source Provider** to fetch prices from a new data so
 
 ---
 
-## Flow
+## 🔄 Flow
 
 The system calls provider methods in three distinct phases:
 
@@ -50,9 +50,9 @@ graph TD
 
 ---
 
-## ABC Methods
+## 📋 ABC Methods
 
-### Required (Abstract)
+### ✅ Required (Abstract)
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
@@ -63,7 +63,7 @@ graph TD
 | `get_current_value(identifier, type, params)` | `async → FACurrentValue` | Fetch latest price. Returns `value`, `currency`, `as_of_date`, `source`. |
 | `get_history_value(identifier, type, params, start, end)` | `async → FAHistoricalData` | Fetch historical OHLCV data for date range. Return raw data only — no gap filling. |
 
-### Strongly Recommended (Override)
+### 💪 Strongly Recommended (Override)
 
 !!! tip "Implementing `search()` is strongly recommended"
     Without search, users must know the exact asset identifier (ticker, ISIN, URL) upfront. With search, they can type a name like "Apple" and pick from results.
@@ -73,7 +73,7 @@ graph TD
 | `search(query)` | Raises `NOT_SUPPORTED` | Search for assets by name, ticker, or ISIN. Returns `[{identifier, identifier_type, display_name, currency, type}]`. |
 | `test_search_query` | — | Query string for automated search tests (e.g., `"Apple"`). Return `None` if search not supported. |
 
-### Optional (Override)
+### 🔧 Optional (Override)
 
 | Method | Default | Description |
 |--------|---------|-------------|
@@ -84,11 +84,11 @@ graph TD
 
 ---
 
-## Asset Search
+## 🔎 Asset Search
 
 The `search(query)` method allows users to **discover assets** by name, ticker, or ISIN across all providers simultaneously.
 
-### How It Works
+### ⚙️ How It Works
 
 1. User types a query in the UI (e.g., "Apple", "MSCI World", "IE00B4L5Y983")
 2. Frontend calls `GET /api/v1/assets/provider/search?q=Apple`
@@ -96,7 +96,7 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 4. Providers that don't implement search (default raises `NOT_SUPPORTED`) are silently skipped
 5. Results are aggregated and returned to the user
 
-### Provider Support
+### 🔌 Provider Support
 
 | Provider | `search()` | `test_search_query` | Notes |
 |----------|-----------|---------------------|-------|
@@ -105,7 +105,7 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 | **CSS Scraper** | ❌ | `None` | No search — URL must be provided manually |
 | **Scheduled Investment** | ❌ | `None` | Synthetic provider, no external search |
 
-### API Endpoint
+### 🌐 API Endpoint
 
 ```
 GET /api/v1/assets/provider/search?q=Apple&providers=yfinance,justetf
@@ -142,7 +142,7 @@ GET /api/v1/assets/provider/search?q=Apple&providers=yfinance,justetf
 
 ---
 
-## Implementation Example
+## 💻 Implementation Example
 
 ```python
 # backend/app/services/asset_source_providers/my_provider.py
@@ -197,7 +197,7 @@ class MyProvider(AssetSourceProvider):
 
 ---
 
-## Related Documentation
+## 🔗 Related Documentation
 
 - [Asset Architecture](../../backend/assets/architecture.md) — Provider interface, caching, refresh logic
 - [System Providers](../../backend/assets/system_providers.md) — Built-in providers (Scheduled Investment, Manual)

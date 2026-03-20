@@ -3,7 +3,7 @@
 LibreFolio uses **Alembic** to manage database schema changes. Alembic is a lightweight database migration tool for SQLAlchemy that provides a versioning system for your database
 schema.
 
-## Workflow
+## 🔄 Workflow
 
 The basic workflow for making a schema change is:
 
@@ -23,7 +23,7 @@ The basic workflow for making a schema change is:
    ./dev.py db upgrade
    ```
 
-## SQLite and Alembic Limitations
+## ⚠️ SQLite and Alembic Limitations
 
 SQLite has limited support for `ALTER TABLE` statements, which can make schema migrations more complex than with other databases like PostgreSQL. Alembic works around this by using
 a "batch mode" that:
@@ -33,13 +33,13 @@ a "batch mode" that:
 3. Drops the old table.
 4. Renames the new table to the original name.
 
-### The `CHECK` Constraint Problem
+### 🔍 The `CHECK` Constraint Problem
 
 A significant limitation of this approach is that **Alembic's autogenerate feature does not detect `CHECK` constraints in SQLite**.
 
 This means that if you add or modify a `CHECK` constraint in your SQLAlchemy model, you **must manually add it** to the generated migration script.
 
-#### Example: Manually Adding a `CHECK` Constraint
+#### 📝 Example: Manually Adding a `CHECK` Constraint
 
 If you add a `CHECK` constraint to the `Transaction` model:
 

@@ -9,7 +9,7 @@ To add a new currency pair to your FX dashboard:
 
 ---
 
-## Direct Routes
+## 🔗 Direct Routes
 
 If a provider supports both currencies directly (e.g., ECB for EUR→USD), you'll see a **Direct Routes** section:
 
@@ -19,7 +19,7 @@ If a provider supports both currencies directly (e.g., ECB for EUR→USD), you'l
 
 ---
 
-## Chain Routes
+## 🔀 Chain Routes
 
 For exotic pairs (e.g., RON→JPY) where no single provider covers both currencies, the system builds **conversion chains** — multi-step paths through intermediate currencies:
 
@@ -37,20 +37,19 @@ For exotic pairs (e.g., RON→JPY) where no single provider covers both currenci
 
 ---
 
-## How Route Discovery Works
+## 🧭 How Route Discovery Works
 
 When you select two currencies, LibreFolio queries all installed providers to find:
 
-- **Direct routes**: a single provider that covers both currencies
-- **Chain routes**: two or more providers that together can connect the currencies through an intermediate currency (e.g., EUR)
+- 🔗 **Direct routes**: a single provider that covers both currencies
+- 🔀 **Chain routes**: two or more providers that together can connect the currencies through an intermediate currency (e.g., EUR)
 
 Each route shows:
 
-- The **provider** name and icon
-- The **direction** (base → quote)
-- For chains: the **intermediate currency** and the **number of hops**
+- 🏛️ The **provider** name and icon
+- ➡️ The **direction** (base → quote)
+- 🔢 For chains: the **intermediate currency** and the **number of hops**
 
 You can choose any available route based on your preference for data source, coverage period, or update frequency.
 
 For technical details on the routing algorithm, see the developer documentation: [FX Configuration & Routing](../../developer/backend/fx/configuration.md).
-

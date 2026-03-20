@@ -1,17 +1,17 @@
 # ⚖️ Credits & Legal
 
-## Credits
+## 🏆 Credits
 
 LibreFolio is a labor of love, built to empower individuals with financial data sovereignty.
 
-### Core Team
+### 👥 Core Team
 
 * **Emanuele Alfano** - *Creator & Lead Developer*
     * Concept, Architecture, Backend (FastAPI), Frontend (SvelteKit), and DevOps.
 * **Nicoleta Alfano** - *Artwork & Design*
     * Logo design, color palette, and visual identity.
 
-### AI-Assisted Development
+### 🤖 AI-Assisted Development
 
 This project was developed with the support of advanced AI coding assistants, utilizing a structured **Plan -> Dev -> Test -> Review** methodology.
 
@@ -21,18 +21,18 @@ This project was developed with the support of advanced AI coding assistants, ut
 
 ---
 
-## Legal & License
+## 📜 Legal & License
 
 LibreFolio is open-source software licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
-### What this means for you
+### 📋 What this means for you
 
 * ✅ **Use**: You are free to use this software for private or commercial purposes.
 * ✅ **Modify**: You can modify the source code to suit your needs.
 * ✅ **Distribute**: You can share copies of the software.
 * 🔄 **Share Alike**: If you modify the software and make it available to others (even over a network), you **must** release your modifications under the same AGPL-3.0 license.
 
-### Full License Text
+### 📄 Full License Text
 
 The full text of the license is available in the [LICENSE](https://github.com/Alfystar/LibreFolio/blob/main/LICENCE) file in the repository.
 

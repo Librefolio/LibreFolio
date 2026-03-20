@@ -33,7 +33,7 @@ This page lists the Foreign Exchange (FX) rate providers currently available in 
 | **Historical Data** | Available from 1999 |
 | **API Docs** | [ECB Data Portal API](https://data.ecb.europa.eu/help/api/overview) |
 
-### How It Works
+### ⚙️ How It Works
 
 ECB publishes daily reference exchange rates for the Euro against ~45 currencies. The provider queries the ECB Statistical Data Warehouse using the SDMX REST API.
 
@@ -42,11 +42,11 @@ ECB publishes daily reference exchange rates for the Euro against ~45 currencies
 - **Series**: `SP00` (Spot rate)
 - **Quotation**: Rates are "1 EUR = X foreign currency" — stored directly in LibreFolio's format
 
-### Supported Currencies
+### 💰 Supported Currencies
 
 Major: USD, GBP, JPY, CHF, CAD, AUD, NZD, SEK, NOK, DKK, CNY, HKD, SGD, KRW, INR, BRL, MXN, ZAR, TRY, PLN, CZK, HUF, RON, BGN, HRK, RUB, and many more.
 
-### Limitations
+### ⚠️ Limitations
 
 - No data on weekends or ECB holidays
 - Some emerging market currencies may have gaps during local holidays
@@ -67,7 +67,7 @@ Major: USD, GBP, JPY, CHF, CAD, AUD, NZD, SEK, NOK, DKK, CNY, HKD, SGD, KRW, INR
 | **Update Frequency** | Daily, US business days |
 | **API Docs** | [FRED Economic Data](https://fred.stlouisfed.org/) |
 
-### How It Works
+### ⚙️ How It Works
 
 The Federal Reserve provides exchange rate data through FRED (Federal Reserve Economic Data). The provider downloads CSV files for each currency series.
 
@@ -75,11 +75,11 @@ The Federal Reserve provides exchange rate data through FRED (Federal Reserve Ec
 - **Quotation**: "USD per 1 foreign currency" — the provider **inverts** these automatically to get LibreFolio's standard format
 - **Multi-unit currencies**: None (FRED quotes all currencies per 1 unit)
 
-### Supported Currencies
+### 💰 Supported Currencies
 
 EUR, GBP, JPY, CAD, CHF, AUD, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, NZD, THB, SEK, NOK, DKK, CNY.
 
-### Series ID Mapping
+### 🗺️ Series ID Mapping
 
 | Currency | FRED Series | Direction |
 |----------|-------------|-----------|
@@ -90,7 +90,7 @@ EUR, GBP, JPY, CAD, CHF, AUD, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, NZD, THB, 
 | CAD | `DEXCAUS` | CAD per 1 USD |
 | AUD | `DEXUSAL` | USD per 1 AUD |
 
-### Limitations
+### ⚠️ Limitations
 
 - One HTTP request per currency (sequential fetching)
 - No data on US holidays and weekends
@@ -112,18 +112,18 @@ EUR, GBP, JPY, CAD, CHF, AUD, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, NZD, THB, 
 | **Historical Data** | Deep historical coverage (decades for major currencies) |
 | **API Docs** | [BOE Statistical Interactive Database](https://www.bankofengland.co.uk/boeapps/database/) |
 
-### How It Works
+### ⚙️ How It Works
 
 BOE provides exchange rates through their Statistical Interactive Database (IADB). Each currency has a unique series code.
 
 - **Series codes**: Format `XUDL{XXX}` where `XXX` varies by currency (e.g., `XUDLUSS` for USD)
 - **Quotation**: "Foreign currency per 1 GBP" — the provider normalizes these automatically
 
-### Supported Currencies
+### 💰 Supported Currencies
 
 USD, EUR, JPY, CHF, CAD, AUD, NZD, SEK, NOK, DKK, CNY, HKD, SGD, ZAR, INR.
 
-### Limitations
+### ⚠️ Limitations
 
 - API returns HTML with embedded CSV data — parsing is more complex than pure JSON/CSV APIs
 - One request per currency (sequential)
@@ -145,18 +145,18 @@ USD, EUR, JPY, CHF, CAD, AUD, NZD, SEK, NOK, DKK, CNY, HKD, SGD, ZAR, INR.
 | **Update Frequency** | Daily, Swiss business days |
 | **API Docs** | [SNB Data Portal](https://data.snb.ch/en/topics/uvo#!/doc/explanations) |
 
-### How It Works
+### ⚙️ How It Works
 
 SNB provides exchange rates through their Data Portal API. The provider queries the `devkum` dataset for daily rates.
 
 - **Quotation**: "X CHF = 1 (or 100) foreign currency units" — the provider **inverts** and normalizes automatically
 - **Multi-unit currencies**: JPY, SEK, NOK, DKK are quoted per **100 units** (e.g., 100 JPY = 1.5 CHF). The provider divides by 100 automatically.
 
-### Supported Currencies
+### 💰 Supported Currencies
 
 USD, EUR, GBP, JPY, CAD, AUD, SEK, NOK, DKK, CNY.
 
-### Multi-Unit Currency Handling
+### 🔢 Multi-Unit Currency Handling
 
 | Currency | SNB Quotation | LibreFolio Normalization |
 |----------|---------------|--------------------------|
@@ -164,7 +164,7 @@ USD, EUR, GBP, JPY, CAD, AUD, SEK, NOK, DKK, CNY.
 | JPY | 1.50 CHF = **100** JPY | 1 CHF = 66.67 JPY |
 | SEK | 8.50 CHF = **100** SEK | 1 CHF = 11.76 SEK |
 
-### Limitations
+### ⚠️ Limitations
 
 - Smallest provider list (~10 currencies only)
 - No data on Swiss holidays and weekends

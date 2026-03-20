@@ -10,32 +10,32 @@ The Signals panel lets you overlay **technical indicators** on the FX chart. The
 
 ## 📊 Available Indicators
 
-### [EMA — Exponential Moving Average](../../../financial-theory/technical-indicators.md#ema)
+### 📉 [EMA — Exponential Moving Average](../../../financial-theory/technical-indicators.md#ema)
 
 Tracks the **trend** by smoothing daily price noise, giving more weight to recent values. When a short-period EMA crosses above a long-period EMA ("golden cross"), it signals upward momentum.
 
-- **Fast EMA**: Short period (e.g., 12 days) — reacts quickly to price changes
-- **Slow EMA**: Long period (e.g., 26 days) — smoother, shows the underlying trend
+- ⚡ **Fast EMA**: Short period (e.g., 12 days) — reacts quickly to price changes
+- 🐢 **Slow EMA**: Long period (e.g., 26 days) — smoother, shows the underlying trend
 
-### [MACD — Moving Average Convergence Divergence](../../../financial-theory/technical-indicators.md#macd)
+### 📊 [MACD — Moving Average Convergence Divergence](../../../financial-theory/technical-indicators.md#macd)
 
 Measures the **momentum** by computing the difference between two EMAs. A positive MACD means the fast EMA is above the slow EMA (bullish), negative means the opposite (bearish).
 
-- **MACD Line**: Difference between fast and slow EMA
-- **Signal Line**: EMA of the MACD line itself (smoothed momentum)
-- **Histogram**: Visual difference between MACD and Signal lines
+- 📈 **MACD Line**: Difference between fast and slow EMA
+- 〰️ **Signal Line**: EMA of the MACD line itself (smoothed momentum)
+- 📊 **Histogram**: Visual difference between MACD and Signal lines
 
-### [RSI — Relative Strength Index](../../../financial-theory/technical-indicators.md#rsi)
+### 💪 [RSI — Relative Strength Index](../../../financial-theory/technical-indicators.md#rsi)
 
 An **oscillator** (0–100) that measures the speed and magnitude of price changes. Values above 70 suggest overbought conditions, below 30 suggest oversold.
 
-### [Bollinger Bands](../../../financial-theory/technical-indicators.md#bollinger-bands)
+### 📏 [Bollinger Bands](../../../financial-theory/technical-indicators.md#bollinger-bands)
 
 A **volatility envelope** around the price. The bands widen during volatile periods and contract during calm periods.
 
-- **Middle Band**: Simple Moving Average (SMA)
-- **Upper Band**: SMA + 2 standard deviations
-- **Lower Band**: SMA − 2 standard deviations
+- 〰️ **Middle Band**: Simple Moving Average (SMA)
+- 🔺 **Upper Band**: SMA + 2 standard deviations
+- 🔻 **Lower Band**: SMA − 2 standard deviations
 
 ---
 
@@ -57,7 +57,7 @@ For a comprehensive mathematical treatment of each indicator — including formu
 
 This reference page covers:
 
-- The **mathematical formulas** behind each indicator
-- **Signal processing** equivalents (EMA = IIR filter, SMA = FIR filter, etc.)
-- The **"fast vs slow"** intuition in terms of filter cut-off frequencies
-- **Practical examples** of crossover detection and trend identification
+- 🔢 The **mathematical formulas** behind each indicator
+- 🎛️ **Signal processing** equivalents (EMA = IIR filter, SMA = FIR filter, etc.)
+- ⚡ The **"fast vs slow"** intuition in terms of filter cut-off frequencies
+- 📈 **Practical examples** of crossover detection and trend identification

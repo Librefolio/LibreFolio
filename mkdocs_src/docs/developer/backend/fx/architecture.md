@@ -1,13 +1,13 @@
-# 🏗️ FX Architecture
+# 💱 FX Architecture
 
 The Foreign Exchange (FX) system is responsible for fetching, storing, and providing exchange rates for currency conversion.
 
-## Multi-Provider Support
+## 🔌 Multi-Provider Support
 
 LibreFolio supports multiple FX rate providers (e.g., ECB, FED). This ensures redundancy and allows users to choose the source that best fits their needs (e.g., a US user might
 prefer FED rates, while a European user prefers ECB).
 
-### The `FXRateProvider` Interface
+### 📋 The `FXRateProvider` Interface
 
 All providers must implement the `FXRateProvider` abstract base class:
 
@@ -23,7 +23,7 @@ class FXRateProvider(ABC):
         pass
 ```
 
-## Normalization and Storage
+## 📐 Normalization and Storage
 
 Providers typically return rates relative to a specific base currency (e.g., ECB returns `1 EUR = X USD`).
 
@@ -35,14 +35,14 @@ currency.**
 
 This ensures that we only need to store one rate per pair, and we can easily calculate the inverse if needed.
 
-## Priority System
+## 🔢 Priority System
 
 When converting currency, the system needs to decide which rate to use if multiple providers have data for the same pair and date.
 
 Currently, the system allows the user (or admin) to select a **preferred provider** for synchronization. The `ensure_rates_multi_source` function orchestrates the fetching process
 using the selected provider.
 
-## Conversion Logic
+## 🔄 Conversion Logic
 
 The `convert` function handles the actual currency conversion:
 

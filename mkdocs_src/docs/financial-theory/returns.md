@@ -17,7 +17,7 @@ $$
 
     $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
 
-### Properties
+### 📊 Properties
 
 - **Intuitive**: directly represents "how much you gained/lost"
 - **Not additive**: you cannot simply sum simple returns across periods to get total return
@@ -37,7 +37,7 @@ $$
 r_{log} = \ln\left(\frac{P_{end}}{P_{start}}\right) = \ln(P_{end}) - \ln(P_{start})
 $$
 
-### Properties
+### 📊 Properties
 
 - **Additive across time**: total log return = sum of sub-period log returns
 
@@ -48,7 +48,7 @@ $$
 - **Symmetric**: a +5% move followed by a −5% move returns exactly to the starting point
 - **Approximately equal** to simple return for small values: $r_{log} \approx R_{simple}$ when $R_{simple}$ is small
 
-### Conversion
+### 🔄 Conversion
 
 $$
 r_{log} = \ln(1 + R_{simple}) \qquad R_{simple} = e^{r_{log}} - 1
@@ -60,7 +60,7 @@ $$
 
 To compare returns across different time periods, we **annualize** them — projecting the observed growth rate to a full year.
 
-### Compound Annual Growth Rate (CAGR)
+### 📈 Compound Annual Growth Rate (CAGR)
 
 The most common annualization method. Given a total return over $d$ calendar days:
 
@@ -75,7 +75,7 @@ This is what LibreFolio's [Measures tool](../user/fx/detail/measures.md) display
 
     $$R_{annual} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
 
-### Annualized Log Return
+### 📐 Annualized Log Return
 
 For log returns, annualization is simply scaling:
 

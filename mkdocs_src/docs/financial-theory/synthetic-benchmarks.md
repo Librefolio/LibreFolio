@@ -13,16 +13,16 @@ They are invaluable for:
 
 ---
 
-## Linear Growth { #linear-growth }
+## 📈 Linear Growth { #linear-growth }
 
-### Financial Meaning
+### 💡 Financial Meaning
 
 A linear growth benchmark represents **simple interest** — the value increases by a
 fixed absolute amount each period. It is the simplest "target line" you can draw: if you
 expect an asset to return $r$% per year, the linear benchmark shows where the price
 *should* be at any point in time under that assumption.
 
-### Mathematical Formula
+### 🔢 Mathematical Formula
 
 $$
 y(t) = y_0 \cdot (1 + r \cdot t)
@@ -37,14 +37,14 @@ where:
 This is equivalent to the **simple interest** formula $A = P(1 + rt)$, where $t$ is
 expressed in years using the applicable [Day Count Convention](day-count.md).
 
-### Parameters
+### ⚙️ Parameters
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
 | Annual Rate | `annualRate` | 5 | Growth rate in percent per year. |
 | Offset | `offset` | 0 | Vertical shift as % of base value. |
 
-### Interpretation
+### 🔍 Interpretation
 
 The line is perfectly straight on a linear scale. Any point where the actual price
 is *above* the line means the asset has outperformed the target; any point *below*
@@ -55,16 +55,16 @@ logarithmic scale — making it easy to visually distinguish from compound growt
 
 ---
 
-## Compound Growth { #compound-growth }
+## 📊 Compound Growth { #compound-growth }
 
-### Financial Meaning
+### 💡 Financial Meaning
 
 A compound growth benchmark represents **compound interest** — the value grows
 exponentially, meaning returns are reinvested. This is the natural growth model for
 most financial assets and the standard assumption in discounted cash flow (DCF)
 analysis.
 
-### Mathematical Formula
+### 🔢 Mathematical Formula
 
 $$
 y(t) = y_0 \cdot (1 + r)^t
@@ -93,7 +93,7 @@ $$
 A = P \cdot e^{r \cdot t}
 $$
 
-### Iterative Computation (Daily Stepping)
+### 🔄 Iterative Computation (Daily Stepping)
 
 In LibreFolio the compound curve is computed **iteratively** rather than calling
 `pow()` for each data point. This is both more efficient and instructive:
@@ -116,14 +116,14 @@ how banks actually accrue daily compound interest.
     A quick mental shortcut: an investment growing at $r$% per year will approximately
     double in $72 / r$ years. At 7% → ~10.3 years.
 
-### Parameters
+### ⚙️ Parameters
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
 | Annual Rate | `annualRate` | 7 | Compound growth rate in percent per year. |
 | Offset | `offset` | 0 | Vertical shift as % of base value. |
 
-### Interpretation
+### 🔍 Interpretation
 
 The curve is straight on a **logarithmic** scale — this is the telltale sign of
 exponential growth. Overlaying a compound benchmark on a log-scale chart is the
@@ -133,9 +133,9 @@ cleanest way to judge whether an asset is growing faster or slower than a target
 
 ---
 
-## Sine Wave { #sine-wave }
+## 🌊 Sine Wave { #sine-wave }
 
-### Financial Meaning
+### 💡 Financial Meaning
 
 A sine wave benchmark represents **periodic oscillation**. It is useful for:
 
@@ -143,7 +143,7 @@ A sine wave benchmark represents **periodic oscillation**. It is useful for:
 - Providing a visual reference for **cyclic patterns** that traders suspect in the data.
 - Testing the rendering pipeline with a known analytic waveform.
 
-### Mathematical Formula
+### 🔢 Mathematical Formula
 
 $$
 y(t) = A \cdot \sin\!\left(\frac{2\pi t}{T}\right) + y_0 + \text{offset}
@@ -156,7 +156,7 @@ where:
 - $y_0$ is the base value (first data point),
 - $\text{offset}$ is a vertical shift.
 
-### Parameters
+### ⚙️ Parameters
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
@@ -164,7 +164,7 @@ where:
 | Period | `period` | 365 | Full cycle length in days. |
 | Offset | `offset` | 0 | Vertical shift as % of base value. |
 
-### Interpretation
+### 🔍 Interpretation
 
 If the actual price roughly tracks the sine reference, the market exhibits a detectable
 cyclic component at that frequency. Deviations from the sine suggest non-periodic shocks

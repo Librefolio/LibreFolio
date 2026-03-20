@@ -4,7 +4,7 @@ Once a currency pair is configured with a data provider, LibreFolio can **automa
 
 ---
 
-## Sync All
+## 🔄 Sync All
 
 From the FX list page, use the **Sync All** button to synchronize all configured pairs at once:
 
@@ -14,19 +14,19 @@ From the FX list page, use the **Sync All** button to synchronize all configured
 
 The sync modal shows:
 
-- **Progress** for each pair being synced
-- **Status** indicators (success, error, skipped)
-- **New data points** count for each pair
+- 📊 **Progress** for each pair being synced
+- ✅ **Status** indicators (success, error, skipped)
+- 🆕 **New data points** count for each pair
 
 ---
 
-## Individual Pair Sync
+## 🎯 Individual Pair Sync
 
 You can also sync a single pair from its [detail page](detail/index.md) using the sync button. This is useful when you want to update only one specific pair.
 
 ---
 
-## How Sync Works
+## ⚙️ How Sync Works
 
 The sync process:
 
@@ -46,9 +46,9 @@ For advanced users: LibreFolio uses a sophisticated **routing system** for FX da
 
 This means:
 
-- If your primary provider (e.g., ECB) is down, the system falls back to the next provider (e.g., FED)
-- Exotic pairs use multi-step chains through intermediate currencies (e.g., RON → EUR → JPY)
-- You can customize which provider to use for each pair
+- 🔄 If your primary provider (e.g., ECB) is down, the system falls back to the next provider (e.g., FED)
+- 🔀 Exotic pairs use multi-step chains through intermediate currencies (e.g., RON → EUR → JPY)
+- ⚙️ You can customize which provider to use for each pair
 
 For the list of supported providers, see the [FX Providers List](../../developer/backend/fx/providers_list.md).
 

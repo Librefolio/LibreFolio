@@ -2,7 +2,7 @@
 
 This section guides you through the LibreFolio test suite. Understanding the tests is one of the best ways to understand the codebase.
 
-## Running Tests
+## 🚀 Running Tests
 
 All tests are executed through `dev.py`:
 
@@ -20,7 +20,7 @@ All tests are executed through `dev.py`:
 ./dev.py test api --list
 ```
 
-### Global Flags
+### 🌐 Global Flags
 
 | Flag | Description |
 |------|-------------|
@@ -29,13 +29,13 @@ All tests are executed through `dev.py`:
 | `--cov-clean` | Clean coverage database before run |
 | `--db-reset` | Reset test database before DB tests |
 
-### Frontend Flags
+### 🖥️ Frontend Flags
 
 Frontend test categories support additional flags (`--headed`, `--debug`, `--ui`). See the [Frontend Tests Overview](front-overview.md) for details.
 
 ---
 
-## Test Categories
+## 📋 Test Categories
 
 LibreFolio organizes tests into **10 categories**, grouped by layer:
 
@@ -54,7 +54,7 @@ LibreFolio organizes tests into **10 categories**, grouped by layer:
 
 ---
 
-## Architecture Overview
+## 🏗️ Architecture Overview
 
 ```mermaid
 graph TD
@@ -78,9 +78,9 @@ graph TD
 
 ---
 
-## Category Details
+## 📑 Category Details
 
-### Backend Categories
+### 🔧 Backend Categories
 
 - **[External](external.md)** — Tests that call real external APIs (FX providers, asset providers, BRIM parsers). Run without the backend server.
 - **[Database](db.md)** — Tests the database layer directly (schema validation, persistence, migrations). Uses an isolated test SQLite file.
@@ -90,7 +90,7 @@ graph TD
 - **[API](api.md)** — Integration tests for FastAPI endpoints. Automatically starts a test server if needed.
 - **[E2E](e2e.md)** — End-to-end backend tests with real API interaction and database state.
 
-### Frontend Categories (Playwright)
+### 🎭 Frontend Categories (Playwright)
 
 - **[Front-Utility](front-utility.md)** — Tests UI components: authentication flow, settings tabs, file upload, search selects, image cropping.
 - **[Front-User](front-user.md)** — Tests user-facing features: broker CRUD, multi-user scenarios, broker sharing with RBAC.
@@ -101,7 +101,7 @@ graph TD
 
 ---
 
-## Coverage
+## 📊 Coverage
 
 Generate a code coverage report:
 

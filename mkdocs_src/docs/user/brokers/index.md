@@ -10,7 +10,7 @@ All transactions, reports, and import data are tied to a broker. You need at lea
 
 ---
 
-## Creating a Broker
+## ➕ Creating a Broker
 
 1. Navigate to the **Brokers** page from the sidebar
 2. Click **"New Broker"**
@@ -25,7 +25,7 @@ All transactions, reports, and import data are tied to a broker. You need at lea
     </div>
 ---
 
-## What Can You Do With a Broker?
+## 🔧 What Can You Do With a Broker?
 
 | Feature | Description | Status |
 |---------|-------------|--------|
@@ -40,8 +40,6 @@ All transactions, reports, and import data are tied to a broker. You need at lea
 
 ---
 
-## In This Section
+## 📑 In This Section
 
-- **[Broker Sharing](sharing.md)** — How to share access with other users (family, advisors, accountants)
-
-
+- 🤝 **[Broker Sharing](sharing.md)** — How to share access with other users (family, advisors, accountants)

@@ -8,7 +8,7 @@ The Measures panel provides a **click-to-click measurement tool** for analyzing 
 
 ---
 
-## How to Use
+## 🖱️ How to Use
 
 1. Click the **Measures** toggle button (📐) in the chart toolbar
 2. The measures panel opens below the chart
@@ -18,7 +18,7 @@ The Measures panel provides a **click-to-click measurement tool** for analyzing 
 
 ---
 
-## Computed Metrics
+## 📊 Computed Metrics
 
 For each measurement, the panel displays:
 
@@ -37,15 +37,14 @@ For each measurement, the panel displays:
 
 ---
 
-## Multiple Measurements
+## 🔁 Multiple Measurements
 
 You can take multiple measurements in sequence — each new click pair replaces the previous measurement. This lets you quickly compare movements across different time windows.
 
 ---
 
-## Tips
+## 💡 Tips
 
-- **Zoom in** before measuring for better precision on the click points
-- Use measurements to compare **pre/post event** rate movements (e.g., before and after a central bank announcement)
-- The annualized return is most meaningful for periods of **30+ days** — very short periods can produce misleading annualized figures
-
+- 🔍 **Zoom in** before measuring for better precision on the click points
+- 📰 Use measurements to compare **pre/post event** rate movements (e.g., before and after a central bank announcement)
+- ⚠️ The annualized return is most meaningful for periods of **30+ days** — very short periods can produce misleading annualized figures

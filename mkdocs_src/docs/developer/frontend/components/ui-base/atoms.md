@@ -4,7 +4,7 @@ Small, standalone UI primitives and input helpers.
 
 ---
 
-## ThemeToggle
+## 🌓 ThemeToggle
 
 A **light/dark/auto theme toggle** with animated icons.
 
@@ -16,7 +16,7 @@ A **light/dark/auto theme toggle** with animated icons.
 
 ---
 
-## DocsLink
+## 📖 DocsLink
 
 A **link to the MkDocs documentation** with book icon.
 
@@ -27,7 +27,7 @@ A **link to the MkDocs documentation** with book icon.
 
 ---
 
-## AnimatedBackground
+## 🌊 AnimatedBackground
 
 **Animated SVG waves** for the login page background.
 
@@ -39,7 +39,7 @@ A **link to the MkDocs documentation** with book icon.
 
 ---
 
-## OrderableList
+## 📋 OrderableList
 
 A **drag-and-drop reorderable list**.
 
@@ -51,7 +51,7 @@ A **drag-and-drop reorderable list**.
 
 ---
 
-## PasswordInput
+## 🔑 PasswordInput
 
 *Located in `lib/components/ui/input/`*
 
@@ -64,7 +64,7 @@ A **password field with visibility toggle** (eye icon).
 
 ---
 
-## PasswordStrength
+## 💪 PasswordStrength
 
 *Located in `lib/components/ui/input/`*
 
@@ -75,4 +75,3 @@ A **password strength indicator** powered by `zxcvbn`.
 - Score: 0 (very weak) to 4 (very strong)
 
 **Used by**: [RegisterCard](../auth.md) (below password field).
-

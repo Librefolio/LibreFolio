@@ -4,7 +4,7 @@ LibreFolio stores all persistent data in a structured directory under `backend/d
 
 ---
 
-## Directory Layout
+## 🗂️ Directory Layout
 
 ```
 backend/data/
@@ -35,8 +35,8 @@ backend/data/
 
 The main SQLite database. Contains all application data: users, brokers, transactions, FX rates, settings, etc.
 
-- Uses **WAL (Write-Ahead Logging)** journal mode for better concurrent access
-- The `.db-wal` and `.db-shm` files are temporary WAL files — they're expected and managed by SQLite
+- 📝 Uses **WAL (Write-Ahead Logging)** journal mode for better concurrent access
+- 📎 The `.db-wal` and `.db-shm` files are temporary WAL files — they're expected and managed by SQLite
 
 :material-arrow-right: **Developer deep-dive**: [Database Schema](../developer/architecture/database/index.md)
 
@@ -44,8 +44,8 @@ The main SQLite database. Contains all application data: users, brokers, transac
 
 Files uploaded by users through the Files page. Each upload creates two files:
 
-- `{uuid}.{ext}` — The actual binary file (e.g., `a1b2c3d4.png`)
-- `{uuid}.json` — Metadata including: original filename, MIME type, file size, upload date, uploader user ID
+- 📄 `{uuid}.{ext}` — The actual binary file (e.g., `a1b2c3d4.png`)
+- 📋 `{uuid}.json` — Metadata including: original filename, MIME type, file size, upload date, uploader user ID
 
 :material-arrow-right: **Developer deep-dive**: [File Upload Component](../developer/frontend/components/file-upload.md)
 
@@ -65,7 +65,7 @@ Application logs in structured JSON format (via `structlog`).
 
 ---
 
-## Environment Variables
+## 🌍 Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -76,9 +76,9 @@ Application logs in structured JSON format (via `structlog`).
 
 ---
 
-## Backup
+## 💾 Backup
 
-### Simple Backup
+### 📦 Simple Backup
 
 The easiest way to back up LibreFolio is to copy the entire data directory:
 
@@ -87,7 +87,7 @@ The easiest way to back up LibreFolio is to copy the entire data directory:
 cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 ```
 
-### Docker Backup
+### 🐳 Docker Backup
 
 If running via Docker, the data directory is typically mounted as a volume:
 
@@ -99,7 +99,7 @@ docker volume inspect librefolio_data
 docker cp librefolio-container:/app/backend/data/prod/ ./backup/
 ```
 
-### What to Back Up
+### ✅ What to Back Up
 
 At minimum, back up:
 
@@ -112,9 +112,9 @@ At minimum, back up:
 
 ---
 
-## Maintenance from Host Terminal
+## 🔧 Maintenance from Host Terminal
 
-### Docker exec
+### 🐳 Docker exec
 
 ```bash
 # Access the container shell
@@ -126,7 +126,7 @@ docker exec -it librefolio-container /bin/bash
 ./dev.py db upgrade
 ```
 
-### Direct access (non-Docker)
+### 💻 Direct access (non-Docker)
 
 ```bash
 # From the project root

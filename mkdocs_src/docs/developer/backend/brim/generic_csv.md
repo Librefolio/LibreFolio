@@ -1,11 +1,11 @@
-# 📋 Case Study: The Generic CSV Provider
+# 🔧 Generic CSV Provider
 
 The **Generic CSV Provider** (`broker_generic_csv`) is the fallback import plugin for BRIM. It is designed to be highly flexible and serves as an excellent case study for
 understanding the BRIM plugin architecture.
 
 Its primary goal is to parse simple CSV files even if they don't come from a specifically supported broker.
 
-## Key Features
+## ⭐ Key Features
 
 - **Header Auto-Detection**: It doesn't rely on fixed column names. Instead, it maintains a dictionary of possible header names for each standard field (e.g., `date` can be "
   Date", "data", "Trade Date", etc.).
@@ -14,7 +14,7 @@ Its primary goal is to parse simple CSV files even if they don't come from a spe
 - **Transaction Type Mapping**: It maps common keywords (e.g., "buy", "acquisto", "compra") to the standard `TransactionType` enum.
 - **Low Priority**: It has a `detection_priority` of `0`, ensuring that more specific, high-confidence plugins are always tried first.
 
-## Column Mapping Reference
+## 📋 Column Mapping Reference
 
 When creating a CSV file for import (or a new plugin), these are the standard columns that LibreFolio expects. The Generic CSV provider tries to map input columns to these
 concepts.
@@ -29,9 +29,9 @@ concepts.
 | **`asset`**       | The identifier of the financial instrument. | Ticker symbol (e.g., `AAPL`), ISIN (e.g., `US0378331005`), or name. Required for BUY/SELL/DIVIDEND.                 |
 | **`description`** | Optional notes.                             | Any text string.                                                                                                    |
 
-## How it Works: A Deeper Look
+## 🔍 How it Works: A Deeper Look
 
-### 1. Column Detection (`_detect_columns`)
+### 1️⃣ Column Detection (`_detect_columns`)
 
 When the `parse()` method is called, the first step is to map the CSV's header row to LibreFolio's standard fields.
 
@@ -57,7 +57,7 @@ def _detect_columns(self, fieldnames: List[str]) -> Dict[str, str]:
 
 This creates a `column_map` like `{'date': 'Data operazione', 'type': 'Tipo operazione'}` which is then used to read data from each row.
 
-### 2. Row Parsing (`_parse_row`)
+### 2️⃣ Row Parsing (`_parse_row`)
 
 For each row in the CSV, the `_parse_row` method is called.
 
@@ -71,7 +71,7 @@ For each row in the CSV, the `_parse_row` method is called.
     - It assigns a consistent **fake asset ID** for each unique asset identifier found in the file. This allows the user to map all "AAPL" transactions to the correct asset in one
       go during the review step.
 
-### 3. The "Gold Standard" Example
+### 📐 3. The "Gold Standard" Example
 
 The Generic CSV Provider is the perfect starting point for creating a new, specific broker plugin. You can copy its structure and then:
 
