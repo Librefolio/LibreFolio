@@ -1,10 +1,11 @@
-# Plan: FX Documentation — MkDocs, i18n Globale, Traduzioni
+# Plan: FX Documentation — User Guide, Admin Guide, Provider Docs & i18n Pipeline
 
 **Data creazione**: 12 Marzo 2026
-**Status**: 📋 ACCENNATO — da dettagliare dopo testing
+**Ultimo aggiornamento**: 20 Marzo 2026
+**Status**: 📋 DETTAGLIATO — pronto per esecuzione
 **Priorità**: Media (ultima fase di Phase 5)
-**Stima**: ~3 giorni
-**Dipendenze**: `plan-fxTestingCleanup.prompt.md` completato (screenshot da E2E)
+**Stima**: ~4-5 giorni
+**Dipendenze**: `plan-fxTestingCleanup.prompt.md` completato ✅ (screenshot da E2E, JWT, gallery)
 **Riferimenti**:
 - `phases/phase-05-subplan/05FX_outofdate_plan/plan-phase05Fx.prompt.md` Steps 7, 8 — interamente pendenti
 - `phases/phase-05-subplan/05FX_outofdate_plan/phase05-pending-audit.md` §B (Documentazione)
@@ -13,30 +14,78 @@
 
 ## Contesto
 
-La documentazione MkDocs va completata DOPO i test e gli screenshot. Include: infrastruttura i18n globale, nuove pagine utente, documentazione backend FX, e traduzioni progressive.
+La documentazione MkDocs va completata DOPO i test e gli screenshot. Include: nuove pagine User Guide, Admin Guide, Provider docs dettagliate, documentazione JWT auth, e pipeline i18n globale.
 
-## Task pendenti (da vecchio master plan)
+La documentazione si divide in 3 macro-fasi:
 
-### B1-B4. i18n MkDocs Globale (Step 7 del vecchio master)
-- Plugin `mkdocs-static-i18n` in `mkdocs.yml` (dipendenza già nel Pipfile)
-- Rename ~18 file `.md` → `.en.md` (sezioni traducibili)
-- Rinominare `gallery-lang-selector.js` → `site-lang-selector.js`
-- Rimuovere check `isGalleryPage()`, aggiungere navigazione tradotta
-- Aggiornare `gallery-img-loader.js` per leggere lingua da path URL
-- Testare con `./dev.py mkdocs serve`
+1. **Nuove pagine** — User Guide (onboarding, broker sharing, files, FX, crop-image) + Admin Guide (settings, filesystem)
+2. **Aggiornamento docs esistenti** — Provider docs dettagliate, JWT auth, tabelle API endpoint, nav mkdocs
+3. **i18n Pipeline** — Plugin `mkdocs-static-i18n`, rename file, traduzioni progressive
 
-### B5-B11. Documentazione Utente GUI (Step 8 del vecchio master)
-- `user/brokers.en.md` — broker, BRIM, sharing
-- `user/files.en.md` — upload, tabella, filtri
-- `user/settings.en.md` — profilo, preferenze, password
-- `admin/global-settings.en.md` — parametri globali
-- `user/fx-rates.en.md` — pagina FX, chart, sync, edit, provider, **chain**
-- `user/fx-csv-import.en.md` — **Guida import CSV per FX** (vedi sotto)
-- Aggiornare `user/index.en.md` + nav in `mkdocs.yml`
+**Ordine globale di esecuzione Phase 5:**
+```
+1. plan-fxConversionChain.prompt.md       ✅ (chain/route-based)
+2. plan-fxDetailPageRedesign.prompt.md    ✅ (chart unificato, DataEditor, MeasureSignal, pannelli inline)
+3. plan-fxTestingCleanup.prompt.md        ✅ (E2E, unit test, i18n audit, gallery, JWT migration)
+4. plan-fxDocumentation.prompt.md         📋 (MkDocs, docs utente, traduzioni) ← QUESTO PIANO
+```
 
-### B5b. Pagina manuale utente: Import CSV FX
+---
 
-**Rif.**: [`plan-csvImportRefinement.prompt.md`](plan-csvImportRefinement.prompt.md)
+## Fase 1 — Nuove pagine (User Guide)
+
+### 1.1 User Onboarding: Registrazione, Login, Primo Broker
+
+**File**: `mkdocs_src/docs/user/getting-started.en.md`
+
+Guida passo-passo in tono semplice, con screenshot dalla gallery:
+
+1. **Registrazione**: Come registrarsi (primo utente diventa automaticamente admin). Screenshot del form di registrazione.
+2. **Login**: Come effettuare il login. Screenshot della pagina di login.
+3. **Creare il primo Broker**: Navigare a `/brokers`, cliccare "New Broker", compilare i campi (nome, icona, valuta base). Screenshot della pagina broker list e del form di creazione.
+4. **Perché serve un Broker**: Spiegare brevemente che il broker è il contenitore delle transazioni e serve sia per la gestione operativa che per i calcoli di patrimonio. _Non entrare nel dettaglio del portfolio aggregation (non ancora implementato)._
+
+### 1.2 Broker Sharing
+
+**File**: `mkdocs_src/docs/user/broker-sharing.en.md`
+
+1. **Cos'è il Broker Sharing**: Spiegare il sistema RBAC (Owner, Editor, Viewer) con la tabella permessi.
+2. **Share Percentage**: Cos'è la percentuale di possesso e perché serve per i calcoli di patrimonio aggregato. Esempio: conto cointestato con coniuge → 50% ciascuno.
+3. **Come condividere**: Mostrare il modale `BrokerSharingModal` con screenshot — cercare utenti, assegnare ruolo, impostare percentuale.
+4. **Scenari d'uso**: Consulente finanziario (Viewer), coniuge (Editor/co-Owner), commercialista (Viewer).
+5. _Non entrare nel dettaglio dei calcoli di patrimonio aggregato (Phase futura)._
+
+### 1.3 Pagina Files
+
+**File**: `mkdocs_src/docs/user/files.en.md`
+
+1. **Introduzione**: La pagina `/files` ha due tab:
+   - **Risorse Statiche** (`custom-uploads/`): file accessibili a tutti gli utenti (avatar, icone, documenti condivisi). Chiunque con accesso al sistema può vederli.
+   - **Broker Reports** (`broker_reports/`): file visibili solo agli utenti con accesso a quel broker specifico (Owner, Editor, Viewer).
+2. **Come caricare un file**: Drag & drop o click per sfogliare. Le immagini aprono automaticamente il modale di editing (vedi [Image Crop](misc/image-crop.en.md)).
+3. **Caricare report del broker**: Spiegare che i report del proprio broker (CSV, Excel) possono essere caricati qui e verranno poi usati dal sistema BRIM per importare automaticamente le transazioni. _Accennare senza entrare nel dettaglio perché il sistema UI BRIM va ancora completato._
+4. **Screenshot** dalla gallery: tab risorse statiche, tab broker reports, upload in corso.
+
+### 1.4 Tassi di Cambio (FX)
+
+**File**: `mkdocs_src/docs/user/fx-rates.en.md`
+
+1. **Introduzione alla pagina FX**: Navigare a `/fx`, panoramica delle card con coppie di valute.
+2. **Creare una coppia FX da zero**:
+   - Cliccare "Add Pair"
+   - Scegliere le due valute (CurrencySearchSelect)
+   - Il sistema mostra automaticamente le route disponibili (Direct Routes e Chain Routes)
+   - Scegliere un provider e confermare
+3. **Autosync**: Spiegare brevemente che il sistema può sincronizzare automaticamente i tassi dal provider scelto.
+4. **Chain di approvvigionamento dati**: Accennare che per coppie esotiche (es. RON/JPY) il sistema può costruire catene multi-provider (es. RON→EUR→JPY). Rimandare alla documentazione tecnica per approfondire: [FX Configuration & Routing](../developer/backend/fx/configuration.md).
+5. **Dettaglio coppia**: Chart interattivo, vista dati, editing manuale, import CSV.
+6. **Screenshot** dalla gallery FX (12 scene × 2 temi disponibili).
+
+### 1.5 Import CSV FX
+
+**File**: `mkdocs_src/docs/user/fx-csv-import.en.md`
+
+**Rif.**: [`plan-csvImportRefinement.prompt.md`](phases/phase-05-subplan/plan-csvImportRefinement.prompt.md)
 
 Pagina dedicata che spiega all'utente come importare dati FX via CSV. Deve coprire:
 
@@ -61,61 +110,116 @@ Pagina dedicata che spiega all'utente come importare dati FX via CSV. Deve copri
    - Rate non numerici o negativi
 6. **Screenshot**: modale import con drop zone, direction bar, CsvEditor preview, errori
 
-### B12. Documentazione Backend FX
-- Flusso sync con fallback e chain
-- Provider MANUAL sentinel pattern
-- Nuovo endpoint sync pair-based + route-based config
-- SNB provider (JSON API, dati mensili)
-- Currency utils (flag emoji, pycountry, babel)
-- Traduzione endpoints (parametro `lang`)
+### 1.6 Image Crop (sezione Varie)
 
-### B13. Documentazione Algoritmo DFS Chain (developer docs)
-- `developer/fx-chain-algorithm.en.md` — spiegazione del grafo valute-provider
-- Vincoli custom (archi non ripetuti, max 2 usi per provider)
-- Pseudo-codice DFS con backtracking completo
-- Motivazione scelta DFS vs BFS vs librerie shortest-path
-- Uso di `graphology` MultiDirectedGraph come struttura dati
+**File**: `mkdocs_src/docs/user/misc/image-crop.en.md`
 
-### Traduzioni progressive
-- Le traduzioni `.it.md`, `.fr.md`, `.es.md` vengono create progressivamente
-- Phase 5 include solo l'infrastruttura (plugin, rename, selettore, pagine EN)
-- Documentare in TODO_FUTURI.md la roadmap traduzioni
+Guida all'uso del componente di crop interattivo:
+
+1. **Quando appare**: Automaticamente quando si carica un'immagine nella pagina Files o quando si modifica l'avatar nel profilo.
+2. **Preset disponibili**: Avatar (200×200 1:1), Broker Icon (64×64 1:1), Custom (libero).
+3. **Controlli**: Zoom (pulsanti, rotellina mouse, pinch), Rotazione (15° step), Flip H/V, maniglie di crop agli angoli.
+4. **Output**: Selezione formato (PNG, JPEG, WebP), controllo qualità per formati lossy (10-100%), anteprima ellisse per crop circolari.
+5. **Screenshot**: Modale `ImageEditModal` con crop attivo, preset selector, quality slider.
 
 ---
 
-## Note
+## Fase 2 — Nuove pagine (Admin Guide) + Provider Docs
 
-Questo plan è l'ultimo della catena Phase 5 FX. Una volta completato, Phase 5 può essere chiusa.
+### 2.1 Espansione CLI Tools
 
-### ⚠️ Aggiornamento necessario: Auth JWT
+**File**: `mkdocs_src/docs/admin/cli_tools.md` (aggiornamento)
 
-La documentazione backend deve essere aggiornata per riflettere la migrazione
-da sessioni in-memory a **JWT tokens** (vedi `plan-jwt-gallery-fixes.prompt.md`).
+Aggiungere/aggiornare:
 
-Punti da documentare:
-1. **Come funziona il login**: `POST /api/v1/auth/login` → ritorna un cookie `session`
-   che contiene un JWT firmato (HMAC-SHA256), non più un session ID opaco
-2. **Come inviare richieste autenticate con curl**:
-   ```bash
-   # Login e salva cookie
-   curl -c cookies.txt -X POST http://localhost:8000/api/v1/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"username": "user", "password": "pass"}'
+- `./dev.py server --force`: Uccide processi sulla porta prima di avviare
+- `./dev.py server --workers N`: Multi-worker Uvicorn (auto-calcolato come `2 × (CPU-1)`)
+- Aggiornare tabella test_runner con le nuove categorie:
 
-   # Usa il cookie per endpoint protetti
-   curl -b cookies.txt http://localhost:8000/api/v1/auth/me
-   ```
-3. **JWT_SECRET env var**: in multi-worker, deve essere settato dal launcher
-   (dev.py lo genera automaticamente). In produzione può essere un valore fisso.
-4. **Scadenza**: il token scade dopo N ore (configurabile in global_settings).
-   Al riavvio del server il secret cambia → tutti i token vengono invalidati.
-5. **Logout**: il server cancella il cookie; il token resta valido fino a scadenza
-   (accettabile, non c'è blacklist server-side per ora)
+| Category       | Command                            | Description                          |
+|----------------|------------------------------------|--------------------------------------|
+| External       | `./dev.py test external all`       | Provider tests (FX, assets, BRIM)    |
+| Database       | `./dev.py test db all`             | Database layer tests                 |
+| Services       | `./dev.py test services all`       | Service logic tests                  |
+| Utils          | `./dev.py test utils all`          | Utility tests                        |
+| Schemas        | `./dev.py test schemas all`        | Schema validation tests              |
+| API            | `./dev.py test api all`            | API endpoint tests                   |
+| E2E            | `./dev.py test e2e all`            | Backend end-to-end tests             |
+| Front-Utility  | `./dev.py test front-utility all`  | Auth, settings, files, select, crop  |
+| Front-User     | `./dev.py test front-user all`     | Brokers, multi-user                  |
+| Front-FX       | `./dev.py test front-fx all`       | FX unit + 7 E2E spec files           |
+| **All**        | `./dev.py test all`                | Run everything                       |
 
-### Endpoint privati (richiedono login)
+- Flag `--list` per elencare i test disponibili senza eseguirli
+- `./dev.py i18n audit --duplicates --save-xlsx` per audit i18n avanzato
 
-Tutti gli endpoint che usano `Depends(get_current_user)` — devono avere il
-cookie `session` con JWT valido. Da documentare come sezione "Private API".
+### 2.2 Admin Settings
+
+**File**: `mkdocs_src/docs/admin/settings.en.md`
+
+1. **Global Settings**: Elenco dei parametri globali (max upload size, JWT token expiration, ecc.).
+2. **Come inizializzare da CLI**: `./dev.py user init-settings`
+3. **Come modificare dalla UI**: Navigare a Settings → tab Admin (solo per superuser).
+4. **Parametri disponibili**: Tabella con key, tipo, default, descrizione.
+
+### 2.3 Filesystem Structure
+
+**File**: `mkdocs_src/docs/admin/filesystem.en.md`
+
+Documentare la struttura dati su filesystem:
+
+```
+backend/data/
+├── prod/                       # Dati di produzione
+│   ├── sqlite/app.db           # Database SQLite (WAL mode)
+│   ├── custom-uploads/         # File caricati dagli utenti
+│   │   ├── {uuid}.{ext}       # File binario
+│   │   └── {uuid}.json        # Metadata sidecar
+│   ├── broker_reports/
+│   │   ├── uploaded/           # Report caricati, in attesa di parsing
+│   │   ├── parsed/            # Report già processati con successo
+│   │   └── failed/            # Report il cui parsing è fallito
+│   └── logs/                   # Log applicazione
+└── test/                       # Dati di test (isolati, stessa struttura)
+```
+
+- Spiegare cosa contiene ogni cartella (senza dettagli implementativi)
+- Come fare backup del volume Docker (copia di `backend/data/prod/`)
+- Come accedere al container via `docker exec` per operazioni di manutenzione
+- Variabile d'ambiente `LIBREFOLIO_DATA_DIR` per override del path di produzione
+- Variabile d'ambiente `LIBREFOLIO_TEST_MODE=1` per usare dati di test
+
+### 2.4 Documentazione JWT Auth
+
+**File**: `mkdocs_src/docs/developer/architecture/security.md` (aggiornamento/espansione)
+
+Documentare la migrazione da sessioni in-memory a JWT tokens:
+
+1. **Come funziona il login**: `POST /api/v1/auth/login` → ritorna `{"access_token": "...", "token_type": "bearer"}`
+2. **Come inviare richieste autenticate**:
+   - Frontend: header `Authorization: Bearer <token>`, `localStorage` persistence
+   - curl:
+     ```bash
+     # Login
+     TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+       -H "Content-Type: application/json" \
+       -d '{"username": "user", "password": "pass"}' | jq -r '.access_token')
+
+     # Usa il token per endpoint protetti
+     curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/auth/me
+     ```
+3. **JWT_SECRET**: In multi-worker Uvicorn, `dev.py` genera un secret random condiviso tra tutti i worker. In produzione può essere un valore fisso via env var.
+4. **Scadenza**: Token scade dopo N ore (configurabile in global_settings). Al riavvio del server con nuovo secret, tutti i token precedenti vengono invalidati.
+5. **Logout**: Il frontend cancella il token dal `localStorage`. Non c'è blacklist server-side (stateless by design).
+6. **Multi-worker**: Il secret JWT viene generato una volta e passato a tutti i worker Uvicorn, garantendo che un token emesso da un worker sia valido per qualsiasi altro worker.
+
+### 2.5 Tabelle API Endpoint
+
+**File**: `mkdocs_src/docs/developer/api/overview.md` (aggiornamento)
+
+Aggiornare con le tabelle complete degli endpoint privati e pubblici:
+
+#### Endpoint privati (richiedono `Authorization: Bearer <token>`)
 
 | Modulo | Endpoint | Metodo | Note |
 |--------|----------|--------|------|
@@ -123,8 +227,7 @@ cookie `session` con JWT valido. Da documentare come sezione "Private API".
 | **Auth** | `/auth/change-password` | POST | |
 | **Auth** | `/auth/profile` | PUT | Modifica username/email |
 | **Auth** | `/auth/users/me` | DELETE | Cancellazione account |
-| **Settings** | `/settings/user` | GET | Preferenze utente |
-| **Settings** | `/settings/user` | PUT | Modifica preferenze |
+| **Settings** | `/settings/user` | GET/PUT | Preferenze utente |
 | **Settings** | `/settings/global` | GET | Elenco settings globali |
 | **Settings** | `/settings/global/{key}` | GET/PUT | Lettura/modifica singolo setting |
 | **Settings** | `/settings/global/initialize` | POST | Admin: init defaults |
@@ -138,17 +241,38 @@ cookie `session` con JWT valido. Da documentare come sezione "Private API".
 | **BRIM** | `/brim/files/{id}/download` | GET | Download file |
 | **BRIM** | `/brim/files/{id}/last-parse` | GET | Ultimo risultato parse |
 | **BRIM** | `/brim/files/{id}/parse` | POST | Esegui parse file |
-| **Transactions** | `/transactions` | POST/PATCH/DELETE | CRUD transazioni (bulk) |
+| **Transactions** | `/transactions` | POST/GET/PATCH/DELETE | CRUD transazioni (bulk) |
+| **Transactions** | `/transactions/types` | GET | Metadata tipi transazione |
+| **Transactions** | `/transactions/{id}` | GET | Dettaglio singola transazione |
 | **Uploads** | `/uploads` | POST/GET | Upload e lista file |
 | **Uploads** | `/uploads/{id}` | GET/DELETE | Dettaglio/elimina file |
 | **Users** | `/users` | GET | Ricerca utenti |
+| **FX** | `/fx/providers` | GET | Lista provider FX installati |
+| **FX** | `/fx/providers/routes` | GET/POST/DELETE | CRUD conversion routes |
+| **FX** | `/fx/currencies/sync` | POST | Sync tassi FX |
+| **FX** | `/fx/currencies/rate` | POST/DELETE | Upsert/elimina tassi FX |
+| **FX** | `/fx/currencies/convert` | POST | Conversione valuta |
+| **Assets** | `/assets` | POST/GET/PATCH/DELETE | CRUD asset (bulk) |
+| **Assets** | `/assets/all` | GET | Lista completa asset |
+| **Assets** | `/assets/query` | GET | Ricerca asset |
+| **Assets** | `/assets/prices` | POST/DELETE | Upsert/elimina prezzi |
+| **Assets** | `/assets/prices/{id}` | GET | Storico prezzi |
+| **Assets** | `/assets/prices/refresh` | POST | Refresh prezzi da provider |
+| **Assets** | `/assets/provider` | GET/POST/DELETE | Provider assignments |
+| **Assets** | `/assets/provider/search` | GET | Cerca asset su provider |
+| **Assets** | `/assets/provider/assignments` | GET | Lista assegnazioni |
+| **Assets** | `/assets/provider/refresh` | POST | Refresh metadata |
+| **Backup** | `/backup/export` | POST | Esporta dati utente |
+| **Backup** | `/backup/restore` | POST | Ripristina da backup |
+| **Backup** | `/backup/formats` | GET | Formati export disponibili |
+| **Backup** | `/backup/status` | GET | Stato ultimo backup |
 
-### Endpoint pubblici (nessun login richiesto)
+#### Endpoint pubblici (nessun login richiesto)
 
 | Modulo | Endpoint | Metodo | Note |
 |--------|----------|--------|------|
 | **Auth** | `/auth/login` | POST | Login |
-| **Auth** | `/auth/logout` | POST | Logout (cancella cookie) |
+| **Auth** | `/auth/logout` | POST | Logout |
 | **Auth** | `/auth/register` | POST | Registrazione |
 | **System** | `/system/health` | GET | Health check |
 | **System** | `/system/info` | GET | Info sistema |
@@ -157,70 +281,230 @@ cookie `session` con JWT valido. Da documentare come sezione "Private API".
 | **Uploads** | `/uploads/plugin/{type}/{path}` | GET | Plugin assets |
 | **BRIM** | `/brim/plugins` | GET | Lista plugin disponibili |
 
-### Endpoint privati — FX (prefisso `/fx`)
+### 2.6 Provider Core — Documentazione dettagliata
 
-| Sub-router | Endpoint | Metodo | Note |
-|------------|----------|--------|------|
-| **Providers** | `/fx/providers` | GET | Lista provider FX installati (codice, valute supportate, icon) |
-| **Providers** | `/fx/providers/routes` | GET | Lista conversion routes configurate per l'utente |
-| **Providers** | `/fx/providers/routes` | POST | Crea nuove conversion routes (direct o chain) |
-| **Providers** | `/fx/providers/routes` | DELETE | Elimina conversion routes (bulk) |
-| **Currencies** | `/fx/currencies/sync` | POST | Sync tassi FX per coppie configurate |
-| **Currencies** | `/fx/currencies/rate` | POST | Upsert tassi FX (bulk) |
-| **Currencies** | `/fx/currencies/rate` | DELETE | Elimina tassi FX (bulk) |
-| **Currencies** | `/fx/currencies/convert` | POST | Conversione valuta (con chain/fallback) |
+**File**: `mkdocs_src/docs/developer/backend/fx/providers_list.md` (espansione)
 
-### Endpoint privati — Assets (prefisso `/assets`)
+Mantenere la **tabella riassuntiva** in cima alla pagina, poi aggiungere un **capitoletto dedicato** per ciascun provider core installato di default:
 
-| Sub-router | Endpoint | Metodo | Note |
-|------------|----------|--------|------|
-| **CRUD** | `/assets` | POST | Creazione asset (bulk) |
-| **CRUD** | `/assets` | GET | Lista asset con filtri, paginazione, ordinamento |
-| **CRUD** | `/assets` | PATCH | Aggiornamento asset (bulk) |
-| **CRUD** | `/assets` | DELETE | Eliminazione asset (bulk) |
-| **CRUD** | `/assets/all` | GET | Lista completa asset (senza paginazione) |
-| **CRUD** | `/assets/query` | GET | Ricerca asset per ISIN/ticker/nome |
-| **Prices** | `/assets/prices` | POST | Upsert prezzi asset (bulk) |
-| **Prices** | `/assets/prices` | DELETE | Elimina prezzi asset (bulk) |
-| **Prices** | `/assets/prices/{asset_id}` | GET | Storico prezzi singolo asset |
-| **Prices** | `/assets/prices/refresh` | POST | Refresh prezzi da provider esterni |
-| **Provider** | `/assets/provider` | GET | Lista provider asset disponibili |
-| **Provider** | `/assets/provider` | POST | Assegna provider ad asset (bulk) |
-| **Provider** | `/assets/provider` | DELETE | Rimuovi assegnazioni provider (bulk) |
-| **Provider** | `/assets/provider/search` | GET | Cerca asset su provider esterno |
-| **Provider** | `/assets/provider/assignments` | GET | Lista assegnazioni provider correnti |
-| **Provider** | `/assets/provider/refresh` | POST | Refresh metadata asset da provider |
+#### ECB — European Central Bank
 
-### Endpoint privati — Transactions (prefisso `/transactions`)
+- **Codice**: `ECB`
+- **Base Currency**: EUR
+- **URL sorgente API**: `https://www.ecb.europa.eu/stats/eurofxref/` (XML)
+- **Valute supportate**: ~30 (tutte le principali + emergenti)
+- **Frequenza aggiornamento**: Giornaliera, ~16:00 CET nei giorni lavorativi
+- **API key**: Non richiesta
+- **Formato risposta**: XML con namespace ECB, parsato con `lxml`
+- **Storico**: Disponibile dal 1999
+- **Limitazioni note**: Nessun dato nei weekend/festivi BCE
+- **Esempio risposta**: Snippet XML con 2-3 valute
 
-| Endpoint | Metodo | Note |
-|----------|--------|------|
-| `/transactions` | POST | Creazione transazioni (bulk) |
-| `/transactions` | GET | Lista transazioni con filtri |
-| `/transactions` | PATCH | Aggiornamento transazioni (bulk) |
-| `/transactions` | DELETE | Eliminazione transazioni (bulk) |
-| `/transactions/types` | GET | Metadata tipi transazione |
-| `/transactions/{id}` | GET | Dettaglio singola transazione |
+#### FED — Federal Reserve (FRED)
 
-### Endpoint privati — Backup (prefisso `/backup`)
+- **Codice**: `FED`
+- **Base Currency**: USD
+- **URL sorgente API**: `https://fred.stlouisfed.org/graph/fredgraph.csv` (CSV, nessuna API key)
+- **Valute supportate**: ~20 principali (EUR, GBP, JPY, CAD, CHF, AUD, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, NZD, THB, SEK, NOK, DKK, CNY)
+- **Serie IDs**: Format `DEXXX` (es. `DEXUSEU` = USD per 1 EUR)
+- **Frequenza aggiornamento**: Giornaliera, giorni lavorativi US
+- **Quotazione**: USD per 1 unità estera → il provider inverte automaticamente per ottenere il formato LibreFolio
+- **Multi-unit currencies**: Nessuna (FRED quota tutto per 1 unità)
+- **Limitazioni note**: Una richiesta HTTP per valuta (sequenziale)
 
-| Endpoint | Metodo | Note |
-|----------|--------|------|
-| `/backup/export` | POST | Esporta dati utente |
-| `/backup/restore` | POST | Ripristina dati da backup |
-| `/backup/formats` | GET | Lista formati export disponibili |
-| `/backup/status` | GET | Stato ultimo backup/restore |
+#### BOE — Bank of England
 
-> **Nota**: Tutti gli endpoint FX, Assets, Transactions, Brokers, BRIM,
-> Settings, Backup, Uploads CRUD e Users richiedono il cookie `session`
-> con JWT valido. Vedi `plan-api-auth-guard.prompt.md` per il piano di
-> protezione dei ~32 endpoint attualmente pubblici.
+- **Codice**: `BOE`
+- **Base Currency**: GBP
+- **URL sorgente API**: Bank of England Statistical Interactive Database (XML)
+- **Valute supportate**: ~60 (la lista più ampia tra i provider core)
+- **Frequenza aggiornamento**: Giornaliera, giorni lavorativi UK
+- **Storico**: Molto profondo (decenni per le valute principali)
+- **Limitazioni note**: API XML complessa, parsing robusto necessario
 
-**Ordine globale di esecuzione Phase 5:**
+#### SNB — Swiss National Bank
+
+- **Codice**: `SNB`
+- **Base Currency**: CHF
+- **URL sorgente API**: `https://data.snb.ch/api/cube` (dataset `devkum`, CSV)
+- **Valute supportate**: ~10 principali (USD, EUR, GBP, JPY, CAD, AUD, SEK, NOK, DKK, CNY)
+- **Frequenza aggiornamento**: Giornaliera, giorni lavorativi svizzeri
+- **Multi-unit currencies**: JPY, SEK, NOK, DKK quotate per 100 unità (il provider normalizza automaticamente a 1 unità)
+- **Quotazione**: X CHF = 1 (o 100) unità estera → il provider inverte automaticamente
+- **Limitazioni note**: Lista valute ridotta rispetto ad altri provider
+
+#### Azione post-documentazione
+
+Dopo aver scritto i capitoletti, aggiornare la property `docs_url` in ogni classe provider Python per puntare all'anchor specifico:
+
+- `ecb.py` → `"/mkdocs/developer/backend/fx/providers_list/#ecb-european-central-bank"`
+- `fed.py` → `"/mkdocs/developer/backend/fx/providers_list/#fed-federal-reserve-fred"`
+- `boe.py` → `"/mkdocs/developer/backend/fx/providers_list/#boe-bank-of-england"`
+- `snb.py` → `"/mkdocs/developer/backend/fx/providers_list/#snb-swiss-national-bank"`
+
+Il frontend già usa `docs_url` per il link nell'info bar del `FxProviderSelect` (cliccando sull'icona del provider si apre la pagina di documentazione).
+
+---
+
+## Fase 2.5 — Aggiornamento docs esistenti
+
+### 2.5.1 User Manual Overview
+
+**File**: `mkdocs_src/docs/user/index.md` (riscrittura)
+
+Riscrivere l'overview con link a tutte le nuove pagine:
+
+- Getting Started (registrazione, login, primo broker)
+- Broker Sharing
+- Files (risorse statiche vs broker reports)
+- FX Rates (coppie di valute, sync, chain)
+- CSV Import (import dati FX)
+- Varie: Image Crop
+
+### 2.5.2 Admin Manual Overview
+
+**File**: `mkdocs_src/docs/admin/index.md` (aggiornamento)
+
+Aggiungere link a:
+
+- Settings (global settings)
+- Filesystem Structure
+- Menzione del sistema JWT e multi-worker
+
+### 2.5.3 Navigazione MkDocs
+
+**File**: `mkdocs_src/mkdocs.yml` (aggiornamento nav)
+
+Inserire tutte le nuove pagine nella navigazione:
+
+```yaml
+nav:
+  # ...existing...
+  - User Manual:
+      - Overview: user/index.md
+      - Installation (Docker): user/installation.md
+      - Getting Started: user/getting-started.md
+      - Broker Sharing: user/broker-sharing.md
+      - Files & Uploads: user/files.md
+      - FX Rates: user/fx-rates.md
+      - FX CSV Import: user/fx-csv-import.md
+      - Misc:
+          - Image Crop: user/misc/image-crop.md
+  - Admin Manual:
+      - Overview: admin/index.md
+      - CLI Tools: admin/cli_tools.md
+      - Global Settings: admin/settings.md
+      - Filesystem Structure: admin/filesystem.md
+      - Advanced Docker: admin/docker_advanced.md
+      - Exposing with Tailscale: admin/tailscale_exposure.md
+  # ...existing...
 ```
-1. plan-fxConversionChain.prompt.md       (chain/route-based)
-2. plan-fxDetailPageRedesign.prompt.md    (chart unificato, DataEditor, MeasureSignal, pannelli inline)
-3. plan-fxTestingCleanup.prompt.md        (E2E, unit test, i18n audit, gallery)
-4. plan-fxDocumentation.prompt.md         (MkDocs, docs utente, traduzioni)
+
+### 2.5.4 Gallery images nelle docs
+
+Le pagine user guide devono usare screenshot dalla gallery (320 disponibili in 4 lingue × 2 temi). Usare il sistema `gallery-img-loader.js` esistente con attributi `data-category` e `data-name`:
+
+```html
+<img class="gallery-img" data-category="fx" data-name="fx-list-overview" alt="FX List" />
 ```
 
+Il loader risolve automaticamente il path basandosi su lingua e tema selezionati.
+
+---
+
+## Fase 3 — i18n Pipeline MkDocs
+
+### 3.1 Configurazione plugin
+
+- Aggiungere `mkdocs-static-i18n` in `mkdocs.yml` (dipendenza già nel Pipfile)
+- Lingua default: `en`
+- Lingue alternative: `it`, `fr`, `es`
+
+### 3.2 Rename file
+
+- Rinominare ~20+ file `.md` traducibili → `.en.md` (sezioni user-facing e admin)
+- Le sezioni developer possono restare solo inglese (troppo tecniche per tradurre)
+
+### 3.3 Selettore lingua globale
+
+- Rinominare `gallery-lang-selector.js` → `site-lang-selector.js`
+- Rimuovere check `isGalleryPage()`, rendere il selettore lingua globale su tutto il sito
+- Aggiungere navigazione tradotta nel selettore
+
+### 3.4 Aggiornamento image loader
+
+- Aggiornare `gallery-img-loader.js` per leggere lingua da path URL (`/it/`, `/fr/`, `/es/`) anziché solo dal selettore gallery
+
+### 3.5 Traduzioni progressive
+
+Le traduzioni `.it.md`, `.fr.md`, `.es.md` vengono create progressivamente:
+- Phase 5 include solo l'infrastruttura (plugin, rename, selettore, pagine EN)
+- Le traduzioni effettive seguono dopo
+
+**Suggerimenti per la pipeline di traduzione:**
+
+- **Opzione A — Manuale**: Scrivere prima tutto in EN, poi tradurre file per file con assistenza AI. Massimo controllo sulla qualità, ma processo lento per ~20+ pagine × 3 lingue.
+
+- **Opzione B — Semi-automatico con script**: Creare `./dev.py mkdocs translate <lang>` che per ogni `.en.md` senza corrispondente `.<lang>.md` genera una bozza traducendo via LLM API (OpenAI/Claude). L'output va rivisto manualmente ma il grosso del lavoro è automatizzato.
+
+- **Opzione C — Markdown-aware translation**: Pipeline più sofisticata che:
+  1. Divide ogni `.en.md` in blocchi semantici (titoli, paragrafi, tabelle, code blocks)
+  2. Traduce blocco per blocco mantenendo la struttura Markdown intatta
+  3. Mantiene una cache (hash per blocco) per non ri-tradurre blocchi invariati al prossimo aggiornamento
+  4. Preserva i code blocks, link interni, e attributi HTML senza tradurli
+
+- **Raccomandazione**: Partire con **Opzione A** per le prime 3-4 pagine user guide (onboarding, broker, files, FX), valutare il tempo necessario, e poi decidere se investire in Opzione B o C per il volume restante. L'Opzione C è la più robusta per manutenzione a lungo termine ma richiede sviluppo iniziale.
+
+---
+
+## Note implementative
+
+### Struttura file finale prevista
+
+```
+mkdocs_src/docs/
+├── user/
+│   ├── index.md              # Overview (riscritta)
+│   ├── installation.md       # Esistente
+│   ├── getting-started.md    # NUOVO — onboarding
+│   ├── broker-sharing.md     # NUOVO — RBAC sharing
+│   ├── files.md              # NUOVO — uploads & reports
+│   ├── fx-rates.md           # NUOVO — coppie FX
+│   ├── fx-csv-import.md      # NUOVO — import CSV
+│   └── misc/
+│       └── image-crop.md     # NUOVO — crop tool
+├── admin/
+│   ├── index.md              # Overview (aggiornata)
+│   ├── cli_tools.md          # Aggiornata
+│   ├── settings.md           # NUOVO — global settings
+│   ├── filesystem.md         # NUOVO — struttura dati
+│   ├── docker_advanced.md    # Esistente
+│   └── tailscale_exposure.md # Esistente
+└── developer/
+    ├── architecture/
+    │   └── security.md       # Aggiornata (JWT)
+    ├── api/
+    │   └── overview.md       # Aggiornata (tabelle endpoint)
+    └── backend/
+        └── fx/
+            └── providers_list.md  # Espansa (capitoletti per provider)
+```
+
+### Dipendenze da completare prima
+
+- ✅ Screenshot gallery disponibili (320 immagini, 64 test)
+- ✅ JWT auth implementata e documentata nel piano
+- ✅ Tutti gli endpoint protetti
+- ✅ i18n audit pulito (590 chiavi, 100% coverage)
+- ✅ Test runner riorganizzato (front-utility, front-user, front-fx)
+
+### Ordine di esecuzione consigliato
+
+1. **Fase 2.5.3** (mkdocs.yml nav) — setup struttura navigazione
+2. **Fase 1.1-1.4** (User Guide core) — onboarding, broker, files, FX
+3. **Fase 2.1-2.3** (Admin Guide) — CLI, settings, filesystem
+4. **Fase 2.4** (JWT Auth docs) — security page
+5. **Fase 2.6** (Provider docs) — capitoletti + `docs_url` update
+6. **Fase 1.5-1.6** (User Guide secondarie) — CSV import, image crop
+7. **Fase 2.5** (Aggiornamenti vari) — overview pages, API tables
+8. **Fase 3** (i18n pipeline) — plugin, rename, selettore, infrastruttura
