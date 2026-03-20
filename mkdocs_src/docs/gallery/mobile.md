@@ -13,7 +13,7 @@ LibreFolio is fully responsive and works great on smartphones and tablets. The i
 
 ## 🔐 Authentication
 
-### Login Page
+### 🔑 Login Page
 
 Clean and accessible login on mobile devices.
 
@@ -21,7 +21,7 @@ Clean and accessible login on mobile devices.
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page">
 </div>
 
-### Registration
+### 📝 Registration
 
 Easy account creation with password strength feedback.
 
@@ -33,7 +33,7 @@ Easy account creation with password strength feedback.
 
 ## 📊 Dashboard
 
-### Main Dashboard
+### 📈 Main Dashboard
 
 Your portfolio overview optimized for mobile viewing.
 
@@ -41,7 +41,7 @@ Your portfolio overview optimized for mobile viewing.
     <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard">
 </div>
 
-### Navigation Menu
+### ☰ Navigation Menu
 
 Full navigation accessible via the hamburger menu.
 
@@ -53,7 +53,7 @@ Full navigation accessible via the hamburger menu.
 
 ## ⚙️ Settings
 
-### User Preferences
+### 🎛️ User Preferences
 
 All settings accessible on mobile with the same functionality.
 
@@ -61,7 +61,7 @@ All settings accessible on mobile with the same functionality.
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
 </div>
 
-### Global Settings (Admin)
+### 🛡️ Global Settings (Admin)
 
 System-wide configuration on mobile.
 
@@ -69,7 +69,7 @@ System-wide configuration on mobile.
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
 </div>
 
-### About
+### ℹ️ About
 
 System information at your fingertips.
 
@@ -77,7 +77,7 @@ System information at your fingertips.
     <img class="gallery-img" data-category="settings" data-name="about" alt="About">
 </div>
 
-### Password Change
+### 🔐 Password Change
 
 Secure password changes on the go.
 
@@ -85,7 +85,7 @@ Secure password changes on the go.
     <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Password Change Modal">
 </div>
 
-### Profile
+### 👤 Profile
 
 Your profile, avatar, and account settings on mobile.
 
@@ -97,7 +97,7 @@ Your profile, avatar, and account settings on mobile.
 
 ## 📁 Files
 
-### Static Resources
+### 📂 Static Resources
 
 Manage your uploaded files on mobile.
 
@@ -105,7 +105,7 @@ Manage your uploaded files on mobile.
     <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab">
 </div>
 
-### Static Resources - Grid View
+### 🗂️ Static Resources - Grid View
 
 Visual file browsing with image previews on mobile.
 
@@ -113,7 +113,7 @@ Visual file browsing with image previews on mobile.
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View">
 </div>
 
-### Broker Reports (BRIM)
+### 📋 Broker Reports (BRIM)
 
 Import and manage broker reports.
 
@@ -125,7 +125,7 @@ Import and manage broker reports.
 
 ## 🖼️ Media & Upload
 
-### Image Editor
+### ✂️ Image Editor
 
 Crop, rotate, zoom and flip images on mobile. Supports presets for avatars and icons.
 
@@ -133,7 +133,7 @@ Crop, rotate, zoom and flip images on mobile. Supports presets for avatars and i
     <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal">
 </div>
 
-### Asset Picker
+### 🎨 Asset Picker
 
 Choose an existing file, enter a URL, or upload a new image.
 
@@ -141,7 +141,7 @@ Choose an existing file, enter a URL, or upload a new image.
     <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Asset Picker Modal">
 </div>
 
-### File Uploader
+### 📤 File Uploader
 
 Drag-and-drop or browse to upload files. Images open the crop editor, other files can be renamed.
 
@@ -153,7 +153,7 @@ Drag-and-drop or browse to upload files. Images open the crop editor, other file
 
 ## 🏦 Brokers
 
-### Broker List
+### 📋 Broker List
 
 Your brokerage accounts with touch-friendly cards.
 
@@ -161,7 +161,7 @@ Your brokerage accounts with touch-friendly cards.
     <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List">
 </div>
 
-### Broker Detail
+### 🔍 Broker Detail
 
 Detailed broker view optimized for mobile.
 
@@ -169,7 +169,7 @@ Detailed broker view optimized for mobile.
     <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail">
 </div>
 
-### Broker Edit
+### ✏️ Broker Edit
 
 Edit broker details — name, icon, base currency, and configuration.
 
@@ -177,7 +177,7 @@ Edit broker details — name, icon, base currency, and configuration.
     <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Modal">
 </div>
 
-### Import Modal
+### 📥 Import Modal
 
 Import transactions directly from your phone.
 
@@ -185,7 +185,7 @@ Import transactions directly from your phone.
     <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
 </div>
 
-### Broker Sharing
+### 🤝 Broker Sharing
 
 Manage co-ownership and access roles with the sharing modal, optimized for mobile.
 
@@ -197,7 +197,7 @@ Manage co-ownership and access roles with the sharing modal, optimized for mobil
 
 ## 💱 FX Rates
 
-### FX List
+### 📋 FX List
 
 All configured currency pairs with mini-charts, optimized for mobile.
 
@@ -205,7 +205,7 @@ All configured currency pairs with mini-charts, optimized for mobile.
     <img class="gallery-img" data-category="fx" data-name="list" alt="FX List Page">
 </div>
 
-### FX List Filtered
+### 🔎 FX List Filtered
 
 Currency pairs filtered by base currency.
 
@@ -213,7 +213,7 @@ Currency pairs filtered by base currency.
     <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="FX List Filtered">
 </div>
 
-### Add Pair — Direct Routes
+### ➕ Add Pair — Direct Routes
 
 Add a new currency pair with direct provider routes (e.g. USD/CHF via FED).
 
@@ -221,7 +221,7 @@ Add a new currency pair with direct provider routes (e.g. USD/CHF via FED).
     <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Add Pair - Direct Routes">
 </div>
 
-### Add Pair — Chain
+### 🔗 Add Pair — Chain
 
 Add a pair using conversion chain through an intermediate currency (e.g. NOK/CHF via EUR).
 
@@ -229,7 +229,7 @@ Add a pair using conversion chain through an intermediate currency (e.g. NOK/CHF
     <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Add Pair - Chain">
 </div>
 
-### Sync All
+### 🔄 Sync All
 
 Sync all configured pairs from their providers.
 
@@ -237,7 +237,7 @@ Sync all configured pairs from their providers.
     <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Sync All Progress">
 </div>
 
-### Detail Chart
+### 📈 Detail Chart
 
 Full-size interactive chart for a currency pair.
 
@@ -245,7 +245,7 @@ Full-size interactive chart for a currency pair.
     <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="FX Detail Chart">
 </div>
 
-### Signals Overlay
+### 📡 Signals Overlay
 
 Technical indicator signals panel overlaid on the chart.
 
@@ -253,7 +253,7 @@ Technical indicator signals panel overlaid on the chart.
     <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Detail Signals Overlay">
 </div>
 
-### Measures Panel
+### 📏 Measures Panel
 
 Click-to-click measurement tool.
 
@@ -261,7 +261,7 @@ Click-to-click measurement tool.
     <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Detail Measures Panel">
 </div>
 
-### Data Editor
+### ✏️ Data Editor
 
 Inline data editor for rate values on mobile.
 
@@ -269,7 +269,7 @@ Inline data editor for rate values on mobile.
     <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Data Editor">
 </div>
 
-### CSV Import
+### 📄 CSV Import
 
 Import rate data from CSV files.
 
@@ -277,7 +277,7 @@ Import rate data from CSV files.
     <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="CSV Import Modal">
 </div>
 
-### Chart Settings
+### ⚙️ Chart Settings
 
 Chart aesthetics and signal overlay settings.
 
@@ -285,7 +285,7 @@ Chart aesthetics and signal overlay settings.
     <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
 </div>
 
-### Provider Config
+### 🔧 Provider Config
 
 Configure provider priority and conversion routes.
 

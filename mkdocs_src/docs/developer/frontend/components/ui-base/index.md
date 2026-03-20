@@ -2,7 +2,7 @@
 
 Generic, reusable components in `lib/components/ui/` that serve as building blocks for all composite components.
 
-## Dependency Map
+## 🗺️ Dependency Map
 
 ```mermaid
 graph TD
@@ -37,13 +37,12 @@ graph TD
     style CSE fill:#e8f5e9,stroke:#2e7d32
 ```
 
-## Sub-sections
+## 📑 Sub-sections
 
 | Section | Components | Description |
 |---------|-----------|-------------|
 | **[Modals](modals.md)** | ModalBase, ConfirmModal | Foundation for all modal dialogs |
 | **[Feedback](feedback.md)** | ToastContainer, InfoBanner, LoadingSpinner, Tooltip | Notifications and user feedback |
-| **[Pickers](pickers.md)** | CalendarMonth, SingleDatePicker, DateRangePicker | Date selection components |
+| **[Pickers](datePickers.md)** | CalendarMonth, SingleDatePicker, DateRangePicker | Date selection components |
 | **[Atoms](atoms.md)** | ThemeToggle, DocsLink, AnimatedBackground, OrderableList, PasswordInput, PasswordStrength | Small standalone UI primitives |
 | **[Datapoint Editor](data-editor.md)** | DataEditor, CsvEditor, DataImportModal | Inline editing and CSV import for financial datapoints |
-

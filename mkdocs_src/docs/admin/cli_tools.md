@@ -19,7 +19,7 @@ Install all project dependencies (Python and Node.js):
 
 ## 🖥️ Server (Production)
 
-### Starting the Server
+### ▶️ Starting the Server
 
 ```bash
 # Standard start
@@ -62,7 +62,7 @@ User management is done via `./dev.py user` subcommands:
 
 ## ⚙️ System Management
 
-### Initialize Global Settings
+### 🔧 Initialize Global Settings
 
 ```bash
 ./dev.py user init-settings
@@ -70,7 +70,7 @@ User management is done via `./dev.py user` subcommands:
 
 Populates the database with default [Global Settings](settings.md) if they don't already exist.
 
-### Database Migrations
+### 🗄️ Database Migrations
 
 ```bash
 # Apply pending migrations

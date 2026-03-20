@@ -8,18 +8,18 @@ The heart of the Pair Detail page — a full-featured **ECharts-powered** chart 
 
 ---
 
-## Chart Types
+## 🔀 Chart Types
 
 Toggle between two visualization modes:
 
-- **Line Chart** — A clean line connecting each daily rate. Best for seeing trends over long periods.
-- **Candlestick Chart** — Shows open/high/low/close for each period. Best for analyzing short-term volatility and price action.
+- 📈 **Line Chart** — A clean line connecting each daily rate. Best for seeing trends over long periods.
+- 🕯️ **Candlestick Chart** — Shows open/high/low/close for each period. Best for analyzing short-term volatility and price action.
 
 Use the toggle button in the chart toolbar to switch between modes.
 
 ---
 
-## Navigation & Zoom
+## 🔍 Navigation & Zoom
 
 | Action | Desktop | Mobile |
 |--------|---------|--------|
@@ -32,17 +32,17 @@ You can also use the **time range selector** buttons (1M, 3M, 6M, 1Y, 5Y, All) t
 
 ---
 
-## Tooltip
+## 💬 Tooltip
 
 Hover over any point on the chart to see:
 
-- The **date**
-- The **exchange rate** with full precision
-- The **percentage change** from the previous data point
+- 📅 The **date**
+- 💱 The **exchange rate** with full precision
+- 📊 The **percentage change** from the previous data point
 
 ---
 
-## Toolbar
+## 🧰 Toolbar
 
 The chart toolbar provides quick access to:
 
@@ -55,8 +55,7 @@ The chart toolbar provides quick access to:
 
 ---
 
-## Related
+## 🔗 Related
 
-- **[Chart Settings](../chart-settings.md)** — Customize colors, line width, area fill, grid
-- **[Signals](signals.md)** — Overlay technical indicators on the chart
-
+- ⚙️ **[Chart Settings](../chart-settings.md)** — Customize colors, line width, area fill, grid
+- 📈 **[Signals](signals.md)** — Overlay technical indicators on the chart

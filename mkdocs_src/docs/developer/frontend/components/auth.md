@@ -11,18 +11,18 @@ This section documents the authentication UI components used for login, registra
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; display: block;">
 </div>
 
-## LoginCard
+## 🔑 LoginCard
 
 The `LoginCard` handles user authentication via username/email and password.
 
-### Features
+### ⚡ Features
 
 - **Input**: Username or Email field (autofocus).
 - **Password**: Password field with visibility toggle (via `PasswordInput`).
 - **State**: Uses `$lib/stores/auth` to manage loading state and errors.
 - **Navigation**: Emits events to switch to Register or Forgot Password views.
 
-### Usage
+### 💻 Usage
 
 ```svelte
 <script>
@@ -36,7 +36,7 @@ The `LoginCard` handles user authentication via username/email and password.
 />
 ```
 
-## RegisterCard
+## 📝 RegisterCard
 
 The `RegisterCard` handles new user registration with client-side validation.
 
@@ -44,7 +44,7 @@ The `RegisterCard` handles new user registration with client-side validation.
     <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registration with Password Strength" style="width: 100%; display: block;">
 </div>
 
-### Features
+### ⚡ Features
 
 - **Validation**: Real-time validation for:
     - Username (min length)
@@ -54,7 +54,7 @@ The `RegisterCard` handles new user registration with client-side validation.
 - **Strength Meter**: Integrated `PasswordStrength` component.
 - **Error Handling**: Maps backend errors (e.g., "username taken") to user-friendly messages.
 
-### Usage
+### 💻 Usage
 
 ```svelte
 <script>
@@ -69,11 +69,11 @@ The `RegisterCard` handles new user registration with client-side validation.
 />
 ```
 
-## PasswordStrength
+## 🔒 PasswordStrength
 
 A visual indicator of password strength using `zxcvbn-ts`.
 
-### Features
+### ⚡ Features
 
 - **Score**: Calculates a score from 0 (Very Weak) to 4 (Very Strong).
 - **Visual Bar**: Color-coded progress bar (Red -> Orange -> Yellow -> Lime -> Green).
@@ -83,7 +83,7 @@ A visual indicator of password strength using `zxcvbn-ts`.
     - Number
     - Special character
 
-### Usage
+### 💻 Usage
 
 ```svelte
 <script>
@@ -95,17 +95,17 @@ A visual indicator of password strength using `zxcvbn-ts`.
 <PasswordStrength {password} showRules={true} />
 ```
 
-## PasswordInput
+## 🔑 PasswordInput
 
 A reusable input component for passwords.
 
-### Features
+### ⚡ Features
 
 - **Toggle Visibility**: Eye icon to show/hide password.
 - **Styling**: Consistent styling with error state support.
 - **Events**: Forwards `input`, `blur`, `focus` events.
 
-### Usage
+### 💻 Usage
 
 ```svelte
 <script>
@@ -119,4 +119,3 @@ A reusable input component for passwords.
   hasError={false}
 />
 ```
-

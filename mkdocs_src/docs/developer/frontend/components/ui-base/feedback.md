@@ -4,7 +4,7 @@ Components for user notifications, contextual information, loading states, and t
 
 ---
 
-## ToastContainer
+## 🔔 ToastContainer
 
 Global container for **toast notifications** (success, error, info, warning).
 
@@ -17,7 +17,7 @@ Global container for **toast notifications** (success, error, info, warning).
 
 ---
 
-## InfoBanner
+## ℹ️ InfoBanner { #infobanner }
 
 A **dismissible banner** for contextual information or warnings.
 
@@ -29,7 +29,7 @@ A **dismissible banner** for contextual information or warnings.
 
 ---
 
-## LoadingSpinner
+## ⏳ LoadingSpinner
 
 A simple **animated spinner** for async loading states.
 
@@ -40,7 +40,7 @@ A simple **animated spinner** for async loading states.
 
 ---
 
-## Tooltip
+## 💡 Tooltip
 
 **Hover/focus tooltip** with automatic positioning.
 
@@ -49,4 +49,3 @@ A simple **animated spinner** for async loading states.
 - Accessible: shows on focus for keyboard users
 
 **Used by**: Toolbar buttons, icon-only buttons, info badges.
-

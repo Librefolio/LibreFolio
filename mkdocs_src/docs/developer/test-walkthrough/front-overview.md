@@ -2,7 +2,7 @@
 
 LibreFolio's frontend tests use **[Playwright](https://playwright.dev/)** to drive a real browser and interact with the application exactly as a user would.
 
-## Tools & Framework
+## 🧰 Tools & Framework
 
 | Tool | Role |
 |------|------|
@@ -11,7 +11,7 @@ LibreFolio's frontend tests use **[Playwright](https://playwright.dev/)** to dri
 | **`page`** | Playwright's page fixture — represents a browser tab |
 | **`expect`** | Assertion library with auto-retry and web-first semantics |
 
-### How Tests Work
+### ⚙️ How Tests Work
 
 Each test file (`.spec.ts`) contains scenarios that:
 
@@ -34,7 +34,7 @@ test('create a new broker', async ({ page }) => {
 
 ---
 
-## Automated Setup
+## 🤖 Automated Setup
 
 When you run a frontend test category, `dev.py` handles everything automatically:
 
@@ -49,7 +49,7 @@ When you run a frontend test category, `dev.py` handles everything automatically
 
 ---
 
-## Flags
+## 🏁 Flags
 
 Frontend test categories (`front-utility`, `front-user`, `front-fx`) support these flags:
 
@@ -60,7 +60,7 @@ Frontend test categories (`front-utility`, `front-user`, `front-fx`) support the
 | `--ui` | Opens **Playwright UI Mode** — a full interactive test runner | Explore tests interactively, view timeline/trace, re-run selectively |
 | `--list` | Lists available test files without running them | Discover tests, verify naming, plan what to run |
 
-### Playwright UI Mode (`--ui`)
+### 🎨 Playwright UI Mode (`--ui`)
 
 The UI mode provides a rich interactive experience:
 
@@ -77,7 +77,7 @@ The UI mode provides a rich interactive experience:
 
 ---
 
-## Test Categories
+## 📋 Test Categories
 
 | Category | Command | What's Tested |
 |----------|---------|---------------|

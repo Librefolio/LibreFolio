@@ -8,7 +8,7 @@ LibreFolio allows you to share access to your brokerage accounts with other user
 
 ---
 
-## How to Share
+## 📋 How to Share
 
 1. Navigate to a broker's detail page
 2. Click the **Share** button (:material-share-variant:) in the header
@@ -23,7 +23,7 @@ LibreFolio allows you to share access to your brokerage accounts with other user
 
 ---
 
-## Access Roles
+## 🛡️ Access Roles
 
 When you share a broker, you assign a **role** that determines what the other user can do:
 
@@ -38,13 +38,13 @@ When you share a broker, you assign a **role** that determines what the other us
 | **Manage Access (Add/Remove Users)** |   ❌    |   ❌    |   ✅   |
 | **Delete Broker**                    |   ❌    |   ❌    |   ✅   |
 
-- **Viewer**: Read-only access. Ideal for accountants or family members who just need to see data.
-- **Editor**: Can manage day-to-day operations (transactions, imports) but cannot delete the broker or change access.
-- **Owner**: Full control. Can do everything, including adding/removing other users.
+- 👁️ **Viewer**: Read-only access. Ideal for accountants or family members who just need to see data.
+- ✏️ **Editor**: Can manage day-to-day operations (transactions, imports) but cannot delete the broker or change access.
+- 👑 **Owner**: Full control. Can do everything, including adding/removing other users.
 
 ---
 
-## Share Percentage
+## 📊 Share Percentage
 
 Each user with access to a broker has a **share percentage** (0% to 100%). This represents how much of the broker's portfolio value belongs to that user.
 
@@ -66,7 +66,7 @@ The sum of all share percentages for a broker **must not exceed 100%**, but it c
 
 ---
 
-## Common Scenarios
+## 💡 Common Scenarios
 
 | Scenario | Suggested Setup |
 |----------|----------------|
