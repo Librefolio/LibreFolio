@@ -6,12 +6,13 @@ This section documents the reusable UI components in LibreFolio, organized by fu
 
 | Category | Components | Details |
 |----------|-----------|---------|
+| **[UI Base](ui-base.md)** | ModalBase, ConfirmModal, Tooltip, ToastContainer, DateRangePicker, DataEditor, and more | Generic building blocks used by all composite components |
 | **[DataTable](data-table.md)** | DataTable, Pagination, Toolbar, ColumnFilter, ModalBase, ConfirmModal | Advanced data grid with sorting, filtering, column management |
 | **[Authentication](auth.md)** | LoginCard, RegisterCard, ForgotPasswordCard, PasswordStrengthMeter | Card-style auth forms with validation |
 | **[Settings](settings.md)** | SettingsLayout, PreferencesTab, ProfileTab, GlobalSettingsTab, AboutTab | Two-column settings with categories |
 | **[File Upload & Media](file-upload.md)** | FileUploader, ImageCropper, ImageEditModal, FileEditModal, AssetPickerModal, LazyImage | Upload, crop, edit, and pick media files |
 | **[Select & Dropdowns](select.md)** | BaseDropdown, SimpleSelect, SearchSelect, CurrencySearchSelect, FxProviderSelect, BrokerSearchSelect | Keyboard-navigable dropdowns with search |
-| **[Brokers](brokers.md)** | BrokerCard, BrokerForm, BrokerIcon, BrokerModal, BrokerSharingModal, CashBalanceCard | Broker CRUD, sharing, cash management |
+| **[Brokers](brokers/index.md)** | BrokerCard, BrokerForm, BrokerIcon, BrokerModal, BrokerSharingModal, CashBalanceCard | Broker CRUD, sharing, cash management |
 
 ## Component Guidelines
 

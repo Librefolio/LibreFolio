@@ -80,5 +80,5 @@ Set up your local development environment and learn the daily workflow:
 
 ## 📖 Guides
 
-- **[Creating a New Plugin](architecture/patterns/registry_pattern.md#guide-how-to-create-a-new-plugin)** — Step-by-step guide to adding a BRIM, Assets, or FX provider
+- **[Creating a New Plugin](architecture/patterns/registry_pattern.md#plugin-development-guides)** — Guides for BRIM, Assets, and FX providers
 - **[Database Migrations](architecture/patterns/alembic.md)** — How to manage schema changes with Alembic
