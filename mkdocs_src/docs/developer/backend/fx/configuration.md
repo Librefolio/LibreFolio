@@ -2,11 +2,11 @@
 
 LibreFolio supports a sophisticated multi-provider routing system for Foreign Exchange (FX) rates. This allows administrators to define exactly which provider should be used for each currency pair, with automatic fallback capabilities and **multi-step conversion chains**.
 
-## The Routing Logic
+## 🛤️ The Routing Logic
 
 When the system needs to fetch FX rates (e.g., via the `/api/v1/fx/currencies/sync` endpoint), it consults the `fx_conversion_routes` table.
 
-### Priority System
+### 🔢 Priority System
 
 Each currency pair can have multiple **routes** assigned, ranked by **priority** (1 = highest/primary).
 
@@ -14,7 +14,7 @@ Each currency pair can have multiple **routes** assigned, ranked by **priority**
 2. **Fallback**: If the primary route fails (API error, timeout, provider down), the system automatically tries the route with `priority=2`, and so on.
 3. **Failure**: If all configured routes fail, the sync operation reports an error for that specific pair.
 
-### Direct vs. Chain Routes
+### 🔗 Direct vs. Chain Routes
 
 Each route is defined as a **chain of steps** (`chain_steps` JSON array):
 
@@ -26,7 +26,7 @@ Each route is defined as a **chain of steps** (`chain_steps` JSON array):
 
 The system multiplies the intermediate rates to compute the final derived rate, which is stored in `fx_rates` with `source = "CHAIN:ECB+ECB"`.
 
-### Example Configuration
+### 📋 Example Configuration
 
 | Base    | Quote   | Priority | Chain Steps                               | Description                  |
 |:--------|:--------|:---------|:------------------------------------------|:-----------------------------|
@@ -41,7 +41,7 @@ In this example:
 - For **RON/USD**, no provider offers this pair directly, so it uses a 2-step chain through EUR.
 - For **GBP/USD**, it uses BOE directly.
 
-## Database Schema
+## 🗃️ Database Schema
 
 The configuration is stored in the `FxConversionRoute` model:
 
@@ -81,17 +81,17 @@ class FxConversionRoute(SQLModel, table=True):
 - **No repeated edges**: The same currency pair cannot appear twice in a chain (any direction)
 - **Alphabetical ordering**: `base < quote` constraint
 
-## API Endpoints
+## 🌐 API Endpoints
 
 Configuration is managed via the `/api/v1/fx/providers/routes` endpoints.
 
-### List Routes
+### 📋 List Routes
 
 `GET /api/v1/fx/providers/routes`
 
 Returns all configured routes ordered by base, quote, and priority. Each route includes the full `chain_steps` array.
 
-### Create/Update Routes (Bulk)
+### ➕ Create/Update Routes (Bulk)
 
 `POST /api/v1/fx/providers/routes`
 
@@ -129,7 +129,7 @@ Creates or updates multiple conversion routes atomically.
 ]
 ```
 
-### Delete Routes
+### 🗑️ Delete Routes
 
 `DELETE /api/v1/fx/providers/routes`
 
@@ -149,7 +149,7 @@ Removes routing rules. Can delete a specific priority or all rules for a pair.
 
 If `priority` is omitted, all routes for the pair are deleted. When all real-provider routes are deleted, a MANUAL sentinel route is automatically reinstated to preserve the pair in the system.
 
-## Auto-Sync Behavior
+## 🔄 Auto-Sync Behavior
 
 When calling `POST /api/v1/fx/currencies/sync`:
 

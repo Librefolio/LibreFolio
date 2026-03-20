@@ -2,7 +2,7 @@
 
 Frontend E2E tests for utility components and core UI flows.
 
-## What's Tested
+## 🔍 What's Tested
 
 These Playwright tests cover fundamental UI components that are used across the entire application:
 
@@ -14,7 +14,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 | **Select Components** | `SearchSelect`, `BaseDropdown`, currency pickers |
 | **Image Crop** | `ImageEditModal`, crop presets, zoom, rotation, format export |
 
-## Running
+## 🚀 Running
 
 ```bash
 # Run all front-utility tests
@@ -30,7 +30,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 ./dev.py test front-utility all --headed
 ```
 
-## Test Location
+## 📂 Test Location
 
 ```
 frontend/e2e/

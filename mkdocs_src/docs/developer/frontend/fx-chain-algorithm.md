@@ -2,7 +2,7 @@
 
 *Status: Implemented (Mar 2026)*
 
-## Overview
+## 📖 Overview
 
 LibreFolio allows users to convert between any two currencies, even when no single provider covers the pair directly. The frontend builds a **currency graph** and runs a **DFS (Depth-First Search) with backtracking** to discover all possible conversion routes — both direct (1-step) and multi-step (chain).
 
@@ -13,14 +13,14 @@ The algorithm lives in two modules:
 | `src/lib/utils/currencyGraph.ts` | Graph construction + DFS pathfinding |
 | `src/lib/stores/currencyGraphStore.ts` | Session-level caching + public API |
 
-## The Currency Graph
+## 🌐 The Currency Graph
 
 The graph is a **MultiDirectedGraph** (from the [graphology](https://graphology.github.io/) library):
 
 - **Nodes** = all ISO 4217 currency codes (~180), from `GET /utilities/currencies`
 - **Edges** = provider capabilities, from `GET /fx/providers`
 
-### Edge Construction
+### 🔗 Edge Construction
 
 For each provider $P$ (excluding `MANUAL`), for each base $B \in P.\text{base\_currencies}$ and target $T \in P.\text{target\_currencies}$ (with $B \ne T$):
 
@@ -34,7 +34,7 @@ Key design decisions:
 2. **Bidirectionality via DFS** — the DFS explores both outbound edges ($B \to T$) and **inbound** edges ($T \leftarrow B$) at each node, effectively traversing in reverse.
 3. **Multi-graph** — if two providers both cover EUR→USD, there are two parallel edges with different `provider` attributes.
 
-### Why Single-Direction Edges?
+### ❓ Why Single-Direction Edges?
 
 | Approach | Edges | Pros | Cons |
 |:---------|:------|:-----|:-----|
@@ -43,7 +43,7 @@ Key design decisions:
 
 The single-direction approach encodes the real relationship: *"Provider P publishes rates from B to T"*. The backend's `compute_chain_rate()` uses alphabetical normalization to decide whether to use the rate directly or invert it ($1/\text{rate}$).
 
-## Simplified Example Graph
+## 📐 Simplified Example Graph
 
 Consider 4 providers and 5 currencies:
 
@@ -76,7 +76,7 @@ graph LR
 
 Each arrow is a directed edge with the provider label. The DFS can traverse any edge in reverse (e.g., go from USD to EUR via the ECB edge EUR→USD).
 
-### Example: All Routes from RON to USD
+### 📋 Example: All Routes from RON to USD
 
 Starting from **RON**, the DFS finds these paths:
 
@@ -94,9 +94,9 @@ Route 1 is the shortest (2 steps) and uses only ECB. Route 2 mixes ECB and FED. 
 !!! warning "Chain Failure Risk"
     If **any single step** in a chain fails (provider down, API error), the **entire chain** fails. Shorter chains are more reliable.
 
-## DFS Algorithm
+## 🔍 DFS Algorithm
 
-### Pseudocode
+### 📝 Pseudocode
 
 ```
 function findAllPaths(graph, source, target, maxDepth=4):
@@ -140,11 +140,11 @@ function findAllPaths(graph, source, target, maxDepth=4):
     return sort(validPaths, by=length)
 ```
 
-### Constraints
+### 📏 Constraints
 
 The DFS enforces **two constraints** at each step to produce valid, non-redundant routes:
 
-#### Constraint 1 — Simple Paths (No Repeated Nodes)
+#### 🔄 Constraint 1 — Simple Paths (No Repeated Nodes)
 
 $$
 \text{neighbor} \notin \text{visitedNodes}
@@ -160,7 +160,7 @@ The source node is added to `visitedNodes` at initialization, so the DFS can nev
 !!! note "Evolution"
     The original algorithm used `usedEdgePairs: Set<string>` (tracking visited *edges*, not *nodes*). This allowed the same node to appear multiple times if reached via different edge pairs, producing redundant cycles like `EUR→USD→GBP→EUR→RON`. Switching to `visitedNodes` (simple paths) eliminated these and guarantees each conversion chain is **unique and optimal**.
 
-#### Constraint 2 — Max 2 Uses per Provider
+#### 2️⃣ Constraint 2 — Max 2 Uses per Provider
 
 $$
 \text{providerUseCount}[\text{provider}] < 2
@@ -316,4 +316,3 @@ interface ChainStep {
 ```
 
 No transformation is needed between the DFS output and the API request body.
-

@@ -2,7 +2,7 @@
 
 LibreFolio records every financial event as a transaction. Understanding these types is crucial for accurate portfolio tracking and tax reporting.
 
-## Supported Transactions
+## 📋 Supported Transactions
 
 <table>
   <thead>

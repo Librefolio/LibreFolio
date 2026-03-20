@@ -2,7 +2,7 @@
 
 This section documents the reusable UI components in LibreFolio, organized by functional area.
 
-## Component Library
+## 📚 Component Library
 
 | Category | Components | Details |
 |----------|-----------|---------|
@@ -14,7 +14,7 @@ This section documents the reusable UI components in LibreFolio, organized by fu
 | **[Select & Dropdowns](select.md)** | BaseDropdown, SimpleSelect, SearchSelect, CurrencySearchSelect, FxProviderSelect, BrokerSearchSelect | Keyboard-navigable dropdowns with search |
 | **[Brokers](brokers/index.md)** | BrokerCard, BrokerForm, BrokerIcon, BrokerModal, BrokerSharingModal, CashBalanceCard | Broker CRUD, sharing, cash management |
 
-## Component Guidelines
+## 📏 Component Guidelines
 
 - **ModalBase**: ALL modals extend `ModalBase.svelte` with configurable z-index
 - **Svelte 5 Runes**: Use `$state`, `$derived`, `$effect`, `$props`

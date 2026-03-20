@@ -8,23 +8,23 @@ Each currency pair in LibreFolio is backed by one or more **data providers** —
 
 ---
 
-## How to Access
+## 🔓 How to Access
 
 Click the **Provider** button (⚙️) in the chart toolbar on the Pair Detail page. This opens the provider configuration modal showing the current route setup.
 
 ---
 
-## What You See
+## 📋 What You See
 
 The modal displays:
 
-- **Current Route(s)** — The active data source(s) for this pair, in priority order
-- **Route Type** — Whether it's a **Direct** route (single provider) or a **Chain** route (multi-hop through an intermediate currency)
-- **Provider Details** — Name, icon, and base currency of each provider in the route
+- 🛤️ **Current Route(s)** — The active data source(s) for this pair, in priority order
+- 🔀 **Route Type** — Whether it's a **Direct** route (single provider) or a **Chain** route (multi-hop through an intermediate currency)
+- 🏛️ **Provider Details** — Name, icon, and base currency of each provider in the route
 
 ---
 
-## Changing Providers
+## 🔧 Changing Providers
 
 To change the data source for a pair:
 
@@ -37,7 +37,7 @@ The next sync will fetch data from the new provider.
 
 ---
 
-## Priority & Fallback
+## 🔢 Priority & Fallback
 
 When multiple routes are configured for a pair:
 
@@ -57,10 +57,9 @@ When multiple routes are configured for a pair:
 
 ## 📚 Related
 
-- **[Adding a Pair](../add-pair.md)** — Full route discovery (direct + chain routes)
-- **[Synchronization](../sync.md)** — How sync uses the configured providers
-- **[FX Providers List](../../../developer/backend/fx/providers_list.md)** — Technical details on each provider (ECB, FED, BOE, SNB)
+- ➕ **[Adding a Pair](../add-pair.md)** — Full route discovery (direct + chain routes)
+- 🔄 **[Synchronization](../sync.md)** — How sync uses the configured providers
+- 📋 **[FX Providers List](../../../developer/backend/fx/providers_list.md)** — Technical details on each provider (ECB, FED, BOE, SNB)
 
 !!! tip "🔗 How chain routes are calculated"
     For the mathematical algorithm behind multi-hop conversion chains, see [FX Chain Algorithm](../../../developer/frontend/fx-chain-algorithm.md).
-

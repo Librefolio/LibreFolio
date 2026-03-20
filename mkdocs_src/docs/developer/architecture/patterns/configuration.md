@@ -3,7 +3,7 @@
 LibreFolio uses a `.env` file for configuration, powered by Pydantic's `BaseSettings`. This allows for easy management of environment variables for both local development and
 Docker deployments.
 
-## `.env` File
+## 📄 `.env` File
 
 The `.env` file is located at the root of the project. A sample file, `.env.example`, is provided. To get started, simply copy it:
 
@@ -11,7 +11,7 @@ The `.env` file is located at the root of the project. A sample file, `.env.exam
 cp .env.example .env
 ```
 
-### Key Environment Variables
+### 🔑 Key Environment Variables
 
 - **`PORT`**: The port on which the FastAPI server will run.
     - Default: `8000`
@@ -39,7 +39,7 @@ cp .env.example .env
     - Default: `50`
     - Cached thumbnails are evicted using LRU when limit is reached.
 
-## Data Separation
+## 📂 Data Separation
 
 LibreFolio uses separate data directories for production and test:
 
@@ -48,7 +48,7 @@ LibreFolio uses separate data directories for production and test:
 
 The `get_data_dir()` function in `config.py` automatically selects the correct path based on `LIBREFOLIO_TEST_MODE`.
 
-## How it Works
+## ⚙️ How it Works
 
 The settings are loaded into a Pydantic `Settings` class located in `backend/app/config.py`. This class automatically reads variables from the `.env` file and validates their
 types.

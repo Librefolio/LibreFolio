@@ -8,7 +8,7 @@ How to create a new **FX Rate Provider** to fetch exchange rates from a new cent
 
 ---
 
-## Flow
+## 🔄 Flow
 
 The system calls provider methods in two distinct phases:
 
@@ -45,9 +45,9 @@ graph TD
 
 ---
 
-## ABC Methods
+## 📋 ABC Methods
 
-### Required (Abstract)
+### ✅ Required (Abstract)
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
@@ -57,7 +57,7 @@ graph TD
 | `get_supported_currencies()` | `async → list[str]` | List of available quote currencies (can be static or dynamic) |
 | `fetch_rates(date_range, currencies, base_currency)` | `async → dict[str, list[tuple]]` | Fetch rates for date range. Returns `{currency: [(date, base, quote, rate), ...]}` |
 
-### Optional (Override)
+### 🔧 Optional (Override)
 
 | Method | Default | Description |
 |--------|---------|-------------|
@@ -73,7 +73,7 @@ graph TD
 
 ---
 
-## Implementation Example
+## 💻 Implementation Example
 
 ```python
 # backend/app/services/fx_providers/my_central_bank.py
@@ -132,7 +132,7 @@ class MyCentralBankProvider(FXRateProvider):
         return result
 ```
 
-### Static Assets (Icons)
+### 🖼️ Static Assets (Icons)
 
 Place provider icons in `backend/app/services/fx_providers/static/mcb/`:
 
@@ -146,7 +146,7 @@ fx_providers/
 
 ---
 
-## Related Documentation
+## 🔗 Related Documentation
 
 - [FX Architecture](../../backend/fx/architecture.md) — Multi-provider design, sync process
 - [FX Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm, fallback

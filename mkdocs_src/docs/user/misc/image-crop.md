@@ -4,13 +4,13 @@ LibreFolio includes a powerful interactive image editing tool that lets you crop
 
 ---
 
-## When Does It Appear?
+## 🎯 When Does It Appear?
 
 The Image Crop modal opens automatically whenever you upload an image file in LibreFolio:
 
-- **Files page** → uploading any image (JPEG, PNG, WebP, GIF)
-- **Profile settings** → changing your avatar
-- **Broker settings** → changing a broker icon
+- 📂 **Files page** → uploading any image (JPEG, PNG, WebP, GIF)
+- 👤 **Profile settings** → changing your avatar
+- 🏦 **Broker settings** → changing a broker icon
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -18,7 +18,7 @@ The Image Crop modal opens automatically whenever you upload an image file in Li
 
 ---
 
-## Presets
+## 📐 Presets
 
 The tool offers presets for common use cases:
 
@@ -32,46 +32,46 @@ The preset automatically sets the aspect ratio constraint and output size.
 
 ---
 
-## Controls
+## 🎛️ Controls
 
-### Crop Area
+### ✂️ Crop Area
 
-- **Drag the corners** to resize the crop area
-- **Drag inside** the area to move it
-- The crop area is **clamped to the image bounds** — you can't select outside the image
+- 📏 **Drag the corners** to resize the crop area
+- ↔️ **Drag inside** the area to move it
+- 🔒 The crop area is **clamped to the image bounds** — you can't select outside the image
 
-### Zoom
+### 🔍 Zoom
 
-- **Mouse wheel** or **pinch** (on touch devices) to zoom in/out
-- **Zoom buttons** (+/−) for precise control
-- Zooming centers on the crop selection
+- 🖱️ **Mouse wheel** or **pinch** (on touch devices) to zoom in/out
+- ➕ **Zoom buttons** (+/−) for precise control
+- 🎯 Zooming centers on the crop selection
 
-### Rotation
+### 🔄 Rotation
 
-- **Rotate buttons** (↺/↻) rotate in 15° steps
-- Rotation happens relative to the selection center
+- 🔄 **Rotate buttons** (↺/↻) rotate in 15° steps
+- 📍 Rotation happens relative to the selection center
 
-### Flip
+### 🪞 Flip
 
-- **Flip Horizontal** (↔) — mirrors the image left-right
-- **Flip Vertical** (↕) — mirrors the image top-bottom
+- ↔️ **Flip Horizontal** (↔) — mirrors the image left-right
+- ↕️ **Flip Vertical** (↕) — mirrors the image top-bottom
 
 ---
 
-## Output Settings
+## ⚙️ Output Settings
 
 Before confirming, you can adjust:
 
-- **Output format**: PNG (lossless, transparency), JPEG (smaller, no transparency), WebP (modern, best compression)
-- **Quality** (JPEG/WebP only): Slider from 10% to 100% — lower quality = smaller file
-- **Output size**: Width and height in pixels (linked to the preset, but editable)
+- 🎨 **Output format**: PNG (lossless, transparency), JPEG (smaller, no transparency), WebP (modern, best compression)
+- 📊 **Quality** (JPEG/WebP only): Slider from 10% to 100% — lower quality = smaller file
+- 📐 **Output size**: Width and height in pixels (linked to the preset, but editable)
 
 !!! tip "Ellipse Preview"
     For avatar and icon presets, a circular **ellipse overlay** is shown on the crop area. This helps you preview how the image will look in a circular frame (e.g., user avatars in the navigation bar).
 
 ---
 
-## Workflow
+## 🔄 Workflow
 
 1. **Upload or drag** an image file
 2. The crop modal opens with the appropriate preset
@@ -82,4 +82,3 @@ Before confirming, you can adjust:
 
 !!! info "Non-image files"
     If you upload a non-image file (PDF, CSV, etc.), the crop modal is skipped. Instead, a simple rename dialog appears.
-

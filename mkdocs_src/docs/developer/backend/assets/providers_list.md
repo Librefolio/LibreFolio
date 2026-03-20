@@ -12,9 +12,9 @@ This page lists the asset pricing providers currently available in LibreFolio.
 
 ---
 
-### Feature Key
+### 🔑 Feature Key
 
-- **History**: Can fetch historical OHLC data.
-- **Search**: Supports searching for assets by name/ticker.
-- **Metadata**: Can fetch asset details (sector, description, etc.).
-- **Current Value**: Can fetch the latest real-time price.
+- 📈 **History**: Can fetch historical OHLC data.
+- 🔎 **Search**: Supports searching for assets by name/ticker.
+- 📋 **Metadata**: Can fetch asset details (sector, description, etc.).
+- 💰 **Current Value**: Can fetch the latest real-time price.

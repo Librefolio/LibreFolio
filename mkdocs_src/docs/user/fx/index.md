@@ -4,7 +4,7 @@ LibreFolio includes a full-featured **Foreign Exchange (FX)** management system.
 
 ---
 
-## The FX List Page
+## 📋 The FX List Page
 
 Navigate to **FX Rates** from the sidebar to see all your configured currency pairs:
 
@@ -14,10 +14,10 @@ Navigate to **FX Rates** from the sidebar to see all your configured currency pa
 
 Each card shows:
 
-- The **currency pair** with flag emojis (e.g., 🇪🇺 EUR → 🇺🇸 USD)
-- The **latest rate** and trend
-- The **data provider** (ECB, FED, BOE, etc.)
-- A **mini sparkline** chart
+- 🏷️ The **currency pair** with flag emojis (e.g., 🇪🇺 EUR → 🇺🇸 USD)
+- 📈 The **latest rate** and trend
+- 🏛️ The **data provider** (ECB, FED, BOE, etc.)
+- 📊 A **mini sparkline** chart
 
 You can **filter** by currency to quickly find a specific pair:
 
@@ -27,9 +27,9 @@ You can **filter** by currency to quickly find a specific pair:
 
 ---
 
-## What's Next?
+## 🔮 What's Next?
 
-- **[Adding a Pair](add-pair.md)** — How to create a new currency pair with direct or chain routes
-- **[Synchronization](sync.md)** — Automatic and manual sync from providers
-- **[Pair Detail Page](detail/index.md)** — Interactive chart, signal measurements, data editor, provider configuration
-- **[Chart Settings](chart-settings.md)** — Customize chart appearance and signal overlays
+- ➕ **[Adding a Pair](add-pair.md)** — How to create a new currency pair with direct or chain routes
+- 🔄 **[Synchronization](sync.md)** — Automatic and manual sync from providers
+- 📊 **[Pair Detail Page](detail/index.md)** — Interactive chart, signal measurements, data editor, provider configuration
+- ⚙️ **[Chart Settings](chart-settings.md)** — Customize chart appearance and signal overlays

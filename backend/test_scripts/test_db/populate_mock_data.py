@@ -1302,8 +1302,18 @@ def upload_static_resources(session: Session):
 
 
 def upload_broker_reports(session: Session):
-    """Copy sample BRIM report files into broker_reports/uploaded/."""
+    """Upload sample BRIM report files using the real save_uploaded_file service.
+
+    This creates proper UUID-named files with JSON sidecar metadata inside
+    broker-specific subdirectories, exactly matching the structure produced
+    by the real API endpoint POST /import/upload.
+
+    Result:
+        broker_reports/uploaded/broker_{id}/{uuid}.csv   (data file)
+        broker_reports/uploaded/broker_{id}/{uuid}.json  (metadata sidecar)
+    """
     from backend.app.config import PROJECT_ROOT
+    from backend.app.services.brim_provider import save_uploaded_file
 
     print("\n📄 Uploading broker report samples...")
     print("-" * 60)
@@ -1323,7 +1333,10 @@ def upload_broker_reports(session: Session):
         "Recrowd": "generic_simple.csv",
     }
 
-    data_dir = get_data_dir()
+    # Get admin user for uploaded_by_user_id
+    admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()
+    admin_id = admin.id if admin else None
+
     brokers = session.exec(select(Broker)).all()
 
     for broker in brokers:
@@ -1336,13 +1349,15 @@ def upload_broker_reports(session: Session):
             print(f"  ⚠️  Sample not found: {sample_filename}")
             continue
 
-        # Copy to broker_reports/uploaded/
-        dest_dir = data_dir / "broker_reports" / "uploaded"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_file = dest_dir / f"broker_{broker.id}_{sample_filename}"
-        import shutil
-        shutil.copy2(sample_path, dest_file)
-        print(f"  ✅ {broker.name} → {sample_filename}")
+        # Use the real service function (UUID + sidecar JSON + broker subfolder)
+        content = sample_path.read_bytes()
+        file_info = save_uploaded_file(
+            content=content,
+            original_filename=sample_filename,
+            user_id=admin_id,
+            broker_id=broker.id,
+        )
+        print(f"  ✅ {broker.name} → {sample_filename} (id: {file_info.file_id[:8]}…)")
 
 
 def main():

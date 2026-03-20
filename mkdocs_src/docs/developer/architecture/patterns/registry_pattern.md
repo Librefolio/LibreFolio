@@ -2,7 +2,7 @@
 
 LibreFolio uses a **Registry Pattern** to create a flexible and extensible plugin system. This allows new functionality—such as support for new brokers, asset pricing sources, or FX providers—to be added without modifying the core application code.
 
-## How it Works
+## ⚙️ How it Works
 
 The system is based on three key components:
 
@@ -10,7 +10,7 @@ The system is based on three key components:
 2. **Provider Registry**: A central class that discovers and stores all available plugins (e.g., `AssetProviderRegistry`).
 3. **`@register_provider` Decorator**: A simple decorator that automatically registers a plugin with its corresponding registry.
 
-### High-Level Flow
+### 🗺️ High-Level Flow
 
 ```mermaid
 graph TD
@@ -35,16 +35,16 @@ graph TD
     REG -.-> GET
 ```
 
-### Discovery Process
+### 🔍 Discovery Process
 
 1. **Scan**: On first access, `auto_discover()` scans the designated plugin folder (e.g., `backend/app/services/fx_providers/`).
 2. **Import**: Each `.py` file (except `__init__.py`) is loaded with `importlib`.
 3. **Register**: The `@register_provider` decorator fires on import, calling `Registry.register(class)` which reads `provider_code` and stores the class in `_providers[code] = class`.
 4. **Lazy**: Discovery happens once, on first `get_provider()` call. Subsequent calls use the cached dictionary.
 
-## Core Components
+## 🧱 Core Components
 
-### `AbstractProviderRegistry`
+### 📋 `AbstractProviderRegistry`
 
 The base class for all registries. Provides:
 
@@ -56,7 +56,7 @@ The base class for all registries. Provides:
 | `list_providers(cls)` | List all registered providers with `code` and `name` |
 | `auto_discover(cls)` | Scan plugin folder and import all modules |
 
-### Registry Specializations
+### 🏷️ Registry Specializations
 
 | Registry | Plugin Folder | Base Class | Purpose |
 |----------|--------------|------------|---------|
@@ -64,7 +64,7 @@ The base class for all registries. Provides:
 | `AssetProviderRegistry` | `asset_source_providers/` | `AssetSourceProvider` | Fetch asset prices |
 | `FXProviderRegistry` | `fx_providers/` | `FXRateProvider` | Fetch exchange rates |
 
-### `@register_provider` Decorator
+### 🎯 `@register_provider` Decorator
 
 ```python
 @register_provider(AssetProviderRegistry)
@@ -76,7 +76,7 @@ The decorator is a factory that calls `registry_class.register(provider_class)` 
 
 ---
 
-## Plugin Development Guides
+## 📖 Plugin Development Guides
 
 Each subsystem has its own detailed guide with ABC method tables, flow diagrams, and implementation examples:
 
@@ -88,23 +88,23 @@ Each subsystem has its own detailed guide with ABC method tables, flow diagrams,
 
 ---
 
-## Subsystem Documentation
+## 📚 Subsystem Documentation
 
 Each plugin subsystem also has architecture docs, provider lists, and configuration pages:
 
-### BRIM (Broker Report Import Manager)
+### 📥 BRIM (Broker Report Import Manager)
 
 - [Architecture](../../backend/brim/architecture.md) — Pipeline design, parsing flow
 - [Generic CSV Provider](../../backend/brim/generic_csv.md) — User-configurable CSV mapper
 - [Providers List](../../backend/brim/providers_list.md) — All supported brokers (Directa, Degiro, IBKR, etc.)
 
-### Assets (Pricing & Metadata)
+### 📈 Assets (Pricing & Metadata)
 
 - [Architecture](../../backend/assets/architecture.md) — Provider interface, caching, refresh logic
 - [System Providers](../../backend/assets/system_providers.md) — Built-in providers (Scheduled Investment, Manual)
 - [Providers List](../../backend/assets/providers_list.md) — All available providers (Yahoo Finance, etc.)
 
-### FX (Foreign Exchange)
+### 💱 FX (Foreign Exchange)
 
 - [Architecture](../../backend/fx/architecture.md) — Multi-provider design, sync process
 - [Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm, priority fallback
