@@ -671,15 +671,22 @@ test.describe('Gallery Screenshots', () => {
                     const chfOption = page.locator('[role="listbox"] button').filter({hasText: 'CHF'}).first();
                     await expect(chfOption).toBeVisible({timeout: 2000});
                     await chfOption.click();
-                    await page.waitForTimeout(1500); // Wait for route discovery (DFS pathfinding)
+
+                    // Wait for route discovery to complete (loading spinner → route-select div)
+                    const routeSelect = modal.locator('[data-testid="fx-route-select"]');
+                    await routeSelect.waitFor({state: 'visible', timeout: 10_000});
 
                     // Open route picker to show discovered routes
-                    const routeSelect = modal.locator('[data-testid="fx-route-select"]');
                     const addRouteBtn = routeSelect.locator('button').filter({hasText: /add|aggiungi|ajouter|añadir/i}).first();
-                    if (await addRouteBtn.isVisible({timeout: 3000}).catch(() => false)) {
-                        await addRouteBtn.click();
-                        await page.waitForTimeout(2000); // Wait for routes to render with provider icons
-                    }
+                    await addRouteBtn.waitFor({state: 'visible', timeout: 5000});
+                    await addRouteBtn.click();
+
+                    // Scroll modal body to bottom so picker content is in view
+                    await modal.locator('.overflow-y-auto').evaluate(el => el.scrollTop = el.scrollHeight);
+
+                    // Wait for direct routes section to render
+                    await modal.locator('[data-testid="fx-route-direct-section"]').waitFor({state: 'visible', timeout: 5000});
+                    await page.waitForTimeout(500); // Extra settle time for provider icons
 
                     await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-routes');
                     await page.keyboard.press('Escape');
@@ -727,15 +734,23 @@ test.describe('Gallery Screenshots', () => {
                     const chfOption = page.locator('[role="listbox"] button').filter({hasText: 'CHF'}).first();
                     await expect(chfOption).toBeVisible({timeout: 2000});
                     await chfOption.click();
-                    await page.waitForTimeout(1500); // Wait for route discovery (chain)
+
+                    // Wait for route discovery to complete (loading spinner → route-select div)
+                    const routeSelect = modal.locator('[data-testid="fx-route-select"]');
+                    await routeSelect.waitFor({state: 'visible', timeout: 10_000});
 
                     // Open route picker to show discovered chain routes
-                    const routeSelect = modal.locator('[data-testid="fx-route-select"]');
                     const addRouteBtn = routeSelect.locator('button').filter({hasText: /add|aggiungi|ajouter|añadir/i}).first();
-                    if (await addRouteBtn.isVisible({timeout: 3000}).catch(() => false)) {
-                        await addRouteBtn.click();
-                        await page.waitForTimeout(2000); // Wait for chain routes to render
-                    }
+                    await addRouteBtn.waitFor({state: 'visible', timeout: 5000});
+                    await addRouteBtn.click();
+                    await page.waitForTimeout(500); // Let Svelte render the picker
+
+                    // Scroll modal body to bottom so picker content is in view
+                    await modal.locator('.overflow-y-auto').evaluate(el => el.scrollTop = el.scrollHeight);
+
+                    // Wait for chain routes section to render
+                    await modal.locator('[data-testid^="fx-route-chain-section"]').first().waitFor({state: 'visible', timeout: 5000});
+                    await page.waitForTimeout(500); // Extra settle time for provider icons
 
                     await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-chain');
                     await page.keyboard.press('Escape');
