@@ -43,6 +43,78 @@ Both flag styles work:
 - `--lang it fr es` (space-separated)
 - `--lang it --lang fr --lang es` (repeated flags)
 
+### Check pipeline setup
+
+```bash
+./dev.py mkdocs translate-check
+```
+
+Verifies: Aphra installed, API key valid, models configured, files detected, OpenRouter connectivity.
+
+## 🔄 How Aphra Translates (Workflow)
+
+Aphra uses a multi-step **agentic workflow** where an LLM acts in different roles. Each role can use a different model.
+
+### Default: 4-step workflow (web search OFF)
+
+| Step | Role | What it does |
+|------|------|-------------|
+| **1. Analyze** | Writer | Reads the source text, identifies key terms, cultural references, and technical jargon that may be tricky to translate |
+| **2. Translate** | Writer | Produces an initial full translation preserving structure and style |
+| **3. Critique** | Critiquer | Compares original vs translation, flags errors, suggests improvements |
+| **4. Refine** | Writer | Produces the final translation incorporating the critic's feedback |
+
+### Optional: 5-step workflow (web search ON)
+
+When `APHRA_WEB_SEARCH=true`, a **Search** step is added between Analyze and Translate:
+
+| Step | Role | What it does |
+|------|------|-------------|
+| **2. Search** | Searcher | For each term found in Step 1, queries the web via OpenRouter's `:online` plugin for real-time context, definitions, and usage examples |
+
+### Why web search is OFF by default
+
+- **Cost**: OpenRouter charges **$4 per 1000 web search results**, on top of model costs. Each term from Step 1 triggers a separate search query.
+- **Speed**: Search adds 30-120 seconds per file depending on term count.
+- **Not needed for technical docs**: LibreFolio documentation uses well-known terms (Docker, ETF, API, ISIN…) that don't benefit from web lookup.
+- **Model compatibility**: The `:online` suffix appended to model names may conflict with `:free` model suffixes (`model:free:online` is invalid).
+
+> **When to enable**: Only if translating content with obscure cultural references, idiomatic expressions, or rapidly-evolving terminology that needs real-time verification.
+
+### LLM Roles & Model Configuration
+
+Aphra's 3 roles can each use a different model, configured via `.env`:
+
+```env
+# Shared model for all roles (convenient shortcut)
+APHRA_MODEL=google/gemini-2.5-flash
+
+# Per-role overrides (uncomment to specialize)
+# APHRA_WRITER=google/gemini-2.5-flash      # Steps: analyze, translate, refine
+# APHRA_SEARCHER=google/gemini-2.5-flash     # Step: search (only if web search ON)
+# APHRA_CRITIQUER=google/gemini-2.5-flash    # Step: critique
+```
+
+**Priority**: `APHRA_WRITER` > `APHRA_MODEL` > hardcoded default (`google/gemini-2.5-flash`)
+
+> **⚠️ Aphra's built-in defaults** (in `aphra/workflows/short_article/config/default.toml`) are `anthropic/claude-sonnet-4` (writer + critiquer) and `perplexity/sonar` (searcher) — both paid models. Our wrapper **overrides these** with the models from `.env`, so you're always in control of costs.
+
+### Web Search Toggle
+
+```env
+# OFF (default) — 4 steps, no web cost, faster
+APHRA_WEB_SEARCH=false
+
+# ON — 5 steps, adds web search cost + latency
+APHRA_WEB_SEARCH=true
+```
+
+### Caching Note
+
+The translation pipeline caches **source file MD5 hashes** (`.translate-hashes.json`) to skip unchanged files between runs. This is per-file granularity — if a source `.en.md` hasn't changed, all its translations are skipped.
+
+Aphra's web search results (Step 2, when enabled) are **not cached** between runs. In theory, since the search glossary is shared context (same terms appear across files in the same section), caching and reusing it could save significant API calls. However, for our use case with web search disabled, this optimization is unnecessary. If needed in the future, the glossary could be serialized per-section and reused across files.
+
 ## 🔑 API Key Setup (BYOK: OpenRouter + Google Gemini)
 
 This pipeline uses Google Gemini models via OpenRouter's **BYOK (Bring Your Own Key)** feature. This routes API calls directly through Google's servers using your own credentials, minimizing costs.
@@ -88,7 +160,7 @@ OPENROUTER_API_KEY=sk-or-v1-your-key-here
 
 ```
 mkdocs_src/aphra-pipeline/
-├── .env                    # API key (gitignored)
+├── .env                    # API key + model config (gitignored)
 ├── .env.example            # Template for contributors
 ├── .gitignore              # Ignores .env, config.toml, cache
 ├── README.md               # This file
@@ -99,10 +171,10 @@ The script:
 1. Reads translatable file paths from `mkdocs.yml` nav (excludes Developer/POC sections)
 2. Detects target languages from `frontend/src/lib/i18n/index.ts` → `SUPPORTED_LOCALES`
 3. Computes MD5 hash per source file — skips unchanged files
-4. Generates temporary `config.toml` with Gemini model + API key
-5. Invokes Aphra per file × language
-6. Saves output as `*.{lang}.md` alongside the source
-7. Cleans up `config.toml` (even on error)
+4. Generates temporary `config.toml` with model names + API key (Aphra format)
+5. Calls Aphra workflow step-by-step (bypasses `aphra.translate()` to correctly pass config path and control web search)
+6. Shows per-step progress with timing (Analyze → Translate → Critique → Refine)
+7. Saves output as `*.{lang}.md` alongside the source
+8. Cleans up `config.toml` (even on error)
 
 Translation cache stored in `.translate-hashes.json` (gitignored).
-
