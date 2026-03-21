@@ -55,6 +55,9 @@ EN_ONLY_SECTIONS = {"Developer Manual", "POC UX"}
 # Aphra model configuration (overridable per-role via .env)
 DEFAULT_APHRA_MODEL = "google/gemini-2.5-flash"
 
+# Default Ollama base URL (OpenAI-compatible API)
+DEFAULT_OLLAMA_URL = "http://localhost:11434/v1"
+
 
 # ---------------------------------------------------------------------------
 # Language detection from frontend
@@ -166,8 +169,27 @@ def _file_md5(filepath: Path) -> str:
 # Aphra config.toml generation
 # ---------------------------------------------------------------------------
 
+def _is_local_mode() -> bool:
+    """Check if using a local LLM backend (Ollama, llama.cpp, etc.)."""
+    base_url = _load_env_var("APHRA_BASE_URL", "")
+    return base_url != "" and "openrouter.ai" not in base_url
+
+
+def _get_base_url() -> str | None:
+    """Get custom base URL for LLM API (None = default OpenRouter)."""
+    url = _load_env_var("APHRA_BASE_URL", "")
+    return url if url else None
+
+
 def _load_api_key() -> str:
-    """Load OPENROUTER_API_KEY from .env file."""
+    """Load API key from .env file.
+
+    In local mode (APHRA_BASE_URL set to non-OpenRouter), a dummy key
+    is returned since Ollama/llama.cpp don't require authentication.
+    """
+    if _is_local_mode():
+        return _load_env_var("OPENROUTER_API_KEY", "ollama-local")
+
     if not ENV_FILE.exists():
         print(f"ERROR: {ENV_FILE} not found. Copy from .env.example and add your key.", file=sys.stderr)
         sys.exit(1)
@@ -203,19 +225,29 @@ def _load_models() -> dict:
     """
     Load per-role Aphra model names from .env.
 
-    Hierarchy (per role):
-      1. APHRA_WRITER / APHRA_SEARCHER / APHRA_CRITIQUER  (role-specific)
-      2. APHRA_MODEL  (shared fallback)
-      3. DEFAULT_APHRA_MODEL  (hardcoded)
+    Roles (4 steps in the workflow):
+      - analyzer:  Step 1 Analyze (reasoning — identify key terms)
+      - writer:    Step 3 Translate + Step 5 Refine (generation)
+      - critiquer: Step 4 Critique (reasoning — compare original vs translation)
+      - searcher:  Step 2 Search (web lookup, usually skipped)
 
-    Returns dict with keys: writer, searcher, critiquer.
+    Hierarchy:
+      APHRA_ANALYZER  → defaults to APHRA_WRITER → APHRA_MODEL → DEFAULT
+      APHRA_WRITER    → defaults to APHRA_MODEL → DEFAULT
+      APHRA_CRITIQUER → defaults to APHRA_ANALYZER (reasoning model)
+      APHRA_SEARCHER  → defaults to APHRA_MODEL → DEFAULT
+
+    Returns dict with keys: analyzer, writer, searcher, critiquer.
     """
     shared = _load_env_var("APHRA_MODEL", DEFAULT_APHRA_MODEL)
+    writer = _load_env_var("APHRA_WRITER", shared)
+    analyzer = _load_env_var("APHRA_ANALYZER", writer)
     return {
-        "writer": _load_env_var("APHRA_WRITER", shared),
+        "analyzer": analyzer,
+        "writer": writer,
         "searcher": _load_env_var("APHRA_SEARCHER", shared),
-        "critiquer": _load_env_var("APHRA_CRITIQUER", shared),
-        }
+        "critiquer": _load_env_var("APHRA_CRITIQUER", analyzer),
+    }
 
 
 def _generate_config_toml(api_key: str, models: dict) -> None:
@@ -318,114 +350,128 @@ def _format_tokens(total: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Translation logic
+# Translation logic — shared-analysis architecture
 # ---------------------------------------------------------------------------
 
-def _translate_file(source_path: Path, target_lang: str, api_key: str, models: dict) -> Path | None:
-    """
-    Translate a single .en.md file to target language using Aphra.
+# Language name mapping for Aphra prompts
+LANG_NAMES = {"it": "Italian", "fr": "French", "es": "Spanish"}
 
-    We bypass aphra.translate() to correctly pass our config.toml path
-    to BOTH the LLMModelClient (API key) AND the workflow's load_config
-    (model names). Without this, Aphra loads default models from its
-    internal config/default.toml (Claude Sonnet 4 + Perplexity Sonar).
 
-    Returns the output Path on success, None on failure.
-    """
+def _create_model_client(api_key: str, models: dict):
+    """Create an Aphra LLMModelClient, patching base_url for local backends."""
     from aphra.core.llm_client import LLMModelClient
+
+    _generate_config_toml(api_key, models)
+    model_client = LLMModelClient(str(CONFIG_TOML))
+
+    custom_base_url = _get_base_url()
+    if custom_base_url:
+        model_client.client.base_url = custom_base_url
+
+    return model_client
+
+
+def _analyze_source(source_text: str, model_client, models: dict):
+    """
+    Step 1 — Analyze: identify key terms, entities, expressions.
+
+    This step is language-INDEPENDENT (it analyzes the English source)
+    so its result can be shared across all target languages.
+
+    Returns (workflow, workflow_config, analysis_text) or raises on error.
+    """
     from aphra.core.context import TranslationContext
     from aphra.core.registry import get_suitable_workflow
 
-    # Read source text
-    source_text = source_path.read_text(encoding="utf-8")
+    workflow = get_suitable_workflow(source_text)
+    if workflow is None:
+        raise ValueError("No suitable Aphra workflow for this content")
 
-    # Build output path: foo.en.md → foo.{lang}.md
+    workflow_config = workflow.load_config(global_config_path=str(CONFIG_TOML))
+
+    # Use analyzer model (reasoning) for analysis step
+    workflow_config['writer'] = models['analyzer']
+
+    context = TranslationContext(
+        model_client=model_client,
+        source_language="English",
+        target_language="multilingual",
+        log_calls=False,
+    )
+    context.set_workflow_config(workflow_config)
+
+    analysis = workflow.analyze(context, source_text)
+    return workflow, workflow_config, analysis
+
+
+def _translate_one_lang(
+    source_text: str, source_path: Path, target_lang: str,
+    workflow, workflow_config: dict, model_client, models: dict,
+    analysis: str,
+) -> Path | None:
+    """
+    Steps 2-5 for ONE target language: Search → Translate → Critique → Refine.
+
+    Uses writer model (generation) for Translate+Refine and
+    critiquer model (reasoning) for Critique.
+
+    Returns output Path on success, None on failure.
+    """
+    from aphra.core.context import TranslationContext
+
     output_name = source_path.name.replace(".en.md", f".{target_lang}.md")
     output_path = source_path.parent / output_name
+    target_name = LANG_NAMES.get(target_lang, target_lang)
 
-    # Language name mapping for Aphra
-    lang_names = {"it": "Italian", "fr": "French", "es": "Spanish"}
-    target_name = lang_names.get(target_lang, target_lang)
+    context = TranslationContext(
+        model_client=model_client,
+        source_language="English",
+        target_language=target_name,
+        log_calls=False,
+    )
+    context.set_workflow_config(workflow_config)
 
-    config_path = str(CONFIG_TOML)
+    web_search = _load_env_var("APHRA_WEB_SEARCH", "false").lower() in ("true", "1", "yes")
 
-    try:
-        # Ensure config.toml exists
-        _generate_config_toml(api_key, models)
+    # Step 2: Search (optional)
+    if web_search:
+        t1 = time.time()
+        print(f"       [2/5] 🔍 Search    ... ", end="", flush=True)
+        glossary = workflow.search(context, analysis)
+        print(f"({time.time() - t1:.0f}s)", flush=True)
+    else:
+        glossary = ""
+        print(f"       [2/5] 🔍 Search    ... skipped", flush=True)
 
-        # Create model client with our config (reads [openrouter] api_key)
-        model_client = LLMModelClient(config_path)
+    # Step 3: Translate (writer model — generation)
+    workflow_config['writer'] = models['writer']
+    t2 = time.time()
+    print(f"       [3/5] 🌐 Translate ... ", end="", flush=True)
+    translation = workflow.translate(context, source_text)
+    print(f"({time.time() - t2:.0f}s)", flush=True)
 
-        # Create translation context
-        context = TranslationContext(
-            model_client=model_client,
-            source_language="English",
-            target_language=target_name,
-            log_calls=False,
-            )
+    # Step 4: Critique (critiquer model — reasoning)
+    t3 = time.time()
+    print(f"       [4/5] 🔎 Critique  ... ", end="", flush=True)
+    critique = workflow.critique(context, source_text, translation, glossary)
+    print(f"({time.time() - t3:.0f}s)", flush=True)
 
-        # Find suitable workflow for this content
-        workflow = get_suitable_workflow(source_text)
-        if workflow is None:
-            print(f"\n  ⚠️  No suitable workflow for {source_path.name}", file=sys.stderr)
-            return None
+    # Step 5: Refine (writer model — generation)
+    t4 = time.time()
+    print(f"       [5/5] ✨ Refine    ... ", end="", flush=True)
+    translated = workflow.refine(
+        context, source_text,
+        translation=translation, glossary=glossary, critique=critique,
+    )
+    print(f"({time.time() - t4:.0f}s)", flush=True)
 
-        # ── KEY FIX: pass OUR config path so [short_article] models are read ──
-        workflow_config = workflow.load_config(global_config_path=config_path)
-        context.set_workflow_config(workflow_config)
+    if translated:
+        translated = _clean_translation(translated)
+        output_path.write_text(translated, encoding="utf-8")
+        return output_path
 
-        # Check if web search is enabled (default: disabled — saves cost & time)
-        web_search = _load_env_var("APHRA_WEB_SEARCH", "false").lower() in ("true", "1", "yes")
-
-        t0 = time.time()
-
-        # Step 1: Analyze — identify key terms, expressions, entities
-        print(f"\n     [1/5] 📝 Analyze   ... ", end="", flush=True)
-        analysis = workflow.analyze(context, source_text)
-        print(f"({time.time() - t0:.0f}s)", flush=True)
-
-        # Step 2: Search (optional) — web-search context for each term
-        if web_search:
-            t1 = time.time()
-            print(f"     [2/5] 🔍 Search    ... ", end="", flush=True)
-            glossary = workflow.search(context, analysis)
-            print(f"({time.time() - t1:.0f}s)", flush=True)
-        else:
-            glossary = ""  # skip web search — not needed for technical docs
-            print(f"     [2/5] 🔍 Search    ... skipped", flush=True)
-
-        # Step 3: Translate — initial full translation
-        t2 = time.time()
-        print(f"     [3/5] 🌐 Translate ... ", end="", flush=True)
-        translation = workflow.translate(context, source_text)
-        print(f"({time.time() - t2:.0f}s)", flush=True)
-
-        # Step 4: Critique — compare original vs translation, suggest fixes
-        t3 = time.time()
-        print(f"     [4/5] 🔎 Critique  ... ", end="", flush=True)
-        critique = workflow.critique(context, source_text, translation, glossary)
-        print(f"({time.time() - t3:.0f}s)", flush=True)
-
-        # Step 5: Refine — final translation incorporating critique
-        t4 = time.time()
-        print(f"     [5/5] ✨ Refine    ... ", end="", flush=True)
-        translated = workflow.refine(context, source_text,
-                                     translation=translation,
-                                     glossary=glossary,
-                                     critique=critique)
-        print(f"({time.time() - t4:.0f}s)", flush=True)
-
-        if translated:
-            translated = _clean_translation(translated)
-            output_path.write_text(translated, encoding="utf-8")
-            return output_path
-        else:
-            print(f"  ⚠️  Empty translation for {source_path.name} → {target_lang}", file=sys.stderr)
-            return None
-
-    except Exception as e:
-        print(f"\n  ❌ Error translating {source_path.name} → {target_lang}: {e}", file=sys.stderr)
-        return None
+    print(f"  ⚠️  Empty translation for {source_path.name} → {target_lang}", file=sys.stderr)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -556,50 +602,99 @@ def run_translate(args) -> int:
     models = _load_models()
 
     print(f"\n🚀 Starting translation...")
-    if len(set(models.values())) == 1:
+    local = _is_local_mode()
+    base_url = _get_base_url()
+    backend_label = f"🏠 Local ({base_url})" if local else "☁️  OpenRouter"
+    print(f"   Backend: {backend_label}")
+    unique_models = set(models.values())
+    if len(unique_models) == 1:
         print(f"   Model: {models['writer']}")
     else:
-        print(f"   Writer:    {models['writer']}")
-        print(f"   Searcher:  {models['searcher']}")
-        print(f"   Critiquer: {models['critiquer']}")
+        print(f"   Analyzer:  {models['analyzer']}  (analyze + critique)")
+        print(f"   Writer:    {models['writer']}  (translate + refine)")
+        if models['searcher'] not in (models['writer'], models['analyzer']):
+            print(f"   Searcher:  {models['searcher']}")
     web_search = _load_env_var("APHRA_WEB_SEARCH", "false").lower() in ("true", "1", "yes")
     print(f"   Web search: {'ON' if web_search else 'OFF (skipped)'}")
     print()
 
+    # ── Group plan by source file for shared analysis ──
+    from collections import OrderedDict
+    file_groups: OrderedDict[tuple[str, Path], list[str]] = OrderedDict()
+    for cache_key, source_path, lang in plan:
+        key = (cache_key, source_path)
+        if key not in file_groups:
+            file_groups[key] = []
+        file_groups[key].append(lang)
+
     success_count = 0
     fail_count = 0
     total_tokens_est = 0
+    translation_idx = 0
     t_total = time.time()
 
     try:
-        _generate_config_toml(api_key, models)
+        model_client = _create_model_client(api_key, models)
 
-        for i, (cache_key, source_path, lang) in enumerate(plan, 1):
-            print(f"  [{i}/{len(plan)}] {cache_key} → {lang}", flush=True)
-            start = time.time()
+        for file_idx, ((cache_key, source_path), langs) in enumerate(file_groups.items(), 1):
+            source_text = source_path.read_text(encoding="utf-8")
+            langs_label = ", ".join(langs)
+            print(f"  📄 [{file_idx}/{len(file_groups)}] {cache_key} → {langs_label}")
 
-            output_path = _translate_file(source_path, lang, api_key, models)
-            if output_path:
-                elapsed = time.time() - start
-                est = _estimate_tokens(source_path.stat().st_size)
-                total_tokens_est += est["total"]
-                print(f"     ✅ Done ({elapsed:.0f}s, {_format_tokens(est['total'])}) → {output_path}")
-                success_count += 1
+            # ── Step 1: Analyze ONCE (shared across all target languages) ──
+            t0 = time.time()
+            print(f"     [1/5] 📝 Analyze   ... ", end="", flush=True)
+            try:
+                workflow, workflow_config, analysis = _analyze_source(
+                    source_text, model_client, models,
+                )
+                print(f"({time.time() - t0:.0f}s) [{models['analyzer'].split('/')[-1]}]", flush=True)
+            except Exception as e:
+                print(f"\n     ❌ Analyze failed: {e}", file=sys.stderr)
+                fail_count += len(langs)
+                continue
 
-                # Update hash cache
-                current_md5 = _file_md5(source_path)
-                if cache_key not in hashes:
-                    hashes[cache_key] = {"md5": current_md5, "langs_done": [], "last_translated": ""}
-                hashes[cache_key]["md5"] = current_md5
-                if lang not in hashes[cache_key]["langs_done"]:
-                    hashes[cache_key]["langs_done"].append(lang)
-                hashes[cache_key]["last_translated"] = datetime.now(timezone.utc).isoformat()
+            # ── Steps 2-5: per language ──
+            for lang in langs:
+                translation_idx += 1
+                target_label = LANG_NAMES.get(lang, lang)
+                print(f"\n     🌐 [{translation_idx}/{len(plan)}] → {target_label} ({lang})")
+                start = time.time()
 
-                # Save after each successful translation
-                _save_hashes(hashes)
-            else:
-                fail_count += 1
-                print("❌")
+                try:
+                    output_path = _translate_one_lang(
+                        source_text=source_text,
+                        source_path=source_path,
+                        target_lang=lang,
+                        workflow=workflow,
+                        workflow_config=workflow_config,
+                        model_client=model_client,
+                        models=models,
+                        analysis=analysis,
+                    )
+                except Exception as e:
+                    output_path = None
+                    print(f"\n     ❌ Error: {e}", file=sys.stderr)
+
+                if output_path:
+                    elapsed = time.time() - start
+                    est = _estimate_tokens(source_path.stat().st_size)
+                    total_tokens_est += est["total"]
+                    print(f"     ✅ Done ({elapsed:.0f}s, {_format_tokens(est['total'])}) → {output_path}")
+                    success_count += 1
+
+                    # Update hash cache
+                    current_md5 = _file_md5(source_path)
+                    if cache_key not in hashes:
+                        hashes[cache_key] = {"md5": current_md5, "langs_done": [], "last_translated": ""}
+                    hashes[cache_key]["md5"] = current_md5
+                    if lang not in hashes[cache_key]["langs_done"]:
+                        hashes[cache_key]["langs_done"].append(lang)
+                    hashes[cache_key]["last_translated"] = datetime.now(timezone.utc).isoformat()
+                    _save_hashes(hashes)
+                else:
+                    fail_count += 1
+                    print("     ❌ Failed")
 
     finally:
         _cleanup_config_toml()
@@ -636,6 +731,8 @@ def run_check(args) -> int:
       5. Quick API connectivity test (OpenRouter /models endpoint)
     """
     ok = True
+    local = _is_local_mode()
+    base_url = _get_base_url()
 
     # ── 1. Aphra import ──
     print("1️⃣  Aphra module ...", end=" ", flush=True)
@@ -647,20 +744,24 @@ def run_check(args) -> int:
         print("   ➜  Installa con: pipenv install --dev 'git+https://github.com/DavidLMS/aphra.git#egg=aphra'")
         ok = False
 
-    # ── 2. .env + API key ──
-    print("2️⃣  .env + API key ...", end=" ", flush=True)
-    if not ENV_FILE.exists():
-        print(f"❌ {ENV_FILE} non trovato")
-        print(f"   ➜  Copia da .env.example e aggiungi la tua chiave OpenRouter")
-        ok = False
+    # ── 2. Backend + API key ──
+    if local:
+        print(f"2️⃣  Backend ...", end=" ", flush=True)
+        print(f"✅ 🏠 Locale ({base_url})")
     else:
-        try:
-            api_key = _load_api_key()
-            masked = api_key[:12] + "..." + api_key[-4:]
-            print(f"✅ trovata ({masked})")
-        except SystemExit:
-            print("❌ OPENROUTER_API_KEY non trovata nel file .env")
+        print("2️⃣  .env + API key ...", end=" ", flush=True)
+        if not ENV_FILE.exists():
+            print(f"❌ {ENV_FILE} non trovato")
+            print(f"   ➜  Copia da .env.example e aggiungi la tua chiave OpenRouter")
             ok = False
+        else:
+            try:
+                api_key = _load_api_key()
+                masked = api_key[:12] + "..." + api_key[-4:]
+                print(f"✅ trovata ({masked})")
+            except SystemExit:
+                print("❌ OPENROUTER_API_KEY non trovata nel file .env")
+                ok = False
 
     # ── 3. Models ──
     print("3️⃣  Modelli LLM ...", end=" ", flush=True)
@@ -710,27 +811,54 @@ def run_check(args) -> int:
         print("ℹ️  vuota (prima esecuzione)")
 
     # ── 8. API connectivity ──
-    print("8️⃣  OpenRouter API ...", end=" ", flush=True)
-    if ok:  # only if we have an API key
+    if local:
+        print("8️⃣  Ollama server ...", end=" ", flush=True)
         try:
             import urllib.request
             import urllib.error
-            req = urllib.request.Request(
-                "https://openrouter.ai/api/v1/models",
-                headers={"Authorization": f"Bearer {api_key}"},
-                )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            # Ollama health check (strip /v1 to get base Ollama URL)
+            ollama_url = base_url.replace("/v1", "") if base_url else DEFAULT_OLLAMA_URL.replace("/v1", "")
+            req = urllib.request.Request(f"{ollama_url}/api/tags")
+            with urllib.request.urlopen(req, timeout=5) as resp:
                 if resp.status == 200:
-                    print("✅ connessione OK")
+                    import json as _json
+                    data = _json.loads(resp.read())
+                    model_names = [m.get("name", "?") for m in data.get("models", [])]
+                    print(f"✅ connesso — {len(model_names)} modelli disponibili")
+                    # Check if configured model is available
+                    configured = models['writer']
+                    found = any(configured in n or n.startswith(configured.split(":")[0]) for n in model_names)
+                    if not found:
+                        print(f"     ⚠️  Modello '{configured}' non trovato in Ollama")
+                        print(f"     Modelli disponibili: {', '.join(model_names[:5])}")
                 else:
                     print(f"⚠️  status {resp.status}")
-        except urllib.error.HTTPError as e:
-            print(f"❌ HTTP {e.code} — chiave non valida?")
-            ok = False
         except Exception as e:
-            print(f"⚠️  errore di rete: {e}")
+            print(f"❌ Ollama non raggiungibile: {e}")
+            print(f"   ➜  Avvia Ollama con: ollama serve")
+            ok = False
     else:
-        print("⏭️  saltato (fix errori precedenti)")
+        print("8️⃣  OpenRouter API ...", end=" ", flush=True)
+        if ok:  # only if we have an API key
+            try:
+                import urllib.request
+                import urllib.error
+                req = urllib.request.Request(
+                    "https://openrouter.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status == 200:
+                        print("✅ connessione OK")
+                    else:
+                        print(f"⚠️  status {resp.status}")
+            except urllib.error.HTTPError as e:
+                print(f"❌ HTTP {e.code} — chiave non valida?")
+                ok = False
+            except Exception as e:
+                print(f"⚠️  errore di rete: {e}")
+        else:
+            print("⏭️  saltato (fix errori precedenti)")
 
     # ── Summary ──
     print()
