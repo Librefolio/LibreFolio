@@ -932,6 +932,11 @@ Examples:
                        help="Number of Playwright workers (default: CPU count)")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
+    # Translate - Import from mkdocs_src/aphra-pipeline/translate_docs.py
+    sys.path.insert(0, str(PROJECT_ROOT / "mkdocs_src" / "aphra-pipeline"))
+    from translate_docs import register_subparser as register_translate_parser
+    register_translate_parser(mk_sub)
+
     # =========================================================================
     # 📦 Tools Commands Group
     # =========================================================================
