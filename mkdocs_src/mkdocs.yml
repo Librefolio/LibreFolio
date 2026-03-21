@@ -57,6 +57,25 @@ markdown_extensions:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: it
+          name: Italiano
+          build: true
+        - locale: fr
+          name: Français
+          build: true
+        - locale: es
+          name: Español
+          build: true
+
 extra_javascript:
   # MathJax configuration (must load before MathJax)
   - javascripts/mathjax.js
@@ -64,53 +83,52 @@ extra_javascript:
   - javascripts/lib-loader.js
   # Dashboard connectivity check
   - javascripts/dashboard-check.js
-  # Gallery language selector (for gallery pages)
-  - javascripts/gallery-lang-selector.js
+  # Site-wide language selector (controls i18n + gallery screenshots)
+  - javascripts/site-lang-selector.js
   # Gallery image loader - auto-resolves screenshot paths on any page
   - javascripts/gallery-img-loader.js
 
 nav:
-  - Home: index.md
-  - 🚀 Dashboard: /
-  - FAQ: faq.md
+  - Home: index.en.md
+  - FAQ: faq.en.md
   - User Manual:
-      - Overview: user/index.md
-      - Getting Started: user/getting-started.md
-      - Installation (Docker): user/installation.md
+      - Overview: user/index.en.md
+      - Getting Started: user/getting-started.en.md
+      - Installation (Docker): user/installation.en.md
       - Brokers:
-          - Overview: user/brokers/index.md
-          - Broker Sharing: user/brokers/sharing.md
+          - Overview: user/brokers/index.en.md
+          - Broker Sharing: user/brokers/sharing.en.md
       - Files:
-          - Overview: user/files/index.md
+          - Overview: user/files/index.en.md
       - FX Rates:
-          - Overview: user/fx/index.md
-          - Adding a Pair: user/fx/add-pair.md
-          - Synchronization: user/fx/sync.md
+          - Overview: user/fx/index.en.md
+          - Adding a Pair: user/fx/add-pair.en.md
+          - Synchronization: user/fx/sync.en.md
           - Pair Detail:
-              - Overview: user/fx/detail/index.md
-              - Interactive Chart: user/fx/detail/chart.md
-              - Signals: user/fx/detail/signals.md
-              - Measures: user/fx/detail/measures.md
-              - Data Editor: user/fx/detail/data-editor.md
-              - Provider Config: user/fx/detail/provider.md
-          - Chart Settings: user/fx/chart-settings.md
+              - Overview: user/fx/detail/index.en.md
+              - Interactive Chart: user/fx/detail/chart.en.md
+              - Signals: user/fx/detail/signals.en.md
+              - Measures: user/fx/detail/measures.en.md
+              - Data Editor: user/fx/detail/data-editor.en.md
+              - Provider Config: user/fx/detail/provider.en.md
+          - Chart Settings: user/fx/chart-settings.en.md
       - Misc:
-          - Image Crop: user/misc/image-crop.md
+          - Image Crop: user/misc/image-crop.en.md
   - Admin Manual:
-      - Overview: admin/index.md
-      - CLI Tools: admin/cli_tools.md
-      - Global Settings: admin/settings.md
-      - Filesystem Structure: admin/filesystem.md
-      - Advanced Docker: admin/docker_advanced.md
-      - Exposing with Tailscale: admin/tailscale_exposure.md
+      - Overview: admin/index.en.md
+      - CLI Tools: admin/cli_tools.en.md
+      - Global Settings: admin/settings.en.md
+      - Filesystem Structure: admin/filesystem.en.md
+      - Advanced Docker: admin/docker_advanced.en.md
+      - Exposing with Tailscale: admin/tailscale_exposure.en.md
   - Financial Theory:
-      - Overview: financial-theory/index.md
-      - Asset Types: financial-theory/asset-types.md
-      - Transaction Types: financial-theory/transaction-types.md
-      - Day Count Conventions: financial-theory/day-count.md
-      - Returns & Growth Rates: financial-theory/returns.md
-      - Technical Indicators: financial-theory/technical-indicators.md
-      - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.md
+      - Overview: financial-theory/index.en.md
+      - Asset Types: financial-theory/asset-types.en.md
+      - Transaction Types: financial-theory/transaction-types.en.md
+      - Day Count Conventions: financial-theory/day-count.en.md
+      - Returns & Growth Rates: financial-theory/returns.en.md
+      - Technical Indicators: financial-theory/technical-indicators.en.md
+      - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.en.md
   - Developer Manual:
       - Overview: developer/index.md
       - Dev Installation: developer/dev-installation.md
@@ -195,11 +213,11 @@ nav:
               - Front-User: developer/test-walkthrough/front-user.md
               - Front-FX: developer/test-walkthrough/front-fx.md
   - Gallery:
-      - Overview: gallery/index.md
-      - Desktop: gallery/desktop.md
-      - Mobile: gallery/mobile.md
+      - Overview: gallery/index.en.md
+      - Desktop: gallery/desktop.en.md
+      - Mobile: gallery/mobile.en.md
   - POC UX: POC_UX/index.md
-  - Credits & Legal: credits-legal.md
+  - Credits & Legal: credits-legal.en.md
 
 extra_css:
   - static/extra.css
