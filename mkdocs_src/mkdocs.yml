@@ -69,12 +69,330 @@ plugins:
         - locale: it
           name: Italiano
           build: true
+          nav_translations:
+            Home: Home
+            FAQ: FAQ
+            User Manual: Manuale Utente
+            Overview: Panoramica
+            Getting Started: Per Iniziare
+            Installation (Docker): Installazione (Docker)
+            Brokers: Broker
+            Broker Sharing: Condivisione Broker
+            Files: File
+            FX Rates: Tassi di Cambio
+            Adding a Pair: Aggiungere una Coppia
+            Synchronization: Sincronizzazione
+            Pair Detail: Dettaglio Coppia
+            Interactive Chart: Grafico Interattivo
+            Signals: Segnali
+            Measures: Misure
+            Data Editor: Editor Dati
+            Provider Config: Configurazione Provider
+            Chart Settings: Impostazioni Grafico
+            Misc: Varie
+            Image Crop: Ritaglio Immagine
+            Admin Manual: Manuale Admin
+            CLI Tools: Strumenti CLI
+            Global Settings: Impostazioni Globali
+            Filesystem Structure: Struttura Filesystem
+            Advanced Docker: Docker Avanzato
+            Exposing with Tailscale: Esporre con Tailscale
+            Financial Theory: Teoria Finanziaria
+            Asset Types: Tipi di Asset
+            Transaction Types: Tipi di Transazione
+            Day Count Conventions: Convenzioni di Conteggio Giorni
+            "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
+            Technical Indicators: Indicatori Tecnici
+            Synthetic Benchmarks: Benchmark Sintetici
+            Developer Manual: Manuale Sviluppatore
+            Dev Installation: Installazione Dev
+            Architecture: Architettura
+            System Overview: Panoramica Sistema
+            "Technologies & Patterns": "Tecnologie & Pattern"
+            Async Architecture: Architettura Asincrona
+            "Registry & Plugin System": "Registry & Sistema Plugin"
+            BRIM Plugin Guide: Guida Plugin BRIM
+            Asset Plugin Guide: Guida Plugin Asset
+            FX Plugin Guide: Guida Plugin FX
+            Database Migrations (Alembic): Migrazioni Database (Alembic)
+            Configuration: Configurazione
+            Core Systems: Sistemi Core
+            "Security & Authentication": "Sicurezza & Autenticazione"
+            "Users & Roles": "Utenti & Ruoli"
+            Access Control (RBAC): Controllo Accessi (RBAC)
+            Settings System: Sistema Impostazioni
+            Database Schema: Schema Database
+            "Users & Access": "Utenti & Accesso"
+            "Brokers & Transactions": "Broker & Transazioni"
+            "Assets & Pricing": "Asset & Prezzi"
+            "FX Rates & Routes": "Tassi FX & Rotte"
+            "API & Communication": "API & Comunicazione"
+            Reference: Riferimento
+            cURL Testing: Test cURL
+            Backend Development: Sviluppo Backend
+            "BRIM (Import)": "BRIM (Importazione)"
+            Generic CSV Provider: Provider CSV Generico
+            Providers List: Lista Provider
+            "Assets (Pricing)": "Asset (Prezzi)"
+            System Providers: Provider di Sistema
+            "FX (Currency)": "FX (Valute)"
+            "Configuration & Routing": "Configurazione & Routing"
+            Frontend Development: Sviluppo Frontend
+            Components: Componenti
+            UI Base: UI Base
+            Modals: Modali
+            Feedback: Feedback
+            Date Pickers: Selettori Data
+            Atoms: Atomi
+            Datapoint Editor: Editor Datapoint
+            DataTable: DataTable
+            Authentication: Autenticazione
+            Settings: Impostazioni
+            "File Upload & Media": "Upload File & Media"
+            "Select & Dropdowns": "Select & Dropdown"
+            Cards: Schede
+            Forms: Form
+            FX Chain Algorithm: Algoritmo Catena FX
+            Pages: Pagine
+            State Management: Gestione Stato
+            Internationalization: Internazionalizzazione
+            Styling: Stile
+            Test Walkthrough: Guida ai Test
+            Backend Tests: Test Backend
+            External: Esterno
+            Database: Database
+            Services: Servizi
+            Utils: Utilità
+            Schemas: Schemi
+            API: API
+            E2E: E2E
+            "Frontend Tests (Playwright)": "Test Frontend (Playwright)"
+            Front-Utility: Front-Utility
+            Front-User: Front-User
+            Front-FX: Front-FX
+            Gallery: Galleria
+            Desktop: Desktop
+            Mobile: Mobile
+            POC UX: POC UX
+            "Credits & Legal": "Crediti & Note Legali"
         - locale: fr
           name: Français
           build: true
+          nav_translations:
+            Home: Accueil
+            FAQ: FAQ
+            User Manual: Manuel Utilisateur
+            Overview: Aperçu
+            Getting Started: Premiers Pas
+            Installation (Docker): Installation (Docker)
+            Brokers: Courtiers
+            Broker Sharing: Partage de Courtier
+            Files: Fichiers
+            FX Rates: Taux de Change
+            Adding a Pair: Ajouter une Paire
+            Synchronization: Synchronisation
+            Pair Detail: Détail de la Paire
+            Interactive Chart: Graphique Interactif
+            Signals: Signaux
+            Measures: Mesures
+            Data Editor: Éditeur de Données
+            Provider Config: Configuration du Fournisseur
+            Chart Settings: Paramètres du Graphique
+            Misc: Divers
+            Image Crop: Recadrage d'Image
+            Admin Manual: Manuel Admin
+            CLI Tools: Outils CLI
+            Global Settings: Paramètres Globaux
+            Filesystem Structure: Structure du Système de Fichiers
+            Advanced Docker: Docker Avancé
+            Exposing with Tailscale: Exposer avec Tailscale
+            Financial Theory: Théorie Financière
+            Asset Types: Types d'Actifs
+            Transaction Types: Types de Transactions
+            Day Count Conventions: Conventions de Décompte des Jours
+            "Returns & Growth Rates": "Rendements & Taux de Croissance"
+            Technical Indicators: Indicateurs Techniques
+            Synthetic Benchmarks: Benchmarks Synthétiques
+            Developer Manual: Manuel Développeur
+            Dev Installation: Installation Dev
+            Architecture: Architecture
+            System Overview: Vue d'Ensemble du Système
+            "Technologies & Patterns": "Technologies & Patterns"
+            Async Architecture: Architecture Asynchrone
+            "Registry & Plugin System": "Registry & Système de Plugins"
+            BRIM Plugin Guide: Guide Plugin BRIM
+            Asset Plugin Guide: Guide Plugin Asset
+            FX Plugin Guide: Guide Plugin FX
+            Database Migrations (Alembic): Migrations de Base de Données (Alembic)
+            Configuration: Configuration
+            Core Systems: Systèmes Principaux
+            "Security & Authentication": "Sécurité & Authentification"
+            "Users & Roles": "Utilisateurs & Rôles"
+            Access Control (RBAC): Contrôle d'Accès (RBAC)
+            Settings System: Système de Paramètres
+            Database Schema: Schéma de Base de Données
+            "Users & Access": "Utilisateurs & Accès"
+            "Brokers & Transactions": "Courtiers & Transactions"
+            "Assets & Pricing": "Actifs & Tarification"
+            "FX Rates & Routes": "Taux FX & Routes"
+            "API & Communication": "API & Communication"
+            Reference: Référence
+            cURL Testing: Tests cURL
+            Backend Development: Développement Backend
+            "BRIM (Import)": "BRIM (Import)"
+            Generic CSV Provider: Fournisseur CSV Générique
+            Providers List: Liste des Fournisseurs
+            "Assets (Pricing)": "Actifs (Tarification)"
+            System Providers: Fournisseurs Système
+            "FX (Currency)": "FX (Devises)"
+            "Configuration & Routing": "Configuration & Routage"
+            Frontend Development: Développement Frontend
+            Components: Composants
+            UI Base: UI Base
+            Modals: Modales
+            Feedback: Feedback
+            Date Pickers: Sélecteurs de Date
+            Atoms: Atomes
+            Datapoint Editor: Éditeur de Datapoint
+            DataTable: DataTable
+            Authentication: Authentification
+            Settings: Paramètres
+            "File Upload & Media": "Upload de Fichiers & Médias"
+            "Select & Dropdowns": "Select & Listes Déroulantes"
+            Cards: Cartes
+            Forms: Formulaires
+            FX Chain Algorithm: Algorithme de Chaîne FX
+            Pages: Pages
+            State Management: Gestion d'État
+            Internationalization: Internationalisation
+            Styling: Style
+            Test Walkthrough: Guide des Tests
+            Backend Tests: Tests Backend
+            External: Externe
+            Database: Base de Données
+            Services: Services
+            Utils: Utilitaires
+            Schemas: Schémas
+            API: API
+            E2E: E2E
+            "Frontend Tests (Playwright)": "Tests Frontend (Playwright)"
+            Front-Utility: Front-Utility
+            Front-User: Front-User
+            Front-FX: Front-FX
+            Gallery: Galerie
+            Desktop: Bureau
+            Mobile: Mobile
+            POC UX: POC UX
+            "Credits & Legal": "Crédits & Mentions Légales"
         - locale: es
           name: Español
           build: true
+          nav_translations:
+            Home: Inicio
+            FAQ: FAQ
+            User Manual: Manual de Usuario
+            Overview: Resumen
+            Getting Started: Primeros Pasos
+            Installation (Docker): Instalación (Docker)
+            Brokers: Brokers
+            Broker Sharing: Compartir Broker
+            Files: Archivos
+            FX Rates: Tipos de Cambio
+            Adding a Pair: Añadir un Par
+            Synchronization: Sincronización
+            Pair Detail: Detalle del Par
+            Interactive Chart: Gráfico Interactivo
+            Signals: Señales
+            Measures: Medidas
+            Data Editor: Editor de Datos
+            Provider Config: Configuración del Proveedor
+            Chart Settings: Ajustes del Gráfico
+            Misc: Varios
+            Image Crop: Recorte de Imagen
+            Admin Manual: Manual de Admin
+            CLI Tools: Herramientas CLI
+            Global Settings: Configuración Global
+            Filesystem Structure: Estructura del Sistema de Archivos
+            Advanced Docker: Docker Avanzado
+            Exposing with Tailscale: Exponer con Tailscale
+            Financial Theory: Teoría Financiera
+            Asset Types: Tipos de Activos
+            Transaction Types: Tipos de Transacciones
+            Day Count Conventions: Convenciones de Conteo de Días
+            "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
+            Technical Indicators: Indicadores Técnicos
+            Synthetic Benchmarks: Benchmarks Sintéticos
+            Developer Manual: Manual del Desarrollador
+            Dev Installation: Instalación Dev
+            Architecture: Arquitectura
+            System Overview: Vista General del Sistema
+            "Technologies & Patterns": "Tecnologías & Patrones"
+            Async Architecture: Arquitectura Asíncrona
+            "Registry & Plugin System": "Registry & Sistema de Plugins"
+            BRIM Plugin Guide: Guía de Plugin BRIM
+            Asset Plugin Guide: Guía de Plugin Asset
+            FX Plugin Guide: Guía de Plugin FX
+            Database Migrations (Alembic): Migraciones de Base de Datos (Alembic)
+            Configuration: Configuración
+            Core Systems: Sistemas Principales
+            "Security & Authentication": "Seguridad & Autenticación"
+            "Users & Roles": "Usuarios & Roles"
+            Access Control (RBAC): Control de Acceso (RBAC)
+            Settings System: Sistema de Configuración
+            Database Schema: Esquema de Base de Datos
+            "Users & Access": "Usuarios & Acceso"
+            "Brokers & Transactions": "Brokers & Transacciones"
+            "Assets & Pricing": "Activos & Precios"
+            "FX Rates & Routes": "Tipos FX & Rutas"
+            "API & Communication": "API & Comunicación"
+            Reference: Referencia
+            cURL Testing: Pruebas cURL
+            Backend Development: Desarrollo Backend
+            "BRIM (Import)": "BRIM (Importación)"
+            Generic CSV Provider: Proveedor CSV Genérico
+            Providers List: Lista de Proveedores
+            "Assets (Pricing)": "Activos (Precios)"
+            System Providers: Proveedores del Sistema
+            "FX (Currency)": "FX (Divisas)"
+            "Configuration & Routing": "Configuración & Enrutamiento"
+            Frontend Development: Desarrollo Frontend
+            Components: Componentes
+            UI Base: UI Base
+            Modals: Modales
+            Feedback: Feedback
+            Date Pickers: Selectores de Fecha
+            Atoms: Átomos
+            Datapoint Editor: Editor de Datapoint
+            DataTable: DataTable
+            Authentication: Autenticación
+            Settings: Configuración
+            "File Upload & Media": "Subida de Archivos & Medios"
+            "Select & Dropdowns": "Select & Desplegables"
+            Cards: Tarjetas
+            Forms: Formularios
+            FX Chain Algorithm: Algoritmo de Cadena FX
+            Pages: Páginas
+            State Management: Gestión de Estado
+            Internationalization: Internacionalización
+            Styling: Estilo
+            Test Walkthrough: Guía de Tests
+            Backend Tests: Tests Backend
+            External: Externo
+            Database: Base de Datos
+            Services: Servicios
+            Utils: Utilidades
+            Schemas: Esquemas
+            API: API
+            E2E: E2E
+            "Frontend Tests (Playwright)": "Tests Frontend (Playwright)"
+            Front-Utility: Front-Utility
+            Front-User: Front-User
+            Front-FX: Front-FX
+            Gallery: Galería
+            Desktop: Escritorio
+            Mobile: Móvil
+            POC UX: POC UX
+            "Credits & Legal": "Créditos & Aviso Legal"
 
 extra_javascript:
   # MathJax configuration (must load before MathJax)
@@ -89,46 +407,46 @@ extra_javascript:
   - javascripts/gallery-img-loader.js
 
 nav:
-  - Home: index.en.md
-  - FAQ: faq.en.md
+  - Home: index.md
+  - FAQ: faq.md
   - User Manual:
-      - Overview: user/index.en.md
-      - Getting Started: user/getting-started.en.md
-      - Installation (Docker): user/installation.en.md
+      - Overview: user/index.md
+      - Getting Started: user/getting-started.md
+      - Installation (Docker): user/installation.md
       - Brokers:
-          - Overview: user/brokers/index.en.md
-          - Broker Sharing: user/brokers/sharing.en.md
+          - Overview: user/brokers/index.md
+          - Broker Sharing: user/brokers/sharing.md
       - Files:
-          - Overview: user/files/index.en.md
+          - Overview: user/files/index.md
       - FX Rates:
-          - Overview: user/fx/index.en.md
-          - Adding a Pair: user/fx/add-pair.en.md
-          - Synchronization: user/fx/sync.en.md
+          - Overview: user/fx/index.md
+          - Adding a Pair: user/fx/add-pair.md
+          - Synchronization: user/fx/sync.md
           - Pair Detail:
-              - Overview: user/fx/detail/index.en.md
-              - Interactive Chart: user/fx/detail/chart.en.md
-              - Signals: user/fx/detail/signals.en.md
-              - Measures: user/fx/detail/measures.en.md
-              - Data Editor: user/fx/detail/data-editor.en.md
-              - Provider Config: user/fx/detail/provider.en.md
-          - Chart Settings: user/fx/chart-settings.en.md
+              - Overview: user/fx/detail/index.md
+              - Interactive Chart: user/fx/detail/chart.md
+              - Signals: user/fx/detail/signals.md
+              - Measures: user/fx/detail/measures.md
+              - Data Editor: user/fx/detail/data-editor.md
+              - Provider Config: user/fx/detail/provider.md
+          - Chart Settings: user/fx/chart-settings.md
       - Misc:
-          - Image Crop: user/misc/image-crop.en.md
+          - Image Crop: user/misc/image-crop.md
   - Admin Manual:
-      - Overview: admin/index.en.md
-      - CLI Tools: admin/cli_tools.en.md
-      - Global Settings: admin/settings.en.md
-      - Filesystem Structure: admin/filesystem.en.md
-      - Advanced Docker: admin/docker_advanced.en.md
-      - Exposing with Tailscale: admin/tailscale_exposure.en.md
+      - Overview: admin/index.md
+      - CLI Tools: admin/cli_tools.md
+      - Global Settings: admin/settings.md
+      - Filesystem Structure: admin/filesystem.md
+      - Advanced Docker: admin/docker_advanced.md
+      - Exposing with Tailscale: admin/tailscale_exposure.md
   - Financial Theory:
-      - Overview: financial-theory/index.en.md
-      - Asset Types: financial-theory/asset-types.en.md
-      - Transaction Types: financial-theory/transaction-types.en.md
-      - Day Count Conventions: financial-theory/day-count.en.md
-      - Returns & Growth Rates: financial-theory/returns.en.md
-      - Technical Indicators: financial-theory/technical-indicators.en.md
-      - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.en.md
+      - Overview: financial-theory/index.md
+      - Asset Types: financial-theory/asset-types.md
+      - Transaction Types: financial-theory/transaction-types.md
+      - Day Count Conventions: financial-theory/day-count.md
+      - Returns & Growth Rates: financial-theory/returns.md
+      - Technical Indicators: financial-theory/technical-indicators.md
+      - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.md
   - Developer Manual:
       - Overview: developer/index.md
       - Dev Installation: developer/dev-installation.md
@@ -213,11 +531,11 @@ nav:
               - Front-User: developer/test-walkthrough/front-user.md
               - Front-FX: developer/test-walkthrough/front-fx.md
   - Gallery:
-      - Overview: gallery/index.en.md
-      - Desktop: gallery/desktop.en.md
-      - Mobile: gallery/mobile.en.md
+      - Overview: gallery/index.md
+      - Desktop: gallery/desktop.md
+      - Mobile: gallery/mobile.md
   - POC UX: POC_UX/index.md
-  - Credits & Legal: credits-legal.en.md
+  - Credits & Legal: credits-legal.md
 
 extra_css:
   - static/extra.css

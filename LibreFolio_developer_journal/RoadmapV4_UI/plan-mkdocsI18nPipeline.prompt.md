@@ -1,11 +1,23 @@
 # Plan: Pipeline i18n MkDocs con Aphra
 
 **Data creazione**: 21 Marzo 2026
-**Status**: 🔄 IN CORSO — Step 1-6.3 completati, manca Step 6.4 (traduzione pilota)
+**Status**: 🔄 IN CORSO — Step 1-6.3 completati, Step 6.4 (traduzione pilota) in test, nav_translations completate per it/fr/es
 **Priorità**: Media (ultima fase di Phase 5)
 **Stima**: ~2-3 giorni
 **Dipendenze**: `plan-fxDocumentation.prompt.md` Fasi 1-2.5 completate ✅, `plan-docsPerfection.prompt.md` completato ✅
 **Fonte originale**: `plan-fxDocumentation.prompt.md` → Fase 3
+
+### Scoperte durante implementazione
+
+- **mkdocs.yml nav con suffix strategy**: il `nav:` deve usare path SENZA suffisso lingua (`faq.md` non `faq.en.md`). Il plugin `mkdocs-static-i18n` risolve automaticamente `faq.en.md`, `faq.it.md`, ecc. Usare `.en.md` nel nav causa warning di build e link rotti (404) nelle versioni tradotte.
+- **nav_translations**: completate per tutte e 3 le lingue target (it, fr, es) — 129 voci ciascuna. Tutte le label del menu (tabs + sidebar) sono tradotte.
+- **Aphra config.toml**: il format atteso è `[openrouter]` + `[short_article]`, non `[llm]`. La funzione `translate()` passa il config path solo a `LLMModelClient` ma NON al workflow → il workflow usa i default hardcoded (Claude Sonnet 4 + Perplexity Sonar = costosi). **Fix**: bypass `aphra.translate()`, chiamata diretta al workflow con `load_config(global_config_path=...)`.
+- **Aphra post-processing**: l'output contiene artefatti (tag `<translation>`, marker glossario `[N]`, blocco definizioni in fondo). Serve `_clean_translation()` per pulirli automaticamente.
+- **Web search**: Step 2 (Search) usa il plugin `:online` di OpenRouter ($4/1000 risultati) e non è necessario per docs tecniche. Disabilitato di default via `APHRA_WEB_SEARCH=false`.
+- **Modelli per ruolo**: Aphra ha 3 ruoli (writer, searcher, critiquer) ciascuno configurabile con un modello diverso via `.env`.
+- **Language selector**: implementata Soluzione B ("URL is king + redirect for default") per sincronizzare URL i18n e selettore lingua.
+- **--file path resolution**: risolve in 3 modi: path assoluto, relativo a CWD, fallback relativo a `docs/`. Supporta glob patterns (`*.en.md`, `**/*.en.md`).
+- **Token estimation**: stima basata su dimensione file × fattore multi-step (~11.3× source tokens). 108 traduzioni totali (36 file × 3 lingue) ≈ 1.26M token.
 
 ---
 
@@ -261,31 +273,33 @@ done
 
 ### 4.2 Aggiornare `nav:` in mkdocs.yml
 
-Ogni path rinominato va aggiornato. Esempio:
+Con `docs_structure: suffix`, il `nav:` deve usare path **senza** suffisso lingua. Il plugin risolve automaticamente `faq.en.md`, `faq.it.md`, ecc.
 
 ```yaml
 nav:
-  - Home: index.en.md
-  - FAQ: faq.en.md
+  - Home: index.md           # ← risolve index.en.md / index.it.md
+  - FAQ: faq.md              # ← risolve faq.en.md / faq.it.md
   - User Manual:
-      - Overview: user/index.en.md
-      - Getting Started: user/getting-started.en.md
-      # ... tutti i 17 file
+      - Overview: user/index.md
+      - Getting Started: user/getting-started.md
+      # ... tutti i 17 file (senza .en)
   - Admin Manual:
-      - Overview: admin/index.en.md
-      # ... tutti i 6 file
+      - Overview: admin/index.md
+      # ... tutti i 6 file (senza .en)
   - Financial Theory:
-      - Overview: financial-theory/index.en.md
-      # ... tutti i 7 file
-  - Developer Manual:        # ← INVARIATO (restano .md)
+      - Overview: financial-theory/index.md
+      # ... tutti i 7 file (senza .en)
+  - Developer Manual:        # ← INVARIATO (restano .md, EN-only)
       - Overview: developer/index.md
       # ...
   - Gallery:
-      - Overview: gallery/index.en.md
-      # ... tutti i 3 file
-  - POC UX: POC_UX/index.md  # ← INVARIATO (resta .md)
-  - Credits & Legal: credits-legal.en.md
+      - Overview: gallery/index.md
+      # ... tutti i 3 file (senza .en)
+  - POC UX: POC_UX/index.md  # ← INVARIATO (resta .md, EN-only)
+  - Credits & Legal: credits-legal.md
 ```
+
+> ⚠️ **IMPORTANTE**: NON usare `index.en.md` nel nav — causa warning di build e link 404 nelle versioni tradotte.
 
 ### 4.3 Verificare build + cross-link
 
@@ -543,9 +557,9 @@ export const SUPPORTED_LOCALES = ['en', 'it', 'fr', 'es'] as const;
 Con regex: `SUPPORTED_LOCALES\s*=\s*\[([^\]]+)\]`
 Questo garantisce che se aggiungiamo una lingua al frontend (es. `de`), lo script la rileva automaticamente senza bisogno di aggiornare due posti.
 
-### nav_translations (futuro)
+### nav_translations ✅
 
-Il plugin `mkdocs-static-i18n` supporta `nav_translations` per tradurre le label del menu sidebar (es. "User Manual" → "Manuale Utente"). Questo va popolato manualmente dopo il pilot, oppure come task separato. Non fa parte di questo piano.
+Completate per tutte e 3 le lingue target (it, fr, es) — 129 voci ciascuna in `mkdocs.yml`. Tutte le label del menu (tabs + sidebar) sono tradotte correttamente.
 
 ### CI/CD (futuro)
 
