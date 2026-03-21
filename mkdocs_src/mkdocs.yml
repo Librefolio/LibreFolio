@@ -104,72 +104,7 @@ plugins:
             "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
             Technical Indicators: Indicatori Tecnici
             Synthetic Benchmarks: Benchmark Sintetici
-            Developer Manual: Manuale Sviluppatore
-            Dev Installation: Installazione Dev
-            Architecture: Architettura
-            System Overview: Panoramica Sistema
-            "Technologies & Patterns": "Tecnologie & Pattern"
-            Async Architecture: Architettura Asincrona
-            "Registry & Plugin System": "Registry & Sistema Plugin"
-            BRIM Plugin Guide: Guida Plugin BRIM
-            Asset Plugin Guide: Guida Plugin Asset
-            FX Plugin Guide: Guida Plugin FX
-            Database Migrations (Alembic): Migrazioni Database (Alembic)
-            Configuration: Configurazione
-            Core Systems: Sistemi Core
-            "Security & Authentication": "Sicurezza & Autenticazione"
-            "Users & Roles": "Utenti & Ruoli"
-            Access Control (RBAC): Controllo Accessi (RBAC)
-            Settings System: Sistema Impostazioni
-            Database Schema: Schema Database
-            "Users & Access": "Utenti & Accesso"
-            "Brokers & Transactions": "Broker & Transazioni"
-            "Assets & Pricing": "Asset & Prezzi"
-            "FX Rates & Routes": "Tassi FX & Rotte"
-            "API & Communication": "API & Comunicazione"
-            Reference: Riferimento
-            cURL Testing: Test cURL
-            Backend Development: Sviluppo Backend
-            "BRIM (Import)": "BRIM (Importazione)"
-            Generic CSV Provider: Provider CSV Generico
-            Providers List: Lista Provider
-            "Assets (Pricing)": "Asset (Prezzi)"
-            System Providers: Provider di Sistema
-            "FX (Currency)": "FX (Valute)"
-            "Configuration & Routing": "Configurazione & Routing"
-            Frontend Development: Sviluppo Frontend
-            Components: Componenti
-            UI Base: UI Base
-            Modals: Modali
-            Feedback: Feedback
-            Date Pickers: Selettori Data
-            Atoms: Atomi
-            Datapoint Editor: Editor Datapoint
-            DataTable: DataTable
-            Authentication: Autenticazione
-            Settings: Impostazioni
-            "File Upload & Media": "Upload File & Media"
-            "Select & Dropdowns": "Select & Dropdown"
-            Cards: Schede
-            Forms: Form
-            FX Chain Algorithm: Algoritmo Catena FX
-            Pages: Pagine
-            State Management: Gestione Stato
-            Internationalization: Internazionalizzazione
-            Styling: Stile
-            Test Walkthrough: Guida ai Test
-            Backend Tests: Test Backend
-            External: Esterno
-            Database: Database
-            Services: Servizi
-            Utils: Utilità
-            Schemas: Schemi
-            API: API
-            E2E: E2E
-            "Frontend Tests (Playwright)": "Test Frontend (Playwright)"
-            Front-Utility: Front-Utility
-            Front-User: Front-User
-            Front-FX: Front-FX
+            # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galleria
             Desktop: Desktop
             Mobile: Mobile
@@ -213,72 +148,7 @@ plugins:
             "Returns & Growth Rates": "Rendements & Taux de Croissance"
             Technical Indicators: Indicateurs Techniques
             Synthetic Benchmarks: Benchmarks Synthétiques
-            Developer Manual: Manuel Développeur
-            Dev Installation: Installation Dev
-            Architecture: Architecture
-            System Overview: Vue d'Ensemble du Système
-            "Technologies & Patterns": "Technologies & Patterns"
-            Async Architecture: Architecture Asynchrone
-            "Registry & Plugin System": "Registry & Système de Plugins"
-            BRIM Plugin Guide: Guide Plugin BRIM
-            Asset Plugin Guide: Guide Plugin Asset
-            FX Plugin Guide: Guide Plugin FX
-            Database Migrations (Alembic): Migrations de Base de Données (Alembic)
-            Configuration: Configuration
-            Core Systems: Systèmes Principaux
-            "Security & Authentication": "Sécurité & Authentification"
-            "Users & Roles": "Utilisateurs & Rôles"
-            Access Control (RBAC): Contrôle d'Accès (RBAC)
-            Settings System: Système de Paramètres
-            Database Schema: Schéma de Base de Données
-            "Users & Access": "Utilisateurs & Accès"
-            "Brokers & Transactions": "Courtiers & Transactions"
-            "Assets & Pricing": "Actifs & Tarification"
-            "FX Rates & Routes": "Taux FX & Routes"
-            "API & Communication": "API & Communication"
-            Reference: Référence
-            cURL Testing: Tests cURL
-            Backend Development: Développement Backend
-            "BRIM (Import)": "BRIM (Import)"
-            Generic CSV Provider: Fournisseur CSV Générique
-            Providers List: Liste des Fournisseurs
-            "Assets (Pricing)": "Actifs (Tarification)"
-            System Providers: Fournisseurs Système
-            "FX (Currency)": "FX (Devises)"
-            "Configuration & Routing": "Configuration & Routage"
-            Frontend Development: Développement Frontend
-            Components: Composants
-            UI Base: UI Base
-            Modals: Modales
-            Feedback: Feedback
-            Date Pickers: Sélecteurs de Date
-            Atoms: Atomes
-            Datapoint Editor: Éditeur de Datapoint
-            DataTable: DataTable
-            Authentication: Authentification
-            Settings: Paramètres
-            "File Upload & Media": "Upload de Fichiers & Médias"
-            "Select & Dropdowns": "Select & Listes Déroulantes"
-            Cards: Cartes
-            Forms: Formulaires
-            FX Chain Algorithm: Algorithme de Chaîne FX
-            Pages: Pages
-            State Management: Gestion d'État
-            Internationalization: Internationalisation
-            Styling: Style
-            Test Walkthrough: Guide des Tests
-            Backend Tests: Tests Backend
-            External: Externe
-            Database: Base de Données
-            Services: Services
-            Utils: Utilitaires
-            Schemas: Schémas
-            API: API
-            E2E: E2E
-            "Frontend Tests (Playwright)": "Tests Frontend (Playwright)"
-            Front-Utility: Front-Utility
-            Front-User: Front-User
-            Front-FX: Front-FX
+            # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galerie
             Desktop: Bureau
             Mobile: Mobile
@@ -322,72 +192,7 @@ plugins:
             "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
             Technical Indicators: Indicadores Técnicos
             Synthetic Benchmarks: Benchmarks Sintéticos
-            Developer Manual: Manual del Desarrollador
-            Dev Installation: Instalación Dev
-            Architecture: Arquitectura
-            System Overview: Vista General del Sistema
-            "Technologies & Patterns": "Tecnologías & Patrones"
-            Async Architecture: Arquitectura Asíncrona
-            "Registry & Plugin System": "Registry & Sistema de Plugins"
-            BRIM Plugin Guide: Guía de Plugin BRIM
-            Asset Plugin Guide: Guía de Plugin Asset
-            FX Plugin Guide: Guía de Plugin FX
-            Database Migrations (Alembic): Migraciones de Base de Datos (Alembic)
-            Configuration: Configuración
-            Core Systems: Sistemas Principales
-            "Security & Authentication": "Seguridad & Autenticación"
-            "Users & Roles": "Usuarios & Roles"
-            Access Control (RBAC): Control de Acceso (RBAC)
-            Settings System: Sistema de Configuración
-            Database Schema: Esquema de Base de Datos
-            "Users & Access": "Usuarios & Acceso"
-            "Brokers & Transactions": "Brokers & Transacciones"
-            "Assets & Pricing": "Activos & Precios"
-            "FX Rates & Routes": "Tipos FX & Rutas"
-            "API & Communication": "API & Comunicación"
-            Reference: Referencia
-            cURL Testing: Pruebas cURL
-            Backend Development: Desarrollo Backend
-            "BRIM (Import)": "BRIM (Importación)"
-            Generic CSV Provider: Proveedor CSV Genérico
-            Providers List: Lista de Proveedores
-            "Assets (Pricing)": "Activos (Precios)"
-            System Providers: Proveedores del Sistema
-            "FX (Currency)": "FX (Divisas)"
-            "Configuration & Routing": "Configuración & Enrutamiento"
-            Frontend Development: Desarrollo Frontend
-            Components: Componentes
-            UI Base: UI Base
-            Modals: Modales
-            Feedback: Feedback
-            Date Pickers: Selectores de Fecha
-            Atoms: Átomos
-            Datapoint Editor: Editor de Datapoint
-            DataTable: DataTable
-            Authentication: Autenticación
-            Settings: Configuración
-            "File Upload & Media": "Subida de Archivos & Medios"
-            "Select & Dropdowns": "Select & Desplegables"
-            Cards: Tarjetas
-            Forms: Formularios
-            FX Chain Algorithm: Algoritmo de Cadena FX
-            Pages: Páginas
-            State Management: Gestión de Estado
-            Internationalization: Internacionalización
-            Styling: Estilo
-            Test Walkthrough: Guía de Tests
-            Backend Tests: Tests Backend
-            External: Externo
-            Database: Base de Datos
-            Services: Servicios
-            Utils: Utilidades
-            Schemas: Esquemas
-            API: API
-            E2E: E2E
-            "Frontend Tests (Playwright)": "Tests Frontend (Playwright)"
-            Front-Utility: Front-Utility
-            Front-User: Front-User
-            Front-FX: Front-FX
+            # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galería
             Desktop: Escritorio
             Mobile: Móvil
@@ -530,6 +335,8 @@ nav:
               - Front-Utility: developer/test-walkthrough/front-utility.md
               - Front-User: developer/test-walkthrough/front-user.md
               - Front-FX: developer/test-walkthrough/front-fx.md
+      - Documentation:
+          - Translation Pipeline: developer/docs/translation-pipeline.md
   - Gallery:
       - Overview: gallery/index.md
       - Desktop: gallery/desktop.md
