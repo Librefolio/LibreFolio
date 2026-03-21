@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.6-12-gc25dbb9-dirty"
+    "version": "v0.5.7-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -659,7 +659,7 @@
           "Uploads"
         ],
         "summary": "Serve File",
-        "description": "Serve the actual file content.\n\nThis endpoint does not require authentication to allow\nembedding in images/documents.\n\nPreview modes:\n- Text preview: ?offset=0&window=1000 (returns first 1000 chars)\n- Image preview: ?img_preview=200x200 (returns resized image, max dimension)\n\nArgs:\n    file_id: File UUID\n    download: If True, force download with original filename\n    offset: Start byte for text preview (text files only)\n    window: Number of bytes to read for text preview (text files only)\n    img_preview: Image resize format \"WIDTHxHEIGHT\" (images only)\n\nReturns:\n    File content with appropriate MIME type\n\nRaises:\n    400: If preview params used on incompatible file type\n    404: If file not found",
+        "description": "Serve the actual file content.\n\nRequires authentication via session cookie.\nBrowser <img> tags automatically include cookies,\nso embedded images work seamlessly.\n\nPreview modes:\n- Text preview: ?offset=0&window=1000 (returns first 1000 chars)\n- Image preview: ?img_preview=200x200 (returns resized image, max dimension)\n\nArgs:\n    file_id: File UUID\n    download: If True, force download with original filename\n    offset: Start byte for text preview (text files only)\n    window: Number of bytes to read for text preview (text files only)\n    img_preview: Image resize format \"WIDTHxHEIGHT\" (images only)\n\nReturns:\n    File content with appropriate MIME type\n\nRaises:\n    400: If preview params used on incompatible file type\n    404: If file not found",
         "operationId": "serve_file_api_v1_uploads_file__file_id__get",
         "parameters": [
           {
@@ -758,7 +758,7 @@
           "Uploads"
         ],
         "summary": "Serve Plugin Static",
-        "description": "Serve static assets from plugin directories.\n\nPlugin developers can place static files (icons, images, etc.)\nin their plugin's static/ folder.\n\nStructure:\n    brim_providers/static/{path}\n    fx_providers/static/{path}\n    asset_source_providers/static/{path}\n\nExample URLs:\n    /api/v1/uploads/plugin/brim/directa/logo.png\n    /api/v1/uploads/plugin/fx/ecb/icon.svg\n    /api/v1/uploads/plugin/asset/yfinance/logo.png\n\nArgs:\n    provider_type: One of 'brim', 'fx', 'asset'\n    path: Path to file within static folder\n\nReturns:\n    File content",
+        "description": "Serve static assets from plugin directories.\n\nRequires authentication via session cookie.\n\nPlugin developers can place static files (icons, images, etc.)\nin their plugin's static/ folder.\n\nStructure:\n    brim_providers/static/{path}\n    fx_providers/static/{path}\n    asset_source_providers/static/{path}\n\nExample URLs:\n    /api/v1/uploads/plugin/brim/directa/logo.png\n    /api/v1/uploads/plugin/fx/ecb/icon.svg\n    /api/v1/uploads/plugin/asset/yfinance/logo.png\n\nArgs:\n    provider_type: One of 'brim', 'fx', 'asset'\n    path: Path to file within static folder\n\nReturns:\n    File content",
         "operationId": "serve_plugin_static_api_v1_uploads_plugin__provider_type___path__get",
         "parameters": [
           {

@@ -18,16 +18,11 @@ Stato al 21 Marzo 2026 (aggiornato). Elenco chiaro di cosa manca da fare, con ri
 
 ### 1. i18n Pipeline MkDocs
 
-**Fonte**: `plan-fxDocumentation.prompt.md` → Fase 3
+**Piano dedicato**: `plan-mkdocsI18nPipeline.prompt.md` (6 step, ~7.5 ore stimate)
 
-L'intera infrastruttura di traduzione della documentazione:
+Setup completo: `mkdocs-static-i18n` (suffix), Aphra subrepo Poetry, selettore lingua globale con readonly su pagine EN-only, script orchestrazione con cache MD5, integrazione `./dev.py mkdocs translate`.
 
-1. **Configurare `mkdocs-static-i18n`** in `mkdocs.yml` (dipendenza già nel Pipfile). Lingua default: `en`, alternative: `it`, `fr`, `es`.
-2. **Rename file** — Rinominare ~20+ file `.md` traducibili → `.en.md` (sezioni user-facing e admin). Sezioni developer restano solo inglese.
-3. **Selettore lingua globale** — Trasformare `gallery-lang-selector.js` in `site-lang-selector.js`, rimuovere check `isGalleryPage()`, renderlo globale.
-4. **Aggiornare image loader** — `gallery-img-loader.js` deve leggere lingua da path URL (`/it/`, `/fr/`, `/es/`) oltre che dal selettore gallery.
-5. **Traduzioni progressive** — Le traduzioni `.it.md`, `.fr.md`, `.es.md` seguono dopo. Opzioni: manuale, semi-automatico con `./dev.py mkdocs translate`, o pipeline markdown-aware con cache per blocco.
-
+35 file traducibili (user + admin + financial-theory + gallery + root). `developer/` e `POC_UX/` esclusi (EN-only).
 
 ---
 
@@ -35,7 +30,8 @@ L'intera infrastruttura di traduzione della documentazione:
 
 | File | Status | Cosa manca |
 |------|--------|-----------|
-| `plan-fxDocumentation.prompt.md` | ⏳ | Solo Fase 3 (i18n Pipeline MkDocs) |
+| `plan-mkdocsI18nPipeline.prompt.md` | 📋 | Pipeline completa (6 step) |
+| `plan-fxDocumentation.prompt.md` | ⏳ | Fase 3 → ora delegata a `plan-mkdocsI18nPipeline` |
 | `plan-frontendDevelopment.prompt.md` | 🟡 | Master plan fasi 4-8 — phase 5 FX in corso |
 | `plan-phase05-to-08-upgrade.md` | 🟡 | Roadmap macro fasi 5-8 — phase 5 FX quasi completata |
 | `plan-phase7b-filePreview.md` | 📋 | Pianificato per Phase 7.5 (futuro, post-Transactions) |

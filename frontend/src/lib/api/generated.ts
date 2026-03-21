@@ -8201,8 +8201,9 @@ Returns:
     alias: "serve_file_api_v1_uploads_file__file_id__get",
     description: `Serve the actual file content.
 
-This endpoint does not require authentication to allow
-embedding in images/documents.
+Requires authentication via session cookie.
+Browser &lt;img&gt; tags automatically include cookies,
+so embedded images work seamlessly.
 
 Preview modes:
 - Text preview: ?offset&#x3D;0&amp;window&#x3D;1000 (returns first 1000 chars)
@@ -8264,6 +8265,8 @@ Raises:
     alias:
       "serve_plugin_static_api_v1_uploads_plugin__provider_type___path__get",
     description: `Serve static assets from plugin directories.
+
+Requires authentication via session cookie.
 
 Plugin developers can place static files (icons, images, etc.)
 in their plugin&#x27;s static/ folder.

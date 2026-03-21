@@ -1,77 +1,116 @@
-document.addEventListener("DOMContentLoaded", function () {
-    // Use relative paths for deployment flexibility
-    const healthUrl = "/api/v1/system/health";
-    const dashboardUrl = "/";
-    const fallbackUrl = "getting-started/installation/"; // Relative to index.md
+/**
+ * Dashboard Connectivity Check
+ *
+ * Adds a 🚀 dashboard icon in the MkDocs header (next to theme toggle and
+ * language selector). The icon is hidden by default and only shown when the
+ * LibreFolio server is online (health check passes).
+ *
+ * Also updates the homepage "Go to Dashboard" button if present.
+ */
+(function () {
+    'use strict';
 
-    // 1. Check Homepage Button
-    const dashboardBtn = document.getElementById("dashboard-link");
+    var healthUrl = '/api/v1/system/health';
+    var dashboardUrl = '/';
+    var fallbackUrl = 'getting-started/installation/';
 
-    // 2. Check Navigation Links (Sidebar and Top Tabs)
-    // We look for any link pointing to the dashboard URL
-    const allLinks = document.querySelectorAll('a[href="' + dashboardUrl + '"], a[href="/"]');
-    const navItemsToHide = [];
-
-    allLinks.forEach(link => {
-        // Identify if this is a navigation link (sidebar or tabs)
-        // Material MkDocs uses .md-nav__link for sidebar and .md-tabs__link for top tabs
-        if (link.classList.contains('md-nav__link') || link.classList.contains('md-tabs__link')) {
-            // Find the parent list item (li) to hide
-            const parentItem = link.closest('li');
-            if (parentItem) {
-                navItemsToHide.push(parentItem);
+    function injectStyles() {
+        var style = document.createElement('style');
+        style.textContent = `
+            .dashboard-header-icon {
+                display: none;
+                align-items: center;
+                margin-left: 0.4rem;
             }
-        }
-    });
-
-    // Function to update UI based on status
-    function updateUI(isOnline) {
-        console.log("Dashboard status:", isOnline ? "ONLINE" : "OFFLINE");
-
-        // Update Homepage Button
-        if (dashboardBtn) {
-            if (isOnline) {
-                dashboardBtn.href = dashboardUrl;
-                dashboardBtn.classList.remove("md-button--disabled", "md-button--secondary");
-                dashboardBtn.innerHTML = "Go to Dashboard 🚀";
-                dashboardBtn.title = "Go to Dashboard";
-            } else {
-                dashboardBtn.href = fallbackUrl;
-                dashboardBtn.innerHTML = "Server Offline - Setup Guide 📘";
-                dashboardBtn.classList.add("md-button--secondary");
+            .dashboard-header-icon.online {
+                display: flex;
             }
-        }
-
-        // Update Nav Links
-        navItemsToHide.forEach(item => {
-            if (isOnline) {
-                item.style.display = ""; // Restore default display
-            } else {
-                item.style.display = "none"; // Hide
+            .dashboard-header-icon a {
+                display: flex;
+                align-items: center;
+                padding: 0.4rem 0.5rem;
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                color: var(--md-header-fg-color, white);
+                font-size: 1.1rem;
+                text-decoration: none;
+                transition: all 0.2s;
+                line-height: 1;
             }
-        });
+            .dashboard-header-icon a:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+        `;
+        document.head.appendChild(style);
     }
 
-    // Offline-first: Start with offline state, then check server
-    updateUI(false);
+    function createDashboardIcon() {
+        var container = document.createElement('div');
+        container.className = 'dashboard-header-icon';
+        container.innerHTML = '<a href="' + dashboardUrl + '" title="Go to Dashboard">🚀</a>';
+        return container;
+    }
 
-    // Perform health check
-    fetch(healthUrl)
-        .then(response => {
-            if (response.ok) {
+    function init() {
+        injectStyles();
+
+        // Create header icon
+        var headerInner = document.querySelector('.md-header__inner');
+        if (!headerInner) return;
+
+        var icon = createDashboardIcon();
+
+        // Insert before the source/repo link (right side of header)
+        var headerSource = document.querySelector('.md-header__source');
+        if (headerSource) {
+            headerSource.parentNode.insertBefore(icon, headerSource);
+        } else {
+            headerInner.appendChild(icon);
+        }
+
+        // Homepage button (if present on the page)
+        var dashboardBtn = document.getElementById('dashboard-link');
+
+        // Start offline
+        if (dashboardBtn) {
+            dashboardBtn.href = fallbackUrl;
+            dashboardBtn.innerHTML = 'Server Offline - Setup Guide 📘';
+            dashboardBtn.classList.add('md-button--secondary');
+        }
+
+        // Health check
+        fetch(healthUrl)
+            .then(function (response) {
+                if (!response.ok) throw new Error('Server not OK');
                 return response.json();
-            }
-            throw new Error("Server not OK");
-        })
-        .then(data => {
-            if (data.status === "ok") {
-                updateUI(true);
-            } else {
-                throw new Error("Invalid status");
-            }
-        })
-        .catch(error => {
-            // Server not reachable - keep offline state
-            console.log("Dashboard server not reachable:", error.message);
-        });
-});
+            })
+            .then(function (data) {
+                if (data.status !== 'ok') throw new Error('Invalid status');
+
+                console.log('Dashboard status: ONLINE');
+
+                // Show header icon
+                icon.classList.add('online');
+
+                // Update homepage button
+                if (dashboardBtn) {
+                    dashboardBtn.href = dashboardUrl;
+                    dashboardBtn.classList.remove('md-button--disabled', 'md-button--secondary');
+                    dashboardBtn.innerHTML = 'Go to Dashboard 🚀';
+                    dashboardBtn.title = 'Go to Dashboard';
+                }
+            })
+            .catch(function (error) {
+                console.log('Dashboard status: OFFLINE');
+                console.log('Dashboard server not reachable:', error.message);
+            });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();

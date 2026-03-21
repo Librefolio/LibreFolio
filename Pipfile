@@ -39,8 +39,8 @@ email-validator = "*"
 python-magic = "*"
 argcomplete = "*"
 pillow = "*"
-mkdocs-static-i18n = "*"
 PyJWT = "*"
+mkdocs-static-i18n = "*"
 
 [dev-packages]
 pytest = "*"
@@ -53,6 +53,7 @@ coverage = {extras = ["toml"], version = "*"}
 gevent = "*"
 tabulate = "*"
 openpyxl = "*"
+"aphra " = {git = "https://github.com/DavidLMS/aphra.git"}
 
 [requires]
 python_version = "3.13"
