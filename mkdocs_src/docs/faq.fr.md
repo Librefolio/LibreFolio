@@ -10,7 +10,7 @@ LibreFolio est un tracker de portefeuille auto-hébergé et open source, conçu 
 
 ### 💰 LibreFolio est-il gratuit ?
 
-Oui ! LibreFolio est entièrement gratuit et open source sous licence MIT.
+Oui ! LibreFolio est entièrement gratuit et open source sous licence [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
 
 ### 📊 Quels actifs puis-je suivre ?
 
@@ -20,7 +20,10 @@ LibreFolio prend en charge :
 - **Cryptomonnaies** - Bientôt disponibles
 - **Obligations** - Saisie manuelle prise en charge
 - **Prêts P2P** - Actifs à rendement périodique
-- **Espèces et Dépôts** - Suivi des liquidités
+- **Espèces et Dépôts** — Suivi des liquidités
+
+!!! tip "Il manque quelque chose ? 💡"
+    Si vous souhaitez un type d'actif ou une fonctionnalité que nous n'avons pas encore envisagé, faites-le nous savoir ! Ouvrez une [demande d'amélioration sur GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement).
 
 ## 🚀 Démarrer
 
@@ -45,13 +48,21 @@ Actuellement, la réinitialisation du mot de passe se fait via CLI. Contactez l'
 
 ## 🔧 Dépannage
 
-### 📉 Mes prix ne se mettent pas à jour
+### 📉 Les prix de mes actifs ne se mettent pas à jour
 
 Vérifiez que :
 
 1. La synchronisation automatique est activée dans les Paramètres globaux
-2. Vos actifs possèdent des ISIN ou symboles valides
-3. Le fournisseur yfinance fonctionne (consultez les journaux)
+2. Vos actifs possèdent des ISIN ou symboles valides reconnus par le **fournisseur de données** configuré (ex. [yfinance](https://pypi.org/project/yfinance/) pour les actions et ETF)
+3. Le service du fournisseur est disponible (consultez les journaux du serveur)
+
+### 💱 Mes taux de change ne se mettent pas à jour
+
+Vérifiez que :
+
+1. La paire de devises a au moins un [fournisseur de données configuré](user/fx/detail/provider.md)
+2. L'API du fournisseur est accessible (BCE, Fed, BOE, BNS)
+3. Vous avez exécuté une [synchronisation](user/fx/sync.md) pour la plage de dates souhaitée
 
 ### 🔐 Je ne peux pas me connecter
 

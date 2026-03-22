@@ -10,7 +10,7 @@ The Measures panel provides a **click-to-click measurement tool** for analyzing 
 
 ## 🖱️ How to Use
 
-1. Click the **Measures** toggle button (📐) in the chart toolbar
+1. Click the **Measures** toggle button (📏) in the chart toolbar
 2. The measures panel opens below the chart
 3. **Click** on a starting point on the chart — this sets the "from" date and rate
 4. **Click** on an ending point — this sets the "to" date and rate

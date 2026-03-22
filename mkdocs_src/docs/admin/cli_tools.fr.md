@@ -3,7 +3,7 @@
 LibreFolio fournit le script `dev.py` pour les tâches d'administration. Cette page couvre les commandes les plus pertinentes pour les **administrateurs système**.
 
 !!! info "👩‍💻 Pour les développeurs"
- Pour les commandes spécifiques au développement (build frontend, exécuteur de tests, synchronisation API, audit i18n), consultez le [Guide d'installation pour développeurs](../developer/dev-installation.md).
+    Pour les commandes spécifiques au développement (build frontend, exécuteur de tests, synchronisation API, audit i18n), consultez le [Guide d'installation pour développeurs](../developer/dev-installation.md).
 
 ---
 
@@ -33,7 +33,7 @@ Installer toutes les dépendances du projet (Python et Node.js) :
 ```
 
 !!! tip "Multi-worker"
- En production, utilisez `--workers` pour exécuter plusieurs workers Uvicorn. Cela améliore le débit et est recommandé pour tout déploiement avec plus d'un cœur de CPU.
+    En production, utilisez `--workers` pour exécuter plusieurs workers Uvicorn. Cela améliore le débit et est recommandé pour tout déploiement avec plus d'un cœur de CPU.
 
 ---
 
@@ -68,7 +68,7 @@ La gestion des utilisateurs se fait via les sous-commandes `./dev.py user` :
 ./dev.py user init-settings
 ```
 
-Remplit la base de données avec les [Paramètres globaux] par défaut s'ils n'existent pas déjà.
+Remplit la base de données avec les [Paramètres Globaux](settings.md) par défaut s'ils n'existent pas déjà.
 
 ### 🗄️ Migrations de base de données
 
@@ -78,7 +78,7 @@ Remplit la base de données avec les [Paramètres globaux] par défaut s'ils n'e
 ```
 
 !!! warning "🗄️ Réinitialisation de la base de données"
- `./dev.py db create-clean` recrée la base de données à partir de zéro — **toutes les données sont perdues**. À utiliser uniquement si vous avez besoin de partir de zéro.
+    `./dev.py db create-clean` recrée la base de données à partir de zéro — **toutes les données sont perdues**. À utiliser uniquement si vous avez besoin de partir de zéro.
 
 ---
 
@@ -103,13 +103,10 @@ Pour une liste complète de toutes les commandes disponibles :
 ```
 
 !!! info "👩‍💻 Commandes développeur"
- Commandes supplémentaires pour les workflows de développement :
+    Commandes supplémentaires pour les workflows de développement :
 
- - **Frontend** : `./dev.py front build`, `front dev`, `front check` — voir [Développement frontend](../developer/frontend/index.md)
- - **Tests** : `./dev.py test all` — voir [Parcours des tests](../developer/test-walkthrough/index.md)
- - **Client API** : `./dev.py api sync` — voir [Vue d'ensemble de l'API](../developer/api/overview.md)
- - **i18n** : `./dev.py i18n audit` — voir [Internationalisation](../developer/frontend/i18n.md)
+    - **Frontend** : `./dev.py front build`, `front dev`, `front check` — voir [Développement frontend](../developer/frontend/index.md)
+    - **Tests** : `./dev.py test all` — voir [Parcours des tests](../developer/test-walkthrough/index.md)
+    - **Client API** : `./dev.py api sync` — voir [Vue d'ensemble de l'API](../developer/api/overview.md)
+    - **i18n** : `./dev.py i18n audit` — voir [Internationalisation](../developer/frontend/i18n.md)
 
-```
-
-## Notes du traducteur

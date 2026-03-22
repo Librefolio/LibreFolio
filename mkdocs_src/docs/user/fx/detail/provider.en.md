@@ -26,14 +26,15 @@ The modal displays:
 
 ## 🔧 Changing Providers
 
-To change the data source for a pair:
+You can configure **one or more** data providers for each pair. Multiple providers act as a **fallback chain** — if the primary source fails, the system automatically tries the next one.
+
+To change or add providers:
 
 1. Open the Provider Configuration modal
 2. **Remove** the current route if needed
 3. **Add a new route** — the system will discover available routes (same as when [adding a new pair](../add-pair.md))
-4. Select the new route and **confirm**
-
-The next sync will fetch data from the new provider.
+4. **Reorder** routes to set priorities (drag & drop or arrow buttons)
+5. Click **Save** — the next sync will fetch data from the highest-priority available provider
 
 ---
 

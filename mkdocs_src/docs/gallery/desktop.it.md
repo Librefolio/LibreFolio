@@ -90,6 +90,14 @@ Gestisci le informazioni del tuo profilo, l'avatar e le impostazioni dell'accoun
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Scheda Profilo">
 </div>
 
+### ✏️ Modifica Broker
+
+Modifica i dettagli del broker: nome, icona, valuta base e configurazione.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Finestra Modale Modifica Broker">
+</div>
+
 ---
 
 ## 📁 File

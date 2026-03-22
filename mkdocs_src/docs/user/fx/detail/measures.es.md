@@ -10,7 +10,7 @@ El panel de Medidas proporciona una **herramienta de medición entre dos clics**
 
 ## 🖱️ Cómo Usarlo
 
-1. Haz clic en el interruptor **Medidas** (📐) en la barra de herramientas del gráfico
+1. Haz clic en el interruptor **Medidas** (📏) en la barra de herramientas del gráfico
 2. El panel de medidas se abre debajo del gráfico
 3. **Haz clic** en un punto de partida en el gráfico — esto establece la fecha y el tipo de cambio "desde"
 4. **Haz clic** en un punto final — esto establece la fecha y el tipo de cambio "hasta"
@@ -31,9 +31,9 @@ Para cada medición, el panel muestra:
 | **Retorno Anualizado** | Retorno anual proyectado basado en el período medido | +17.8% p.a. |
 
 !!! info "📚 Retorno Anualizado"
- El retorno anualizado utiliza la fórmula de **Tasa de Crecimiento Anual Compuesto (CAGR)**. Para una explicación comprensiva que incluye retornos logarítmicos, capitalización y cuándo usar cada método, consulta:
+    El retorno anualizado utiliza la fórmula de **Tasa de Crecimiento Anual Compuesto (CAGR)**. Para una explicación comprensiva que incluye retornos logarítmicos, capitalización y cuándo usar cada método, consulta:
 
- :material-book-open-variant: **[Retornos & Tasas de Crecimiento — Teoría Financiera](../../../financial-theory/returns.md)**
+    :material-book-open-variant: **[Retornos & Tasas de Crecimiento — Teoría Financiera](../../../financial-theory/returns.md)**
 
 ---
 

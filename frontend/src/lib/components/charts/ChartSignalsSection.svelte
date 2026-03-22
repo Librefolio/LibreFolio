@@ -154,7 +154,9 @@
     }
 
     function addSignal(type: string) {
-        const signal = createSignal(type, signals.length);
+        // Collect colors already in use by existing signals
+        const usedColors = signals.map(s => s.style.color);
+        const signal = createSignal(type, signals.length, usedColors);
         if (signal) {
             signals = [...signals, signal.toConfig()];
             emitChange();
@@ -298,13 +300,13 @@
                                 {/if}
                             </div>
                             <div class="flex items-center gap-0.5 flex-shrink-0">
-                                {#if signal.signalType === 'fx-pair' && signal.params.currencyPair}
+                                {#if signal.signalType === 'fx-pair' && signal.params.pairSlug}
                                     {#if onsyncpair}
                                         <button
                                             type="button"
                                             class="p-1 rounded text-gray-400 hover:text-blue-500 transition-colors"
                                             title={$t('common.sync')}
-                                            onclick={() => onsyncpair?.(String(signal.params.currencyPair))}
+                                            onclick={() => onsyncpair?.(String(signal.params.pairSlug))}
                                         >
                                             <RefreshCw size={13} />
                                         </button>
@@ -314,7 +316,7 @@
                                             type="button"
                                             class="p-1 rounded text-gray-400 hover:text-libre-green transition-colors"
                                             title={$t('common.detail')}
-                                            onclick={() => ondetailpair?.(String(signal.params.currencyPair))}
+                                            onclick={() => ondetailpair?.(String(signal.params.pairSlug))}
                                         >
                                             <ExternalLink size={13} />
                                         </button>

@@ -785,7 +785,7 @@
                     <th
                             class="th-data"
                             class:sortable={column.sortable !== false && enableSorting}
-                            style="{tableLayout === 'auto' ? 'min-width' : 'width'}: {tableLayout === 'auto' ? (column.width || 80) : (columnWidths[column.id] || column.width || 150)}px;"
+                            style="width: {columnWidths[column.id] || column.width || 150}px;"
                     >
                         <div class="header-content">
                             <button
@@ -1248,11 +1248,12 @@
         right: 0;
         top: 0;
         bottom: 0;
-        width: 4px;
+        width: 6px;
         background: transparent;
         cursor: col-resize;
         opacity: 0;
         transition: opacity 0.15s;
+        z-index: 5;
     }
 
     th:hover .resize-handle {

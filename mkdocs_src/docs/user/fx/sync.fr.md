@@ -30,13 +30,18 @@ Vous pouvez également synchroniser une seule paire depuis sa [page de détail](
 
 Le processus de synchronisation :
 
-1. Récupère les taux à partir de l'API du fournisseur sélectionné (BCE, Fed, Banque d'Angleterre, BNS, etc.)
-2. Stocke les nouveaux points de données dans la base de données locale
-3. Ignore les dates qui existent déjà (pas de doublons)
-4. Si le fournisseur principal échoue, le système bascule automatiquement vers le fournisseur configuré suivant
+1. Récupère les taux à partir de l'API du fournisseur configuré (BCE, Fed, BOE, BNS, etc.)
+2. **Écrase** les points de données existants dans la plage de dates téléchargée avec les valeurs du fournisseur — le fournisseur est considéré comme la source faisant autorité
+3. Ajoute de nouveaux points pour les dates non encore présentes dans la base de données
+4. Si le fournisseur principal échoue, le système bascule automatiquement vers le fournisseur suivant
 
-!!! tip "Pas de données en double"
- Resynchroniser une paire est toujours sans risque — les données existantes ne sont jamais écrasées ni dupliquées.
+Après la synchronisation, vous verrez le nombre de **points téléchargés** et combien étaient **réellement nouveaux** (non déjà présents dans la base de données).
+
+!!! warning "Le fournisseur fait autorité"
+    Resynchroniser une paire écrasera toute valeur modifiée manuellement dans la plage synchronisée. Pour préserver les modifications manuelles, configurez la paire avec le fournisseur MANUAL (pas de source de données automatique).
+
+!!! info "Précision des conversions en chaîne"
+    Lors de l'utilisation de routes en chaîne (ex. RON → EUR → JPY), chaque conversion intermédiaire introduit une erreur d'arrondi minimale. Bien que négligeable dans la plupart des cas, les taux convertis en chaîne peuvent légèrement différer des cotations directes du marché.
 
 ---
 
@@ -53,13 +58,3 @@ Cela signifie :
 Pour la liste des fournisseurs pris en charge, consultez la [Liste des fournisseurs de taux de change](../../developer/backend/fx/providers_list.md).
 
 Pour les détails techniques sur l'algorithme de routage et la configuration, consultez la documentation développeur : [Configuration et routage des taux de change](../../developer/backend/fx/configuration.md).
-
- **FX** (Foreign Exchange) : Acronyme anglais désignant le marché des changes ou les opérations de devises. Utilisé couramment dans le contexte financier international, même en français.
-
- **Paires exotiques** : En forex, paires de devises qui ne font pas partie des "majors" (USD, EUR, JPY, GBP, CHF, CAD, AUD, NZD). Elles impliquent généralement une devise majeure et une devise mineure, ou deux devises mineures, et sont moins liquides.
-
- **Point de données** : Ici, une valeur de taux de change enregistrée pour une date spécifique (une cotation). Chaque point de données constitue une entrée dans la série temporelle.
-
- **Acronymes des banques centrales** : 
- - **Fed** : Réserve fédérale américaine, banque centrale des États-Unis. Le sigle "Fed" est couramment utilisé en français.
- - **BNS** : Banque nationale suisse, banque centrale de la Suisse. Le sigle "BNS" est l'acronyme officiel en français, mais moins répandu que "SNB" dans la documentation technique internationale.

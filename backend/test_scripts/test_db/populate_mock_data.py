@@ -648,7 +648,7 @@ def populate_transactions(session: Session):
             "asset": None,
             "type": TransactionType.DEPOSIT,
             "quantity": Decimal("0"),
-            "amount": Decimal("5000.00"),
+            "amount": Decimal("10000.00"),
             "currency": "EUR",
             "days_ago": 30,
             "description": "Initial deposit",

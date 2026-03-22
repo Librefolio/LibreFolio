@@ -93,6 +93,14 @@ Tu perfil, avatar y configuración de cuenta en móvil.
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Pestaña de Perfil">
 </div>
 
+### ✏️ Edición de Broker
+
+Edita los detalles del broker: nombre, icono, moneda base y configuración.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Modal de Edición de Broker">
+</div>
+
 ---
 
 ## 📁 Archivos

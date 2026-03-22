@@ -10,7 +10,7 @@ LibreFolio es un rastreador de carteras **autohospedado** y de código abierto d
 
 ### 💰 ¿Es LibreFolio gratuito?
 
-¡Sí! LibreFolio es completamente gratuito y de código abierto bajo la licencia MIT.
+¡Sí! LibreFolio es completamente gratuito y de código abierto bajo la licencia [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
 
 ### 📊 ¿Qué activos puedo seguir?
 
@@ -20,7 +20,10 @@ LibreFolio es compatible con:
 - **Criptomonedas** - Próximamente
 - **Bonos** - Permite entrada manual
 - **Préstamos P2P** - Activos con rendimientos periódicos
-- **Efectivo y Depósitos** - Sigue tu liquidez
+- **Efectivo y Depósitos** — Sigue tu liquidez
+
+!!! tip "¿Falta algo? 💡"
+    Si hay un tipo de activo o una función que te gustaría ver y en la que no hemos pensado, ¡nos encantaría saberlo! Abre una [solicitud de mejora en GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement).
 
 ## 🚀 Primeros Pasos
 
@@ -45,13 +48,21 @@ Actualmente, el restablecimiento de contraseña se realiza mediante la CLI. Cont
 
 ## 🔧 Solución de Problemas
 
-### 📉 Mis precios no se actualizan
+### 📉 Los precios de mis activos no se actualizan
 
 Verifica que:
 
-1. La sincronización automática esté activada en **configuración global**
-2. Tus activos tengan ISINs o símbolos válidos
-3. El proveedor yfinance esté funcionando (revisa los registros)
+1. La sincronización automática esté activada en la configuración global
+2. Tus activos tengan ISINs o símbolos válidos reconocidos por el **proveedor de datos** configurado (ej. [yfinance](https://pypi.org/project/yfinance/) para acciones y ETFs)
+3. El servicio del proveedor esté disponible (revisa los registros del servidor)
+
+### 💱 Mis tipos de cambio no se actualizan
+
+Verifica que:
+
+1. El par de divisas tenga al menos un [proveedor de datos configurado](user/fx/detail/provider.md)
+2. La API del proveedor sea accesible (BCE, FED, BOE, SNB)
+3. Hayas ejecutado una [sincronización](user/fx/sync.md) para el rango de fechas deseado
 
 ### 🔐 No puedo iniciar sesión
 

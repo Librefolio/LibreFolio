@@ -8,14 +8,14 @@ Le cœur de la page détail de la paire — un graphique complet **alimenté par
 
 ---
 
-## 🔀 Types de graphique
+## 🔀 Modes d'affichage
 
-Basculer entre deux modes de visualisation :
+Basculer entre deux modes via la barre d'outils :
 
-- 📈 **Graphique linéaire** — Une ligne épurée reliant chaque taux quotidien. Idéal pour visualiser les tendances sur de longues périodes.
-- 🕯️ **Graphique en chandeliers** — Affiche l'ouverture, le plus haut, le plus bas et la clôture pour chaque période. Idéal pour analyser la volatilité à court terme et l'action des prix.
+- 📈 **Absolu** — Affiche les valeurs brutes du taux de change (ex. 1 EUR = 1,0845 USD). Idéal pour voir les niveaux réels du taux.
+- 📊 **Pourcentage (%)** — Affiche la variation en pourcentage depuis le premier point de données visible. Idéal pour comparer les mouvements relatifs et superposer plusieurs signaux.
 
-Utilisez le bouton de basculement dans la barre d'outils du graphique pour changer de mode.
+En passant en mode %, tous les signaux superposés sont également recalculés en pourcentage depuis leur point de départ respectif.
 
 ---
 
@@ -28,7 +28,10 @@ Utilisez le bouton de basculement dans la barre d'outils du graphique pour chang
 | **Zoom arrière** | Molette de souris vers le bas | Pincement rapprocher |
 | **Réinitialiser le zoom** | Double-clic | Double-appui |
 
-Vous pouvez également utiliser les boutons du **sélecteur de période** (1M, 3M, 6M, 1A, 5A, Tout) pour accéder rapidement aux périodes courantes.
+Vous pouvez également utiliser les **préréglages temporels** (1S, 1M, 3M, 6M, 1A, 2A) ou sélectionner une plage **Personnalisée** pour accéder rapidement à des périodes spécifiques.
+
+!!! info "Disponibilité des données"
+    Si la plage sélectionnée dépasse les données disponibles, LibreFolio affiche ce qui est disponible. Utilisez **Synchroniser** pour essayer de télécharger des données plus anciennes — mais notez que certains fournisseurs ont une couverture historique limitée.
 
 ---
 
@@ -46,10 +49,10 @@ Survolez n'importe quel point du graphique pour voir :
 
 La barre d'outils du graphique donne un accès rapide à :
 
-- 📊 **Basculement de type de graphique** — Linéaire / Chandeliers
-- ⏱️ **Sélecteur de période** — 1M, 3M, 6M, 1A, 5A, Tout
+- 📊 **Mode d'affichage** — Absolu / Pourcentage
+- ⏱️ **Plage temporelle** — 1S, 1M, 3M, 6M, 1A, 2A, Personnalisée
 - 📈 **[Signaux](signals.md)** — Activer les superpositions d'indicateurs techniques
-- 📐 **[Mesures](measures.md)** — Outil de mesure clic à clic
+- 📏 **[Mesures](measures.md)** — Outil de mesure clic à clic
 - ✏️ **[Éditeur de données](data-editor.md)** — Modifier des points de données individuels
 - ⚙️ **[Paramètres du graphique](../chart-settings.md)** — Personnalisation visuelle
 

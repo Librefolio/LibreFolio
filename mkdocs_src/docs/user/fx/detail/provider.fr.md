@@ -26,14 +26,15 @@ La fenêtre modale affiche :
 
 ## 🔧 Modifier les fournisseurs
 
-Pour changer la source de données d'une paire :
+Vous pouvez configurer **un ou plusieurs** fournisseurs de données pour chaque paire. Plusieurs fournisseurs forment une **chaîne de secours** — si la source principale échoue, le système essaie automatiquement le suivant.
+
+Pour modifier ou ajouter des fournisseurs :
 
 1. Ouvrez la fenêtre modale de Configuration des fournisseurs
 2. **Supprimez** la route actuelle si nécessaire
 3. **Ajoutez une nouvelle route** — le système identifiera automatiquement les routes disponibles (identique à l'[ajout d'une nouvelle paire](../add-pair.md))
-4. Sélectionnez la nouvelle route et **confirmez**
-
-La prochaine synchronisation récupérera les données depuis le nouveau fournisseur.
+4. **Réordonnez** les routes pour définir les priorités (glisser-déposer ou boutons fléchés)
+5. Cliquez sur **Enregistrer** — la prochaine synchronisation récupérera les données depuis le fournisseur disponible de plus haute priorité
 
 ---
 
@@ -46,12 +47,12 @@ Lorsque plusieurs routes sont configurées pour une paire :
 - Vous pouvez **réorganiser** les routes pour changer les priorités
 
 !!! example "Exemple d'itinéraire de secours"
- EUR/USD configurée avec :
+    EUR/USD configurée avec :
 
- 1. **BCE** (principale) — Banque Centrale Européenne
- 2. **Fed** (secours) — Réserve fédérale
+    1. **BCE** (principale) — Banque Centrale Européenne
+    2. **Fed** (secours) — Réserve fédérale
 
- Si l'API de la BCE est inaccessible pendant la synchronisation, le système utilise automatiquement la Fed à la place.
+    Si l'API de la BCE est inaccessible pendant la synchronisation, le système utilise automatiquement la Fed à la place.
 
 ---
 
@@ -62,4 +63,4 @@ Lorsque plusieurs routes sont configurées pour une paire :
 - 📋 **[Liste des fournisseurs FX](../../../developer/backend/fx/providers_list.md)** — Détails techniques sur chaque fournisseur (BCE, Fed, Banque d'Angleterre, BNS)
 
 !!! tip "🔗 Comment les routes en chaîne sont calculées"
- Pour l'algorithme mathématique derrière les conversions multi-saut, voir [Algorithme de chaîne FX](../../../developer/frontend/fx-chain-algorithm.md).
+    Pour l'algorithme mathématique derrière les conversions multi-saut, voir [Algorithme de chaîne FX](../../../developer/frontend/fx-chain-algorithm.md).

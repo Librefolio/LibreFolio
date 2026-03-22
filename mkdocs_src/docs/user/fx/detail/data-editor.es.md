@@ -38,8 +38,8 @@ El editor muestra una tabla desplazable con todos los puntos de datos de este pa
 1. Haz clic en el **icono de basura** junto a cualquier fila
 2. Confirma la eliminación
 
-!!! warning "Las ediciones manuales sobrescriben los datos sincronizados"
- Si editas o agregas manualmente un punto de datos para una fecha que fue sincronizada desde un proveedor, tu valor manual tiene precedencia. La próxima sincronización no sobrescribirá las entradas manuales.
+!!! warning "Los datos sincronizados sobrescriben las ediciones manuales"
+    Si editas o agregas manualmente un punto de datos para una fecha que luego es cubierta por una sincronización, el valor del proveedor **sobrescribirá** tu edición manual — el proveedor siempre se considera la fuente autorizada. Para pares donde desees control manual completo, usa el proveedor MANUAL (sin fuente de datos automática) — ver [Configuración de Proveedor](provider.md).
 
 ---
 
@@ -146,10 +146,13 @@ Esto fallará si estás en la página EUR/USD — las monedas del encabezado deb
 
 ### 🔀 Comportamiento en la Fusión
 
-Al importar, si una fecha ya existe en la base de datos:
+Al importar vía CSV o al añadir puntos manualmente en el editor:
 
-- 🔄 **Los puntos de datos existentes se sobrescriben** con los valores importados
-- 🆕 **Las fechas nuevas** se agregan
-- ✅ **Las fechas que no están en el CSV** se dejan sin cambios
+- Las modificaciones se aplican primero a la **caché local del cliente** (visibles inmediatamente en el gráfico)
+- Las modificaciones **no se guardan** en la base de datos hasta que presiones **Guardar**
+- 🔄 Los **puntos de datos existentes** en la base de datos se **sobrescribirán** con los valores importados al guardar
+- 🆕 Las **fechas nuevas** se agregan
+- ✅ Las **fechas que no están en la importación** se dejan sin cambios
 
-Esto te permite actualizar selectivamente rangos de fechas específicos sin afectar el resto de tus datos.
+!!! tip "Ideal para pares MANUAL"
+    El editor de datos es particularmente útil para pares configurados con el proveedor MANUAL (sin fuente de datos automática). Para pares con proveedor, las ediciones manuales serán sobrescritas en la próxima sincronización.

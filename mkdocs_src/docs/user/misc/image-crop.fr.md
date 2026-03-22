@@ -67,7 +67,7 @@ Avant de confirmer, vous pouvez ajuster :
 - 📐 **Taille de sortie** : largeur et hauteur en pixels (liées au paramètre prédéfini mais modifiables)
 
 !!! tip "Aperçu elliptique"
- Pour les paramètres prédéfinis Avatar et Icône de courtier, une superposition elliptique est affichée sur la zone de recadrage. Cela vous aide à prévisualiser l'apparence de l'image dans un cadre circulaire (par exemple, les avatars utilisateur dans la barre de navigation).
+    Pour les paramètres prédéfinis Avatar et Icône de courtier, une superposition elliptique est affichée sur la zone de recadrage. Cela vous aide à prévisualiser l'apparence de l'image dans un cadre circulaire (par exemple, les avatars utilisateur dans la barre de navigation).
 
 ---
 
@@ -81,4 +81,4 @@ Avant de confirmer, vous pouvez ajuster :
 6. Cliquez sur **Annuler** ou fermez la fenêtre pour ignorer les modifications
 
 !!! info "Fichiers qui ne sont pas des images"
- Si vous importez un fichier qui n'est pas une image (PDF, CSV, etc.), la fenêtre de recadrage est ignorée. À la place, une simple boîte de dialogue de renommage apparaît.
+    Si vous importez un fichier qui n'est pas une image (PDF, CSV, etc.), la fenêtre de recadrage est ignorée. À la place, une simple boîte de dialogue de renommage apparaît.

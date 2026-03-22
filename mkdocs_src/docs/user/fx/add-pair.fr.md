@@ -28,12 +28,12 @@ Pour les paires exotiques (par ex. RON → JPY) où aucun fournisseur unique ne 
 </div>
 
 !!! example "Exemple de chaîne"
- **RON → JPY** via la BCE :
+    **RON → JPY** via la BCE :
 
- 1. RON → EUR (la BCE fournit RON/EUR)
- 2. EUR → JPY (la BCE fournit EUR/JPY)
+    1. RON → EUR (la BCE fournit RON/EUR)
+    2. EUR → JPY (la BCE fournit EUR/JPY)
 
- Le taux final est calculé en multipliant les taux intermédiaires.
+    Le taux final est calculé en multipliant les taux intermédiaires.
 
 ---
 
