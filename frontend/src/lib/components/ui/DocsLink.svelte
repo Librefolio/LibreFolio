@@ -1,9 +1,3 @@
-<!--
-  DocsLink.svelte - Reusable documentation link button.
-  Shows a small HelpCircle (?) icon that:
-  - On hover: displays a Tooltip with the provided label
-  - On click: opens the MkDocs page at /mkdocs/{path} in a new tab
--->
 <script lang="ts">
     import {HelpCircle} from 'lucide-svelte';
     import Tooltip from './Tooltip.svelte';
@@ -16,13 +10,23 @@
     export let size: number = 12;
     /** Enable KaTeX math rendering in tooltip */
     export let math: boolean = false;
+
+    /**
+     * Build the MkDocs URL with locale prefix if the current app language
+     * is not English, so docs open in the correct language.
+     */
+    function getDocsUrl(): string {
+        const lang = localStorage.getItem('gallery-lang') || 'en';
+        const prefix = lang !== 'en' ? `${lang}/` : '';
+        return `/mkdocs/${prefix}${path}`;
+    }
 </script>
 
 <Tooltip text={label} position="top" maxWidth="320px" {math}>
     <button
         type="button"
         class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors"
-        onclick={() => window.open("/mkdocs/" + path, '_blank')}
+        onclick={() => window.open(getDocsUrl(), '_blank')}
     >
         <HelpCircle {size} />
     </button>
