@@ -1183,10 +1183,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tipi-di-grafico" class="md-nav__link">
+  <a href="#modalita-di-visualizzazione" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔀 Tipi di grafico
+        🔀 Modalità di visualizzazione
       
     </span>
   </a>
@@ -1968,6 +1968,34 @@
     
   
     Benchmark Sintetici
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5239,10 +5267,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tipi-di-grafico" class="md-nav__link">
+  <a href="#modalita-di-visualizzazione" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔀 Tipi di grafico
+        🔀 Modalità di visualizzazione
       
     </span>
   </a>
@@ -5320,13 +5348,13 @@
 </div>
 
 <hr />
-<h2 id="tipi-di-grafico">🔀 Tipi di grafico</h2>
-<p>Passa tra due modalità di visualizzazione:</p>
+<h2 id="modalita-di-visualizzazione">🔀 Modalità di visualizzazione</h2>
+<p>Alterna tra due modalità tramite la barra degli strumenti:</p>
 <ul>
-<li>📈 <strong>Grafico a linee</strong> — Una linea continua che collega il tasso di cambio di ogni giorno. Ideale per vedere le tendenze su periodi lunghi.</li>
-<li>🕯️ <strong>Grafico a candele</strong> — Mostra apertura/massimo/minimo/chiusura per ogni periodo. Ideale per analizzare la volatilità a breve termine e l'azione dei prezzi.</li>
+<li>📈 <strong>Assoluto</strong> — Mostra il valore del tasso di cambio grezzo (es. 1 EUR = 1,0845 USD). Ideale per vedere i livelli effettivi del tasso.</li>
+<li>📊 <strong>Percentuale (%)</strong> — Mostra la variazione percentuale dal primo punto dati visibile. Ideale per confrontare i movimenti relativi e sovrapporre più segnali.</li>
 </ul>
-<p>Usa il pulsante di commutazione nella barra degli strumenti del grafico per passare da una modalità all'altra.</p>
+<p>Passando alla modalità %, anche tutti i segnali overlay vengono ricalcolati come percentuali dal rispettivo punto di partenza.</p>
 <hr />
 <h2 id="navigazione-zoom">🔍 Navigazione &amp; zoom</h2>
 <table>
@@ -5360,7 +5388,11 @@
 </tr>
 </tbody>
 </table>
-<p>Puoi anche utilizzare i pulsanti del <strong>selettore di intervallo di tempo</strong> (1M, 3M, 6M, 1Y, 5Y, All) per passare rapidamente ai periodi più comuni.</p>
+<p>Puoi anche utilizzare i <strong>preset temporali</strong> (1S, 1M, 3M, 6M, 1A, 2A) o selezionare un intervallo <strong>Personalizzato</strong> per passare rapidamente a periodi specifici.</p>
+<div class="admonition info">
+<p class="admonition-title">Disponibilità dei dati</p>
+<p>Se l'intervallo selezionato supera i dati disponibili, LibreFolio mostra quello che c'è. Usa <strong>Sincronizza</strong> per provare a scaricare dati più vecchi dal provider — ma nota che alcuni provider hanno una copertura storica limitata.</p>
+</div>
 <hr />
 <h2 id="tooltip">💬 Tooltip</h2>
 <p>Passa il puntatore su qualsiasi punto del grafico per vedere:</p>
@@ -5373,8 +5405,10 @@
 <h2 id="barra-degli-strumenti">🧰 Barra degli strumenti</h2>
 <p>La barra degli strumenti del grafico offre un rapido accesso a:</p>
 <ul>
-<li>📊 <strong>Commutazione tipo di grafico</strong> — Linee / Candele- ⏱️ <strong>Intervallo di tempo</strong> — 1M, 3M, 6M, 1Y, 5Y, All</li>
-<li>📈 <strong><a href="../signals/">Segnali</a></strong> — Attiva/disattiva sovrapposizioni di indicatori tecnici- 📐 <strong><a href="../measures/">Misure</a></strong> — Strumento di misurazione click‑to‑click</li>
+<li>📊 <strong>Modalità di visualizzazione</strong> — Assoluto / Percentuale</li>
+<li>⏱️ <strong>Intervallo di tempo</strong> — 1S, 1M, 3M, 6M, 1A, 2A, Personalizzato</li>
+<li>📈 <strong><a href="../signals/">Segnali</a></strong> — Attiva/disattiva sovrapposizioni di indicatori tecnici</li>
+<li>📏 <strong><a href="../measures/">Misure</a></strong> — Strumento di misurazione click‑to‑click</li>
 <li>✏️ <strong><a href="../data-editor/">Editor dati</a></strong> — Modifica i singoli punti dati</li>
 <li>⚙️ <strong><a href="../../chart-settings/">Impostazioni grafico</a></strong> — Personalizzazione visiva</li>
 </ul>

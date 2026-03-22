@@ -2009,6 +2009,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5378,22 +5406,18 @@
 <hr />
 <h2 id="available-indicators">📊 Available Indicators</h2>
 <h3 id="ema-exponential-moving-average">📉 <a href="../../../../financial-theory/technical-indicators/#ema">EMA — Exponential Moving Average</a></h3>
-<p>Tracks the <strong>trend</strong> by smoothing daily price noise, giving more weight to recent values. When a short-period EMA crosses above a long-period EMA ("golden cross"), it signals upward momentum.</p>
-<ul>
-<li>⚡ <strong>Fast EMA</strong>: Short period (e.g., 12 days) — reacts quickly to price changes</li>
-<li>🐢 <strong>Slow EMA</strong>: Long period (e.g., 26 days) — smoother, shows the underlying trend</li>
-</ul>
+<p>Smooths daily rate noise to reveal the <strong>underlying trend</strong>. In FX, an EMA crossing above the rate line often suggests a weakening base currency (or strengthening quote currency). Configurable period: shorter = more reactive, longer = smoother.</p>
 <h3 id="macd-moving-average-convergence-divergence">📊 <a href="../../../../financial-theory/technical-indicators/#macd">MACD — Moving Average Convergence Divergence</a></h3>
-<p>Measures the <strong>momentum</strong> by computing the difference between two EMAs. A positive MACD means the fast EMA is above the slow EMA (bullish), negative means the opposite (bearish).</p>
+<p>Measures the <strong>momentum</strong> by computing the difference between a fast and a slow EMA. A positive MACD means the fast EMA is above the slow EMA (bullish), negative means the opposite (bearish). Useful in FX for detecting trend reversals and momentum shifts.</p>
 <ul>
 <li>📈 <strong>MACD Line</strong>: Difference between fast and slow EMA</li>
 <li>〰️ <strong>Signal Line</strong>: EMA of the MACD line itself (smoothed momentum)</li>
 <li>📊 <strong>Histogram</strong>: Visual difference between MACD and Signal lines</li>
 </ul>
 <h3 id="rsi-relative-strength-index">💪 <a href="../../../../financial-theory/technical-indicators/#rsi">RSI — Relative Strength Index</a></h3>
-<p>An <strong>oscillator</strong> (0–100) that measures the speed and magnitude of price changes. Values above 70 suggest overbought conditions, below 30 suggest oversold.</p>
+<p>An <strong>oscillator</strong> (0–100) that measures the speed and magnitude of price changes. In FX, values above 70 may suggest the currency pair is overbought, below 30 suggests oversold. Useful for spotting potential reversals.</p>
 <h3 id="bollinger-bands">📏 <a href="../../../../financial-theory/technical-indicators/#bollinger-bands">Bollinger Bands</a></h3>
-<p>A <strong>volatility envelope</strong> around the price. The bands widen during volatile periods and contract during calm periods.</p>
+<p>A <strong>volatility envelope</strong> around the price. The bands widen during volatile periods and contract during calm periods. In FX, a rate touching the upper band may signal overbought conditions, while touching the lower band may signal oversold.</p>
 <ul>
 <li>〰️ <strong>Middle Band</strong>: Simple Moving Average (SMA)</li>
 <li>🔺 <strong>Upper Band</strong>: SMA + 2 standard deviations</li>
@@ -5404,9 +5428,9 @@
 <ol>
 <li>Click the <strong>Signals</strong> toggle button (📈) in the chart toolbar</li>
 <li>The signals panel opens below the chart</li>
-<li>Toggle each indicator <strong>on/off</strong> independently</li>
+<li>Add indicators from the categorized dropdowns (Technical Indicators, Data Comparison, Synthetic Benchmarks)</li>
+<li>Each indicator's parameters can be adjusted inline</li>
 <li>Signals are rendered as overlays directly on the chart</li>
-<li>Each indicator's parameters can be adjusted in <a href="../../chart-settings/">Chart Settings</a></li>
 </ol>
 <hr />
 <h2 id="deep-dive-financial-theory">📚 Deep Dive: Financial Theory</h2>

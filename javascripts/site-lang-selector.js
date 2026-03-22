@@ -118,6 +118,8 @@
 
     function saveLang(lang) {
         localStorage.setItem(STORAGE_KEY, lang);
+        // Sync to SvelteKit app (docs → app direction)
+        localStorage.setItem('librefolio-locale', lang);
         window.dispatchEvent(new CustomEvent('gallery-lang-change', {detail: {lang}}));
     }
 
@@ -338,17 +340,39 @@
         var sel = createSelector(urlLang);
         injectSelector(sel);
 
-        // Restore scroll position after language switch
+        // Restore scroll position after language switch (2-phase)
         var savedPct = sessionStorage.getItem('docs-scroll-pct');
         if (savedPct !== null) {
             sessionStorage.removeItem('docs-scroll-pct');
             var pct = parseFloat(savedPct);
             if (!isNaN(pct) && pct > 0) {
-                // Use requestAnimationFrame to wait for page layout to settle
+                var userScrolled = false;
+
+                // Phase 1: Apply immediately after layout settles
                 requestAnimationFrame(function () {
                     var targetY = pct * document.documentElement.scrollHeight;
                     window.scrollTo(0, targetY);
                 });
+
+                // Track if user manually scrolls (don't override their intent)
+                var onUserScroll = function () { userScrolled = true; };
+                window.addEventListener('scroll', onUserScroll, { passive: true });
+
+                // Phase 2: Re-apply after all images loaded (if user hasn't scrolled)
+                window.addEventListener('load', function () {
+                    window.removeEventListener('scroll', onUserScroll);
+                    if (!userScrolled) {
+                        requestAnimationFrame(function () {
+                            var targetY = pct * document.documentElement.scrollHeight;
+                            window.scrollTo(0, targetY);
+                        });
+                    }
+                });
+
+                // Safety: clean up scroll listener after 10s regardless
+                setTimeout(function () {
+                    window.removeEventListener('scroll', onUserScroll);
+                }, 10000);
             }
         }
     }

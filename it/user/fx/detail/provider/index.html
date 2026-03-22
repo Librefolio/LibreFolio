@@ -1328,10 +1328,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#priorita-fallbackquando-sono-configurati-piu-percorsi-per-una-coppia" class="md-nav__link">
+  <a href="#priorita-fallback" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔢 Priorità &amp; fallbackQuando sono configurati più percorsi per una coppia:
+        🔢 Priorità &amp; Fallback
       
     </span>
   </a>
@@ -1968,6 +1968,34 @@
     
   
     Benchmark Sintetici
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5272,10 +5300,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#priorita-fallbackquando-sono-configurati-piu-percorsi-per-una-coppia" class="md-nav__link">
+  <a href="#priorita-fallback" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔢 Priorità &amp; fallbackQuando sono configurati più percorsi per una coppia:
+        🔢 Priorità &amp; Fallback
       
     </span>
   </a>
@@ -5332,16 +5360,18 @@
 </ul>
 <hr />
 <h2 id="cambiare-i-provider">🔧 Cambiare i provider</h2>
-<p>Per modificare la fonte di dati di una coppia:</p>
+<p>Puoi configurare <strong>uno o più</strong> provider di dati per ogni coppia. Più provider fungono da <strong>catena di fallback</strong> — se la fonte primaria fallisce, il sistema prova automaticamente la successiva.</p>
+<p>Per modificare o aggiungere provider:</p>
 <ol>
 <li>Apri la modale di configurazione del provider</li>
 <li><strong>Rimuovi</strong> il percorso corrente se necessario</li>
 <li><strong>Aggiungi un nuovo percorso</strong> — il sistema scoprirà i percorsi disponibili utilizzando lo stesso processo di <a href="../../add-pair/">aggiunta di una nuova coppia</a></li>
-<li>Seleziona il nuovo percorso e <strong>conferma</strong></li>
+<li><strong>Riordina</strong> i percorsi per impostare le priorità (trascinamento o pulsanti freccia)</li>
+<li>Clicca <strong>Salva</strong> — la prossima sincronizzazione preleverà i dati dal provider disponibile con la priorità più alta</li>
 </ol>
-<p>La successiva sincronizzazione preleverà i dati dal nuovo provider.</p>
 <hr />
-<h2 id="priorita-fallbackquando-sono-configurati-piu-percorsi-per-una-coppia">🔢 Priorità &amp; fallbackQuando sono configurati più percorsi per una coppia:</h2>
+<h2 id="priorita-fallback">🔢 Priorità &amp; Fallback</h2>
+<p>Quando sono configurati più percorsi per una coppia:</p>
 <ul>
 <li>I percorsi vengono provati <strong>in ordine di priorità</strong> (il primo = massima priorità)</li>
 <li>Se il provider principale fallisce (timeout, errore API), il sistema <strong>esegue il fallback</strong> automaticamente al percorso successivo</li>
@@ -5349,13 +5379,13 @@
 </ul>
 <div class="admonition example">
 <p class="admonition-title">Esempio di fallback</p>
-</div>
 <p>EUR/USD configurato con:</p>
 <ol>
 <li><strong>BCE</strong> (primario) — Banca Centrale Europea</li>
 <li><strong>FED</strong> (fallback) — Federal Reserve</li>
 </ol>
 <p>Se l'API della BCE è irraggiungibile durante la sincronizzazione, il sistema utilizza automaticamente la FED.</p>
+</div>
 <hr />
 <h2 id="correlati">📚 Correlati</h2>
 <ul>
@@ -5365,8 +5395,8 @@
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">🔗 Come vengono calcolati i percorsi a catena</p>
-</div>
 <p>Per l'algoritmo matematico dietro le catene di conversione multi‑salto, vedi <a href="../../../../developer/frontend/fx-chain-algorithm/">Algoritmo della catena FX</a>.</p>
+</div>
 
 
 

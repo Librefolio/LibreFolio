@@ -1970,6 +1970,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5313,15 +5341,20 @@
 <h2 id="fonctionnement-de-la-synchronisation">⚙️ Fonctionnement de la synchronisation</h2>
 <p>Le processus de synchronisation :</p>
 <ol>
-<li>Récupère les taux à partir de l'API du fournisseur sélectionné (BCE, Fed, Banque d'Angleterre, BNS, etc.)</li>
-<li>Stocke les nouveaux points de données dans la base de données locale</li>
-<li>Ignore les dates qui existent déjà (pas de doublons)</li>
-<li>Si le fournisseur principal échoue, le système bascule automatiquement vers le fournisseur configuré suivant</li>
+<li>Récupère les taux à partir de l'API du fournisseur configuré (BCE, Fed, BOE, BNS, etc.)</li>
+<li><strong>Écrase</strong> les points de données existants dans la plage de dates téléchargée avec les valeurs du fournisseur — le fournisseur est considéré comme la source faisant autorité</li>
+<li>Ajoute de nouveaux points pour les dates non encore présentes dans la base de données</li>
+<li>Si le fournisseur principal échoue, le système bascule automatiquement vers le fournisseur suivant</li>
 </ol>
-<div class="admonition tip">
-<p class="admonition-title">Pas de données en double</p>
+<p>Après la synchronisation, vous verrez le nombre de <strong>points téléchargés</strong> et combien étaient <strong>réellement nouveaux</strong> (non déjà présents dans la base de données).</p>
+<div class="admonition warning">
+<p class="admonition-title">Le fournisseur fait autorité</p>
+<p>Resynchroniser une paire écrasera toute valeur modifiée manuellement dans la plage synchronisée. Pour préserver les modifications manuelles, configurez la paire avec le fournisseur MANUAL (pas de source de données automatique).</p>
 </div>
-<p>Resynchroniser une paire est toujours sans risque — les données existantes ne sont jamais écrasées ni dupliquées.</p>
+<div class="admonition info">
+<p class="admonition-title">Précision des conversions en chaîne</p>
+<p>Lors de l'utilisation de routes en chaîne (ex. RON → EUR → JPY), chaque conversion intermédiaire introduit une erreur d'arrondi minimale. Bien que négligeable dans la plupart des cas, les taux convertis en chaîne peuvent légèrement différer des cotations directes du marché.</p>
+</div>
 <hr />
 <h2 id="chaines-dapprovisionnement-des-donnees">🌐 Chaînes d'approvisionnement des données</h2>
 <p>Pour les utilisateurs avancés : LibreFolio utilise un <strong>système de routage</strong> sophistiqué pour les données de change. Chaque paire de devises peut avoir plusieurs fournisseurs configurés avec des priorités et des chaînes de secours.</p>
@@ -5333,12 +5366,6 @@
 </ul>
 <p>Pour la liste des fournisseurs pris en charge, consultez la <a href="../../../developer/backend/fx/providers_list/">Liste des fournisseurs de taux de change</a>.</p>
 <p>Pour les détails techniques sur l'algorithme de routage et la configuration, consultez la documentation développeur : <a href="../../../developer/backend/fx/configuration/">Configuration et routage des taux de change</a>.</p>
-<p><strong>FX</strong> (Foreign Exchange) : Acronyme anglais désignant le marché des changes ou les opérations de devises. Utilisé couramment dans le contexte financier international, même en français.</p>
-<p><strong>Paires exotiques</strong> : En forex, paires de devises qui ne font pas partie des "majors" (USD, EUR, JPY, GBP, CHF, CAD, AUD, NZD). Elles impliquent généralement une devise majeure et une devise mineure, ou deux devises mineures, et sont moins liquides.</p>
-<p><strong>Point de données</strong> : Ici, une valeur de taux de change enregistrée pour une date spécifique (une cotation). Chaque point de données constitue une entrée dans la série temporelle.</p>
-<p><strong>Acronymes des banques centrales</strong> : 
- - <strong>Fed</strong> : Réserve fédérale américaine, banque centrale des États-Unis. Le sigle "Fed" est couramment utilisé en français.
- - <strong>BNS</strong> : Banque nationale suisse, banque centrale de la Suisse. Le sigle "BNS" est l'acronyme officiel en français, mais moins répandu que "SNB" dans la documentation technique internationale.</p>
 
 
 

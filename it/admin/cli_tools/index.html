@@ -2025,6 +2025,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5417,8 +5445,8 @@
 <p>LibreFolio fornisce lo script <code>dev.py</code> per le attività di amministrazione. Questa pagina illustra i comandi più rilevanti per gli <strong>amministratori di sistema</strong>.</p>
 <div class="admonition info">
 <p class="admonition-title">👩‍💻 Per Sviluppatori</p>
-</div>
 <p>Per i comandi specifici per lo sviluppo (build frontend, test runner, sincronizzazione API, audit i18n), consultare la <a href="../../developer/dev-installation/">Guida all'Installazione per Sviluppatori</a>.</p>
+</div>
 <hr />
 <h2 id="installazione">🚀 Installazione</h2>
 <p>Installa tutte le dipendenze del progetto (Python e Node.js):</p>
@@ -5438,8 +5466,8 @@
 </code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Multi-worker</p>
-</div>
 <p>In produzione, utilizza <code>--workers</code> per eseguire più worker Uvicorn. Questo migliora la produttività ed è raccomandato per qualsiasi distribuzione con più di un core CPU.</p>
+</div>
 <hr />
 <h2 id="gestione-utenti">👤 Gestione Utenti</h2>
 <p>La gestione degli utenti si effettua tramite i sottocomandi <code>./dev.py user</code>:</p>
@@ -5463,15 +5491,15 @@
 <h3 id="inizializza-le-impostazioni-globali">🔧 Inizializza le Impostazioni Globali</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>init-settings
 </code></pre></div>
-<p>Popola il database con le Impostazioni Globali predefinite, se non esistono già.</p>
+<p>Popola il database con le <a href="../settings/">Impostazioni Globali</a> predefinite, se non esistono già.</p>
 <h3 id="migrazioni-del-database">🗄️ Migrazioni del Database</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Applica le migrazioni in sospeso</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>./dev.py<span class="w"> </span>db<span class="w"> </span>upgrade
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">🗄️ Reset del Database</p>
-</div>
 <p><code>./dev.py db create-clean</code> ricrea il database da zero — <strong>TUTTI i dati andranno persi</strong>. Utilizzare solo se è necessario ricominciare da zero.</p>
+</div>
 <hr />
 <h2 id="documentazione">📚 Documentazione</h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Build e deploy della documentazione MkDocs su GitHub Pages</span>
@@ -5487,7 +5515,6 @@
 </code></pre></div>
 <div class="admonition info">
 <p class="admonition-title">👩‍💻 Comandi per Sviluppatori</p>
-</div>
 <p>Comandi aggiuntivi per i flussi di lavoro di sviluppo:</p>
 <ul>
 <li><strong>Frontend</strong>: <code>./dev.py front build</code>, <code>front dev</code>, <code>front check</code> — consultare <a href="../../developer/frontend/">Sviluppo Frontend</a></li>
@@ -5495,6 +5522,7 @@
 <li><strong>Client API</strong>: <code>./dev.py api sync</code> — consultare <a href="../../developer/api/overview/">Panoramica API</a></li>
 <li><strong>i18n audit</strong>: consultare <a href="../../developer/frontend/i18n/">Internazionalizzazione</a></li>
 </ul>
+</div>
 
 
 

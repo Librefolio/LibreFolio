@@ -1647,17 +1647,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#notes-du-traducteur" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes du traducteur
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -2023,6 +2012,34 @@
     
   
     Benchmarks Synthétiques
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5404,17 +5421,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#notes-du-traducteur" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes du traducteur
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -5439,8 +5445,8 @@
 <p>LibreFolio fournit le script <code>dev.py</code> pour les tâches d'administration. Cette page couvre les commandes les plus pertinentes pour les <strong>administrateurs système</strong>.</p>
 <div class="admonition info">
 <p class="admonition-title">👩‍💻 Pour les développeurs</p>
-</div>
 <p>Pour les commandes spécifiques au développement (build frontend, exécuteur de tests, synchronisation API, audit i18n), consultez le <a href="../../developer/dev-installation/">Guide d'installation pour développeurs</a>.</p>
+</div>
 <hr />
 <h2 id="installation">🚀 Installation</h2>
 <p>Installer toutes les dépendances du projet (Python et Node.js) :</p>
@@ -5460,8 +5466,8 @@
 </code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Multi-worker</p>
-</div>
 <p>En production, utilisez <code>--workers</code> pour exécuter plusieurs workers Uvicorn. Cela améliore le débit et est recommandé pour tout déploiement avec plus d'un cœur de CPU.</p>
+</div>
 <hr />
 <h2 id="gestion-des-utilisateurs">👤 Gestion des utilisateurs</h2>
 <p>La gestion des utilisateurs se fait via les sous-commandes <code>./dev.py user</code> :</p>
@@ -5485,15 +5491,15 @@
 <h3 id="initialiser-les-parametres-globaux">🔧 Initialiser les paramètres globaux</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>init-settings
 </code></pre></div>
-<p>Remplit la base de données avec les [Paramètres globaux] par défaut s'ils n'existent pas déjà.</p>
+<p>Remplit la base de données avec les <a href="../settings/">Paramètres Globaux</a> par défaut s'ils n'existent pas déjà.</p>
 <h3 id="migrations-de-base-de-donnees">🗄️ Migrations de base de données</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Appliquer les migrations en attente</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>./dev.py<span class="w"> </span>db<span class="w"> </span>upgrade
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">🗄️ Réinitialisation de la base de données</p>
-</div>
 <p><code>./dev.py db create-clean</code> recrée la base de données à partir de zéro — <strong>toutes les données sont perdues</strong>. À utiliser uniquement si vous avez besoin de partir de zéro.</p>
+</div>
 <hr />
 <h2 id="documentation">📚 Documentation</h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Générer et déployer la documentation MkDocs sur GitHub Pages</span>
@@ -5509,7 +5515,6 @@
 </code></pre></div>
 <div class="admonition info">
 <p class="admonition-title">👩‍💻 Commandes développeur</p>
-</div>
 <p>Commandes supplémentaires pour les workflows de développement :</p>
 <ul>
 <li><strong>Frontend</strong> : <code>./dev.py front build</code>, <code>front dev</code>, <code>front check</code> — voir <a href="../../developer/frontend/">Développement frontend</a></li>
@@ -5517,8 +5522,7 @@
 <li><strong>Client API</strong> : <code>./dev.py api sync</code> — voir <a href="../../developer/api/overview/">Vue d'ensemble de l'API</a></li>
 <li><strong>i18n</strong> : <code>./dev.py i18n audit</code> — voir <a href="../../developer/frontend/i18n/">Internationalisation</a></li>
 </ul>
-<p>```</p>
-<h2 id="notes-du-traducteur">Notes du traducteur</h2>
+</div>
 
 
 

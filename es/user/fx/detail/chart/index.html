@@ -1183,10 +1183,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tipos-de-grafico" class="md-nav__link">
+  <a href="#modos-de-visualizacion" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔀 Tipos de gráfico
+        🔀 Modos de visualización
       
     </span>
   </a>
@@ -1968,6 +1968,34 @@
     
   
     Benchmarks Sintéticos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5239,10 +5267,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tipos-de-grafico" class="md-nav__link">
+  <a href="#modos-de-visualizacion" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔀 Tipos de gráfico
+        🔀 Modos de visualización
       
     </span>
   </a>
@@ -5320,13 +5348,13 @@
 </div>
 
 <hr />
-<h2 id="tipos-de-grafico">🔀 Tipos de gráfico</h2>
-<p>Alterna entre dos modos de visualización:</p>
+<h2 id="modos-de-visualizacion">🔀 Modos de visualización</h2>
+<p>Alterna entre dos modos mediante la barra de herramientas:</p>
 <ul>
-<li>📈 <strong>Gráfico de líneas</strong> — Una línea continua que conecta cada tipo de cambio diario. Ideal para identificar tendencias en períodos prolongados.</li>
-<li>🕯️ <strong>Gráfico de velas japonesas</strong> — Muestra apertura, máximo, mínimo y cierre para cada período. Ideal para analizar volatilidad a corto plazo y acción del precio.</li>
+<li>📈 <strong>Absoluto</strong> — Muestra los valores brutos del tipo de cambio (ej. 1 EUR = 1,0845 USD). Ideal para ver los niveles reales del tipo.</li>
+<li>📊 <strong>Porcentaje (%)</strong> — Muestra el cambio porcentual desde el primer punto de datos visible. Ideal para comparar movimientos relativos y superponer múltiples señales.</li>
 </ul>
-<p>Utiliza el botón de alternancia en la barra de herramientas del gráfico para cambiar entre modos.</p>
+<p>Al cambiar al modo %, todas las señales superpuestas también se recalculan como porcentajes desde sus respectivos puntos de partida.</p>
 <hr />
 <h2 id="navegacion-y-zoom">🔍 Navegación y zoom</h2>
 <table>
@@ -5360,7 +5388,11 @@
 </tr>
 </tbody>
 </table>
-<p>También puedes usar los botones del <strong>selector de rango temporal</strong> (1M, 3M, 6M, 1A, 5A, Todo) para Saltar rápidamente a períodos comunes.</p>
+<p>También puedes usar los <strong>presets temporales</strong> (1S, 1M, 3M, 6M, 1A, 2A) o seleccionar un rango <strong>Personalizado</strong> para acceder rápidamente a períodos específicos.</p>
+<div class="admonition info">
+<p class="admonition-title">Disponibilidad de datos</p>
+<p>Si el rango seleccionado excede los datos disponibles, LibreFolio muestra lo que hay. Usa <strong>Sincronizar</strong> para intentar descargar datos más antiguos — pero ten en cuenta que algunos proveedores tienen cobertura histórica limitada.</p>
+</div>
 <hr />
 <h2 id="descripcion-emergente">💬 Descripción emergente</h2>
 <p>Pasa el cursor sobre cualquier punto del gráfico para ver:</p>
@@ -5373,10 +5405,10 @@
 <h2 id="barra-de-herramientas">🧰 Barra de herramientas</h2>
 <p>La barra de herramientas del gráfico ofrece acceso rápido a:</p>
 <ul>
-<li>📊 <strong>Alternancia de tipo de gráfico</strong> — Líneas / Velas japonesas</li>
-<li>⏱️ <strong>Rango temporal</strong> — 1M, 3M, 6M, 1A, 5A, Todo</li>
+<li>📊 <strong>Modo de visualización</strong> — Absoluto / Porcentaje</li>
+<li>⏱️ <strong>Rango temporal</strong> — 1S, 1M, 3M, 6M, 1A, 2A, Personalizado</li>
 <li>📈 <strong><a href="../signals/">Señales</a></strong> — Activar superposiciones de indicadores técnicos</li>
-<li>📐 <strong><a href="../measures/">Medidas</a></strong> — Herramienta de medición entre puntos</li>
+<li>📏 <strong><a href="../measures/">Medidas</a></strong> — Herramienta de medición entre puntos</li>
 <li>✏️ <strong><a href="../data-editor/">Editor de datos</a></strong> — Editar puntos de datos individuales</li>
 <li>⚙️ <strong><a href="../../chart-settings/">Configuración del gráfico</a></strong> — Personalización visual</li>
 </ul>

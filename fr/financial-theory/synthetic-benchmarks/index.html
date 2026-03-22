@@ -14,7 +14,7 @@
         <link rel="prev" href="../technical-indicators/">
       
       
-        <link rel="next" href="../../developer/">
+        <link rel="next" href="../taxation/">
       
       
         
@@ -2103,6 +2103,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -5590,7 +5618,13 @@
 <hr />
 <h2 id="linear-growth">📈 Croissance Linéaire</h2>
 <h3 id="signification-financiere">💡 Signification Financière</h3>
-<p>Une courbe de référence de croissance linéaire représente les <strong>intérêts simples</strong> — la valeur augmente d'un montant absolu fixe à chaque période. C'est la plus simple « ligne cible » que l'on puisse tracer : si l'on s'attend à ce qu'un actif rapporte <span class="arithmatex">\(r\)</span>% par an, la courbe de référence linéaire indique où le prix <em>devrait</em> se trouver à tout moment sous cette hypothèse.</p>
+<p>Une courbe de référence de croissance linéaire représente les <strong>intérêts simples</strong> — la valeur augmente d'un montant absolu fixe à chaque période. Cela modélise le scénario où vous <strong>ne réinvestissez pas</strong> vos revenus (dividendes, intérêts, coupons) : les versements en espèces sont reçus mais mis de côté, seul le capital initial génère des rendements.</p>
+<p>Si au contraire vous <strong>réinvestissez</strong> ces revenus — manuellement ou automatiquement via des instruments capitalisants (ex. ETF capitalisants, qui réinvestissent les dividendes en interne et bénéficient du <a href="../taxation/#tax-deferral-advantage">report d'imposition</a>) — vous devriez observer une <strong><a href="#compound-growth">croissance composée</a></strong>, où les rendements génèrent à leur tour des rendements.</p>
+<p>En pratique, l'écart entre croissance linéaire et composée s'élargit considérablement sur les horizons longs. C'est pourquoi la référence Linéaire apparaît comme une droite tandis que la référence Composée courbe vers le haut de façon exponentielle.</p>
+<div class="admonition abstract">
+<p class="admonition-title">Plus-values et moins-values</p>
+<p>Lorsqu'un actif est vendu au-dessus de son prix d'achat, la différence est une <strong>plus-value</strong> ; en dessous, une <strong>moins-value</strong>. Chaque juridiction a ses propres règles concernant les taux d'imposition, les seuils de durée de détention, la durée du report des pertes et les méthodes d'appariement (FIFO, LIFO, identification spécifique). Pour un aperçu théorique, voir <a href="../taxation/">Fiscalité &amp; Efficience Fiscale</a>.</p>
+</div>
 <h3 id="formule-mathematique">🔢 Formule Mathématique</h3>
 <div class="arithmatex">\[
 y(t) = y_0 \cdot (1 + r \cdot t)
@@ -5665,8 +5699,8 @@ y_{i+1} = y_i \cdot \text{facteurQuotidien}
 <p>Cela est mathématiquement équivalent à la forme close <span class="arithmatex">\(y_0(1+r)^t\)</span> mais remplace <span class="arithmatex">\(N\)</span> opérations puissance coûteuses par <span class="arithmatex">\(N\)</span> multiplications simples — le même principe que celui utilisé par les banques pour l'accumulation journalière des intérêts composés.</p>
 <div class="admonition tip">
 <p class="admonition-title">Règle du 72</p>
-</div>
 <p>Un raccourci mental rapide : un investissement qui croît à <span class="arithmatex">\(r\)</span>% par an doublera approximativement en <span class="arithmatex">\(72 / r\)</span> années. À 7% → ~10,3 ans.</p>
+</div>
 <h3 id="parametres_1">⚙️ Paramètres</h3>
 <table>
 <thead>

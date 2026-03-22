@@ -690,10 +690,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#mis-precios-no-se-actualizan" class="md-nav__link">
+  <a href="#los-precios-de-mis-activos-no-se-actualizan" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📉 Mis precios no se actualizan
+        📉 Los precios de mis activos no se actualizan
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mis-tipos-de-cambio-no-se-actualizan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💱 Mis tipos de cambio no se actualizan
       
     </span>
   </a>
@@ -2048,6 +2059,34 @@
     
   
     Benchmarks Sintéticos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5431,10 +5470,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#mis-precios-no-se-actualizan" class="md-nav__link">
+  <a href="#los-precios-de-mis-activos-no-se-actualizan" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📉 Mis precios no se actualizan
+        📉 Los precios de mis activos no se actualizan
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mis-tipos-de-cambio-no-se-actualizan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💱 Mis tipos de cambio no se actualizan
       
     </span>
   </a>
@@ -5494,7 +5544,7 @@
 <h3 id="que-es-librefolio">🤔 ¿Qué es LibreFolio?</h3>
 <p>LibreFolio es un rastreador de carteras <strong>autohospedado</strong> y de código abierto diseñado para inversores preocupados por la privacidad. Te permite <strong>seguir</strong> tus inversiones, analizar su rendimiento y mantener el control total de tus datos financieros.</p>
 <h3 id="es-librefolio-gratuito">💰 ¿Es LibreFolio gratuito?</h3>
-<p>¡Sí! LibreFolio es completamente gratuito y de código abierto bajo la licencia MIT.</p>
+<p>¡Sí! LibreFolio es completamente gratuito y de código abierto bajo la licencia <a href="https://www.gnu.org/licenses/agpl-3.0.html">AGPL-3.0</a>.</p>
 <h3 id="que-activos-puedo-seguir">📊 ¿Qué activos puedo seguir?</h3>
 <p>LibreFolio es compatible con:</p>
 <ul>
@@ -5502,8 +5552,12 @@
 <li><strong>Criptomonedas</strong> - Próximamente</li>
 <li><strong>Bonos</strong> - Permite entrada manual</li>
 <li><strong>Préstamos P2P</strong> - Activos con rendimientos periódicos</li>
-<li><strong>Efectivo y Depósitos</strong> - Sigue tu liquidez</li>
+<li><strong>Efectivo y Depósitos</strong> — Sigue tu liquidez</li>
 </ul>
+<div class="admonition tip">
+<p class="admonition-title">¿Falta algo? 💡</p>
+<p>Si hay un tipo de activo o una función que te gustaría ver y en la que no hemos pensado, ¡nos encantaría saberlo! Abre una <a href="https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement">solicitud de mejora en GitHub</a>.</p>
+</div>
 <h2 id="primeros-pasos">🚀 Primeros Pasos</h2>
 <h3 id="como-instalo-librefolio">📦 ¿Cómo instalo LibreFolio?</h3>
 <p>Consulta nuestra <a href="../developer/dev-installation/">Guía de Instalación</a> para instrucciones detalladas.</p>
@@ -5519,12 +5573,19 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>reset<span class="w"> </span>&lt;usuario&gt;<span class="w"> </span>&lt;nueva_contraseña&gt;
 </code></pre></div>
 <h2 id="solucion-de-problemas">🔧 Solución de Problemas</h2>
-<h3 id="mis-precios-no-se-actualizan">📉 Mis precios no se actualizan</h3>
+<h3 id="los-precios-de-mis-activos-no-se-actualizan">📉 Los precios de mis activos no se actualizan</h3>
 <p>Verifica que:</p>
 <ol>
-<li>La sincronización automática esté activada en <strong>configuración global</strong></li>
-<li>Tus activos tengan ISINs o símbolos válidos</li>
-<li>El proveedor yfinance esté funcionando (revisa los registros)</li>
+<li>La sincronización automática esté activada en la configuración global</li>
+<li>Tus activos tengan ISINs o símbolos válidos reconocidos por el <strong>proveedor de datos</strong> configurado (ej. <a href="https://pypi.org/project/yfinance/">yfinance</a> para acciones y ETFs)</li>
+<li>El servicio del proveedor esté disponible (revisa los registros del servidor)</li>
+</ol>
+<h3 id="mis-tipos-de-cambio-no-se-actualizan">💱 Mis tipos de cambio no se actualizan</h3>
+<p>Verifica que:</p>
+<ol>
+<li>El par de divisas tenga al menos un <a href="../user/fx/detail/provider/">proveedor de datos configurado</a></li>
+<li>La API del proveedor sea accesible (BCE, FED, BOE, SNB)</li>
+<li>Hayas ejecutado una <a href="../user/fx/sync/">sincronización</a> para el rango de fechas deseado</li>
 </ol>
 <h3 id="no-puedo-iniciar-sesion">🔐 No puedo iniciar sesión</h3>
 <ul>

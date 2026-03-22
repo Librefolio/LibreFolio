@@ -1981,6 +1981,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5332,14 +5360,15 @@
 </ul>
 <hr />
 <h2 id="modifier-les-fournisseurs">🔧 Modifier les fournisseurs</h2>
-<p>Pour changer la source de données d'une paire :</p>
+<p>Vous pouvez configurer <strong>un ou plusieurs</strong> fournisseurs de données pour chaque paire. Plusieurs fournisseurs forment une <strong>chaîne de secours</strong> — si la source principale échoue, le système essaie automatiquement le suivant.</p>
+<p>Pour modifier ou ajouter des fournisseurs :</p>
 <ol>
 <li>Ouvrez la fenêtre modale de Configuration des fournisseurs</li>
 <li><strong>Supprimez</strong> la route actuelle si nécessaire</li>
 <li><strong>Ajoutez une nouvelle route</strong> — le système identifiera automatiquement les routes disponibles (identique à l'<a href="../../add-pair/">ajout d'une nouvelle paire</a>)</li>
-<li>Sélectionnez la nouvelle route et <strong>confirmez</strong></li>
+<li><strong>Réordonnez</strong> les routes pour définir les priorités (glisser-déposer ou boutons fléchés)</li>
+<li>Cliquez sur <strong>Enregistrer</strong> — la prochaine synchronisation récupérera les données depuis le fournisseur disponible de plus haute priorité</li>
 </ol>
-<p>La prochaine synchronisation récupérera les données depuis le nouveau fournisseur.</p>
 <hr />
 <h2 id="priorite-et-itineraire-de-secours">🔢 Priorité et itinéraire de secours</h2>
 <p>Lorsque plusieurs routes sont configurées pour une paire :</p>
@@ -5350,13 +5379,13 @@
 </ul>
 <div class="admonition example">
 <p class="admonition-title">Exemple d'itinéraire de secours</p>
-</div>
 <p>EUR/USD configurée avec :</p>
 <ol>
 <li><strong>BCE</strong> (principale) — Banque Centrale Européenne</li>
 <li><strong>Fed</strong> (secours) — Réserve fédérale</li>
 </ol>
 <p>Si l'API de la BCE est inaccessible pendant la synchronisation, le système utilise automatiquement la Fed à la place.</p>
+</div>
 <hr />
 <h2 id="liens-associes">📚 Liens associés</h2>
 <ul>
@@ -5366,8 +5395,8 @@
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">🔗 Comment les routes en chaîne sont calculées</p>
-</div>
 <p>Pour l'algorithme mathématique derrière les conversions multi-saut, voir <a href="../../../../developer/frontend/fx-chain-algorithm/">Algorithme de chaîne FX</a>.</p>
+</div>
 
 
 

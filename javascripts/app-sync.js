@@ -116,7 +116,33 @@
 
     // Also sync after DOM is ready (in case body wasn't available yet)
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', syncTheme);
+        document.addEventListener('DOMContentLoaded', function () {
+            syncTheme();
+            watchPaletteToggle();
+        });
+    } else {
+        watchPaletteToggle();
+    }
+
+    // ── Reverse theme sync: MkDocs palette → app ─────────────────
+
+    /**
+     * When the user clicks the MkDocs Material theme toggle, write
+     * the new theme back to 'librefolio-theme' so the SvelteKit app
+     * picks it up on next visit.
+     */
+    function watchPaletteToggle() {
+        var toggles = document.querySelectorAll('[data-md-component=palette] input');
+        toggles.forEach(function (toggle) {
+            toggle.addEventListener('change', function () {
+                // Small delay: Material updates the scheme attribute asynchronously
+                setTimeout(function () {
+                    var scheme = document.body.getAttribute('data-md-color-scheme');
+                    var appTheme = (scheme === 'slate') ? 'dark' : 'light';
+                    localStorage.setItem('librefolio-theme', appTheme);
+                }, 100);
+            });
+        });
     }
 })();
 

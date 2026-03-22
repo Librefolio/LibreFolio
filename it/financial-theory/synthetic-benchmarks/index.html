@@ -14,7 +14,7 @@
         <link rel="prev" href="../technical-indicators/">
       
       
-        <link rel="next" href="../../developer/">
+        <link rel="next" href="../taxation/">
       
       
         
@@ -2103,6 +2103,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -5580,7 +5608,7 @@
 
 
 <h1 id="benchmark-sintetici">🎯 Benchmark Sintetici</h1>
-<p>LibreFolio può sovrapporre <strong>curve di benchmark sintetici</strong>[^1] su qualsiasi grafico Forex. A differenza degli indicatori tecnici (che vengono calcolati <em>dai</em> dati di mercato), i benchmark sintetici sono generati matematicamente e fungono da <strong>linee di riferimento visive</strong> — "e se il prezzo avesse seguito questa traiettoria ideale?".</p>
+<p>LibreFolio può sovrapporre <strong>curve di benchmark sintetici</strong> su qualsiasi grafico Forex. A differenza degli indicatori tecnici (che vengono calcolati <em>dai</em> dati di mercato), i benchmark sintetici sono generati matematicamente e fungono da <strong>linee di riferimento visive</strong> — "e se il prezzo avesse seguito questa traiettoria ideale?".</p>
 <p>Sono strumenti preziosi per:</p>
 <ul>
 <li>Confrontare i rendimenti effettivi con un tasso di crescita obiettivo.</li>
@@ -5590,7 +5618,13 @@
 <hr />
 <h2 id="linear-growth">📈 Crescita Lineare</h2>
 <h3 id="significato-finanziario">💡 Significato Finanziario</h3>
-<p>Un benchmark di crescita lineare rappresenta <strong>interesse semplice</strong> — il valore aumenta di un importo fisso assoluto ogni periodo. È la "linea obiettivo" più semplice che si possa disegnare: se ci si aspetta che un asset renda <span class="arithmatex">\(r\)</span>% annui, il benchmark lineare mostra dove il prezzo <em>dovrebbe</em> essere in qualsiasi momento sotto questa ipotesi.</p>
+<p>Un benchmark di crescita lineare rappresenta <strong>interesse semplice</strong> — il valore aumenta di un importo fisso assoluto ogni periodo. Questo modella lo scenario in cui <strong>non reinvesti</strong> i guadagni (dividendi, interessi, cedole): i pagamenti in contanti vengono ricevuti ma messi da parte, quindi solo il capitale originale genera rendimenti.</p>
+<p>Se invece <strong>reinvesti</strong> quei guadagni — manualmente o automaticamente attraverso strumenti ad accumulazione (es. ETF ad accumulazione, che reinvestono i dividendi internamente e beneficiano del <a href="../taxation/#tax-deferral-advantage">differimento fiscale</a>) — dovresti aspettarti una <strong><a href="#compound-growth">crescita composta</a></strong>, dove i rendimenti generano ulteriori rendimenti.</p>
+<p>In pratica, la differenza tra crescita lineare e composta si allarga drasticamente su orizzonti lunghi. Ecco perché il benchmark Lineare appare come una linea retta mentre il benchmark Composto curva verso l'alto esponenzialmente.</p>
+<div class="admonition abstract">
+<p class="admonition-title">Plusvalenze e minusvalenze</p>
+<p>Quando si vende un asset al di sopra del prezzo di acquisto, la differenza è una <strong>plusvalenza</strong>; al di sotto, una <strong>minusvalenza</strong>. Ogni giurisdizione ha le proprie regole riguardo aliquote fiscali, soglie per periodo di detenzione, durata del riporto delle perdite e metodi di abbinamento (FIFO, LIFO, identificazione specifica). Per una panoramica teorica, vedi <a href="../taxation/">Tassazione &amp; Efficienza Fiscale</a>.</p>
+</div>
 <h3 id="formula-matematica">🔢 Formula Matematica</h3>
 <div class="arithmatex">\[
 y(t) = y_0 \cdot (1 + r \cdot t)
@@ -5601,7 +5635,7 @@ y(t) = y_0 \cdot (1 + r \cdot t)
 <li><span class="arithmatex">\(r\)</span> è il tasso di crescita annuo (espresso come decimale, es. 0,07 per il 7%),</li>
 <li><span class="arithmatex">\(t\)</span> è il tempo in anni dall'inizio.</li>
 </ul>
-<p>Questo è equivalente alla formula dell'<strong>interesse semplice</strong> <span class="arithmatex">\(A = P(1 + rt)\)</span>, dove <span class="arithmatex">\(t\)</span> è espresso in anni usando la convenzione di <a href="../day-count/">Conteggio dei Giorni</a>[^2] applicabile.</p>
+<p>Questo è equivalente alla formula dell'<strong>interesse semplice</strong> <span class="arithmatex">\(A = P(1 + rt)\)</span>, dove <span class="arithmatex">\(t\)</span> è espresso in anni usando la convenzione di <a href="../day-count/">Conteggio dei Giorni</a> applicabile.</p>
 <h3 id="parametri">⚙️ Parametri</h3>
 <table>
 <thead>
@@ -5623,12 +5657,12 @@ y(t) = y_0 \cdot (1 + r \cdot t)
 <td>Scostamento</td>
 <td><code>offset</code></td>
 <td>0</td>
-<td>Spostamento verticale come % del valore base[^3].</td>
+<td>Spostamento verticale come % del valore base.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="interpretazione">🔍 Interpretazione</h3>
-<p>La linea è perfettamente dritta su scala lineare. Qualsiasi punto in cui il prezzo effettivo è <em>sopra</em> la linea significa che l'asset ha superato il target; qualsiasi punto <em>sotto</em> indica underperformance. Poiché la crescita è additiva, la linea tende a curvarsi verso il basso su scala logaritmica[^4] — rendendola facilmente distinguibile visivamente dalla crescita composta.</p>
+<p>La linea è perfettamente dritta su scala lineare. Qualsiasi punto in cui il prezzo effettivo è <em>sopra</em> la linea significa che l'asset ha superato il target; qualsiasi punto <em>sotto</em> indica underperformance. Poiché la crescita è additiva, la linea tende a curvarsi verso il basso su scala logaritmica — rendendola facilmente distinguibile visivamente dalla crescita composta.</p>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg></span> <a href="https://en.wikipedia.org/wiki/Interest#Simple_interest" target="_blank">Interesse Semplice su Wikipedia</a></p>
 <hr />
 <h2 id="compound-growth">📊 Crescita Composta</h2>
@@ -5650,7 +5684,7 @@ A = P \cdot \left(1 + \frac{r}{n}\right)^{n \cdot t}
 \]</div>
 <p>Il backend di LibreFolio supporta le seguenti frequenze di capitalizzazione:
 <strong>Annuale</strong> (<span class="arithmatex">\(n=1\)</span>), <strong>Semestrale</strong> (<span class="arithmatex">\(n=2\)</span>), <strong>Trimestrale</strong> (<span class="arithmatex">\(n=4\)</span>),
-<strong>Mensile</strong> (<span class="arithmatex">\(n=12\)</span>), <strong>Giornaliera</strong> (<span class="arithmatex">\(n=365\)</span>), e <strong>Continua</strong> (<span class="arithmatex">\(n \to \infty\)</span>)[^5].</p>
+<strong>Mensile</strong> (<span class="arithmatex">\(n=12\)</span>), <strong>Giornaliera</strong> (<span class="arithmatex">\(n=365\)</span>), e <strong>Continua</strong> (<span class="arithmatex">\(n \to \infty\)</span>).</p>
 <p>Quando <span class="arithmatex">\(n \to \infty\)</span> (capitalizzazione continua):</p>
 <div class="arithmatex">\[
 A = P \cdot e^{r \cdot t}
@@ -5664,9 +5698,11 @@ A = P \cdot e^{r \cdot t}
 <div class="arithmatex">\[
 y_{i+1} = y_i \cdot \text{fattoreGiornaliero}
 \]</div>
-<p>Questo è matematicamente equivalente alla forma chiusa <span class="arithmatex">\(y_0(1+r)^t\)</span> ma sostituisce <span class="arithmatex">\(N\)</span> costose operazioni di potenza con <span class="arithmatex">\(N\)</span> semplici moltiplicazioni — lo stesso principio dietro come le banche effettivamente <strong>maturano</strong>[^6] gli interessi composti giornalieri.</p>
-<p>!!! tip "Regola del 72"[^7]
- Una scorciatoia mentale rapida: un investimento che cresce al <span class="arithmatex">\(r\)</span>% annuo raddoppierà approssimativamente in <span class="arithmatex">\(72 / r\)</span> anni. Al 7% → ~10,3 anni.</p>
+<p>Questo è matematicamente equivalente alla forma chiusa <span class="arithmatex">\(y_0(1+r)^t\)</span> ma sostituisce <span class="arithmatex">\(N\)</span> costose operazioni di potenza con <span class="arithmatex">\(N\)</span> semplici moltiplicazioni — lo stesso principio dietro come le banche effettivamente <strong>maturano</strong> gli interessi composti giornalieri.</p>
+<div class="admonition tip">
+<p class="admonition-title">Regola del 72</p>
+<p>Una scorciatoia mentale rapida: un investimento che cresce al <span class="arithmatex">\(r\)</span>% annuo raddoppierà approssimativamente in <span class="arithmatex">\(72 / r\)</span> anni. Al 7% → ~10,3 anni.</p>
+</div>
 <h3 id="parametri_1">⚙️ Parametri</h3>
 <table>
 <thead>
@@ -5688,12 +5724,12 @@ y_{i+1} = y_i \cdot \text{fattoreGiornaliero}
 <td>Scostamento</td>
 <td><code>offset</code></td>
 <td>0</td>
-<td>Spostamento verticale come % del valore base[^3].</td>
+<td>Spostamento verticale come % del valore base.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="interpretazione_1">🔍 Interpretazione</h3>
-<p>La curva è dritta su scala <strong>logaritmica</strong>[^4] — questo è il segno distintivo della crescita esponenziale. Sovrapporre un benchmark composto su un grafico in scala log è il modo più pulito per valutare se un asset sta crescendo più o meno velocemente di un tasso obiettivo.</p>
+<p>La curva è dritta su scala <strong>logaritmica</strong> — questo è il segno distintivo della crescita esponenziale. Sovrapporre un benchmark composto su un grafico in scala log è il modo più pulito per valutare se un asset sta crescendo più o meno velocemente di un tasso obiettivo.</p>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg></span> <a href="https://en.wikipedia.org/wiki/Compound_interest" target="_blank">Interesse Composto su Wikipedia</a></p>
 <hr />
 <h2 id="sine-wave">🌊 Onda Sinusoidale</h2>
@@ -5742,23 +5778,13 @@ y(t) = A \cdot \sin\!\left(\frac{2\pi t}{T}\right) + y_0 + \text{scostamento}
 <td>Scostamento</td>
 <td><code>offset</code></td>
 <td>0</td>
-<td>Spostamento verticale come % del valore base[^3].</td>
+<td>Spostamento verticale come % del valore base.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="interpretazione_2">🔍 Interpretazione</h3>
-<p>Se il prezzo effettivo segue approssimativamente il riferimento sinusoidale, il mercato mostra una <strong>componente ciclica</strong>[^8] rilevabile a quella frequenza. Le deviazioni dalla sinusoide suggeriscono shock non periodici o deriva della tendenza. Regolare il parametro del periodo permette di <strong>analizzare</strong>[^9] diverse lunghezze di ciclo — effettivamente eseguendo una versione manuale dell'analisi spettrale.</p>
+<p>Se il prezzo effettivo segue approssimativamente il riferimento sinusoidale, il mercato mostra una <strong>componente ciclica</strong> rilevabile a quella frequenza. Le deviazioni dalla sinusoide suggeriscono shock non periodici o deriva della tendenza. Regolare il parametro del periodo permette di <strong>analizzare</strong> diverse lunghezze di ciclo — effettivamente eseguendo una versione manuale dell'analisi spettrale.</p>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg></span> <a href="https://en.wikipedia.org/wiki/Sine_wave" target="_blank">Onda Sinusoidale su Wikipedia</a></p>
-<hr />
-<p>[^1]: Nel gergo finanziario italiano, "benchmark" è generalmente considerato un sostantivo maschile. Pertanto, "benchmark sintetici" è la forma grammaticalmente corretta con accordo al maschile. In alternativa, si potrebbe usare "curve di riferimento sintetiche" per evitare il prestito.
-[^2]: La <strong>Convenzione di Conteggio dei Giorni</strong> (Day Count Convention) è lo standard utilizzato nel settore finanziario per determinare il numero di giorni tra due date ai fini del calcolo degli interessi. Le convenzioni più comuni includono Actual/365, 30/360 e Actual/360.
-[^3]: Il parametro <code>offset</code> (scostamento) non indica un errore, ma uno spostamento verticale calibrato in percentuale del valore iniziale (<code>y_0</code>). Serve per adattare la curva di benchmark a diversi livelli di prezzo di partenza.
-[^4]: Su una <strong>scala logaritmica</strong>, una crescita esponenziale (composta) si presenta come una linea retta, mentre una crescita lineare (semplice) assume una forma curva verso il basso. Questo principio permette un confronto visivo immediato tra il benchmark e il prezzo.
-[^5]: La <strong>capitalizzazione continua</strong> rappresenta il limite matematico in cui gli interessi sono calcolati e aggiunti al capitale in modo istantaneo e infinitamente frequente. La costante <code>e</code> (~2.71828) è il numero di Nepero, base dei logaritmi naturali.
-[^6]: Il verbo corretto per "accrue" in questo contesto finanziario è "maturano" (gli interessi maturano nel tempo). "Accantonare" si riferisce invece alla creazione di un fondo per far fronte a un futuro Omanento o rischio.
-[^7]: La <strong>Regola del 72</strong> è una formula approssimativa per stimare il tempo di raddoppio di un investimento. Si calcola dividendo 72 per il tasso di rendimento percentuale annuo. Fornisce una stima rapida per tassi comuni (es. 72/6 = 12 anni).
-[^8]: "Ciclabile" (adatto a essere percorso in bicicletta) era un errore di traduzione di "cyclic". Il termine corretto è "<strong>componente ciclica</strong>", che indica una parte o un elemento che si ripete a intervalli regolari.
-[^9]: "Scansire" è un calco dall'inglese "to scan" poco idiomatico in questo contesto. Alternative più fluide sono "<strong>analizzare</strong>", "<strong>sperimentare con</strong>" o "<strong>esplorare</strong>" diverse lunghezze di ciclo.</p>
 
 
 

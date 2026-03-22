@@ -1981,6 +1981,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5314,67 +5342,61 @@
 
 
 <h1 id="configuracion-de-proveedores">🔌 Configuración de Proveedores</h1>
-<p>Cada par de divisas en LibreFolio cuenta con el respaldo de uno o más <strong>proveedores de datos</strong>[^1] —bancos centrales que suministran los datos de tipo de cambio—. La Configuración de Proveedores le permite ver y modificar qué proveedores se utilizan para un par específico.</p>
+<p>Cada par de divisas en LibreFolio cuenta con el respaldo de uno o más <strong>proveedores de datos</strong> —bancos centrales que suministran los datos de tipo de cambio—. La Configuración de Proveedores le permite ver y modificar qué proveedores se utilizan para un par específico.</p>
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Configuración de Proveedores" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 <hr />
 <h2 id="como-acceder">🔓 Cómo acceder</h2>
-<p>Haga clic en el botón <strong>Proveedor</strong> (⚙️) en la barra de herramientas del gráfico, en la página de detalle del par. Esto abre el modal de configuración de proveedores que muestra la configuración de rutas[^1] actual.</p>
+<p>Haga clic en el botón <strong>Proveedor</strong> (⚙️) en la barra de herramientas del gráfico, en la página de detalle del par. Esto abre el modal de configuración de proveedores que muestra la configuración de rutas actual.</p>
 <hr />
 <h2 id="lo-que-vera">📋 Lo que verá</h2>
 <p>El modal muestra:</p>
 <ul>
 <li>🛤️ <strong>Ruta(s) actual(es)</strong> — La(s) fuente(s) de datos activa(s) para este par, en orden de prioridad</li>
-<li>🔀 <strong>Tipo de ruta</strong> — Si es una <strong>ruta directa</strong> (proveedor único) o una <strong>ruta en cadena</strong>[^2] (que implica múltiples conversiones intermediarias a través de una moneda intermediaria)</li>
+<li>🔀 <strong>Tipo de ruta</strong> — Si es una <strong>ruta directa</strong> (proveedor único) o una <strong>ruta en cadena</strong> (que implica múltiples conversiones intermediarias a través de una moneda intermediaria)</li>
 <li>🏛️ <strong>Detalles de cada proveedor</strong> — Nombre, icono y moneda base de cada proveedor en la ruta</li>
 </ul>
 <hr />
 <h2 id="cambiar-proveedores">🔧 Cambiar proveedores</h2>
-<p>Para cambiar la fuente de datos de un par:</p>
+<p>Puedes configurar <strong>uno o más</strong> proveedores de datos para cada par. Varios proveedores actúan como una <strong>cadena de respaldo</strong> — si la fuente principal falla, el sistema prueba automáticamente el siguiente.</p>
+<p>Para cambiar o añadir proveedores:</p>
 <ol>
-<li>Abra el modal de Configuración de Proveedores</li>
-<li><strong>Elimine</strong> la ruta actual si es necesario</li>
-<li><strong>Añada una nueva ruta</strong> — el sistema descubrirá las rutas disponibles (igual que al <a href="../../add-pair/">añadir un nuevo par</a>)</li>
-<li>Seleccione la nueva ruta y <strong>confirme</strong></li>
+<li>Abre el modal de Configuración de Proveedores</li>
+<li><strong>Elimina</strong> la ruta actual si es necesario</li>
+<li><strong>Añade una nueva ruta</strong> — el sistema descubrirá las rutas disponibles (igual que al <a href="../../add-pair/">añadir un nuevo par</a>)</li>
+<li><strong>Reordena</strong> las rutas para establecer prioridades (arrastrar y soltar o botones de flecha)</li>
+<li>Haz clic en <strong>Guardar</strong> — la siguiente sincronización obtendrá datos del proveedor disponible con mayor prioridad</li>
 </ol>
-<p>La siguiente sincronización obtendrá datos del nuevo proveedor.</p>
 <hr />
 <h2 id="prioridad-y-respaldo">🔢 Prioridad y Respaldo</h2>
 <p>Cuando se configuran múltiples rutas para un par:</p>
 <ul>
 <li>Las rutas se prueban <strong>en orden de prioridad</strong> (superior = mayor prioridad)</li>
-<li>Si el proveedor principal falla (timeout, error de API), el sistema automáticamente <strong>recurre</strong>[^3] a la siguiente ruta</li>
+<li>Si el proveedor principal falla (timeout, error de API), el sistema automáticamente recurre a la siguiente ruta</li>
 <li>Puede <strong>reordenar</strong> las rutas para cambiar las prioridades</li>
 </ul>
 <div class="admonition example">
 <p class="admonition-title">Ejemplo de Respaldo</p>
-</div>
 <p>EUR/USD configurado con:</p>
 <ol>
-<li><strong>BCE</strong>[^4] (principal) — Banco Central Europeo</li>
-<li><strong>FED</strong>[^5] (respaldo) — Reserva Federal</li>
+<li><strong>BCE</strong> (principal) — Banco Central Europeo</li>
+<li><strong>FED</strong> (respaldo) — Reserva Federal</li>
 </ol>
 <p>Si la API del BCE no está disponible durante la sincronización, el sistema utilizará automáticamente la FED.</p>
+</div>
 <hr />
 <h2 id="relacionado">📚 Relacionado</h2>
 <ul>
 <li>➕ <strong><a href="../../add-pair/">Añadir un par</a></strong> — Descubrimiento completo de rutas (directas + en cadena)</li>
 <li>🔄 <strong><a href="../../sync/">Sincronización</a></strong> — Cómo la sincronización utiliza los proveedores configurados</li>
-<li>📋 <strong><a href="../../../../developer/backend/fx/providers_list/">Lista de Proveedores de FX</a></strong> — Detalles técnicos de cada proveedor (BCE[^4], FED[^5], BOE[^6], SNB[^7])</li>
+<li>📋 <strong><a href="../../../../developer/backend/fx/providers_list/">Lista de Proveedores de FX</a></strong> — Detalles técnicos de cada proveedor (BCE, FED, BOE, SNB)</li>
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">🔗 Cómo se calculan las rutas en cadena</p>
-</div>
 <p>Para ver el algoritmo matemático detrás de las cadenas de conversión multi-salto, consulte <a href="../../../../developer/frontend/fx-chain-algorithm/">Algoritmo de Cadena FX</a>.</p>
-<p>[^1]: En este contexto, "proveedor" y "ruta" se refieren a la secuencia específica de uno o más bancos centrales (y monedas intermediarias, en caso de rutas en cadena) de los cuales el sistema obtiene los tipos de cambio para un par de divisas. "Ruta" no implica un camino geográfico, sino una vía de datos técnica.
-[^2]: "Ruta en cadena" (chain route) es un término técnico que describe una conversión de divisas que requiere múltiples pasos, pasando por una o más monedas intermediarias (ej: EUR → USD → JPY). Se contrapone a "ruta directa", donde la conversión es inmediata entre las dos divisas del par.
-[^3]: "Respaldo" (fallback) se refiere al mecanismo automático por el cual, si la fuente de datos principal (proveedor o ruta) falla, el sistema cambia a la siguiente fuente en orden de prioridad sin intervención del usuario.
-[^4]: BCE: Banco Central Europeo.
-[^5]: FED: Reserva Federal de los Estados Unidos (Federal Reserve System). Aunque se usa la sigla "FED" comúnmente, su nombre oficial en español es "Reserva Federal".
-[^6]: BOE: Bank of England (Banco de Inglaterra).
-[^7]: SNB: Swiss National Bank (Banco Nacional Suizo).</p>
+</div>
 
 
 

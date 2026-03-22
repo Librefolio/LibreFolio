@@ -2131,6 +2131,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5648,9 +5676,9 @@
 <li>Confirmez la suppression</li>
 </ol>
 <div class="admonition avertissement">
-<p class="admonition-title">Les modifications manuelles remplacent les données synchronisées</p>
+<p class="admonition-title">Les données synchronisées écrasent les modifications manuelles</p>
+<p>Si vous modifiez manuellement un point de données pour une date ensuite couverte par une synchronisation, la valeur du fournisseur <strong>écrasera</strong> votre modification — le fournisseur est toujours considéré comme la source faisant autorité. Pour les paires où vous souhaitez un contrôle manuel complet, utilisez le fournisseur MANUAL (pas de source automatique) — voir <a href="../provider/">Configuration du fournisseur</a>.</p>
 </div>
-<p>Si vous modifiez ou ajoutez manuellement un point de données pour une date qui a été synchronisée à partir d'un fournisseur, votre valeur manuelle prévaut. La prochaine synchronisation n'écrasera pas les valeurs manuelles.</p>
 <hr />
 <h2 id="importation-csv">📥 Importation CSV</h2>
 <p>Pour le chargement en masse de données historiques de taux de change, utilisez l'outil d'importation CSV.</p>
@@ -5775,13 +5803,18 @@
 </table>
 <hr />
 <h3 id="comportement-de-fusion">🔀 Comportement de fusion</h3>
-<p>Lors de l'importation, si une date existe déjà dans la base de données :</p>
+<p>Lors de l'importation CSV ou de l'ajout manuel de points dans l'éditeur :</p>
 <ul>
-<li>🔄 <strong>Les points de données existants sont remplacés</strong> par les valeurs importées</li>
-<li>🆕 <strong>Les nouvelles dates</strong> sont ajoutées</li>
-<li>✅ <strong>Les dates non présentes dans le CSV</strong> restent inchangées</li>
+<li>Les modifications sont d'abord appliquées au <strong>cache local du client</strong> (visibles immédiatement dans le graphique)</li>
+<li>Les modifications <strong>ne sont pas enregistrées</strong> dans la base de données tant que vous n'appuyez pas sur <strong>Enregistrer</strong></li>
+<li>🔄 Les <strong>points de données existants</strong> dans la base de données seront <strong>remplacés</strong> par les valeurs importées lors de l'enregistrement</li>
+<li>🆕 Les <strong>nouvelles dates</strong> sont ajoutées</li>
+<li>✅ Les <strong>dates non présentes dans l'importation</strong> restent inchangées</li>
 </ul>
-<p>Cela vous permet de mettre à jour sélectivement des plages de dates spécifiques sans affecter le reste de vos données.</p>
+<div class="admonition tip">
+<p class="admonition-title">Idéal pour les paires MANUAL</p>
+<p>L'éditeur de données est particulièrement utile pour les paires configurées avec le fournisseur MANUAL (pas de source de données automatique). Pour les paires avec fournisseur, les modifications manuelles seront écrasées lors de la prochaine synchronisation.</p>
+</div>
 
 
 

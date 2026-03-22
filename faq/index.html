@@ -690,10 +690,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#my-prices-arent-updating" class="md-nav__link">
+  <a href="#my-asset-prices-arent-updating" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📉 My prices aren't updating
+        📉 My asset prices aren't updating
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#my-fx-rates-arent-updating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💱 My FX rates aren't updating
       
     </span>
   </a>
@@ -2048,6 +2059,34 @@
     
   
     Synthetic Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5431,10 +5470,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#my-prices-arent-updating" class="md-nav__link">
+  <a href="#my-asset-prices-arent-updating" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📉 My prices aren't updating
+        📉 My asset prices aren't updating
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#my-fx-rates-arent-updating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💱 My FX rates aren't updating
       
     </span>
   </a>
@@ -5495,16 +5545,20 @@
 <p>LibreFolio is a self-hosted, open-source portfolio tracker designed for privacy-conscious investors. It allows you to track your investments, analyze performance, and maintain full
 control of your financial data.</p>
 <h3 id="is-librefolio-free">💰 Is LibreFolio free?</h3>
-<p>Yes! LibreFolio is completely free and open-source under the MIT license.</p>
+<p>Yes! LibreFolio is completely free and open-source under the <a href="https://www.gnu.org/licenses/agpl-3.0.html">AGPL-3.0 license</a>.</p>
 <h3 id="what-assets-can-i-track">📊 What assets can I track?</h3>
 <p>LibreFolio supports:</p>
 <ul>
-<li><strong>Stocks &amp; ETFs</strong> - Automatically fetched prices from yfinance</li>
-<li><strong>Cryptocurrencies</strong> - Coming soon</li>
-<li><strong>Bonds</strong> - Manual entry supported</li>
-<li><strong>P2P Lending</strong> - Scheduled-yield assets</li>
-<li><strong>Cash &amp; Deposits</strong> - Track your liquidity</li>
+<li><strong>Stocks &amp; ETFs</strong> — Automatically fetched prices via data providers (e.g., yfinance)</li>
+<li><strong>Cryptocurrencies</strong> — Coming soon</li>
+<li><strong>Bonds</strong> — Manual entry supported</li>
+<li><strong>P2P Lending</strong> — Scheduled-yield assets</li>
+<li><strong>Cash &amp; Deposits</strong> — Track your liquidity</li>
 </ul>
+<div class="admonition tip">
+<p class="admonition-title">Missing something? 💡</p>
+<p>If there's an asset class or feature you'd like to see that we haven't thought of yet, we'd love to hear from you! Open a <a href="https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement">feature request on GitHub</a> and let us know.</p>
+</div>
 <h2 id="getting-started">🚀 Getting Started</h2>
 <h3 id="how-do-i-install-librefolio">📦 How do I install LibreFolio?</h3>
 <p>See our <a href="../developer/dev-installation/">Installation Guide</a> for detailed instructions.</p>
@@ -5520,12 +5574,20 @@ control of your financial data.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>reset<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;new_password&gt;
 </code></pre></div>
 <h2 id="troubleshooting">🔧 Troubleshooting</h2>
-<h3 id="my-prices-arent-updating">📉 My prices aren't updating</h3>
+<h3 id="my-asset-prices-arent-updating">📉 My asset prices aren't updating</h3>
 <p>Check that:</p>
 <ol>
 <li>Auto-sync is enabled in Global Settings</li>
-<li>Your assets have valid ISINs or symbols</li>
-<li>The yfinance provider is working (check logs)</li>
+<li>Your assets have valid ISINs or symbols recognized by the configured <strong>data provider</strong> (e.g., <a href="https://pypi.org/project/yfinance/">yfinance</a> for stocks and ETFs)</li>
+<li>The provider's service is available (check server logs for errors)</li>
+</ol>
+<h3 id="my-fx-rates-arent-updating">💱 My FX rates aren't updating</h3>
+<p>Check that:</p>
+<ol>
+<li>The currency pair has at least one <a href="../user/fx/detail/provider/">data provider configured</a></li>
+<li>The provider's API is reachable (ECB, FED, BOE, SNB)</li>
+<li>You've run a <a href="../user/fx/sync/">sync</a> for the desired date range</li>
+<li>Check the <a href="../user/fx/detail/provider/">provider supply chain</a> for fallback options</li>
 </ol>
 <h3 id="i-cant-login">🔐 I can't login</h3>
 <ul>

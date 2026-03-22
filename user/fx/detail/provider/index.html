@@ -1981,6 +1981,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5332,14 +5360,15 @@
 </ul>
 <hr />
 <h2 id="changing-providers">🔧 Changing Providers</h2>
-<p>To change the data source for a pair:</p>
+<p>You can configure <strong>one or more</strong> data providers for each pair. Multiple providers act as a <strong>fallback chain</strong> — if the primary source fails, the system automatically tries the next one.</p>
+<p>To change or add providers:</p>
 <ol>
 <li>Open the Provider Configuration modal</li>
 <li><strong>Remove</strong> the current route if needed</li>
 <li><strong>Add a new route</strong> — the system will discover available routes (same as when <a href="../../add-pair/">adding a new pair</a>)</li>
-<li>Select the new route and <strong>confirm</strong></li>
+<li><strong>Reorder</strong> routes to set priorities (drag &amp; drop or arrow buttons)</li>
+<li>Click <strong>Save</strong> — the next sync will fetch data from the highest-priority available provider</li>
 </ol>
-<p>The next sync will fetch data from the new provider.</p>
 <hr />
 <h2 id="priority-fallback">🔢 Priority &amp; Fallback</h2>
 <p>When multiple routes are configured for a pair:</p>
