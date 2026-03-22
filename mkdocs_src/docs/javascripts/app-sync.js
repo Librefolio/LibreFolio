@@ -85,10 +85,34 @@
         }
     }
 
+    // ── Language sync ─────────────────────────────────────────────
+
+    /**
+     * Sync language from frontend app (librefolio-locale) to MkDocs (gallery-lang).
+     *
+     * The SvelteKit app stores locale in 'librefolio-locale'.
+     * The MkDocs language selector uses 'gallery-lang'.
+     * Both are on the same origin, so localStorage is shared.
+     *
+     * This sync ensures that when opening docs from the app,
+     * the MkDocs language selector picks up the correct language.
+     * The actual URL redirect is handled by site-lang-selector.js init().
+     */
+    function syncLanguage() {
+        var appLocale = localStorage.getItem('librefolio-locale');
+        if (!appLocale) return;
+
+        var currentMkdocsLang = localStorage.getItem('gallery-lang');
+        if (currentMkdocsLang !== appLocale) {
+            localStorage.setItem('gallery-lang', appLocale);
+        }
+    }
+
     // ── Run sync on page load (as early as possible) ─────────────
 
-    // Theme: sync immediately (even before DOMContentLoaded)
+    // Theme + Language: sync immediately (even before DOMContentLoaded)
     syncTheme();
+    syncLanguage();
 
     // Also sync after DOM is ready (in case body wasn't available yet)
     if (document.readyState === 'loading') {

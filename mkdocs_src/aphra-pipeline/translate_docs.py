@@ -649,6 +649,11 @@ class RateLimitError(Exception):
     pass
 
 
+class AuthError(Exception):
+    """Raised when the LLM API returns HTTP 401 (key disabled/invalid)."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Time formatting helpers
 # ---------------------------------------------------------------------------
@@ -757,12 +762,27 @@ def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RA
         try:
             return func(*args, **kwargs)
         except Exception as e:
+            # ── Auth error (401) — API key disabled/invalid, abort immediately ──
+            err_str_raw = str(e)
+            err_str = err_str_raw.lower()
+            err_type = type(e).__name__
+
+            if '401' in err_str or 'unauthorized' in err_str or 'user not found' in err_str or 'authenticationerror' in err_type.lower():
+                raise AuthError(
+                    f"{step_name}: API key invalid or disabled (HTTP 401).\n"
+                    f"       OpenRouter sometimes disables keys (especially with free models).\n"
+                    f"       To fix:\n"
+                    f"         1. Go to https://openrouter.ai/workspaces/default/keys\n"
+                    f"         2. Find your key — if disabled, click the 3 dots → Enable\n"
+                    f"         3. Re-run the same command (progress is saved in cache)"
+                ) from e
+
             # ── Rate limit (429) — pause and retry ──
             if _is_rate_limit_error(e):
                 if attempt < rate_limit_retries:
                     remaining = rate_limit_retries - attempt
                     print(f"\n       🛑 Rate limit (429). "
-                          f"Pausa {pause_s}s, poi retry ({remaining} tentativi rimasti)...",
+                          f"Pausing {pause_s}s, then retry ({remaining} attempts left)...",
                           flush=True)
                     # Countdown display
                     for sec in range(pause_s, 0, -30):
@@ -773,9 +793,9 @@ def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RA
                     continue
                 else:
                     raise RateLimitError(
-                        f"{step_name}: rate limit raggiunto (HTTP 429) dopo {rate_limit_retries} retry.\n"
-                        f"       Il progresso è salvato nel cache — le traduzioni completate non saranno rifatte.\n"
-                        f"       Riesegui lo stesso comando quando il rate limit si resetta."
+                        f"{step_name}: rate limit hit (HTTP 429) after {rate_limit_retries} retries.\n"
+                        f"       Progress is saved in cache — completed translations won't be redone.\n"
+                        f"       Re-run the same command when the rate limit resets."
                     ) from e
 
             err_type = type(e).__name__
@@ -831,7 +851,7 @@ def _robust_refine(workflow, context, source_text: str, *,
                 print(f"       🔄 Retry {attempt + 1}/{max_retries}...", flush=True)
                 continue
             return ""
-        except (ConnectionError, RateLimitError):
+        except (ConnectionError, RateLimitError, AuthError):
             raise  # Propagate up — pipeline will abort
         except Exception as e:
             print(f"\n       ❌ Refine error: {e}", file=sys.stderr)
@@ -989,7 +1009,7 @@ def _translate_one_lang(
             workflow.translate, context, source_text,
             step_name="Translate",
         )
-    except RateLimitError:
+    except (RateLimitError, AuthError):
         raise  # Propagate up — pipeline will abort
     except (TimeoutError, ConnectionError) as e:
         print(f"\n       ⏱️  {e}", file=sys.stderr)
@@ -1024,7 +1044,7 @@ def _translate_one_lang(
             workflow.critique, context, source_text, translation, glossary_with_diff,
             step_name="Critique",
         )
-    except RateLimitError:
+    except (RateLimitError, AuthError):
         raise  # Propagate up — pipeline will abort
     except TimeoutError as e:
         print(f"\n       ⏱️  {e}", file=sys.stderr)
@@ -1251,10 +1271,10 @@ def run_translate(args) -> int:
                 print(f"\n     ❌ {e}", file=sys.stderr)
                 fail_count += sum(len(v) for v in file_groups.values())  # all remaining
                 break  # Ollama is down — stop everything
-            except RateLimitError as e:
+            except (RateLimitError, AuthError) as e:
                 print(f"\n     🛑 {e}", file=sys.stderr)
                 fail_count += sum(len(v) for v in file_groups.values())
-                break  # Rate limit — stop, re-run later
+                break  # Rate limit or auth error — stop, re-run later
             except Exception as e:
                 print(f"\n     ❌ Analyze failed: {e}", file=sys.stderr)
                 fail_count += len(langs)
@@ -1295,7 +1315,7 @@ def run_translate(args) -> int:
                         models=models,
                         analysis=analysis,
                     )
-                except RateLimitError as e:
+                except (RateLimitError, AuthError) as e:
                     print(f"\n     🛑 {e}", file=sys.stderr)
                     result = {"output_path": None}
                     rate_limited = True

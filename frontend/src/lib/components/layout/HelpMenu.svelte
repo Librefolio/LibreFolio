@@ -10,7 +10,7 @@
 
     /** Build a MkDocs URL with locale prefix matching the app's current language. */
     function mkdocsUrl(path: string = ''): string {
-        const lang = localStorage.getItem('gallery-lang') || 'en';
+        const lang = localStorage.getItem('librefolio-locale') || 'en';
         const prefix = lang !== 'en' ? `${lang}/` : '';
         return `/mkdocs/${prefix}${path}`;
     }
