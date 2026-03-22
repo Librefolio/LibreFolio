@@ -108,7 +108,7 @@ Como mínimo, haz copia de seguridad de:
 3. **`broker_reports/uploaded/`** — Informes originales de broker (por si necesitas volver a procesarlos)
 
 !!! tip "Copia de seguridad solo de la base de datos"
- Si el almacenamiento es limitado, hacer copia de seguridad solo de `sqlite/app.db` preserva todos los datos estructurados. Los archivos siempre se pueden volver a subir.
+    Si el almacenamiento es limitado, hacer copia de seguridad solo de `sqlite/app.db` preserva todos los datos estructurados. Los archivos siempre se pueden volver a subir.
 
 ---
 

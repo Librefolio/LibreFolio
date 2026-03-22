@@ -28,12 +28,12 @@ Per le coppie esotiche (es. RON→JPY) in cui nessun singolo provider copre entr
 </div>
 
 !!! example "Esempio di Catena"
- **RON → JPY** tramite ECB:
+    **RON → JPY** tramite ECB:
 
- 1. RON → EUR (ECB fornisce RON/EUR)
- 2. EUR → JPY (ECB fornisce EUR/JPY)
+    1. RON → EUR (ECB fornisce RON/EUR)
+    2. EUR → JPY (ECB fornisce EUR/JPY)
 
- Il tasso finale viene calcolato moltiplicando i tassi intermedi.
+    Il tasso finale viene calcolato moltiplicando i tassi intermedi.
 
 ---
 

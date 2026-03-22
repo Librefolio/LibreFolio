@@ -38,8 +38,8 @@ The editor shows a scrollable table of all data points for this currency pair, s
 1. Click the **trash icon** next to any row
 2. Confirm the deletion
 
-!!! warning "Manual edits override synced data"
-    If you manually edit or add a data point for a date that was synced from a provider, your manual value takes precedence. The next sync will not overwrite manual entries.
+!!! warning "Synced data overwrites manual edits"
+    If you manually edit or add a data point for a date that is later covered by a sync, the provider's value will **overwrite** your manual edit — the provider is always treated as the authoritative source. For pairs where you want full manual control, use the MANUAL provider (no automatic data source) — see [Provider Config](provider.md).
 
 ---
 
@@ -146,10 +146,16 @@ This will fail if you're on the EUR/USD page — the header currencies must matc
 
 ### 🔀 Merge Behavior
 
-When importing, if a date already exists in the database:
+When importing via CSV or adding points manually in the editor:
 
-- 🔄 **Existing data points are overwritten** with the imported values
+- Changes are first applied to the **local client cache** (visible immediately in the chart)
+- Changes are **not persisted** to the database until you click **Save**
+- 🔄 **Existing data points** in the database will be **overwritten** with the imported values upon save
 - 🆕 **New dates** are added
-- ✅ **Dates not in the CSV** are left untouched
+- ✅ **Dates not in the import** are left untouched
 
 This allows you to selectively update specific date ranges without affecting the rest of your data.
+
+!!! tip "Best for MANUAL pairs"
+    The data editor is most useful for pairs configured with the MANUAL provider (no automatic data source). For provider-backed pairs, manual edits will be overwritten on the next sync.
+

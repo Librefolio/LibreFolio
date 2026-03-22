@@ -10,7 +10,7 @@ Il pannello Misure fornisce uno **strumento di misurazione da clic a clic** per 
 
 ## 🖱️ Come utilizzare
 
-1. Fai clic sul pulsante **Misure** (📐) nella barra degli strumenti del grafico
+1. Fai clic sul pulsante **Misure** (📏) nella barra degli strumenti del grafico
 2. Il pannello Misure si apre sotto il grafico
 3. **Fai clic** su un punto iniziale sul grafico — questo imposta la data e il tasso 'da'
 4. **Fai clic** su un punto finale — questo imposta la data e il tasso 'a'
@@ -31,9 +31,9 @@ Per ogni misurazione, il pannello mostra:
 | **Rendimento annualizzato** | Rendimento annuo proiettato basato sul periodo misurato | +17,8% p.a. |
 
 !!! info "📚 Rendimento annualizzato"
- Il rendimento annualizzato utilizza la formula del **Compound Annual Growth Rate (CAGR, tasso di crescita annuo composto)**. Per una spiegazione completa che includa i rendimenti logaritmici, il compounding e quando utilizzare ciascun metodo, vedere:
+    Il rendimento annualizzato utilizza la formula del **Compound Annual Growth Rate (CAGR, tasso di crescita annuo composto)**. Per una spiegazione completa che includa i rendimenti logaritmici, il compounding e quando utilizzare ciascun metodo, vedere:
 
- :material-book-open-variant: **[Rendimenti e tassi di crescita — Teoria finanziaria](../../../financial-theory/returns.md)**
+    :material-book-open-variant: **[Rendimenti e tassi di crescita — Teoria finanziaria](../../../financial-theory/returns.md)**
 
 ---
 

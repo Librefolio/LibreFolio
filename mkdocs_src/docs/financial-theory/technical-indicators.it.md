@@ -4,12 +4,12 @@ Questa pagina documenta gli indicatori di analisi tecnica disponibili come overl
 l'interpretazione **finanziaria** che i trader usano quotidianamente, e l'equivalente in **elaborazione del segnale** che ingegneri con background in sistemi di controllo o DSP riconosceranno all'istante.
 
 !!! info "Perché due prospettive?"
- I mercati finanziari **NON** sono sistemi LTI (Lineari Tempo-Invarianti) stazionari — sono
- rumorosi, caotici e il loro contenuto spettrale cambia nel tempo. Eppure gli strumenti
- matematici che usiamo per estrarre trend, momentum o volatilità sono *esattamente* gli
- stessi filtri a tempo discreto insegnati in qualsiasi corso di elaborazione del segnale.
- Se avete mai progettato un filtro Butterworth passa-basso o calcolato una varianza mobile,
- già comprendete questi indicatori — solo con nomi diversi.
+    I mercati finanziari **NON** sono sistemi LTI (Lineari Tempo-Invarianti) stazionari — sono
+    rumorosi, caotici e il loro contenuto spettrale cambia nel tempo. Eppure gli strumenti
+    matematici che usiamo per estrarre trend, momentum o volatilità sono *esattamente* gli
+    stessi filtri a tempo discreto insegnati in qualsiasi corso di elaborazione del segnale.
+    Se avete mai progettato un filtro Butterworth passa-basso o calcolato una varianza mobile,
+    già comprendete questi indicatori — solo con nomi diversi.
 
 ---
 
@@ -90,9 +90,9 @@ Quando $\alpha$ è piccola ($N$ grande) la banda passante si restringe drasticam
 tutto tranne la componente DC (il trend di lungo periodo).
 
 !!! tip "Posizione del polo"
- Il singolo polo si trova in $z = 1-\alpha$. Per $N = 200$, $\alpha \approx 0.01$, quindi
- il polo è in $z = 0.99$ — estremamente vicino al cerchio unitario, il che spiega il forte
- smorzamento e il large ritardo di gruppo.
+    Il singolo polo si trova in $z = 1-\alpha$. Per $N = 200$, $\alpha \approx 0.01$, quindi
+    il polo è in $z = 0.99$ — estremamente vicino al cerchio unitario, il che spiega il forte
+    smorzamento e il large ritardo di gruppo.
 
 :material-link: [EMA su Wikipedia](https://en.wikipedia.org/wiki/Exponential_smoothing){ target="_blank" }
 
@@ -157,9 +157,9 @@ un **filtro adattato**, ritardando leggermente il segnale per ridurre i falsi po
 rilevamento degli incroci.
 
 !!! note "Interpretazione derivata"
- Per piccoli $\alpha$, $EMA_{fast} - EMA_{slow}$ si comporta come una derivata smorzata del
- primo ordine $\frac{d}{dt}[\text{trend}]$. Quando l'istogramma cambia segno, la "velocità"
- del trend cambia direzione.
+    Per piccoli $\alpha$, $EMA_{fast} - EMA_{slow}$ si comporta come una derivata smorzata del
+    primo ordine $\frac{d}{dt}[\text{trend}]$. Quando l'istogramma cambia segno, la "velocità"
+    del trend cambia direzione.
 
 :material-link: [MACD su Wikipedia](https://en.wikipedia.org/wiki/MACD){ target="_blank" }
 
@@ -223,9 +223,9 @@ allontana dall'equilibrio, più forte è la forza di ripristino — da qui la pr
 verso la media che i trader sfruttano.
 
 !!! warning "Non-stazionarietà"
- Le soglie 70/30 assumono distribuzioni di rendimento approssimativamente simmetriche. In
- forti trend di mercato l'RSI può rimanere sopra 70 per settimane — è un indicatore
- *probabilistico*, non deterministico.
+    Le soglie 70/30 assumono distribuzioni di rendimento approssimativamente simmetriche. In
+    forti trend di mercato l'RSI può rimanere sopra 70 per settimane — è un indicatore
+    *probabilistico*, non deterministico.
 
 :material-link: [RSI su Wikipedia](https://en.wikipedia.org/wiki/Relative_strength_index){ target="_blank" }
 
@@ -286,8 +286,8 @@ a bassa entropia sono seguiti in modo affidabile da esplosioni ad alta entropia 
 — rendendo lo squeeze uno dei setup più osservati nell'analisi tecnica.
 
 !!! info "FIR vs IIR"
- A differenza dell'EMA (IIR, un polo), la SMA è un **filtro FIR** con un ritardo di gruppo
- perfettamente piatto di $(N-1)/2$ campioni. Compromette una banda di transizione più ampia
- per zero distorsione di fase — ideale per centrare l'inviluppo di confidenza.
+    A differenza dell'EMA (IIR, un polo), la SMA è un **filtro FIR** con un ritardo di gruppo
+    perfettamente piatto di $(N-1)/2$ campioni. Compromette una banda di transizione più ampia
+    per zero distorsione di fase — ideale per centrare l'inviluppo di confidenza.
 
 :material-link: [Bollinger Bands su Wikipedia](https://en.wikipedia.org/wiki/Bollinger_Bands){ target="_blank" }

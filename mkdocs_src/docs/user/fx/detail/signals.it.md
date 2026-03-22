@@ -12,14 +12,11 @@ Il pannello Segnali ti permette di sovrapporre **indicatori tecnici** sul grafic
 
 ### 📉 [EMA — Media Mobile Esponenziale](../../../financial-theory/technical-indicators.md#ema)
 
-Traccia il **trend** attenuando il rumore dei prezzi giornalieri, assegnando più peso ai valori recenti. Quando una EMA a periodo breve incrocia al rialzo una EMA a periodo lungo ("golden cross"), segnala momentum ascendente.
-
-- ⚡ **EMA Veloce**: Periodo breve (es. 12 giorni) — reagisce rapidamente ai cambiamenti di prezzo
-- 🐢 **EMA Lenta**: Periodo lungo (es. 26 giorni) — più regolare, mostra il trend sottostante
+Attenua il rumore dei tassi giornalieri per rivelare il **trend sottostante**. Nel FX, una EMA che incrocia al rialzo la linea del tasso spesso suggerisce un indebolimento della valuta base (o un rafforzamento della valuta quotata). Periodo configurabile: più breve = più reattiva, più lungo = più regolare.
 
 ### 📊 [MACD — Convergenza/Divergenza delle Medie Mobili](../../../financial-theory/technical-indicators.md#macd)
 
-Misura il **momentum** calcolando la differenza tra due EMA. Un MACD positivo significa che la EMA veloce è sopra quella lenta (rialzista), negativo significa il contrario (ribassista).
+Misura il **momentum** calcolando la differenza tra una EMA veloce e una lenta. Un MACD positivo significa che la EMA veloce è sopra quella lenta (rialzista), negativo significa il contrario (ribassista). Utile nel FX per rilevare inversioni di trend e cambiamenti di momentum.
 
 - 📈 **Linea MACD**: Differenza tra EMA veloce e lenta
 - 〰️ **Linea di Segnale**: EMA della stessa linea MACD (momentum smorzato)
@@ -43,9 +40,9 @@ Una **fascia di volatilità** attorno al prezzo. Le bande si allargano durante i
 
 1. Fai clic sul pulsante di attivazione **Segnali** (📈) nella barra degli strumenti del grafico
 2. Il pannello segnali si apre sotto il grafico
-3. Attiva/disattiva ogni indicatore **indipendentemente**
-4. I segnali sono visualizzati come sovrapposizioni direttamente sul grafico
-5. I parametri di ogni indicatore possono essere modificati in [Impostazioni Grafico](../chart-settings.md)
+3. Aggiungi indicatori dai menu a discesa categorizzati (Indicatori Tecnici, Confronto Dati, Benchmark Sintetici)
+4. I parametri di ogni indicatore possono essere regolati direttamente inline
+5. I segnali sono visualizzati come sovrapposizioni direttamente sul grafico
 
 ---
 
@@ -62,4 +59,3 @@ Questa pagina di riferimento copre:
 - ⚡ L'intuizione **"veloce vs lento"** in termini di frequenze di taglio dei filtri
 - 📈 **Esempi pratici** di identificazione degli incroci e trend
 
-## 📝 Note del Traduttore

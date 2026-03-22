@@ -377,6 +377,12 @@
             // Step 3: Clean up frontend state
             removeFxStore(deletingPair.slug);
             pairs = pairs.filter(p => p.config.slug !== deletingPair!.slug);
+
+            // Step 4: Reset currency filters if selected currency no longer exists
+            const remaining = new Set(pairs.flatMap(p => [p.config.base, p.config.quote]));
+            if (filterCurrency1 && !remaining.has(filterCurrency1)) filterCurrency1 = '';
+            if (filterCurrency2 && !remaining.has(filterCurrency2)) filterCurrency2 = '';
+
             deleteDialogOpen = false;
             deletingPair = null;
         } catch (e: any) {

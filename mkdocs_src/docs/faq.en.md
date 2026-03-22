@@ -11,17 +11,20 @@ control of your financial data.
 
 ### 💰 Is LibreFolio free?
 
-Yes! LibreFolio is completely free and open-source under the MIT license.
+Yes! LibreFolio is completely free and open-source under the [AGPL-3.0 license](https://www.gnu.org/licenses/agpl-3.0.html).
 
 ### 📊 What assets can I track?
 
 LibreFolio supports:
 
-- **Stocks & ETFs** - Automatically fetched prices from yfinance
-- **Cryptocurrencies** - Coming soon
-- **Bonds** - Manual entry supported
-- **P2P Lending** - Scheduled-yield assets
-- **Cash & Deposits** - Track your liquidity
+- **Stocks & ETFs** — Automatically fetched prices via data providers (e.g., yfinance)
+- **Cryptocurrencies** — Coming soon
+- **Bonds** — Manual entry supported
+- **P2P Lending** — Scheduled-yield assets
+- **Cash & Deposits** — Track your liquidity
+
+!!! tip "Missing something? 💡"
+    If there's an asset class or feature you'd like to see that we haven't thought of yet, we'd love to hear from you! Open a [feature request on GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement) and let us know.
 
 ## 🚀 Getting Started
 
@@ -46,13 +49,22 @@ Currently, password reset is done via CLI. Contact your instance administrator o
 
 ## 🔧 Troubleshooting
 
-### 📉 My prices aren't updating
+### 📉 My asset prices aren't updating
 
 Check that:
 
 1. Auto-sync is enabled in Global Settings
-2. Your assets have valid ISINs or symbols
-3. The yfinance provider is working (check logs)
+2. Your assets have valid ISINs or symbols recognized by the configured **data provider** (e.g., [yfinance](https://pypi.org/project/yfinance/) for stocks and ETFs)
+3. The provider's service is available (check server logs for errors)
+
+### 💱 My FX rates aren't updating
+
+Check that:
+
+1. The currency pair has at least one [data provider configured](user/fx/detail/provider.md)
+2. The provider's API is reachable (ECB, FED, BOE, SNB)
+3. You've run a [sync](user/fx/sync.md) for the desired date range
+4. Check the [provider supply chain](user/fx/detail/provider.md) for fallback options
 
 ### 🔐 I can't login
 

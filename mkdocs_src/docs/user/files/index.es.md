@@ -53,7 +53,7 @@ Para subir un archivo:
 </div>
 
 !!! consejo "Límite de Tamaño de Archivo"
- El tamaño máximo de subida está configurado por el administrador del sistema en [Configuración Global](../../admin/settings.md). El valor predeterminado suele ser de 10 MB.
+    El tamaño máximo de subida está configurado por el administrador del sistema en [Configuración Global](../../admin/settings.md). El valor predeterminado suele ser de 10 MB.
 
 ---
 
@@ -63,10 +63,14 @@ Si quieres importar transacciones desde tu broker:
 
 1. Ve a la pestaña **Informes de Broker**
 2. Sube el archivo CSV o Excel exportado de tu broker (Degiro, Interactive Brokers, eToro, Directa, etc.)
-3. El sistema intentará **detectar automáticamente** el formato del broker y **iniciar el procesamiento** de las transacciones
+3. Elige a qué **broker asociar** el archivo — es donde se guardarán las transacciones importadas
+4. El sistema intentará luego **detectar automáticamente** el formato del archivo mediante el sistema de importación BRIM y procesar las transacciones
 
-!!! nota "En desarrollo"
- La interfaz de usuario completa para importar informes de broker (BRIM) está en desarrollo activo. Actualmente, puedes subir informes e **iniciar el procesamiento**, pero el **asistente de importación paso a paso** aún no está disponible.
+!!! info "Asociación ≠ Análisis"
+    El broker elegido al subir el archivo es solo para **asociación** — determina qué cuenta de broker recibe las transacciones importadas. La detección del formato y el análisis ocurren en un paso separado y son **independientes** del broker: el mismo plugin BRIM puede funcionar para varios brokers si exportan en el mismo formato.
+
+!!! note "En desarrollo"
+    La interfaz completa para importar informes de broker (BRIM) está en desarrollo activo. Actualmente, puedes subir informes y asociarlos con brokers, pero el asistente de importación paso a paso aún no está disponible.
 
 ---
 

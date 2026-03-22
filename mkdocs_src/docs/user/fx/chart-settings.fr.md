@@ -64,4 +64,4 @@ Pour les fondements mathématiques, consultez [Indicateurs techniques](../../fin
 
 ## 💾 Persistance
 
-Les paramètres du graphique sont stockés localement dans votre navigateur et s'appliquent à toutes les paires de devises. Ils sont conservés entre les sessions.
+Les paramètres du graphique sont stockés dans le `localStorage` de votre navigateur et s'appliquent à toutes les paires de devises. Ils survivent entre les sessions — même après avoir fermé et rouvert le navigateur — et ne seront perdus que si vous videz le cache/stockage du navigateur ou si le stockage expire (selon le navigateur, généralement des mois à des années).

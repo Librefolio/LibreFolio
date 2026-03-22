@@ -63,10 +63,14 @@ If you want to import transactions from your broker:
 
 1. Go to the **Broker Reports** tab
 2. Upload the CSV or Excel file exported from your broker (Degiro, Interactive Brokers, eToro, Directa, etc.)
-3. The system will attempt to **automatically detect** the broker format and parse the transactions
+3. Choose which **broker to associate** the file with — this is where the imported transactions will be stored
+4. The system will later attempt to **automatically detect** the file format via the BRIM import system and parse the transactions
+
+!!! info "Association ≠ Parsing"
+    The broker you choose when uploading is for **association** only — it determines which broker account receives the imported transactions. The format detection and parsing happen in a separate step and are **independent** of the broker: the same BRIM plugin can work for multiple brokers if they export in the same format.
 
 !!! note "Work in Progress"
-    The full broker report import UI (BRIM) is under active development. Currently, you can upload reports and trigger parsing, but the guided import wizard is not yet available.
+    The full broker report import UI (BRIM) is under active development. Currently, you can upload reports and associate them with brokers, but the guided import wizard is not yet available.
 
 ---
 

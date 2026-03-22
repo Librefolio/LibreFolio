@@ -93,6 +93,14 @@ Your profile, avatar, and account settings on mobile.
     <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab">
 </div>
 
+### ✏️ Broker Edit
+
+Edit broker details — name, icon, base currency, and configuration.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Broker Edit Modal">
+</div>
+
 ---
 
 ## 📁 Files

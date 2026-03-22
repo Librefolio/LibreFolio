@@ -108,7 +108,7 @@ Come minimo, fare il backup di:
 3. **`broker_reports/uploaded/`** — Report broker originali (nel caso sia necessario rielaborarli)
 
 !!! consiglio "Backup solo del database"
- Se lo spazio di archiviazione è limitato, fare il backup solo di `sqlite/app.db` preserva tutti i dati strutturati. I file possono sempre essere ricaricati.
+    Se lo spazio di archiviazione è limitato, fare il backup solo di `sqlite/app.db` preserva tutti i dati strutturati. I file possono sempre essere ricaricati.
 
 ---
 

@@ -67,7 +67,7 @@ Prima di confermare, puoi regolare:
 - 📐 **Dimensione del file risultante**: Larghezza e altezza in pixel (collegata alla configurazione predefinita, ma modificabile)
 
 !!! tip "Anteprima Ellisse"
- Per le configurazioni **Avatar** e **Icona Broker**, viene mostrata una **sovrapposizione ellittica** circolare sull'area di ritaglio. Questo ti aiuta a vedere un'anteprima di come l'immagine apparirà in una cornice circolare (es. avatar utente nella barra di navigazione).
+    Per le configurazioni **Avatar** e **Icona Broker**, viene mostrata una **sovrapposizione ellittica** circolare sull'area di ritaglio. Questo ti aiuta a vedere un'anteprima di come l'immagine apparirà in una cornice circolare (es. avatar utente nella barra di navigazione).
 
 ---
 
@@ -81,4 +81,4 @@ Prima di confermare, puoi regolare:
 6. Clicca **Annulla** o chiudi il modale per scartare le modifiche
 
 !!! info "File non immagine"
- Se carichi un file non immagine (PDF, CSV, ecc.), il modale di ritaglio viene saltato. Al suo posto appare una semplice finestra di dialogo per la ridenominazione.
+    Se carichi un file non immagine (PDF, CSV, ecc.), il modale di ritaglio viene saltato. Al suo posto appare una semplice finestra di dialogo per la ridenominazione.

@@ -26,30 +26,33 @@ La modale mostra:
 
 ## 🔧 Cambiare i provider
 
-Per modificare la fonte di dati di una coppia:
+Puoi configurare **uno o più** provider di dati per ogni coppia. Più provider fungono da **catena di fallback** — se la fonte primaria fallisce, il sistema prova automaticamente la successiva.
+
+Per modificare o aggiungere provider:
 
 1. Apri la modale di configurazione del provider
 2. **Rimuovi** il percorso corrente se necessario
 3. **Aggiungi un nuovo percorso** — il sistema scoprirà i percorsi disponibili utilizzando lo stesso processo di [aggiunta di una nuova coppia](../add-pair.md)
-4. Seleziona il nuovo percorso e **conferma**
-
-La successiva sincronizzazione preleverà i dati dal nuovo provider.
+4. **Riordina** i percorsi per impostare le priorità (trascinamento o pulsanti freccia)
+5. Clicca **Salva** — la prossima sincronizzazione preleverà i dati dal provider disponibile con la priorità più alta
 
 ---
 
-## 🔢 Priorità & fallbackQuando sono configurati più percorsi per una coppia:
+## 🔢 Priorità & Fallback
+
+Quando sono configurati più percorsi per una coppia:
 
 - I percorsi vengono provati **in ordine di priorità** (il primo = massima priorità)
 - Se il provider principale fallisce (timeout, errore API), il sistema **esegue il fallback** automaticamente al percorso successivo
 - Puoi **riordinare** i percorsi per cambiare le priorità
 
 !!! example "Esempio di fallback"
- EUR/USD configurato con:
+    EUR/USD configurato con:
 
- 1. **BCE** (primario) — Banca Centrale Europea
- 2. **FED** (fallback) — Federal Reserve
+    1. **BCE** (primario) — Banca Centrale Europea
+    2. **FED** (fallback) — Federal Reserve
 
- Se l'API della BCE è irraggiungibile durante la sincronizzazione, il sistema utilizza automaticamente la FED.
+    Se l'API della BCE è irraggiungibile durante la sincronizzazione, il sistema utilizza automaticamente la FED.
 
 ---
 
@@ -60,4 +63,4 @@ La successiva sincronizzazione preleverà i dati dal nuovo provider.
 - 📋 **[Elenco dei provider FX](../../../developer/backend/fx/providers_list.md)** — Dettagli tecnici su ogni provider (BCE, FED, BOE, SNB)
 
 !!! tip "🔗 Come vengono calcolati i percorsi a catena"
- Per l'algoritmo matematico dietro le catene di conversione multi‑salto, vedi [Algoritmo della catena FX](../../../developer/frontend/fx-chain-algorithm.md).
+    Per l'algoritmo matematico dietro le catene di conversione multi‑salto, vedi [Algoritmo della catena FX](../../../developer/frontend/fx-chain-algorithm.md).

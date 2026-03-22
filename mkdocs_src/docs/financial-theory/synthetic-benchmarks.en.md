@@ -18,9 +18,25 @@ They are invaluable for:
 ### 💡 Financial Meaning
 
 A linear growth benchmark represents **simple interest** — the value increases by a
-fixed absolute amount each period. It is the simplest "target line" you can draw: if you
-expect an asset to return $r$% per year, the linear benchmark shows where the price
-*should* be at any point in time under that assumption.
+fixed absolute amount each period. This models the scenario where you **do not reinvest**
+earnings (dividends, interest, coupons): cash payouts are received but kept aside, so
+only the original principal generates returns.
+
+If instead you **reinvest** those earnings — either manually or automatically through
+accumulating instruments (e.g., accumulating ETFs, which reinvest dividends internally
+and benefit from [tax deferral](taxation.md#tax-deferral-advantage)) — you should
+expect **[compound growth](#compound-growth)**, where returns generate further returns.
+
+In practice, the difference between linear and compound growth widens dramatically
+over long horizons. This is why the Linear benchmark appears as a straight line while
+the Compound benchmark curves upward exponentially.
+
+!!! abstract "Capital gains & losses"
+    When selling an asset above its purchase price, the difference is a **capital gain**;
+    below, a **capital loss**. Each jurisdiction has its own rules regarding tax rates,
+    holding period thresholds, loss carry-forward duration, and matching methods
+    (FIFO, LIFO, specific identification). For a theoretical overview, see
+    [Taxation & Tax Efficiency](taxation.md).
 
 ### 🔢 Mathematical Formula
 

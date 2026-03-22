@@ -36,7 +36,7 @@ Toutes les transactions, rapports et données importées sont associés à un co
 | **Afficher les transactions** | Lister, filtrer et gérer les opérations importées | 🔜 Bientôt disponible |
 
 !!! note "En cours de développement"
- La page de détail du courtier et l'interface de gestion des transactions sont en cours de développement. Actuellement, vous pouvez créer des courtiers, téléverser des rapports et partager l'accès. L'importation et la visualisation complètes des transactions seront ajoutées dans les phases à venir.
+    La page de détail du courtier et l'interface de gestion des transactions sont en cours de développement. Actuellement, vous pouvez créer des courtiers, téléverser des rapports et partager l'accès. L'importation et la visualisation complètes des transactions seront ajoutées dans les phases à venir.
 
 ---
 

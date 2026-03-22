@@ -46,4 +46,3 @@ de este documento de licencia, pero no se permite cambiarlo.
 (Véase el repositorio para el texto completo)
 ```
 
-**Notas del traductor**:

@@ -13,9 +13,9 @@ R_{semplice} = \frac{P_{fine} - P_{inizio}}{P_{inizio}} = \frac{P_{fine}}{P_{ini
 $$
 
 !!! esempio
- Se EUR/USD si muove da 1.10 a 1.14:
+    Se EUR/USD si muove da 1.10 a 1.14:
 
- $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
+    $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
 
 ### 📊 Proprietà
 
@@ -71,9 +71,9 @@ $$
 Questo è ciò che lo strumento [Misurazioni](../user/fx/detail/measures.md) di LibreFolio visualizza.
 
 !!! esempio
- EUR/USD si muove da 1.10 a 1.14 in 90 giorni:
+    EUR/USD si muove da 1.10 a 1.14 in 90 giorni:
 
- $$R_{annuale} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
+    $$R_{annuale} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
 
 ### 📐 Rendimento Logaritmico Annualizzato
 
@@ -99,8 +99,8 @@ Questa linearità è uno dei principali vantaggi dei rendimenti logaritmici nell
 | **Interpretazione** | "Ho guadagnato il 5%" | "Il tasso di crescita logaritmica era 0.0488" |
 
 !!! tip "Quando usare l'uno o l'altro?"
- - **Rendimenti semplici** per la reportistica agli utenti e il calcolo dei rendimenti a livello di portafoglio
- - **Rendimenti logaritmici** per l'analisi statistica, la stima della volatilità e i modelli di serie temporali
+    - **Rendimenti semplici** per la reportistica agli utenti e il calcolo dei rendimenti a livello di portafoglio
+    - **Rendimenti logaritmici** per l'analisi statistica, la stima della volatilità e i modelli di serie temporali
 
 ---
 

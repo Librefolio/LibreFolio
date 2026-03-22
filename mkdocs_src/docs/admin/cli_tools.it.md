@@ -3,7 +3,7 @@
 LibreFolio fornisce lo script `dev.py` per le attività di amministrazione. Questa pagina illustra i comandi più rilevanti per gli **amministratori di sistema**.
 
 !!! info "👩‍💻 Per Sviluppatori"
- Per i comandi specifici per lo sviluppo (build frontend, test runner, sincronizzazione API, audit i18n), consultare la [Guida all'Installazione per Sviluppatori](../developer/dev-installation.md).
+    Per i comandi specifici per lo sviluppo (build frontend, test runner, sincronizzazione API, audit i18n), consultare la [Guida all'Installazione per Sviluppatori](../developer/dev-installation.md).
 
 ---
 
@@ -33,7 +33,7 @@ Installa tutte le dipendenze del progetto (Python e Node.js):
 ```
 
 !!! tip "Multi-worker"
- In produzione, utilizza `--workers` per eseguire più worker Uvicorn. Questo migliora la produttività ed è raccomandato per qualsiasi distribuzione con più di un core CPU.
+    In produzione, utilizza `--workers` per eseguire più worker Uvicorn. Questo migliora la produttività ed è raccomandato per qualsiasi distribuzione con più di un core CPU.
 
 ---
 
@@ -68,7 +68,7 @@ La gestione degli utenti si effettua tramite i sottocomandi `./dev.py user`:
 ./dev.py user init-settings
 ```
 
-Popola il database con le Impostazioni Globali predefinite, se non esistono già.
+Popola il database con le [Impostazioni Globali](settings.md) predefinite, se non esistono già.
 
 ### 🗄️ Migrazioni del Database
 
@@ -78,7 +78,7 @@ Popola il database con le Impostazioni Globali predefinite, se non esistono già
 ```
 
 !!! warning "🗄️ Reset del Database"
- `./dev.py db create-clean` ricrea il database da zero — **TUTTI i dati andranno persi**. Utilizzare solo se è necessario ricominciare da zero.
+    `./dev.py db create-clean` ricrea il database da zero — **TUTTI i dati andranno persi**. Utilizzare solo se è necessario ricominciare da zero.
 
 ---
 
@@ -103,9 +103,9 @@ Per un elenco completo di tutti i comandi disponibili:
 ```
 
 !!! info "👩‍💻 Comandi per Sviluppatori"
- Comandi aggiuntivi per i flussi di lavoro di sviluppo:
+    Comandi aggiuntivi per i flussi di lavoro di sviluppo:
 
- - **Frontend**: `./dev.py front build`, `front dev`, `front check` — consultare [Sviluppo Frontend](../developer/frontend/index.md)
- - **Test**: `./dev.py test all` — consultare [Guida ai Test](../developer/test-walkthrough/index.md)
- - **Client API**: `./dev.py api sync` — consultare [Panoramica API](../developer/api/overview.md)
- - **i18n audit**: consultare [Internazionalizzazione](../developer/frontend/i18n.md)
+    - **Frontend**: `./dev.py front build`, `front dev`, `front check` — consultare [Sviluppo Frontend](../developer/frontend/index.md)
+    - **Test**: `./dev.py test all` — consultare [Guida ai Test](../developer/test-walkthrough/index.md)
+    - **Client API**: `./dev.py api sync` — consultare [Panoramica API](../developer/api/overview.md)
+    - **i18n audit**: consultare [Internazionalizzazione](../developer/frontend/i18n.md)

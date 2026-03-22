@@ -67,7 +67,7 @@ Antes de confirmar, puedes ajustar:
 - 📐 **Tamaño de salida**: Ancho y alto en píxeles (asociado al predefinido, pero editable)
 
 !!! tip "Vista previa circular"
- Para los predefinidos de avatar e icono, se muestra una **superposición circular** en el área de recorte. Esto te ayuda a previsualizar cómo se verá la imagen en un marco circular (p. ej., avatares de usuario en la barra de navegación).
+    Para los predefinidos de avatar e icono, se muestra una **superposición circular** en el área de recorte. Esto te ayuda a previsualizar cómo se verá la imagen en un marco circular (p. ej., avatares de usuario en la barra de navegación).
 
 ---
 
@@ -81,4 +81,4 @@ Antes de confirmar, puedes ajustar:
 6. Haz clic en **Cancelar** o cierra la ventana modal para descartar los cambios
 
 !!! info "Archivos que no son imágenes"
- Si subes un archivo que no es una imagen (PDF, CSV, etc.), se omite la ventana modal de recorte. En su lugar, aparece un simple cuadro de diálogo para renombrar.
+    Si subes un archivo que no es una imagen (PDF, CSV, etc.), se omite la ventana modal de recorte. En su lugar, aparece un simple cuadro de diálogo para renombrar.

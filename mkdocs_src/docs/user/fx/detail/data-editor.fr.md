@@ -38,8 +38,8 @@ L'éditeur affiche un tableau déroulant de tous les points de données pour cet
 1. Cliquez sur l'**icône corbeille** à côté de n'importe quelle ligne
 2. Confirmez la suppression
 
-!!! avertissement "Les modifications manuelles remplacent les données synchronisées"
- Si vous modifiez ou ajoutez manuellement un point de données pour une date qui a été synchronisée à partir d'un fournisseur, votre valeur manuelle prévaut. La prochaine synchronisation n'écrasera pas les valeurs manuelles.
+!!! avertissement "Les données synchronisées écrasent les modifications manuelles"
+    Si vous modifiez manuellement un point de données pour une date ensuite couverte par une synchronisation, la valeur du fournisseur **écrasera** votre modification — le fournisseur est toujours considéré comme la source faisant autorité. Pour les paires où vous souhaitez un contrôle manuel complet, utilisez le fournisseur MANUAL (pas de source automatique) — voir [Configuration du fournisseur](provider.md).
 
 ---
 
@@ -143,10 +143,13 @@ Cela échouera si vous êtes sur la page EUR/USD — les devises de l'en-tête d
 
 ### 🔀 Comportement de fusion
 
-Lors de l'importation, si une date existe déjà dans la base de données :
+Lors de l'importation CSV ou de l'ajout manuel de points dans l'éditeur :
 
-- 🔄 **Les points de données existants sont remplacés** par les valeurs importées
-- 🆕 **Les nouvelles dates** sont ajoutées
-- ✅ **Les dates non présentes dans le CSV** restent inchangées
+- Les modifications sont d'abord appliquées au **cache local du client** (visibles immédiatement dans le graphique)
+- Les modifications **ne sont pas enregistrées** dans la base de données tant que vous n'appuyez pas sur **Enregistrer**
+- 🔄 Les **points de données existants** dans la base de données seront **remplacés** par les valeurs importées lors de l'enregistrement
+- 🆕 Les **nouvelles dates** sont ajoutées
+- ✅ Les **dates non présentes dans l'importation** restent inchangées
 
-Cela vous permet de mettre à jour sélectivement des plages de dates spécifiques sans affecter le reste de vos données.
+!!! tip "Idéal pour les paires MANUAL"
+    L'éditeur de données est particulièrement utile pour les paires configurées avec le fournisseur MANUAL (pas de source de données automatique). Pour les paires avec fournisseur, les modifications manuelles seront écrasées lors de la prochaine synchronisation.

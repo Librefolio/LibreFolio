@@ -7,9 +7,9 @@ Una **Convenzione sul Conteggio dei Giorni** determina come gli interessi matura
 
 ## 🔧 Utilizzo in LibreFolio
 
-Le convenzioni sul conteggio dei giorni vengono utilizzate dal modulo **Scheduled Investment**[^3] 
+Le convenzioni sul conteggio dei giorni vengono utilizzate dal modulo **Scheduled Investment** 
 (`backend/app/services/asset_source_providers/scheduled_investment.py`) per 
-il calcolo del rendimento sintetico[^1]. La funzione `calculate_day_count_fraction()` in 
+il calcolo del rendimento sintetico. La funzione `calculate_day_count_fraction()` in 
 `backend/app/utils/financial_math.py` implementa tutte e quattro le convenzioni e restituisce una 
 **frazione temporale** `Decimal` utilizzata nei calcoli di maturazione degli interessi.
 
@@ -31,26 +31,23 @@ La convenzione predefinita è **ACT/365**.
 
 ## 📐 30/360 (Bond Basis)
 
-- **Giorni**: Calcolati assumendo che ogni mese abbia 30 giorni[^2].
+- **Giorni**: Calcolati assumendo che ogni mese abbia 30 giorni.
 - **Anno**: Assunto di 360 giorni.
-- **Formula**: $t = \frac{360(Y_2 - Y_1) + 30(M_2 - M_1) + (D_2 - D_1)}{360}$[^2]
+- **Formula**: $t = \frac{360(Y_2 - Y_1) + 30(M_2 - M_1) + (D_2 - D_1)}{360}$
 - **Utilizzo**: Standard per le obbligazioni societarie statunitensi e molte obbligazioni municipali.
 
 ## 📅 ACT/ACT (Actual/Actual)
 
 - **Giorni**: Il numero effettivo di giorni tra due date.
-- **Anno**: Il numero effettivo di giorni nell'anno (365 o 366 negli anni bisestili)[^4].
-- **Formula**: $t = \frac{\text{giorni effettivi}}{365 \text{ o } 366}$[^4]
-- **Utilizzo**: Standard per le **obbligazioni del Tesoro USA**[^4]. Gestisce correttamente gli anni bisestili calcolando la frazione per ciascun anno separatamente.
+- **Anno**: Il numero effettivo di giorni nell'anno (365 o 366 negli anni bisestili).
+- **Formula**: $t = \frac{\text{giorni effettivi}}{365 \text{ o } 366}$
+- **Utilizzo**: Standard per le **obbligazioni del Tesoro USA**. Gestisce correttamente gli anni bisestili calcolando la frazione per ciascun anno separatamente.
 
 !!! info "Perché questo è importante?"
- La differenza tra le convenzioni può essere significativa per capitali elevati o durate 
- lunghe. Ad esempio, 30 giorni su un prestito di €1.000.000 al 5%: ACT/365 dà €4.109,59 di 
- interessi, mentre ACT/360 dà €4.166,67 — una differenza di €57 dallo stesso periodo di 30 giorni.
+    La differenza tra le convenzioni può essere significativa per capitali elevati o durate 
+    lunghe. Ad esempio, 30 giorni su un prestito di €1.000.000 al 5%: ACT/365 dà €4.109,59 di 
+    interessi, mentre ACT/360 dà €4.166,67 — una differenza di €57 dallo stesso periodo di 30 giorni.
 
 :material-link: [Convenzione sul Conteggio dei Giorni su Wikipedia](https://en.wikipedia.org/wiki/Day_count_convention){ target="_blank" }
 
-[^3]: **Nota del traduttore**: L'espressione inglese *asset source provider* si riferisce a un modulo/componente software del backend che fornisce dati sugli asset. Qui è stato tradotto come "modulo" per renderedlo più idiomatico in italiano.
-[^1]: **Nota del traduttore**: *Synthetic yield* indica il rendimento calcolato sulla base dei flussi di cassa programmati (scheduled), non su prezzi di mercato osservati. La traduzione "rendimento sintetico" è tecnicamente corretta ma poco comune; qui si preferisce mantenerla accompagnata da questa spiegazione.
-[^2]: **Nota del traduttore**: Nella formula, $Y$ = anno, $M$ = mese, $D$ = giorno delle due date confrontate. La formula assume mesi di 30 giorni, quindi le differenze di mesi e giorni vengono moltiplicate per 30.
 [^4]: **Nota del traduttore**: La variante ACT/ACT descritta è quella standard per i Treasury bond USA. Esiste anche la variante ICMA (usata in Europa) che tratta diversamente i periodi che attraversano anni bisestili. Qui "obbligazioni del Tesoro USA" è la traduzione corretta per *US Treasury bonds* (non "buoni", che sono T-bills a breve termine). La formula gestisce gli anni bisestili suddividendo il calcolo per anno solare.

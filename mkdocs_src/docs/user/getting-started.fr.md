@@ -23,7 +23,7 @@ Remplissez vos informations :
 </div>
 
 !!! info "Premier utilisateur = Administrateur"
- Le tout premier utilisateur à s'inscrire devient automatiquement l'**administrateur système** (superutilisateur). Cet utilisateur peut gérer les paramètres globaux, promouvoir d'autres utilisateurs et accéder à toutes les fonctionnalités d'administration.
+    Le tout premier utilisateur à s'inscrire devient automatiquement l'**administrateur système** (superutilisateur). Cet utilisateur peut gérer les paramètres globaux, promouvoir d'autres utilisateurs et accéder à toutes les fonctionnalités d'administration.
 
 ---
 
@@ -42,7 +42,7 @@ Après l'inscription, vous serez redirigé vers la page de connexion. Entrez vos
 Dans LibreFolio, un **courtier** correspond à un compte de courtage — l'endroit où se trouvent vos investissements (par exemple, Interactive Brokers, Degiro, un compte bancaire, etc.).
 
 !!! note "Pourquoi ai-je besoin d'un courtier ?"
- Toutes les transactions dans LibreFolio sont liées à un courtier. C'est le conteneur qui regroupe vos transactions, fichiers importés et rapports. Vous avez besoin d'au moins un courtier avant de pouvoir commencer à suivre quoi que ce soit.
+    Toutes les transactions dans LibreFolio sont liées à un courtier. C'est le conteneur qui regroupe vos transactions, fichiers importés et rapports. Vous avez besoin d'au moins un courtier avant de pouvoir commencer à suivre quoi que ce soit.
 
 ### 📋 Étapes
 
@@ -75,4 +75,4 @@ Maintenant que vous avez un compte et un courtier, vous pouvez :
 - ⚙️ **[Personnaliser les paramètres](../admin/settings.md)** — Ajuster la langue, le thème et les préférences système
 
 !!! astuce "Calculs de portefeuille"
- Les courtiers sont également utilisés pour les calculs d'agrégation de portefeuille. Lorsque vous partagez un courtier avec un autre utilisateur et définissez un **pourcentage de partage**, le système peut calculer la part de chaque utilisateur dans la valeur totale du portefeuille. Cette fonctionnalité est **actuellement en développement**.
+    Les courtiers sont également utilisés pour les calculs d'agrégation de portefeuille. Lorsque vous partagez un courtier avec un autre utilisateur et définissez un **pourcentage de partage**, le système peut calculer la part de chaque utilisateur dans la valeur totale du portefeuille. Cette fonctionnalité est **actuellement en développement**.

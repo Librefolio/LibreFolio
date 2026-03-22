@@ -14,7 +14,14 @@ Son herramientas muy útiles para:
 
 ### 💡 Significado Financiero
 
-Una referencia de crecimiento lineal representa **interés simple** — el valor aumenta en una cantidad absoluta fija cada período. Es la 'línea objetivo' más simple que **se puede** trazar: si esperas que un activo rinda $r$% anual, la referencia lineal muestra dónde *debería* estar el precio en cualquier momento bajo ese supuesto.
+Una referencia de crecimiento lineal representa **interés simple** — el valor aumenta en una cantidad absoluta fija cada período. Esto modela el escenario donde **no reinviertes** las ganancias (dividendos, intereses, cupones): los pagos en efectivo se reciben pero se apartan, por lo que solo el capital original genera rendimientos.
+
+Si en cambio **reinviertes** esas ganancias — manualmente o automáticamente a través de instrumentos de acumulación (ej. ETFs de acumulación, que reinvierten dividendos internamente y se benefician del [diferimiento fiscal](taxation.md#tax-deferral-advantage)) — deberías esperar un **[crecimiento compuesto](#compound-growth)**, donde los rendimientos generan a su vez más rendimientos.
+
+En la práctica, la diferencia entre crecimiento lineal y compuesto se amplía drásticamente en horizontes largos. Por eso la referencia Lineal aparece como una línea recta mientras que la referencia Compuesta curva hacia arriba exponencialmente.
+
+!!! abstract "Ganancias y pérdidas de capital"
+    Cuando se vende un activo por encima de su precio de compra, la diferencia es una **ganancia de capital**; por debajo, una **pérdida de capital**. Cada jurisdicción tiene sus propias reglas respecto a tipos impositivos, umbrales de período de tenencia, duración de la compensación de pérdidas y métodos de asignación (FIFO, LIFO, identificación específica). Para una visión general teórica, ver [Fiscalidad & Eficiencia Fiscal](taxation.md).
 
 ### 🔢 Fórmula Matemática
 
@@ -96,7 +103,7 @@ $$
 Esto es matemáticamente equivalente a la forma cerrada $y_0(1+r)^t$ pero reemplaza $N$ operaciones de potencia costosas por $N$ multiplicaciones simples — el mismo principio **que utilizan** los bancos para devengar intereses compuestos diarios.
 
 !!! tip "Regla del 72"
- Un atajo mental rápido: una inversión que crece al $r$% anual se duplicará aproximadamente en $72 / r$ años. Al 7% → ~10.3 años.
+    Un atajo mental rápido: una inversión que crece al $r$% anual se duplicará aproximadamente en $72 / r$ años. Al 7% → ~10.3 años.
 
 ### ⚙️ Parámetros
 
@@ -150,5 +157,3 @@ Si el precio real sigue aproximadamente la referencia senoidal, el mercado **pre
 
 :material-link: [Onda Senoidal en Wikipedia](https://en.wikipedia.org/wiki/Sine_wave){ target="_blank" }
 
----
-**Notas del Traductor**

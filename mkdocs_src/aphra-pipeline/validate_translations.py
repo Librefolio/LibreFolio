@@ -297,12 +297,15 @@ def check_artifacts(
     issues = []
     lines = translated.splitlines()
 
-    # Translator notes section
+    # Translator notes section (heading variants)
     translator_notes_patterns = [
         r"###?\s*Note?\s+(?:del|du)\s+Trad",
         r"###?\s*Translator['\u2019]?s?\s+Notes?",
         r"###?\s*Notas?\s+del?\s+Trad",
         r"###?\s*Notes?\s+(?:de\s+)?traduction",
+        # Emoji variant: ## 📖 Notes du Traducteur
+        r"##\s+\S+\s+Note?\s+(?:del|du)\s+Trad",
+        r"##\s+\S+\s+Notas?\s+del?\s+Trad",
     ]
     for i, line in enumerate(lines, 1):
         for pattern in translator_notes_patterns:
@@ -315,6 +318,32 @@ def check_artifacts(
                     message=f"Translator notes artifact found: '{line.strip()}'",
                 ))
                 break
+
+    # Bold translator notes: **Notas del Traductor**, **Notes du traducteur**
+    _notes_kw = (
+        r"(?:Notas?\s+del?\s+Trad\w+|Notes?\s+du\s+Trad\w+|"
+        r"Note?\s+del\s+Trad\w+|Translator['\u2019]?s?\s+Notes?)"
+    )
+    bold_notes = re.findall(rf'\*\*{_notes_kw}\*\*', translated, re.IGNORECASE)
+    if bold_notes:
+        issues.append(Issue(
+            severity=Severity.ERROR,
+            file=cache_key, lang=lang,
+            check="artifact-translator-notes-bold",
+            message=f"Translator notes in bold format: {bold_notes[0]}",
+        ))
+
+    # HTML translator notes: <h2>Notas del Traductor</h2>
+    html_notes = re.findall(
+        rf'<h[1-6]>\s*{_notes_kw}\s*</h[1-6]>', translated, re.IGNORECASE,
+    )
+    if html_notes:
+        issues.append(Issue(
+            severity=Severity.ERROR,
+            file=cache_key, lang=lang,
+            check="artifact-translator-notes-html",
+            message=f"Translator notes in HTML heading: {html_notes[0]}",
+        ))
 
     # <translation> tags
     if re.search(r'</?translation>', translated):
@@ -346,6 +375,116 @@ def check_artifacts(
                 line=i,
                 message=f"Glossary definition line: '{line.strip()[:60]}'",
             ))
+
+    # Footnote definitions [^N]: (translator notes disguised as footnotes)
+    footnote_defs = re.findall(r'^\[\^\d+\]:.*$', translated, re.MULTILINE)
+    if footnote_defs:
+        issues.append(Issue(
+            severity=Severity.WARN,
+            file=cache_key, lang=lang,
+            check="artifact-footnote-defs",
+            message=f"Footnote definitions found ({len(footnote_defs)}): "
+                    f"likely translator notes in footnote format",
+        ))
+
+    # Inline footnote references [^N]
+    footnote_refs = re.findall(r'\[\^\d+\]', translated)
+    if footnote_refs:
+        issues.append(Issue(
+            severity=Severity.WARN,
+            file=cache_key, lang=lang,
+            check="artifact-footnote-refs",
+            message=f"Inline footnote refs found ({len(footnote_refs)}): "
+                    f"{', '.join(footnote_refs[:5])}",
+        ))
+
+    return issues
+
+
+def check_admonition_indent(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Check that admonition content lines are properly indented (4 spaces).
+    Translation LLMs often strip the leading spaces from admonition bodies.
+    Also checks title preservation and body presence.
+    """
+    issues = []
+    lines = translated.splitlines()
+    src_lines = source.splitlines()
+
+    # ── 1. Indentation check ──
+    for i, line in enumerate(lines):
+        if re.match(r'^!!! \w+', line) or re.match(r'^\?\?\? \w+', line):
+            # Check next non-empty line for proper indentation
+            for j in range(i + 1, min(i + 5, len(lines))):
+                next_line = lines[j]
+                if next_line.strip() == '':
+                    continue
+                if (next_line.startswith('    ')
+                        or next_line.startswith('!!! ')
+                        or next_line.startswith('??? ')
+                        or next_line.startswith('---')):
+                    break  # Properly indented or new block
+                if next_line.strip():
+                    issues.append(Issue(
+                        severity=Severity.ERROR,
+                        file=cache_key, lang=lang,
+                        check="admonition-indent",
+                        line=j + 1,
+                        message=f"Admonition content not indented (needs 4 spaces): "
+                                f"'{next_line.strip()[:50]}'",
+                    ))
+                    break
+
+    # ── 2. Title preservation ──
+    _adm_title_re = re.compile(r'^(?:!!!|[?]{3})\s+\w+\s+"([^"]*)"')
+    src_titles = _adm_title_re.findall(source)
+    tr_titles = _adm_title_re.findall(translated)
+
+    if len(src_titles) != len(tr_titles):
+        issues.append(Issue(
+            severity=Severity.WARN,
+            file=cache_key, lang=lang,
+            check="admonition-title-count",
+            message=f"Admonition titles: source {len(src_titles)}, "
+                    f"translation {len(tr_titles)}",
+        ))
+
+    for idx, (src_t, tr_t) in enumerate(zip(src_titles, tr_titles)):
+        if src_t.strip() and not tr_t.strip():
+            issues.append(Issue(
+                severity=Severity.ERROR,
+                file=cache_key, lang=lang,
+                check="admonition-title-empty",
+                message=f"Admonition #{idx + 1}: title lost "
+                        f"(source: \"{src_t}\")",
+            ))
+
+    # ── 3. Body presence ──
+    for i, line in enumerate(lines):
+        if re.match(r'^(?:!!!|[?]{3})\s+\w+', line):
+            has_body = False
+            for j in range(i + 1, min(i + 10, len(lines))):
+                next_line = lines[j]
+                if next_line.startswith('    ') and next_line.strip():
+                    has_body = True
+                    break
+                # Non-indented non-empty content = body is outside the box
+                if (next_line.strip()
+                        and not next_line.startswith('    ')
+                        and not re.match(r'^(?:!!!|[?]{3})\s+', next_line)
+                        and next_line.strip() != '---'):
+                    break
+            if not has_body:
+                issues.append(Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key, lang=lang,
+                    check="admonition-body-missing",
+                    line=i + 1,
+                    message=f"Admonition has no indented body content: "
+                            f"'{line.strip()[:60]}'",
+                ))
 
     return issues
 
@@ -651,6 +790,7 @@ ALL_CHECKS = [
     ("latex", check_latex, True),
     ("file-size", check_file_size, True),
     ("artifacts", check_artifacts, False),                  # only needs translated
+    ("admonition-indent", check_admonition_indent, False),  # only needs translated
 ]
 
 
