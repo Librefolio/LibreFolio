@@ -30,13 +30,18 @@ Puoi anche sincronizzare una singola coppia dalla sua [pagina dei dettagli](deta
 
 Il processo di sincronizzazione:
 
-1. Recupera i tassi dall'API del fornitore selezionato (BCE, FED, BOE, SNB, ecc.)
-2. Memorizza i nuovi dati nel database locale
-3. Ignora le date già esistenti (nessun duplicato)
-4. Se il fornitore primario fallisce, il sistema passa automaticamente al fornitore di ripiego
+1. Recupera i tassi dall'API del provider configurato (BCE, FED, BOE, SNB, ecc.)
+2. **Sovrascrive** i dati esistenti nell'intervallo di date scaricato con i valori del provider — il provider è considerato la fonte autorevole
+3. Aggiunge nuovi punti per le date non ancora presenti nel database
+4. Se il provider primario fallisce, il sistema passa automaticamente al provider di ripiego
 
-!!! tip "Nessun dato duplicato"
- Risincronizzare una coppia è sempre sicuro — i dati esistenti non vengono mai sovrascritti o duplicati.
+Dopo la sincronizzazione, vengono mostrati il numero di **punti scaricati** e quanti erano **effettivamente nuovi** (non già presenti nel database).
+
+!!! warning "Il provider è autorevole"
+    Risincronizzare una coppia sovrascriverà qualsiasi valore modificato manualmente nell'intervallo sincronizzato. Se desideri preservare le modifiche manuali, configura la coppia con il provider MANUAL (nessuna fonte di dati automatica).
+
+!!! info "Precisione nelle conversioni a catena"
+    Quando si usano percorsi a catena (es. RON → EUR → JPY), ogni conversione intermedia introduce un minimo errore di arrotondamento. Sebbene trascurabile nella maggior parte dei casi, i tassi convertiti tramite catena possono differire leggermente dalle quotazioni dirette di mercato.
 
 ---
 

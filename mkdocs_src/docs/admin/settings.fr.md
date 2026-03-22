@@ -18,7 +18,7 @@ LibreFolio dispose d'un ensemble de **paramètres système** qui affectent tous 
 </div>
 
 !!! attention "Administrateurs uniquement"
- Seuls les utilisateurs avec des privilèges de **super-admin** peuvent modifier les paramètres système. Les utilisateurs réguliers voient une **vue en lecture seule**.
+    Seuls les utilisateurs avec des privilèges de **super-admin** peuvent modifier les paramètres système. Les utilisateurs réguliers voient une **vue en lecture seule**.
 
 ### 💻 Depuis la ligne de commande (CLI)
 
@@ -76,6 +76,3 @@ Les paramètres sont regroupés en catégories dans l'interface utilisateur :
 - 🔒 Lors du démarrage multi-worker, les paramètres sont initialisés avec `INSERT ... ON CONFLICT DO NOTHING` pour éviter les **conditions de course (race conditions)**.
 - ⚡ Les modifications prennent effet **immédiatement** — aucun redémarrage du serveur requis
 
----
-
-## 📖 Notes du Traducteur

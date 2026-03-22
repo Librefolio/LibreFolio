@@ -320,11 +320,24 @@ def _clean_translation(text: str) -> str:
     #    Matches: ---\n### Note del Traduttore, ### Translator's Notes,
     #    ### Notes du Traducteur, ### Notas del Traductor, etc.
     #    Also matches without the --- separator.
+    _NOTES_KW = (
+        r"(?:Note?\s+(?:del|du)\s+Trad\w+|Translator['\u2019]?s?\s+Notes?"
+        r"|Notas?\s+del?\s+Trad\w+)"
+    )
     translator_notes_patterns = [
         # With --- separator (most common)
-        r"\n---\s*\n+\s*###?\s*(?:Note?\s+(?:del|du)\s+Trad\w+|Translator['\u2019]?s?\s+Notes?|Notas?\s+del?\s+Trad\w+).*",
+        rf"\n---\s*\n+\s*###?\s*{_NOTES_KW}.*",
         # Without --- separator
-        r"\n###?\s*(?:Note?\s+(?:del|du)\s+Trad\w+|Translator['\u2019]?s?\s+Notes?|Notas?\s+del?\s+Trad\w+).*",
+        rf"\n###?\s*{_NOTES_KW}.*",
+        # Emoji between ## and text: ## 📖 Notes du Traducteur
+        rf"\n---\s*\n+\s*##\s+\S+\s+{_NOTES_KW}.*",
+        rf"\n##\s+\S+\s+{_NOTES_KW}.*",
+        # Bold variant: **Notas del Traductor**, **Notes du traducteur**
+        rf"\n---\s*\n+\*\*{_NOTES_KW}\*\*.*",
+        rf"\n\*\*{_NOTES_KW}\*\*.*",
+        # HTML variant: <h2>Notas del Traductor</h2>
+        rf"\n<hr\s*/?\s*>\s*\n*<h[1-6]>\s*{_NOTES_KW}\s*</h[1-6]>.*",
+        rf"\n<h[1-6]>\s*{_NOTES_KW}\s*</h[1-6]>.*",
     ]
     for pattern in translator_notes_patterns:
         text = re.sub(pattern, '', text, flags=re.DOTALL | re.IGNORECASE)
@@ -344,8 +357,19 @@ def _clean_translation(text: str) -> str:
     #    [N] followed by ( is a markdown link → keep. Everything else → strip.
     text = re.sub(r'\[(\d+)\](?!\()', '', text)
 
-    # 5. Clean up double/triple spaces left by removed markers
+    # 5. Remove footnote definitions [^N]: ... (LLM translator notes disguised as footnotes)
+    #    These are NOT standard markdown footnotes from the source — the EN source has none.
+    #    They appear only in translations as "Translator Notes" in footnote format.
+    text = re.sub(r'^\[\^\d+\]:.*$', '', text, flags=re.MULTILINE)
+
+    # 6. Remove inline footnote references [^N] (not markdown links)
+    text = re.sub(r'\[\^\d+\]', '', text)
+
+    # 7. Clean up double/triple spaces left by removed markers
     text = re.sub(r'  +', ' ', text)
+
+    # 8. Collapse 3+ consecutive blank lines to 2 (left by removed footnotes)
+    text = re.sub(r'\n{3,}', '\n\n', text)
 
     # Ensure file ends with single newline
     text = text.rstrip() + '\n'

@@ -30,13 +30,18 @@ You can also sync a single pair from its [detail page](detail/index.md) using th
 
 The sync process:
 
-1. Fetches rates from the selected provider's API (ECB, FED, BOE, SNB, etc.)
-2. Stores new data points in the local database
-3. Skips dates that already exist (no duplicates)
+1. Fetches rates from the configured provider's API (ECB, FED, BOE, SNB, etc.)
+2. **Overwrites** existing data points in the downloaded date range with the provider's values — the provider is treated as the authoritative source
+3. Adds new data points for dates not yet in the database
 4. If the primary provider fails, the system automatically falls back to the next configured provider
 
-!!! tip "No duplicate data"
-    Re-syncing a pair is always safe — existing data points are never overwritten or duplicated.
+After sync, you'll see the number of **points downloaded** and how many were **actually new** (not previously present in the database).
+
+!!! warning "Provider is authoritative"
+    Re-syncing a pair will overwrite any manually edited values in the synced date range. If you need to preserve manual edits, consider using a pair configured with the MANUAL provider (no automatic data source).
+
+!!! info "Chain conversion precision"
+    When using chain routes (e.g., RON → EUR → JPY), each intermediate conversion introduces a minimal rounding error. While negligible for most purposes, be aware that chain-converted rates may differ slightly from direct market quotes.
 
 ---
 

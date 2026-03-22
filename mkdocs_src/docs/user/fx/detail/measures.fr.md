@@ -10,7 +10,7 @@ Le panneau Mesures fournit un **outil de mesure point à point** pour analyser l
 
 ## 🖱️ Comment l'utiliser
 
-1. Cliquez sur le bouton bascule **Mesures** (📐) dans la barre d'outils du graphique
+1. Cliquez sur le bouton bascule **Mesures** (📏) dans la barre d'outils du graphique
 2. Le panneau des mesures s'ouvre sous le graphique
 3. **Cliquez** sur un point de départ sur le graphique — cela définit la date et le taux de départ
 4. **Cliquez** sur un point d'arrivée — cela définit la date et le taux d'arrivée
@@ -31,9 +31,9 @@ Pour chaque mesure, le panneau affiche :
 | **Rendement annualisé** | Rendement annuel projeté basé sur la période mesurée | +17,8% p.a. |
 
 !!! info "📚 Rendement annualisé"
- Le rendement annualisé utilise la formule du **Taux de croissance annuel composé (CAGR)**. Pour une explication complète incluant les rendements logarithmiques, la composition, et quand utiliser quelle méthode, consultez :
+    Le rendement annualisé utilise la formule du **Taux de croissance annuel composé (CAGR)**. Pour une explication complète incluant les rendements logarithmiques, la composition, et quand utiliser quelle méthode, consultez :
 
- :material-book-open-variant: **[Rendements & Taux de croissance — Théorie financière](../../../financial-theory/returns.md)**
+    :material-book-open-variant: **[Rendements & Taux de croissance — Théorie financière](../../../financial-theory/returns.md)**
 
 ---
 

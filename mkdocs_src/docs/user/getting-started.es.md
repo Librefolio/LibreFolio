@@ -23,7 +23,7 @@ Completa tus datos:
 </div>
 
 !!! info "Primer Usuario = Administrador"
- El primer usuario que se registra se convierte automáticamente en el **administrador del sistema** (superusuario). Este usuario puede gestionar la configuración global, promover a otros usuarios y acceder a todas las funciones de administración.
+    El primer usuario que se registra se convierte automáticamente en el **administrador del sistema** (superusuario). Este usuario puede gestionar la configuración global, promover a otros usuarios y acceder a todas las funciones de administración.
 
 ---
 
@@ -42,7 +42,7 @@ Después de registrarte, serás redirigido a la página de inicio de sesión. In
 Un **Broker** en LibreFolio representa una cuenta de corretaje: el lugar donde se gestionan tus inversiones (por ejemplo, Interactive Brokers, Degiro, una cuenta bancaria, etc.).
 
 !!! note "¿Por qué necesito un Broker?"
- Todas las transacciones en LibreFolio están vinculadas a un broker. Es la cuenta que agrupa tus operaciones, importaciones e informes. Necesitas al menos un broker antes de poder comenzar a hacer seguimiento de cualquier cosa.
+    Todas las transacciones en LibreFolio están vinculadas a un broker. Es la cuenta que agrupa tus operaciones, importaciones e informes. Necesitas al menos un broker antes de poder comenzar a hacer seguimiento de cualquier cosa.
 
 ### 📋 Pasos
 
@@ -75,4 +75,4 @@ Ahora que tienes una cuenta y un broker, puedes:
 - ⚙️ **[Personalizar configuración](../admin/settings.md)** — Modificar idioma, tema y preferencias del sistema
 
 !!! tip "Cálculos de Cartera"
- Los Brokers también se utilizan para los **cálculos de agregación** de cartera. Cuando compartes un broker con otro usuario y estableces un **porcentaje de participación**, el sistema puede calcular la porción de cada usuario en el valor total de la cartera. Esta función está en desarrollo activo.
+    Los Brokers también se utilizan para los **cálculos de agregación** de cartera. Cuando compartes un broker con otro usuario y estableces un **porcentaje de participación**, el sistema puede calcular la porción de cada usuario en el valor total de la cartera. Esta función está en desarrollo activo.

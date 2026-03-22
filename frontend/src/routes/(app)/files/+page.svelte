@@ -975,6 +975,13 @@
         padding: 1.5rem;
         max-width: 1200px;
         margin: 0 auto;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .files-page .content {
+        min-width: 0;
+        overflow: hidden;
     }
 
     .page-header {

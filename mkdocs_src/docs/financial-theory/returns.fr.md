@@ -13,9 +13,9 @@ R_{simple} = \frac{P_{end} - P_{start}}{P_{start}} = \frac{P_{end}}{P_{start}} -
 $$
 
 !!! exemple
- Si EUR/USD passe de 1,10 à 1,14 :
+    Si EUR/USD passe de 1,10 à 1,14 :
 
- $$R = \frac{1,14 - 1,10}{1,10} = 0,0364 = 3,64\%$$
+    $$R = \frac{1,14 - 1,10}{1,10} = 0,0364 = 3,64\%$$
 
 ### 📊 Propriétés
 
@@ -71,9 +71,9 @@ $$
 C'est ce que l'outil [Mesures](../user/fx/detail/measures.md) de LibreFolio affiche.
 
 !!! exemple
- EUR/USD passe de 1,10 à 1,14 sur 90 jours :
+    EUR/USD passe de 1,10 à 1,14 sur 90 jours :
 
- $$R_{annual} = \left(\frac{1,14}{1,10}\right)^{365/90} - 1 = (1,0364)^{4,056} - 1 \approx 15,5\%$$
+    $$R_{annual} = \left(\frac{1,14}{1,10}\right)^{365/90} - 1 = (1,0364)^{4,056} - 1 \approx 15,5\%$$
 
 ### 📐 Rendement logarithmique annualisé
 
@@ -99,8 +99,8 @@ Cette linéarité est l'un des avantages clés des rendements logarithmiques en 
 | **Interprétation** | "J'ai gagné 5%" | "Le taux de croissance logarithmique était de 0,0488" |
 
 !!! astuce "Quand utiliser l'un ou l'autre ?"
- - **Rendements simples** pour les rapports aux utilisateurs et le calcul des rendements au niveau du portefeuille
- - **Rendements logarithmiques** pour l'analyse statistique, l'estimation de la volatilité et les modèles de séries temporelles
+    - **Rendements simples** pour les rapports aux utilisateurs et le calcul des rendements au niveau du portefeuille
+    - **Rendements logarithmiques** pour l'analyse statistique, l'estimation de la volatilité et les modèles de séries temporelles
 
 ---
 
@@ -122,4 +122,3 @@ Pour plus de détails, voir [Conventions de décompte des jours](day-count.md).
 2. **Prix négatifs** : les rendements logarithmiques ne sont pas définis pour des valeurs négatives — pas un problème pour les taux de change
 3. **Fréquence de composition** : le TCAC suppose une composition continue ; les instruments réels peuvent être composés quotidiennement, mensuellement ou trimestriellement
 
-## 📝 Notes du traducteur

@@ -8,14 +8,14 @@ The heart of the Pair Detail page — a full-featured **ECharts-powered** chart 
 
 ---
 
-## 🔀 Chart Types
+## 🔀 View Modes
 
-Toggle between two visualization modes:
+Toggle between two display modes using the toolbar:
 
-- 📈 **Line Chart** — A clean line connecting each daily rate. Best for seeing trends over long periods.
-- 🕯️ **Candlestick Chart** — Shows open/high/low/close for each period. Best for analyzing short-term volatility and price action.
+- 📈 **Absolute** — Shows the raw exchange rate values (e.g., 1 EUR = 1.0845 USD). Best for seeing actual rate levels.
+- 📊 **Percentage (%)** — Shows the percentage change from the first visible data point. Best for comparing relative movements and overlaying multiple signals.
 
-Use the toggle button in the chart toolbar to switch between modes.
+When switching to % mode, all overlay signals are also recalculated as percentages from their respective starting points.
 
 ---
 
@@ -28,7 +28,10 @@ Use the toggle button in the chart toolbar to switch between modes.
 | **Zoom out** | Mouse wheel down | Pinch in |
 | **Reset zoom** | Double-click | Double-tap |
 
-You can also use the **time range selector** buttons (1M, 3M, 6M, 1Y, 5Y, All) to quickly jump to common periods.
+You can also use the **time range presets** (1W, 1M, 3M, 6M, 1Y, 2Y) or select a **Custom** date range to quickly jump to specific periods.
+
+!!! info "Data availability"
+    If the selected time range exceeds the available data, LibreFolio displays whatever is available. Use **Sync** to try fetching older data from the provider — but note that some providers have limited historical coverage.
 
 ---
 
@@ -46,10 +49,10 @@ Hover over any point on the chart to see:
 
 The chart toolbar provides quick access to:
 
-- 📊 **Chart type toggle** — Line / Candlestick
-- ⏱️ **Time range** — 1M, 3M, 6M, 1Y, 5Y, All
+- 📊 **View mode toggle** — Absolute / Percentage
+- ⏱️ **Time range** — 1W, 1M, 3M, 6M, 1Y, 2Y, Custom
 - 📈 **[Signals](signals.md)** — Toggle technical indicator overlays
-- 📐 **[Measures](measures.md)** — Click-to-click measurement tool
+- 📏 **[Measures](measures.md)** — Click-to-click measurement tool
 - ✏️ **[Data Editor](data-editor.md)** — Edit individual data points
 - ⚙️ **[Chart Settings](../chart-settings.md)** — Visual customization
 

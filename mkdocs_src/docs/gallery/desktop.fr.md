@@ -90,6 +90,14 @@ Gérez les informations de votre profil, votre avatar et les paramètres de votr
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Onglet Profil">
 </div>
 
+### ✏️ Modification du Courtier
+
+Modifiez les détails du courtier : nom, icône, devise de base et configuration.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Modale de Modification du Courtier">
+</div>
+
 ---
 
 ## 📁 Fichiers

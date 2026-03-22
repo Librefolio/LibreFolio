@@ -64,4 +64,4 @@ Per le basi matematiche, vedere [Indicatori Tecnici](../../financial-theory/tech
 
 ## 💾 Persistenza
 
-Le impostazioni del grafico vengono salvate localmente nel browser e si applicano a tutte le coppie di valute. Rimangono attive tra una sessione e l'altra.
+Le impostazioni del grafico vengono salvate nel `localStorage` del browser e si applicano a tutte le coppie di valute. Sopravvivono tra le sessioni — anche dopo aver chiuso e riaperto il browser — e verranno perse solo se si cancella la cache/storage del browser o se lo storage scade (dipende dal browser, tipicamente mesi o anni).

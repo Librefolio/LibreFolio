@@ -46,6 +46,48 @@ const SIGNAL_REGISTRY = new Map<string, SignalConstructor>([
 ]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// COLOR DISTANCE — Pick signal colors maximally distant from those already in use
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Extract hue (0–360) from a hex color string like '#3b82f6'. */
+function hexToHue(hex: string): number {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    if (d === 0) return 0;
+    let h: number;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    return ((h * 60) + 360) % 360;
+}
+
+/**
+ * Pick the palette color with max minimum-distance (hue-based, circular)
+ * from all colors already in use. Falls back to simple index if no
+ * usedColors are provided.
+ */
+function pickBestColor(usedColors: string[]): string {
+    if (!usedColors.length) return DEFAULT_SIGNAL_COLORS[0];
+    const usedHues = usedColors.map(hexToHue);
+    let bestColor = DEFAULT_SIGNAL_COLORS[0];
+    let bestDist = -1;
+    for (const c of DEFAULT_SIGNAL_COLORS) {
+        const h = hexToHue(c);
+        const minDist = Math.min(...usedHues.map(uh => {
+            const d = Math.abs(h - uh);
+            return Math.min(d, 360 - d);  // circular hue distance
+        }));
+        if (minDist > bestDist) {
+            bestDist = minDist;
+            bestColor = c;
+        }
+    }
+    return bestColor;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -74,10 +116,15 @@ export function getRegisteredSignalTypes(): SignalTypeInfo[] {
 }
 
 /**
- * Create a NEW signal instance with default params and next color from palette.
+ * Create a NEW signal instance with default params and best color from palette.
+ * Colors are chosen to maximize perceptual distance from already-used colors.
  * Returns null if signalType is not registered.
  */
-export function createSignal(signalType: string, existingCount: number): ChartSignal | null {
+export function createSignal(
+    signalType: string,
+    existingCount: number,
+    usedColors: string[] = [],
+): ChartSignal | null {
     const Cls = SIGNAL_REGISTRY.get(signalType);
     if (!Cls) return null;
 
@@ -85,8 +132,11 @@ export function createSignal(signalType: string, existingCount: number): ChartSi
     // Technical indicators get thinner lines (1px) by default — they are auxiliary.
     // Benchmarks and comparisons get 2px.
     const defaultWidth = Cls.category === 'indicator' ? 1 : 2;
+    const color = usedColors.length > 0
+        ? pickBestColor(usedColors)
+        : DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length];
     const style: SignalStyle = {
-        color: DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length],
+        color,
         lineWidth: defaultWidth,
         lineType: Cls.signalType === 'macd' ? 'solid' : 'dashed',
         markerStart: null,

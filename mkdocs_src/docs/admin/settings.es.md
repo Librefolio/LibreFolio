@@ -18,7 +18,7 @@ LibreFolio tiene un conjunto de **configuraciones de sistema** que afectan a tod
 </div>
 
 !!! warning "Solo Administradores"
- Solo los usuarios con privilegios de **superusuario** pueden modificar las configuraciones globales. Los usuarios no administradores ven una vista de solo lectura.
+    Solo los usuarios con privilegios de **superusuario** pueden modificar las configuraciones globales. Los usuarios no administradores ven una vista de solo lectura.
 
 ### 💻 Desde la CLI
 

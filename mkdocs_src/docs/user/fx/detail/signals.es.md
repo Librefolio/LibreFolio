@@ -12,14 +12,11 @@ El panel de Señales permite superponer **indicadores técnicos** en el gráfico
 
 ### 📉 [EMA — Media Móvil Exponencial](../../../financial-theory/technical-indicators.md#ema)
 
-Rastrea la **tendencia** suavizando el ruido diario del precio, dando más peso a los valores recientes. Cuando una EMA de periodo corto cruza por encima de una EMA de periodo largo ("cruce dorado"), señala impulso alcista.
-
-- ⚡ **EMA Rápida**: Periodo corto (ej. 12 días) — reacciona rápidamente a cambios de precio
-- 🐢 **EMA Lenta**: Periodo largo (ej. 26 días) — más suave, muestra la tendencia subyacente
+Suaviza el ruido de los tipos de cambio diarios para revelar la **tendencia subyacente**. En FX, una EMA que cruza por encima de la línea del tipo suele sugerir un debilitamiento de la moneda base (o fortalecimiento de la moneda cotizada). Período configurable: más corto = más reactivo, más largo = más suave.
 
 ### 📊 [MACD — Convergencia/Divergencia de Medias Móviles](../../../financial-theory/technical-indicators.md#macd)
 
-Mide el **impulso** calculando la diferencia entre dos EMAs. Un MACD positivo significa que la EMA rápida está por encima de la EMA lenta (alcista), negativo significa lo contrario (bajista).
+Mide el **impulso** calculando la diferencia entre una EMA rápida y una lenta. Un MACD positivo significa que la EMA rápida está por encima de la EMA lenta (alcista), negativo significa lo contrario (bajista). Útil en FX para detectar reversiones de tendencia y cambios de impulso.
 
 - 📈 **Línea MACD**: Diferencia entre la EMA rápida y la EMA lenta
 - 〰️ **Línea de Señal**: EMA de la propia línea MACD (impulso suavizado)
@@ -43,9 +40,9 @@ Un **canal de volatilidad** alrededor del precio. Las bandas se amplían durante
 
 1. Haz clic en el botón de alternancia **Señales** (📈) en la barra de herramientas del gráfico
 2. El panel de señales se abre debajo del gráfico
-3. Activa o desactiva cada indicador de forma independiente
-4. Las señales se representan como superposiciones directamente en el gráfico
-5. Los parámetros de cada indicador pueden ajustarse en [Configuración del Gráfico](../chart-settings.md)
+3. Agrega indicadores desde los menús desplegables categorizados (Indicadores Técnicos, Comparación de Datos, Benchmarks Sintéticos)
+4. Los parámetros de cada indicador pueden ajustarse directamente en línea
+5. Las señales se representan como superposiciones directamente en el gráfico
 
 ---
 

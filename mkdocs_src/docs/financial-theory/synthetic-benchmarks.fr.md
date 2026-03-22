@@ -14,7 +14,14 @@ Elles sont inestimables pour :
 
 ### 💡 Signification Financière
 
-Une courbe de référence de croissance linéaire représente les **intérêts simples** — la valeur augmente d'un montant absolu fixe à chaque période. C'est la plus simple « ligne cible » que l'on puisse tracer : si l'on s'attend à ce qu'un actif rapporte $r$% par an, la courbe de référence linéaire indique où le prix *devrait* se trouver à tout moment sous cette hypothèse.
+Une courbe de référence de croissance linéaire représente les **intérêts simples** — la valeur augmente d'un montant absolu fixe à chaque période. Cela modélise le scénario où vous **ne réinvestissez pas** vos revenus (dividendes, intérêts, coupons) : les versements en espèces sont reçus mais mis de côté, seul le capital initial génère des rendements.
+
+Si au contraire vous **réinvestissez** ces revenus — manuellement ou automatiquement via des instruments capitalisants (ex. ETF capitalisants, qui réinvestissent les dividendes en interne et bénéficient du [report d'imposition](taxation.md#tax-deferral-advantage)) — vous devriez observer une **[croissance composée](#compound-growth)**, où les rendements génèrent à leur tour des rendements.
+
+En pratique, l'écart entre croissance linéaire et composée s'élargit considérablement sur les horizons longs. C'est pourquoi la référence Linéaire apparaît comme une droite tandis que la référence Composée courbe vers le haut de façon exponentielle.
+
+!!! abstract "Plus-values et moins-values"
+    Lorsqu'un actif est vendu au-dessus de son prix d'achat, la différence est une **plus-value** ; en dessous, une **moins-value**. Chaque juridiction a ses propres règles concernant les taux d'imposition, les seuils de durée de détention, la durée du report des pertes et les méthodes d'appariement (FIFO, LIFO, identification spécifique). Pour un aperçu théorique, voir [Fiscalité & Efficience Fiscale](taxation.md).
 
 ### 🔢 Formule Mathématique
 
@@ -94,7 +101,7 @@ $$
 Cela est mathématiquement équivalent à la forme close $y_0(1+r)^t$ mais remplace $N$ opérations puissance coûteuses par $N$ multiplications simples — le même principe que celui utilisé par les banques pour l'accumulation journalière des intérêts composés.
 
 !!! tip "Règle du 72"
- Un raccourci mental rapide : un investissement qui croît à $r$% par an doublera approximativement en $72 / r$ années. À 7% → ~10,3 ans.
+    Un raccourci mental rapide : un investissement qui croît à $r$% par an doublera approximativement en $72 / r$ années. À 7% → ~10,3 ans.
 
 ### ⚙️ Paramètres
 

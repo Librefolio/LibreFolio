@@ -9,7 +9,7 @@
  * If the same pair is added twice, points overlap harmlessly (not permanent).
  */
 
-import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
+import {ChartSignal, type SignalParamDescriptor, type RenderedSignal} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class FxPairSignal extends ChartSignal {
@@ -47,6 +47,42 @@ export class FxPairSignal extends ChartSignal {
         }
 
         return points;
+    }
+
+    /**
+     * Override render() for FxPairSignal: in percentage mode, normalize to the
+     * signal's OWN first value (not the base chart's p0).
+     *
+     * Rationale: FxPair comparison data has a completely different scale
+     * (e.g. EUR/USD ~1.10 vs GBP/JPY ~190). Normalizing both curves to their
+     * own starting point makes them start at 0% and shows relative movement,
+     * which is the only meaningful comparison in percentage mode.
+     */
+    override render(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal {
+        const absData = this.computePoints(baseData);
+
+        let data = absData;
+        if (viewMode === 'percentage' && absData.length > 0) {
+            const p0 = absData[0].value;   // OWN first value, not base chart's
+            if (p0 !== 0) {
+                data = absData.map(d => ({
+                    ...d,
+                    value: ((d.value - p0) / p0) * 100,
+                }));
+            }
+        }
+
+        return {
+            id: this.id,
+            label: this.getLabel(),
+            data,
+            color: this.style.color,
+            lineWidth: this.style.lineWidth,
+            lineType: this.style.lineType,
+            markerStart: this.style.markerStart,
+            markerEnd: this.style.markerEnd,
+            yAxisIndex: 0,
+        };
     }
 
     getLabel(): string {

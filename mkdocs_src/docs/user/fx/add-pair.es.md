@@ -28,12 +28,12 @@ Para pares exóticos (por ejemplo, RON→JPY) donde ningún proveedor cubre amba
 </div>
 
 !!! example "Ejemplo de Ruta en Cadena"
- **RON → JPY** a través de ECB:
+    **RON → JPY** a través de ECB:
 
- 1. RON → EUR (ECB proporciona RON/EUR)
- 2. EUR → JPY (ECB proporciona EUR/JPY)
+    1. RON → EUR (ECB proporciona RON/EUR)
+    2. EUR → JPY (ECB proporciona EUR/JPY)
 
- La tasa final se calcula multiplicando las tasas intermedias.
+    La tasa final se calcula multiplicando las tasas intermedias.
 
 ---
 

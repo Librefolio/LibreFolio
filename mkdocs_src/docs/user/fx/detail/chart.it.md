@@ -8,14 +8,14 @@ Il cuore della pagina dei dettagli della coppia — un grafico **ECharts-powered
 
 ---
 
-## 🔀 Tipi di grafico
+## 🔀 Modalità di visualizzazione
 
-Passa tra due modalità di visualizzazione:
+Alterna tra due modalità tramite la barra degli strumenti:
 
-- 📈 **Grafico a linee** — Una linea continua che collega il tasso di cambio di ogni giorno. Ideale per vedere le tendenze su periodi lunghi.
-- 🕯️ **Grafico a candele** — Mostra apertura/massimo/minimo/chiusura per ogni periodo. Ideale per analizzare la volatilità a breve termine e l'azione dei prezzi.
+- 📈 **Assoluto** — Mostra il valore del tasso di cambio grezzo (es. 1 EUR = 1,0845 USD). Ideale per vedere i livelli effettivi del tasso.
+- 📊 **Percentuale (%)** — Mostra la variazione percentuale dal primo punto dati visibile. Ideale per confrontare i movimenti relativi e sovrapporre più segnali.
 
-Usa il pulsante di commutazione nella barra degli strumenti del grafico per passare da una modalità all'altra.
+Passando alla modalità %, anche tutti i segnali overlay vengono ricalcolati come percentuali dal rispettivo punto di partenza.
 
 ---
 
@@ -28,7 +28,10 @@ Usa il pulsante di commutazione nella barra degli strumenti del grafico per pass
 | **Zoom out** | Rotella del mouse verso il basso | Stringimento con due dita |
 | **Reset zoom** | Doppio clic | Doppio tocco |
 
-Puoi anche utilizzare i pulsanti del **selettore di intervallo di tempo** (1M, 3M, 6M, 1Y, 5Y, All) per passare rapidamente ai periodi più comuni.
+Puoi anche utilizzare i **preset temporali** (1S, 1M, 3M, 6M, 1A, 2A) o selezionare un intervallo **Personalizzato** per passare rapidamente a periodi specifici.
+
+!!! info "Disponibilità dei dati"
+    Se l'intervallo selezionato supera i dati disponibili, LibreFolio mostra quello che c'è. Usa **Sincronizza** per provare a scaricare dati più vecchi dal provider — ma nota che alcuni provider hanno una copertura storica limitata.
 
 ---
 
@@ -46,8 +49,10 @@ Passa il puntatore su qualsiasi punto del grafico per vedere:
 
 La barra degli strumenti del grafico offre un rapido accesso a:
 
-- 📊 **Commutazione tipo di grafico** — Linee / Candele- ⏱️ **Intervallo di tempo** — 1M, 3M, 6M, 1Y, 5Y, All
-- 📈 **[Segnali](signals.md)** — Attiva/disattiva sovrapposizioni di indicatori tecnici- 📐 **[Misure](measures.md)** — Strumento di misurazione click‑to‑click
+- 📊 **Modalità di visualizzazione** — Assoluto / Percentuale
+- ⏱️ **Intervallo di tempo** — 1S, 1M, 3M, 6M, 1A, 2A, Personalizzato
+- 📈 **[Segnali](signals.md)** — Attiva/disattiva sovrapposizioni di indicatori tecnici
+- 📏 **[Misure](measures.md)** — Strumento di misurazione click‑to‑click
 - ✏️ **[Editor dati](data-editor.md)** — Modifica i singoli punti dati
 - ⚙️ **[Impostazioni grafico](../chart-settings.md)** — Personalizzazione visiva
 

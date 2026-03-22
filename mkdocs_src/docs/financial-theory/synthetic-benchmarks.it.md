@@ -1,6 +1,6 @@
 # 🎯 Benchmark Sintetici
 
-LibreFolio può sovrapporre **curve di benchmark sintetici**[^1] su qualsiasi grafico Forex. A differenza degli indicatori tecnici (che vengono calcolati *dai* dati di mercato), i benchmark sintetici sono generati matematicamente e fungono da **linee di riferimento visive** — "e se il prezzo avesse seguito questa traiettoria ideale?".
+LibreFolio può sovrapporre **curve di benchmark sintetici** su qualsiasi grafico Forex. A differenza degli indicatori tecnici (che vengono calcolati *dai* dati di mercato), i benchmark sintetici sono generati matematicamente e fungono da **linee di riferimento visive** — "e se il prezzo avesse seguito questa traiettoria ideale?".
 
 Sono strumenti preziosi per:
 
@@ -14,7 +14,14 @@ Sono strumenti preziosi per:
 
 ### 💡 Significato Finanziario
 
-Un benchmark di crescita lineare rappresenta **interesse semplice** — il valore aumenta di un importo fisso assoluto ogni periodo. È la "linea obiettivo" più semplice che si possa disegnare: se ci si aspetta che un asset renda $r$% annui, il benchmark lineare mostra dove il prezzo *dovrebbe* essere in qualsiasi momento sotto questa ipotesi.
+Un benchmark di crescita lineare rappresenta **interesse semplice** — il valore aumenta di un importo fisso assoluto ogni periodo. Questo modella lo scenario in cui **non reinvesti** i guadagni (dividendi, interessi, cedole): i pagamenti in contanti vengono ricevuti ma messi da parte, quindi solo il capitale originale genera rendimenti.
+
+Se invece **reinvesti** quei guadagni — manualmente o automaticamente attraverso strumenti ad accumulazione (es. ETF ad accumulazione, che reinvestono i dividendi internamente e beneficiano del [differimento fiscale](taxation.md#tax-deferral-advantage)) — dovresti aspettarti una **[crescita composta](#compound-growth)**, dove i rendimenti generano ulteriori rendimenti.
+
+In pratica, la differenza tra crescita lineare e composta si allarga drasticamente su orizzonti lunghi. Ecco perché il benchmark Lineare appare come una linea retta mentre il benchmark Composto curva verso l'alto esponenzialmente.
+
+!!! abstract "Plusvalenze e minusvalenze"
+    Quando si vende un asset al di sopra del prezzo di acquisto, la differenza è una **plusvalenza**; al di sotto, una **minusvalenza**. Ogni giurisdizione ha le proprie regole riguardo aliquote fiscali, soglie per periodo di detenzione, durata del riporto delle perdite e metodi di abbinamento (FIFO, LIFO, identificazione specifica). Per una panoramica teorica, vedi [Tassazione & Efficienza Fiscale](taxation.md).
 
 ### 🔢 Formula Matematica
 
@@ -28,18 +35,18 @@ dove:
 - $r$ è il tasso di crescita annuo (espresso come decimale, es. 0,07 per il 7%),
 - $t$ è il tempo in anni dall'inizio.
 
-Questo è equivalente alla formula dell'**interesse semplice** $A = P(1 + rt)$, dove $t$ è espresso in anni usando la convenzione di [Conteggio dei Giorni](day-count.md)[^2] applicabile.
+Questo è equivalente alla formula dell'**interesse semplice** $A = P(1 + rt)$, dove $t$ è espresso in anni usando la convenzione di [Conteggio dei Giorni](day-count.md) applicabile.
 
 ### ⚙️ Parametri
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
 | Tasso Annuo | `annualRate` | 5 | Tasso di crescita in percentuale annua. |
-| Scostamento | `offset` | 0 | Spostamento verticale come % del valore base[^3]. |
+| Scostamento | `offset` | 0 | Spostamento verticale come % del valore base. |
 
 ### 🔍 Interpretazione
 
-La linea è perfettamente dritta su scala lineare. Qualsiasi punto in cui il prezzo effettivo è *sopra* la linea significa che l'asset ha superato il target; qualsiasi punto *sotto* indica underperformance. Poiché la crescita è additiva, la linea tende a curvarsi verso il basso su scala logaritmica[^4] — rendendola facilmente distinguibile visivamente dalla crescita composta.
+La linea è perfettamente dritta su scala lineare. Qualsiasi punto in cui il prezzo effettivo è *sopra* la linea significa che l'asset ha superato il target; qualsiasi punto *sotto* indica underperformance. Poiché la crescita è additiva, la linea tende a curvarsi verso il basso su scala logaritmica — rendendola facilmente distinguibile visivamente dalla crescita composta.
 
 :material-link: [Interesse Semplice su Wikipedia](https://en.wikipedia.org/wiki/Interest#Simple_interest){ target="_blank" }
 
@@ -71,7 +78,7 @@ $$
 
 Il backend di LibreFolio supporta le seguenti frequenze di capitalizzazione:
 **Annuale** ($n=1$), **Semestrale** ($n=2$), **Trimestrale** ($n=4$),
-**Mensile** ($n=12$), **Giornaliera** ($n=365$), e **Continua** ($n \to \infty$)[^5].
+**Mensile** ($n=12$), **Giornaliera** ($n=365$), e **Continua** ($n \to \infty$).
 
 Quando $n \to \infty$ (capitalizzazione continua):
 
@@ -93,21 +100,21 @@ $$
 y_{i+1} = y_i \cdot \text{fattoreGiornaliero}
 $$
 
-Questo è matematicamente equivalente alla forma chiusa $y_0(1+r)^t$ ma sostituisce $N$ costose operazioni di potenza con $N$ semplici moltiplicazioni — lo stesso principio dietro come le banche effettivamente **maturano**[^6] gli interessi composti giornalieri.
+Questo è matematicamente equivalente alla forma chiusa $y_0(1+r)^t$ ma sostituisce $N$ costose operazioni di potenza con $N$ semplici moltiplicazioni — lo stesso principio dietro come le banche effettivamente **maturano** gli interessi composti giornalieri.
 
-!!! tip "Regola del 72"[^7]
- Una scorciatoia mentale rapida: un investimento che cresce al $r$% annuo raddoppierà approssimativamente in $72 / r$ anni. Al 7% → ~10,3 anni.
+!!! tip "Regola del 72"
+    Una scorciatoia mentale rapida: un investimento che cresce al $r$% annuo raddoppierà approssimativamente in $72 / r$ anni. Al 7% → ~10,3 anni.
 
 ### ⚙️ Parametri
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
 | Tasso di Crescita | `annualRate` | 7 | Tasso di crescita in percentuale annua. |
-| Scostamento | `offset` | 0 | Spostamento verticale come % del valore base[^3]. |
+| Scostamento | `offset` | 0 | Spostamento verticale come % del valore base. |
 
 ### 🔍 Interpretazione
 
-La curva è dritta su scala **logaritmica**[^4] — questo è il segno distintivo della crescita esponenziale. Sovrapporre un benchmark composto su un grafico in scala log è il modo più pulito per valutare se un asset sta crescendo più o meno velocemente di un tasso obiettivo.
+La curva è dritta su scala **logaritmica** — questo è il segno distintivo della crescita esponenziale. Sovrapporre un benchmark composto su un grafico in scala log è il modo più pulito per valutare se un asset sta crescendo più o meno velocemente di un tasso obiettivo.
 
 :material-link: [Interesse Composto su Wikipedia](https://en.wikipedia.org/wiki/Compound_interest){ target="_blank" }
 
@@ -142,21 +149,11 @@ dove:
 |---|---|---|---|
 | Ampiezza | `amplitude` | 10 | Intervallo di oscillazione di picco come % del valore base. |
 | Periodo | `period` | 365 | Lunghezza del ciclo completo in giorni. |
-| Scostamento | `offset` | 0 | Spostamento verticale come % del valore base[^3]. |
+| Scostamento | `offset` | 0 | Spostamento verticale come % del valore base. |
 
 ### 🔍 Interpretazione
 
-Se il prezzo effettivo segue approssimativamente il riferimento sinusoidale, il mercato mostra una **componente ciclica**[^8] rilevabile a quella frequenza. Le deviazioni dalla sinusoide suggeriscono shock non periodici o deriva della tendenza. Regolare il parametro del periodo permette di **analizzare**[^9] diverse lunghezze di ciclo — effettivamente eseguendo una versione manuale dell'analisi spettrale.
+Se il prezzo effettivo segue approssimativamente il riferimento sinusoidale, il mercato mostra una **componente ciclica** rilevabile a quella frequenza. Le deviazioni dalla sinusoide suggeriscono shock non periodici o deriva della tendenza. Regolare il parametro del periodo permette di **analizzare** diverse lunghezze di ciclo — effettivamente eseguendo una versione manuale dell'analisi spettrale.
 
 :material-link: [Onda Sinusoidale su Wikipedia](https://en.wikipedia.org/wiki/Sine_wave){ target="_blank" }
 
----
-[^1]: Nel gergo finanziario italiano, "benchmark" è generalmente considerato un sostantivo maschile. Pertanto, "benchmark sintetici" è la forma grammaticalmente corretta con accordo al maschile. In alternativa, si potrebbe usare "curve di riferimento sintetiche" per evitare il prestito.
-[^2]: La **Convenzione di Conteggio dei Giorni** (Day Count Convention) è lo standard utilizzato nel settore finanziario per determinare il numero di giorni tra due date ai fini del calcolo degli interessi. Le convenzioni più comuni includono Actual/365, 30/360 e Actual/360.
-[^3]: Il parametro `offset` (scostamento) non indica un errore, ma uno spostamento verticale calibrato in percentuale del valore iniziale (`y_0`). Serve per adattare la curva di benchmark a diversi livelli di prezzo di partenza.
-[^4]: Su una **scala logaritmica**, una crescita esponenziale (composta) si presenta come una linea retta, mentre una crescita lineare (semplice) assume una forma curva verso il basso. Questo principio permette un confronto visivo immediato tra il benchmark e il prezzo.
-[^5]: La **capitalizzazione continua** rappresenta il limite matematico in cui gli interessi sono calcolati e aggiunti al capitale in modo istantaneo e infinitamente frequente. La costante `e` (~2.71828) è il numero di Nepero, base dei logaritmi naturali.
-[^6]: Il verbo corretto per "accrue" in questo contesto finanziario è "maturano" (gli interessi maturano nel tempo). "Accantonare" si riferisce invece alla creazione di un fondo per far fronte a un futuro Omanento o rischio.
-[^7]: La **Regola del 72** è una formula approssimativa per stimare il tempo di raddoppio di un investimento. Si calcola dividendo 72 per il tasso di rendimento percentuale annuo. Fornisce una stima rapida per tassi comuni (es. 72/6 = 12 anni).
-[^8]: "Ciclabile" (adatto a essere percorso in bicicletta) era un errore di traduzione di "cyclic". Il termine corretto è "**componente ciclica**", che indica una parte o un elemento che si ripete a intervalli regolari.
-[^9]: "Scansire" è un calco dall'inglese "to scan" poco idiomatico in questo contesto. Alternative più fluide sono "**analizzare**", "**sperimentare con**" o "**esplorare**" diverse lunghezze di ciclo.

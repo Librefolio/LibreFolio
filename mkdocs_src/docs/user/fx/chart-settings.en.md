@@ -64,4 +64,4 @@ For the mathematical foundations, see [Technical Indicators](../../financial-the
 
 ## 💾 Persistence
 
-Chart settings are stored locally in your browser and apply across all currency pairs. They persist between sessions.
+Chart settings are stored locally in your browser's `localStorage` and apply across all currency pairs. They survive across sessions — even after closing and reopening the browser — and will only be lost if you clear your browser cache/storage or if the storage expires (browser-dependent, typically months to years).

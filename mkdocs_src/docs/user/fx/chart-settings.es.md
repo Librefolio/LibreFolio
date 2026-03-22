@@ -61,6 +61,6 @@ Para los fundamentos matemáticos, consulta [Indicadores Técnicos](../../financ
 
 ## 💾 Persistencia
 
-La configuración del gráfico se almacena localmente en tu navegador y se aplica a todos los pares de divisas. Persiste entre sesiones.
+La configuración del gráfico se almacena en el `localStorage` de tu navegador y se aplica a todos los pares de divisas. Sobrevive entre sesiones — incluso después de cerrar y reabrir el navegador — y solo se perderá si limpias la caché/almacenamiento del navegador o si el almacenamiento expira (depende del navegador, normalmente meses a años).
 
 ---

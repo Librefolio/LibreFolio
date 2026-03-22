@@ -19,7 +19,7 @@ LibreFolio Le permite compartir el acceso a sus cuentas de bróker con otros usu
 7. Haga clic en **Guardar** para aplicar los cambios
 
 !!! warning "Solo los Propietarios pueden gestionar el acceso"
- Debe ser **Propietario** del bróker para agregar, eliminar o modificar el acceso de otros usuarios.
+    Debe ser **Propietario** del bróker para agregar, eliminar o modificar el acceso de otros usuarios.
 
 ---
 
@@ -49,18 +49,18 @@ Al compartir un bróker, asigna un **rol** que determina lo que el otro usuario 
 Cada usuario con acceso a un bróker tiene un **porcentaje de participación** (de 0% a 100%). Esto representa qué parte del valor de la cartera del bróker pertenece a ese usuario.
 
 !!! example "Cuenta Conjunta"
- Usted y su cónyuge comparten una cuenta de bróker al 50/50:
+    Usted y su cónyuge comparten una cuenta de bróker al 50/50:
 
- - Usted (Propietario): **50%**
- - Cónyuge (Editor): **50%**
+    - Usted (Propietario): **50%**
+    - Cónyuge (Editor): **50%**
 
- Al calcular el valor total de la cartera, el sistema contará el 50% del valor de este bróker para cada uno.
+    Al calcular el valor total de la cartera, el sistema contará el 50% del valor de este bróker para cada uno.
 
 !!! example "Asesor Financiero"
- Su asesor financiero necesita ver su cartera pero no es dueño de ninguna parte:
+    Su asesor financiero necesita ver su cartera pero no es dueño de ninguna parte:
 
- - Usted (Propietario): **100%**
- - Asesor (Visualizador): **0%**
+    - Usted (Propietario): **100%**
+    - Asesor (Visualizador): **0%**
 
 La suma de todos los porcentajes de participación para un bróker **no debe superar el 100%**, pero puede ser menor (por ejemplo, una cuenta copropiedad donde el copropietario no está en el sistema).
 
@@ -76,4 +76,4 @@ La suma de todos los porcentajes de participación para un bróker **no debe sup
 | **Miembro de la familia** | Visualizador o Editor, con un porcentaje de participación personalizado |
 
 !!! note "Agregación de Cartera"
- El porcentaje de participación está diseñado para futuras funciones de agregación de cartera. Cuando se implementen, el panel de control de cada usuario mostrará su participación proporcional en todos los brókeres a los que tenga acceso.
+    El porcentaje de participación está diseñado para futuras funciones de agregación de cartera. Cuando se implementen, el panel de control de cada usuario mostrará su participación proporcional en todos los brókeres a los que tenga acceso.

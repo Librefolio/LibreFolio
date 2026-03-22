@@ -23,7 +23,7 @@ Compila i tuoi dati:
 </div>
 
 !!! info "Il primo utente = amministratore"
- Il primissimo utente che si registra diventa automaticamente l'**amministratore di sistema** (superutente). Questo utente può gestire le impostazioni globali, promuovere altri utenti e accedere a tutte le funzionalità di amministrazione.
+    Il primissimo utente che si registra diventa automaticamente l'**amministratore di sistema** (superutente). Questo utente può gestire le impostazioni globali, promuovere altri utenti e accedere a tutte le funzionalità di amministrazione.
 
 ---
 
@@ -42,7 +42,7 @@ Dopo la registrazione, verrai reindirizzato alla pagina di login. Inserisci le t
 Un **broker** in LibreFolio rappresenta un conto di intermediazione — il luogo in cui sono custoditi i tuoi investimenti (es. Interactive Brokers, Degiro, un conto bancario, ecc.).
 
 !!! note "Perché ho bisogno di un broker?"
- Tutte le transazioni in LibreFolio sono collegate a un broker. È il contenitore che raggruppa le tue transazioni, importazioni e report. Hai bisogno di almeno un broker prima di poter iniziare a monitorare qualsiasi cosa.
+    Tutte le transazioni in LibreFolio sono collegate a un broker. È il contenitore che raggruppa le tue transazioni, importazioni e report. Hai bisogno di almeno un broker prima di poter iniziare a monitorare qualsiasi cosa.
 
 ### 📋 Passaggi
 
@@ -75,4 +75,4 @@ Ora che hai un account e un broker, puoi:
 - ⚙️ **[Personalizzare le impostazioni](../admin/settings.md)** — Modifica lingua, tema e preferenze di sistema
 
 !!! tip "Calcoli del portafoglio"
- I broker sono utilizzati anche per i calcoli di aggregazione del portafoglio. Quando condividi un broker con un altro utente e imposti una **percentuale di condivisione**, il sistema può calcolare la quota di ciascun utente sul valore totale del portafoglio. Questa funzionalità è in fase di sviluppo attivo.
+    I broker sono utilizzati anche per i calcoli di aggregazione del portafoglio. Quando condividi un broker con un altro utente e imposti una **percentuale di condivisione**, il sistema può calcolare la quota di ciascun utente sul valore totale del portafoglio. Questa funzionalità è in fase di sviluppo attivo.

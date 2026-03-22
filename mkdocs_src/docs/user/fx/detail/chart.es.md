@@ -8,14 +8,14 @@ El núcleo de la página de detalle del par: un gráfico completo **potenciado p
 
 ---
 
-## 🔀 Tipos de gráfico
+## 🔀 Modos de visualización
 
-Alterna entre dos modos de visualización:
+Alterna entre dos modos mediante la barra de herramientas:
 
-- 📈 **Gráfico de líneas** — Una línea continua que conecta cada tipo de cambio diario. Ideal para identificar tendencias en períodos prolongados.
-- 🕯️ **Gráfico de velas japonesas** — Muestra apertura, máximo, mínimo y cierre para cada período. Ideal para analizar volatilidad a corto plazo y acción del precio.
+- 📈 **Absoluto** — Muestra los valores brutos del tipo de cambio (ej. 1 EUR = 1,0845 USD). Ideal para ver los niveles reales del tipo.
+- 📊 **Porcentaje (%)** — Muestra el cambio porcentual desde el primer punto de datos visible. Ideal para comparar movimientos relativos y superponer múltiples señales.
 
-Utiliza el botón de alternancia en la barra de herramientas del gráfico para cambiar entre modos.
+Al cambiar al modo %, todas las señales superpuestas también se recalculan como porcentajes desde sus respectivos puntos de partida.
 
 ---
 
@@ -28,7 +28,10 @@ Utiliza el botón de alternancia en la barra de herramientas del gráfico para c
 | **Alejar** | Rueda del mouse hacia abajo | Pellizcar para reducir |
 | **Restablecer zoom** | Doble clic | Doble toque |
 
-También puedes usar los botones del **selector de rango temporal** (1M, 3M, 6M, 1A, 5A, Todo) para Saltar rápidamente a períodos comunes.
+También puedes usar los **presets temporales** (1S, 1M, 3M, 6M, 1A, 2A) o seleccionar un rango **Personalizado** para acceder rápidamente a períodos específicos.
+
+!!! info "Disponibilidad de datos"
+    Si el rango seleccionado excede los datos disponibles, LibreFolio muestra lo que hay. Usa **Sincronizar** para intentar descargar datos más antiguos — pero ten en cuenta que algunos proveedores tienen cobertura histórica limitada.
 
 ---
 
@@ -46,10 +49,10 @@ Pasa el cursor sobre cualquier punto del gráfico para ver:
 
 La barra de herramientas del gráfico ofrece acceso rápido a:
 
-- 📊 **Alternancia de tipo de gráfico** — Líneas / Velas japonesas
-- ⏱️ **Rango temporal** — 1M, 3M, 6M, 1A, 5A, Todo
+- 📊 **Modo de visualización** — Absoluto / Porcentaje
+- ⏱️ **Rango temporal** — 1S, 1M, 3M, 6M, 1A, 2A, Personalizado
 - 📈 **[Señales](signals.md)** — Activar superposiciones de indicadores técnicos
-- 📐 **[Medidas](measures.md)** — Herramienta de medición entre puntos
+- 📏 **[Medidas](measures.md)** — Herramienta de medición entre puntos
 - ✏️ **[Editor de datos](data-editor.md)** — Editar puntos de datos individuales
 - ⚙️ **[Configuración del gráfico](../chart-settings.md)** — Personalización visual
 
