@@ -1,5 +1,10 @@
 /* LibreFolio Documentation Theme */
 
+/* Hide built-in mkdocs-static-i18n language selector (replaced by custom site-lang-selector.js) */
+.md-header__option .md-select {
+    display: none !important;
+}
+
 :root {
     /* Brand Colors from Frontend */
     --md-primary-fg-color: #1a4031; /* libre-green */
