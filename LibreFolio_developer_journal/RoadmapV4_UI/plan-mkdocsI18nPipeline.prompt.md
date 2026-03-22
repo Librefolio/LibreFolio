@@ -27,6 +27,12 @@
 - **Timeout per step**: aggiunto `_call_with_timeout()` con threading (default 600s, configurabile via `APHRA_STEP_TIMEOUT`). Previene i loop infiniti di reasoning dei thinking models. Il timeout sul Critique NON blocca la traduzione — procede con critica vuota.
 - **Retry su Refine**: `_robust_refine()` ritenta fino a 2 volte quando `parse_translation()` fallisce (tag `<improved_translation>` non trovato). Gestisce anche timeout per singolo tentativo.
 - **Test pilota 27B fallito**: Analyze 833s, Critique FR 573s, Refine FR fallito (no `<improved_translation>` tag), Critique ES bloccato all'infinito. Il 27B come critiquer è troppo lento su M1 Pro (~2-5 tok/s). Raccomandazione: usare 9B per tutto in locale, oppure cloud per quality.
+- **Rate limit retry**: `_call_step()` ora rileva HTTP 429, pausa 90s, retry fino a 5 tentativi (flag `--rate-limit-retries N`). Se esauriti → abort con progresso salvato. Il run successivo riprende da dove si era fermato grazie al cache.
+- **HTTP timeout reale**: sostituito threading con `httpx.Timeout` sull'OpenAI client. La connessione viene effettivamente chiusa e Ollama/OpenRouter smette di generare. Default 15 min (`APHRA_STEP_TIMEOUT=900`).
+- **Timestamps nei log**: ogni file/lingua mostra `[HH:MM:SS]` di inizio e fine, elapsed in formato adattivo (`42s`, `2m 15s`, `4h 38m 35s`).
+- **Scroll preservation**: `site-lang-selector.js` salva `scrollY/scrollHeight` in `sessionStorage` prima del cambio lingua, ripristina al caricamento.
+- **Theme/Language sync app↔docs**: `app-sync.js` sincronizza `librefolio-theme` → palette MkDocs Material e `librefolio-locale` → `gallery-lang` al caricamento. `DocsLink.svelte` e `HelpMenu.svelte` leggono `librefolio-locale` per aprire i docs nella lingua corretta dell'app.
+- **Traduzione completa (cloud)**: 97/100 file tradotti con `stepfun/step-3.5-flash:free` via OpenRouter in ~4.5h. 3 file falliti per rate limit temporaneo, poi completati al re-run. Costo totale: $0 (modello gratuito).
 
 ---
 

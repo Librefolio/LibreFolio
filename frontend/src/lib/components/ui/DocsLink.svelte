@@ -16,7 +16,7 @@
      * is not English, so docs open in the correct language.
      */
     function getDocsUrl(): string {
-        const lang = localStorage.getItem('gallery-lang') || 'en';
+        const lang = localStorage.getItem('librefolio-locale') || 'en';
         const prefix = lang !== 'en' ? `${lang}/` : '';
         return `/mkdocs/${prefix}${path}`;
     }
