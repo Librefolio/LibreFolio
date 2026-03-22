@@ -937,6 +937,10 @@ Examples:
     from translate_docs import register_subparser as register_translate_parser
     register_translate_parser(mk_sub)
 
+    # Translate-validate - structural validation of translated files
+    from validate_translations import register_subparser as register_validate_parser
+    register_validate_parser(mk_sub)
+
     # =========================================================================
     # 📦 Tools Commands Group
     # =========================================================================

@@ -206,6 +206,8 @@ extra_javascript:
   - javascripts/lib-loader.js
   # Dashboard connectivity check
   - javascripts/dashboard-check.js
+  # App ↔ MkDocs sync (theme from frontend → MkDocs Material, must load before lang selector)
+  - javascripts/app-sync.js
   # Site-wide language selector (controls i18n + gallery screenshots)
   - javascripts/site-lang-selector.js
   # Gallery image loader - auto-resolves screenshot paths on any page
