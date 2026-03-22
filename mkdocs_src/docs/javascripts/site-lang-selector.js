@@ -82,6 +82,13 @@
 
         if (currentLang === targetLang) return;
 
+        // Save scroll position as percentage before navigating
+        var docHeight = document.documentElement.scrollHeight;
+        if (docHeight > 0) {
+            var scrollPct = window.scrollY / docHeight;
+            sessionStorage.setItem('docs-scroll-pct', String(scrollPct));
+        }
+
         // Extract content path (everything after base + optional lang prefix)
         var afterBase = path.substring(base.length);
         var contentPath = (currentLang !== 'en')
@@ -330,6 +337,20 @@
         // Create selector showing the (now-synced) URL language
         var sel = createSelector(urlLang);
         injectSelector(sel);
+
+        // Restore scroll position after language switch
+        var savedPct = sessionStorage.getItem('docs-scroll-pct');
+        if (savedPct !== null) {
+            sessionStorage.removeItem('docs-scroll-pct');
+            var pct = parseFloat(savedPct);
+            if (!isNaN(pct) && pct > 0) {
+                // Use requestAnimationFrame to wait for page layout to settle
+                requestAnimationFrame(function () {
+                    var targetY = pct * document.documentElement.scrollHeight;
+                    window.scrollTo(0, targetY);
+                });
+            }
+        }
     }
 
     // ── Bootstrap ───────────────────────────────────────────────

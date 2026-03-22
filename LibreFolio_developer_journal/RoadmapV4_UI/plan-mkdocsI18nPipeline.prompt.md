@@ -1,7 +1,7 @@
 # Plan: Pipeline i18n MkDocs con Aphra
 
 **Data creazione**: 21 Marzo 2026
-**Status**: 🔄 IN CORSO — Step 1-6.3 completati, Step 6.4 (traduzione pilota) in test, nav_translations completate per it/fr/es
+**Status**: 🔄 IN CORSO — Step 1-6.3 completati, Step 6.4 (traduzione pilota) in test con Ollama locale, Step 6.5 (validation script) completato, nav_translations completate per it/fr/es
 **Priorità**: Media (ultima fase di Phase 5)
 **Stima**: ~2-3 giorni
 **Dipendenze**: `plan-fxDocumentation.prompt.md` Fasi 1-2.5 completate ✅, `plan-docsPerfection.prompt.md` completato ✅
@@ -18,6 +18,15 @@
 - **Language selector**: implementata Soluzione B ("URL is king + redirect for default") per sincronizzare URL i18n e selettore lingua.
 - **--file path resolution**: risolve in 3 modi: path assoluto, relativo a CWD, fallback relativo a `docs/`. Supporta glob patterns (`*.en.md`, `**/*.en.md`).
 - **Token estimation**: stima basata su dimensione file × fattore multi-step (~11.3× source tokens). 108 traduzioni totali (36 file × 3 lingue) ≈ 1.26M token.
+- **Ollama 9B quality**: il modello 9B locale (`Qwen3.5-9B-Claude`) produce traduzioni con difetti strutturali (parole troncate es. "Critt valute", heading level errati, code block tradotti, sezione "Note del Traduttore" aggiunta). Il 27B è marginalmente migliore. Per qualità production-grade serve Gemini Flash via OpenRouter (~$0.50-1.00 per tutte le traduzioni).
+- **Validation script**: creato `validate_translations.py` (Step 6.5) che cross-referenzia `.en.md` con `*.{lang}.md` e rileva: heading count/level mismatch, link persi, code blocks modificati, artefatti (Translator Notes, glossary markers), size ratio anomalo, LaTeX alterato, admonition corrotte. Integrato come `./dev.py mkdocs translate-validate`.
+- **_clean_translation() fix**: aggiunto pattern per rimuovere automaticamente la sezione "Note del Traduttore" / "Translator's Notes" (in tutte le varianti linguistiche) che il modello LLM aggiunge in fondo ai file tradotti.
+- **Structural diff (translate-diff)**: aggiunto `_structural_diff()` che confronta oggettivamente la struttura markdown EN vs tradotta (13 check: headings, code blocks, links/URL, immagini, admonitions, HR, liste, tabelle, bold, line count). Iniettato come contesto nel Step 4 (Critique) via parametro `glossary`. Comando standalone: `./dev.py mkdocs translate-diff --lang it -v`.
+- **Artefatti salvati nel hash cache (v2)**: evoluto `.translate-hashes.json` per salvare per ogni file: analysis (condivisa), e per lingua: critique, structural diff, modelli usati, tempo. Migrazione automatica v1→v2. Comando `./dev.py mkdocs translate-inspect` per consultare.
+- **Thinking models + Aphra**: i modelli `*-Reasoning-Distilled` producono `<think>...</think>` blocks prima della risposta. Il parser Aphra fa `str.find()` e non gestisce questo. **Fix**: monkey-patch di `call_model()` che strippa automaticamente i `<think>` blocks dall'output prima che Aphra li parsi.
+- **Timeout per step**: aggiunto `_call_with_timeout()` con threading (default 600s, configurabile via `APHRA_STEP_TIMEOUT`). Previene i loop infiniti di reasoning dei thinking models. Il timeout sul Critique NON blocca la traduzione — procede con critica vuota.
+- **Retry su Refine**: `_robust_refine()` ritenta fino a 2 volte quando `parse_translation()` fallisce (tag `<improved_translation>` non trovato). Gestisce anche timeout per singolo tentativo.
+- **Test pilota 27B fallito**: Analyze 833s, Critique FR 573s, Refine FR fallito (no `<improved_translation>` tag), Critique ES bloccato all'infinito. Il 27B come critiquer è troppo lento su M1 Pro (~2-5 tok/s). Raccomandazione: usare 9B per tutto in locale, oppure cloud per quality.
 
 ---
 
