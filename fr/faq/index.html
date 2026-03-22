@@ -690,10 +690,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#mes-prix-ne-se-mettent-pas-a-jour" class="md-nav__link">
+  <a href="#les-prix-de-mes-actifs-ne-se-mettent-pas-a-jour" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📉 Mes prix ne se mettent pas à jour
+        📉 Les prix de mes actifs ne se mettent pas à jour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mes-taux-de-change-ne-se-mettent-pas-a-jour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💱 Mes taux de change ne se mettent pas à jour
       
     </span>
   </a>
@@ -2048,6 +2059,34 @@
     
   
     Benchmarks Synthétiques
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5431,10 +5470,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#mes-prix-ne-se-mettent-pas-a-jour" class="md-nav__link">
+  <a href="#les-prix-de-mes-actifs-ne-se-mettent-pas-a-jour" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📉 Mes prix ne se mettent pas à jour
+        📉 Les prix de mes actifs ne se mettent pas à jour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mes-taux-de-change-ne-se-mettent-pas-a-jour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💱 Mes taux de change ne se mettent pas à jour
       
     </span>
   </a>
@@ -5494,7 +5544,7 @@
 <h3 id="quest-ce-que-librefolio">🤔 Qu'est-ce que LibreFolio ?</h3>
 <p>LibreFolio est un tracker de portefeuille auto-hébergé et open source, conçu pour les investisseurs soucieux de leur vie privée. Il vous permet de suivre vos investissements, d'analyser leurs performances et de conserver le contrôle total de vos données financières.</p>
 <h3 id="librefolio-est-il-gratuit">💰 LibreFolio est-il gratuit ?</h3>
-<p>Oui ! LibreFolio est entièrement gratuit et open source sous licence MIT.</p>
+<p>Oui ! LibreFolio est entièrement gratuit et open source sous licence <a href="https://www.gnu.org/licenses/agpl-3.0.html">AGPL-3.0</a>.</p>
 <h3 id="quels-actifs-puis-je-suivre">📊 Quels actifs puis-je suivre ?</h3>
 <p>LibreFolio prend en charge :</p>
 <ul>
@@ -5502,8 +5552,12 @@
 <li><strong>Cryptomonnaies</strong> - Bientôt disponibles</li>
 <li><strong>Obligations</strong> - Saisie manuelle prise en charge</li>
 <li><strong>Prêts P2P</strong> - Actifs à rendement périodique</li>
-<li><strong>Espèces et Dépôts</strong> - Suivi des liquidités</li>
+<li><strong>Espèces et Dépôts</strong> — Suivi des liquidités</li>
 </ul>
+<div class="admonition tip">
+<p class="admonition-title">Il manque quelque chose ? 💡</p>
+<p>Si vous souhaitez un type d'actif ou une fonctionnalité que nous n'avons pas encore envisagé, faites-le nous savoir ! Ouvrez une <a href="https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement">demande d'amélioration sur GitHub</a>.</p>
+</div>
 <h2 id="demarrer">🚀 Démarrer</h2>
 <h3 id="comment-installer-librefolio">📦 Comment installer LibreFolio ?</h3>
 <p>Consultez notre <a href="../developer/dev-installation/">Guide d'installation</a> pour des instructions détaillées.</p>
@@ -5519,12 +5573,19 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>reset<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;new_password&gt;
 </code></pre></div>
 <h2 id="depannage">🔧 Dépannage</h2>
-<h3 id="mes-prix-ne-se-mettent-pas-a-jour">📉 Mes prix ne se mettent pas à jour</h3>
+<h3 id="les-prix-de-mes-actifs-ne-se-mettent-pas-a-jour">📉 Les prix de mes actifs ne se mettent pas à jour</h3>
 <p>Vérifiez que :</p>
 <ol>
 <li>La synchronisation automatique est activée dans les Paramètres globaux</li>
-<li>Vos actifs possèdent des ISIN ou symboles valides</li>
-<li>Le fournisseur yfinance fonctionne (consultez les journaux)</li>
+<li>Vos actifs possèdent des ISIN ou symboles valides reconnus par le <strong>fournisseur de données</strong> configuré (ex. <a href="https://pypi.org/project/yfinance/">yfinance</a> pour les actions et ETF)</li>
+<li>Le service du fournisseur est disponible (consultez les journaux du serveur)</li>
+</ol>
+<h3 id="mes-taux-de-change-ne-se-mettent-pas-a-jour">💱 Mes taux de change ne se mettent pas à jour</h3>
+<p>Vérifiez que :</p>
+<ol>
+<li>La paire de devises a au moins un <a href="../user/fx/detail/provider/">fournisseur de données configuré</a></li>
+<li>L'API du fournisseur est accessible (BCE, Fed, BOE, BNS)</li>
+<li>Vous avez exécuté une <a href="../user/fx/sync/">synchronisation</a> pour la plage de dates souhaitée</li>
 </ol>
 <h3 id="je-ne-peux-pas-me-connecter">🔐 Je ne peux pas me connecter</h3>
 <ul>

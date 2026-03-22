@@ -730,6 +730,15 @@
         <xhtml:link rel="alternate" hreflang="it" href="https://alfystar.github.io/LibreFolio/it/financial-theory/synthetic-benchmarks/"/>
     </url>
     <url>
+        <loc>https://alfystar.github.io/LibreFolio/financial-theory/taxation/</loc>
+        <lastmod>2026-03-22</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://alfystar.github.io/LibreFolio/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="https://alfystar.github.io/LibreFolio/es/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="fr" href="https://alfystar.github.io/LibreFolio/fr/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="it" href="https://alfystar.github.io/LibreFolio/it/financial-theory/taxation/"/>
+    </url>
+    <url>
         <loc>https://alfystar.github.io/LibreFolio/financial-theory/technical-indicators/</loc>
         <lastmod>2026-03-22</lastmod>
         <changefreq>daily</changefreq>
@@ -1655,6 +1664,15 @@
         <xhtml:link rel="alternate" hreflang="en" href="https://alfystar.github.io/LibreFolio/financial-theory/synthetic-benchmarks/"/>
         <xhtml:link rel="alternate" hreflang="es" href="https://alfystar.github.io/LibreFolio/es/financial-theory/synthetic-benchmarks/"/>
         <xhtml:link rel="alternate" hreflang="fr" href="https://alfystar.github.io/LibreFolio/fr/financial-theory/synthetic-benchmarks/"/>
+    </url>
+    <url>
+        <loc>https://alfystar.github.io/LibreFolio/it/financial-theory/taxation/</loc>
+        <lastmod>2026-03-22</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="it" href="https://alfystar.github.io/LibreFolio/it/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://alfystar.github.io/LibreFolio/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="https://alfystar.github.io/LibreFolio/es/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="fr" href="https://alfystar.github.io/LibreFolio/fr/financial-theory/taxation/"/>
     </url>
     <url>
         <loc>https://alfystar.github.io/LibreFolio/it/financial-theory/technical-indicators/</loc>
@@ -2584,6 +2602,15 @@
         <xhtml:link rel="alternate" hreflang="it" href="https://alfystar.github.io/LibreFolio/it/financial-theory/synthetic-benchmarks/"/>
     </url>
     <url>
+        <loc>https://alfystar.github.io/LibreFolio/fr/financial-theory/taxation/</loc>
+        <lastmod>2026-03-22</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="fr" href="https://alfystar.github.io/LibreFolio/fr/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://alfystar.github.io/LibreFolio/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="es" href="https://alfystar.github.io/LibreFolio/es/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="it" href="https://alfystar.github.io/LibreFolio/it/financial-theory/taxation/"/>
+    </url>
+    <url>
         <loc>https://alfystar.github.io/LibreFolio/fr/financial-theory/technical-indicators/</loc>
         <lastmod>2026-03-22</lastmod>
         <changefreq>daily</changefreq>
@@ -3509,6 +3536,15 @@
         <xhtml:link rel="alternate" hreflang="en" href="https://alfystar.github.io/LibreFolio/financial-theory/synthetic-benchmarks/"/>
         <xhtml:link rel="alternate" hreflang="fr" href="https://alfystar.github.io/LibreFolio/fr/financial-theory/synthetic-benchmarks/"/>
         <xhtml:link rel="alternate" hreflang="it" href="https://alfystar.github.io/LibreFolio/it/financial-theory/synthetic-benchmarks/"/>
+    </url>
+    <url>
+        <loc>https://alfystar.github.io/LibreFolio/es/financial-theory/taxation/</loc>
+        <lastmod>2026-03-22</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="es" href="https://alfystar.github.io/LibreFolio/es/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://alfystar.github.io/LibreFolio/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="fr" href="https://alfystar.github.io/LibreFolio/fr/financial-theory/taxation/"/>
+        <xhtml:link rel="alternate" hreflang="it" href="https://alfystar.github.io/LibreFolio/it/financial-theory/taxation/"/>
     </url>
     <url>
         <loc>https://alfystar.github.io/LibreFolio/es/financial-theory/technical-indicators/</loc>

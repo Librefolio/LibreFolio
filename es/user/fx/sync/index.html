@@ -1970,6 +1970,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5313,15 +5341,20 @@
 <h2 id="como-funciona-la-sincronizacion">⚙️ Cómo Funciona la Sincronización</h2>
 <p>El proceso de sincronización:</p>
 <ol>
-<li>Obtiene los tipos de cambio desde la API del proveedor seleccionado (BCE, FED, BOE, SNB, etc.)</li>
-<li>Almacena nuevos puntos de datos en la base de datos local</li>
-<li>Omite las fechas que ya existen (sin duplicados)</li>
-<li>Si el proveedor principal falla, el sistema automáticamente recurre al siguiente proveedor configurado</li>
+<li>Obtiene los tipos de cambio desde la API del proveedor configurado (BCE, FED, BOE, SNB, etc.)</li>
+<li><strong>Sobrescribe</strong> los puntos de datos existentes en el rango de fechas descargado con los valores del proveedor — el proveedor se considera la fuente autorizada</li>
+<li>Añade nuevos puntos para las fechas no presentes en la base de datos</li>
+<li>Si el proveedor principal falla, el sistema recurre automáticamente al siguiente proveedor configurado</li>
 </ol>
-<div class="admonition tip">
-<p class="admonition-title">Sin datos duplicados</p>
+<p>Después de la sincronización, verás el número de <strong>puntos descargados</strong> y cuántos eran <strong>realmente nuevos</strong> (no presentes previamente en la base de datos).</p>
+<div class="admonition warning">
+<p class="admonition-title">El proveedor es autoritativo</p>
+<p>Volver a sincronizar un par sobrescribirá cualquier valor editado manualmente en el rango sincronizado. Para preservar las ediciones manuales, configura el par con el proveedor MANUAL (sin fuente de datos automática).</p>
 </div>
-<p>Volver a sincronizar un par es siempre seguro: los puntos de datos existentes nunca se sobrescriben ni se duplican.</p>
+<div class="admonition info">
+<p class="admonition-title">Precisión en las conversiones en cadena</p>
+<p>Al usar rutas en cadena (ej. RON → EUR → JPY), cada conversión intermedia introduce un mínimo error de redondeo. Aunque es despreciable en la mayoría de los casos, los tipos convertidos por cadena pueden diferir ligeramente de las cotizaciones directas del mercado.</p>
+</div>
 <hr />
 <h2 id="cadenas-de-suministro-de-datos">🌐 Cadenas de Suministro de Datos</h2>
 <p>Para usuarios avanzados: LibreFolio utiliza un <strong>sistema de enrutamiento sofisticado</strong> para los datos de divisas. Cada par de divisas puede tener múltiples proveedores configurados con prioridades y cadenas de respaldo.</p>

@@ -2169,6 +2169,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5705,8 +5733,8 @@
 <p>Esta página documenta los indicadores de análisis técnico disponibles como superposiciones de gráficos en el módulo FX de LibreFolio. Cada indicador se explica desde dos perspectivas complementarias: la interpretación <strong>financiera</strong> que los traders usan a diario, y el equivalente en <strong>procesamiento de señales</strong> que los ingenieros de sistemas de control o con formación en DSP reconocerán al instante.</p>
 <div class="admonition info">
 <p class="admonition-title">¿Por qué dos perspectivas?</p>
-</div>
 <p>Los mercados financieros <strong>no</strong> son sistemas LTI (Lineales e Invariantes en el Tiempo) estacionarios — son ruidosos, caóticos y su contenido espectral cambia con el tiempo. Sin embargo, las herramientas matemáticas que aplicamos para extraer tendencia, momento o volatilidad son <em>exactamente</em> los mismos filtros de tiempo discreto que se enseñan en cualquier curso de procesamiento de señales. Si alguna vez has diseñado un pasa-bajos Butterworth o calculado una varianza móvil, ya entiendes estos indicadores — solo con nombres diferentes.</p>
+</div>
 <hr />
 <h2 id="la-intuicion-rapido-vs-lento">⚡ La Intuición "Rápido" vs "Lento"</h2>
 <p>En finanzas, rápido y lento se refieren a la <strong>constante de tiempo</strong> (<span class="arithmatex">\(\tau\)</span>) del filtro subyacente.</p>
@@ -5799,8 +5827,8 @@ H(z) = \frac{\alpha}{1 - (1-\alpha)\,z^{-1}}
 <p>Cuando <span class="arithmatex">\(\alpha\)</span> es pequeño (<span class="arithmatex">\(N\)</span> grande) la banda de paso se estrecha dramáticamente, atenuando todo excepto el componente DC (la tendencia a largo plazo).</p>
 <div class="admonition tip">
 <p class="admonition-title">Ubicación del polo</p>
-</div>
 <p>El único polo está en <span class="arithmatex">\(z = 1-\alpha\)</span>. Para <span class="arithmatex">\(N = 200\)</span>, <span class="arithmatex">\(\alpha \approx 0.01\)</span>, entonces el polo está en <span class="arithmatex">\(z = 0.99\)</span> — extremadamente cerca del círculo unitario, lo que explica el fuerte suavizado y el gran retraso de grupo.</p>
+</div>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg></span> <a href="https://en.wikipedia.org/wiki/Exponential_smoothing" target="_blank">EMA en Wikipedia</a></p>
 <hr />
 <h2 id="macd">📊 MACD — Convergencia/Divergencia de Medias Móviles</h2>
@@ -5868,8 +5896,8 @@ H_{MACD}(z) = H_{fast}(z) - H_{slow}(z)
 <p>La Línea de Señal es otro pasa-bajos aplicado a esta salida pasa-banda — actúa como un <strong>filtro adaptado</strong>, retrasando ligeramente la señal para reducir detecciones de cruce falsos positivos.</p>
 <div class="admonition note">
 <p class="admonition-title">Interpretación como derivada</p>
-</div>
 <p>Para <span class="arithmatex">\(\alpha\)</span> pequeño, <span class="arithmatex">\(EMA_{fast} - EMA_{slow}\)</span> se comporta como una primera derivada suavizada <span class="arithmatex">\(\frac{d}{dt}[\text{tendencia}]\)</span>. Cuando el histograma cambia de signo, la "velocidad" de la tendencia cambia de dirección.</p>
+</div>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg></span> <a href="https://en.wikipedia.org/wiki/MACD" target="_blank">MACD en Wikipedia</a></p>
 <hr />
 <h2 id="rsi">💪 RSI — Índice de Fuerza Relativa</h2>
@@ -5938,8 +5966,8 @@ H_{MACD}(z) = H_{fast}(z) - H_{slow}(z)
 <p>En términos de sistemas de control, es un <strong>detector de saturación</strong>: cuando la salida del sistema (precio) ha estado moviéndose en una dirección por demasiado tiempo, el RSI señaliza que el actuador (mercado) está cerca de su riel. Como cualquier oscilador en un bucle de retroalimentación, cuanto más lejos del equilibrio, más fuerte es la fuerza restauradora — de ahí la propiedad de reversión a la media que los traders explotan.</p>
 <div class="admonition warning">
 <p class="admonition-title">No estacionariedad</p>
-</div>
 <p>Los umbrales 70/30 asumen distribuciones de retorno aproximadamente simétricas. En mercados con tendencias fuertes, el RSI puede permanecer por encima de 70 durante semanas — es un indicador <em>probabilístico</em>, no determinista.</p>
+</div>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg></span> <a href="https://en.wikipedia.org/wiki/Relative_strength_index" target="_blank">RSI en Wikipedia</a></p>
 <hr />
 <h2 id="bollinger-bands">📏 Bandas de Bollinger</h2>
@@ -5996,8 +6024,8 @@ H_{MACD}(z) = H_{fast}(z) - H_{slow}(z)
 <p>En el lenguaje de filtros adaptativos, esto es un <strong>rastreador de valor esperado con un intervalo de confianza adaptativo</strong>. Cuando la varianza <span class="arithmatex">\(\sigma^2\)</span> cae (la "contracción de Bollinger" o <em>squeeze</em>), el sistema está en un estado de baja entropía. En sistemas caóticos como los mercados financieros, los períodos de baja entropía son seguidos de manera confiable por explosiones de alta entropía (alta volatilidad) — haciendo de la contracción una de las configuraciones más vigiladas en el análisis técnico.</p>
 <div class="admonition info">
 <p class="admonition-title">FIR vs IIR</p>
-</div>
 <p>A diferencia de la EMA (IIR, un polo), la SMA es un filtro <strong>FIR</strong> con un retraso de grupo perfectamente plano de <span class="arithmatex">\((N-1)/2\)</span> muestras. Compensa una banda de transición más ancha por distorsión de fase cero — ideal para centrar la envolvente de confianza.</p>
+</div>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg></span> <a href="https://en.wikipedia.org/wiki/Bollinger_Bands" target="_blank">Bandas de Bollinger en Wikipedia</a></p>
 
 

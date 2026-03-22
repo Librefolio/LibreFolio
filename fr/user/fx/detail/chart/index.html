@@ -1183,10 +1183,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#types-de-graphique" class="md-nav__link">
+  <a href="#modes-daffichage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔀 Types de graphique
+        🔀 Modes d'affichage
       
     </span>
   </a>
@@ -1968,6 +1968,34 @@
     
   
     Benchmarks Synthétiques
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5239,10 +5267,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#types-de-graphique" class="md-nav__link">
+  <a href="#modes-daffichage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔀 Types de graphique
+        🔀 Modes d'affichage
       
     </span>
   </a>
@@ -5320,13 +5348,13 @@
 </div>
 
 <hr />
-<h2 id="types-de-graphique">🔀 Types de graphique</h2>
-<p>Basculer entre deux modes de visualisation :</p>
+<h2 id="modes-daffichage">🔀 Modes d'affichage</h2>
+<p>Basculer entre deux modes via la barre d'outils :</p>
 <ul>
-<li>📈 <strong>Graphique linéaire</strong> — Une ligne épurée reliant chaque taux quotidien. Idéal pour visualiser les tendances sur de longues périodes.</li>
-<li>🕯️ <strong>Graphique en chandeliers</strong> — Affiche l'ouverture, le plus haut, le plus bas et la clôture pour chaque période. Idéal pour analyser la volatilité à court terme et l'action des prix.</li>
+<li>📈 <strong>Absolu</strong> — Affiche les valeurs brutes du taux de change (ex. 1 EUR = 1,0845 USD). Idéal pour voir les niveaux réels du taux.</li>
+<li>📊 <strong>Pourcentage (%)</strong> — Affiche la variation en pourcentage depuis le premier point de données visible. Idéal pour comparer les mouvements relatifs et superposer plusieurs signaux.</li>
 </ul>
-<p>Utilisez le bouton de basculement dans la barre d'outils du graphique pour changer de mode.</p>
+<p>En passant en mode %, tous les signaux superposés sont également recalculés en pourcentage depuis leur point de départ respectif.</p>
 <hr />
 <h2 id="navigation-et-zoom">🔍 Navigation et zoom</h2>
 <table>
@@ -5360,7 +5388,11 @@
 </tr>
 </tbody>
 </table>
-<p>Vous pouvez également utiliser les boutons du <strong>sélecteur de période</strong> (1M, 3M, 6M, 1A, 5A, Tout) pour accéder rapidement aux périodes courantes.</p>
+<p>Vous pouvez également utiliser les <strong>préréglages temporels</strong> (1S, 1M, 3M, 6M, 1A, 2A) ou sélectionner une plage <strong>Personnalisée</strong> pour accéder rapidement à des périodes spécifiques.</p>
+<div class="admonition info">
+<p class="admonition-title">Disponibilité des données</p>
+<p>Si la plage sélectionnée dépasse les données disponibles, LibreFolio affiche ce qui est disponible. Utilisez <strong>Synchroniser</strong> pour essayer de télécharger des données plus anciennes — mais notez que certains fournisseurs ont une couverture historique limitée.</p>
+</div>
 <hr />
 <h2 id="infobulle">💬 Infobulle</h2>
 <p>Survolez n'importe quel point du graphique pour voir :</p>
@@ -5373,10 +5405,10 @@
 <h2 id="barre-doutils">🧰 Barre d'outils</h2>
 <p>La barre d'outils du graphique donne un accès rapide à :</p>
 <ul>
-<li>📊 <strong>Basculement de type de graphique</strong> — Linéaire / Chandeliers</li>
-<li>⏱️ <strong>Sélecteur de période</strong> — 1M, 3M, 6M, 1A, 5A, Tout</li>
+<li>📊 <strong>Mode d'affichage</strong> — Absolu / Pourcentage</li>
+<li>⏱️ <strong>Plage temporelle</strong> — 1S, 1M, 3M, 6M, 1A, 2A, Personnalisée</li>
 <li>📈 <strong><a href="../signals/">Signaux</a></strong> — Activer les superpositions d'indicateurs techniques</li>
-<li>📐 <strong><a href="../measures/">Mesures</a></strong> — Outil de mesure clic à clic</li>
+<li>📏 <strong><a href="../measures/">Mesures</a></strong> — Outil de mesure clic à clic</li>
 <li>✏️ <strong><a href="../data-editor/">Éditeur de données</a></strong> — Modifier des points de données individuels</li>
 <li>⚙️ <strong><a href="../../chart-settings/">Paramètres du graphique</a></strong> — Personnalisation visuelle</li>
 </ul>

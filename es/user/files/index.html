@@ -1998,6 +1998,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5393,20 +5421,25 @@
 
 <div class="admonition consejo">
 <p class="admonition-title">Límite de Tamaño de Archivo</p>
-</div>
 <p>El tamaño máximo de subida está configurado por el administrador del sistema en <a href="../../admin/settings/">Configuración Global</a>. El valor predeterminado suele ser de 10 MB.</p>
+</div>
 <hr />
 <h2 id="subida-de-informes-de-broker">📤 Subida de Informes de Broker</h2>
 <p>Si quieres importar transacciones desde tu broker:</p>
 <ol>
 <li>Ve a la pestaña <strong>Informes de Broker</strong></li>
 <li>Sube el archivo CSV o Excel exportado de tu broker (Degiro, Interactive Brokers, eToro, Directa, etc.)</li>
-<li>El sistema intentará <strong>detectar automáticamente</strong> el formato del broker y <strong>iniciar el procesamiento</strong> de las transacciones</li>
+<li>Elige a qué <strong>broker asociar</strong> el archivo — es donde se guardarán las transacciones importadas</li>
+<li>El sistema intentará luego <strong>detectar automáticamente</strong> el formato del archivo mediante el sistema de importación BRIM y procesar las transacciones</li>
 </ol>
-<div class="admonition nota">
-<p class="admonition-title">En desarrollo</p>
+<div class="admonition info">
+<p class="admonition-title">Asociación ≠ Análisis</p>
+<p>El broker elegido al subir el archivo es solo para <strong>asociación</strong> — determina qué cuenta de broker recibe las transacciones importadas. La detección del formato y el análisis ocurren en un paso separado y son <strong>independientes</strong> del broker: el mismo plugin BRIM puede funcionar para varios brokers si exportan en el mismo formato.</p>
 </div>
-<p>La interfaz de usuario completa para importar informes de broker (BRIM) está en desarrollo activo. Actualmente, puedes subir informes e <strong>iniciar el procesamiento</strong>, pero el <strong>asistente de importación paso a paso</strong> aún no está disponible.</p>
+<div class="admonition note">
+<p class="admonition-title">En desarrollo</p>
+<p>La interfaz completa para importar informes de broker (BRIM) está en desarrollo activo. Actualmente, puedes subir informes y asociarlos con brokers, pero el asistente de importación paso a paso aún no está disponible.</p>
+</div>
 <hr />
 <h2 id="seguridad">🔒 Seguridad</h2>
 <ul>

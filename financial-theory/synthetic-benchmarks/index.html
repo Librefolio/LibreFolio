@@ -14,7 +14,7 @@
         <link rel="prev" href="../technical-indicators/">
       
       
-        <link rel="next" href="../../developer/">
+        <link rel="next" href="../taxation/">
       
       
         
@@ -2103,6 +2103,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -5594,9 +5622,24 @@ this ideal trajectory?"</p>
 <h2 id="linear-growth">📈 Linear Growth</h2>
 <h3 id="financial-meaning">💡 Financial Meaning</h3>
 <p>A linear growth benchmark represents <strong>simple interest</strong> — the value increases by a
-fixed absolute amount each period. It is the simplest "target line" you can draw: if you
-expect an asset to return <span class="arithmatex">\(r\)</span>% per year, the linear benchmark shows where the price
-<em>should</em> be at any point in time under that assumption.</p>
+fixed absolute amount each period. This models the scenario where you <strong>do not reinvest</strong>
+earnings (dividends, interest, coupons): cash payouts are received but kept aside, so
+only the original principal generates returns.</p>
+<p>If instead you <strong>reinvest</strong> those earnings — either manually or automatically through
+accumulating instruments (e.g., accumulating ETFs, which reinvest dividends internally
+and benefit from <a href="../taxation/#tax-deferral-advantage">tax deferral</a>) — you should
+expect <strong><a href="#compound-growth">compound growth</a></strong>, where returns generate further returns.</p>
+<p>In practice, the difference between linear and compound growth widens dramatically
+over long horizons. This is why the Linear benchmark appears as a straight line while
+the Compound benchmark curves upward exponentially.</p>
+<div class="admonition abstract">
+<p class="admonition-title">Capital gains &amp; losses</p>
+<p>When selling an asset above its purchase price, the difference is a <strong>capital gain</strong>;
+below, a <strong>capital loss</strong>. Each jurisdiction has its own rules regarding tax rates,
+holding period thresholds, loss carry-forward duration, and matching methods
+(FIFO, LIFO, specific identification). For a theoretical overview, see
+<a href="../taxation/">Taxation &amp; Tax Efficiency</a>.</p>
+</div>
 <h3 id="mathematical-formula">🔢 Mathematical Formula</h3>
 <div class="arithmatex">\[
 y(t) = y_0 \cdot (1 + r \cdot t)

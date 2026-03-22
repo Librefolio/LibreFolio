@@ -2131,6 +2131,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5648,9 +5676,9 @@
 <li>Confirma la eliminación</li>
 </ol>
 <div class="admonition warning">
-<p class="admonition-title">Las ediciones manuales sobrescriben los datos sincronizados</p>
+<p class="admonition-title">Los datos sincronizados sobrescriben las ediciones manuales</p>
+<p>Si editas o agregas manualmente un punto de datos para una fecha que luego es cubierta por una sincronización, el valor del proveedor <strong>sobrescribirá</strong> tu edición manual — el proveedor siempre se considera la fuente autorizada. Para pares donde desees control manual completo, usa el proveedor MANUAL (sin fuente de datos automática) — ver <a href="../provider/">Configuración de Proveedor</a>.</p>
 </div>
-<p>Si editas o agregas manualmente un punto de datos para una fecha que fue sincronizada desde un proveedor, tu valor manual tiene precedencia. La próxima sincronización no sobrescribirá las entradas manuales.</p>
 <hr />
 <h2 id="importacion-csv">📥 Importación CSV</h2>
 <p>Para carga masiva de datos históricos de tipos de cambio, usa la herramienta de Importación CSV.</p>
@@ -5775,13 +5803,18 @@
 </table>
 <hr />
 <h3 id="comportamiento-en-la-fusion">🔀 Comportamiento en la Fusión</h3>
-<p>Al importar, si una fecha ya existe en la base de datos:</p>
+<p>Al importar vía CSV o al añadir puntos manualmente en el editor:</p>
 <ul>
-<li>🔄 <strong>Los puntos de datos existentes se sobrescriben</strong> con los valores importados</li>
-<li>🆕 <strong>Las fechas nuevas</strong> se agregan</li>
-<li>✅ <strong>Las fechas que no están en el CSV</strong> se dejan sin cambios</li>
+<li>Las modificaciones se aplican primero a la <strong>caché local del cliente</strong> (visibles inmediatamente en el gráfico)</li>
+<li>Las modificaciones <strong>no se guardan</strong> en la base de datos hasta que presiones <strong>Guardar</strong></li>
+<li>🔄 Los <strong>puntos de datos existentes</strong> en la base de datos se <strong>sobrescribirán</strong> con los valores importados al guardar</li>
+<li>🆕 Las <strong>fechas nuevas</strong> se agregan</li>
+<li>✅ Las <strong>fechas que no están en la importación</strong> se dejan sin cambios</li>
 </ul>
-<p>Esto te permite actualizar selectivamente rangos de fechas específicos sin afectar el resto de tus datos.</p>
+<div class="admonition tip">
+<p class="admonition-title">Ideal para pares MANUAL</p>
+<p>El editor de datos es particularmente útil para pares configurados con el proveedor MANUAL (sin fuente de datos automática). Para pares con proveedor, las ediciones manuales serán sobrescritas en la próxima sincronización.</p>
+</div>
 
 
 

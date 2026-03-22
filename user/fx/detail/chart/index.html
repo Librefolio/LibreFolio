@@ -1183,10 +1183,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#chart-types" class="md-nav__link">
+  <a href="#view-modes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔀 Chart Types
+        🔀 View Modes
       
     </span>
   </a>
@@ -1968,6 +1968,34 @@
     
   
     Synthetic Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../financial-theory/taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5239,10 +5267,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#chart-types" class="md-nav__link">
+  <a href="#view-modes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔀 Chart Types
+        🔀 View Modes
       
     </span>
   </a>
@@ -5320,13 +5348,13 @@
 </div>
 
 <hr />
-<h2 id="chart-types">🔀 Chart Types</h2>
-<p>Toggle between two visualization modes:</p>
+<h2 id="view-modes">🔀 View Modes</h2>
+<p>Toggle between two display modes using the toolbar:</p>
 <ul>
-<li>📈 <strong>Line Chart</strong> — A clean line connecting each daily rate. Best for seeing trends over long periods.</li>
-<li>🕯️ <strong>Candlestick Chart</strong> — Shows open/high/low/close for each period. Best for analyzing short-term volatility and price action.</li>
+<li>📈 <strong>Absolute</strong> — Shows the raw exchange rate values (e.g., 1 EUR = 1.0845 USD). Best for seeing actual rate levels.</li>
+<li>📊 <strong>Percentage (%)</strong> — Shows the percentage change from the first visible data point. Best for comparing relative movements and overlaying multiple signals.</li>
 </ul>
-<p>Use the toggle button in the chart toolbar to switch between modes.</p>
+<p>When switching to % mode, all overlay signals are also recalculated as percentages from their respective starting points.</p>
 <hr />
 <h2 id="navigation-zoom">🔍 Navigation &amp; Zoom</h2>
 <table>
@@ -5360,7 +5388,11 @@
 </tr>
 </tbody>
 </table>
-<p>You can also use the <strong>time range selector</strong> buttons (1M, 3M, 6M, 1Y, 5Y, All) to quickly jump to common periods.</p>
+<p>You can also use the <strong>time range presets</strong> (1W, 1M, 3M, 6M, 1Y, 2Y) or select a <strong>Custom</strong> date range to quickly jump to specific periods.</p>
+<div class="admonition info">
+<p class="admonition-title">Data availability</p>
+<p>If the selected time range exceeds the available data, LibreFolio displays whatever is available. Use <strong>Sync</strong> to try fetching older data from the provider — but note that some providers have limited historical coverage.</p>
+</div>
 <hr />
 <h2 id="tooltip">💬 Tooltip</h2>
 <p>Hover over any point on the chart to see:</p>
@@ -5373,10 +5405,10 @@
 <h2 id="toolbar">🧰 Toolbar</h2>
 <p>The chart toolbar provides quick access to:</p>
 <ul>
-<li>📊 <strong>Chart type toggle</strong> — Line / Candlestick</li>
-<li>⏱️ <strong>Time range</strong> — 1M, 3M, 6M, 1Y, 5Y, All</li>
+<li>📊 <strong>View mode toggle</strong> — Absolute / Percentage</li>
+<li>⏱️ <strong>Time range</strong> — 1W, 1M, 3M, 6M, 1Y, 2Y, Custom</li>
 <li>📈 <strong><a href="../signals/">Signals</a></strong> — Toggle technical indicator overlays</li>
-<li>📐 <strong><a href="../measures/">Measures</a></strong> — Click-to-click measurement tool</li>
+<li>📏 <strong><a href="../measures/">Measures</a></strong> — Click-to-click measurement tool</li>
 <li>✏️ <strong><a href="../data-editor/">Data Editor</a></strong> — Edit individual data points</li>
 <li>⚙️ <strong><a href="../../chart-settings/">Chart Settings</a></strong> — Visual customization</li>
 </ul>

@@ -1988,17 +1988,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#notes-du-traducteur" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        📝 Notes du traducteur
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -2051,6 +2040,34 @@
     
   
     Benchmarks Synthétiques
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../taxation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Taxation & Tax Efficiency
   
 
     
@@ -5460,17 +5477,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#notes-du-traducteur" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        📝 Notes du traducteur
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -5501,9 +5507,9 @@ R_{simple} = \frac{P_{end} - P_{start}}{P_{start}} = \frac{P_{end}}{P_{start}} -
 \]</div>
 <div class="admonition exemple">
 <p class="admonition-title">Exemple</p>
-</div>
 <p>Si EUR/USD passe de 1,10 à 1,14 :</p>
-<p>$<span class="arithmatex">\(R = \frac{1,14 - 1,10}{1,10} = 0,0364 = 3,64\%\)</span>$</p>
+<div class="arithmatex">\[R = \frac{1,14 - 1,10}{1,10} = 0,0364 = 3,64\%\]</div>
+</div>
 <h3 id="proprietes">📊 Propriétés</h3>
 <ul>
 <li><strong>Intuitif</strong> : représente directement "combien vous avez gagné/perdu"</li>
@@ -5545,9 +5551,9 @@ R_{annual} = \left(\frac{P_{end}}{P_{start}}\right)^{365/d} - 1
 <p>C'est ce que l'outil <a href="../../user/fx/detail/measures/">Mesures</a> de LibreFolio affiche.</p>
 <div class="admonition exemple">
 <p class="admonition-title">Exemple</p>
-</div>
 <p>EUR/USD passe de 1,10 à 1,14 sur 90 jours :</p>
-<p>$<span class="arithmatex">\(R_{annual} = \left(\frac{1,14}{1,10}\right)^{365/90} - 1 = (1,0364)^{4,056} - 1 \approx 15,5\%\)</span>$</p>
+<div class="arithmatex">\[R_{annual} = \left(\frac{1,14}{1,10}\right)^{365/90} - 1 = (1,0364)^{4,056} - 1 \approx 15,5\%\]</div>
+</div>
 <h3 id="rendement-logarithmique-annualise">📐 Rendement logarithmique annualisé</h3>
 <p>Pour les rendements logarithmiques, l'annualisation est simplement un ajustement d'échelle :</p>
 <div class="arithmatex">\[
@@ -5599,11 +5605,11 @@ r_{annual} = r_{log} \times \frac{365}{d}
 </table>
 <div class="admonition astuce">
 <p class="admonition-title">Quand utiliser l'un ou l'autre ?</p>
-</div>
 <ul>
 <li><strong>Rendements simples</strong> pour les rapports aux utilisateurs et le calcul des rendements au niveau du portefeuille</li>
 <li><strong>Rendements logarithmiques</strong> pour l'analyse statistique, l'estimation de la volatilité et les modèles de séries temporelles</li>
 </ul>
+</div>
 <hr />
 <h2 id="conventions-de-decompte-des-jours">📏 Conventions de décompte des jours</h2>
 <p>Le nombre de jours <span class="arithmatex">\(d\)</span> peut être calculé différemment selon la convention :</p>
@@ -5620,7 +5626,6 @@ r_{annual} = r_{log} \times \frac{365}{d}
 <li><strong>Prix négatifs</strong> : les rendements logarithmiques ne sont pas définis pour des valeurs négatives — pas un problème pour les taux de change</li>
 <li><strong>Fréquence de composition</strong> : le TCAC suppose une composition continue ; les instruments réels peuvent être composés quotidiennement, mensuellement ou trimestriellement</li>
 </ol>
-<h2 id="notes-du-traducteur">📝 Notes du traducteur</h2>
 
 
 
