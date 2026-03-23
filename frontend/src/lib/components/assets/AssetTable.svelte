@@ -1,6 +1,7 @@
 <!--
   AssetTable — Table view for assets list using DataTable.
-  Columns: Icon, Name, Type (badge), Currency (flag), Last Price, Δ Abs, Δ %, Provider, Active, Actions.
+  Columns: Icon, Name, Type (badge), Currency (flag), Last Price, Δ multi-period, Provider, Active, Actions.
+  Dynamic Δ columns based on visiblePeriods prop.
   Svelte 5 runes, dark mode.
   Used by: /assets list page (table/list view)
 -->
@@ -28,16 +29,18 @@
         lastPrice?: number | null;
         deltaAbs?: number | null;
         deltaPercent?: number | null;
+        deltas?: Record<string, number | null>;
     }
 
     interface Props {
         data: AssetRow[];
         loading?: boolean;
+        visiblePeriods?: ReadonlyArray<{key: string; days: number}>;
         onedit?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
     }
 
-    let {data = [], loading = false, onedit, ondelete}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], onedit, ondelete}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
 
@@ -47,13 +50,14 @@
 
     function formatDelta(val: number | null | undefined, suffix: string = ''): string {
         if (val === null || val === undefined) return '—';
-        const sign = val >= 0 ? '+' : '';
-        return `${sign}${val.toFixed(2)}${suffix}`;
+        const num = Number(val);
+        const sign = num >= 0 ? '+' : '';
+        return `${sign}${num.toFixed(2)}${suffix}`;
     }
 
     function deltaColorClass(val: number | null | undefined): string {
         if (val === null || val === undefined) return 'text-gray-400 dark:text-gray-500';
-        return val >= 0
+        return Number(val) >= 0
             ? 'text-emerald-600 dark:text-emerald-400'
             : 'text-red-500 dark:text-red-400';
     }
@@ -113,37 +117,29 @@
             id: 'lastPrice',
             header: () => $t('assets.table.lastPrice'),
             cell: (row) => row.lastPrice !== null && row.lastPrice !== undefined
-                ? {type: 'html', html: `<span class="font-mono">${row.lastPrice.toFixed(2)}</span>`}
+                ? {type: 'html', html: `<span class="font-mono">${Number(row.lastPrice).toFixed(2)}</span>`}
                 : '—',
             type: 'number',
             getValue: (row) => row.lastPrice ?? 0,
             width: 110,
             minWidth: 80,
         },
-        {
-            id: 'deltaAbs',
-            header: 'Δ Abs',
-            cell: (row) => ({
-                type: 'html' as const,
-                html: `<span class="font-mono ${deltaColorClass(row.deltaAbs)}">${formatDelta(row.deltaAbs)}</span>`,
-            }),
-            type: 'number',
-            getValue: (row) => row.deltaAbs ?? 0,
-            width: 100,
-            minWidth: 70,
-        },
-        {
-            id: 'deltaPct',
-            header: 'Δ %',
-            cell: (row) => ({
-                type: 'html' as const,
-                html: `<span class="font-mono ${deltaColorClass(row.deltaPercent)}">${formatDelta(row.deltaPercent, '%')}</span>`,
-            }),
-            type: 'number',
-            getValue: (row) => row.deltaPercent ?? 0,
-            width: 90,
-            minWidth: 70,
-        },
+        // Dynamic Δ multi-period columns
+        ...visiblePeriods.map(period => ({
+            id: `delta_${period.key}`,
+            header: `Δ ${period.key}`,
+            cell: (row: AssetRow) => {
+                const val = row.deltas?.[period.key] ?? null;
+                return {
+                    type: 'html' as const,
+                    html: `<span class="font-mono ${deltaColorClass(val)}">${formatDelta(val, '%')}</span>`,
+                };
+            },
+            type: 'number' as const,
+            getValue: (row: AssetRow) => row.deltas?.[period.key] ?? 0,
+            width: 80,
+            minWidth: 60,
+        })),
         {
             id: 'provider',
             header: () => $t('assets.table.provider'),
@@ -206,6 +202,3 @@
         },
     ]}
 />
-
-
-

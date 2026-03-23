@@ -14,6 +14,7 @@
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
+    import {getUserStorageKey} from '$lib/utils/storage';
     import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
@@ -155,7 +156,7 @@
     // ============ Storage Helpers ============
 
     function getStorageKey(suffix: string): string {
-        return `dataTable_${storageKey}_${suffix}`;
+        return getUserStorageKey(`dataTable_${storageKey}_${suffix}`);
     }
 
     function loadFromStorage<V>(key: string, defaultValue: V): V {

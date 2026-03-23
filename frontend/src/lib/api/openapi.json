@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.8-1-ge40d065-dirty"
+    "version": "v0.5.8-2-g863e355-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -1780,68 +1780,36 @@
         }
       }
     },
-    "/api/v1/assets/prices/{asset_id}": {
-      "get": {
+    "/api/v1/assets/prices/query": {
+      "post": {
         "tags": [
           "FA (Financial Assets)",
           "FA Prices"
         ],
-        "summary": "Get Prices",
-        "description": "Get prices for asset with backward-fill support.\n\nReturns a list of FAPricePoint with OHLC data, volume, and backward-fill info.",
-        "operationId": "get_prices_api_v1_assets_prices__asset_id__get",
-        "parameters": [
-          {
-            "name": "asset_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Asset Id"
+        "summary": "Query Prices Bulk",
+        "description": "Bulk query prices for multiple assets.\n\nReads from DB only (no provider delegation). Uses a single SQL query\nfor all assets, then applies backward-fill per asset.\nAnalogous to POST /fx/currencies/convert for FX rates.",
+        "operationId": "query_prices_bulk_api_v1_assets_prices_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/FAPriceQueryItem"
+                },
+                "type": "array",
+                "title": "Requests"
+              }
             }
           },
-          {
-            "name": "start_date",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date",
-              "description": "Start date (required)",
-              "title": "Start Date"
-            },
-            "description": "Start date (required)"
-          },
-          {
-            "name": "end_date",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "End date (optional, defaults to start_date)",
-              "title": "End Date"
-            },
-            "description": "End date (optional, defaults to start_date)"
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/FAPricePoint-Output"
-                  },
-                  "title": "Response Get Prices Api V1 Assets Prices  Asset Id  Get"
+                  "$ref": "#/components/schemas/FAPriceQueryResponse"
                 }
               }
             }
@@ -7451,6 +7419,67 @@
         ],
         "title": "FAPricePoint",
         "description": "Single price point with OHLC data.\n\nUsed for both:\n- Upsert operations (backward_fill_info is None)\n- Query results (backward_fill_info may be present)\n\nThe API contract uses separate `close: Decimal` and `currency: str` fields\nfor JSON compatibility. Use `close_cur` property for internal operations\nthat need a Currency object."
+      },
+      "FAPriceQueryItem": {
+        "properties": {
+          "asset_id": {
+            "type": "integer",
+            "title": "Asset Id",
+            "description": "Asset ID to query"
+          },
+          "date_range": {
+            "$ref": "#/components/schemas/DateRangeModel",
+            "description": "Date range (end defaults to start)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_id",
+          "date_range"
+        ],
+        "title": "FAPriceQueryItem",
+        "description": "Single asset price query in a bulk request.\n\nUses DateRangeModel from common.py (same as FXConversionRequest.date_range).\nIf date_range.end is None, defaults to date_range.start (single day)."
+      },
+      "FAPriceQueryResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FAPriceQueryResult"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "List of items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FAPriceQueryResponse",
+        "description": "Bulk response for price queries.\n\nInherits from BaseListResponse[FAPriceQueryResult]:\n- items: List[FAPriceQueryResult]  (one per asset queried)"
+      },
+      "FAPriceQueryResult": {
+        "properties": {
+          "asset_id": {
+            "type": "integer",
+            "title": "Asset Id",
+            "description": "Asset ID queried"
+          },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/FAPricePoint-Output"
+            },
+            "type": "array",
+            "title": "Prices",
+            "description": "Price history with backward-fill"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_id"
+        ],
+        "title": "FAPriceQueryResult",
+        "description": "Response for a single asset price query."
       },
       "FAProviderAssignmentItem": {
         "properties": {

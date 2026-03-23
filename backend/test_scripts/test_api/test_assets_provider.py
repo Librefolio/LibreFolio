@@ -30,6 +30,32 @@ from backend.test_scripts.test_utils import print_section, print_info, print_suc
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
+
+
+async def create_user_and_login(client: httpx.AsyncClient) -> None:
+    """Create a test user, login, and set session cookie on client."""
+    import uuid as _uuid
+    username = f"test_{int(__import__('time').time()*1000)}_{_uuid.uuid4().hex[:4]}"
+    email = f"{username}@test.com"
+    password = "TestPass123!"
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    if resp.status_code != 201:
+        raise Exception(f"Failed to create user: {resp.text}")
+    login_resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"Failed to login: {login_resp.text}")
+    session = login_resp.cookies.get("session")
+    if session:
+        client.cookies.set("session", session)
+
 SEARCH_TIMEOUT = 90.0  # Search can be slow due to external API calls (yfinance, justetf)
 
 
@@ -52,6 +78,7 @@ async def test_assign_provider(test_server):
     print_section("Test 1: POST /assets/provider - Assign Provider")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset
         asset_item = FAAssetCreateItem(
             display_name=f"Provider Test {unique_id('PROV')}",
@@ -108,6 +135,7 @@ async def test_update_provider_params(test_server):
     print_section("Test 2: POST /assets/provider - Update Provider Params")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset
         asset_item = FAAssetCreateItem(
             display_name=f"Update Params {unique_id('UPD')}", currency="USD"
@@ -159,6 +187,7 @@ async def test_remove_provider(test_server):
     print_section("Test 3: DELETE /assets/provider - Remove Assignment")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset with provider
         asset_item = FAAssetCreateItem(
             display_name=f"Remove Prov {unique_id('REM')}", currency="USD"
@@ -209,6 +238,7 @@ async def test_refresh_metadata(test_server):
     print_section("Test 4: POST /assets/provider/refresh - Refresh Metadata")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset with provider
         asset_item = FAAssetCreateItem(
             display_name=f"Refresh Test {unique_id('REF')}", currency="USD"
@@ -255,6 +285,7 @@ async def test_bulk_assign_providers(test_server):
     print_section("Test 5: POST /assets/provider - Bulk Assign")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create multiple assets
         assets = [
             FAAssetCreateItem(display_name=f"Bulk {i} {unique_id(f'BLK{i}')}", currency="USD")
@@ -300,6 +331,7 @@ async def test_search_assets_basic(test_server):
     print_section("Test 6: GET /assets/provider/search - Basic Search 'Apple'")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Search using default (all providers)
         # Note: Uses longer timeout as external APIs (yfinance) can be slow
         search_resp = await client.get(
@@ -351,6 +383,7 @@ async def test_search_assets_semiconductor(test_server):
     print_section("Test 7: GET /assets/provider/search - Search 'Semiconductor'")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Search for "Semiconductor" - sector-specific
         # Note: Uses longer timeout as external APIs (yfinance) can be slow
         search_resp = await client.get(
@@ -399,6 +432,7 @@ async def test_search_assets_provider_filter(test_server):
     print_section("Test 8: GET /assets/provider/search - Provider Filter (justetf)")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Search using only justetf provider
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
@@ -447,6 +481,7 @@ async def test_search_assets_ibm(test_server):
     print_section("Test 9: GET /assets/provider/search - Search 'IBM'")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Search for "IBM" - well-known ticker/company
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search", params={"q": "IBM"}, timeout=SEARCH_TIMEOUT
@@ -492,6 +527,7 @@ async def test_search_assets_invalid_provider(test_server):
     print_section("Test 10: GET /assets/provider/search - Invalid Provider")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Search using non-existent provider
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
@@ -524,6 +560,7 @@ async def test_search_assets_empty_query(test_server):
     print_section("Test 11: GET /assets/provider/search - Empty Query Validation")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Search with empty query
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search", params={"q": ""}, timeout=TIMEOUT
@@ -547,6 +584,7 @@ async def test_search_parallel_execution(test_server):
     import time
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Time a search across all providers
         start_time = time.time()
 
@@ -583,6 +621,7 @@ async def test_search_to_asset_e2e(test_server):
     print_section("Test 13: End-to-End - Search → Create → Assign → Refresh")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Search for assets
         print_info("Step 1: Searching for 'Microsoft'...")
         search_resp = await client.get(
@@ -819,6 +858,7 @@ async def test_price_refresh_uses_current_value(test_server):
     from datetime import date
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset with yfinance provider (reliable for current prices)
         asset_item = FAAssetCreateItem(
             display_name=f"Current Price Test {unique_id('CPT')}",
@@ -923,6 +963,7 @@ async def test_css_scraper_current_price(test_server):
     from datetime import date
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset for Borsa Italiana BTP
         asset_item = FAAssetCreateItem(
             display_name=f"BTP Test {unique_id('BTP')}", currency="EUR", asset_type=AssetType.BOND

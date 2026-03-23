@@ -29,6 +29,32 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 
 
+
+
+async def create_user_and_login(client: httpx.AsyncClient) -> None:
+    """Create a test user, login, and set session cookie on client."""
+    import uuid as _uuid
+    username = f"test_{int(__import__('time').time()*1000)}_{_uuid.uuid4().hex[:4]}"
+    email = f"{username}@test.com"
+    password = "TestPass123!"
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    if resp.status_code != 201:
+        raise Exception(f"Failed to create user: {resp.text}")
+    login_resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"Failed to login: {login_resp.text}")
+    session = login_resp.cookies.get("session")
+    if session:
+        client.cookies.set("session", session)
+
 # ============================================================================
 # PYTEST FIXTURES
 # ============================================================================
@@ -59,6 +85,7 @@ async def test_create_single_asset(test_server):
     print_section("Test 1: POST /assets - Create Single Asset")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         item = FAAssetCreateItem(
             display_name=f"Apple Inc. {unique_id('AAPL')}",
             currency="USD",
@@ -88,6 +115,7 @@ async def test_create_multiple_assets(test_server):
     print_section("Test 2: POST /assets - Create Multiple Assets")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         item1 = FAAssetCreateItem(
             display_name=f"Microsoft Corp. {unique_id('MSFT')}",
             currency="USD",
@@ -131,6 +159,7 @@ async def test_create_partial_success(test_server):
     dup_name = f"Test {unique_id('DUP')}"
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # First create an asset
         item = FAAssetCreateItem(display_name=dup_name, currency="USD", asset_type=AssetType.STOCK)
         await client.post(
@@ -182,6 +211,7 @@ async def test_create_duplicate_identifier(test_server):
     uniq_name = f"Original {unique_id('UNIQUE')}"
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create first asset
         item = FAAssetCreateItem(display_name=uniq_name, currency="USD")
         await client.post(
@@ -216,6 +246,7 @@ async def test_create_with_classification_params(test_server):
     print_section("Test 5: POST /assets - With classification_params")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         item = FAAssetCreateItem(
             display_name=f"Tesla Inc. {unique_id('TSLA')}",
             currency="USD",
@@ -243,6 +274,7 @@ async def test_list_no_filters(test_server):
 
     # Create some test assets first
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         items = [
             FAAssetCreateItem(display_name=f"List Test 1 {unique_id('LIST1')}", currency="USD"),
             FAAssetCreateItem(display_name=f"List Test 2 {unique_id('LIST2')}", currency="EUR"),
@@ -267,6 +299,7 @@ async def test_list_filter_currency(test_server):
     """Test 7: List with currency filter."""
     print_section("Test 7: GET /assets/query - Filter by Currency")
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create USD and EUR assets
         items = [
             FAAssetCreateItem(display_name=f"USD Asset 1 {unique_id('USD1')}", currency="USD"),
@@ -293,6 +326,7 @@ async def test_list_filter_asset_type(test_server):
     print_section("Test 8: GET /assets/query - Filter by Asset Type")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         items = [
             FAAssetCreateItem(
                 display_name=f"Stock 1 {unique_id('STK1')}",
@@ -323,6 +357,7 @@ async def test_list_search(test_server):
     print_section("Test 9: GET /assets/query - Search")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         items = [
             FAAssetCreateItem(display_name=f"Apple Inc. {unique_id('SEARCHAPPL')}", currency="USD"),
             FAAssetCreateItem(
@@ -349,6 +384,7 @@ async def test_list_active_filter(test_server):
     print_section("Test 10: GET /assets/query - Active Filter")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create two assets (both active by default)
         items = [
             FAAssetCreateItem(display_name=f"Active Asset {unique_id('ACT1')}", currency="USD"),
@@ -408,6 +444,7 @@ async def test_list_has_provider(test_server):
     print_section("Test 11: GET /assets/query - Has Provider")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset with unique identifier
         item = FAAssetCreateItem(
             display_name=f"Provider Test {unique_id('PROVTEST')}", currency="USD"
@@ -455,6 +492,7 @@ async def test_delete_success(test_server):
     print_section("Test 12: DELETE /assets - Success")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create assets to delete
         items: list[FAAssetCreateItem] = [
             FAAssetCreateItem(display_name=f"Delete 1 {unique_id('DEL1')}", currency="USD"),
@@ -487,6 +525,7 @@ async def test_delete_cascade(test_server):
     print_section("Test 14: DELETE /assets - CASCADE Delete")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset
         item_fa_create = FAAssetCreateItem(
             display_name=f"Cascade Test {unique_id('CASCTEST')}", currency="USD"
@@ -551,6 +590,7 @@ async def test_delete_partial_success(test_server):
     print_section("Test 15: DELETE /assets - Partial Success")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create one valid asset
         item = FAAssetCreateItem(
             display_name=f"Delete Partial {unique_id('DELPART')}", currency="USD"
@@ -608,6 +648,7 @@ async def test_list_asset_providers(test_server):
     print_section("Test 16: GET /assets/provider - List Providers")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         response = await client.get(f"{API_BASE}/assets/provider", timeout=TIMEOUT)
         assert (
             response.status_code == 200
@@ -638,6 +679,7 @@ async def test_bulk_remove_providers(test_server):
     print_section("Test 17: DELETE /assets/provider - Bulk Remove Providers")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset
         item = FAAssetCreateItem(
             display_name=f"Provider Remove Test {unique_id('PROVREM')}", currency="USD"
@@ -704,6 +746,7 @@ async def test_bulk_delete_prices(test_server):
     print_section("Test 18: DELETE /assets/prices - Bulk Delete Prices")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset
         item = FAAssetCreateItem(
             display_name=f"Price Delete Test {unique_id('PRICEDEL')}", currency="USD"
@@ -726,6 +769,7 @@ async def test_bulk_refresh_prices(test_server):
     print_section("Test 19: POST /assets/prices/refresh - Bulk Refresh Prices")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset
         item = FAAssetCreateItem(
             display_name=f"Price Refresh Test {unique_id('REFRESH')}", currency="USD"

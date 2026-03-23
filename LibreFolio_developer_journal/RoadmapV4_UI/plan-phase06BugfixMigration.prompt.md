@@ -9,21 +9,67 @@ con Step 3 (AssetModal). Questo piano di rientro corregge tutto in ordine di dip
 **Durata stimata**: ~0.5 giorni
 **Dipendenze**: Phase 06 Step 1 + Step 2 completati
 
+**Stato**: ✅ Step 1-9 completati + fix auth test + ottimizzazione FX delete
+
 ---
 
 ## Indice
 
-| # | Titolo | Area | Priorità |
-|---|--------|------|----------|
-| 1 | Fix crash `.toFixed()` su pagina Assets | Frontend | 🔴 Bloccante |
-| 2 | Migrazione BrokerIcon a Svelte 5 runes | Frontend | 🟡 Debito tecnico |
-| 3 | Migrazione localStorage a user-scoped | Frontend | 🟡 Debito tecnico |
-| 4 | Fix FX delete 422 (`date_range` array → oggetto) | Frontend | 🔴 Bug |
-| 5 | Fix FX detail UX per coppie manual-only | Frontend + UX | 🟡 UX |
-| 6 | Spostare ViewModeToggle nell'header | Frontend | 🟢 Estetica |
-| 7 | Endpoint bulk asset prices + colonne Δ multi-periodo | Backend + Frontend + Test | 🟢 Feature |
-| 8 | Fix test upload 401 | Backend test | 🟡 Test |
-| 9 | Rimuovere chiave i18n orfana | i18n | 🟢 Pulizia |
+| # | Titolo | Area | Priorità | Stato |
+|---|--------|------|----------|-------|
+| 1 | Fix crash `.toFixed()` su pagina Assets | Frontend | 🔴 Bloccante | ✅ |
+| 2 | Migrazione BrokerIcon a Svelte 5 runes | Frontend | 🟡 Debito tecnico | ✅ |
+| 3 | Migrazione localStorage a user-scoped | Frontend | 🟡 Debito tecnico | ✅ |
+| 4 | Fix FX delete 422 (`date_range` array → oggetto) | Frontend | 🔴 Bug | ✅ |
+| 5 | Fix FX detail UX per coppie manual-only | Frontend + UX | 🟡 UX | ✅ |
+| 6 | Spostare ViewModeToggle nell'header | Frontend | 🟢 Estetica | ✅ |
+| 7 | Endpoint bulk asset prices + colonne Δ multi-periodo | Backend + Frontend + Test | 🟢 Feature | ✅ |
+| 8 | Fix test upload 401 | Backend test | 🟡 Test | ✅ |
+| 9 | Rimuovere chiave i18n orfana | i18n | 🟢 Pulizia | ✅ |
+| 10 | Fix auth in TUTTI i test API (8+1 file) | Backend test | 🔴 Bug | ✅ |
+| 11 | Ottimizzazione FX delete (merge date consecutive in range) | Frontend | 🟢 Ottimizzazione | ✅ |
+
+---
+
+## Feedback Review — TODO per Step 2b successivo
+
+Questi punti emersi dalla review dell'utente vanno implementati in un batch successivo:
+
+### F1 — Toast message dopo save in FxDataEditorSection
+**Area**: Frontend UX
+**File**: `FxDataEditorSection.svelte`
+**Problema**: Dopo il salvataggio (upsert + delete) non c'è feedback visivo.
+**Soluzione**: Aggiungere toast success con conteggio punti inseriti/aggiornati/cancellati.
+Toast error in caso di fallimento con messaggio di errore dal backend.
+Usare il componente toast custom esistente (`toasts.success()` / `toasts.error()`).
+
+### F2 — Impedire rate negativi nell'editor FX
+**Area**: Frontend validation
+**File**: `DataEditor.svelte` o `FxDataEditorSection.svelte`
+**Problema**: Il campo rate permette valori negativi tramite freccia giù della tastiera.
+**Soluzione**: Aggiungere `min="0"` all'input numerico e/o clamping nel handler.
+
+### F3 — Marker circolare per singolo punto nel chart
+**Area**: Frontend chart
+**File**: `PriceChartCompact.svelte`, `PriceChartFull.svelte`, `LineChart.svelte`
+**Problema**: Un singolo data point è invisibile perché non crea un segmento di linea.
+**Soluzione**: Se i dati contengono un solo punto, renderizzarlo come marker circolare.
+Se il marker è assente o null, usare il circolare di default. Dal 2° punto in poi,
+si usa il comportamento normale (segmento di linea).
+
+### F4 — ColumnVisibilityToggle nella pagina Assets (table mode)
+**Area**: Frontend UX
+**File**: `assets/+page.svelte`
+**Problema**: In modalità tabella manca il selettore di visibilità colonne (occhio).
+**Soluzione**: Accanto al ViewModeToggle, mostrare `ColumnVisibilityToggle` quando
+`viewMode === 'list'`, come già fatto nella pagina files.
+
+### F5 — Colonne Δ multi-periodo nella tabella FX
+**Area**: Frontend feature
+**File**: `fx/+page.svelte`, `FxTable.svelte`
+**Problema**: Le colonne Δ multi-periodo sono solo nella tabella Assets, non in FX.
+**Soluzione**: Replicare la stessa logica di `DELTA_PERIODS` + `visiblePeriods` +
+`computePeriodDelta()` nella pagina FX e nel componente FxTable.
 
 ---
 

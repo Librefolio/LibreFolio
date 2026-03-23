@@ -8,6 +8,7 @@
     import {userSettings} from '$lib/stores/settings';
     import {globalSettings} from '$lib/stores/globalSettings';
     import {debug} from '$lib/debug';
+    import {getUserStorage} from '$lib/utils/storage';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import Header from '$lib/components/layout/Header.svelte';
     import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
@@ -27,12 +28,10 @@
         // Sync language store with i18n after mount
         currentLanguage.init();
 
-        // Load sidebar collapsed state from localStorage
+        // Load sidebar collapsed state from user-scoped localStorage
         if (browser) {
-            const saved = localStorage.getItem('sidebar-collapsed');
-            if (saved !== null) {
-                sidebarCollapsed = saved === 'true';
-            }
+            const saved = getUserStorage('sidebar-collapsed', 'false');
+            sidebarCollapsed = saved === 'true';
         }
 
         // Check authentication with timeout

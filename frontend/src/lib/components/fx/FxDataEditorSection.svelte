@@ -185,12 +185,32 @@
             }
 
             if (deleteRows.length > 0) {
-                // Group all date ranges and send in one call
-                const deleteItems = [{
-                    from: base < quote ? base : quote,
-                    to: base < quote ? quote : base,
-                    date_range: deleteRows.map(dr => ({start: dr.date})),
-                }];
+                // Merge consecutive dates into ranges for fewer API items
+                const baseNormDel = base < quote ? base : quote;
+                const quoteNormDel = base < quote ? quote : base;
+                const sortedDates = deleteRows.map(dr => dr.date).sort();
+                const ranges: Array<{start: string; end?: string}> = [];
+                let rangeStart = sortedDates[0];
+                let rangeEnd = sortedDates[0];
+                for (let i = 1; i < sortedDates.length; i++) {
+                    const prev = new Date(rangeEnd);
+                    const curr = new Date(sortedDates[i]);
+                    const diffDays = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
+                    if (diffDays <= 1) {
+                        rangeEnd = sortedDates[i];
+                    } else {
+                        ranges.push(rangeStart === rangeEnd ? {start: rangeStart} : {start: rangeStart, end: rangeEnd});
+                        rangeStart = sortedDates[i];
+                        rangeEnd = sortedDates[i];
+                    }
+                }
+                ranges.push(rangeStart === rangeEnd ? {start: rangeStart} : {start: rangeStart, end: rangeEnd});
+
+                const deleteItems = ranges.map(r => ({
+                    from: baseNormDel,
+                    to: quoteNormDel,
+                    date_range: r,
+                }));
                 await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete(deleteItems);
             }
 

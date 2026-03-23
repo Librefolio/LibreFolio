@@ -35,6 +35,32 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
 
 
+
+
+async def create_user_and_login(client: httpx.AsyncClient) -> None:
+    """Create a test user, login, and set session cookie on client."""
+    import uuid as _uuid
+    username = f"test_{int(__import__('time').time()*1000)}_{_uuid.uuid4().hex[:4]}"
+    email = f"{username}@test.com"
+    password = "TestPass123!"
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    if resp.status_code != 201:
+        raise Exception(f"Failed to create user: {resp.text}")
+    login_resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"Failed to login: {login_resp.text}")
+    session = login_resp.cookies.get("session")
+    if session:
+        client.cookies.set("session", session)
+
 # Fixture: test server
 @pytest.fixture(scope="module")
 def test_server():
@@ -55,6 +81,7 @@ async def test_patch_display_name(test_server):
     print_section("Test 1: PATCH /assets - display_name")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create test asset
         create_item = FAAssetCreateItem(
             display_name=f"Original Name {unique_id('PATCH1')}",
@@ -102,6 +129,7 @@ async def test_patch_currency(test_server):
     print_section("Test 2: PATCH /assets - currency")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset with USD currency
         create_item = FAAssetCreateItem(
             display_name=f"Currency Test {unique_id('PATCH2')}",
@@ -145,6 +173,7 @@ async def test_patch_asset_type(test_server):
     print_section("Test 3: PATCH /assets - asset_type")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset with STOCK type
         create_item = FAAssetCreateItem(
             display_name=f"Type Test {unique_id('PATCH3')}",
@@ -188,6 +217,7 @@ async def test_patch_icon_url(test_server):
     print_section("Test 4: PATCH /assets - icon_url")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset without icon_url
         create_item = FAAssetCreateItem(
             display_name=f"Icon Test {unique_id('PATCH4')}", currency="USD"
@@ -246,6 +276,7 @@ async def test_patch_icon_url_clear(test_server):
     print_section("Test 5: PATCH /assets - icon_url clear")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset with icon_url
         create_item = FAAssetCreateItem(
             display_name=f"Icon Clear Test {unique_id('ICONCLR')}",
@@ -295,6 +326,7 @@ async def test_patch_active(test_server):
     print_section("Test 6: PATCH /assets - active")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset (active=True by default)
         create_item = FAAssetCreateItem(
             display_name=f"Active Test {unique_id('PATCH6')}",
@@ -339,6 +371,7 @@ async def test_patch_multiple_base_fields(test_server):
     print_section("Test 7: PATCH /assets - Multiple Base Fields")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset
         create_item = FAAssetCreateItem(
             display_name=f"Multi Patch {unique_id('PATCH7')}",
