@@ -86,7 +86,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#translation-pipeline" class="md-skip">
+        <a href="#overview" class="md-skip">
           Skip to content
         </a>
       
@@ -4915,8 +4915,6 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
-        
-      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
@@ -4958,8 +4956,6 @@
 <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
-  
-    
   
   
     <label class="md-nav__title" for="__toc">
@@ -5187,6 +5183,56 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prettier-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prettier Compatibility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prettier Compatibility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Problem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-solution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Solution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automated-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automated Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -5430,8 +5476,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -5661,6 +5705,56 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#prettier-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prettier Compatibility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prettier Compatibility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Problem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-solution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Solution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automated-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automated Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -5681,7 +5775,9 @@
   
 
 
-<h1 id="translation-pipeline">🌐 Translation Pipeline</h1>
+  <h1>Translation Pipeline</h1>
+
+<p># 🌐 Translation Pipeline</p>
 <p>Automated translation of LibreFolio MkDocs documentation into multiple languages using <a href="https://github.com/DavidLMS/aphra">Aphra</a> — an LLM-based agentic translation workflow. Supports both <strong>cloud</strong> (OpenRouter) and <strong>local</strong> (Ollama) LLM backends.</p>
 <hr />
 <h2 id="overview">Overview</h2>
@@ -5927,6 +6023,65 @@
 <h2 id="caching">Caching</h2>
 <p>The pipeline caches <strong>source file MD5 hashes</strong> in <code>.translate-hashes.json</code> to skip unchanged files between runs. If a source <code>.en.md</code> hasn't changed, all its translations are skipped.</p>
 <p>Use <code>--force</code> to ignore the cache and re-translate everything.</p>
+<hr />
+<h2 id="prettier-compatibility">Prettier Compatibility</h2>
+<h3 id="the-problem">The Problem</h3>
+<p>Prettier uses the <strong>remark</strong> parser (CommonMark). In CommonMark, <code>!!! info "title"</code> is an unknown construct — admonitions don't exist. Prettier treats the 4-space indented body as "continuation text" and <strong>strips the indentation</strong>, breaking the admonition box:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>&lt;!-- BEFORE Prettier --&gt;
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>!!! note &quot;Title&quot;
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    Content inside the box.     ← 4 spaces (INSIDE the box)
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>&lt;!-- AFTER Prettier — BROKEN --&gt;
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>!!! note &quot;Title&quot;
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>Content inside the box.         ← 0 spaces (OUTSIDE the box)
+</code></pre></div>
+<p><code>tabWidth: 4</code> does NOT fix this — it only controls tab→space conversion, not paragraph indentation preservation.</p>
+<h3 id="the-solution">The Solution</h3>
+<p>Add an <strong>empty line</strong> between the directive and the indented body. With the empty line, Prettier leaves the block completely untouched, and MkDocs renders identically:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>&lt;!-- ✅ CORRECT — survives Prettier unchanged --&gt;
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>!!! note &quot;Title&quot;
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    Content inside the box.
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    Second line.
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>&lt;!-- ❌ WRONG — Prettier will strip indentation --&gt;
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>!!! note &quot;Title&quot;
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    Content inside the box.
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    Second line.
+</code></pre></div>
+<p>This applies to both <code>!!!</code> (admonitions) and <code>???</code> (collapsible details).</p>
+<h3 id="automated-checks">Automated Checks</h3>
+<p>The empty-line rule is enforced at three levels:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Where</th>
+<th>Severity</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Pre-build warning</strong></td>
+<td><code>dev.py</code> → <code>_check_admonition_empty_lines()</code></td>
+<td>⚠️ Warning</td>
+<td>Runs before every <code>./dev.py mkdocs build</code>. Scans all <code>.md</code> files and warns if any admonition is missing the empty line.</td>
+</tr>
+<tr>
+<td><strong>Translation validation</strong></td>
+<td><code>validate_translations.py</code> → <code>admonition-empty-line</code></td>
+<td>⚠️ WARN</td>
+<td>Checks translated files during <code>./dev.py mkdocs translate-validate</code>.</td>
+</tr>
+<tr>
+<td><strong>Structural diff (critic)</strong></td>
+<td><code>translate_docs.py</code> → <code>_structural_diff()</code> → <code>ADMONITION_EMPTY_LINE</code></td>
+<td>Info to LLM</td>
+<td>Injected into the Step 4 (Critique) context so the critic LLM can flag and fix the issue during refinement.</td>
+</tr>
+</tbody>
+</table>
 
 
 
