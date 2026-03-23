@@ -405,7 +405,9 @@ def db_validate(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Schema validation", verbose=verbose)
 
 
-def db_populate(verbose: bool = False, force: bool = False) -> bool:
+def db_populate(verbose: bool = False, force: bool = False,
+                clean: bool = False, with_static: bool = False,
+                with_reports: bool = False) -> bool:
     """
     Populate database with mock data for testing.
     Inserts comprehensive sample data (useful for frontend development).
@@ -413,6 +415,9 @@ def db_populate(verbose: bool = False, force: bool = False) -> bool:
     Args:
         verbose: Show verbose output
         force: Delete existing database and recreate from scratch
+        clean: Clean data dirs (custom-uploads, broker_reports) before populating
+        with_static: Upload static resources (avatars, broker icons)
+        with_reports: Upload sample broker report files
     """
     print_section("Database Mock Data Population")
 
@@ -425,6 +430,12 @@ def db_populate(verbose: bool = False, force: bool = False) -> bool:
     cmd = ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.populate_mock_data"]
     if force:
         cmd.append("--force")
+    if clean:
+        cmd.append("--clean")
+    if with_static:
+        cmd.append("--with-static")
+    if with_reports:
+        cmd.append("--with-reports")
 
     success = run_command(
         cmd,
@@ -761,6 +772,15 @@ def utils_sector_normalization(verbose: bool = False, test_names: list = None) -
     print_info("Tests: FinancialSector enum, aliases, normalization, validation")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_sector_normalization.py", test_names)
     return run_command(cmd, "Sector normalization tests", verbose=verbose)
+
+
+def utils_currency_utils(verbose: bool = False, test_names: list = None) -> bool:
+    """Test currency listing, flag mapping, and validation consistency."""
+    print_section("Utils: Currency Utils")
+    print_info("Testing: backend/app/utils/currency_utils.py")
+    print_info("Tests: list_currencies (pycountry), flag_emoji mapping, crypto, validation consistency")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_currency_utils.py", test_names)
+    return run_command(cmd, "Currency utils tests", verbose=verbose)
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -1197,6 +1217,16 @@ def _ensure_frontend_build() -> bool:
     return True
 
 
+def _ensure_db_populated() -> bool:
+    """Ensure test database has been populated with mock data (brokers, assets, etc.).
+
+    Always runs populate --force to guarantee a clean, known state.
+    Required by tests that expect pre-existing data (e.g., broker-sharing).
+    """
+    print_info("Populating test DB with mock data...")
+    return db_populate(verbose=False, force=True)
+
+
 def _ensure_test_users() -> bool:
     """Ensure E2E test users exist in test database."""
     print_info("Ensuring E2E test users exist...")
@@ -1369,39 +1399,399 @@ def front_image_crop(verbose: bool = False, ui: bool = False, headed: bool = Fal
 
 
 def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
-    """Run broker sharing E2E tests."""
+    """Run broker sharing E2E tests (requires populated DB with brokers)."""
     print_section("Frontend Broker Sharing Tests")
     if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
         return False
     if not _ensure_test_users():
         return False
     return _run_playwright("broker-sharing.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
 
-def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
-    """Run all frontend tests (excludes gallery)."""
-    print_header("Frontend E2E Tests (Playwright)")
-    print_info("Running browser-based E2E tests")
-    print_info("Server will be started automatically by Playwright")
+def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX unit tests (Vitest)."""
+    print_section("Frontend FX Unit Tests (Vitest)")
+    cmd = ["npm", "run", "test:unit"]
+    print(f"\n{Colors.BLUE}Running: Vitest unit tests{Colors.NC}")
+    print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True)
+        if result.returncode == 0:
+            print_success("Vitest unit tests - PASSED")
+            return True
+        else:
+            print_error(f"Vitest unit tests - FAILED (exit code: {result.returncode})")
+            return False
+    except Exception as e:
+        print_error(f"Vitest error: {e}")
+        return False
 
-    # Ensure frontend is built before running tests
+
+def front_fx_list(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX list page E2E tests."""
+    print_section("Frontend FX List Page Tests")
     if not _ensure_frontend_build():
         return False
-
+    if not _ensure_db_populated():
+        return False
     if not _ensure_test_users():
         return False
+    return _run_playwright("fx/fx-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
-    # Run all specs except gallery
-    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "brokers.spec.ts", "multi-user.spec.ts", "select-components.spec.ts", "image-crop.spec.ts", "broker-sharing.spec.ts"]
 
+def front_fx_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX detail page E2E tests."""
+    print_section("Frontend FX Detail Page Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_fx_add_pair(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX add pair modal E2E tests."""
+    print_section("Frontend FX Add Pair Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-add-pair.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_fx_editor(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX data editor E2E tests."""
+    print_section("Frontend FX Data Editor Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-data-editor.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_fx_sync(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX sync modal E2E tests."""
+    print_section("Frontend FX Sync Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_fx_api(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX API route E2E tests."""
+    print_section("Frontend FX API Route Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-api.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_fx_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX chart settings E2E tests."""
+    print_section("Frontend FX Chart Settings Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-chart-settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run all FX tests (unit + E2E)."""
     return _run_test_suite(
-        suite_name="Frontend E2E Tests",
+        suite_name="All FX Tests (Unit + E2E)",
+        tests=[
+            ("FX Unit (Vitest)", lambda: front_fx_unit(verbose=verbose)),
+            ("FX List Page", lambda: front_fx_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Add Pair Modal", lambda: front_fx_add_pair(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Detail Page", lambda: front_fx_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Data Editor", lambda: front_fx_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Sync Modal", lambda: front_fx_sync(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX API Routes", lambda: front_fx_api(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX Chart Settings", lambda: front_fx_settings(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+        ],
+        verbose=verbose,
+        header_msg="All FX Tests (Unit + E2E)",
+        summary_title="FX Test Summary",
+        success_msg="All FX tests passed! 🎉",
+    )
+
+
+def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
+    """Run all frontend utility/component E2E tests."""
+    print_header("Frontend Utility Tests (Playwright)")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "select-components.spec.ts", "image-crop.spec.ts"]
+    return _run_test_suite(
+        suite_name="Frontend Utility Tests",
         tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug)) for spec in specs],
         verbose=verbose,
-        header_msg=None,  # Already printed above
-        summary_title="Frontend E2E Test Summary",
-        success_msg="All frontend E2E tests passed! 🎉",
+        header_msg=None,
+        summary_title="Frontend Utility Test Summary",
+        success_msg="All frontend utility tests passed! 🎉",
     )
+
+
+def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
+    """Run all frontend user/broker E2E tests."""
+    print_header("Frontend User Tests (Playwright)")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    specs = ["brokers.spec.ts", "multi-user.spec.ts", "broker-sharing.spec.ts"]
+    return _run_test_suite(
+        suite_name="Frontend User Tests",
+        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug)) for spec in specs],
+        verbose=verbose,
+        header_msg=None,
+        summary_title="Frontend User Test Summary",
+        success_msg="All frontend user tests passed! 🎉",
+    )
+
+
+def _list_front_tests(category: str, action: str = None) -> bool:
+    """
+    List available test names from spec files for a front-* category.
+    Parses .spec.ts files looking for test.describe() and test() calls.
+    If action is specified, lists only that spec; otherwise lists all specs in the category.
+
+    Returns True always (listing is not a failure).
+    """
+    import re
+
+    # Map category actions to spec files
+    spec_map = {}
+    if category in TEST_REGISTRY:
+        for act, info in TEST_REGISTRY[category].items():
+            if act == "_meta" or act == "all":
+                continue
+            tests_file = info.get("tests", "")
+            if tests_file.endswith(".spec.ts"):
+                spec_map[act] = tests_file
+
+    # If action specified (and not "all"), filter to just that spec
+    if action and action != "all" and action in spec_map:
+        spec_map = {action: spec_map[action]}
+    elif action and action == "fx-unit":
+        # Special: vitest unit tests
+        print(f"\n{Colors.CYAN}🧪 Vitest Unit Tests:{Colors.NC}")
+        try:
+            result = subprocess.run(
+                ["npm", "run", "test:unit:list"],
+                cwd=PROJECT_ROOT / "frontend",
+                capture_output=True, text=True
+            )
+            if result.stdout:
+                for line in result.stdout.strip().splitlines():
+                    if line.strip():
+                        print(f"  {line.strip()}")
+        except Exception as e:
+            print_error(f"Could not list Vitest tests: {e}")
+        print()
+        return True
+
+    if not spec_map:
+        print_error(f"No spec files found for category '{category}' action '{action}'")
+        return True
+
+    e2e_dir = PROJECT_ROOT / "frontend" / "e2e"
+
+    print(f"\n{Colors.CYAN}🧪 Available Tests ({category}):{Colors.NC}")
+    print(f"  Use {Colors.YELLOW}./dev.py test {category} <action> \"<test name>\"{Colors.NC} to run a specific test\n")
+
+    for act, spec_path in spec_map.items():
+        spec_file = e2e_dir / spec_path
+        if not spec_file.exists():
+            print(f"  {Colors.RED}✗ {spec_path} — not found{Colors.NC}")
+            continue
+
+        content = spec_file.read_text()
+        current_describe = ""
+        test_count = 0
+
+        print(f"  {Colors.GREEN}▸ {act}{Colors.NC} ({spec_path})")
+        for line in content.splitlines():
+            dm = re.search(r"test\.describe\(['\"](.+?)['\"]", line)
+            if dm:
+                current_describe = dm.group(1)
+                print(f"    {Colors.BLUE}▸ {current_describe}{Colors.NC}")
+            tm = re.search(r"test\(['\"](.+?)['\"]", line)
+            if tm:
+                test_name = tm.group(1)
+                print(f"      • {test_name}")
+                test_count += 1
+
+        if test_count == 0:
+            print(f"    {Colors.YELLOW}(no tests found){Colors.NC}")
+        print()
+
+    return True
+
+
+# Mapping of backend test categories to their test directories/files
+BACKEND_TEST_PATHS = {
+    "external": "backend/test_scripts/test_external/",
+    "db": "backend/test_scripts/test_db/",
+    "services": "backend/test_scripts/test_services/",
+    "utils": "backend/test_scripts/test_utilities/",
+    "schemas": "backend/test_scripts/test_schemas/",
+    "api": "backend/test_scripts/test_api/",
+    "e2e": "backend/test_scripts/test_e2e/",
+}
+
+
+def _list_pytest_tests(category: str, action: str = None) -> bool:
+    """
+    List available pytest test names for a backend category.
+    Uses `pytest --collect-only -q` to enumerate tests.
+
+    Args:
+        category: Backend test category (external, db, services, etc.)
+        action: Specific action or "all" to list all tests in category.
+
+    Returns True always (listing is not a failure).
+    """
+    # Determine path: if action maps to a specific file, use that; otherwise use category directory
+    test_path = None
+
+    if action and action != "all" and category in TEST_REGISTRY:
+        info = TEST_REGISTRY[category].get(action, {})
+        # Try to extract path from the "tests" field or known patterns
+        tests_field = info.get("tests", "")
+        # Check if the function has a known pytest path
+        func = info.get("func")
+        if func:
+            # Inspect function source to find _build_pytest_cmd path
+            import inspect
+            try:
+                source = inspect.getsource(func)
+                import re
+                match = re.search(r'_build_pytest_cmd\(["\']([^"\']+)["\']', source)
+                if match:
+                    test_path = match.group(1)
+                else:
+                    # Try direct pytest path
+                    match = re.search(r'pytest.*?["\']([^"\']*test_scripts[^"\']+\.py)["\']', source)
+                    if match:
+                        test_path = match.group(1)
+            except (TypeError, OSError):
+                pass
+
+    if not test_path:
+        # Fall back to category directory
+        test_path = BACKEND_TEST_PATHS.get(category)
+
+    if not test_path:
+        print_error(f"No test path found for category '{category}' action '{action}'")
+        return True
+
+    full_path = PROJECT_ROOT / test_path
+    if not full_path.exists():
+        print_error(f"Test path not found: {test_path}")
+        return True
+
+    print(f"\n{Colors.CYAN}🧪 Available Tests ({category}{' / ' + action if action and action != 'all' else ''}):{Colors.NC}")
+    print(f"  Use {Colors.YELLOW}./dev.py test {category} <action> \"<test name>\"{Colors.NC} to run a specific test\n")
+
+    try:
+        cmd = ["pipenv", "run", "python", "-m", "pytest", str(test_path), "--collect-only", "-q"]
+        result = subprocess.run(
+            cmd,
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        output = result.stdout.strip()
+        if not output:
+            print(f"  {Colors.YELLOW}(no tests collected){Colors.NC}")
+            if result.stderr:
+                # Show only the last few lines of stderr (skip warnings)
+                err_lines = [l for l in result.stderr.strip().splitlines() if 'ERROR' in l or 'error' in l.lower()]
+                for l in err_lines[:5]:
+                    print(f"  {Colors.RED}{l}{Colors.NC}")
+            print()
+            return True
+
+        # Parse pytest --collect-only -q output
+        # Format: "backend/test_scripts/test_api/test_fx_api.py::TestFxApi::test_get_providers"
+        # or: "backend/test_scripts/.../test_file.py::test_function"
+        current_file = ""
+        current_class = ""
+        test_count = 0
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line or line.startswith("=") or line.startswith("-") or "selected" in line or "no tests" in line:
+                continue
+            if "::" not in line:
+                continue
+
+            parts = line.split("::")
+            file_part = parts[0] if len(parts) > 0 else ""
+            # Extract filename from path
+            file_name = Path(file_part).name if file_part else ""
+
+            if len(parts) == 3:
+                # file::Class::test
+                cls = parts[1]
+                test = parts[2]
+                if file_name != current_file:
+                    current_file = file_name
+                    current_class = ""
+                    print(f"  {Colors.GREEN}▸ {file_name}{Colors.NC}")
+                if cls != current_class:
+                    current_class = cls
+                    print(f"    {Colors.BLUE}▸ {cls}{Colors.NC}")
+                print(f"      • {test}")
+            elif len(parts) == 2:
+                # file::test (no class)
+                test = parts[1]
+                if file_name != current_file:
+                    current_file = file_name
+                    current_class = ""
+                    print(f"  {Colors.GREEN}▸ {file_name}{Colors.NC}")
+                print(f"    • {test}")
+            test_count += 1
+
+        # Print summary line from pytest (e.g., "42 tests collected")
+        for line in output.splitlines():
+            if "selected" in line or "test" in line.lower() and not "::" in line:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("="):
+                    print(f"\n  {Colors.CYAN}{stripped}{Colors.NC}")
+
+    except subprocess.TimeoutExpired:
+        print_error("Timeout collecting tests (30s)")
+    except Exception as e:
+        print_error(f"Could not list tests: {e}")
+
+    print()
+    return True
 
 
 # ============================================================================
@@ -1762,6 +2152,14 @@ These tests verify utility modules and helper functions:
             "prereq": "None",
             "tests": "Sector enum values, aliases",
             },
+        "currency-utils": {
+            "func": utils_currency_utils,
+            "test_names": True,
+            "name": "Currency Utils",
+            "desc": "Test currency listing, flag mapping, validation consistency",
+            "prereq": "pycountry, babel installed",
+            "tests": "list_currencies (pycountry), flag_emoji, crypto, no historic currencies",
+            },
         "all": {
             "func": utils_all,
             "test_names": False,
@@ -2012,20 +2410,20 @@ These tests verify complete end-to-end workflows via REST API:
             "desc": "Run all E2E tests",
             },
         },
-    "front": {
+    "front-utility": {
         "_meta": {
-            "help": "Frontend E2E tests (Playwright on Chromium)",
+            "help": "Frontend utility & component E2E tests (auth, settings, files, select, image-crop)",
             "description": """
-Frontend E2E Tests
+Frontend Utility & Component Tests
 
-Browser-based tests using Playwright:
-  • Backend server started automatically in test mode
-  • Tests run on Chromium (headless by default)
-  • Use --ui for interactive Playwright UI
-  • Use --headed to see browser
-  • Screenshots saved on failure
+Browser-based tests for core UI components and utility pages:
+  • Auth (login, register, logout, language)
+  • Settings (user preferences, global settings)
+  • Files (upload, tabs, filters)
+  • Select components (keyboard navigation, search)
+  • Image crop & media (ImageEditModal, AssetPicker, avatar)
 
-Note: gallery.spec.ts is NOT included in 'all' - use ./dev.py mkdocs gallery
+Options: --ui, --headed, --debug
 """,
             },
         "auth": {
@@ -2052,22 +2450,6 @@ Note: gallery.spec.ts is NOT included in 'all' - use ./dev.py mkdocs gallery
             "prereq": "Login working",
             "tests": "files.spec.ts",
             },
-        "brokers": {
-            "func": front_brokers,
-            "test_names": True,
-            "name": "Brokers Tests",
-            "desc": "CRUD broker, import files modal",
-            "prereq": "Login working",
-            "tests": "brokers.spec.ts",
-            },
-        "multi-user": {
-            "func": front_multi_user,
-            "test_names": True,
-            "name": "Multi-User Tests",
-            "desc": "Data isolation between users",
-            "prereq": "Multiple test users",
-            "tests": "multi-user.spec.ts",
-            },
         "select": {
             "func": front_select,
             "test_names": True,
@@ -2084,6 +2466,43 @@ Note: gallery.spec.ts is NOT included in 'all' - use ./dev.py mkdocs gallery
             "prereq": "Login working, uploaded files",
             "tests": "image-crop.spec.ts",
             },
+        "all": {
+            "func": front_utility_all,
+            "test_names": False,
+            "name": "All Utility Tests",
+            "desc": "Run all utility/component E2E tests",
+            },
+        },
+    "front-user": {
+        "_meta": {
+            "help": "Frontend user & broker E2E tests (brokers, multi-user, sharing)",
+            "description": """
+Frontend User & Broker Tests
+
+Browser-based tests for broker management and multi-user scenarios:
+  • Brokers (CRUD, import files)
+  • Multi-user (data isolation)
+  • Broker sharing (roles, ownership chart)
+
+Options: --ui, --headed, --debug
+""",
+            },
+        "brokers": {
+            "func": front_brokers,
+            "test_names": True,
+            "name": "Brokers Tests",
+            "desc": "CRUD broker, import files modal",
+            "prereq": "Login working",
+            "tests": "brokers.spec.ts",
+            },
+        "multi-user": {
+            "func": front_multi_user,
+            "test_names": True,
+            "name": "Multi-User Tests",
+            "desc": "Data isolation between users",
+            "prereq": "Multiple test users",
+            "tests": "multi-user.spec.ts",
+            },
         "broker-sharing": {
             "func": front_broker_sharing,
             "test_names": True,
@@ -2093,10 +2512,95 @@ Note: gallery.spec.ts is NOT included in 'all' - use ./dev.py mkdocs gallery
             "tests": "broker-sharing.spec.ts",
             },
         "all": {
-            "func": front_all,
+            "func": front_user_all,
             "test_names": False,
-            "name": "All Frontend Tests",
-            "desc": "Run all E2E tests (excludes gallery)",
+            "name": "All User Tests",
+            "desc": "Run all user/broker E2E tests",
+            },
+        },
+    "front-fx": {
+        "_meta": {
+            "help": "Frontend FX E2E & unit tests (list, detail, add-pair, editor, sync, API, settings)",
+            "description": """
+Frontend FX Tests
+
+Tests for the FX (foreign exchange) subsystem:
+  • Unit tests: TimeSeriesStore, EditBuffer (Vitest)
+  • E2E: FX list page, detail page, add pair modal
+  • E2E: Data editor, sync modal, API routes, chart settings
+
+Options: --ui, --headed, --debug
+""",
+            },
+        "fx-unit": {
+            "func": front_fx_unit,
+            "test_names": False,
+            "name": "FX Unit Tests",
+            "desc": "Vitest unit tests for TimeSeriesStore, EditBuffer",
+            "prereq": "None",
+            "tests": "vitest (stores/__tests__/)",
+            },
+        "fx-list": {
+            "func": front_fx_list,
+            "test_names": True,
+            "name": "FX List Page",
+            "desc": "FX list page navigation, cards, filters",
+            "prereq": "Login working, DB populated",
+            "tests": "fx/fx-list.spec.ts",
+            },
+        "fx-detail": {
+            "func": front_fx_detail,
+            "test_names": True,
+            "name": "FX Detail Page",
+            "desc": "FX detail page chart, panels, swap, sync",
+            "prereq": "Login working, DB populated",
+            "tests": "fx/fx-detail.spec.ts",
+            },
+        "fx-add-pair": {
+            "func": front_fx_add_pair,
+            "test_names": True,
+            "name": "FX Add Pair",
+            "desc": "Add pair modal, currency select, route discovery",
+            "prereq": "Login working, DB populated",
+            "tests": "fx/fx-add-pair.spec.ts",
+            },
+        "fx-editor": {
+            "func": front_fx_editor,
+            "test_names": True,
+            "name": "FX Data Editor",
+            "desc": "Data editor table, edit, CSV import",
+            "prereq": "Login working, DB populated",
+            "tests": "fx/fx-data-editor.spec.ts",
+            },
+        "fx-sync": {
+            "func": front_fx_sync,
+            "test_names": True,
+            "name": "FX Sync Modal",
+            "desc": "Sync all modal, sync from detail",
+            "prereq": "Login working, DB populated",
+            "tests": "fx/fx-sync.spec.ts",
+            },
+        "fx-api": {
+            "func": front_fx_api,
+            "test_names": True,
+            "name": "FX API Routes",
+            "desc": "FX API endpoint contract tests",
+            "prereq": "Login working, DB populated",
+            "tests": "fx/fx-api.spec.ts",
+            },
+        "fx-settings": {
+            "func": front_fx_settings,
+            "test_names": True,
+            "name": "FX Chart Settings",
+            "desc": "Chart settings modal, aesthetics, signals",
+            "prereq": "Login working, DB populated",
+            "tests": "fx/fx-chart-settings.spec.ts",
+            },
+        "all": {
+            "func": front_fx,
+            "test_names": False,
+            "name": "All FX Tests",
+            "desc": "Run all FX tests (unit + E2E)",
             },
         },
     }
@@ -2171,13 +2675,29 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
     test_func = test_info["func"]
     accepts_test_names = test_info.get("test_names", False)
 
-    # Special case for db populate (has force flag)
+    # Special case for db populate (has force, clean, with-static, with-reports flags)
     if category == "db" and action == "populate":
         force = kwargs.get("force", False)
-        return test_func(verbose=verbose, force=force)
+        clean = kwargs.get("clean", False)
+        with_static = kwargs.get("with_static", False)
+        with_reports = kwargs.get("with_reports", False)
+        return test_func(verbose=verbose, force=force, clean=clean,
+                         with_static=with_static, with_reports=with_reports)
+
+    # Handle --list for any category
+    list_tests = kwargs.get("list_tests", False)
+    if list_tests:
+        if category in ("front-utility", "front-user", "front-fx"):
+            return _list_front_tests(category, action)
+        elif category in BACKEND_TEST_PATHS:
+            return _list_pytest_tests(category, action)
+        else:
+            print_error(f"--list not supported for category '{category}'")
+            return True
 
     # Special case for front category (has ui, headed, debug flags + test_names)
-    if category == "front":
+    if category in ("front-utility", "front-user", "front-fx"):
+
         ui = kwargs.get("ui", False)
         headed = kwargs.get("headed", False)
         debug = kwargs.get("debug", False)
@@ -2309,19 +2829,49 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Auto-generate subparsers from TEST_REGISTRY
     for category in TEST_REGISTRY.keys():
-        extra_args = None
+        extra_args = []
+        # --list for all categories (list tests without running)
+        extra_args.append((
+            "--list", {
+            "action": "store_true",
+            "dest": "list_tests",
+            "help": "List available test names without running them",
+            "default": False,
+            }
+            ))
         if category == "db":
-            extra_args = [
-                (
-                    "--force", {
-                    "action": "store_true",
-                    "help": "[populate only] Recreate from scratch",
-                    "default": False,
-                    }
-                    ),
-                ]
-        elif category == "front":
-            extra_args = [
+            extra_args.append((
+                "--force", {
+                "action": "store_true",
+                "help": "[populate only] Recreate from scratch",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--clean", {
+                "action": "store_true",
+                "help": "[populate only] Clean custom-uploads and broker_reports dirs",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--with-static", {
+                "action": "store_true",
+                "dest": "with_static",
+                "help": "[populate only] Upload static resources (avatars, broker icons)",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--with-reports", {
+                "action": "store_true",
+                "dest": "with_reports",
+                "help": "[populate only] Upload sample broker report files",
+                "default": False,
+                }
+                ))
+        elif category in ("front-utility", "front-user", "front-fx"):
+            extra_args.extend([
                 (
                     "--ui", {
                     "action": "store_true",
@@ -2343,7 +2893,7 @@ def create_parser() -> argparse.ArgumentParser:
                     "default": False,
                     }
                     ),
-                ]
+                ])
         create_subparser_from_registry(subparsers, category, extra_args)
 
     # Special "all" category
@@ -2380,7 +2930,7 @@ def register_subparser(parent_subparsers):
     # Create the "test" subparser under dev.py
     test_parser = parent_subparsers.add_parser(
         "test",
-        help="Run tests (api, db, external, schemas, services, utils, e2e, all)",
+        help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-user, front-fx, all)",
         description="LibreFolio Test Runner"
         )
 
@@ -2422,19 +2972,49 @@ def register_subparser(parent_subparsers):
 
     # Auto-generate from registry
     for category in TEST_REGISTRY.keys():
-        extra_args = None
+        extra_args = []
+        # --list for all categories
+        extra_args.append((
+            "--list", {
+            "action": "store_true",
+            "dest": "list_tests",
+            "help": "List available test names without running them",
+            "default": False,
+            }
+            ))
         if category == "db":
-            extra_args = [
-                (
-                    "--force", {
-                    "action": "store_true",
-                    "help": "[populate only] Recreate from scratch",
-                    "default": False,
-                    }
-                    ),
-                ]
-        elif category == "front":
-            extra_args = [
+            extra_args.append((
+                "--force", {
+                "action": "store_true",
+                "help": "[populate only] Recreate from scratch",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--clean", {
+                "action": "store_true",
+                "help": "[populate only] Clean custom-uploads and broker_reports dirs",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--with-static", {
+                "action": "store_true",
+                "dest": "with_static",
+                "help": "[populate only] Upload static resources (avatars, broker icons)",
+                "default": False,
+                }
+                ))
+            extra_args.append((
+                "--with-reports", {
+                "action": "store_true",
+                "dest": "with_reports",
+                "help": "[populate only] Upload sample broker report files",
+                "default": False,
+                }
+                ))
+        elif category in ("front-utility", "front-user", "front-fx"):
+            extra_args.extend([
                 (
                     "--ui", {
                     "action": "store_true",
@@ -2456,7 +3036,7 @@ def register_subparser(parent_subparsers):
                     "default": False,
                     }
                     ),
-                ]
+                ])
         create_subparser_from_registry(test_subparsers, category, extra_args)
 
     # "all" category
@@ -2517,9 +3097,14 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
         if action:
             # Build kwargs based on category
             kwargs = {}
+            # --list available for all categories
+            kwargs['list_tests'] = getattr(args, 'list_tests', False)
             if category == "db":
                 kwargs['force'] = getattr(args, 'force', False)
-            elif category == "front":
+                kwargs['clean'] = getattr(args, 'clean', False)
+                kwargs['with_static'] = getattr(args, 'with_static', False)
+                kwargs['with_reports'] = getattr(args, 'with_reports', False)
+            elif category in ("front-utility", "front-user", "front-fx"):
                 kwargs['ui'] = getattr(args, 'ui', False)
                 kwargs['headed'] = getattr(args, 'headed', False)
                 kwargs['debug'] = getattr(args, 'debug', False)

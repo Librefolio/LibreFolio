@@ -8,7 +8,7 @@
     import BrokerForm from './BrokerForm.svelte';
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -150,7 +150,7 @@
             </div>
 
             <!-- Error message -->
-            <ErrorBanner message={error} className="mx-4 mt-4 shrink-0" on:dismiss={() => error = ''} />
+            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mx-4 mt-4 shrink-0" />
 
             <!-- Form (scrollable area with sticky footer inside) -->
             <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">
@@ -180,7 +180,7 @@
                     <AlertTriangle size={20} class="text-amber-600 dark:text-amber-400"/>
                 </div>
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                    {$_('brokers.discardChanges')}
+                    {$_('common.discardChanges')}
                 </h2>
             </div>
             <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
@@ -191,13 +191,13 @@
                         on:click={cancelDiscard}
                         class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
-                    {$_('brokers.continueEditing')}
+                    {$_('common.continueEditing')}
                 </button>
                 <button
                         on:click={confirmDiscard}
                         class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
                 >
-                    {$_('brokers.discardAndClose')}
+                    {$_('common.discardAndClose')}
                 </button>
             </div>
         </div>

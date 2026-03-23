@@ -61,7 +61,7 @@ export async function uploadBrimFile(
 /**
  * Format byte sizes into human-readable strings with i18n-translated units.
  *
- * Uses svelte-i18n translation keys: filter.bytes, filter.kilobytes, filter.megabytes, filter.gigabytes.
+ * Uses svelte-i18n translation keys: common.bytes, common.kilobytes, common.megabytes, common.gigabytes.
  * Works both inside and outside Svelte components via get() from svelte/store.
  *
  * @param bytes - Size in bytes
@@ -69,10 +69,10 @@ export async function uploadBrimFile(
  */
 export function formatBytes(bytes: number): string {
     const t = get(_);
-    const b = t('filter.bytes') || 'B';
-    const kb = t('filter.kilobytes') || 'KB';
-    const mb = t('filter.megabytes') || 'MB';
-    const gb = t('filter.gigabytes') || 'GB';
+    const b = t('common.bytes') || 'B';
+    const kb = t('common.kilobytes') || 'KB';
+    const mb = t('common.megabytes') || 'MB';
+    const gb = t('common.gigabytes') || 'GB';
 
     if (bytes === 0) return `0 ${b}`;
     if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} ${gb}`;

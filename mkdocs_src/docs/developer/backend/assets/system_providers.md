@@ -1,12 +1,12 @@
-# System Providers (Assets)
+# 🔌 System Providers (Assets)
 
 LibreFolio includes two powerful "system" providers for asset pricing that do not rely on a specific external API. They provide flexibility for tracking a wide range of assets.
 
-## CSS Scraper (`cssscraper`)
+## 🌐 CSS Scraper (`cssscraper`)
 
 The CSS Scraper is a versatile provider that can extract a price from any public webpage using a CSS selector.
 
-### How it Works
+### ⚙️ How it Works
 
 1. **Configuration**: When assigning this provider to an asset, you must provide:
     - `identifier`: The URL of the webpage to scrape.
@@ -20,23 +20,23 @@ The CSS Scraper is a versatile provider that can extract a price from any public
     - It uses **BeautifulSoup** to parse the HTML and find the element matching the CSS selector.
     - It extracts the text content of the element and parses it into a `Decimal` value, handling different number formats.
 
-### Use Cases
+### 📋 Use Cases
 
 - Tracking the price of an asset from a financial news website.
 - Scraping data from a niche market data provider that doesn't have an API.
 - Tracking the value of a collectible from an auction site.
 
-### Limitations
+### ⚠️ Limitations
 
 - **No Historical Data**: It can only fetch the current value.
 - **Fragile**: If the website's layout changes, the CSS selector may break.
 - **Requires Public Access**: It cannot access pages that require a login.
 
-## Scheduled Investment (`scheduled_investment`)
+## 📅 Scheduled Investment (`scheduled_investment`)
 
 This is a synthetic provider that calculates the value of an asset based on a predefined interest schedule. It does not make any external calls.
 
-### How it Works
+### ⚙️ How it Works
 
 1. **Configuration**: The asset's value is determined by its `interest_schedule` stored in the `provider_params`. This schedule defines:
     - Interest rate periods (start date, end date, annual rate).
@@ -49,13 +49,13 @@ This is a synthetic provider that calculates the value of an asset based on a pr
     - It then calculates the **accrued interest** up to the requested date by applying the interest schedule to the principal.
     - The final value is `principal + accrued_interest`.
 
-### Use Cases
+### 📋 Use Cases
 
 - **P2P/Crowdfunding Loans**: Model a loan with a fixed interest rate.
 - **Fixed-Rate Bonds**: Calculate the value of a bond including accrued interest.
 - **Any asset with predictable cash flows**.
 
-### Example
+### 📐 Example
 
 If you have a P2P loan of €1,000 with a 10% simple annual interest rate, the provider will calculate its value as:
 

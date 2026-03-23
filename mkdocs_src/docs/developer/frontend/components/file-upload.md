@@ -1,8 +1,8 @@
-# File Upload & Media Components
+# 📤 File Upload & Media Components
 
 *Status: Implemented and documented (Feb 2026)*
 
-## Overview
+## 📖 Overview
 
 Comprehensive file upload system with image editing, asset picking, and multi-file support.
 
@@ -15,9 +15,9 @@ Comprehensive file upload system with image editing, asset picking, and multi-fi
     </div>
 </div>
 
-## Components
+## 🧱 Components
 
-### FileUploader (`ui/media/FileUploader.svelte`)
+### ⬆️ FileUploader (`ui/media/FileUploader.svelte`)
 
 Multi-file uploader with:
 
@@ -29,7 +29,7 @@ Multi-file uploader with:
 - Edit (✏️) and Restore (↩️) buttons per file
 - Preview for images via backend thumbnail API
 
-### ImageCropper (`ui/media/ImageCropper.svelte`)
+### ✂️ ImageCropper (`ui/media/ImageCropper.svelte`)
 
 cropperjs v2 based image cropper (Web Components):
 
@@ -41,7 +41,7 @@ cropperjs v2 based image cropper (Web Components):
 - Selection clamped to canvas bounds
 - Middle-mouse-button drag for background translation
 
-### ImageEditModal (`ui/media/ImageEditModal.svelte`)
+### 🖼️ ImageEditModal (`ui/media/ImageEditModal.svelte`)
 
 Full image editing modal (extends ModalBase):
 
@@ -57,7 +57,7 @@ Full image editing modal (extends ModalBase):
 - Confirmation dialog on close with unsaved changes
 - Reset all button to restore original state
 
-### FileEditModal (`ui/media/FileEditModal.svelte`)
+### 📄 FileEditModal (`ui/media/FileEditModal.svelte`)
 
 Simple file rename modal (extends ModalBase):
 
@@ -65,7 +65,7 @@ Simple file rename modal (extends ModalBase):
 - Used for PDFs, CSVs, and other non-image files
 - Also available for BRIM import files
 
-### AssetPickerModal (`ui/media/AssetPickerModal.svelte`)
+### 🔎 AssetPickerModal (`ui/media/AssetPickerModal.svelte`)
 
 3-tab asset picker modal (extends ModalBase):
 
@@ -79,7 +79,7 @@ Simple file rename modal (extends ModalBase):
 
 Used for: broker icons, user avatars, and any image URL field.
 
-### ImagePickerWrapper (`ui/media/ImagePickerWrapper.svelte`)
+### 📸 ImagePickerWrapper (`ui/media/ImagePickerWrapper.svelte`)
 
 Wraps the full AssetPicker → ImageEdit flow:
 
@@ -87,11 +87,11 @@ Wraps the full AssetPicker → ImageEdit flow:
 - If upload selected → opens ImageEditModal
 - Returns final URL to parent
 
-### FileGrid (`ui/media/FileGrid.svelte`)
+### 📁 FileGrid (`ui/media/FileGrid.svelte`)
 
 Shared grid view component used in both `/files` page and AssetPickerModal.
 
-## Files
+## 📂 Files
 
 ```
 frontend/src/lib/components/ui/media/
@@ -121,4 +121,3 @@ frontend/src/lib/components/ui/media/
 - File type checking against `accept` prop
 - File size checking against global `max_file_upload_mb` setting
 - Client-side only (server validates again)
-

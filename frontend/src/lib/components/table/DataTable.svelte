@@ -14,11 +14,12 @@
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
-    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon} from 'lucide-svelte';
+    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableToolbar from './DataTableToolbar.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
-    import ConfirmModal from './ConfirmModal.svelte';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
 
     interface Props {
@@ -51,6 +52,14 @@
         onFiltersChange?: (filters: Record<string, FilterValue>) => void;
         /** Initial filters to apply (from URL params) */
         initialFilters?: Record<string, FilterValue>;
+        /** Optional function to add CSS classes to a row based on its data */
+        getRowClass?: (row: T) => string;
+        /** Optional function to add inline styles to a row (e.g. CSS custom properties) */
+        getRowStyle?: (row: T) => string;
+        /** Table layout mode: 'fixed' (default) or 'auto' (columns expand to fill space) */
+        tableLayout?: 'fixed' | 'auto';
+        /** Show or hide the internal column-visibility/bulk-action toolbar (default: true) */
+        showToolbar?: boolean;
     }
 
     let {
@@ -81,6 +90,10 @@
         getRowDisplayName,
         onFiltersChange,
         initialFilters,
+        getRowClass,
+        getRowStyle,
+        tableLayout = 'fixed',
+        showToolbar = true,
     }: Props = $props();
 
     // Derived: effective selection mode
@@ -133,6 +146,12 @@
     // Resize state
     let resizing = $state<{ columnId: string; startX: number; startWidth: number } | null>(null);
 
+    // Highlighted row (set by navigateToRowId, cleared on user interaction)
+    let highlightedRowId = $state<string | null>(null);
+
+    // Filter button refs (for fixed-position popover)
+    let filterBtnRefs = $state<Record<string, HTMLButtonElement | null>>({});
+
     // ============ Storage Helpers ============
 
     function getStorageKey(suffix: string): string {
@@ -162,9 +181,9 @@
     // Default column order
     let defaultColumnOrder = $derived(columns.map(c => c.id));
 
-    // Default column visibility (all visible)
+    // Default column visibility (respects hiddenByDefault)
     let defaultColumnVisibility = $derived(
-        Object.fromEntries(columns.map(c => [c.id, true]))
+        Object.fromEntries(columns.map(c => [c.id, !c.hiddenByDefault]))
     );
 
     // Default column widths
@@ -354,7 +373,7 @@
 
         // If no valid values, use sensible defaults
         if (min === Infinity) min = 0;
-        if (max === -Infinity) max = 100;
+        if (max === -Infinity) max = min + 1;
 
         // Ensure min < max
         if (min >= max) max = min + 1;
@@ -386,6 +405,11 @@
 
     function getColumnLabel(col: ColumnDef<T>): string {
         return typeof col.header === 'function' ? col.header() : col.header;
+    }
+
+    function getColumnTooltip(col: ColumnDef<T>): string | null {
+        if (!col.headerTooltip) return null;
+        return typeof col.headerTooltip === 'function' ? col.headerTooltip() : col.headerTooltip;
     }
 
     // ============ Actions ============
@@ -593,7 +617,24 @@
         const storedPageSize = loadFromStorage<number>(getStorageKey('pageSize'), defaultPageSize);
         pagination = {...pagination, pageSize: storedPageSize === 0 ? 999999 : storedPageSize};
 
-        columnVisibility = loadFromStorage(getStorageKey('columnVisibility'), defaultColumnVisibility);
+        const storedVisibility = loadFromStorage<VisibilityState | null>(getStorageKey('columnVisibility'), null);
+        if (storedVisibility) {
+            // Merge: apply stored state, but force hiddenByDefault for columns not previously known
+            const merged = {...defaultColumnVisibility};
+            for (const [id, visible] of Object.entries(storedVisibility)) {
+                if (id in merged) merged[id] = visible;
+            }
+            // Force-hide columns with hiddenByDefault that weren't in the stored state
+            for (const col of columns) {
+                if (col.hiddenByDefault && !(col.id in storedVisibility)) {
+                    merged[col.id] = false;
+                }
+            }
+            columnVisibility = merged;
+        } else {
+            columnVisibility = {...defaultColumnVisibility};
+        }
+
         columnWidths = loadFromStorage(getStorageKey('columnWidths'), defaultColumnWidths);
         columnOrder = loadFromStorage(getStorageKey('columnOrder'), defaultColumnOrder);
 
@@ -640,15 +681,70 @@
             columnWidths = {...defaultColumnWidths};
         }
     });
+
+    // ============ Public API ============
+
+    /**
+     * Navigate to the page containing the row with the given ID, then scroll it into view.
+     * Reusable: called from DataEditor's "Add Row", chart point click, etc.
+     */
+    export function navigateToRowId(rowId: string) {
+        const index = sortedData.findIndex(row => getRowId(row) === rowId);
+        if (index < 0) return;
+        if (enablePagination) {
+            const targetPage = Math.floor(index / pagination.pageSize);
+            if (pagination.pageIndex !== targetPage) {
+                pagination = {...pagination, pageIndex: targetPage};
+            }
+        }
+        // Set highlight — will be cleared on user interaction
+        highlightedRowId = rowId;
+        // After pagination update, scroll to the row
+        import('svelte').then(({tick}) => tick()).then(() => {
+            // Find the row in the visible table by scanning for matching row ID
+            const rows = document.querySelectorAll('.datatable tbody tr');
+            const positionInPage = enablePagination ? index % pagination.pageSize : index;
+            const targetRow = rows[positionInPage];
+            targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
+        });
+    }
+
+    /** Get ordered columns info for external visibility control */
+    export function getColumnsForVisibility(): Array<{id: string; header: string | (() => string); visible: boolean}> {
+        return orderedColumns.map(c => ({id: c.id, header: c.header, visible: columnVisibility[c.id] !== false}));
+    }
+
+    /** Toggle a column's visibility (external access) */
+    export function toggleColumnVisibilityById(columnId: string) {
+        toggleColumnVisibility(columnId);
+    }
+
+    /** Get ordered column IDs */
+    export function getColumnOrder(): string[] {
+        return [...columnOrder];
+    }
+
+    /** Set column order (reorder columns) */
+    export function setColumnOrder(newOrder: string[]) {
+        reorderColumns(newOrder);
+    }
+
+    /** Reset column visibility, order and widths to defaults */
+    export function resetColumnLayout() {
+        resetColumns();
+    }
+
+    /** Clear all selected rows (external access) */
+    export function clearSelection() {
+        clearAllSelection();
+    }
 </script>
 
 <div class="datatable-container">
-    <!-- Toolbar -->
-    {#if enableColumnVisibility || bulkActions.length > 0}
+    <!-- Toolbar: selection counter + bulk actions (shown when rows are selected) -->
+    {#if showToolbar && selectedRows.length > 0 && bulkActions.length > 0}
         <DataTableToolbar
                 selectedCount={selectedRows.length}
-                columns={orderedColumns.map(c => ({ id: c.id, header: c.header }))}
-                {columnVisibility}
                 bulkActions={bulkActions.map(a => ({
 				id: a.id,
 				icon: a.icon,
@@ -656,16 +752,14 @@
 				variant: a.variant,
 				onClick: () => handleBulkAction(a),
 			}))}
-                onToggleColumn={toggleColumnVisibility}
-                onResetColumns={resetColumns}
-                onReorderColumns={reorderColumns}
                 onClearSelection={clearAllSelection}
         />
     {/if}
 
     <!-- Table -->
-    <div class="table-wrapper">
-        <table class="datatable">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="table-wrapper" onkeydown={() => { highlightedRowId = null; }}>
+        <table class="datatable {tableLayout === 'auto' ? 'layout-auto' : ''}">
             <thead>
             <tr>
                 <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
@@ -714,9 +808,20 @@
                                 {/if}
                             </button>
 
+                            <!-- Header tooltip (info icon) -->
+                            {#if getColumnTooltip(column)}
+                                {@const tooltipText = getColumnTooltip(column) ?? ''}
+                                <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
+                                    <span class="header-tooltip-icon">
+                                        <Info size={12} />
+                                    </span>
+                                </Tooltip>
+                            {/if}
+
                             <!-- Filter button -->
                             {#if column.filterable !== false && enableColumnFilters}
                                 <button
+                                        bind:this={filterBtnRefs[column.id]}
                                         type="button"
                                         class="filter-btn"
                                         class:active={hasFilter}
@@ -747,6 +852,7 @@
                                         initialValue={columnFilters[column.id]}
                                         onApply={(filter) => applyColumnFilter(column.id, filter)}
                                         onClose={() => openFilterColumnId = null}
+                                        anchorElement={filterBtnRefs[column.id] ?? null}
                                 />
                             {/if}
                         </div>
@@ -778,16 +884,16 @@
                             colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)}
                             class="td-empty"
                     >
-                        {emptyMessage || $t('table.noData') || 'No data available'}
+                        {emptyMessage || $t('common.noData') || 'No data available'}
                     </td>
                 </tr>
             {:else}
                 {#each paginatedData as row}
                     {@const rowId = getRowId(row)}
                     {@const isSelected = rowSelection[rowId]}
-                    <tr class:selected={isSelected}
-                        class:clickable={effectiveSelectionMode === 'single' || onRowClick}
-                        onclick={() => handleRowClick(row)}
+                    <tr class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
+                        style={getRowStyle?.(row) ?? ''}
+                        onclick={() => { highlightedRowId = null; handleRowClick(row); }}
                         ondblclick={() => handleRowDoubleClick(row)}
                     >
                         <!-- Selection cell (multi mode only - shows checkboxes) -->
@@ -871,6 +977,28 @@
                                                 <span class="cell-image-label">{cellContent.text}</span>
                                             {/if}
                                         </div>
+                                    {:else if cellContent.type === 'editable-number'}
+                                        <input
+                                            type="number"
+                                            class="cell-editable-number"
+                                            value={cellContent.value ?? ''}
+                                            step={cellContent.step ?? 1}
+                                            placeholder={cellContent.placeholder ?? ''}
+                                            oninput={(e) => {
+                                                const raw = e.currentTarget.value;
+                                                cellContent.onchange(raw === '' ? null : Number(raw));
+                                            }}
+                                            onblur={(e) => {
+                                                const raw = e.currentTarget.value;
+                                                cellContent.onchange(raw === '' ? null : Number(raw));
+                                            }}
+                                            onkeydown={(e) => {
+                                                if (e.key === 'Enter') e.currentTarget.blur();
+                                            }}
+                                            onclick={(e) => e.stopPropagation()}
+                                        />
+                                    {:else if cellContent.type === 'html'}
+                                        {@html cellContent.html}
                                     {/if}
                                 {/if}
                             </td>
@@ -904,8 +1032,8 @@
         </table>
     </div>
 
-    <!-- Pagination - always show when enabled and there's data -->
-    {#if enablePagination && filteredData.length > 0}
+    <!-- Pagination - show only when enabled and items exceed smallest page size -->
+    {#if enablePagination && filteredData.length > 0 && filteredData.length > Math.min(...pageSizeOptions.filter(x => x > 0))}
         <DataTablePagination
                 pageIndex={pagination.pageIndex}
                 pageSize={pagination.pageSize}
@@ -959,7 +1087,6 @@
         overflow-y: visible;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
-        min-height: 280px;
         background: white;
     }
 
@@ -973,6 +1100,10 @@
         border-collapse: collapse;
         table-layout: fixed;
         background: white;
+    }
+
+    .datatable.layout-auto {
+        table-layout: auto;
     }
 
     :global(.dark) .datatable {
@@ -1066,6 +1197,18 @@
         color: #94a3b8;
     }
 
+    .header-tooltip-icon {
+        display: flex;
+        align-items: center;
+        color: #94a3b8;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    :global(.dark) .header-tooltip-icon {
+        color: #64748b;
+    }
+
     .filter-btn {
         display: flex;
         align-items: center;
@@ -1105,11 +1248,12 @@
         right: 0;
         top: 0;
         bottom: 0;
-        width: 4px;
+        width: 6px;
         background: transparent;
         cursor: col-resize;
         opacity: 0;
         transition: opacity 0.15s;
+        z-index: 5;
     }
 
     th:hover .resize-handle {
@@ -1148,32 +1292,57 @@
         background: #1e293b;
     }
 
-    tbody tr.selected {
+    tbody :global(tr.selected) {
         background: #eff6ff;
     }
 
-    :global(.dark) tbody tr.selected {
+    :global(.dark) tbody :global(tr.selected) {
         background: #1e3a5f;
     }
 
-    tbody tr.clickable {
+    tbody :global(tr.clickable) {
         cursor: pointer;
     }
 
-    tbody tr.clickable:hover {
+    tbody :global(tr.clickable):hover {
         background: #f0fdf4;
     }
 
-    :global(.dark) tbody tr.clickable:hover {
+    :global(.dark) tbody :global(tr.clickable):hover {
         background: #1a2e35;
     }
 
-    tbody tr.clickable.selected {
+    tbody :global(tr.clickable.selected) {
         background: #dcfce7;
     }
 
-    :global(.dark) tbody tr.clickable.selected {
+    :global(.dark) tbody :global(tr.clickable.selected) {
         background: #14532d;
+    }
+
+    /* Highlighted row (navigateToRowId) — purple, highest priority */
+    tbody :global(tr.highlighted) {
+        background: #f3e8ff !important;
+    }
+
+    tbody :global(tr.highlighted):hover {
+        background: #f3e8ff !important;
+    }
+
+    :global(.dark) tbody :global(tr.highlighted) {
+        background: rgba(147, 51, 234, 0.25) !important;
+    }
+
+    :global(.dark) tbody :global(tr.highlighted):hover {
+        background: rgba(147, 51, 234, 0.25) !important;
+    }
+
+    :global(tr.highlighted) td {
+        border-bottom-color: #e9d5ff;
+    }
+
+    :global(.dark) :global(tr.highlighted) td {
+        border-bottom-color: #7e22ce;
     }
 
     td {
@@ -1512,13 +1681,13 @@
     :global(.dark) .action-btn {
         background: #1e293b;
         border-color: #334155;
-        color: #94a3b8;
+        color: #cbd5e1;
     }
 
     :global(.dark) .action-btn:hover {
         background: #334155;
         border-color: #475569;
-        color: #f1f5f9;
+        color: #f8fafc;
     }
 
     :global(.dark) .action-btn.danger {
@@ -1537,5 +1706,61 @@
         .th-actions, .td-actions {
             position: static;
         }
+    }
+
+    /* Editable number cell */
+    .cell-editable-number {
+        width: 100%;
+        max-width: 120px;
+        padding: 0.25rem 0.375rem;
+        font-size: 0.8125rem;
+        font-family: ui-monospace, monospace;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        background: white;
+        color: #1e293b;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+    .cell-editable-number:focus {
+        border-color: #1a4031;
+        box-shadow: 0 0 0 1px #1a403140;
+    }
+    :global(.dark) .cell-editable-number {
+        background: #0f172a;
+        border-color: #475569;
+        color: #e2e8f0;
+    }
+    :global(.dark) .cell-editable-number:focus {
+        border-color: #4ade80;
+        box-shadow: 0 0 0 1px #4ade8040;
+    }
+
+    /* Row status classes (used via getRowClass prop) */
+    :global(tr.row-deleted) td {
+        background: rgba(239, 68, 68, 0.06) !important;
+        opacity: 0.55;
+    }
+    :global(.dark) :global(tr.row-deleted) td {
+        background: rgba(239, 68, 68, 0.20) !important;
+        opacity: 0.55;
+    }
+    :global(tr.row-edited) td {
+        background: rgba(59, 130, 246, 0.06) !important;
+    }
+    :global(.dark) :global(tr.row-edited) td {
+        background: rgba(59, 130, 246, 0.20) !important;
+    }
+    :global(tr.row-appended) td {
+        background: rgba(16, 185, 129, 0.06) !important;
+    }
+    :global(.dark) :global(tr.row-appended) td {
+        background: rgba(16, 185, 129, 0.20) !important;
+    }
+    :global(tr.row-stale) td {
+        background: rgba(245, 158, 11, var(--stale-opacity, 0.04)) !important;
+    }
+    :global(.dark) :global(tr.row-stale) td {
+        background: rgba(245, 158, 11, var(--stale-opacity, 0.08)) !important;
     }
 </style>

@@ -15,6 +15,7 @@
     import {Check, RotateCcw, Search, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import type {ColumnType, EnumOption, FilterValue} from './types';
+    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
 
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
@@ -27,18 +28,23 @@
         onApply: (filter: FilterValue | null) => void;
         onClose: () => void;
         initialValue?: FilterValue | null;
+        /** Anchor element (filter button) for fixed-position popover */
+        anchorElement?: HTMLElement | null;
     }
 
-    let {type, enumOptions = [], numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null}: Props = $props();
+    let {type, enumOptions = [], numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null, anchorElement = null}: Props = $props();
 
     let popoverElement: HTMLDivElement;
 
+    // Fixed positioning state
+    let popoverStyle = $state('');
+
     // Size units conversion (labels are translated via getter)
     const SIZE_UNITS_BASE: { unit: SizeUnit; bytes: number; labelKey: string }[] = [
-        {unit: 'B', bytes: 1, labelKey: 'filter.bytes'},
-        {unit: 'KB', bytes: 1024, labelKey: 'filter.kilobytes'},
-        {unit: 'MB', bytes: 1024 * 1024, labelKey: 'filter.megabytes'},
-        {unit: 'GB', bytes: 1024 * 1024 * 1024, labelKey: 'filter.gigabytes'},
+        {unit: 'B', bytes: 1, labelKey: 'common.bytes'},
+        {unit: 'KB', bytes: 1024, labelKey: 'common.kilobytes'},
+        {unit: 'MB', bytes: 1024 * 1024, labelKey: 'common.megabytes'},
+        {unit: 'GB', bytes: 1024 * 1024 * 1024, labelKey: 'common.gigabytes'},
     ];
 
     // Reactive translated size units
@@ -92,6 +98,53 @@
     // Number filter state
     let numMin = $state(getInitialNumMin());
     let numMax = $state(getInitialNumMax());
+
+    // Number slider positions (0-100)
+    // svelte-ignore state_referenced_locally
+    let numSliderMinPos = $state(numToSliderPos(getInitialNumMin()));
+    // svelte-ignore state_referenced_locally
+    let numSliderMaxPos = $state(numToSliderPos(getInitialNumMax()));
+
+    // Linear scale for number slider
+    function numToSliderPos(value: number): number {
+        if (numberMax <= numberMin) return 0;
+        return Math.round(((value - numberMin) / (numberMax - numberMin)) * 100);
+    }
+
+    // LINEAR scale: number slider maps 0-100 position linearly to [numberMin, numberMax]
+    function sliderPosToNum(pos: number): number {
+        const raw = numberMin + (pos / 100) * (numberMax - numberMin);
+        // Round to reasonable precision
+        const range = numberMax - numberMin;
+        if (range < 1) return Math.round(raw * 100000) / 100000;
+        if (range < 10) return Math.round(raw * 1000) / 1000;
+        if (range < 100) return Math.round(raw * 100) / 100;
+        return Math.round(raw * 10) / 10;
+    }
+
+    /** Format number for slider labels */
+    function fmtNum(v: number): string {
+        if (Math.abs(v) >= 1000) return v.toLocaleString(undefined, {maximumFractionDigits: 0});
+        if (Math.abs(v) >= 1) return v.toLocaleString(undefined, {maximumFractionDigits: 2});
+        return v.toPrecision(3);
+    }
+
+    function updateNumMinFromSlider() {
+        if (numSliderMinPos > numSliderMaxPos) numSliderMinPos = numSliderMaxPos;
+        numMin = sliderPosToNum(numSliderMinPos);
+        applyFilter();
+    }
+
+    function updateNumMaxFromSlider() {
+        if (numSliderMaxPos < numSliderMinPos) numSliderMaxPos = numSliderMinPos;
+        numMax = sliderPosToNum(numSliderMaxPos);
+        applyFilter();
+    }
+
+    function syncNumSlidersFromInput() {
+        numSliderMinPos = numToSliderPos(numMin);
+        numSliderMaxPos = numToSliderPos(numMax);
+    }
 
     // Date filter state
     let dateFrom = $state(getInitialDateFrom());
@@ -153,7 +206,7 @@
     }
 
 
-    // Logarithmic scale for slider (0-100 position to bytes)
+    // LOGARITHMIC scale: size slider maps 0-100 position logarithmically to [numberMin, numberMax]
     function sliderPosToBytes(pos: number): number {
         if (pos <= 0) return numberMin;
         if (pos >= 100) return numberMax;
@@ -261,6 +314,8 @@
         textMatchMode = 'contains';
         numMin = numberMin;
         numMax = numberMax;
+        numSliderMinPos = 0;
+        numSliderMaxPos = 100;
         dateFrom = '';
         dateTo = '';
         selectedEnums = new Set(enumOptions.map(o => o.value));
@@ -304,6 +359,47 @@
             initSizeInputs();
         }
 
+        // Calculate fixed position from anchor element
+        if (anchorElement) {
+            const updatePosition = () => {
+                const rect = anchorElement!.getBoundingClientRect();
+                const popW = popoverElement?.offsetWidth ?? 240;
+                const popH = popoverElement?.offsetHeight ?? 300;
+                let left = rect.left;
+                // Prevent overflow on right edge
+                if (left + popW > window.innerWidth - 8) {
+                    left = window.innerWidth - popW - 8;
+                }
+                // Smart top/bottom: open upward if not enough space below
+                const spaceBelow = window.innerHeight - rect.bottom - 8;
+                const openAbove = spaceBelow < popH && rect.top > popH;
+                const top = openAbove ? rect.top - popH - 4 : rect.bottom + 4;
+                popoverStyle = `position: fixed; top: ${top}px; left: ${left}px;`;
+            };
+            updatePosition();
+            // Re-measure after first render to get actual popover height
+            requestAnimationFrame(updatePosition);
+            // Close on scroll (parent containers + window)
+            const scrollParent = anchorElement!.closest('.table-wrapper');
+            const handleScroll = () => onClose();
+            scrollParent?.addEventListener('scroll', handleScroll);
+            window.addEventListener('scroll', handleScroll, true);
+            window.addEventListener('resize', updatePosition);
+
+            const timer = setTimeout(() => {
+                document.addEventListener('click', handleClickOutside, true);
+            }, 100);
+
+            return () => {
+                clearTimeout(timer);
+                document.removeEventListener('click', handleClickOutside, true);
+                scrollParent?.removeEventListener('scroll', handleScroll);
+                window.removeEventListener('scroll', handleScroll, true);
+                window.removeEventListener('resize', updatePosition);
+                if (debounceTimer) clearTimeout(debounceTimer);
+            };
+        }
+
         const timer = setTimeout(() => {
             document.addEventListener('click', handleClickOutside, true);
         }, 100);
@@ -316,7 +412,7 @@
     });
 </script>
 
-<div bind:this={popoverElement} class="filter-popover" transition:fade={{ duration: 100 }}>
+<div bind:this={popoverElement} class="filter-popover" style={popoverStyle} transition:fade={{ duration: 100 }}>
     <div class="filter-header">
         <span class="filter-title">{$t('table.filter')}</span>
         <button class="reset-btn" onclick={clearFilter} title={$t('common.clear')} type="button">
@@ -353,19 +449,56 @@
         {:else if type === 'number'}
             <div class="number-filter">
                 <div class="range-row">
-                    <label class="range-label" for="number-min-input">{$t('filter.min')}</label>
-                    <input type="number" class="range-input" bind:value={numMin} min={numberMin} max={numMax} onchange={applyFilter} id="number-min-input"/>
+                    <label class="range-label" for="number-min-input">{$t('common.min')}</label>
+                    <input type="number" class="range-input" bind:value={numMin} min={numberMin} max={numMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }} id="number-min-input"/>
                 </div>
                 <div class="range-row">
-                    <label class="range-label" for="number-max-input">{$t('filter.max')}</label>
-                    <input type="number" class="range-input" bind:value={numMax} min={numMin} max={numberMax} onchange={applyFilter} id="number-max-input"/>
+                    <label class="range-label" for="number-max-input">{$t('common.max')}</label>
+                    <input type="number" class="range-input" bind:value={numMax} min={numMin} max={numberMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }} id="number-max-input"/>
+                </div>
+                <!-- Dual range slider -->
+                <div class="size-slider-container">
+                    <div class="size-slider-track">
+                        <div
+                                class="size-slider-range"
+                                style="left: {numSliderMinPos}%; right: {100 - numSliderMaxPos}%"
+                        ></div>
+                        <div class="slider-tick" style="left: 25%"></div>
+                        <div class="slider-tick" style="left: 50%"></div>
+                        <div class="slider-tick" style="left: 75%"></div>
+                    </div>
+                    <input
+                            type="range"
+                            class="size-slider size-slider-min"
+                            min="0"
+                            max="100"
+                            bind:value={numSliderMinPos}
+                            oninput={updateNumMinFromSlider}
+                    />
+                    <input
+                            type="range"
+                            class="size-slider size-slider-max"
+                            min="0"
+                            max="100"
+                            bind:value={numSliderMaxPos}
+                            oninput={updateNumMaxFromSlider}
+                    />
+                </div>
+
+                <!-- Slider labels with intermediate values -->
+                <div class="size-slider-labels">
+                    <span>{fmtNum(numberMin)}</span>
+                    <span class="slider-label-mid">{fmtNum(sliderPosToNum(25))}</span>
+                    <span class="slider-label-mid">{fmtNum(sliderPosToNum(50))}</span>
+                    <span class="slider-label-mid">{fmtNum(sliderPosToNum(75))}</span>
+                    <span>{fmtNum(numberMax)}</span>
                 </div>
             </div>
         {:else if type === 'size'}
             <div class="size-filter">
                 <!-- Min size input -->
                 <div class="size-row">
-                    <label class="size-label" for="size-min-input">{$t('filter.min')}</label>
+                    <label class="size-label" for="size-min-input">{$t('common.min')}</label>
                     <div class="size-input-group">
                         <input
                                 type="number"
@@ -385,7 +518,7 @@
 
                 <!-- Max size input -->
                 <div class="size-row">
-                    <label class="size-label" for="size-max-input">{$t('filter.max')}</label>
+                    <label class="size-label" for="size-max-input">{$t('common.max')}</label>
                     <div class="size-input-group">
                         <input
                                 type="number"
@@ -444,14 +577,15 @@
             </div>
         {:else if type === 'date'}
             <div class="date-filter">
-                <div class="date-row">
-                    <label class="date-label" for="date-from-input">{$t('filter.from')}</label>
-                    <input type="date" class="date-input" bind:value={dateFrom} onchange={applyFilter} id="date-from-input"/>
-                </div>
-                <div class="date-row">
-                    <label class="date-label" for="date-to-input">{$t('filter.to')}</label>
-                    <input type="date" class="date-input" bind:value={dateTo} onchange={applyFilter} id="date-to-input"/>
-                </div>
+                <DateRangePicker
+                    start={dateFrom}
+                    end={dateTo}
+                    showPresets={false}
+                    showCustomWindow={false}
+                    compact={true}
+                    stacked={true}
+                    onchange={(s, e) => { dateFrom = s; dateTo = e; applyFilter(); }}
+                />
             </div>
         {:else if type === 'enum'}
             <div class="enum-filter">
@@ -486,8 +620,8 @@
         background: white;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        z-index: 60;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        z-index: 9999;
     }
 
     :global(.dark) .filter-popover {
@@ -640,23 +774,23 @@
         gap: 0.5rem;
     }
 
-    .range-row, .date-row {
+    .range-row {
         display: flex;
         align-items: center;
         gap: 0.5rem;
     }
 
-    .range-label, .date-label {
+    .range-label {
         min-width: 35px;
         font-size: 0.75rem;
         color: #64748b;
     }
 
-    :global(.dark) .range-label, :global(.dark) .date-label {
+    :global(.dark) .range-label {
         color: #94a3b8;
     }
 
-    .range-input, .date-input {
+    .range-input {
         flex: 1;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
@@ -666,18 +800,18 @@
         color: #0f172a;
     }
 
-    :global(.dark) .range-input, :global(.dark) .date-input {
+    :global(.dark) .range-input {
         background: #0f172a;
         border-color: #334155;
         color: #f1f5f9;
     }
 
-    .range-input:focus, .date-input:focus {
+    .range-input:focus {
         outline: none;
         border-color: #1a4031;
     }
 
-    :global(.dark) .range-input:focus, :global(.dark) .date-input:focus {
+    :global(.dark) .range-input:focus {
         border-color: #4ade80;
     }
 

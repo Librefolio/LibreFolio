@@ -8,8 +8,8 @@
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {formatBytes} from '$lib/utils/upload';
     import {FileText, FileUp, RefreshCw, Trash2} from 'lucide-svelte';
-    import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import type {BrimFile} from '$lib/types';
 
     // Props
@@ -179,7 +179,7 @@
         </div>
     </div>
 
-    <ErrorBanner message={error} className="mb-3" on:dismiss={() => error = ''} />
+    <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mb-3" />
 
     {#if loading && files.length === 0}
         <div class="flex items-center justify-center py-8 text-gray-400">

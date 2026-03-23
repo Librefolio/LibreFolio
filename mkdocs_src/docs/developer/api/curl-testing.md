@@ -1,12 +1,12 @@
-# API Testing with cURL
+# 🧪 API Testing with cURL
 
 This guide explains how to test LibreFolio's REST API using cURL from the terminal.
 
-## Authentication
+## 🔐 Authentication
 
 LibreFolio uses session-based authentication with HTTP-only cookies. To make authenticated API calls, you must first login and then pass the session cookie.
 
-### Step 1: Login and Get Session Cookie
+### 1️⃣ Step 1: Login and Get Session Cookie
 
 ```bash
 # Login and save the session cookie
@@ -37,7 +37,7 @@ This will:
 }
 ```
 
-### Step 2: Make Authenticated Requests
+### 2️⃣ Step 2: Make Authenticated Requests
 
 Use the `-b` flag to send the saved cookie:
 
@@ -52,7 +52,7 @@ curl -s -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers
 curl -s -b /tmp/cookies.txt http://localhost:8000/api/v1/uploads
 ```
 
-### Alternative: Direct Cookie Header
+### 🔑 Alternative: Direct Cookie Header
 
 If `-b` doesn't work, you can extract the cookie from the login response and use it directly:
 
@@ -65,16 +65,16 @@ curl -s http://localhost:8000/api/v1/auth/me \
   -H "Cookie: session=YOUR_SESSION_TOKEN_HERE"
 ```
 
-## Common API Endpoints
+## 📋 Common API Endpoints
 
-### Health Check (No Auth Required)
+### 🏥 Health Check (No Auth Required)
 
 ```bash
 curl http://localhost:8000/api/v1/system/health
 # Returns: {"status":"ok"}
 ```
 
-### User Management
+### 👤 User Management
 
 ```bash
 # Get current user
@@ -87,7 +87,7 @@ curl -X PATCH -b /tmp/cookies.txt \
   http://localhost:8000/api/v1/auth/users/me/preferences
 ```
 
-### Brokers
+### 🏦 Brokers
 
 ```bash
 # List all brokers
@@ -100,7 +100,7 @@ curl -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers/1
 curl -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers/1/summary
 ```
 
-### BRIM (Broker Report Import)
+### 📥 BRIM (Broker Report Import)
 
 ```bash
 # List BRIM files
@@ -121,7 +121,7 @@ curl -b /tmp/cookies.txt \
 curl -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers/import/plugins
 ```
 
-### Static Files
+### 📁 Static Files
 
 ```bash
 # List uploaded files
@@ -137,7 +137,7 @@ curl -b /tmp/cookies.txt -O \
   "http://localhost:8000/api/v1/uploads/file/FILE_ID?download=true"
 ```
 
-## Useful cURL Flags
+## 🧰 Useful cURL Flags
 
 | Flag                  | Description                            |
 |-----------------------|----------------------------------------|
@@ -154,7 +154,7 @@ curl -b /tmp/cookies.txt -O \
 | `-O`                  | Save with original filename            |
 | `-w "\n%{http_code}"` | Print HTTP status code                 |
 
-## Test Mode
+## 🧪 Test Mode
 
 To test against the test database (port 8001):
 
@@ -166,7 +166,7 @@ To test against the test database (port 8001):
 curl http://localhost:8001/api/v1/system/health
 ```
 
-## API Documentation
+## 📖 API Documentation
 
 For complete API documentation, visit:
 

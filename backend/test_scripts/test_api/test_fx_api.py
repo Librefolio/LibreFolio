@@ -2,13 +2,15 @@
 FX API Tests.
 
 Tests for Foreign Exchange (FX) endpoints:
-- GET /fx/currencies (list supported currencies)
-- GET /fx/providers (list FX providers)
-- POST /fx/providers/pair-sources (CRUD for pair sources)
+- GET /fx/providers (list FX providers with target currencies)
+- POST /fx/providers/routes (CRUD for pair sources)
 - POST /fx/sync (sync rates from providers)
 - POST /fx/convert (currency conversion)
 - POST /fx/rates (manual rate upsert)
 - DELETE /fx/rates (rate deletion)
+
+Note: The former GET /fx/currencies endpoint was removed and absorbed
+by GET /fx/providers which now includes target_currencies per provider.
 """
 
 from datetime import date, timedelta
@@ -24,19 +26,26 @@ from backend.app.schemas.fx import (
     FXConversionRequest,
     FXUpsertItem,
     FXDeleteItem,
-    FXPairSourceItem,
-    FXPairSourcesResponse,
-    FXCreatePairSourcesResponse,
-    FXDeletePairSourceItem,
+    FXConversionRoutesResponse,
+    FXCreateRoutesResponse,
+    FXDeleteRouteItem,
     FXProviderInfo,
     )
-from backend.app.schemas.refresh import FXSyncResponse
+from backend.app.schemas.refresh import FXSyncBulkResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+
+
+def _route_json(base: str, quote: str, provider: str, priority: int = 1) -> dict:
+    """Build a 1-step route JSON payload for tests."""
+    return {
+        "base": base, "quote": quote, "priority": priority,
+        "chain_steps": [{"from": base, "to": quote, "provider": provider}],
+        }
 
 
 # ============================================================================
@@ -64,34 +73,67 @@ def test_server():
 
 
 @pytest.mark.asyncio
-async def test_get_currencies(test_server):
-    """Test 1: GET /fx/currencies - List supported currencies."""
-    print_section("Test 1: GET /fx/currencies")
+async def test_providers_include_target_currencies(test_server):
+    """Test 1: GET /fx/providers - Providers include target_currencies field.
+
+    This test replaces the former test_get_currencies which tested the now-removed
+    GET /fx/currencies endpoint. Target currencies are now part of the providers response.
+    """
+    print_section("Test 1: GET /fx/providers - target_currencies")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{API_BASE}/fx/currencies", timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
 
         assert (
             response.status_code == 200
         ), f"Expected 200, got {response.status_code}: {response.text}"
 
-        data = response.json()
+        providers = [FXProviderInfo(**p) for p in response.json()]
+        assert len(providers) > 0, "Should have at least one provider"
 
-        # Validate response structure
-        assert "items" in data, "Response should have 'items' field"
-        assert isinstance(data["items"], list), "items should be a list"
+        for provider in providers:
+            # Validate target_currencies field exists and is populated
+            assert hasattr(provider, "target_currencies"), \
+                f"Provider {provider.code} should have target_currencies field"
+            assert isinstance(provider.target_currencies, list), \
+                f"target_currencies should be a list for {provider.code}"
+            assert len(provider.target_currencies) > 0, \
+                f"Provider {provider.code} should have at least one target currency"
 
-        # Validate currency codes
-        for currency in data["items"]:
-            assert len(currency) == 3, f"Currency code should be 3 chars: {currency}"
-            assert currency.isupper(), f"Currency code should be uppercase: {currency}"
+            # Validate currency codes format
+            for currency in provider.target_currencies:
+                assert len(currency) == 3, \
+                    f"Currency code should be 3 chars: {currency} (provider: {provider.code})"
+                assert currency.isupper(), \
+                    f"Currency code should be uppercase: {currency} (provider: {provider.code})"
 
-        print_success(f"✓ Found {len(data['items'])} currencies")
+            # Base currency should be included in target currencies
+            assert provider.base_currency in provider.target_currencies, \
+                f"Base currency {provider.base_currency} should be in target_currencies for {provider.code}"
+
+            print_success(
+                f"✓ {provider.code}: {len(provider.target_currencies)} target currencies, "
+                f"base_currencies={provider.base_currencies}"
+                )
+
+
+@pytest.mark.asyncio
+async def test_old_currencies_endpoint_removed(test_server):
+    """Test 1b: GET /fx/currencies - Should return 404/405 (endpoint removed)."""
+    print_section("Test 1b: GET /fx/currencies - Removed endpoint")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{API_BASE}/fx/currencies", timeout=TIMEOUT)
+
+        assert response.status_code in (404, 405), \
+            f"Expected 404 or 405 for removed endpoint, got {response.status_code}"
+
+        print_success("✓ GET /fx/currencies correctly removed (returns 404/405)")
 
 
 @pytest.mark.asyncio
 async def test_get_providers(test_server):
-    """Test 2: GET /fx/providers - List FX providers."""
+    """Test 2: GET /fx/providers - List FX providers with full info."""
     print_section("Test 2: GET /fx/providers")
 
     async with httpx.AsyncClient() as client:
@@ -111,80 +153,108 @@ async def test_get_providers(test_server):
             assert provider.code, "Provider should have code"
             assert provider.name, "Provider should have name"
             assert provider.base_currency, "Provider should have base_currency"
+            assert provider.base_currencies, "Provider should have base_currencies"
+            assert provider.target_currencies, "Provider should have target_currencies"
             assert hasattr(provider, "icon_url"), "Provider should have icon_url field"
+            # base_currency should be in base_currencies
+            assert provider.base_currency in provider.base_currencies, \
+                f"base_currency {provider.base_currency} should be in base_currencies"
 
         print_success(f"✓ Found {len(providers)} providers")
         print_info(f"  Providers: {', '.join([p.code for p in providers])}")
 
+        # 2b. Test providers filter (single provider)
+        print_info("2b. Filter by single provider (ECB)")
+        response_filtered = await client.get(
+            f"{API_BASE}/fx/providers",
+            params={"providers": ["ECB"]},
+            timeout=TIMEOUT,
+            )
+        assert response_filtered.status_code == 200
+        filtered = [FXProviderInfo(**p) for p in response_filtered.json()]
+        assert len(filtered) == 1, f"Expected 1 provider, got {len(filtered)}"
+        assert filtered[0].code == "ECB"
+        print_success("✓ Single provider filter works")
+
+        # 2c. Test providers filter (multiple providers)
+        print_info("2c. Filter by multiple providers (ECB, FED)")
+        response_multi = await client.get(
+            f"{API_BASE}/fx/providers",
+            params={"providers": ["ECB", "FED"]},
+            timeout=TIMEOUT,
+            )
+        assert response_multi.status_code == 200
+        multi = [FXProviderInfo(**p) for p in response_multi.json()]
+        assert len(multi) == 2, f"Expected 2 providers, got {len(multi)}"
+        codes = {p.code for p in multi}
+        assert codes == {"ECB", "FED"}, f"Expected ECB & FED, got {codes}"
+        print_success("✓ Multi-provider filter works")
+
+        # 2d. No filter returns all providers
+        print_info("2d. No filter returns all")
+        response_all = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
+        all_providers = [FXProviderInfo(**p) for p in response_all.json()]
+        assert len(all_providers) >= 4, f"Expected >= 4, got {len(all_providers)}"
+        print_success(f"✓ No filter returns {len(all_providers)} providers")
+
 
 @pytest.mark.asyncio
 async def test_pair_sources_crud(test_server):
-    """Test 3: POST /fx/providers/pair-sources - CRUD operations for pair sources."""
-    print_section("Test 3: POST /fx/providers/pair-sources - CRUD")
+    """Test 3: POST /fx/providers/routes - CRUD operations for pair sources."""
+    print_section("Test 3: POST /fx/providers/routes - CRUD")
 
     async with httpx.AsyncClient() as client:
         # 3a. List all pair sources (empty or existing)
         print_info("3a. List pair sources")
-        response = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/fx/providers/routes", timeout=TIMEOUT)
         assert response.status_code == 200, f"GET failed: {response.status_code}"
-        sources_response = FXPairSourcesResponse(**response.json())
+        sources_response = FXConversionRoutesResponse(**response.json())
         print_success(f"✓ Listed {len(sources_response.items)} initial sources")
 
         # 3b. Create a new pair source
-        print_info("3b. Create pair source (USD/EUR)")
-        create_request_sources = [
-            FXPairSourceItem(
-                base="USD",
-                quote="EUR",
-                provider_code="ECB",
-                priority=2,  # Use priority 2 to avoid conflict with existing EUR/USD priority 1
-                )
-            ]
+        print_info("3b. Create route (EUR/USD)")
+        create_request_sources = [_route_json("EUR", "USD", "ECB", priority=2)]
         response = await client.post(
-            f"{API_BASE}/fx/providers/pair-sources",
-            json=[s.model_dump(mode="json") for s in create_request_sources],
+            f"{API_BASE}/fx/providers/routes",
+            json=create_request_sources,
             timeout=TIMEOUT,
             )
         assert response.status_code == 201, f"POST failed: {response.status_code}: {response.text}"
-        create_response = FXCreatePairSourcesResponse(**response.json())
+        create_response = FXCreateRoutesResponse(**response.json())
         assert create_response.success_count == 1, "Should create 1 source"
         print_success("✓ Pair source created")
 
         # 3c. Read back to verify
         print_info("3c. Read back to verify")
-        response = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/fx/providers/routes", timeout=TIMEOUT)
         assert response.status_code == 200, f"GET failed: {response.status_code}"
-        sources_response = FXPairSourcesResponse(**response.json())
+        sources_response = FXConversionRoutesResponse(**response.json())
         usd_eur_sources = [
-            s for s in sources_response.items if s.base == "USD" and s.quote == "EUR"
+            s for s in sources_response.items if s.base == "EUR" and s.quote == "USD"
             ]
-        assert len(usd_eur_sources) > 0, "USD/EUR source should exist"
+        assert len(usd_eur_sources) > 0, "EUR/USD source should exist"
         print_success("✓ Pair source verified")
 
         # 3d. Update priority
         print_info("3d. Update priority")
-        update_request_sources = [
-            FXPairSourceItem(
-                base="USD", quote="EUR", provider_code="ECB", priority=3  # Update to priority 3
-                )
-            ]
+        update_request_sources = [_route_json("EUR", "USD", "ECB", priority=3)]
         response = await client.post(
-            f"{API_BASE}/fx/providers/pair-sources",
-            json=[s.model_dump(mode="json") for s in update_request_sources],
+            f"{API_BASE}/fx/providers/routes",
+            json=update_request_sources,
             timeout=TIMEOUT,
             )
         assert response.status_code == 201, f"POST failed: {response.status_code}"
-        update_response = FXCreatePairSourcesResponse(**response.json())
+        update_response = FXCreateRoutesResponse(**response.json())
         assert update_response.success_count == 1, "Should update 1 source"
         print_success("✓ Priority updated")
 
         # 3e. Delete pair source
         print_info("3e. Delete pair source")
 
-        delete_request_sources = [FXDeletePairSourceItem(base="USD", quote="EUR")]
+        delete_request_sources = [FXDeleteRouteItem(base="EUR", quote="USD")]
         response = await client.request(
             method="DELETE",
-            url=f"{API_BASE}/fx/providers/pair-sources",
+            url=f"{API_BASE}/fx/providers/routes",
             json=[s.model_dump(mode="json") for s in delete_request_sources],
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT,
@@ -197,42 +267,53 @@ async def test_pair_sources_crud(test_server):
 
 @pytest.mark.asyncio
 async def test_sync_rates(test_server):
-    """Test 4: POST /fx/currencies/sync - Sync rates from providers."""
+    """Test 4: POST /fx/currencies/sync - Pair-based sync."""
     print_section("Test 4: POST /fx/currencies/sync")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
         yesterday = today - timedelta(days=1)
 
-        # Sync rates using query parameters
-        params = {
-            "start": yesterday.isoformat(),
-            "end": yesterday.isoformat(),
-            "currencies": "EUR,GBP",
-            "provider": "ECB",
-            }
+        # Ensure pair sources exist
+        await client.post(
+            f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "EUR", "quote": "GBP", "priority": 1, "chain_steps": [{"from": "EUR", "to": "GBP", "provider": "ECB"}]}],
+            timeout=TIMEOUT,
+            )
 
-        response = await client.get(
-            f"{API_BASE}/fx/currencies/sync", params=params, timeout=TIMEOUT
+        # Sync rates using POST with pair slugs
+        response = await client.post(
+            f"{API_BASE}/fx/currencies/sync",
+            json={
+                "pairs": ["EUR-GBP"],
+                "start": yesterday.isoformat(),
+                "end": yesterday.isoformat(),
+                },
+            timeout=TIMEOUT,
             )
 
         assert (
             response.status_code == 200
         ), f"Expected 200, got {response.status_code}: {response.text}"
 
-        sync_response = FXSyncResponse(**response.json())
+        sync_response = FXSyncBulkResponse(**response.json())
+        assert len(sync_response.results) == 1
+        pr = sync_response.results[0]
+        assert pr.pair == "EUR-GBP"
+        print_success(f"✓ Sync completed: status={pr.status}, pts_changed={pr.points_changed}")
 
-        assert sync_response.synced >= 0, "Synced count should be non-negative"
-        assert sync_response.date_range.start == yesterday, "Start date should match"
-        assert sync_response.date_range.end == yesterday, "End date should match"
-
-        print_success(f"✓ Sync completed: {sync_response.synced} rates synced")
-        print_info(f"  Currencies: {', '.join(sync_response.currencies)}")
+        # Cleanup
+        await client.request(
+            "DELETE",
+            f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "EUR", "quote": "GBP"}],
+            timeout=TIMEOUT,
+            )
 
 
 @pytest.mark.asyncio
 async def test_sync_rates_auto_config(test_server):
-    """Test 4b: POST /fx/currencies/sync - Auto-config mode (no provider parameter)."""
+    """Test 4b: POST /fx/currencies/sync - Auto-config mode with pair sources."""
     print_section("Test 4b: POST /fx/currencies/sync - Auto-config")
 
     async with httpx.AsyncClient() as client:
@@ -242,91 +323,57 @@ async def test_sync_rates_auto_config(test_server):
         # Step 1: Create pair source configuration in DB
         print_info("Step 1: Configure pair sources in DB")
 
-        pair_sources = [
-            FXPairSourceItem(base="EUR", quote="USD", provider_code="ECB", priority=1),
-            FXPairSourceItem(
-                base="GBP",
-                quote="USD",
-                provider_code="ECB",  # ECB also provides GBP rates
-                priority=1,
-                ),
+        routes = [
+            _route_json("EUR", "USD", "ECB"),
+            _route_json("GBP", "USD", "ECB"),
             ]
 
         create_response = await client.post(
-            f"{API_BASE}/fx/providers/pair-sources",
-            json=[s.model_dump(mode="json") for s in pair_sources],
+            f"{API_BASE}/fx/providers/routes",
+            json=routes,
             timeout=TIMEOUT,
             )
         assert (
             create_response.status_code == 201
         ), f"Expected 201, got {create_response.status_code}: {create_response.text}"
 
-        create_data = FXCreatePairSourcesResponse(**create_response.json())
+        create_data = FXCreateRoutesResponse(**create_response.json())
         assert create_data.success_count >= 2, "Should create at least 2 pair sources"
         print_success(f"✓ Created {create_data.success_count} pair sources")
 
-        # Step 2: Sync rates WITHOUT provider parameter (auto-config mode)
-        print_info("Step 2: Sync rates using auto-config (no provider param)")
+        # Step 2: Sync rates using POST with pair slugs
+        print_info("Step 2: Sync rates using pair slugs")
 
-        # Important: Do NOT pass "provider" parameter
-        params = {
-            "start": yesterday.isoformat(),
-            "end": yesterday.isoformat(),
-            "currencies": "EUR,GBP",  # These currencies are configured in DB
-            }
-
-        sync_response = await client.get(
-            f"{API_BASE}/fx/currencies/sync", params=params, timeout=TIMEOUT
+        sync_response = await client.post(
+            f"{API_BASE}/fx/currencies/sync",
+            json={
+                "pairs": ["EUR-USD", "GBP-USD"],
+                "start": yesterday.isoformat(),
+                "end": yesterday.isoformat(),
+                },
+            timeout=TIMEOUT,
             )
 
         assert (
             sync_response.status_code == 200
         ), f"Expected 200, got {sync_response.status_code}: {sync_response.text}"
 
-        sync_data = FXSyncResponse(**sync_response.json())
+        sync_data = FXSyncBulkResponse(**sync_response.json())
+        assert len(sync_data.results) == 2
+        print_success(f"✓ Auto-config sync: {sync_data.success_count}/{len(sync_data.results)} ok")
+        for pr in sync_data.results:
+            print_info(f"  {pr.pair}: status={pr.status}, pts={pr.points_changed}")
 
-        assert sync_data.synced >= 0, "Synced count should be non-negative"
-        assert sync_data.date_range.start == yesterday, "Start date should match"
-        assert sync_data.date_range.end == yesterday, "End date should match"
-        # Note: currencies list may be empty on weekends/holidays when providers don't publish rates
-        print_success(f"✓ Auto-config sync completed: {sync_data.synced} rates synced")
-        if len(sync_data.currencies) > 0:
-            print_info(f"  Currencies: {', '.join(sync_data.currencies)}")
-        else:
-            print_info("  ℹ️  No currencies synced (normal for weekends/holidays)")
-
-        # Step 3: Test error case - currency not configured
-        print_info("Step 3: Test missing currency configuration")
-
-        params_missing = {
-            "start": yesterday.isoformat(),
-            "end": yesterday.isoformat(),
-            "currencies": "FALSE_CURRENCY",  # NOT configured in DB
-            }
-
-        error_response = await client.get(
-            f"{API_BASE}/fx/currencies/sync", params=params_missing, timeout=TIMEOUT
-            )
-
-        assert (
-            error_response.status_code == 400
-        ), f"Expected 400 for missing config, got {error_response.status_code}"
-        error_data = error_response.json()
-        assert (
-            "No configuration found" in error_data["detail"]
-        ), "Should mention missing configuration"
-        print_success("✓ Missing currency config properly rejected with 400")
-
-        # Step 4: Cleanup - delete pair sources
-        print_info("Step 4: Cleanup pair sources")
+        # Step 3: Cleanup - delete pair sources
+        print_info("Step 3: Cleanup pair sources")
 
         delete_sources = [
-            FXDeletePairSourceItem(base="EUR", quote="USD"),
-            FXDeletePairSourceItem(base="GBP", quote="USD"),
+            FXDeleteRouteItem(base="EUR", quote="USD"),
+            FXDeleteRouteItem(base="GBP", quote="USD"),
             ]
         delete_response = await client.request(
             method="DELETE",
-            url=f"{API_BASE}/fx/providers/pair-sources",
+            url=f"{API_BASE}/fx/providers/routes",
             json=[s.model_dump(mode="json") for s in delete_sources],
             timeout=TIMEOUT,
             )
@@ -345,16 +392,20 @@ async def test_convert_currency(test_server):
     async with httpx.AsyncClient() as client:
         today = date.today()
 
-        # First, ensure we have a rate (sync or manual)
-        # Try to sync first
-        sync_params = {
-            "start": (today - timedelta(days=7)).isoformat(),
-            "end": today.isoformat(),
-            "currencies": "EUR,GBP",
-            "provider": "ECB",
-            }
-        await client.get(  # Sync is GET not POST
-            f"{API_BASE}/fx/currencies/sync", params=sync_params, timeout=TIMEOUT
+        # First, ensure we have rates (sync via POST)
+        await client.post(
+            f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "EUR", "quote": "GBP", "priority": 1, "chain_steps": [{"from": "EUR", "to": "GBP", "provider": "ECB"}]}],
+            timeout=TIMEOUT,
+            )
+        await client.post(
+            f"{API_BASE}/fx/currencies/sync",
+            json={
+                "pairs": ["EUR-GBP"],
+                "start": (today - timedelta(days=7)).isoformat(),
+                "end": today.isoformat(),
+                },
+            timeout=TIMEOUT,
             )
 
         # Now convert (use List directly)
@@ -715,3 +766,224 @@ async def test_invalid_requests(test_server):
             response.status_code == 422
         ), f"Expected 422 for invalid date, got {response.status_code}"
         print_success("✓ Invalid date rejected with 422")
+
+
+# ============================================================================
+# MANUAL PROVIDER TESTS
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_manual_provider_hidden_from_list(test_server):
+    """Test 12: MANUAL provider should NOT appear in GET /fx/providers."""
+    print_section("Test 12: MANUAL provider hidden from GET /fx/providers")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
+        assert response.status_code == 200
+
+        providers = response.json()
+        provider_codes = [p["code"] for p in providers]
+        assert "MANUAL" not in provider_codes, \
+            f"MANUAL should NOT appear in provider list, got: {provider_codes}"
+        print_success(f"✓ MANUAL not in provider list: {provider_codes}")
+
+
+@pytest.mark.asyncio
+async def test_manual_pair_creation(test_server):
+    """Test 13: Create a pair with only MANUAL provider."""
+    print_section("Test 13: Create MANUAL-only pair")
+
+    async with httpx.AsyncClient() as client:
+        # Create a MANUAL-only pair
+        create_data = [
+            {"base": "BRL", "quote": "MXN", "priority": 999, "chain_steps": [{"from": "BRL", "to": "MXN", "provider": "MANUAL"}]}
+            ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/routes", json=create_data, timeout=TIMEOUT
+            )
+        assert response.status_code == 201, f"POST failed: {response.status_code}: {response.text}"
+        print_success("✓ Created BRL/MXN with MANUAL provider")
+
+        # Verify it appears in pair-sources
+        response = await client.get(f"{API_BASE}/fx/providers/routes", timeout=TIMEOUT)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        manual_pairs = [i for i in items if i["base"] == "BRL" and i["quote"] == "MXN"]
+        assert len(manual_pairs) == 1, f"Expected 1 MANUAL pair, got {manual_pairs}"
+        assert manual_pairs[0]["chain_steps"][0]["provider"] == "MANUAL"
+        assert manual_pairs[0]["priority"] == 999
+        print_success("✓ BRL/MXN MANUAL pair visible in pair-sources")
+
+
+@pytest.mark.asyncio
+async def test_manual_auto_removed_on_real_provider(test_server):
+    """Test 14: MANUAL auto-removed when a real provider is added to the same pair."""
+    print_section("Test 14: MANUAL auto-removed when real provider added")
+
+    async with httpx.AsyncClient() as client:
+        # First create a MANUAL-only pair
+        create_manual = [
+            {"base": "DKK", "quote": "PLN", "priority": 999, "chain_steps": [{"from": "DKK", "to": "PLN", "provider": "MANUAL"}]}
+            ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/routes", json=create_manual, timeout=TIMEOUT
+            )
+        assert response.status_code == 201
+        print_success("✓ Created DKK/PLN with MANUAL")
+
+        # Now add a real provider to the same pair
+        create_real = [
+            {"base": "DKK", "quote": "PLN", "priority": 1, "chain_steps": [{"from": "DKK", "to": "PLN", "provider": "ECB"}]}
+            ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/routes", json=create_real, timeout=TIMEOUT
+            )
+        assert response.status_code == 201
+        print_success("✓ Added ECB to DKK/PLN")
+
+        # Verify MANUAL was auto-removed
+        response = await client.get(f"{API_BASE}/fx/providers/routes", timeout=TIMEOUT)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        dkk_pln = [i for i in items if i["base"] == "DKK" and i["quote"] == "PLN"]
+        providers_found = [i["chain_steps"][0]["provider"] for i in dkk_pln]
+        assert "MANUAL" not in providers_found, \
+            f"MANUAL should have been auto-removed, but found: {providers_found}"
+        assert "ECB" in providers_found, f"ECB should be present: {providers_found}"
+        print_success(f"✓ MANUAL auto-removed, remaining providers: {providers_found}")
+
+        # Cleanup
+        await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "DKK", "quote": "PLN"}], timeout=TIMEOUT
+            )
+
+
+@pytest.mark.asyncio
+async def test_manual_auto_reinstated_on_last_provider_removed(test_server):
+    """Test 15: MANUAL auto-reinstated when the last real provider is removed."""
+    print_section("Test 15: MANUAL auto-reinstated when last provider removed")
+
+    async with httpx.AsyncClient() as client:
+        # Create a pair with a real provider
+        create_real = [
+            {"base": "HUF", "quote": "RON", "priority": 1, "chain_steps": [{"from": "HUF", "to": "RON", "provider": "ECB"}]}
+            ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/routes", json=create_real, timeout=TIMEOUT
+            )
+        assert response.status_code == 201
+        print_success("✓ Created HUF/RON with ECB")
+
+        # Remove the real provider
+        delete_data = [
+            {"base": "HUF", "quote": "RON", "priority": 1}
+            ]
+        response = await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/routes",
+            json=delete_data, timeout=TIMEOUT
+            )
+        assert response.status_code == 200
+        print_success("✓ Removed ECB from HUF/RON")
+
+        # Verify MANUAL was auto-reinstated
+        response = await client.get(f"{API_BASE}/fx/providers/routes", timeout=TIMEOUT)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        huf_ron = [i for i in items if i["base"] == "HUF" and i["quote"] == "RON"]
+        assert len(huf_ron) == 1, f"Expected 1 entry (MANUAL), got {huf_ron}"
+        assert huf_ron[0]["chain_steps"][0]["provider"] == "MANUAL"
+        assert huf_ron[0]["priority"] == 999
+        print_success("✓ MANUAL auto-reinstated for HUF/RON")
+
+        # Cleanup
+        await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "HUF", "quote": "RON"}], timeout=TIMEOUT
+            )
+
+
+@pytest.mark.asyncio
+async def test_manual_sync_returns_empty(test_server):
+    """Test 16: Sync with MANUAL provider should return 0 results, no errors."""
+    print_section("Test 16: Sync with MANUAL provider — silent skip")
+
+    async with httpx.AsyncClient() as client:
+        # Create a MANUAL-only pair
+        create_data = [
+            {"base": "ISK", "quote": "TRY", "priority": 999, "chain_steps": [{"from": "ISK", "to": "TRY", "provider": "MANUAL"}]}
+            ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/routes", json=create_data, timeout=TIMEOUT
+            )
+        assert response.status_code == 201
+
+        # Attempt sync — should not error
+        # Specify ISK-TRY pair to focus on the MANUAL pair
+        response = await client.post(
+            f"{API_BASE}/fx/currencies/sync",
+            json={"pairs": ["ISK-TRY"], "start": "2025-01-01", "end": "2025-01-05"},
+            timeout=TIMEOUT
+            )
+        # Sync should succeed (200) — MANUAL pairs are skipped
+        assert response.status_code == 200, \
+            f"Sync should succeed with MANUAL pairs, got {response.status_code}: {response.text}"
+        sync_data = FXSyncBulkResponse(**response.json())
+        assert len(sync_data.results) == 1
+        assert sync_data.results[0].status == "skipped"
+        print_success("✓ Sync completed successfully with MANUAL pair (skipped status)")
+
+        # Cleanup
+        await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "ISK", "quote": "TRY"}], timeout=TIMEOUT
+            )
+
+
+@pytest.mark.asyncio
+async def test_manual_full_pair_delete_no_reinstate(test_server):
+    """Test 17: Full pair delete (no priority) should NOT reinstate MANUAL."""
+    print_section("Test 17: Full pair delete does not reinstate MANUAL")
+
+    async with httpx.AsyncClient() as client:
+        # Create a MANUAL-only pair
+        create_data = [
+            {"base": "ARS", "quote": "CLP", "priority": 999, "chain_steps": [{"from": "ARS", "to": "CLP", "provider": "MANUAL"}]}
+            ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/routes", json=create_data, timeout=TIMEOUT
+            )
+        assert response.status_code == 201
+        print_success("✓ Created ARS/CLP with MANUAL")
+
+        # Delete entire pair (no priority = delete ALL)
+        response = await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "ARS", "quote": "CLP"}], timeout=TIMEOUT
+            )
+        assert response.status_code == 200
+        print_success("✓ Deleted ARS/CLP (full pair)")
+
+        # Verify pair is completely gone — MANUAL was NOT reinstated
+        response = await client.get(f"{API_BASE}/fx/providers/routes", timeout=TIMEOUT)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        ars_clp = [i for i in items if i["base"] == "ARS" and i["quote"] == "CLP"]
+        assert len(ars_clp) == 0, \
+            f"Pair should be completely deleted, but found: {ars_clp}"
+        print_success("✓ Full pair delete: pair completely gone, MANUAL NOT reinstated")
+
+
+@pytest.mark.asyncio
+async def test_manual_cleanup_from_previous_tests(test_server):
+    """Test 18: Cleanup pairs created by earlier MANUAL tests."""
+    print_section("Test 18: Cleanup MANUAL test pairs")
+
+    async with httpx.AsyncClient() as client:
+        # Cleanup BRL/MXN from test 13
+        await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "BRL", "quote": "MXN"}], timeout=TIMEOUT
+            )
+        print_success("✓ Cleanup BRL/MXN")

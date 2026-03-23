@@ -1,12 +1,12 @@
-# Proof of Concept - UI Mockups
+# 🧪 Proof of Concept - UI Mockups
 
 This page collects the UI mockups generated for LibreFolio, along with the prompts used to create them.
 
 ---
 
-## Logo Designs
+## 🎨 Logo Designs
 
-### Prompt 1A: The Secure Shield
+### 🛡️ Prompt 1A: The Secure Shield
 
 > Minimalist logo design for 'LibreFolio', a self-hosted financial tracking application. The icon should combine the concept of a secure vault or shield with financial growth. A
 > stylized, solid dark forest green shield shape contains an upward-trending line graph or arrow rendered in a contrasting mint green color. Below the icon, the word 'LibreFolio'
@@ -16,7 +16,7 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 
 ![Logo Concept A1](./logo/Gemini_Generated_Image_logoA1.png)
 
-### Prompt 1B: The Smart Ledger
+### 📒 Prompt 1B: The Smart Ledger
 
 > Minimalist logo design for 'LibreFolio'. The icon is a stylized open book or financial ledger viewed from above, rendered in solid dark forest green. The 'lines' on the
 > right-hand page of the book are not straight text but instead form an upward-curving financial bar chart or growth graph, rendered in a contrasting mint green color, indicating
@@ -25,7 +25,7 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 
 ![Logo Concept B](./logo/Gemini_Generated_Image_LogoB.png)
 
-### Prompt 1C: The Financial Shield
+### 🏛️ Prompt 1C: The Financial Shield
 
 > Minimalist logo design for 'LibreFolio'. The central icon is a classic, solid shield shape in dark forest green, representing security and privacy. Centered prominently inside
 > the shield is a stylized monogram letter 'L' (for LibreFolio) combined with an upward-pointing arrow, rendered in a contrasting mint green color, symbolizing protected growth.
@@ -35,15 +35,15 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 
 ![Logo Concept A2](./logo/Gemini_Generated_Image_LogoA2.png)
 
-### Refined Logo
+### ✨ Refined Logo
 
 ![LibreFolio Logo](./logo/Librefolio_logo_new.png)
 
 ---
 
-## Authentication
+## 🔐 Authentication
 
-### Login Screen
+### 🔑 Login Screen
 
 > Login screen for LibreFolio. Clean cream background with a centered card. The card contains the LibreFolio logo, and input fields for 'Username' and 'Password', along with a '
 > Login' button in dark forest green.
@@ -53,9 +53,9 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 
 ---
 
-## Main Application Screens
+## 🖥️ Main Application Screens
 
-### Dashboard (Desktop)
+### 📊 Dashboard (Desktop)
 
 > Desktop UI mockup for 'LibreFolio' financial dashboard on a wide screen. The overall aesthetic is clean, modern, and minimalist, inspired by SvelteKit Skeleton UI. The background
 > is cream off-white (#FDFBF7). On the left, there is a dark forest green (#1A4D3E) sidebar navigation menu with clean white icons and text labels for Dashboard, Holdings,
@@ -67,7 +67,7 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 ![Dashboard 1](./dashboard/Gemini_Generated_Image_dashboard.png)
 ![Dashboard 2](./dashboard/Gemini_Generated_Image_dashboard2.png)
 
-### Dashboard (Mobile)
+### 📱 Dashboard (Mobile)
 
 > Mobile phone UI mockup for the 'LibreFolio' financial app. iPhone screen format. The design is a responsive adaptation of the desktop dashboard with a cream background and dark
 > green accents. At the very top, a dark forest green header bar shows the 'LibreFolio' logo and a menu icon. Below the header, a prominent display shows the main KPI: a large '
@@ -79,7 +79,7 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 ![Mobile Home](./mobile/Gemini_Generated_Image_mobileHome.png)
 ![Mobile 2](./mobile/Gemini_Generated_Image_mobile2.png)
 
-### Portfolio Page
+### 💼 Portfolio Page
 
 > Desktop UI mockup for the 'Portafoglio' (Portfolio) page of the LibreFolio app. The page has a cream background and the dark green sidebar on the left. The main content area
 > features a large, detailed, clean data table (datagrid) with rounded corners listing current holdings. Columns include: Asset (with icon, e.g., 'Apple AAPL'), Quantity ('15'),
@@ -89,14 +89,14 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 
 ![Portfolio Detail](./portfolio/Gemini_Generated_Image_portafoglio_detail.png)
 
-### Asset Detail (Stock/ETF)
+### 📈 Asset Detail (Stock/ETF)
 
 > UI mockup for a specific asset detail page within the 'LibreFolio' desktop app, focusing on a Stock investment (e.g., Apple, AAPL). The page has a cream background. The title at
 > the top says 'Apple Inc. (AAPL)'. Below the title, a large, clean line chart shows the stock's price history for the last year.
 
 ![Asset Detail Stock](./portfolio/asset_detail_stock.jpg)
 
-### Transactions Page
+### 💸 Transactions Page
 
 > Desktop UI mockup for the 'Transazioni' (Transactions) page of the LibreFolio app. Cream background, dark green sidebar. At the top of the main content, a filter bar with inputs
 > for date range, transaction type, and asset search. Below it, a long, clean chronological list or table of financial transactions. Each row has an icon indicating type, date,
@@ -107,11 +107,11 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 ![Transaction 2](./transactions/Gemini_Generated_Image_transaction2.png)
 ![Transaction 3](./transactions/Gemini_Generated_Image_transaction3.png)
 
-#### Transaction Detail / Modal
+#### 📝 Transaction Detail / Modal
 
 ![Asset Transaction](./transactions/Transaction%20system%20V1/asset_transaction_modal.jpg)
 
-### Cash Management Page
+### 💰 Cash Management Page
 
 > Desktop UI mockup for the 'Cassa' (Cash) page of the LibreFolio app. Cream background, dark green sidebar. The top of the main area features two prominent rectangular cards with
 > rounded corners displaying cash balances: one titled 'Euro Balance (Base)' showing '€ 5,300.00' and another titled 'USD Balance'
@@ -122,7 +122,7 @@ showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark 
 ![Cash Page](./transactions/Gemini_Generated_Image_cassa.png)
 ![Cash Transaction](./transactions/Transaction%20system%20V1/cash_transaction.jpg)
 
-### P2P Loan Asset Detail
+### 🤝 P2P Loan Asset Detail
 
 > UI mockup for a specific asset detail page within the 'LibreFolio' desktop app, focusing on a P2P Loan investment. The page has a cream background. Title at the top says 'P2P
 > Loan - Green Energy Fund #45'. Below the title, a prominent horizontal progress bar component shows the repayment status: 'Repaid: €450 / €1000 (45%)', with the repaid portion
@@ -133,7 +133,7 @@ showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark 
 ![Scheduled Investment 1](./scheduled_investment/Gemini_Generated_Image_ScheduleInvestment1.png)
 ![Scheduled Investment 2](./scheduled_investment/Gemini_Generated_Image_ScheduleInvestment2.png)
 
-### Reports Page
+### 📋 Reports Page
 
 > Desktop UI mockup for the 'Report' page of the LibreFolio app. Cream background, dark green sidebar. The main content area has navigation tabs at the top: 'Performance', '
 > Income & Dividends', 'Realized Gains (Tax)'. The 'Performance' tab is active. Below the tabs, a large area chart shows the 'Portfolio Value Growth vs Benchmark (S&P500)' over 5
@@ -145,7 +145,7 @@ showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark 
 ![Report Income/Dividends](./reports/Gemini_Generated_Image_report-income-and-dividends.png)
 ![Report Realized Gains](./reports/Gemini_Generated_Image_report-realized-gains-(tax).png)
 
-### Broker Management
+### 🏦 Broker Management
 
 > Desktop UI mockup for a 'Broker Management' page in the LibreFolio app. Cream background, dark green sidebar. The title is 'My Brokers'. The main content area displays a grid of
 > cards, where each card represents a broker.
@@ -154,7 +154,7 @@ showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark 
 ![Broker Management 2](./brokers/broker_management_2.jpg)
 ![Add/Edit Broker Modal](./brokers/add-edit_broker_modal.jpg)
 
-### FX Provider Management
+### 💱 FX Provider Management
 
 > Desktop UI mockup for the 'Fx Provider Priorities' page in the LibreFolio app. Cream background, dark green sidebar. The page title is 'Gestione Priorità Tassi di Cambio (FX)'.
 
@@ -163,7 +163,7 @@ showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark 
 ![FX Add Pair Modal 1](./fx/fx_pair_add_modal_1.jpg)
 ![FX Add Pair Modal 2](./fx/fx_pair_add_modal_2.jpg)
 
-### Settings
+### ⚙️ Settings
 
 > Desktop UI mockup for the 'Settings' page of the LibreFolio app. Cream background, dark green sidebar. The main content area is divided into sections with clear headings for User
 > Profile, Application, API Access, and Data Management.
@@ -174,15 +174,15 @@ showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark 
 
 ---
 
-## Modals & Forms
+## 📑 Modals & Forms
 
-### Add Transaction Modal
+### ➕ Add Transaction Modal
 
 > UI design of a modal window overlay for 'Add Transaction' in the LibreFolio web app.
 
 *(See "Main Application Screens" above)*
 
-### Add New Asset Modal (with Provider Search)
+### 🔍 Add New Asset Modal (with Provider Search)
 
 > Desktop UI mockup of a modal window for 'Aggiungi Nuovo Asset' in the LibreFolio app, on a cream background.
 
@@ -192,13 +192,13 @@ showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark 
 
 ---
 
-## Design Elements
+## 🖌️ Design Elements
 
-### Color Palette
+### 🎨 Color Palette
 
 ![Color Palette](./design/palette.jpg)
 
-### Asset Icons
+### 🏷️ Asset Icons
 
 ![Asset Icons 1](./design/icons_asset_type_1.jpg)
 ![Asset Icons 2](./design/icons_asset_type_2.jpg)

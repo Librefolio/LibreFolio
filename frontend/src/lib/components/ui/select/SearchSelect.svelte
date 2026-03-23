@@ -60,6 +60,8 @@
     let containerRef = $state<HTMLDivElement | null>(null);
     let computedPosition = $state<'top' | 'bottom'>('bottom');
     let dynamicMaxHeight = $state(0);
+    /** Timestamp when trigger received focus — used to debounce Enter after advanceFocus */
+    let triggerFocusedAt = $state(0);
 
     // Derived state
     let selectedOption = $derived(options.find(o => o.value === value));
@@ -180,11 +182,25 @@
         searchQuery = '';
     }
 
-    function selectOption(option: SelectOption) {
+    function selectOption(option: SelectOption, advanceFocus = false) {
         if (option.disabled) return;
         value = option.value;
         onchange?.(option.value);
         closeDropdown();
+        if (advanceFocus && containerRef) {
+            // Move focus to the next focusable element after closing
+            setTimeout(() => {
+                const all = Array.from(
+                    document.querySelectorAll<HTMLElement>(
+                        '[tabindex]:not([tabindex="-1"]), input:not([disabled]), select:not([disabled]), button:not([disabled]), a[href]'
+                    )
+                ).filter(el => el.offsetParent !== null);
+                const idx = all.indexOf(containerRef!.querySelector<HTMLElement>('[tabindex]') ?? containerRef!);
+                if (idx >= 0 && idx + 1 < all.length) {
+                    all[idx + 1].focus();
+                }
+            }, 20);
+        }
     }
 
     function handleTriggerKeydown(event: KeyboardEvent) {
@@ -192,8 +208,20 @@
 
         if (!isOpen) {
             if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                // Don't auto-open on Enter if trigger just received focus and a value is already set
+                // (prevents unwanted dropdown after advanceFocus/Tab from another select)
+                if (event.key === 'Enter' && value && Date.now() - triggerFocusedAt < 200) {
+                    event.preventDefault();
+                    return;
+                }
                 event.preventDefault();
                 openDropdown();
+            } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                // Printable character: open dropdown and start searching
+                event.preventDefault();
+                openDropdown();
+                // Defer setting searchQuery so the input is mounted first
+                setTimeout(() => { searchQuery = event.key; }, 20);
             }
             return;
         }
@@ -222,7 +250,7 @@
                     // Select highlighted or first option
                     const indexToSelect = highlightedIndex >= 0 ? highlightedIndex : 0;
                     if (filteredOptions[indexToSelect]) {
-                        selectOption(filteredOptions[indexToSelect]);
+                        selectOption(filteredOptions[indexToSelect], true);
                     }
                 }
                 break;
@@ -254,11 +282,12 @@
             aria-controls={listboxId}
             aria-expanded={isOpen}
             aria-haspopup="listbox"
-            class="w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white dark:bg-slate-700
+            class="w-full flex items-center justify-between px-3 py-2 border rounded-lg
                transition-all text-left gap-2
-               {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed' : 'dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
+               {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' : 'bg-white dark:bg-slate-700 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
                {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
             onclick={() => !isOpen && openDropdown()}
+            onfocus={() => { triggerFocusedAt = Date.now(); }}
             onkeydown={handleTriggerKeydown}
             role="combobox"
             tabindex={disabled ? -1 : 0}
@@ -283,7 +312,7 @@
             {:else}
                 <div class="flex items-center space-x-2 min-w-0">
                     {#if selectedOption.icon && selectedOption.icon !== selectedOption.value}
-                        <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">
+                        <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium emoji-flag">
                             {selectedOption.icon}
                         </span>
                     {/if}
@@ -356,7 +385,7 @@
                                 </div>
                             {:else}
                                 {#if option.icon && option.icon !== option.value}
-                                    <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium">
+                                    <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium emoji-flag">
                                         {option.icon}
                                     </span>
                                 {/if}

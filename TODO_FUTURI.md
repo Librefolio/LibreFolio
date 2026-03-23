@@ -34,6 +34,34 @@ Quando TanStack Table v9 sarà **rilasciato come stabile** con supporto ufficial
 
 ---
 
+## 🪵 Riorganizzazione Livelli di Log Backend
+
+**Data aggiunta**: 11 Marzo 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Media
+
+### Contesto
+
+I livelli di log del backend sono cresciuti in modo organico e presentano inconsistenze:
+- Alcuni log dettagliati (es. backward-fill FX, aggiornamento rate singolo) sono finiti a livelli troppo alti
+- Non esiste un livello TRACE formale — usiamo `logger.log(5, ...)` ad-hoc per messaggi sotto DEBUG
+- I log dei provider HTTP (httpx/httpcore) sono stati silenziati individualmente in `logging_config.py`
+- I log di sincronizzazione e refresh generano molto "rumore" anche in modalità INFO
+
+### Azione Futura
+
+1. **Definire una policy di log livelli** chiara per tutto il backend:
+   - **CRITICAL/ERROR**: errori che richiedono intervento
+   - **WARNING**: situazioni anomale ma gestite
+   - **INFO**: operazioni significative dell'utente (sync completata, import file, login)
+   - **DEBUG**: dettagli operativi (provider usato, query SQL, risultati intermedi)
+   - **TRACE (5)**: dati granulari massivi (singolo rate, singolo backward-fill, singolo punto dati)
+2. **Registrare un livello TRACE formale** con `logging.addLevelName(5, "TRACE")` e, se possibile, estendere structlog con un metodo `.trace()`
+3. **Audit completo**: scorrere tutti i `logger.info/debug/warning` nel backend e verificare che il livello sia coerente con la policy
+4. **Documentare** la policy in un commento in `logging_config.py`
+
+---
+
 ## 📱 Mobile Column Reorder (DataTable)
 
 **Data aggiunta**: 23 Gennaio 2026  
@@ -308,3 +336,83 @@ Sarebbe più efficiente riutilizzare la risorsa già caricata a risoluzione magg
 - Questa ottimizzazione è puramente client-side per evitare roundtrip network
 - Valutare l'impatto su memoria del browser se molte immagini sono in griglia
 
+---
+
+### 📊 Aggiungere al componente Linea altri stili della line al segnale
+
+Oltre l'attuale visualizzazione a segmenti spezzati, indagare se si possono mostrare le linee anche come spilne smoot, ed in quanti modi, e se si, renderlo un parametro estetico configurabile
+
+---
+
+### 📊 Grafico Asset con rendimento a N
+Con i dati degli asset ha senso mostrare i grafici oltre che per abs e % da P0, anche il rendimento a N (anni o giorni, parametrico) con il significato che ogni punto rappresenta il guadagno/perdita di valore percentuale dell'asset se vosse stato comprato N giorni prima e venduto nel giorno attuale.
+Questo da applicare sia all'asset principale che a quelli di confronto messi nel grafico, da mettere nella pagina di detail per le analisi di dettaglio.
+
+---
+
+## 🪵 Riorganizzazione livelli di log backend
+
+**Data aggiunta**: 12 Marzo 2026  
+**Status**: ⏳ Da fare  
+**Priorità**: Media
+
+Analizzare tutti i log generati dal backend e riorganizzarli in una struttura sensata con livelli appropriati. Attualmente i log del servizio FX (sync, backfill, convert) usano livelli inconsistenti:
+- Log informativi di routine (es. "Syncing FX rates...") sono a INFO ma dovrebbero essere a DEBUG
+- I log di backward-fill ripetitivi sono già stati spostati a DEBUG/livello 5, ma servono ulteriori verifiche
+- I log di sync per singola coppia/currency generano molto output anche a INFO
+
+**Azione**: Fare un audit completo dei livelli di log (DEBUG, INFO, WARNING, ERROR) in tutto il backend, definire una policy chiara e applicarla uniformemente.
+
+---
+
+## 📚 Documentazione Per-Plugin FX Provider
+
+**Data aggiunta**: 15 Marzo 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Bassa
+
+### Contesto
+Attualmente esiste solo una pagina generica che elenca tutti i provider FX:
+- `/mkdocs/developer/backend/fx/providers_list/`
+
+Ogni provider (ECB, FED, BOE, SNB) dovrebbe avere una **pagina dedicata** nella documentazione MkDocs con:
+- Descrizione dettagliata del provider
+- URL dell'API sorgente e formato dati
+- Base currency e valute supportate
+- Frequenza di aggiornamento (giornaliera vs mensile)
+- Eventuali limitazioni note (es. SNB solo mensile, nessun dato giornaliero)
+- Parametri di configurazione
+- Esempio di risposta API
+
+### Azione
+1. Creare una pagina MkDocs per ogni provider in `mkdocs_src/docs/developer/backend/fx/providers/`
+2. Aggiornare la property `docs_url` in ogni provider per puntare alla pagina specifica
+3. Il frontend già usa `docs_url` per il link nell'info bar del FxProviderSelect (cliccando sull'icona del provider)
+
+---
+
+## 📊 CandlestickChart / VolumeBar — Phase 6 (Assets)
+
+**Data aggiunta**: 16 Marzo 2026
+**Status**: 📋 PIANIFICATO
+**Priorità**: Media (Phase 6)
+
+### Contesto
+Per FX si hanno solo close rate giornalieri — non esiste OHLC reale.
+CandlestickChart e VolumeBar saranno implementati quando avremo dati OHLC
+reali dagli asset source provider (yfinance, JustETF).
+
+### File
+- `frontend/src/lib/components/charts/CandlestickChart.svelte` (stub)
+- `frontend/src/lib/components/charts/VolumeBar.svelte` (stub)
+
+### Note
+- Per FX il toggle Line/Candlestick resta disabilitato (`disableCandlestick={true}`)
+- L'OHLC sintetizzato (O=prev close) non ha valore informativo per FX
+
+
+
+## ~~Ripulire tutte le traduzioni non usate con i18n prima di aggiungere nuove lingue~~
+
+**Status**: ✅ COMPLETATO (20 Marzo 2026)  
+**Nota**: Completato durante `plan-fxTestingCleanup.prompt.md` Step 9. Risultato: 724→590 chiavi, 0 inutilizzate, 100% coverage 4 lingue, ~20 duplicati residui intenzionali. Vedi `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-05-subplan/plan-fxTestingCleanup.prompt.md`.

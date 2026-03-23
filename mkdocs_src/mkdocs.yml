@@ -57,6 +57,151 @@ markdown_extensions:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: it
+          name: Italiano
+          build: true
+          nav_translations:
+            Home: Home
+            FAQ: FAQ
+            User Manual: Manuale Utente
+            Overview: Panoramica
+            Getting Started: Per Iniziare
+            Installation (Docker): Installazione (Docker)
+            Brokers: Broker
+            Broker Sharing: Condivisione Broker
+            Files: File
+            FX Rates: Tassi di Cambio
+            Adding a Pair: Aggiungere una Coppia
+            Synchronization: Sincronizzazione
+            Pair Detail: Dettaglio Coppia
+            Interactive Chart: Grafico Interattivo
+            Signals: Segnali
+            Measures: Misure
+            Data Editor: Editor Dati
+            Provider Config: Configurazione Provider
+            Chart Settings: Impostazioni Grafico
+            Misc: Varie
+            Image Crop: Ritaglio Immagine
+            Admin Manual: Manuale Admin
+            CLI Tools: Strumenti CLI
+            Global Settings: Impostazioni Globali
+            Filesystem Structure: Struttura Filesystem
+            Advanced Docker: Docker Avanzato
+            Exposing with Tailscale: Esporre con Tailscale
+            Financial Theory: Teoria Finanziaria
+            Asset Types: Tipi di Asset
+            Transaction Types: Tipi di Transazione
+            Day Count Conventions: Convenzioni di Conteggio Giorni
+            "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
+            Technical Indicators: Indicatori Tecnici
+            Synthetic Benchmarks: Benchmark Sintetici
+            "Taxation & Tax Efficiency": "Tassazione & Efficienza Fiscale"
+            # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
+            Gallery: Galleria
+            Desktop: Desktop
+            Mobile: Mobile
+            POC UX: POC UX
+            "Credits & Legal": "Crediti & Note Legali"
+        - locale: fr
+          name: Français
+          build: true
+          nav_translations:
+            Home: Accueil
+            FAQ: FAQ
+            User Manual: Manuel Utilisateur
+            Overview: Aperçu
+            Getting Started: Premiers Pas
+            Installation (Docker): Installation (Docker)
+            Brokers: Courtiers
+            Broker Sharing: Partage de Courtier
+            Files: Fichiers
+            FX Rates: Taux de Change
+            Adding a Pair: Ajouter une Paire
+            Synchronization: Synchronisation
+            Pair Detail: Détail de la Paire
+            Interactive Chart: Graphique Interactif
+            Signals: Signaux
+            Measures: Mesures
+            Data Editor: Éditeur de Données
+            Provider Config: Configuration du Fournisseur
+            Chart Settings: Paramètres du Graphique
+            Misc: Divers
+            Image Crop: Recadrage d'Image
+            Admin Manual: Manuel Admin
+            CLI Tools: Outils CLI
+            Global Settings: Paramètres Globaux
+            Filesystem Structure: Structure du Système de Fichiers
+            Advanced Docker: Docker Avancé
+            Exposing with Tailscale: Exposer avec Tailscale
+            Financial Theory: Théorie Financière
+            Asset Types: Types d'Actifs
+            Transaction Types: Types de Transactions
+            Day Count Conventions: Conventions de Décompte des Jours
+            "Returns & Growth Rates": "Rendements & Taux de Croissance"
+            Technical Indicators: Indicateurs Techniques
+            Synthetic Benchmarks: Benchmarks Synthétiques
+            "Taxation & Tax Efficiency": "Fiscalité & Efficience Fiscale"
+            # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
+            Gallery: Galerie
+            Desktop: Bureau
+            Mobile: Mobile
+            POC UX: POC UX
+            "Credits & Legal": "Crédits & Mentions Légales"
+        - locale: es
+          name: Español
+          build: true
+          nav_translations:
+            Home: Inicio
+            FAQ: FAQ
+            User Manual: Manual de Usuario
+            Overview: Resumen
+            Getting Started: Primeros Pasos
+            Installation (Docker): Instalación (Docker)
+            Brokers: Brokers
+            Broker Sharing: Compartir Broker
+            Files: Archivos
+            FX Rates: Tipos de Cambio
+            Adding a Pair: Añadir un Par
+            Synchronization: Sincronización
+            Pair Detail: Detalle del Par
+            Interactive Chart: Gráfico Interactivo
+            Signals: Señales
+            Measures: Medidas
+            Data Editor: Editor de Datos
+            Provider Config: Configuración del Proveedor
+            Chart Settings: Ajustes del Gráfico
+            Misc: Varios
+            Image Crop: Recorte de Imagen
+            Admin Manual: Manual de Admin
+            CLI Tools: Herramientas CLI
+            Global Settings: Configuración Global
+            Filesystem Structure: Estructura del Sistema de Archivos
+            Advanced Docker: Docker Avanzado
+            Exposing with Tailscale: Exponer con Tailscale
+            Financial Theory: Teoría Financiera
+            Asset Types: Tipos de Activos
+            Transaction Types: Tipos de Transacciones
+            Day Count Conventions: Convenciones de Conteo de Días
+            "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
+            Technical Indicators: Indicadores Técnicos
+            Synthetic Benchmarks: Benchmarks Sintéticos
+            "Taxation & Tax Efficiency": "Fiscalidad & Eficiencia Fiscal"
+            # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
+            Gallery: Galería
+            Desktop: Escritorio
+            Mobile: Móvil
+            POC UX: POC UX
+            "Credits & Legal": "Créditos & Aviso Legal"
+
 extra_javascript:
   # MathJax configuration (must load before MathJax)
   - javascripts/mathjax.js
@@ -64,24 +209,44 @@ extra_javascript:
   - javascripts/lib-loader.js
   # Dashboard connectivity check
   - javascripts/dashboard-check.js
-  # Gallery language selector (for gallery pages)
-  - javascripts/gallery-lang-selector.js
+  # App ↔ MkDocs sync (theme from frontend → MkDocs Material, must load before lang selector)
+  - javascripts/app-sync.js
+  # Site-wide language selector (controls i18n + gallery screenshots)
+  - javascripts/site-lang-selector.js
   # Gallery image loader - auto-resolves screenshot paths on any page
   - javascripts/gallery-img-loader.js
 
 nav:
   - Home: index.md
-  - 🚀 Dashboard: /
   - FAQ: faq.md
-  - Getting Started:
-      - Introduction: getting-started/introduction.md
-      - Installation: getting-started/installation.md
   - User Manual:
       - Overview: user/index.md
+      - Getting Started: user/getting-started.md
       - Installation (Docker): user/installation.md
+      - Brokers:
+          - Overview: user/brokers/index.md
+          - Broker Sharing: user/brokers/sharing.md
+      - Files:
+          - Overview: user/files/index.md
+      - FX Rates:
+          - Overview: user/fx/index.md
+          - Adding a Pair: user/fx/add-pair.md
+          - Synchronization: user/fx/sync.md
+          - Pair Detail:
+              - Overview: user/fx/detail/index.md
+              - Interactive Chart: user/fx/detail/chart.md
+              - Signals: user/fx/detail/signals.md
+              - Measures: user/fx/detail/measures.md
+              - Data Editor: user/fx/detail/data-editor.md
+              - Provider Config: user/fx/detail/provider.md
+          - Chart Settings: user/fx/chart-settings.md
+      - Misc:
+          - Image Crop: user/misc/image-crop.md
   - Admin Manual:
       - Overview: admin/index.md
       - CLI Tools: admin/cli_tools.md
+      - Global Settings: admin/settings.md
+      - Filesystem Structure: admin/filesystem.md
       - Advanced Docker: admin/docker_advanced.md
       - Exposing with Tailscale: admin/tailscale_exposure.md
   - Financial Theory:
@@ -89,23 +254,35 @@ nav:
       - Asset Types: financial-theory/asset-types.md
       - Transaction Types: financial-theory/transaction-types.md
       - Day Count Conventions: financial-theory/day-count.md
-      - Interest Types: financial-theory/interest-types.md
-      - Compounding: financial-theory/compounding.md
+      - Returns & Growth Rates: financial-theory/returns.md
+      - Technical Indicators: financial-theory/technical-indicators.md
+      - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.md
+      - Taxation & Tax Efficiency: financial-theory/taxation.md
   - Developer Manual:
       - Overview: developer/index.md
-      - Technologies:
-          - Overview: developer/technologies/overview.md
-          - Async Architecture: developer/technologies/async_architecture.md
-          - Database Migrations (Alembic): developer/technologies/alembic.md
-          - Configuration: developer/technologies/configuration.md
+      - Dev Installation: developer/dev-installation.md
       - Architecture:
           - System Overview: developer/architecture/overview.md
-          - Database Schema: developer/architecture/database.md
-          - Users & Brokers: developer/architecture/users_and_brokers.md
-          - Access Control (RBAC): developer/architecture/access_control.md
-          - Settings System: developer/architecture/settings.md
-          - Registry Pattern: developer/architecture/registry_pattern.md
-          - Security: developer/architecture/security.md
+          - Technologies & Patterns:
+              - Async Architecture: developer/architecture/patterns/async.md
+              - Registry & Plugin System:
+                  - Overview: developer/architecture/patterns/registry_pattern.md
+                  - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
+                  - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
+                  - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
+              - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
+              - Configuration: developer/architecture/patterns/configuration.md
+          - Core Systems:
+              - Security & Authentication: developer/architecture/security.md
+              - Users & Roles: developer/architecture/users_and_brokers.md
+              - Access Control (RBAC): developer/architecture/access_control.md
+              - Settings System: developer/architecture/settings.md
+          - Database Schema:
+              - Overview: developer/architecture/database/index.md
+              - Users & Access: developer/architecture/database/users_access.md
+              - Brokers & Transactions: developer/architecture/database/brokers_transactions.md
+              - Assets & Pricing: developer/architecture/database/assets_pricing.md
+              - FX Rates & Routes: developer/architecture/database/fx_rates.md
       - API & Communication:
           - Overview: developer/api/overview.md
           - Reference: developer/api/index.md
@@ -127,26 +304,45 @@ nav:
           - Overview: developer/frontend/index.md
           - Components:
               - Overview: developer/frontend/components/index.md
+              - UI Base:
+                  - Overview: developer/frontend/components/ui-base/index.md
+                  - Modals: developer/frontend/components/ui-base/modals.md
+                  - Feedback: developer/frontend/components/ui-base/feedback.md
+                  - Date Pickers: developer/frontend/components/ui-base/datePickers.md
+                  - Atoms: developer/frontend/components/ui-base/atoms.md
+                  - Datapoint Editor: developer/frontend/components/ui-base/data-editor.md
               - DataTable: developer/frontend/components/data-table.md
               - Authentication: developer/frontend/components/auth.md
               - Settings: developer/frontend/components/settings.md
-              - File Upload: developer/frontend/components/file-upload.md
+              - File Upload & Media: developer/frontend/components/file-upload.md
+              - Select & Dropdowns: developer/frontend/components/select.md
+              - Brokers:
+                  - Overview: developer/frontend/components/brokers/index.md
+                  - Cards: developer/frontend/components/brokers/cards.md
+                  - Forms: developer/frontend/components/brokers/forms.md
+                  - Modals: developer/frontend/components/brokers/modals.md
+          - FX Chain Algorithm: developer/frontend/fx-chain-algorithm.md
           - Pages: developer/frontend/pages/index.md
           - State Management: developer/frontend/state/index.md
           - Internationalization: developer/frontend/i18n.md
           - Styling: developer/frontend/styling.md
       - Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
-          - External: developer/test-walkthrough/external.md
-          - Database: developer/test-walkthrough/db.md
-          - Services: developer/test-walkthrough/services.md
-          - Utils: developer/test-walkthrough/utils.md
-          - Schemas: developer/test-walkthrough/schemas.md
-          - API: developer/test-walkthrough/api.md
-          - E2E: developer/test-walkthrough/e2e.md
-  - Tutorials:
-      - Track First Stock: tutorials/track-first-stock.md
-      - Track P2P Loan: tutorials/track-p2p-loan.md
+          - Backend Tests:
+              - External: developer/test-walkthrough/external.md
+              - Database: developer/test-walkthrough/db.md
+              - Services: developer/test-walkthrough/services.md
+              - Utils: developer/test-walkthrough/utils.md
+              - Schemas: developer/test-walkthrough/schemas.md
+              - API: developer/test-walkthrough/api.md
+              - E2E: developer/test-walkthrough/e2e.md
+          - Frontend Tests (Playwright):
+              - Overview: developer/test-walkthrough/front-overview.md
+              - Front-Utility: developer/test-walkthrough/front-utility.md
+              - Front-User: developer/test-walkthrough/front-user.md
+              - Front-FX: developer/test-walkthrough/front-fx.md
+      - Documentation:
+          - Translation Pipeline: developer/docs/translation-pipeline.md
   - Gallery:
       - Overview: gallery/index.md
       - Desktop: gallery/desktop.md

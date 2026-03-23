@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import User, UserSettings, BrokerUserAccess
-from backend.app.services.auth_service import hash_password, delete_user_sessions
+from backend.app.services.auth_service import hash_password
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -188,9 +188,8 @@ async def reset_password(
     session.add(user)
     await session.commit()
 
-    # Invalidate all existing sessions for this user
-    delete_user_sessions(user_id)
-
+    # Note: JWT tokens cannot be revoked server-side. Existing tokens
+    # for this user will remain valid until they expire naturally.
     logger.info("Password reset", user_id=user_id, username=username)
     return True, None
 
@@ -220,9 +219,6 @@ async def set_user_active(
     session.add(user)
     await session.commit()
 
-    # If deactivating, invalidate all sessions
-    if not active:
-        delete_user_sessions(user.id)
 
     status = "activated" if active else "deactivated"
     logger.info(f"User {status}", user_id=user.id, username=username)
@@ -361,8 +357,6 @@ async def delete_user(session: AsyncSession, user_id: int) -> bool:
     if not user:
         return False
 
-    # Delete all user sessions first
-    delete_user_sessions(user_id)
 
     # Delete user (cascades to related data via DB constraints)
     await session.delete(user)

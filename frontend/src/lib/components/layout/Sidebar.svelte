@@ -31,19 +31,19 @@
     // Group 1: My Portfolio (user-specific data)
     const portfolioItems = [
         {href: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard'},
-        {href: '/brokers', icon: Briefcase, labelKey: 'nav.brokers'},
-        {href: '/transactions', icon: ArrowRightLeft, labelKey: 'nav.transactions'}
+        {href: '/brokers', icon: Briefcase, labelKey: 'brokers.title'},
+        {href: '/transactions', icon: ArrowRightLeft, labelKey: 'transactions.title'}
     ];
 
     // Group 2: Market Data (global/shared data)
     const marketDataItems = [
-        {href: '/assets', icon: BarChart3, labelKey: 'nav.assets'},
-        {href: '/fx', icon: Coins, labelKey: 'nav.fx'}
+        {href: '/assets', icon: BarChart3, labelKey: 'assets.title'},
+        {href: '/fx', icon: Coins, labelKey: 'fx.title'}
     ];
 
     // Group 3: Files & Settings
     const utilityItems = [
-        {href: '/files', icon: Files, labelKey: 'nav.files'},
+        {href: '/files', icon: Files, labelKey: 'uploads.title'},
         {href: '/settings', icon: Settings, labelKey: 'nav.settings'}
     ];
 

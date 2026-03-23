@@ -7,8 +7,13 @@
     let menuRef: HTMLDivElement;
 
     const githubIssuesUrl = 'https://github.com/Alfystar/LibreFolio/issues';
-    const docsUrl = '/mkdocs/';
-    const faqUrl = '/mkdocs/faq/'; // Link to MkDocs FAQ
+
+    /** Build a MkDocs URL with locale prefix matching the app's current language. */
+    function mkdocsUrl(path: string = ''): string {
+        const lang = localStorage.getItem('librefolio-locale') || 'en';
+        const prefix = lang !== 'en' ? `${lang}/` : '';
+        return `/mkdocs/${prefix}${path}`;
+    }
 
     function toggleMenu() {
         isOpen = !isOpen;
@@ -40,7 +45,7 @@
         <div class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
             <!-- FAQ -->
             <a
-                    href={faqUrl}
+                    href={mkdocsUrl('faq/')}
                     class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
                 <Book size={18} class="text-gray-500"/>
@@ -49,7 +54,7 @@
 
             <!-- Documentation -->
             <a
-                    href={docsUrl}
+                    href={mkdocsUrl()}
                     class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
                 <MessageCircle size={18} class="text-gray-500"/>

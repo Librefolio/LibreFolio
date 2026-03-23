@@ -5,7 +5,7 @@
     import {isAxiosError} from 'axios';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         gotoLogin: { message?: string };
@@ -142,7 +142,7 @@
         <form class="space-y-4" data-testid="register-form" on:submit|preventDefault={handleSubmit}>
 
             <!-- General Error Message -->
-            <ErrorBanner message={error} on:dismiss={() => error = ''} />
+            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} />
 
             <!-- Username Input -->
             <div>

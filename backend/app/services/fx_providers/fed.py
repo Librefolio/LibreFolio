@@ -9,6 +9,7 @@ Data Source: H.10 Foreign Exchange Rates via FRED
 Note: No API key required for basic usage
 """
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 
@@ -80,12 +81,29 @@ class FEDProvider(FXRateProvider):
         return "Federal Reserve Bank"
 
     @property
+    def icon(self) -> str | None:
+        return "https://fred.stlouisfed.org/favicon.ico"
+
+    @property
+    def docs_url(self) -> str | None:
+        return "/mkdocs/developer/backend/fx/providers_list/#fed-federal-reserve-fred"
+
+    @property
     def base_currency(self) -> str:
         return "USD"
 
     @property
     def description(self) -> str:
         return "Official exchange rates from Federal Reserve (H.10 Release)"
+
+    @property
+    def description_i18n(self) -> dict[str, str]:
+        return {
+            "en": "Federal Reserve Bank (FRED) — publishes daily exchange rates from the H.10 Statistical Release for 20+ currencies against USD. Updated each business day. One data point per day.",
+            "it": "Federal Reserve Bank (FRED) — pubblica tassi di cambio giornalieri dal bollettino statistico H.10 per 20+ valute contro USD. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
+            "fr": "Federal Reserve Bank (FRED) — publie des taux de change quotidiens du bulletin statistique H.10 pour 20+ devises contre USD. Mise à jour chaque jour ouvrable. Un point par jour.",
+            "es": "Federal Reserve Bank (FRED) — publica tipos de cambio diarios del boletín estadístico H.10 para 20+ monedas contra USD. Actualizado cada día hábil. Un dato por día.",
+        }
 
     @property
     def test_currencies(self) -> list[str]:
@@ -154,21 +172,20 @@ class FEDProvider(FXRateProvider):
         start_date, end_date = date_range
         results = {}
 
-        for currency in currencies:
-            # Skip USD (base currency)
-            if currency == "USD":
-                continue
+        # Filter valid currencies
+        valid_currencies = [c for c in currencies if c != "USD" and c in self.CURRENCY_SERIES]
+        skipped = [c for c in currencies if c != "USD" and c not in self.CURRENCY_SERIES]
+        for c in skipped:
+            logger.warning(f"Currency {c} not supported by FED, skipping")
+            results[c] = []
 
-            # Check if we support this currency
-            if currency not in self.CURRENCY_SERIES:
-                logger.warning(f"Currency {currency} not supported by FED, skipping")
-                results[currency] = []
-                continue
+        if not valid_currencies:
+            return results
 
+        async def _fetch_one(currency: str) -> tuple[str, list[tuple[date, str, str, Decimal]]]:
+            """Fetch rates for a single currency — isolated for parallel execution."""
             series_id = self.CURRENCY_SERIES[currency]
 
-            # Build FRED CSV download request (no API key needed)
-            # Uses public fredgraph.csv endpoint
             params = {
                 "id": series_id,
                 "cosd": start_date.isoformat(),
@@ -180,9 +197,8 @@ class FEDProvider(FXRateProvider):
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
-                    # Parse CSV with date range filter
                     observations = self._parse_csv(response.text, currency, start_date, end_date)
-                    results[currency] = observations
+                    return currency, observations
 
             except httpx.HTTPError as e:
                 logger.error(f"Failed to fetch FX rates for {currency} from FED/FRED: {e}")
@@ -192,6 +208,20 @@ class FEDProvider(FXRateProvider):
                 raise FXServiceError(
                     f"Unexpected FED/FRED response format for {currency}: {e}"
                     ) from e
+
+        # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)
+        tasks = [_fetch_one(c) for c in valid_currencies]
+        fetched = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for i, result in enumerate(fetched):
+            if isinstance(result, BaseException):
+                currency = valid_currencies[i]
+                logger.warning(f"FED fetch failed for {currency}, skipping: {result}")
+                results[currency] = []
+            else:
+                currency, observations = result
+                results[currency] = observations
+
 
         return results
 

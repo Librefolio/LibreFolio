@@ -21,3 +21,14 @@ export async function populateDatabase(): Promise<void> {
     await execAsync('cd .. && ./dev.py test db populate');
     console.log('[E2E] Database populated');
 }
+
+/**
+ * Reset database for gallery: force recreate + clean files + upload static resources + upload reports.
+ * Ensures a fully deterministic filesystem state for reproducible screenshots.
+ */
+export async function resetDatabaseForGallery(): Promise<void> {
+    console.log('[E2E] Resetting database for gallery (force + clean + static + reports)...');
+    await execAsync('cd .. && ./dev.py test db populate --force --clean --with-static --with-reports');
+    console.log('[E2E] Gallery database reset complete');
+}
+

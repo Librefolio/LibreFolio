@@ -6,6 +6,7 @@
     import {_} from '$lib/i18n';
     import {AlertTriangle, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         confirm: { force: boolean };
@@ -61,9 +62,9 @@
                     <p class="text-gray-700 dark:text-gray-300 mb-4">
                         {$_('brokers.confirmDeleteWithTransactions', {values: {count: transactionCount}})}
                     </p>
-                    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-amber-800 dark:text-amber-300 text-sm">
-                        <strong>{brokerName}</strong> has {transactionCount} transaction(s).
-                    </div>
+                    <InfoBanner variant="warning" showIcon={false}>
+                        <span class="text-sm"><strong>{brokerName}</strong> has {transactionCount} transaction(s).</span>
+                    </InfoBanner>
                 {:else}
                     <p class="text-gray-700 dark:text-gray-300">
                         {$_('brokers.confirmDelete')}

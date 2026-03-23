@@ -56,7 +56,7 @@
             data-testid="language-selector-button"
             onclick={() => isOpen = !isOpen}
     >
-        <span class="text-xl">{currentLangInfo.flag}</span>
+        <span class="text-xl emoji-flag">{currentLangInfo.flag}</span>
         <ChevronDown class="text-gray-600 dark:text-gray-300 transition-transform {isOpen ? 'rotate-180' : ''}" size={14}/>
     </button>
 
@@ -72,7 +72,7 @@
                         class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all text-left
                            {$currentLanguage === lang.code ? 'bg-libre-green/10 dark:bg-libre-green/20' : ''}"
                 >
-                    <span class="text-xl">{lang.flag}</span>
+                    <span class="text-xl emoji-flag">{lang.flag}</span>
                     <span class="text-sm text-gray-700 dark:text-gray-200">{lang.name}</span>
                 </button>
             {/each}

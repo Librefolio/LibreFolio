@@ -103,11 +103,32 @@ def check_port_in_use(port: int) -> list:
     return processes
 
 
+def _print_port_help(port: int, processes: list):
+    """Print help message for port-in-use errors."""
+    print()
+    print(f"{Colors.YELLOW}Processes using port {port}:{Colors.NC}")
+    pids = []
+    for pid, proc_name in processes:
+        pids.append(str(pid))
+        print(f"  • PID {pid} ({proc_name})")
+    print()
+    print(f"{Colors.BLUE}To view details:{Colors.NC}")
+    print(f"  lsof -i :{port}")
+    print()
+    print(f"{Colors.BLUE}To kill these processes:{Colors.NC}")
+    print(f"  kill -9 {' '.join(pids)}")
+    print()
+    print(f"{Colors.YELLOW}Tip:{Colors.NC} This often happens when a previous server didn't shut down cleanly.")
+    print(f"{Colors.YELLOW}     Use --force to automatically kill blocking processes.{Colors.NC}")
+
+
 def cmd_server(args):
     """Start the development server."""
     test_mode = getattr(args, 'test', False)
     rebuild = getattr(args, 'rebuild', False)
     debug_mode = getattr(args, 'debug', False)
+    force = getattr(args, 'force', False)
+    workers = getattr(args, 'workers', 1)
 
     if test_mode:
         port = get_test_server_port()
@@ -120,22 +141,34 @@ def cmd_server(args):
     # Check if port is already in use
     processes_using_port = check_port_in_use(port)
     if processes_using_port:
-        print_error(f"Port {port} is already in use!")
-        print()
-        print(f"{Colors.YELLOW}Processes using port {port}:{Colors.NC}")
-        pids = []
-        for pid, proc_name in processes_using_port:
-            pids.append(str(pid))
-            print(f"  • PID {pid} ({proc_name})")
-        print()
-        print(f"{Colors.BLUE}To view details:{Colors.NC}")
-        print(f"  lsof -i :{port}")
-        print()
-        print(f"{Colors.BLUE}To kill these processes:{Colors.NC}")
-        print(f"  kill -9 {' '.join(pids)}")
-        print()
-        print(f"{Colors.YELLOW}Tip:{Colors.NC} This often happens when a previous server didn't shut down cleanly.")
-        return 1
+        if force:
+            # --force: kill blocking processes and continue
+            import signal
+            pids = [pid for pid, _ in processes_using_port]
+            print_warning(f"Port {port} is in use — killing {len(pids)} blocking process(es)...")
+            for pid, proc_name in processes_using_port:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    print(f"  ✗ Killed PID {pid} ({proc_name})")
+                except ProcessLookupError:
+                    pass  # already dead
+                except PermissionError:
+                    print_error(f"  Cannot kill PID {pid} ({proc_name}) — permission denied")
+                    return 1
+            # Wait briefly for port to be released
+            import time
+            time.sleep(1)
+            # Verify port is now free
+            still_in_use = check_port_in_use(port)
+            if still_in_use:
+                print_error(f"Port {port} still in use after killing processes!")
+                _print_port_help(port, still_in_use)
+                return 1
+            print_success(f"Port {port} is now free")
+        else:
+            print_error(f"Port {port} is already in use!")
+            _print_port_help(port, processes_using_port)
+            return 1
 
     # Handle frontend rebuild
     if rebuild:
@@ -185,6 +218,8 @@ def cmd_server(args):
         print_success("Frontend build found - UI available at /")
     else:
         print_warning("No frontend build - run './dev.py front build' to enable UI")
+    if workers > 1:
+        print(f"{Colors.BLUE}Workers: {workers}{Colors.NC}")
     print()
 
     env = os.environ.copy()
@@ -193,13 +228,25 @@ def cmd_server(args):
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
 
-    return run_command_live([
+    # Generate a shared JWT secret for all workers.
+    # On macOS, Python uses 'spawn' (not fork) for multiprocessing, so each
+    # uvicorn worker is a fresh process. Without a shared env var, each worker
+    # would generate its own random secret → tokens invalid across workers.
+    import secrets as _secrets
+    env.setdefault("JWT_SECRET", _secrets.token_urlsafe(64))
+
+    uvicorn_cmd = [
         "pipenv", "run", "uvicorn",
         "backend.app.main:app",
-        "--reload",
         "--host", "0.0.0.0",
-        "--port", str(port)
-    ], env=env)
+        "--port", str(port),
+    ]
+    if workers > 1:
+        uvicorn_cmd.extend(["--workers", str(workers)])
+    else:
+        uvicorn_cmd.append("--reload")
+
+    return run_command_live(uvicorn_cmd, env=env)
 
 
 # =============================================================================
@@ -420,9 +467,45 @@ def cmd_info_version(args):
 # MkDocs Commands
 # =============================================================================
 
+def _check_admonition_empty_lines():
+    """Warn if any admonition is missing the empty line after !!!/???.
+
+    Without the empty line, Prettier removes the 4-space body indentation,
+    breaking the MkDocs admonition rendering.
+    """
+    import re
+    docs_dir = PROJECT_ROOT / "mkdocs_src" / "docs"
+    adm_re = re.compile(r'^(?:!!!|[?]{3})\s+\w+')
+    bad_files = []
+
+    for md_file in sorted(docs_dir.rglob("*.md")):
+        lines = md_file.read_text().splitlines()
+        for i, line in enumerate(lines):
+            if adm_re.match(line):
+                if i + 1 < len(lines) and lines[i + 1].strip() != '':
+                    if lines[i + 1].startswith('    '):
+                        rel = md_file.relative_to(docs_dir)
+                        bad_files.append(f"  {rel}:{i + 1}")
+                        break  # one warning per file is enough
+
+    if bad_files:
+        print(Colors.warning(
+            f"⚠️  {len(bad_files)} file(s) have admonitions without empty line after !!!/??? "
+            f"(Prettier will break them):"
+        ))
+        for f in bad_files[:10]:
+            print(f)
+        if len(bad_files) > 10:
+            print(f"  ... and {len(bad_files) - 10} more")
+        print(Colors.info(
+            "  Fix: add an empty line between the !!! directive and the indented body."
+        ))
+        print()
+
 def cmd_mkdocs_build(args):
     """Build MkDocs documentation."""
     print(Colors.success("Building MkDocs site..."))
+    _check_admonition_empty_lines()
     copy_docs_assets()
     return run_pipenv(["mkdocs", "build", "-f", "mkdocs_src/mkdocs.yml"])
 
@@ -499,7 +582,7 @@ def cmd_mkdocs_gallery(args):
         # Populate test database with realistic data (creates fresh DB with --force)
         print(f"\n{Colors.CYAN}🗄️  Populating test database with sample data...{Colors.NC}")
         result = subprocess.run(
-            ["python", "dev.py", "test", "db", "populate", "--force"],
+            ["python", "dev.py", "test", "db", "populate", "--force", "--clean", "--with-static", "--with-reports"],
             cwd=PROJECT_ROOT
         )
         if result.returncode != 0:
@@ -518,24 +601,44 @@ def cmd_mkdocs_gallery(args):
         print(f"{Colors.YELLOW}⏭️  Skipping DB population (--no-populate){Colors.NC}")
 
     failures = []
-    for viewport, label in viewports:
-        print(f"\n{Colors.CYAN}{label}{Colors.NC}")
-        cmd = ["npm", "run", "test:e2e", "--", "gallery.spec.ts", "--project", viewport, "--headed"]
-        if filter_text:
-            cmd.extend(["-g", filter_text])
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", capture_output=True, text=True)
-        # Always print stdout (contains screenshot paths and pass/fail info)
-        if result.stdout:
-            print(result.stdout)
-        if result.returncode != 0:
-            failures.append(viewport)
-            print_error(f"{viewport.capitalize()} gallery generation had failures (see above)")
-            # Print stderr summary (contains error details)
-            if result.stderr:
-                # Filter to show only relevant lines (skip dotenv tips etc.)
-                for line in result.stderr.splitlines():
-                    if 'Error' in line or 'error' in line or 'FAIL' in line:
-                        print(f"  {Colors.RED}{line}{Colors.NC}")
+    # Determine worker count: --workers flag or CPU count
+    import os as _os
+    import math
+    explicit_workers = getattr(args, 'workers', None)
+    cpu_count = _os.cpu_count() or 2
+    worker_count = explicit_workers if explicit_workers else max(2, cpu_count)
+    # Server workers: 1 per 4 browser workers, minimum 1
+    server_workers = max(1, math.ceil(worker_count / 4))
+    print(f"{Colors.BLUE}Browser workers: {worker_count}  |  Server workers: {server_workers}{Colors.NC}")
+
+    # Build a single Playwright command with all requested projects.
+    # This shares one webServer process across desktop+mobile, avoiding port conflicts.
+    cmd = [
+        "npm", "run", "test:e2e", "--",
+        "gallery.spec.ts",
+        "--headed",
+        "--workers", str(worker_count),
+    ]
+    for viewport, _label in viewports:
+        cmd.extend(["--project", viewport])
+    if filter_text:
+        cmd.extend(["-g", filter_text])
+
+    viewport_labels = ', '.join(v[0] for v in viewports)
+    print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
+    # Pass server worker count via env so playwright.config.ts can use it
+    # Stream output live to terminal (no capture_output) so user sees progress
+    gallery_env = _os.environ.copy()
+    gallery_env["GALLERY_SERVER_WORKERS"] = str(server_workers)
+    try:
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", env=gallery_env)
+    except KeyboardInterrupt:
+        print(f"\n{Colors.YELLOW}⚠️  Gallery interrupted by user (Ctrl+C){Colors.NC}")
+        print(f"{Colors.YELLOW}Partial screenshots may have been saved to mkdocs_src/docs/gallery/{Colors.NC}")
+        return 1
+    if result.returncode != 0:
+        failures = [v[0] for v in viewports]
+        print_error(f"Gallery generation had failures (see above)")
 
     if failures:
         print(f"\n{Colors.YELLOW}⚠️  Gallery generation completed with failures in: {', '.join(failures)}{Colors.NC}")
@@ -764,6 +867,8 @@ Examples:
     p.add_argument("--test", "-t", action="store_true", help="Use test database (port 8001)")
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
+    p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
+    p.add_argument("--workers", "-w", type=int, default=1, help="Number of uvicorn workers (default: 1)")
     p.set_defaults(func=cmd_server)
 
     # Database
@@ -859,7 +964,18 @@ Examples:
                        help="Only generate mobile screenshots")
     mk_p.add_argument("--no-populate", action="store_true",
                        help="Skip DB population (faster for re-runs)")
+    mk_p.add_argument("--workers", "-w", type=int, default=None,
+                       help="Number of Playwright workers (default: CPU count)")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
+
+    # Translate - Import from mkdocs_src/aphra-pipeline/translate_docs.py
+    sys.path.insert(0, str(PROJECT_ROOT / "mkdocs_src" / "aphra-pipeline"))
+    from translate_docs import register_subparser as register_translate_parser
+    register_translate_parser(mk_sub)
+
+    # Translate-validate - structural validation of translated files
+    from validate_translations import register_subparser as register_validate_parser
+    register_validate_parser(mk_sub)
 
     # =========================================================================
     # 📦 Tools Commands Group
