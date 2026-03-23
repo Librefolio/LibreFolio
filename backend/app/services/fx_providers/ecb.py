@@ -51,9 +51,23 @@ class ECBProvider(FXRateProvider):
     def name(self) -> str:
         return "European Central Bank"
 
-    def get_icon(self) -> str | None:
+    @property
+    def icon(self) -> str | None:
         """Returns the icon for the ECB provider"""
-        return "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Logo_European_Central_Bank.svg/2484px-Logo_European_Central_Bank.svg.png"  # Default: no icon
+        return "https://www.ecb.europa.eu/favicon-32.png"
+
+    @property
+    def docs_url(self) -> str | None:
+        return "/mkdocs/developer/backend/fx/providers_list/#ecb-european-central-bank"
+
+    @property
+    def description_i18n(self) -> dict[str, str]:
+        return {
+            "en": "European Central Bank — publishes daily reference exchange rates for 30+ currencies against EUR. Updated every business day around 16:00 CET. One data point per day.",
+            "it": "Banca Centrale Europea — pubblica tassi di cambio di riferimento giornalieri per 30+ valute contro EUR. Aggiornamento ogni giorno lavorativo verso le 16:00 CET. Un dato al giorno.",
+            "fr": "Banque Centrale Européenne — publie des taux de change de référence quotidiens pour 30+ devises contre EUR. Mise à jour chaque jour ouvrable vers 16h00 CET. Un point par jour.",
+            "es": "Banco Central Europeo — publica tipos de cambio de referencia diarios para 30+ monedas contra EUR. Actualizado cada día hábil alrededor de las 16:00 CET. Un dato por día.",
+        }
 
     @property
     def base_currency(self) -> str:
@@ -165,11 +179,13 @@ class ECBProvider(FXRateProvider):
         start_date, end_date = date_range
         results = {}
 
-        for currency in currencies:
-            # Skip EUR (base currency)
-            if currency == "EUR":
-                continue
+        # Filter valid currencies (skip base)
+        valid_currencies = [c for c in currencies if c != "EUR"]
+        if not valid_currencies:
+            return results
 
+        async def _fetch_one(currency: str) -> tuple[str, list[tuple[date, str, str, Decimal]]]:
+            """Fetch rates for a single currency — isolated for parallel execution."""
             # Fetch from ECB API: D.{CURRENCY}.EUR.SP00.A
             # Returns: 1 EUR = X {CURRENCY}
             url = f"{self.BASE_URL}/{self.DATASET}/{self.FREQUENCY}.{currency}.{self.REFERENCE_AREA}.{self.SERIES}.A"
@@ -184,19 +200,12 @@ class ECBProvider(FXRateProvider):
                     response = await client.get(url, params=params)
                     response.raise_for_status()
 
-                    # ECB returns empty body when no data available (weekends/holidays)
-                    # This is NOT an error - it's ECB's way of saying "no rates for this period"
-                    # Happens when:
-                    # - Requesting weekend dates (Saturday/Sunday)
-                    # - Requesting EU holidays
-                    # - Requesting future dates
                     if not response.text:
                         logger.info(
                             f"No FX rates available for {currency} ({start_date} to {end_date}). "
                             f"This is normal for weekends/holidays when ECB doesn't publish rates."
                             )
-                        results[currency] = []
-                        continue
+                        return currency, []
 
                     # Parse JSON response from ECB API
                     data = response.json()
@@ -204,41 +213,28 @@ class ECBProvider(FXRateProvider):
                     # Extract observations from ECB's nested JSON structure
                     observations = []
 
-                    # Check if dataSets exist (ECB returns empty dataSets on weekends/holidays)
                     if "dataSets" in data and len(data["dataSets"]) > 0:
                         series = data["dataSets"][0].get("series", {})
 
                         if series:
-                            # ECB returns series as a dictionary with keys like "0:0:0:0"
-                            # We just need the first (and usually only) series
                             first_series = next(iter(series.values()))
                             obs_data = first_series.get("observations", {})
 
-                            # Get time period dimension to map observation indices to dates
-                            # ECB structure: dimensions.observation contains TIME_PERIOD values
                             dimensions = data["structure"]["dimensions"]["observation"]
                             time_periods = next(
                                 d["values"] for d in dimensions if d["id"] == "TIME_PERIOD"
                                 )
 
-                            # Iterate through observations
-                            # Format: {"0": [1.0850], "1": [1.0860], ...}
-                            # Index maps to time_periods array
                             for obs_idx, obs_value in obs_data.items():
                                 idx = int(obs_idx)
-                                rate_date_str = time_periods[idx]["id"]  # Format: "2025-01-01"
-
-                                # ECB gives: 1 EUR = X foreign currency
-                                # obs_value is array, first element is the rate
-                                # Return as (date, base, quote, rate)
+                                rate_date_str = time_periods[idx]["id"]
                                 ecb_rate = Decimal(str(obs_value[0]))
                                 rate_date = date.fromisoformat(rate_date_str)
-
                                 observations.append(
                                     (rate_date, self.base_currency, currency, ecb_rate)
                                     )
 
-                    results[currency] = observations
+                    return currency, observations
 
             except httpx.HTTPError as e:
                 logger.error(f"Failed to fetch FX rates for {currency}: {e}")
@@ -246,5 +242,14 @@ class ECBProvider(FXRateProvider):
             except (KeyError, IndexError, ValueError) as e:
                 logger.error(f"Failed to parse ECB response for {currency}: {e}")
                 raise FXServiceError(f"Unexpected ECB response format for {currency}: {e}") from e
+
+        # ── Serial fetch: ECB triggers bot protection on parallel requests ──
+        for currency in valid_currencies:
+            try:
+                _, observations = await _fetch_one(currency)
+                results[currency] = observations
+            except Exception as e:
+                logger.warning(f"ECB fetch failed for {currency}, skipping: {e}")
+                results[currency] = []
 
         return results

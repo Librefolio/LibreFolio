@@ -37,7 +37,7 @@ Questa sezione elenca le parti della documentazione che sono parzialmente corret
 
 - **File**: `developer/architecture/database.md`
 - **Obsoleto**: Il diagramma ER (Mermaid) è significativamente obsoleto.
-    - **Mancano tabelle chiave**: `BrokerUserAccess` (fondamentale per l'accesso multi-utente) e `FxCurrencyPairSource` (per la configurazione dei provider FX).
+    - **Mancano tabelle chiave**: `BrokerUserAccess` (fondamentale per l'accesso multi-utente) e `FxConversionRoute` (per la configurazione dei provider FX e le catene di conversione).
     - **Mancano campi importanti**: La tabella `Asset` nel diagramma non include i nuovi campi `identifier_*` (es. `identifier_isin`, `identifier_ticker`), che sono invece presenti
       nel modello `models.py`.
 - **Incompleto**: La descrizione della tabella `Transaction` è troppo semplicistica. Non menziona il campo `related_transaction_id`, che è cruciale per collegare transazioni di
@@ -52,7 +52,7 @@ Questa sezione elenca le parti della documentazione che sono parzialmente corret
     - `curl-testing.md` descrive correttamente l'autenticazione basata su **session cookie**, che è quella implementata.
     - `users_and_brokers.md` descrive erroneamente un'autenticazione basata su **JWT Bearer Token**, che non è utilizzata.
 - **Incompleto**: La documentazione manuale non copre l'intera superficie dell'API. Mancano riferimenti a endpoint importanti come quelli per la gestione degli accessi ai broker (
-  `/brokers/{id}/access`) e la configurazione dei provider FX (`/fx/providers/pair-sources`). Sebbene sia corretto rimandare alla documentazione interattiva (Swagger) per la
+  `/brokers/{id}/access`) e la configurazione dei provider FX (`/fx/providers/routes`). Sebbene sia corretto rimandare alla documentazione interattiva (Swagger) per la
   reference completa, i concetti chiave dovrebbero essere presenti.
 
 ## ❌ Scarsamente Documentato o Mancante
@@ -77,10 +77,8 @@ Questa sezione evidenzia le aree dove la documentazione è gravemente carente, e
 
 ### 3. Configurazione dei Provider FX
 
-- **File**: N/A
-- **Mancante**: Non esiste alcuna documentazione per la tabella `FxCurrencyPairSource` né per gli endpoint API associati (es. `POST /fx/providers/pair-sources`). Questa
-  funzionalità permette di configurare quale provider usare per ogni coppia di valute (con logica di priorità e fallback) ed è un aspetto cruciale del sistema FX multi-provider che
-  non viene spiegato.
+- **File**: `developer/backend/fx/configuration.md`
+- **✅ Aggiornato**: La documentazione è stata aggiornata per riflettere il nuovo modello `FxConversionRoute` e gli endpoint `/fx/providers/routes`, incluse le catene di conversione multi-step.
 
 ## Riepilogo e Azioni Consigliate
 
@@ -90,7 +88,7 @@ Questa sezione evidenzia le aree dove la documentazione è gravemente carente, e
     3. Aggiornare la documentazione dello schema del database (`database.md`), in particolare il diagramma ER e la descrizione delle tabelle `Asset` e `Transaction`.
 
 - **Priorità Media**:
-    1. Creare una nuova pagina per documentare la configurazione dei provider FX (`FxCurrencyPairSource` e API relative).
+    1. ~~Creare una nuova pagina per documentare la configurazione dei provider FX~~ → ✅ Completato (`developer/backend/fx/configuration.md` aggiornato con `FxConversionRoute` e chain routes).
     2. Rivedere la documentazione del sistema di impostazioni (`settings.md`) per allinearla all'implementazione effettiva.
 
 - **Priorità Bassa**:

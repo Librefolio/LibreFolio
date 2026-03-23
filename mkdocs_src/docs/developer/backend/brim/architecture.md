@@ -1,9 +1,9 @@
-# BRIM Architecture
+# 📥 BRIM Architecture
 
 **BRIM (Broker Report Import Manager)** is the system responsible for importing transaction data from CSV files exported by various brokers. It is designed to be robust,
 user-friendly, and extensible.
 
-## The BRIM Workflow
+## 🔄 The BRIM Workflow
 
 The import process follows a clear, multi-step workflow designed to give the user full control and visibility.
 
@@ -44,7 +44,7 @@ graph TD
     - The backend uses the standard `TransactionService` to save the transactions to the database.
     - The imported file is moved from the `uploaded/` directory to `parsed/` or `failed/` depending on the outcome.
 
-## File Lifecycle
+## 📂 File Lifecycle
 
 BRIM manages imported files by moving them between three directories, ensuring a clear record of the import status.
 
@@ -55,7 +55,7 @@ BRIM manages imported files by moving them between three directories, ensuring a
 
 Each file is stored with a corresponding `.json` metadata file that tracks its status, original filename, and any errors.
 
-## Deduplication Logic
+## 🔍 Deduplication Logic
 
 Before final import, BRIM checks for potential duplicates by comparing each parsed transaction against existing transactions in the database based on:
 

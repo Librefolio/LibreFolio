@@ -4,11 +4,17 @@ Main entry point for the backend API.
 """
 
 import os
+import sqlite3
 import subprocess
 import sys
+import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
+
+# Suppress pycountry warnings about duplicate currency names (leone, bolívar soberano)
+# These are ISO 4217 duplicates (old SLL + new SLE, old VEF + new VES) — harmless.
+warnings.filterwarnings("ignore", message=".*already taken in index.*")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -75,8 +81,6 @@ def ensure_database_exists():
             needs_migration = True
         else:
             # Check if database has tables using SQLite directly
-            # This is faster than importing SQLAlchemy
-            import sqlite3
 
             try:
                 conn = sqlite3.connect(str(db_path))

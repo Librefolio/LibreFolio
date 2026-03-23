@@ -22,7 +22,7 @@
         /** Show loading state */
         loading?: boolean;
         /** Position of dropdown */
-        dropdownPosition?: 'top' | 'bottom';
+        dropdownPosition?: 'top' | 'bottom' | 'auto';
         /** Custom class for container */
         class?: string;
         /** Test ID for E2E testing (adds -button suffix to trigger) */
@@ -33,6 +33,10 @@
         selectedItem?: Snippet<[SelectOption]>;
         /** Change callback */
         onchange?: (value: string) => void;
+        /** Compact mode: smaller padding, text-xs, thinner border */
+        compact?: boolean;
+        /** Show chevron icon in trigger button (default: true) */
+        showChevron?: boolean;
     }
 
     let {
@@ -46,16 +50,53 @@
         testId,
         item,
         selectedItem,
-        onchange
+        onchange,
+        compact = false,
+        showChevron = true,
     }: Props = $props();
 
     // Internal state
     let isOpen = $state(false);
     let highlightedIndex = $state(-1);
     let containerRef = $state<HTMLDivElement | null>(null);
+    let computedPosition = $state<'top' | 'bottom'>('bottom');
+    let dropdownMaxHeight = $state<string>('15rem');
 
     // Derived state
     let selectedOption = $derived(options.find(o => o.value === value));
+
+    // Compute dropdown position when opening
+    function updateDropdownPosition() {
+        if (dropdownPosition !== 'auto' || !containerRef) {
+            computedPosition = dropdownPosition === 'top' ? 'top' : 'bottom';
+            dropdownMaxHeight = '15rem';
+            return;
+        }
+        const rect = containerRef.getBoundingClientRect();
+        const padding = 20;
+
+        // Walk up to find the closest scrollable parent
+        let scrollParent = containerRef.parentElement;
+        let parentBottom = window.innerHeight;
+        let parentTop = 0;
+        while (scrollParent) {
+            const style = getComputedStyle(scrollParent);
+            if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+                const pRect = scrollParent.getBoundingClientRect();
+                parentBottom = pRect.bottom;
+                parentTop = pRect.top;
+                break;
+            }
+            scrollParent = scrollParent.parentElement;
+        }
+
+        const spaceBelow = parentBottom - rect.bottom - padding;
+        const spaceAbove = rect.top - parentTop - padding;
+        computedPosition = (spaceBelow < 200 && spaceAbove > spaceBelow) ? 'top' : 'bottom';
+        // Limit dropdown height to actual available space (min 120px, max 240px)
+        const available = computedPosition === 'top' ? spaceAbove : spaceBelow;
+        dropdownMaxHeight = `${Math.max(120, Math.min(240, available))}px`;
+    }
 
     // Reset highlight when options change
     $effect(() => {
@@ -80,6 +121,7 @@
 
     function openDropdown() {
         if (disabled || loading) return;
+        updateDropdownPosition();
         isOpen = true;
         highlightedIndex = -1;
     }
@@ -141,7 +183,7 @@
 <div bind:this={containerRef} class="relative {className}" data-testid={testId}>
     <!-- Trigger Button -->
     <button
-            class="w-full flex items-center justify-between px-3 py-2 border rounded-lg text-sm transition-all text-left
+            class="w-full flex items-center justify-between {compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-2 text-sm'} border rounded-lg transition-all text-left
                {disabled || loading
                    ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-700'
                    : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}
@@ -156,25 +198,31 @@
             {#if selectedItem}
                 {@render selectedItem(selectedOption)}
             {:else if selectedOption.icon}
-                <span class="truncate">{selectedOption.icon} {selectedOption.label}</span>
+                <span class="truncate emoji-flag">{selectedOption.icon} {selectedOption.label}</span>
             {:else}
                 <span class="truncate">{selectedOption.label}</span>
             {/if}
         {:else}
             <span class="text-gray-400">{placeholder || $_('common.select')}</span>
         {/if}
-        <ChevronDown
-                class="ml-2 flex-shrink-0 text-gray-400 transition-transform {isOpen ? 'rotate-180' : ''}"
-                size={16}
-        />
+        {#if showChevron}
+            <ChevronDown
+                    class="ml-2 flex-shrink-0 text-gray-400 transition-transform {isOpen ? 'rotate-180' : ''}"
+                    size={compact ? 12 : 16}
+            />
+        {/if}
     </button>
 
     <!-- Dropdown Menu -->
     {#if isOpen}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-                class="absolute z-50 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                class="absolute z-50 w-max min-w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
                    rounded-lg shadow-lg max-h-60 overflow-y-auto
-                   {dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}"
+                   {computedPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}"
+                style:max-height={dropdownMaxHeight}
+                onwheel={(e) => e.stopPropagation()}
+                ontouchmove={(e) => e.stopPropagation()}
         >
             {#if loading}
                 <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
@@ -202,7 +250,7 @@
                                 {@render item(option)}
                             </div>
                         {:else if option.icon}
-                            <span class="truncate">{option.icon} {option.label}</span>
+                            <span class="truncate emoji-flag">{option.icon} {option.label}</span>
                         {:else}
                             <span class="truncate">{option.label}</span>
                         {/if}

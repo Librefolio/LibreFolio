@@ -34,7 +34,7 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -61,9 +61,14 @@ class FXProviderInfo(BaseModel):
     code: str = Field(..., description="Provider code (e.g., ECB, FED, BOE, SNB)")
     name: str = Field(..., description="Provider full name")
     base_currency: str = Field(..., description="Default base currency")
+    # TODO: deprecate base_currency in favor of base_currencies
     base_currencies: list[str] = Field(..., description="All supported base currencies")
+    target_currencies: list[str] = Field(default_factory=list, description="All target currencies this provider can convert to (from get_supported_currencies)")
     description: str = Field(..., description="Provider description")
+    description_i18n: dict[str, str] = Field(default_factory=dict, description="Multilingual provider descriptions {lang_code: description}")
+    warning_i18n: dict[str, str] = Field(default_factory=dict, description="Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning.")
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
+    docs_url: Optional[str] = Field(None, description="URL to documentation page for this provider")
 
 
 # ============================================================================
@@ -207,27 +212,30 @@ class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
 
 
 class FXDeleteItem(BaseModel):
-    """Single rate deletion request."""
+    """Single rate deletion request.
 
-    model_config = ConfigDict(
-        populate_by_name=True,
-        str_strip_whitespace=True,
-        )
+    Either `date_range` or `delete_all=True` must be specified.
+    If `delete_all=True`, all rates for the pair are deleted regardless of date_range.
+    """
 
-    from_currency: str = Field(
-        ..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)"
-        )
-    to_currency: str = Field(
-        ..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)"
-        )
-    date_range: DateRangeModel = Field(
-        ..., description="Date range to delete (start required, end optional for single day)"
-        )
+    model_config = ConfigDict(populate_by_name=True, str_strip_whitespace=True, )
+
+    from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
+    to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
+    date_range: Optional[DateRangeModel] = Field(None, description="Date range to delete (start required, end optional for single day). Required unless delete_all=True.")
+    delete_all: bool = Field(False, description="If True, delete ALL rates for this pair (ignores date_range)")
 
     @field_validator("from_currency", "to_currency", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
         return Currency.validate_code(v)
+
+    @model_validator(mode="after")
+    def validate_range_or_all(self) -> "FXDeleteItem":
+        """Ensure either date_range or delete_all is specified."""
+        if not self.delete_all and self.date_range is None:
+            raise ValueError("Either 'date_range' or 'delete_all: true' must be specified")
+        return self
 
 
 class FXDeleteResult(BaseDeleteResult):
@@ -255,64 +263,152 @@ class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
 
 
 # ============================================================================
-# PAIR SOURCE CONFIGURATION MODELS
+# CONVERSION ROUTE CONFIGURATION MODELS (replaces pair-sources)
 # ============================================================================
 
 
-class FXPairSourceItem(BaseModel):
-    """Configuration for a currency pair source."""
+def validate_chain_steps(
+    steps: list,  # list[FXRouteStep] or list[dict] with from/to keys
+    base: str,
+    quote: str,
+    ) -> None:
+    """
+    Validate the coherence of a chain_steps list.
 
-    model_config = ConfigDict(
-        str_strip_whitespace=True,
-        )
+    Used by both Pydantic schema (FXConversionRouteItem.validate_chain)
+    and SQLModel (FxConversionRoute validator).
 
-    base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
-    quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
-    provider_code: str = Field(..., description="Provider code (e.g., ECB, FED)")
-    priority: int = Field(..., ge=1, description="Priority (1 = primary, 2+ = fallback)")
+    Raises:
+        ValueError if any rule is violated.
+    """
+    if not steps:
+        raise ValueError("chain_steps must have at least 1 element")
+
+    def _get(step, attr_pydantic, key_dict):
+        if hasattr(step, attr_pydantic):
+            return getattr(step, attr_pydantic)
+        return step[key_dict]
+
+    # 1. Continuity: step[i].to == step[i+1].from
+    for i in range(len(steps) - 1):
+        to_cur = _get(steps[i], 'to_currency', 'to')
+        from_cur = _get(steps[i + 1], 'from_currency', 'from')
+        if to_cur != from_cur:
+            raise ValueError(f"Chain discontinuity at step {i}: {to_cur} != {from_cur}")
+
+    # 2. No repeated edges (unordered pair, any direction/provider)
+    edges_seen: set[tuple[str, str]] = set()
+    for s in steps:
+        fc = _get(s, 'from_currency', 'from')
+        tc = _get(s, 'to_currency', 'to')
+        edge = tuple(sorted([fc, tc]))
+        if edge in edges_seen:
+            raise ValueError(f"Duplicate edge: {edge[0]}-{edge[1]}")
+        edges_seen.add(edge)
+
+    # 3. Endpoints must match (base, quote) of the route
+    first_from = _get(steps[0], 'from_currency', 'from')
+    last_to = _get(steps[-1], 'to_currency', 'to')
+    endpoints = tuple(sorted([first_from, last_to]))
+    pair = tuple(sorted([base, quote]))
+    if endpoints != pair:
+        raise ValueError(f"Chain endpoints {endpoints} don't match pair {pair}")
+
+    # 4. Multi-step chains must not contain MANUAL provider
+    if len(steps) > 1:
+        for s in steps:
+            prov = _get(s, 'provider', 'provider')
+            if prov.upper() == "MANUAL":
+                raise ValueError("MANUAL provider cannot be used in multi-step chains")
+
+
+class FXRouteStep(BaseModel):
+    """Single step (edge) in a conversion chain.
+
+    Corresponds to an edge in the currency graph built by the DFS algorithm.
+    """
+    model_config = ConfigDict(populate_by_name=True, str_strip_whitespace=True)
+
+    from_currency: str = Field(..., alias="from", min_length=3, max_length=3)
+    to_currency: str = Field(..., alias="to", min_length=3, max_length=3)
+    provider: str = Field(..., description="Provider code for this step")
+
+    @field_validator("from_currency", "to_currency", mode="before")
+    @classmethod
+    def uppercase_currency(cls, v):
+        return Currency.validate_code(v)
+
+    @field_validator("provider", mode="before")
+    @classmethod
+    def uppercase_provider(cls, v):
+        if isinstance(v, str):
+            return v.strip().upper()
+        return v
+
+    @model_validator(mode="after")
+    def validate_different(self):
+        if self.from_currency == self.to_currency:
+            raise ValueError(f"from and to must differ (got {self.from_currency})")
+        return self
+
+
+class FXConversionRouteItem(BaseModel):
+    """Configuration for a conversion route.
+
+    Replaces FXPairSourceItem. Every route is a chain of steps:
+    - 1 step = direct conversion (e.g., EUR→USD via ECB)
+    - 2+ steps = chain conversion (e.g., RON→EUR→USD via ECB+ECB)
+    """
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    base: str = Field(..., min_length=3, max_length=3)
+    quote: str = Field(..., min_length=3, max_length=3)
+    priority: int = Field(..., ge=1)
+    chain_steps: list[FXRouteStep] = Field(..., min_length=1,
+                                           description="Ordered list of conversion steps (edges of the graph)")
 
     @field_validator("base", "quote", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
         return Currency.validate_code(v)
 
+    @model_validator(mode="after")
+    def validate_chain(self):
+        validate_chain_steps(self.chain_steps, self.base, self.quote)
+        return self
 
-class FXPairSourcesResponse(BaseListResponse[FXPairSourceItem]):
-    """Response model for listing pair sources."""
+
+class FXConversionRoutesResponse(BaseListResponse[FXConversionRouteItem]):
+    """Response model for listing conversion routes."""
     pass
 
 
-class FXPairSourceResult(BaseModel):
-    """Result of a single pair source creation/update."""
+class FXConversionRouteResult(BaseModel):
+    """Result of a single route creation/update."""
 
     success: bool = Field(..., description="Whether the operation succeeded")
     base: str = Field(..., description="Base currency")
     quote: str = Field(..., description="Quote currency")
-    provider_code: str = Field(..., description="Provider code")
     priority: int = Field(..., description="Priority level")
+    chain_steps: list[FXRouteStep] = Field(..., description="Chain steps configured")
     action: str = Field(..., description="Action taken: 'created' or 'updated'")
     message: Optional[str] = Field(None, description="Additional info/warning")
 
 
-class FXCreatePairSourcesResponse(BaseBulkResponse[FXPairSourceResult]):
-    """Response model for bulk pair source creation."""
+class FXCreateRoutesResponse(BaseBulkResponse[FXConversionRouteResult]):
+    """Response model for bulk route creation."""
 
-    # Operation-specific field
     error_count: int = Field(default=0, description="Number of failed operations")
 
 
-class FXDeletePairSourceItem(BaseModel):
-    """Single pair source to delete."""
+class FXDeleteRouteItem(BaseModel):
+    """Single route to delete."""
 
-    model_config = ConfigDict(
-        str_strip_whitespace=True,
-        )
+    model_config = ConfigDict(str_strip_whitespace=True)
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
-    priority: Optional[int] = Field(
-        None, ge=1, description="Priority level (optional, if not provided deletes all priorities)"
-        )
+    priority: Optional[int] = Field(None, ge=1, description="Priority level (optional, if not provided deletes all priorities)")
 
     @field_validator("base", "quote", mode="before")
     @classmethod
@@ -320,34 +416,36 @@ class FXDeletePairSourceItem(BaseModel):
         return Currency.validate_code(v)
 
 
-class FXDeletePairSourceResult(BaseDeleteResult):
-    """Result of a single pair source deletion."""
+class FXDeleteRouteResult(BaseDeleteResult):
+    """Result of a single route deletion."""
 
     base: str = Field(..., description="Base currency")
     quote: str = Field(..., description="Quote currency")
     priority: Optional[int] = Field(None, description="Priority level (if specified)")
     # Inherits from BaseDeleteResult:
     # - success: bool
-    # - deleted_count: int (number of pair source records deleted)
+    # - deleted_count: int
     # - message: Optional[str]
 
 
-class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResult]):
-    """Response model for DELETE /pair-sources/bulk."""
-
-    # Inherits from BaseBulkDeleteResponse:
-    # - results: List[FXDeletePairSourceResult]
-    # - success_count: int
-    # - errors: List[str]
-    # - total_deleted: int (total pair source records deleted)
+class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
+    """Response model for DELETE /routes."""
     pass
 
 
-# ============================================================================
-# CURRENCY LIST MODELS
-# ============================================================================
+# NOTE: FXCurrenciesResponse was removed — GET /fx/currencies endpoint absorbed by
+# GET /fx/providers which now includes target_currencies per provider.
 
 
-class FXCurrenciesResponse(BaseListResponse[str]):
-    """Response model for available currencies list."""
+class FXPairItem(BaseModel):
+    """A unique currency pair with optional metadata."""
+
+    base: str = Field(..., description="Base currency (alphabetically first)")
+    quote: str = Field(..., description="Quote currency (alphabetically second)")
+    has_provider: bool = Field(default=False, description="Whether this pair has configured providers")
+    rate_count: int = Field(default=0, description="Number of rate data points in the DB")
+
+
+class FXPairsListResponse(BaseListResponse[FXPairItem]):
+    """Response for GET /currencies/pairs — all known FX pairs."""
     pass

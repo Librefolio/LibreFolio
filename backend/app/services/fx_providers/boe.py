@@ -7,6 +7,7 @@ BOE provides daily rates with GBP as base currency.
 API Documentation: https://www.bankofengland.co.uk/boeapps/database/
 """
 
+import asyncio
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -69,12 +70,29 @@ class BOEProvider(FXRateProvider):
         return "Bank of England"
 
     @property
+    def icon(self) -> str | None:
+        return "https://www.bankofengland.co.uk/favicon.svg?ver=2c06d"
+
+    @property
+    def docs_url(self) -> str | None:
+        return "/mkdocs/developer/backend/fx/providers_list/#boe-bank-of-england"
+
+    @property
     def base_currency(self) -> str:
         return "GBP"
 
     @property
     def description(self) -> str:
         return "Official exchange rates from Bank of England"
+
+    @property
+    def description_i18n(self) -> dict[str, str]:
+        return {
+            "en": "Bank of England — publishes daily spot exchange rates for 20+ currencies against GBP. Updated each business day. One data point per day.",
+            "it": "Bank of England — pubblica tassi di cambio spot giornalieri per 20+ valute contro GBP. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
+            "fr": "Banque d'Angleterre — publie des taux de change spot quotidiens pour 20+ devises contre GBP. Mise à jour chaque jour ouvrable. Un point par jour.",
+            "es": "Banco de Inglaterra — publica tipos de cambio spot diarios para 20+ monedas contra GBP. Actualizado cada día hábil. Un dato por día.",
+        }
 
     @property
     def test_currencies(self) -> list[str]:
@@ -133,35 +151,34 @@ class BOEProvider(FXRateProvider):
         start_date, end_date = date_range
         results = {}
 
-        for currency in currencies:
-            # Skip GBP (base currency)
-            if currency == "GBP":
-                continue
+        # Filter valid currencies
+        valid_currencies = [c for c in currencies if c != "GBP" and c in self.CURRENCY_SERIES]
+        skipped = [c for c in currencies if c != "GBP" and c not in self.CURRENCY_SERIES]
+        for c in skipped:
+            logger.warning(f"Currency {c} not supported by BOE, skipping")
+            results[c] = []
 
-            # Check if we support this currency
-            if currency not in self.CURRENCY_SERIES:
-                logger.warning(f"Currency {currency} not supported by BOE, skipping")
-                results[currency] = []
-                continue
+        if not valid_currencies:
+            return results
 
+        async def _fetch_one(currency: str) -> tuple[str, list[tuple[date, str, str, Decimal]]]:
+            """Fetch rates for a single currency — isolated for parallel execution."""
             series_code = self.CURRENCY_SERIES[currency]
 
-            # Build BOE API request
-            # Format: XML-based API (returning CSV-like data)
             params = {
                 "Datefrom": start_date.strftime("%d/%b/%Y"),
                 "Dateto": end_date.strftime("%d/%b/%Y"),
                 "SeriesCodes": series_code,
-                "CSVF": "TN",  # Time series, no metadata
+                "CSVF": "TN",
                 "UsingCodes": "Y",
                 "VPD": "Y",
                 "VFD": "N",
                 }
 
             try:
-                # BOE requires a proper User-Agent header
                 headers = {
-                    "User-Agent": "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)"
+                    "User-Agent": "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)",
+                    "Accept": "text/csv, text/plain, */*;q=0.1",
                     }
 
                 async with httpx.AsyncClient(
@@ -170,9 +187,20 @@ class BOEProvider(FXRateProvider):
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
-                    # Parse CSV-like response
-                    observations = self._parse_response(response.text, currency)
-                    results[currency] = observations
+                    # Guard: detect HTML bot-protection pages
+                    body = response.text
+                    if "<html" in body.lower()[:500] or "<!doctype" in body.lower()[:500]:
+                        logger.error(
+                            f"BOE returned HTML instead of CSV for {currency} "
+                            f"(first 200 chars: {body[:200]})"
+                            )
+                        raise FXServiceError(
+                            f"BOE returned HTML instead of CSV for {currency} — "
+                            f"possible bot protection or endpoint change"
+                            )
+
+                    observations = self._parse_response(body, currency)
+                    return currency, observations
 
             except httpx.HTTPError as e:
                 logger.error(f"Failed to fetch FX rates for {currency} from BOE: {e}")
@@ -180,6 +208,19 @@ class BOEProvider(FXRateProvider):
             except Exception as e:
                 logger.error(f"Failed to parse BOE response for {currency}: {e}")
                 raise FXServiceError(f"Unexpected BOE response format for {currency}: {e}") from e
+
+        # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)
+        tasks = [_fetch_one(c) for c in valid_currencies]
+        fetched = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for i, result in enumerate(fetched):
+            if isinstance(result, BaseException):
+                currency = valid_currencies[i]
+                logger.warning(f"BOE fetch failed for {currency}, skipping: {result}")
+                results[currency] = []
+            else:
+                currency, observations = result
+                results[currency] = observations
 
         return results
 

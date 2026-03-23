@@ -980,6 +980,20 @@ type CurrencyListItem = {
    * Currency symbol (e.g., $, €)
    */
   symbol: string;
+  flag_emoji?: /**
+   * Flag emoji of primary country using this currency (e.g., 🇺🇸, 🇪🇺, 🪙 for crypto)
+   *
+   * @default "🏳️"
+   */
+  string | undefined;
+  country_codes?: /**
+   * ISO-2 country codes using this currency (e.g., ['US', 'AS', 'EC'] for USD)
+   */
+  Array<string> | undefined;
+  country_names?: /**
+   * Localized country names using this currency (e.g., ['United States', 'American Samoa'] for USD in English)
+   */
+  Array<string> | undefined;
 };
 type ExportRequest = Partial<{
   format: ExportFormat;
@@ -2399,6 +2413,80 @@ type FXConversionResult = {
     ((BackwardFillInfo | null) | Array<BackwardFillInfo | null>)
     | undefined;
 };
+type FXConversionRouteItem = {
+  /**
+   * @minLength 3
+   * @maxLength 3
+   */
+  base: string;
+  /**
+   * @minLength 3
+   * @maxLength 3
+   */
+  quote: string;
+  /**
+   * @minimum 1
+   */
+  priority: number;
+  /**
+   * Ordered list of conversion steps (edges of the graph)
+   */
+  chain_steps: Array<FXRouteStep>;
+};
+type FXRouteStep = {
+  /**
+   * @minLength 3
+   * @maxLength 3
+   */
+  from: string;
+  /**
+   * @minLength 3
+   * @maxLength 3
+   */
+  to: string;
+  /**
+   * Provider code for this step
+   */
+  provider: string;
+};
+type FXConversionRouteResult = {
+  /**
+   * Whether the operation succeeded
+   */
+  success: boolean;
+  /**
+   * Base currency
+   */
+  base: string;
+  /**
+   * Quote currency
+   */
+  quote: string;
+  /**
+   * Priority level
+   */
+  priority: number;
+  /**
+   * Chain steps configured
+   */
+  chain_steps: Array<FXRouteStep>;
+  /**
+   * Action taken: 'created' or 'updated'
+   */
+  action: string;
+  message?:
+    | /**
+     * Additional info/warning
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+};
+type FXConversionRoutesResponse = Partial<{
+  /**
+   * List of items
+   */
+  items: Array<FXConversionRouteItem>;
+}>;
 type FXConvertResponse = {
   /**
    * Per-item operation results
@@ -2415,11 +2503,11 @@ type FXConvertResponse = {
    */
   Array<string> | undefined;
 };
-type FXCreatePairSourcesResponse = {
+type FXCreateRoutesResponse = {
   /**
    * Per-item operation results
    */
-  results: Array<FXPairSourceResult>;
+  results: Array<FXConversionRouteResult>;
   /**
    * Number of successful operations
    *
@@ -2437,38 +2525,6 @@ type FXCreatePairSourcesResponse = {
    */
   number | undefined;
 };
-type FXPairSourceResult = {
-  /**
-   * Whether the operation succeeded
-   */
-  success: boolean;
-  /**
-   * Base currency
-   */
-  base: string;
-  /**
-   * Quote currency
-   */
-  quote: string;
-  /**
-   * Provider code
-   */
-  provider_code: string;
-  /**
-   * Priority level
-   */
-  priority: number;
-  /**
-   * Action taken: 'created' or 'updated'
-   */
-  action: string;
-  message?:
-    | /**
-     * Additional info/warning
-     */
-    ((string | null) | Array<string | null>)
-    | undefined;
-};
 type FXDeleteItem = {
   /**
    * Source currency (ISO 4217)
@@ -2484,13 +2540,24 @@ type FXDeleteItem = {
    * @maxLength 3
    */
   to: string;
-  date_range: DateRangeModel;
+  date_range?:
+    | /**
+     * Date range to delete (start required, end optional for single day). Required unless delete_all=True.
+     */
+    ((DateRangeModel | null) | Array<DateRangeModel | null>)
+    | undefined;
+  delete_all?: /**
+   * If True, delete ALL rates for this pair (ignores date_range)
+   *
+   * @default false
+   */
+  boolean | undefined;
 };
-type FXDeletePairSourcesResponse = {
+type FXDeleteRoutesResponse = {
   /**
    * Per-item operation results
    */
-  results: Array<FXDeletePairSourceResult>;
+  results: Array<FXDeleteRouteResult>;
   /**
    * Number of successful operations
    *
@@ -2508,7 +2575,7 @@ type FXDeletePairSourcesResponse = {
    */
   total_deleted: number;
 };
-type FXDeletePairSourceResult = {
+type FXDeleteRouteResult = {
   /**
    * Whether the deletion succeeded
    */
@@ -2540,49 +2607,86 @@ type FXDeletePairSourceResult = {
     ((number | null) | Array<number | null>)
     | undefined;
 };
-type FXPairSourcesResponse = Partial<{
+type FXSyncBulkResponse = {
   /**
-   * List of items
+   * Per-item operation results
    */
-  items: Array<FXPairSourceItem>;
-}>;
-type FXPairSourceItem = {
+  results: Array<FXSyncPairResult>;
   /**
-   * Base currency (ISO 4217)
+   * Number of successful operations
    *
-   * @minLength 3
-   * @maxLength 3
+   * @minimum 0
    */
-  base: string;
-  /**
-   * Quote currency (ISO 4217)
-   *
-   * @minLength 3
-   * @maxLength 3
+  success_count: number;
+  errors?: /**
+   * Operation-level errors (not per-item)
    */
-  quote: string;
-  /**
-   * Provider code (e.g., ECB, FED)
-   */
-  provider_code: string;
-  /**
-   * Priority (1 = primary, 2+ = fallback)
-   *
-   * @minimum 1
-   */
-  priority: number;
-};
-type FXSyncResponse = {
-  /**
-   * Number of new rates inserted/updated
-   */
-  synced: number;
+  Array<string> | undefined;
   date_range: DateRangeModel;
-  /**
-   * Currencies synced
+  total_points_changed?: /**
+   * Sum of points_changed across all pairs
+   *
+   * @default 0
+   * @minimum 0
    */
-  currencies: Array<string>;
+  number | undefined;
 };
+type FXSyncPairResult = {
+  /**
+   * Normalized pair slug, e.g. 'EUR-USD'
+   */
+  pair: string;
+  status: FXSyncStatus;
+  provider_used?:
+    | /**
+     * Provider code that served data (None if failed/skipped)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  points_fetched?: /**
+   * Number of rate points fetched from provider
+   *
+   * @default 0
+   * @minimum 0
+   */
+  number | undefined;
+  points_changed?: /**
+   * Number of rate points actually inserted/updated in DB
+   *
+   * @default 0
+   * @minimum 0
+   */
+  number | undefined;
+  message?:
+    | /**
+     * Optional note (e.g. 'monthly data only', 'fallback used')
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  elapsed_ms?:
+    | /**
+     * Backend sync time for this pair in integer milliseconds. Measured from bulk start (Phase 1) to commit completion, via time.monotonic_ns() with integer division (// 1_000_000). None for SKIPPED/MANUAL pairs.
+     */
+    (| /**
+         * @minimum 0
+         */
+        (number | null)
+        | Array<
+            /**
+             * @minimum 0
+             */
+            number | null
+          >
+      )
+    | undefined;
+};
+type FXSyncStatus =
+  /**
+   * Status of a single pair sync operation.
+   *
+   * @enum ok, partial, failed, skipped
+   */
+  "ok" | "partial" | "failed" | "skipped";
 type GlobalSettingsListResponse = Partial<{
   /**
    * List of items
@@ -2628,6 +2732,8 @@ type ValidationError = {
   loc: Array<(string | number) | Array<string | number>>;
   msg: string;
   type: string;
+  input?: unknown | undefined;
+  ctx?: {} | undefined;
 };
 type SystemInfoResponse = {
   app_version: string;
@@ -3073,6 +3179,8 @@ const ValidationError: z.ZodType<ValidationError> = z
     loc: z.array(z.union([z.string(), z.number()])),
     msg: z.string(),
     type: z.string(),
+    input: z.unknown().optional(),
+    ctx: z.object({}).partial().passthrough().optional(),
   })
   .passthrough();
 const HTTPValidationError: z.ZodType<HTTPValidationError> = z
@@ -3182,7 +3290,7 @@ const SystemInfoResponse: z.ZodType<SystemInfoResponse> = z
   .passthrough();
 const Body_upload_file_api_v1_uploads_post = z
   .object({
-    file: z.instanceof(File),
+    file: z.string(),
     description: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
@@ -3232,6 +3340,12 @@ const UserSearchItem: z.ZodType<UserSearchItem> = z.object({
 const UserSearchResponse: z.ZodType<UserSearchResponse> = z
   .object({ items: z.array(UserSearchItem).describe("List of items") })
   .partial();
+const providers = z
+  .union([z.array(z.string()), z.null()])
+  .describe(
+    "Optional list of provider codes to filter. If empty, returns all providers."
+  )
+  .optional();
 const FXProviderInfo = z
   .object({
     code: z.string().describe("Provider code (e.g., ECB, FED, BOE, SNB)"),
@@ -3240,35 +3354,61 @@ const FXProviderInfo = z
     base_currencies: z
       .array(z.string())
       .describe("All supported base currencies"),
+    target_currencies: z
+      .array(z.string())
+      .describe(
+        "All target currencies this provider can convert to (from get_supported_currencies)"
+      )
+      .optional(),
     description: z.string().describe("Provider description"),
+    description_i18n: z
+      .record(z.string())
+      .describe("Multilingual provider descriptions {lang_code: description}")
+      .optional(),
+    warning_i18n: z
+      .record(z.string())
+      .describe(
+        "Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning."
+      )
+      .optional(),
     icon_url: z
       .union([z.string(), z.null()])
       .describe("Provider icon URL (hardcoded)")
       .optional(),
+    docs_url: z
+      .union([z.string(), z.null()])
+      .describe("URL to documentation page for this provider")
+      .optional(),
   })
   .passthrough();
-const FXPairSourceItem: z.ZodType<FXPairSourceItem> = z
+const FXRouteStep: z.ZodType<FXRouteStep> = z
   .object({
-    base: z.string().min(3).max(3).describe("Base currency (ISO 4217)"),
-    quote: z.string().min(3).max(3).describe("Quote currency (ISO 4217)"),
-    provider_code: z.string().describe("Provider code (e.g., ECB, FED)"),
-    priority: z
-      .number()
-      .int()
-      .gte(1)
-      .describe("Priority (1 = primary, 2+ = fallback)"),
+    from: z.string().min(3).max(3),
+    to: z.string().min(3).max(3),
+    provider: z.string().describe("Provider code for this step"),
   })
   .passthrough();
-const FXPairSourcesResponse: z.ZodType<FXPairSourcesResponse> = z
-  .object({ items: z.array(FXPairSourceItem).describe("List of items") })
+const FXConversionRouteItem: z.ZodType<FXConversionRouteItem> = z
+  .object({
+    base: z.string().min(3).max(3),
+    quote: z.string().min(3).max(3),
+    priority: z.number().int().gte(1),
+    chain_steps: z
+      .array(FXRouteStep)
+      .min(1)
+      .describe("Ordered list of conversion steps (edges of the graph)"),
+  })
+  .passthrough();
+const FXConversionRoutesResponse: z.ZodType<FXConversionRoutesResponse> = z
+  .object({ items: z.array(FXConversionRouteItem).describe("List of items") })
   .partial();
-const FXPairSourceResult: z.ZodType<FXPairSourceResult> = z
+const FXConversionRouteResult: z.ZodType<FXConversionRouteResult> = z
   .object({
     success: z.boolean().describe("Whether the operation succeeded"),
     base: z.string().describe("Base currency"),
     quote: z.string().describe("Quote currency"),
-    provider_code: z.string().describe("Provider code"),
     priority: z.number().int().describe("Priority level"),
+    chain_steps: z.array(FXRouteStep).describe("Chain steps configured"),
     action: z.string().describe("Action taken: 'created' or 'updated'"),
     message: z
       .union([z.string(), z.null()])
@@ -3276,26 +3416,27 @@ const FXPairSourceResult: z.ZodType<FXPairSourceResult> = z
       .optional(),
   })
   .passthrough();
-const FXCreatePairSourcesResponse: z.ZodType<FXCreatePairSourcesResponse> =
-  z.object({
-    results: z.array(FXPairSourceResult).describe("Per-item operation results"),
-    success_count: z
-      .number()
-      .int()
-      .gte(0)
-      .describe("Number of successful operations"),
-    errors: z
-      .array(z.string())
-      .describe("Operation-level errors (not per-item)")
-      .optional(),
-    error_count: z
-      .number()
-      .int()
-      .describe("Number of failed operations")
-      .optional()
-      .default(0),
-  });
-const FXDeletePairSourceItem = z
+const FXCreateRoutesResponse: z.ZodType<FXCreateRoutesResponse> = z.object({
+  results: z
+    .array(FXConversionRouteResult)
+    .describe("Per-item operation results"),
+  success_count: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of successful operations"),
+  errors: z
+    .array(z.string())
+    .describe("Operation-level errors (not per-item)")
+    .optional(),
+  error_count: z
+    .number()
+    .int()
+    .describe("Number of failed operations")
+    .optional()
+    .default(0),
+});
+const FXDeleteRouteItem = z
   .object({
     base: z.string().min(3).max(3).describe("Base currency (ISO 4217)"),
     quote: z.string().min(3).max(3).describe("Quote currency (ISO 4217)"),
@@ -3307,7 +3448,7 @@ const FXDeletePairSourceItem = z
       .optional(),
   })
   .passthrough();
-const FXDeletePairSourceResult: z.ZodType<FXDeletePairSourceResult> = z.object({
+const FXDeleteRouteResult: z.ZodType<FXDeleteRouteResult> = z.object({
   success: z.boolean().describe("Whether the deletion succeeded"),
   deleted_count: z.number().int().gte(0).describe("Number of items deleted"),
   message: z
@@ -3321,39 +3462,64 @@ const FXDeletePairSourceResult: z.ZodType<FXDeletePairSourceResult> = z.object({
     .describe("Priority level (if specified)")
     .optional(),
 });
-const FXDeletePairSourcesResponse: z.ZodType<FXDeletePairSourcesResponse> =
-  z.object({
-    results: z
-      .array(FXDeletePairSourceResult)
-      .describe("Per-item operation results"),
-    success_count: z
-      .number()
-      .int()
-      .gte(0)
-      .describe("Number of successful operations"),
-    errors: z
-      .array(z.string())
-      .describe("Operation-level errors (not per-item)")
-      .optional(),
-    total_deleted: z
-      .number()
-      .int()
-      .gte(0)
-      .describe("Total number of records deleted across all items"),
-  });
-const FXCurrenciesResponse = z
-  .object({ items: z.array(z.string()).describe("List of items") })
-  .partial();
-const provider = z
-  .union([z.string(), z.null()])
-  .describe(
-    "Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration."
-  )
-  .optional();
-const base_currency = z
-  .union([z.string(), z.null()])
-  .describe("Base currency (for multi-base providers)")
-  .optional();
+const FXDeleteRoutesResponse: z.ZodType<FXDeleteRoutesResponse> = z.object({
+  results: z.array(FXDeleteRouteResult).describe("Per-item operation results"),
+  success_count: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of successful operations"),
+  errors: z
+    .array(z.string())
+    .describe("Operation-level errors (not per-item)")
+    .optional(),
+  total_deleted: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Total number of records deleted across all items"),
+});
+const FXSyncPairRequest = z.object({
+  pairs: z
+    .array(z.string())
+    .min(1)
+    .describe("Pair slugs, e.g. ['EUR-USD', 'CHF-CNY']"),
+  start: z.string().describe("Start date (inclusive)"),
+  end: z.string().describe("End date (inclusive)"),
+});
+const FXSyncStatus = z.enum(["ok", "partial", "failed", "skipped"]);
+const FXSyncPairResult: z.ZodType<FXSyncPairResult> = z.object({
+  pair: z.string().describe("Normalized pair slug, e.g. 'EUR-USD'"),
+  status: FXSyncStatus.describe("Status of a single pair sync operation."),
+  provider_used: z
+    .union([z.string(), z.null()])
+    .describe("Provider code that served data (None if failed/skipped)")
+    .optional(),
+  points_fetched: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of rate points fetched from provider")
+    .optional()
+    .default(0),
+  points_changed: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of rate points actually inserted/updated in DB")
+    .optional()
+    .default(0),
+  message: z
+    .union([z.string(), z.null()])
+    .describe("Optional note (e.g. 'monthly data only', 'fallback used')")
+    .optional(),
+  elapsed_ms: z
+    .union([z.number(), z.null()])
+    .describe(
+      "Backend sync time for this pair in integer milliseconds. Measured from bulk start (Phase 1) to commit completion, via time.monotonic_ns() with integer division (// 1_000_000). None for SKIPPED/MANUAL pairs."
+    )
+    .optional(),
+});
 const DateRangeModel: z.ZodType<DateRangeModel> = z.object({
   start: z.string().describe("Start date (inclusive)"),
   end: z
@@ -3361,8 +3527,17 @@ const DateRangeModel: z.ZodType<DateRangeModel> = z.object({
     .describe("End date (inclusive, optional = single day)")
     .optional(),
 });
-const FXSyncResponse: z.ZodType<FXSyncResponse> = z.object({
-  synced: z.number().int().describe("Number of new rates inserted/updated"),
+const FXSyncBulkResponse: z.ZodType<FXSyncBulkResponse> = z.object({
+  results: z.array(FXSyncPairResult).describe("Per-item operation results"),
+  success_count: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of successful operations"),
+  errors: z
+    .array(z.string())
+    .describe("Operation-level errors (not per-item)")
+    .optional(),
   date_range:
     DateRangeModel.describe(`Reusable date range model for FA and FX operations.
 
@@ -3384,7 +3559,13 @@ Examples:
 
     # Range
     {"start": "2025-11-01", "end": "2025-11-30"}  # Entire November`),
-  currencies: z.array(z.string()).describe("Currencies synced"),
+  total_points_changed: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Sum of points_changed across all pairs")
+    .optional()
+    .default(0),
 });
 const FXUpsertItem = z
   .object({
@@ -3430,27 +3611,17 @@ const FXDeleteItem: z.ZodType<FXDeleteItem> = z
   .object({
     from: z.string().min(3).max(3).describe("Source currency (ISO 4217)"),
     to: z.string().min(3).max(3).describe("Target currency (ISO 4217)"),
-    date_range:
-      DateRangeModel.describe(`Reusable date range model for FA and FX operations.
-
-Used across multiple operations: price deletion, FX rate queries, etc.
-Represents an inclusive date range [start, end].
-
-Attributes:
-    start: Start date (inclusive, required)
-    end: End date (inclusive, optional - defaults to start for single day)
-
-Design Notes:
-    - If end is None, represents a single day (start only)
-    - If end is provided, represents a range [start, end] inclusive
-    - Validator ensures end >= start when provided
-
-Examples:
-    # Single day
-    {"start": "2025-11-05", "end": null}  # Just 2025-11-05
-
-    # Range
-    {"start": "2025-11-01", "end": "2025-11-30"}  # Entire November`),
+    date_range: z
+      .union([DateRangeModel, z.null()])
+      .describe(
+        "Date range to delete (start required, end optional for single day). Required unless delete_all=True."
+      )
+      .optional(),
+    delete_all: z
+      .boolean()
+      .describe("If True, delete ALL rates for this pair (ignores date_range)")
+      .optional()
+      .default(false),
   })
   .passthrough();
 const FXDeleteResult: z.ZodType<FXDeleteResult> = z.object({
@@ -4291,7 +4462,7 @@ const FABulkRemoveResponse: z.ZodType<FABulkRemoveResponse> = z.object({
     .describe("Operation-level errors (not per-item)")
     .optional(),
 });
-const providers = z
+const providers__2 = z
   .union([z.string(), z.null()])
   .describe("Comma-separated provider codes (default: all)")
   .optional();
@@ -5087,7 +5258,7 @@ const BRAccessBulkResponse: z.ZodType<BRAccessBulkResponse> = z.object({
     .optional(),
 });
 const Body_upload_file_api_v1_brokers_import_upload_post = z
-  .object({ file: z.instanceof(File).describe("Broker report file to upload") })
+  .object({ file: z.string().describe("Broker report file to upload") })
   .passthrough();
 const BRIMFileStatus = z.enum(["uploaded", "parsed", "failed"]);
 const BRIMFileInfo: z.ZodType<BRIMFileInfo> = z
@@ -5548,6 +5719,25 @@ const CurrencyListItem: z.ZodType<CurrencyListItem> = z.object({
   code: z.string().describe("ISO 4217 currency code (e.g., USD, EUR)"),
   name: z.string().describe("Currency name in requested language"),
   symbol: z.string().describe("Currency symbol (e.g., $, €)"),
+  flag_emoji: z
+    .string()
+    .describe(
+      "Flag emoji of primary country using this currency (e.g., 🇺🇸, 🇪🇺, 🪙 for crypto)"
+    )
+    .optional()
+    .default("🏳️"),
+  country_codes: z
+    .array(z.string())
+    .describe(
+      "ISO-2 country codes using this currency (e.g., ['US', 'AS', 'EC'] for USD)"
+    )
+    .optional(),
+  country_names: z
+    .array(z.string())
+    .describe(
+      "Localized country names using this currency (e.g., ['United States', 'American Samoa'] for USD in English)"
+    )
+    .optional(),
 });
 const CurrencyListResponse: z.ZodType<CurrencyListResponse> = z.object({
   items: z.array(CurrencyListItem).describe("List of items").optional(),
@@ -5596,19 +5786,21 @@ export const schemas = {
   exclude_broker_id,
   UserSearchItem,
   UserSearchResponse,
+  providers,
   FXProviderInfo,
-  FXPairSourceItem,
-  FXPairSourcesResponse,
-  FXPairSourceResult,
-  FXCreatePairSourcesResponse,
-  FXDeletePairSourceItem,
-  FXDeletePairSourceResult,
-  FXDeletePairSourcesResponse,
-  FXCurrenciesResponse,
-  provider,
-  base_currency,
+  FXRouteStep,
+  FXConversionRouteItem,
+  FXConversionRoutesResponse,
+  FXConversionRouteResult,
+  FXCreateRoutesResponse,
+  FXDeleteRouteItem,
+  FXDeleteRouteResult,
+  FXDeleteRoutesResponse,
+  FXSyncPairRequest,
+  FXSyncStatus,
+  FXSyncPairResult,
   DateRangeModel,
-  FXSyncResponse,
+  FXSyncBulkResponse,
   FXUpsertItem,
   FXUpsertResult,
   FXBulkUpsertResponse,
@@ -5670,7 +5862,7 @@ export const schemas = {
   FABulkAssignResponse,
   FAProviderRemovalResult,
   FABulkRemoveResponse,
-  providers,
+  providers__2,
   FAProviderSearchResultItem,
   FAProviderSearchResponse,
   FAProviderAssignmentReadItem,
@@ -6366,7 +6558,7 @@ GET /api/v1/assets/provider/search?q&#x3D;AAPL&amp;providers&#x3D;yfinance,juste
       {
         name: "providers",
         type: "Query",
-        schema: providers,
+        schema: providers__2,
       },
     ],
     response: FAProviderSearchResponse,
@@ -6542,7 +6734,8 @@ Returns user info and sets session cookie.`,
     method: "post",
     path: "/api/v1/auth/logout",
     alias: "logout_api_v1_auth_logout_post",
-    description: `Logout current user and destroy session.`,
+    description: `Logout current user and clear session cookie.
+JWT is stateless — logout simply clears the cookie client-side.`,
     requestFormat: "json",
     response: z
       .object({ message: z.string().default("Logged out successfully") })
@@ -7220,9 +7413,7 @@ Returns file metadata including compatible plugins.`,
         name: "body",
         type: "Body",
         schema: z
-          .object({
-            file: z.instanceof(File).describe("Broker report file to upload"),
-          })
+          .object({ file: z.string().describe("Broker report file to upload") })
           .passthrough(),
       },
       {
@@ -7232,38 +7423,6 @@ Returns file metadata including compatible plugins.`,
       },
     ],
     response: BRIMFileInfo,
-    errors: [
-      {
-        status: 422,
-        description: `Validation Error`,
-        schema: HTTPValidationError,
-      },
-    ],
-  },
-  {
-    method: "get",
-    path: "/api/v1/fx/currencies",
-    alias: "list_currencies_api_v1_fx_currencies_get",
-    description: `Get the list of available currencies from specified provider.
-
-Args:
-    provider: Provider code (default: ECB)
-
-Returns:
-    List of ISO 4217 currency codes`,
-    requestFormat: "json",
-    parameters: [
-      {
-        name: "provider",
-        type: "Query",
-        schema: z
-          .string()
-          .describe("Provider code (ECB, FED, BOE, SNB)")
-          .optional()
-          .default("ECB"),
-      },
-    ],
-    response: FXCurrenciesResponse,
     errors: [
       {
         status: 422,
@@ -7399,66 +7558,37 @@ Example:
     ],
   },
   {
-    method: "get",
+    method: "post",
     path: "/api/v1/fx/currencies/sync",
-    alias: "sync_rates_api_v1_fx_currencies_sync_get",
-    description: `Synchronize FX rates for the specified date range and currencies.
+    alias: "sync_rates_api_v1_fx_currencies_sync_post",
+    description: `Synchronize FX rates for specified currency pairs and date range.
 
-**Two modes of operation**:
+**Pair-based sync** — accepts explicit pair slugs (e.g. [&#x27;EUR-USD&#x27;, &#x27;CHF-CNY&#x27;]).
+Each pair is synced independently using configured routes from
+fx_conversion_routes table, supporting both direct and chain conversions.
 
-1. **Explicit Provider Mode** (provider parameter specified):
-   - Forces the specified provider for all currencies
-   - Ignores fx_currency_pair_sources configuration
-   - Backward compatible with previous API
+Pairs are normalized to alphabetical order (USD-EUR → EUR-USD).
 
-2. **Auto-Configuration Mode** (provider&#x3D;NULL):
-   - Consults fx_currency_pair_sources table
-   - Uses priority&#x3D;1 provider for each currency pair
-   - Fails with explicit error if configuration missing
+**Status per pair:**
+- &#x60;ok&#x60; — provider returned data, inserted/updated in DB
+- &#x60;partial&#x60; — provider returned empty or incomplete data
+- &#x60;failed&#x60; — all providers for this pair failed
+- &#x60;skipped&#x60; — pair is MANUAL-only, nothing to sync
 
 Args:
-    start: Start date (inclusive)
-    end: End date (inclusive)
-    currencies: Comma-separated currency codes (e.g., &quot;USD,GBP,CHF&quot;)
-    provider: (Optional) Force specific provider. If NULL, uses configuration.
-    base_currency: (Optional) Base currency for multi-base providers
-    session: Database session
+    body: FXSyncPairRequest with pairs list and date range
 
 Returns:
-    Sync statistics`,
+    FXSyncBulkResponse with per-pair results and summary`,
     requestFormat: "json",
     parameters: [
       {
-        name: "start",
-        type: "Query",
-        schema: z.string().describe("Start date (inclusive)"),
-      },
-      {
-        name: "end",
-        type: "Query",
-        schema: z.string().describe("End date (inclusive)"),
-      },
-      {
-        name: "currencies",
-        type: "Query",
-        schema: z
-          .string()
-          .describe("Comma-separated currency codes")
-          .optional()
-          .default("USD,GBP,CHF,JPY"),
-      },
-      {
-        name: "provider",
-        type: "Query",
-        schema: provider,
-      },
-      {
-        name: "base_currency",
-        type: "Query",
-        schema: base_currency,
+        name: "body",
+        type: "Body",
+        schema: FXSyncPairRequest,
       },
     ],
-    response: FXSyncResponse,
+    response: FXSyncBulkResponse,
     errors: [
       {
         status: 422,
@@ -7471,60 +7601,78 @@ Returns:
     method: "get",
     path: "/api/v1/fx/providers",
     alias: "list_providers_api_v1_fx_providers_get",
-    description: `Get the list of all available FX rate providers.
+    description: `Get the list of available FX rate providers.
 
 Returns information about each provider including:
 - Provider code and name
 - Default base currency
 - All supported base currencies (for multi-base providers)
-- Description
-- Icon URL
+- All target currencies (from get_supported_currencies)
+- Description and icon URL
 
-Returns:
-    List of provider information`,
+Note: This endpoint absorbed the former GET /fx/currencies endpoint.
+Target currencies are now returned per-provider instead of a separate call.
+
+Installed providers: MANUAL, BOE, FED, ECB, SNB
+
+Use the &#x60;providers&#x60; query parameter to filter by specific provider codes.`,
     requestFormat: "json",
+    parameters: [
+      {
+        name: "providers",
+        type: "Query",
+        schema: providers,
+      },
+    ],
     response: z.array(FXProviderInfo),
+    errors: [
+      {
+        status: 422,
+        description: `Validation Error`,
+        schema: HTTPValidationError,
+      },
+    ],
   },
   {
     method: "get",
-    path: "/api/v1/fx/providers/pair-sources",
-    alias: "list_pair_sources_api_v1_fx_providers_pair_sources_get",
-    description: `Get the list of configured currency pair sources.
+    path: "/api/v1/fx/providers/routes",
+    alias: "list_routes_api_v1_fx_providers_routes_get",
+    description: `Get the list of configured conversion routes.
 
-Returns all configured mappings of currency pairs to providers,
-ordered by base, quote, and priority.
+Returns all configured routes ordered by base, quote, and priority.
+Each route contains chain_steps describing how to compute the rate.
 
 Returns:
-    List of pair source configurations`,
+    List of conversion route configurations`,
     requestFormat: "json",
-    response: FXPairSourcesResponse,
+    response: FXConversionRoutesResponse,
   },
   {
     method: "post",
-    path: "/api/v1/fx/providers/pair-sources",
-    alias: "create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post",
-    description: `Create or update multiple currency pair sources in a single atomic transaction.
+    path: "/api/v1/fx/providers/routes",
+    alias: "create_routes_bulk_api_v1_fx_providers_routes_post",
+    description: `Create or update multiple conversion routes in a single atomic transaction.
 
 Validations:
 - base &lt; quote (alphabetical ordering)
-- Provider code must be registered in FXProviderRegistry
-- Priority must be &gt;&#x3D; 1
+- Provider codes must be registered in FXProviderRegistry
+- Chain steps must be valid (continuity, no repeated edges, matching endpoints)
 
 Args:
-    sources: List of pair sources to create/update
+    routes: List of routes to create/update
     session: Database session
 
 Returns:
-    Results for each pair source operation`,
+    Results for each route operation`,
     requestFormat: "json",
     parameters: [
       {
         name: "body",
         type: "Body",
-        schema: z.array(FXPairSourceItem),
+        schema: z.array(FXConversionRouteItem),
       },
     ],
-    response: FXCreatePairSourcesResponse,
+    response: FXCreateRoutesResponse,
     errors: [
       {
         status: 422,
@@ -7535,31 +7683,28 @@ Returns:
   },
   {
     method: "delete",
-    path: "/api/v1/fx/providers/pair-sources",
-    alias: "delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete",
-    description: `Delete multiple currency pair sources.
+    path: "/api/v1/fx/providers/routes",
+    alias: "delete_routes_bulk_api_v1_fx_providers_routes_delete",
+    description: `Delete multiple conversion routes.
 
 If priority is specified, deletes only that specific priority level.
 If priority is omitted, deletes ALL priorities for that pair.
 
-Warnings (not errors):
-- If a pair doesn&#x27;t exist, logs a warning but continues
-
 Args:
-    sources: List of FXDeletePairSourceItem to delete
+    routes: List of FXDeleteRouteItem to delete
     session: Database session
 
 Returns:
-    FXDeletePairSourcesResponse with results for each deletion operation`,
+    FXDeleteRoutesResponse with results for each deletion operation`,
     requestFormat: "json",
     parameters: [
       {
         name: "body",
         type: "Body",
-        schema: z.array(FXDeletePairSourceItem),
+        schema: z.array(FXDeleteRouteItem),
       },
     ],
-    response: FXDeletePairSourcesResponse,
+    response: FXDeleteRoutesResponse,
     errors: [
       {
         status: 422,
@@ -8056,8 +8201,9 @@ Returns:
     alias: "serve_file_api_v1_uploads_file__file_id__get",
     description: `Serve the actual file content.
 
-This endpoint does not require authentication to allow
-embedding in images/documents.
+Requires authentication via session cookie.
+Browser &lt;img&gt; tags automatically include cookies,
+so embedded images work seamlessly.
 
 Preview modes:
 - Text preview: ?offset&#x3D;0&amp;window&#x3D;1000 (returns first 1000 chars)
@@ -8119,6 +8265,8 @@ Raises:
     alias:
       "serve_plugin_static_api_v1_uploads_plugin__provider_type___path__get",
     description: `Serve static assets from plugin directories.
+
+Requires authentication via session cookie.
 
 Plugin developers can place static files (icons, images, etc.)
 in their plugin&#x27;s static/ folder.

@@ -1,7 +1,7 @@
 """
 Authentication API Endpoints
 
-Provides login, logout, and session management.
+Provides login, logout, and JWT-based session management.
 """
 
 from typing import Literal
@@ -30,9 +30,8 @@ from backend.app.services import settings_service
 from backend.app.services.auth_service import (
     verify_password,
     hash_password,
-    create_session,
-    get_user_id_from_session,
-    delete_session,
+    create_jwt_token,
+    decode_jwt_token,
     )
 from backend.app.services.global_settings_service import get_session_ttl_hours
 
@@ -60,12 +59,12 @@ async def get_current_user(
     Dependency to get current authenticated user.
     Raises 401 if not authenticated.
     """
-    session_id = get_session_cookie(request)
+    token = get_session_cookie(request)
 
-    if not session_id:
+    if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    user_id = get_user_id_from_session(session_id)
+    user_id = decode_jwt_token(token)
 
     if not user_id:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
@@ -129,14 +128,14 @@ async def login(
         logger.warning("Failed to read session TTL from DB, using default 24h", error=str(e))
         ttl_hours = 24
 
-    # Create session with dynamic TTL
-    session_id = create_session(user.id, ttl_hours)
+    # Create JWT token with dynamic TTL
+    token = create_jwt_token(user.id, ttl_hours)
 
     # Set session cookie (max_age in seconds)
     cookie_max_age = ttl_hours * 60 * 60
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
-        value=session_id,
+        value=token,
         max_age=cookie_max_age,
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
@@ -157,16 +156,12 @@ async def login(
 
 @router.post("/logout", response_model=AuthLogoutResponse)
 async def logout(
-    request: Request,
     response: Response,
     ):
     """
-    Logout current user and destroy session.
+    Logout current user and clear session cookie.
+    JWT is stateless — logout simply clears the cookie client-side.
     """
-    session_id = get_session_cookie(request)
-
-    if session_id:
-        delete_session(session_id)
 
     # Clear session cookie
     response.delete_cookie(

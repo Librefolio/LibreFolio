@@ -1,19 +1,19 @@
-# Utility Module Tests (`utils`)
+# 🔧 Utility Module Tests (`utils`)
 
 These tests verify the helper functions and utility modules used throughout the application.
 
-## Purpose
+## 🎯 Purpose
 
 To ensure that low-level utilities are robust and handle edge cases correctly.
 
-## Key Tests
+## 🔑 Key Tests
 
 - **Financial Math**: Tests interest calculations, day count conventions, and compounding formulas.
 - **Datetime Utils**: Tests timezone handling and date parsing.
 - **Decimal Utils**: Tests precision handling for financial amounts.
 
-## Running
+## 🚀 Running
 
 ```bash
-./dev.sh test utils
+./dev.py test utils
 ```

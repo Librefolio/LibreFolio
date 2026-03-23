@@ -1,14 +1,16 @@
 """
 Authentication Service
 
-Provides password hashing/verification and session management.
+Provides password hashing/verification and JWT token management.
 """
 
+import os
 import secrets
 from datetime import timedelta
 from typing import Optional
 
 import bcrypt
+import jwt
 import structlog
 
 from backend.app.utils.datetime_utils import utcnow
@@ -63,137 +65,67 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 # =============================================================================
-# Session Management (In-Memory)
+# JWT Token Management (Stateless)
+#
+# Tokens are signed with HMAC-SHA256 using a shared secret.
+#
+# The secret is read from the JWT_SECRET environment variable, which must
+# be set by the launcher (dev.py) BEFORE starting uvicorn. This is critical
+# for multi-worker: on macOS Python uses 'spawn' (not fork), so each worker
+# is a fresh process that re-imports all modules. Without a shared env var,
+# each worker would generate its own random secret → tokens from worker A
+# would be invalid on worker B.
+#
+# If JWT_SECRET is not set (e.g. single-worker dev mode), a random one is
+# generated. On server restart, a new secret = all tokens invalidated.
 # =============================================================================
 
-# Session storage: {session_id: {"user_id": int, "created_at": datetime, "expires_at": datetime}}
-_sessions: dict[str, dict] = {}
-
-# Session configuration
-DEFAULT_SESSION_EXPIRE_HOURS = 24  # Fallback if DB read fails
-SESSION_ID_LENGTH = 64  # 256 bits of entropy
+# Shared secret: from env var (multi-worker safe) or random (single-worker fallback)
+_JWT_SECRET: str = os.environ.get("JWT_SECRET") or secrets.token_urlsafe(64)
+_JWT_ALGORITHM: str = "HS256"
 
 
-def create_session(user_id: int, ttl_hours: int) -> str:
+def create_jwt_token(user_id: int, ttl_hours: int) -> str:
     """
-    Create a new session for a user.
+    Create a signed JWT token for a user.
 
     Args:
         user_id: ID of the authenticated user
-        ttl_hours: Session TTL in hours (read from global settings by caller)
+        ttl_hours: Token TTL in hours (read from global settings by caller)
 
     Returns:
-        Session ID (to be stored in cookie)
-    """
-    session_id = secrets.token_urlsafe(SESSION_ID_LENGTH)
-    now = utcnow()
-
-    _sessions[session_id] = {
-        "user_id": user_id,
-        "created_at": now,
-        "expires_at": now + timedelta(hours=ttl_hours),
-        }
-
-    logger.info("Session created", user_id=user_id, session_id=session_id[:8] + "...")
-    return session_id
-
-
-def get_session(session_id: str) -> Optional[dict]:
-    """
-    Get session data if valid and not expired.
-
-    Args:
-        session_id: Session ID from cookie
-
-    Returns:
-        Session data dict or None if invalid/expired
-    """
-    session = _sessions.get(session_id)
-
-    if not session:
-        return None
-
-    # Check expiration
-    if utcnow() > session["expires_at"]:
-        # Session expired - clean it up
-        delete_session(session_id)
-        return None
-
-    return session
-
-
-def get_user_id_from_session(session_id: str) -> Optional[int]:
-    """
-    Get user ID from a valid session.
-
-    Args:
-        session_id: Session ID from cookie
-
-    Returns:
-        User ID or None if session invalid
-    """
-    session = get_session(session_id)
-    return session["user_id"] if session else None
-
-
-def delete_session(session_id: str) -> bool:
-    """
-    Delete a session (logout).
-
-    Args:
-        session_id: Session ID to delete
-
-    Returns:
-        True if session was deleted, False if not found
-    """
-    if session_id in _sessions:
-        del _sessions[session_id]
-        logger.info("Session deleted", session_id=session_id[:8] + "...")
-        return True
-    return False
-
-
-def delete_user_sessions(user_id: int) -> int:
-    """
-    Delete all sessions for a user.
-
-    Args:
-        user_id: User ID whose sessions to delete
-
-    Returns:
-        Number of sessions deleted
-    """
-    to_delete = [sid for sid, data in _sessions.items() if data["user_id"] == user_id]
-
-    for sid in to_delete:
-        del _sessions[sid]
-
-    if to_delete:
-        logger.info("User sessions deleted", user_id=user_id, count=len(to_delete))
-
-    return len(to_delete)
-
-
-def cleanup_expired_sessions() -> int:
-    """
-    Remove all expired sessions.
-    Should be called periodically (e.g., via scheduler).
-
-    Returns:
-        Number of sessions cleaned up
+        Encoded JWT token string (to be stored in cookie)
     """
     now = utcnow()
-    to_delete = [sid for sid, data in _sessions.items() if now > data["expires_at"]]
+    payload = {
+        "sub": str(user_id),
+        "iat": now,
+        "exp": now + timedelta(hours=ttl_hours),
+    }
+    token = jwt.encode(payload, _JWT_SECRET, algorithm=_JWT_ALGORITHM)
+    logger.info("JWT token created", user_id=user_id)
+    return token
 
-    for sid in to_delete:
-        del _sessions[sid]
 
-    if to_delete:
-        logger.info("Expired sessions cleaned up", count=len(to_delete))
+def decode_jwt_token(token: str) -> Optional[int]:
+    """
+    Decode and validate a JWT token.
 
-    return len(to_delete)
+    Args:
+        token: Encoded JWT token from cookie
 
-
-def get_active_session_count() -> int:
-    """Get count of active sessions."""
-    return len(_sessions)
+    Returns:
+        User ID (int) or None if token is invalid/expired
+    """
+    try:
+        payload = jwt.decode(token, _JWT_SECRET, algorithms=[_JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+        return int(user_id)
+    except jwt.ExpiredSignatureError:
+        logger.debug("JWT token expired")
+        return None
+    except jwt.InvalidTokenError as e:
+        logger.debug("JWT token invalid", error=str(e))
+        return None

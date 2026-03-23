@@ -24,7 +24,7 @@ httpx = "*"
 beautifulsoup4 = "*"
 sqlglot = "*"
 pycountry = "*"
-mkdocs = "*"
+mkdocs = ">=1.6,<2"
 mkdocs-material = "*"
 websockets = "*"
 uvicorn = "*"
@@ -39,6 +39,8 @@ email-validator = "*"
 python-magic = "*"
 argcomplete = "*"
 pillow = "*"
+PyJWT = "*"
+mkdocs-static-i18n = "*"
 
 [dev-packages]
 pytest = "*"
@@ -51,6 +53,7 @@ coverage = {extras = ["toml"], version = "*"}
 gevent = "*"
 tabulate = "*"
 openpyxl = "*"
+"aphra " = {git = "https://github.com/DavidLMS/aphra.git"}
 
 [requires]
 python_version = "3.13"

@@ -30,11 +30,24 @@
     function getBasePath() {
         var pathname = window.location.pathname;
 
+        // Strip i18n language prefix added by mkdocs-static-i18n
+        // e.g. /LibreFolio/it/gallery/ → /LibreFolio/gallery/
+        var i18nLangs = ['it', 'fr', 'es'];
+        for (var li = 0; li < i18nLangs.length; li++) {
+            var langPrefix = '/' + i18nLangs[li] + '/';
+            var langIdx = pathname.indexOf(langPrefix);
+            if (langIdx >= 0) {
+                // Remove the /XX/ segment: everything before + everything after
+                pathname = pathname.substring(0, langIdx) + pathname.substring(langIdx + langPrefix.length - 1);
+                break;
+            }
+        }
+
         // Known top-level doc sections that appear right after the base path
         var knownSegments = [
-            '/gallery/', '/developer/', '/user-manual/', '/admin-manual/',
+            '/gallery/', '/developer/', '/user/', '/admin/',
             '/getting-started/', '/tutorials/', '/financial-theory/',
-            '/poc-ux/', '/faq/'
+            '/POC_UX/', '/credits-legal/', '/faq/'
         ];
 
         for (var i = 0; i < knownSegments.length; i++) {
@@ -66,6 +79,9 @@
     }
 
     function getCurrentLang() {
+        // Gallery screenshot language is controlled by the custom site-lang-selector
+        // (stored in localStorage), NOT by the i18n page URL prefix.
+        // This lets users view any language screenshots regardless of the page locale.
         return localStorage.getItem('gallery-lang') || 'en';
     }
 
@@ -116,7 +132,7 @@
     function init() {
         updateImages();
 
-        // React to language changes (from gallery-lang-selector.js)
+        // React to language changes (from site-lang-selector.js)
         window.addEventListener('gallery-lang-change', updateImages);
 
         // React to theme changes

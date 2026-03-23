@@ -25,10 +25,12 @@
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {ImageEditModal, FileEditModal} from '$lib/components/ui/media';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
-    import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import {BrokerSearchSelect} from '$lib/components/ui/select';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Search, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import type {BrimFile, Broker, BrokerInfo, UploadedFile} from '$lib/types';
@@ -141,6 +143,14 @@
     // URL filter state
     let initialFilters: Record<string, FilterValue> = {};
     let urlInitialized = false;  // Prevent URL update on initial load
+
+    // FilesTable refs for column visibility toggle
+    let staticTableRef: FilesTable;
+    let brimTableRef: FilesTable;
+    $: activeTableRef = activeTab === 'static' ? staticTableRef : brimTableRef;
+
+    // Selection state for SelectionBar
+    let selectedFileIds: string[] = [];
 
     // BRIM upload with broker selection
     let showBrimUploader = false;
@@ -462,6 +472,9 @@
         return pendingBrimFiles.length > 0;
     }
 
+    // Reactive derived: Svelte needs explicit var refs to track reactivity
+    $: canConfirmBrim = pendingBrimFiles.length > 0 && [...fileBrokerAssignments.values()].every(v => v !== null);
+
     async function confirmBrimUpload() {
         if (!canConfirmBrimUpload()) return;
 
@@ -575,6 +588,24 @@
         }
     }
 
+    async function handleBulkDeleteFiles() {
+        const isBrim = activeTab === 'brim';
+        try {
+            for (const fileId of selectedFileIds) {
+                if (isBrim) {
+                    await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}});
+                } else {
+                    await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
+                }
+            }
+            selectedFileIds = [];
+            activeTableRef?.getTableRef()?.clearSelection();
+            await loadFiles();
+        } catch (e) {
+            error = e instanceof Error ? e.message : 'Delete failed';
+        }
+    }
+
 
     function formatDate(dateStr: string): string {
         return new Date(dateStr).toLocaleDateString(undefined, {
@@ -648,27 +679,46 @@
     </header>
 
     <!-- Tabs -->
-    <div class="tabs" role="tablist">
-        <button
-                aria-selected={activeTab === 'static'}
-                class="tab"
-                class:active={activeTab === 'static'}
-                data-testid="files-tab-static"
-                on:click={() => setActiveTab('static')}
-                role="tab"
-        >
-            {$t('uploads.staticResources')}
-        </button>
-        <button
-                aria-selected={activeTab === 'brim'}
-                class="tab"
-                class:active={activeTab === 'brim'}
-                data-testid="files-tab-brim"
-                on:click={() => setActiveTab('brim')}
-                role="tab"
-        >
-            {$t('uploads.brokerReports')}
-        </button>
+    <div class="flex items-center gap-2">
+        <div class="tabs flex-1" role="tablist">
+            <button
+                    aria-selected={activeTab === 'static'}
+                    class="tab"
+                    class:active={activeTab === 'static'}
+                    data-testid="files-tab-static"
+                    on:click={() => setActiveTab('static')}
+                    role="tab"
+            >
+                {$t('uploads.staticResources')}
+            </button>
+            <button
+                    aria-selected={activeTab === 'brim'}
+                    class="tab"
+                    class:active={activeTab === 'brim'}
+                    data-testid="files-tab-brim"
+                    on:click={() => setActiveTab('brim')}
+                    role="tab"
+            >
+                {$t('uploads.brokerReports')}
+            </button>
+        </div>
+        {#if viewMode === 'list'}
+            <SelectionBar
+                selectedCount={selectedFileIds.length}
+                actions={[{
+                    id: 'delete',
+                    icon: Trash2,
+                    label: $t('common.delete') || 'Delete',
+                    variant: 'danger',
+                    onClick: handleBulkDeleteFiles,
+                }]}
+                onClearSelection={() => {
+                    selectedFileIds = [];
+                    activeTableRef?.getTableRef()?.clearSelection();
+                }}
+            />
+            <ColumnVisibilityToggle tableRef={activeTableRef?.getTableRef()} />
+        {/if}
     </div>
 
 
@@ -703,7 +753,7 @@
     {/if}
 
     <!-- Error message -->
-    <ErrorBanner message={error} on:dismiss={() => error = null} />
+    <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = null} />
 
     <!-- Content -->
     <div class="content">
@@ -728,11 +778,13 @@
             {:else}
                 <!-- List View with New DataTable -->
                 <FilesTable
+                        bind:this={staticTableRef}
                         files={staticFiles}
                         type="static"
                         onDelete={(id) => deleteFile(id, false)}
                         {initialFilters}
                         onFiltersChange={handleFiltersChange}
+                        onSelectionChange={(ids) => selectedFileIds = ids}
                 />
             {/if}
         {:else}
@@ -745,12 +797,14 @@
             {:else}
                 <!-- BRIM Table with New DataTable -->
                 <FilesTable
+                        bind:this={brimTableRef}
                         files={brimFiles}
                         type="brim"
                         onDelete={(id) => deleteFile(id, true)}
                         brokers={brokerMap}
                         {initialFilters}
                         onFiltersChange={handleFiltersChange}
+                        onSelectionChange={(ids) => selectedFileIds = ids}
                 />
             {/if}
         {/if}
@@ -815,7 +869,7 @@
                 <!-- File list with individual broker selection -->
                 <div class="files-list">
                     <p class="files-count">
-                        {pendingBrimFiles.length} {pendingBrimFiles.length === 1 ? $t('uploads.file') || 'file' : $t('uploads.files') || 'files'} {$t('uploads.selected') || 'selected'}
+                        {pendingBrimFiles.length} {pendingBrimFiles.length === 1 ? $t('uploads.file') || 'file' : $t('uploads.files') || 'files'} {$t('common.selected') || 'selected'}
                     </p>
 
                     {#each pendingBrimFiles as file, index}
@@ -855,9 +909,9 @@
                 </button>
                 <button
                         class="btn btn-primary"
-                        class:btn-disabled={!canConfirmBrimUpload()}
+                        class:btn-disabled={!canConfirmBrim}
                         on:click={confirmBrimUpload}
-                        disabled={!canConfirmBrimUpload()}
+                        disabled={!canConfirmBrim}
                 >
                     {$t('uploads.upload')} ({pendingBrimFiles.length})
                 </button>
@@ -921,6 +975,13 @@
         padding: 1.5rem;
         max-width: 1200px;
         margin: 0 auto;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .files-page .content {
+        min-width: 0;
+        overflow: hidden;
     }
 
     .page-header {

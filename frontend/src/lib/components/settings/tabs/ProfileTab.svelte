@@ -6,8 +6,9 @@
     import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
     import {debug} from '$lib/debug';
-    import {AlertCircle, Calendar, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User, Camera} from 'lucide-svelte';
+    import {Calendar, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User, Camera} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/components/settings/PasswordChangeModal.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
 
@@ -211,7 +212,7 @@
                     avatar_url: editedAvatarUrl
                 });
             }
-            successItems = [$_('settings.avatar')];
+            successItems = [$_('common.avatar')];
             setTimeout(() => successItems = [], 3000);
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveAvatarField failed', e);
@@ -316,25 +317,28 @@
 
     <!-- Status Messages -->
     {#if error}
-        <div class="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm"
-             data-testid="profile-error">
-            <AlertCircle size={18}/>
-            <span>{error}</span>
+        <div data-testid="profile-error">
+            <InfoBanner variant="error">
+                <span class="text-sm">{error}</span>
+            </InfoBanner>
         </div>
     {/if}
 
     {#if successItems.length > 0}
-        <div class="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm"
-             data-testid="profile-success">
-            <div class="flex items-center gap-2 mb-2">
-                <CheckCircle size={18}/>
-                <span class="font-medium">{$_('settings.savedSuccessfully')}:</span>
-            </div>
-            <ul class="list-disc list-inside ml-6 space-y-0.5">
-                {#each successItems as item}
-                    <li>{item}</li>
-                {/each}
-            </ul>
+        <div data-testid="profile-success">
+            <InfoBanner variant="success">
+                <div class="text-sm">
+                    <div class="flex items-center gap-2 mb-2">
+                        <CheckCircle size={18}/>
+                        <span class="font-medium">{$_('settings.savedSuccessfully')}:</span>
+                    </div>
+                    <ul class="list-disc list-inside ml-6 space-y-0.5">
+                        {#each successItems as item}
+                            <li>{item}</li>
+                        {/each}
+                    </ul>
+                </div>
+            </InfoBanner>
         </div>
     {/if}
 
@@ -366,7 +370,7 @@
         </div>
         <!-- Avatar Info -->
         <div class="flex-1">
-            <h4 class="font-medium text-gray-900 dark:text-white">{$_('settings.avatar')}</h4>
+            <h4 class="font-medium text-gray-900 dark:text-white">{$_('common.avatar')}</h4>
             <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.avatarHint')}</p>
             {#if !isLocked && editedAvatarUrl}
                 <button
@@ -618,7 +622,7 @@
                 on:keydown|stopPropagation
         >
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
-                {$_('settings.discardChanges')}
+                {$_('common.discardChanges')}
             </h2>
             <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
                 {$_('settings.discardChangesWarning')}
@@ -628,7 +632,7 @@
                         on:click={cancelDiscard}
                         class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
-                    {$_('settings.continueEditing')}
+                    {$_('common.continueEditing')}
                 </button>
                 <button
                         on:click={confirmDiscard}

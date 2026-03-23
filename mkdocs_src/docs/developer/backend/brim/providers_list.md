@@ -1,4 +1,4 @@
-# BRIM Providers List
+# 📦 BRIM Providers List
 
 This page lists all the broker import plugins (BRIM Providers) currently available in LibreFolio.
 
@@ -18,8 +18,8 @@ This page lists all the broker import plugins (BRIM Providers) currently availab
 
 ---
 
-### Test Levels
+### 🧪 Test Levels
 
-- **Alpha**: The plugin is in early development and may have significant bugs.
-- **Beta**: The plugin has been tested with sample files and is considered reasonably stable, but may have edge cases that are not handled.
-- **Stable**: The plugin is well-tested and considered reliable for its supported formats.
+- 🔬 **Alpha**: The plugin is in early development and may have significant bugs.
+- 🧪 **Beta**: The plugin has been tested with sample files and is considered reasonably stable, but may have edge cases that are not handled.
+- ✅ **Stable**: The plugin is well-tested and considered reliable for its supported formats.

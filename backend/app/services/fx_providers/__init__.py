@@ -12,6 +12,7 @@ Available providers:
 - FEDProvider: Federal Reserve (USD base) - code: "FED"
 - BOEProvider: Bank of England (GBP base) - code: "BOE"
 - SNBProvider: Swiss National Bank (CHF base) - code: "SNB"
+- ManualProvider: Sentinel for manual-only pairs (no sync) - code: "MANUAL"
 """
 
 # No imports needed - providers are auto-discovered by FXProviderRegistry

@@ -1,7 +1,7 @@
 {
   "name": "librefolio-frontend",
   "private": true,
-  "version": "0.4.x",
+  "version": "0.5.x",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -17,6 +17,8 @@
     "i18n:audit:md": "python scripts/i18n-audit.py --format md",
     "i18n:audit:both": "python scripts/i18n-audit.py --format both",
     "test:e2e": "playwright test",
+    "test:unit": "vitest run",
+    "test:unit:list": "vitest list",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "PWDEBUG=1 playwright test --headed",
@@ -28,6 +30,7 @@
     "@sveltejs/kit": "^2.48.5",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tailwindcss/postcss": "^4.1.17",
+    "@types/katex": "^0.16.8",
     "autoprefixer": "^10.4.22",
     "dotenv": "^17.2.3",
     "openapi-zod-client": "^1.18.0",
@@ -36,7 +39,8 @@
     "svelte-check": "^4.3.4",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
-    "vite": "^7.2.2"
+    "vite": "^7.2.2",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@tanstack/table-core": "^8.21.3",
@@ -48,6 +52,9 @@
     "cropperjs": "^2.1.0",
     "date-fns": "^4.1.0",
     "echarts": "^6.0.0",
+    "graphology": "^0.26.0",
+    "graphology-types": "^0.24.8",
+    "katex": "^0.16.38",
     "lucide-svelte": "^0.559.0",
     "svelte-i18n": "^4.0.1",
     "zod": "3.24.1"

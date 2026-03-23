@@ -3,16 +3,18 @@ FX (Foreign Exchange) API endpoints.
 Handles currency conversion and FX rate synchronization.
 """
 
+import json
 from datetime import date
 from datetime import timedelta
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, delete as sql_delete, and_, or_
+from sqlmodel import select, delete as sql_delete
 
-from backend.app.db.models import FxCurrencyPairSource
+from backend.app.api.v1.auth import get_current_user
+from backend.app.db.models import FxConversionRoute, FxRate, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
@@ -31,24 +33,26 @@ from backend.app.schemas.fx import (
     FXDeleteItem,
     FXDeleteResult,
     FXBulkDeleteResponse,
-    # Pair source models
-    FXPairSourceItem,
-    FXPairSourcesResponse,
-    FXPairSourceResult,
-    FXCreatePairSourcesResponse,
-    FXDeletePairSourceItem,
-    FXDeletePairSourceResult,
-    FXDeletePairSourcesResponse,
-    FXCurrenciesResponse,
+    # Route models (replaces pair-source models)
+    FXRouteStep,
+    FXConversionRouteItem,
+    FXConversionRoutesResponse,
+    FXConversionRouteResult,
+    FXCreateRoutesResponse,
+    FXDeleteRouteItem,
+    FXDeleteRouteResult,
+    FXDeleteRoutesResponse,
+    # Pairs list models
     )
-from backend.app.schemas.refresh import FXSyncResponse
+from backend.app.schemas.refresh import FXSyncPairRequest, FXSyncBulkResponse
 from backend.app.services.fx import (
     FXServiceError,
     convert_bulk,
-    ensure_rates_multi_source,
+    sync_pairs_bulk,
     upsert_rates_bulk,
     delete_rates_bulk,
     )
+from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
 from backend.app.services.provider_registry import FXProviderRegistry
 
 logger = get_logger(__name__)
@@ -62,27 +66,48 @@ router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 # ============================================================================
 
 
-@router_providers.get("", response_model=List[FXProviderInfo])
-async def list_providers():
-    """
-    Get the list of all available FX rate providers.
+def _build_providers_description() -> str:
+    """Build dynamic description listing all installed FX providers."""
+    try:
+        installed = FXProviderRegistry.list_providers()
+        codes = ", ".join(p["code"] for p in installed)
+    except Exception:
+        codes = "(auto-discovered at runtime)"
+    return (
+        "Get the list of available FX rate providers.\n\n"
+        "Returns information about each provider including:\n"
+        "- Provider code and name\n"
+        "- Default base currency\n"
+        "- All supported base currencies (for multi-base providers)\n"
+        "- All target currencies (from get_supported_currencies)\n"
+        "- Description and icon URL\n\n"
+        "Note: This endpoint absorbed the former GET /fx/currencies endpoint.\n"
+        "Target currencies are now returned per-provider instead of a separate call.\n\n"
+        f"Installed providers: {codes}\n\n"
+        "Use the `providers` query parameter to filter by specific provider codes."
+    )
 
-    Returns information about each provider including:
-    - Provider code and name
-    - Default base currency
-    - All supported base currencies (for multi-base providers)
-    - Description
-    - Icon URL
 
-    Returns:
-        List of provider information
-    """
+@router_providers.get("", response_model=List[FXProviderInfo], description=_build_providers_description())
+async def list_providers(
+    providers: Optional[List[str]] = Query(None, description="Optional list of provider codes to filter. If empty, returns all providers.", ),
+    _current_user: User = Depends(get_current_user),
+    ):
+    """Get the list of available FX rate providers, optionally filtered."""
     try:
         # Get all providers from registry
         providers_list = FXProviderRegistry.list_providers()
 
+        # Always filter out MANUAL provider — it's an internal sentinel
+        providers_list = [p for p in providers_list if p["code"] != "MANUAL"]
+
+        # Filter by requested provider codes (case-insensitive)
+        if providers:
+            requested = {p.upper() for p in providers}
+            providers_list = [p for p in providers_list if p["code"].upper() in requested]
+
         # Build provider info from instances
-        providers = []
+        result = []
         for provider_dict in providers_list:
             code = provider_dict["code"]
             instance = FXProviderRegistry.get_provider_instance(code)
@@ -90,277 +115,91 @@ async def list_providers():
             # Get base currencies (property always available in base class)
             base_currencies = instance.base_currencies
 
-            providers.append(
+            # Get target currencies via async call
+            try:
+                target_currencies = await instance.get_supported_currencies()
+            except Exception as e:
+                logger.warning(f"Failed to fetch target currencies for {code}: {e}")
+                target_currencies = []
+
+            result.append(
                 FXProviderInfo(
                     code=code,
                     name=provider_dict["name"],
                     base_currency=instance.base_currency,
                     base_currencies=base_currencies,
+                    target_currencies=sorted(target_currencies),
                     description=getattr(
                         instance, "description", f'{provider_dict["name"]} FX rate provider'
                         ),
-                    icon_url=instance.get_icon(),
+                    description_i18n=getattr(instance, "description_i18n", {}),
+                    warning_i18n=getattr(instance, "warning_i18n", {}),
+                    icon_url=instance.icon,
+                    docs_url=getattr(instance, "docs_url", None),
                     )
                 )
 
-        return providers  # Return list directly, no wrapper
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
 
 
-@router_currencies.get("", response_model=FXCurrenciesResponse)
-async def list_currencies(
-    provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)")
-    ):
-    """
-    Get the list of available currencies from specified provider.
-
-    Args:
-        provider: Provider code (default: ECB)
-
-    Returns:
-        List of ISO 4217 currency codes
-    """
-    try:
-        provider_instance = FXProviderRegistry.get_provider_instance(provider)
-        if not provider_instance:
-            available = [p["code"] for p in FXProviderRegistry.list_providers()]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown FX provider: {provider}. Available providers: {', '.join(available) if available else 'none registered'}",
-                )
-
-        currencies = await provider_instance.get_supported_currencies()
-        return FXCurrenciesResponse(items=currencies)
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except FXServiceError as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch currencies: {str(e)}")
-
-
-@router_currencies.get("/sync", response_model=FXSyncResponse)
+@router_currencies.post("/sync", response_model=FXSyncBulkResponse)
 async def sync_rates(
-    start: date = Query(..., description="Start date (inclusive)"),
-    end: date = Query(..., description="End date (inclusive)"),
-    currencies: str = Query("USD,GBP,CHF,JPY", description="Comma-separated currency codes"),
-    provider: str | None = Query(
-        None,
-        description="Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration.",
-        ),
-    base_currency: str | None = Query(None, description="Base currency (for multi-base providers)"),
+    body: FXSyncPairRequest,
     session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
-    Synchronize FX rates for the specified date range and currencies.
+    Synchronize FX rates for specified currency pairs and date range.
 
-    **Two modes of operation**:
+    **Pair-based sync** — accepts explicit pair slugs (e.g. ['EUR-USD', 'CHF-CNY']).
+    Each pair is synced independently using configured routes from
+    fx_conversion_routes table, supporting both direct and chain conversions.
 
-    1. **Explicit Provider Mode** (provider parameter specified):
-       - Forces the specified provider for all currencies
-       - Ignores fx_currency_pair_sources configuration
-       - Backward compatible with previous API
+    Pairs are normalized to alphabetical order (USD-EUR → EUR-USD).
 
-    2. **Auto-Configuration Mode** (provider=NULL):
-       - Consults fx_currency_pair_sources table
-       - Uses priority=1 provider for each currency pair
-       - Fails with explicit error if configuration missing
+    **Status per pair:**
+    - `ok` — provider returned data, inserted/updated in DB
+    - `partial` — provider returned empty or incomplete data
+    - `failed` — all providers for this pair failed
+    - `skipped` — pair is MANUAL-only, nothing to sync
 
     Args:
-        start: Start date (inclusive)
-        end: End date (inclusive)
-        currencies: Comma-separated currency codes (e.g., "USD,GBP,CHF")
-        provider: (Optional) Force specific provider. If NULL, uses configuration.
-        base_currency: (Optional) Base currency for multi-base providers
-        session: Database session
+        body: FXSyncPairRequest with pairs list and date range
 
     Returns:
-        Sync statistics
+        FXSyncBulkResponse with per-pair results and summary
     """
     # Validate date range
-    if start > end:
+    if body.start > body.end:
         raise HTTPException(
             status_code=400, detail="Start date must be before or equal to end date"
             )
-    if end > date.today():
+    if body.end > date.today():
         raise HTTPException(status_code=400, detail="End date cannot be in the future")
 
-    # Parse currencies
-    currency_list = [c.strip().upper() for c in currencies.split(",") if c.strip()]
-    if not currency_list:
-        raise HTTPException(status_code=400, detail="At least one currency must be specified")
-
     try:
-        if provider:
-            # EXPLICIT PROVIDER MODE: Force specified provider
-            result = await ensure_rates_multi_source(
-                session,
-                (start, end),
-                currency_list,
-                provider_code=provider,
-                base_currency=base_currency,
-                )
-            return FXSyncResponse(
-                synced=result["total_changed"],
-                date_range=DateRangeModel(start=start, end=end),
-                currencies=result["currencies_synced"],
-                )
-
-        else:
-            # AUTO-CONFIGURATION MODE: Use fx_currency_pair_sources with fallback logic
-            # Query ALL configured pair sources (all priorities), ordered by priority ASC
-            stmt = select(FxCurrencyPairSource).order_by(
-                FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority
-                )
-            result = await session.execute(stmt)
-            all_pair_sources = result.scalars().all()
-
-            if not all_pair_sources:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No currency pair sources configured. Please either: "
-                           "(1) specify 'provider' parameter explicitly, or "
-                           "(2) configure pair sources via POST /fx/pair-sources/bulk",
-                    )
-
-            # Build lookup: (base, quote) -> list of (provider_code, priority) ordered by priority
-            config_lookup = {}
-            for ps in all_pair_sources:
-                key = (ps.base, ps.quote)
-                if key not in config_lookup:
-                    config_lookup[key] = []
-                config_lookup[key].append((ps.provider_code, ps.priority))
-
-            # For each configured pair, assign to its primary provider
-            # This handles inverse pairs correctly (EUR/USD → ECB, USD/EUR → FED)
-            provider_pairs = {}  # provider_code -> set of (base, quote) tuples
-
-            for (base, quote), providers_list in config_lookup.items():
-                # Use primary provider (priority=1 or lowest)
-                primary_provider = providers_list[0][0]
-
-                if primary_provider not in provider_pairs:
-                    provider_pairs[primary_provider] = set()
-
-                provider_pairs[primary_provider].add((base, quote))
-
-            # Convert pairs to currencies for each provider
-            provider_currencies = {}
-            for provider_code, pairs in provider_pairs.items():
-                currencies = set()
-                for base, quote in pairs:
-                    currencies.add(base)
-                    currencies.add(quote)
-                provider_currencies[provider_code] = currencies
-
-            # Check if ALL requested currencies are covered
-            all_configured_currencies = set()
-            for currencies in provider_currencies.values():
-                all_configured_currencies.update(currencies)
-
-            missing_pairs = []
-            for curr in currency_list:
-                if curr not in all_configured_currencies:
-                    missing_pairs.append(curr)
-
-            if missing_pairs:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"No configuration found for currencies: {', '.join(missing_pairs)}. "
-                           f"Please configure pair sources via POST /fx/pair-sources/bulk "
-                           f"or use explicit 'provider' parameter.",
-                    )
-
-            # Execute sync with fallback logic
-            total_changed = 0
-            total_fetched = 0
-            all_currencies_synced = set()
-            final_errors = []
-
-            # Group by provider and try each one (with fallbacks if configured)
-            for provider_code, currencies_set in provider_currencies.items():
-                currencies_list = list(currencies_set)
-
-                # Try primary provider first
-                try:
-                    result = await ensure_rates_multi_source(
-                        session,
-                        (start, end),
-                        currencies_list,
-                        provider_code=provider_code,
-                        base_currency=None,
-                        )
-                    total_changed += result["total_changed"]
-                    total_fetched += result["total_fetched"]
-                    all_currencies_synced.update(result["currencies_synced"])
-
-                except FXServiceError as e:
-                    # Provider failed - try fallback providers if configured
-                    # hard to test in coverage because need fail of provider and fallback
-                    logger.warning(f"Provider {provider_code} (priority=1) failed: {str(e)}")
-
-                    # Find fallback providers for any pair in this currency set
-                    fallback_attempted = False
-                    for base, quote in [
-                        (c1, c2) for c1 in currencies_list for c2 in currencies_list if c1 < c2
-                        ]:
-                        pair_key = (base, quote)
-                        if pair_key in config_lookup and len(config_lookup[pair_key]) > 1:
-                            # Has fallback providers (priority > 1)
-                            for fallback_provider, fallback_priority in config_lookup[pair_key][1:]:
-                                logger.info(
-                                    f"Trying fallback provider {fallback_provider} (priority={fallback_priority}) for {base}/{quote}"
-                                    )
-                                fallback_attempted = True
-
-                                try:
-                                    result = await ensure_rates_multi_source(
-                                        session,
-                                        (start, end),
-                                        [base, quote],
-                                        provider_code=fallback_provider,
-                                        base_currency=None,
-                                        )
-                                    total_changed += result["total_changed"]
-                                    total_fetched += result["total_fetched"]
-                                    all_currencies_synced.update(result["currencies_synced"])
-                                    logger.info(
-                                        f"Fallback successful: {fallback_provider} provided {base}/{quote}"
-                                        )
-                                    break  # Success, no need to try more fallbacks for this pair
-
-                                except FXServiceError as fallback_e:
-                                    logger.warning(
-                                        f"Fallback provider {fallback_provider} (priority={fallback_priority}) also failed: {str(fallback_e)}"
-                                        )
-                                    continue  # Try next fallback
-
-                    if not fallback_attempted:
-                        # No fallbacks configured, record error
-                        final_errors.append(f"Provider {provider_code} failed: {str(e)}")
-
-            # If all providers failed and no currencies synced, raise error
-            if final_errors and not all_currencies_synced:
-                raise HTTPException(
-                    status_code=502, detail=f"All providers failed: {'; '.join(final_errors)}"
-                    )
-
-            return FXSyncResponse(
-                synced=total_changed,
-                date_range=DateRangeModel(start=start, end=end),
-                currencies=sorted(list(all_currencies_synced)),
-                )
+        result = await sync_pairs_bulk(
+            session,
+            pairs=body.pairs,
+            date_range=(body.start, body.end),
+            )
+        return result
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FXServiceError as e:
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
+    except Exception as e:
+        # Catch-all to prevent hanging — always return a response
+        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {str(e)}")
 
 
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)
 async def upsert_rates_endpoint(
-    rates: List[FXUpsertItem], session: AsyncSession = Depends(get_session_generator)
+    rates: List[FXUpsertItem], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Manually insert or update one or more FX rates (bulk operation).
@@ -433,7 +272,8 @@ async def upsert_rates_endpoint(
 
 @router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)
 async def delete_rates_endpoint(
-    deletions: List[FXDeleteItem], session: AsyncSession = Depends(get_session_generator)
+    deletions: List[FXDeleteItem], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Delete one or more FX rates (bulk operation).
@@ -473,9 +313,9 @@ async def delete_rates_endpoint(
     errors = []
     total_deleted = 0
 
-    # Prepare deletions for bulk service call
+    # Separate "delete_all" requests from date-range requests
     bulk_deletions = []
-    deletion_metadata = []  # Track original request info for response
+    deletion_metadata = []
 
     for idx, delete_req in enumerate(deletions):
         from_cur = delete_req.from_currency.upper()
@@ -487,22 +327,61 @@ async def delete_rates_endpoint(
             errors.append(error_msg)
             continue
 
-        # Extract dates from DateRangeModel
-        start_date = delete_req.date_range.start
-        end_date = delete_req.date_range.end
+        # Normalize to alphabetical order
+        if from_cur > to_cur:
+            base, quote = to_cur, from_cur
+        else:
+            base, quote = from_cur, to_cur
 
-        # Add to bulk deletions (backend will normalize)
-        bulk_deletions.append((from_cur, to_cur, start_date, end_date))
+        if delete_req.delete_all:
+            # Delete ALL rates for this pair (no date filter)
+            try:
+                # Count existing
+                count_stmt = select(FxRate).where(
+                    FxRate.base == base, FxRate.quote == quote
+                    )
+                count_result = await session.execute(count_stmt)
+                existing_count = len(count_result.scalars().all())
 
-        deletion_metadata.append(
-            {
-                "original_idx": idx,
-                "from_currency": from_cur,
-                "to_currency": to_cur,
-                "start_date": start_date,
-                "end_date": end_date,
-                }
-            )
+                # Delete all
+                del_stmt = sql_delete(FxRate).where(
+                    FxRate.base == base, FxRate.quote == quote
+                    )
+                del_result = await session.execute(del_stmt)
+                deleted_count = del_result.rowcount
+                await session.commit()
+
+                message = None if deleted_count > 0 else f"No rates found for {base}/{quote}"
+
+                results.append(
+                    FXDeleteResult(
+                        success=True,
+                        base=base,
+                        quote=quote,
+                        date_range=DateRangeModel(start=date.today()),  # placeholder
+                        existing_count=existing_count,
+                        deleted_count=deleted_count,
+                        message=message,
+                        )
+                    )
+                total_deleted += deleted_count
+            except Exception as e:
+                errors.append(f"Delete all for {base}/{quote} failed: {str(e)}")
+        else:
+            # Date-range deletion — collect for bulk service call
+            start_date = delete_req.date_range.start
+            end_date = delete_req.date_range.end
+
+            bulk_deletions.append((from_cur, to_cur, start_date, end_date))
+            deletion_metadata.append(
+                {
+                    "original_idx": idx,
+                    "from_currency": from_cur,
+                    "to_currency": to_cur,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    }
+                )
 
     # Execute bulk deletions if any valid
     if bulk_deletions:
@@ -550,9 +429,7 @@ async def delete_rates_endpoint(
 
     # If all deletions failed validation, return 400
     if errors and not results:
-        raise HTTPException(
-            status_code=400, detail=f"All deletions failed validation: {'; '.join(errors)}"
-            )
+        raise HTTPException(status_code=400, detail=f"All deletions failed validation: {'; '.join(errors)}")
 
     return FXBulkDeleteResponse(
         results=results,
@@ -562,9 +439,47 @@ async def delete_rates_endpoint(
         )
 
 
+import re
+
+_RATE_NOT_FOUND_RE = re.compile(r"^Conversion \d+: No FX rate found for (\S+) on or before (\S+)\. (.+)$")
+
+
+def _compress_convert_errors(errors: list[str]) -> list[str]:
+    """Compress repeated 'No FX rate found' errors into date-range summaries.
+
+    Example: 13 identical messages for CHF/JPY on different dates →
+    'No FX rate found for CHF/JPY (13 dates: 2026-03-01 … 2026-03-13). Please sync ...'
+    Non-matching errors are kept as-is.
+    """
+    pair_dates: dict[str, list[str]] = {}  # pair → [date_str, ...]
+    pair_suffix: dict[str, str] = {}  # pair → trailing message
+    other_errors: list[str] = []
+
+    for err in errors:
+        m = _RATE_NOT_FOUND_RE.match(err)
+        if m:
+            pair, date_str, suffix = m.group(1), m.group(2), m.group(3)
+            pair_dates.setdefault(pair, []).append(date_str)
+            pair_suffix[pair] = suffix
+        else:
+            other_errors.append(err)
+
+    compressed: list[str] = []
+    for pair, dates in pair_dates.items():
+        dates.sort()
+        n = len(dates)
+        if n == 1:
+            compressed.append(f"No FX rate found for {pair} on or before {dates[0]}. {pair_suffix[pair]}")
+        else:
+            compressed.append(f"No FX rate found for {pair} ({n} dates: {dates[0]} … {dates[-1]}). {pair_suffix[pair]}")
+
+    return compressed + other_errors
+
+
 @router_currencies.post("/convert", response_model=FXConvertResponse)
 async def convert_currency_bulk(
-    request: List[FXConversionRequest], session: AsyncSession = Depends(get_session_generator)
+    request: List[FXConversionRequest], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
     Convert one or more amounts between currencies (bulk operation).
@@ -608,9 +523,7 @@ async def convert_currency_bulk(
             current_date = conversion.date_range.start
             while current_date <= conversion.date_range.end:
                 bulk_conversions.append((conversion.from_amount, to_cur, current_date))
-                conversion_metadata.append(
-                    {"original_idx": conv_idx, "conversion": conversion, "date": current_date}
-                    )
+                conversion_metadata.append({"original_idx": conv_idx, "conversion": conversion, "date": current_date})
                 current_date += timedelta(days=1)
         else:
             # Single-day conversion
@@ -664,16 +577,17 @@ async def convert_currency_bulk(
                 )
             )
 
+    # Compress repeated errors (e.g. same pair missing for N dates → single message)
+    compressed_errors = _compress_convert_errors(bulk_errors) if bulk_errors else []
+
     # If all conversions failed, return 404
     if bulk_errors and not results:
-        raise HTTPException(
-            status_code=404, detail=f"All conversions failed: {'; '.join(bulk_errors)}"
-            )
+        raise HTTPException(status_code=404, detail=f"All conversions failed: {'; '.join(compressed_errors)}")
 
     return FXConvertResponse(
         results=results,
         success_count=len([r for r in results if r.to_amount is not None]),
-        errors=bulk_errors,
+        errors=compressed_errors,
         )
 
 
@@ -682,256 +596,246 @@ async def convert_currency_bulk(
 # ============================================================================
 
 
-@router_providers.get("/pair-sources", response_model=FXPairSourcesResponse)
-async def list_pair_sources(session: AsyncSession = Depends(get_session_generator)):
+@router_providers.get("/routes", response_model=FXConversionRoutesResponse)
+async def list_routes(session: AsyncSession = Depends(get_session_generator),
+                      _current_user: User = Depends(get_current_user)):
     """
-    Get the list of configured currency pair sources.
+    Get the list of configured conversion routes.
 
-    Returns all configured mappings of currency pairs to providers,
-    ordered by base, quote, and priority.
+    Returns all configured routes ordered by base, quote, and priority.
+    Each route contains chain_steps describing how to compute the rate.
 
     Returns:
-        List of pair source configurations
+        List of conversion route configurations
     """
     try:
-        stmt = select(FxCurrencyPairSource).order_by(
-            FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority
-            )
+        stmt = select(FxConversionRoute).order_by(FxConversionRoute.base, FxConversionRoute.quote, FxConversionRoute.priority)
         result = await session.execute(stmt)
-        sources = result.scalars().all()
+        routes = result.scalars().all()
 
-        sources_list = [
-            FXPairSourceItem(
-                base=s.base, quote=s.quote, provider_code=s.provider_code, priority=s.priority
+        routes_list = [
+            FXConversionRouteItem(
+                base=r.base, quote=r.quote, priority=r.priority,
+                chain_steps=[FXRouteStep(**s) for s in json.loads(r.chain_steps)],
                 )
-            for s in sources
+            for r in routes
             ]
 
-        return FXPairSourcesResponse(items=sources_list)
+        return FXConversionRoutesResponse(items=routes_list)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch pair sources: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch routes: {str(e)}")
 
 
-@router_providers.post("/pair-sources", response_model=FXCreatePairSourcesResponse, status_code=201)
-async def create_pair_sources_bulk(
-    sources: List[FXPairSourceItem], session: AsyncSession = Depends(get_session_generator)
+@router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
+async def create_routes_bulk(
+    routes: List[FXConversionRouteItem], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
-    Create or update multiple currency pair sources in a single atomic transaction.
+    Create or update multiple conversion routes in a single atomic transaction.
 
     Validations:
     - base < quote (alphabetical ordering)
-    - Provider code must be registered in FXProviderRegistry
-    - Priority must be >= 1
+    - Provider codes must be registered in FXProviderRegistry
+    - Chain steps must be valid (continuity, no repeated edges, matching endpoints)
 
     Args:
-        sources: List of pair sources to create/update
+        routes: List of routes to create/update
         session: Database session
 
     Returns:
-        Results for each pair source operation
+        Results for each route operation
     """
     results = []
     success_count = 0
     error_count = 0
 
     try:
-        # Validate all provider codes exist
         available_providers = {p["code"] for p in FXProviderRegistry.list_providers()}
 
-        # OPTIMIZATION: Batch query for inverse pairs conflict detection
-        # Build list of all inverse pairs to check in ONE query
-        inverse_checks = []
-        for source in sources:
-            # Inverse pair: swap base/quote
-            inverse_checks.append((source.quote.upper(), source.base.upper(), source.priority))
+        for route_item in routes:
+            # Validate all provider codes in chain_steps
+            invalid_providers = []
+            for step in route_item.chain_steps:
+                if step.provider.upper() not in available_providers:
+                    invalid_providers.append(step.provider)
 
-        # Single batch query: check if ANY inverse pairs exist with SAME priority
-        if inverse_checks:
-            inverse_conditions = []
-            for inv_base, inv_quote, inv_priority in inverse_checks:
-                inverse_conditions.append(
-                    and_(
-                        FxCurrencyPairSource.base == inv_base,
-                        FxCurrencyPairSource.quote == inv_quote,
-                        FxCurrencyPairSource.priority == inv_priority,
-                        )
-                    )
-
-            inverse_stmt = select(
-                FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority
-                ).where(or_(*inverse_conditions))
-
-            inverse_result = await session.execute(inverse_stmt)
-            existing_inverses = {
-                (row.base, row.quote, row.priority) for row in inverse_result.all()
-                }
-        else:
-            existing_inverses = set()
-
-        # Validate each source
-        for source in sources:
-            # Validate provider exists
-            if source.provider_code.upper() not in available_providers:
+            if invalid_providers:
                 results.append(
-                    FXPairSourceResult(
+                    FXConversionRouteResult(
                         success=False,
                         action="error",
-                        base=source.base,
-                        quote=source.quote,
-                        provider_code=source.provider_code,
-                        priority=source.priority,
-                        message=f"Unknown provider: {source.provider_code}",
+                        base=route_item.base,
+                        quote=route_item.quote,
+                        priority=route_item.priority,
+                        chain_steps=route_item.chain_steps,
+                        message=f"Unknown provider(s): {', '.join(invalid_providers)}",
                         )
                     )
                 error_count += 1
                 continue
 
-            # Check for inverse pair conflict (same priority)
-            inverse_key = (source.quote.upper(), source.base.upper(), source.priority)
-            if inverse_key in existing_inverses:
-                results.append(
-                    FXPairSourceResult(
-                        success=False,
-                        action="error",
-                        base=source.base,
-                        quote=source.quote,
-                        provider_code=source.provider_code,
-                        priority=source.priority,
-                        message=f"Conflict: Inverse pair {source.quote}/{source.base} with priority={source.priority} already exists. Use different priority.",
-                        )
-                    )
-                error_count += 1
-                continue
+            # Normalize base/quote to alphabetical order
+            base = min(route_item.base.upper(), route_item.quote.upper())
+            quote = max(route_item.base.upper(), route_item.quote.upper())
+
+            # Serialize chain_steps to JSON
+            chain_steps_json = json.dumps([
+                {"from": s.from_currency, "to": s.to_currency, "provider": s.provider}
+                for s in route_item.chain_steps
+                ])
 
             # Check if already exists
-            stmt = select(FxCurrencyPairSource).where(
-                FxCurrencyPairSource.base == source.base.upper(),
-                FxCurrencyPairSource.quote == source.quote.upper(),
-                FxCurrencyPairSource.priority == source.priority,
+            stmt = select(FxConversionRoute).where(
+                FxConversionRoute.base == base,
+                FxConversionRoute.quote == quote,
+                FxConversionRoute.priority == route_item.priority,
                 )
             result = await session.execute(stmt)
             existing = result.scalar_one_or_none()
 
             if existing:
-                # Update
-                existing.provider_code = source.provider_code.upper()
+                existing.chain_steps = chain_steps_json
                 session.add(existing)
                 action = "updated"
             else:
-                # Insert
-                new_source = FxCurrencyPairSource(
-                    base=source.base.upper(),
-                    quote=source.quote.upper(),
-                    provider_code=source.provider_code.upper(),
-                    priority=source.priority,
+                new_route = FxConversionRoute(
+                    base=base,
+                    quote=quote,
+                    priority=route_item.priority,
+                    chain_steps=chain_steps_json,
                     )
-                session.add(new_source)
+                session.add(new_route)
                 action = "created"
 
             results.append(
-                FXPairSourceResult(
+                FXConversionRouteResult(
                     success=True,
                     action=action,
-                    base=source.base.upper(),
-                    quote=source.quote.upper(),
-                    provider_code=source.provider_code.upper(),
-                    priority=source.priority,
+                    base=base,
+                    quote=quote,
+                    priority=route_item.priority,
+                    chain_steps=route_item.chain_steps,
                     message=None,
                     )
                 )
             success_count += 1
 
-        # Commit only if all validations passed
         if error_count > 0:
             await session.rollback()
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "message": f"Validation failed for {error_count} source(s). Transaction rolled back.",
+                    "message": f"Validation failed for {error_count} route(s). Transaction rolled back.",
                     "results": [r.model_dump() for r in results],
                     },
                 )
 
+        # Auto-remove MANUAL sentinel for pairs that now have real providers
+        pairs_with_real_providers = set()
+        for route_item in routes:
+            has_real = any(s.provider.upper() != "MANUAL" for s in route_item.chain_steps)
+            if has_real:
+                b = min(route_item.base.upper(), route_item.quote.upper())
+                q = max(route_item.base.upper(), route_item.quote.upper())
+                pairs_with_real_providers.add((b, q))
+
+        for base, quote in pairs_with_real_providers:
+            # Delete MANUAL routes for this pair
+            manual_del = sql_delete(FxConversionRoute).where(
+                FxConversionRoute.base == base,
+                FxConversionRoute.quote == quote,
+                # A route is MANUAL if chain_steps contains only MANUAL provider
+                # We check by looking for routes where chain_steps has MANUAL
+                )
+            # More targeted: find MANUAL routes
+            manual_stmt = select(FxConversionRoute).where(
+                FxConversionRoute.base == base,
+                FxConversionRoute.quote == quote,
+                )
+            manual_result = await session.execute(manual_stmt)
+            manual_routes = manual_result.scalars().all()
+            for mr in manual_routes:
+                steps = mr.parsed_steps
+                if all(s["provider"].upper() == "MANUAL" for s in steps):
+                    await session.delete(mr)
+                    logger.info(f"Auto-removed MANUAL sentinel for {base}/{quote} (real provider added)")
+
         await session.commit()
 
-        return FXCreatePairSourcesResponse(
-            results=results, success_count=success_count, error_count=error_count
-            )
+        return FXCreateRoutesResponse(results=results, success_count=success_count, error_count=error_count)
 
     except HTTPException:
         raise
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create pair sources: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create routes: {str(e)}")
 
 
-@router_providers.delete("/pair-sources", response_model=FXDeletePairSourcesResponse)
-async def delete_pair_sources_bulk(
-    sources: List[FXDeletePairSourceItem], session: AsyncSession = Depends(get_session_generator)
+@router_providers.delete("/routes", response_model=FXDeleteRoutesResponse)
+async def delete_routes_bulk(
+    routes: List[FXDeleteRouteItem], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
     ):
     """
-    Delete multiple currency pair sources.
+    Delete multiple conversion routes.
 
     If priority is specified, deletes only that specific priority level.
     If priority is omitted, deletes ALL priorities for that pair.
 
-    Warnings (not errors):
-    - If a pair doesn't exist, logs a warning but continues
-
     Args:
-        sources: List of FXDeletePairSourceItem to delete
+        routes: List of FXDeleteRouteItem to delete
         session: Database session
 
     Returns:
-        FXDeletePairSourcesResponse with results for each deletion operation
+        FXDeleteRoutesResponse with results for each deletion operation
     """
     results = []
     total_deleted = 0
 
     try:
-        for source_item in sources:
-            # Now we have a proper Pydantic model with validation
-            base = source_item.base  # Already uppercase from validator
-            quote = source_item.quote  # Already uppercase from validator
-            priority = source_item.priority
+        for route_item in routes:
+            base = route_item.base
+            quote = route_item.quote
+            priority = route_item.priority
 
-            # Build delete query
+            # Normalize to alphabetical
+            norm_base = min(base, quote)
+            norm_quote = max(base, quote)
+
             if priority is not None:
-                # Delete specific priority
-                stmt = sql_delete(FxCurrencyPairSource).where(
-                    FxCurrencyPairSource.base == base,
-                    FxCurrencyPairSource.quote == quote,
-                    FxCurrencyPairSource.priority == priority,
+                stmt = sql_delete(FxConversionRoute).where(
+                    FxConversionRoute.base == norm_base,
+                    FxConversionRoute.quote == norm_quote,
+                    FxConversionRoute.priority == priority,
                     )
             else:
-                # Delete all priorities for this pair
-                stmt = sql_delete(FxCurrencyPairSource).where(
-                    FxCurrencyPairSource.base == base, FxCurrencyPairSource.quote == quote
+                stmt = sql_delete(FxConversionRoute).where(
+                    FxConversionRoute.base == norm_base,
+                    FxConversionRoute.quote == norm_quote,
                     )
 
             result = await session.execute(stmt)
             deleted_count = result.rowcount
 
             if deleted_count == 0:
-                # Warning: pair not found
                 priority_str = f" with priority={priority}" if priority else ""
                 results.append(
-                    FXDeletePairSourceResult(
-                        success=True,  # Not an error, just a warning
-                        base=base,
-                        quote=quote,
+                    FXDeleteRouteResult(
+                        success=True,
+                        base=norm_base,
+                        quote=norm_quote,
                         priority=priority,
                         deleted_count=0,
-                        message=f"Pair {base}/{quote}{priority_str} not found (nothing to delete)",
+                        message=f"Route {norm_base}/{norm_quote}{priority_str} not found (nothing to delete)",
                         )
                     )
             else:
                 results.append(
-                    FXDeletePairSourceResult(
+                    FXDeleteRouteResult(
                         success=True,
-                        base=base,
-                        quote=quote,
+                        base=norm_base,
+                        quote=norm_quote,
                         priority=priority,
                         deleted_count=deleted_count,
                         message=None,
@@ -939,9 +843,45 @@ async def delete_pair_sources_bulk(
                     )
                 total_deleted += deleted_count
 
+        # Auto-reinstate MANUAL sentinel for pairs that have no routes left
+        affected_pairs = set()
+        for route_item in routes:
+            if route_item.priority is not None:
+                b = min(route_item.base, route_item.quote)
+                q = max(route_item.base, route_item.quote)
+                affected_pairs.add((b, q))
+
+        for base, quote in affected_pairs:
+            count_stmt = select(FxConversionRoute).where(
+                FxConversionRoute.base == base,
+                FxConversionRoute.quote == quote,
+                )
+            remaining = await session.execute(count_stmt)
+            remaining_routes = remaining.scalars().all()
+
+            # Check if any non-MANUAL route exists
+            has_real = False
+            for r in remaining_routes:
+                steps = r.parsed_steps
+                if not all(s["provider"].upper() == "MANUAL" for s in steps):
+                    has_real = True
+                    break
+
+            if not has_real and not any(
+                all(s["provider"].upper() == "MANUAL" for s in r.parsed_steps)
+                for r in remaining_routes
+                ):
+                manual_route = FxConversionRoute(
+                    base=base, quote=quote,
+                    priority=MANUAL_PRIORITY,
+                    chain_steps=json.dumps([{"from": base, "to": quote, "provider": "MANUAL"}]),
+                    )
+                session.add(manual_route)
+                logger.info(f"Auto-reinstated MANUAL sentinel for {base}/{quote} (no real providers left)")
+
         await session.commit()
 
-        return FXDeletePairSourcesResponse(
+        return FXDeleteRoutesResponse(
             results=results,
             success_count=len([r for r in results if r.success]),
             total_deleted=total_deleted,
@@ -949,7 +889,7 @@ async def delete_pair_sources_bulk(
 
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete pair sources: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete routes: {str(e)}")
 
 
 # ============================================================================
