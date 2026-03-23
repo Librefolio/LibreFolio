@@ -39,6 +39,7 @@ from backend.app.schemas.prices import (
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,
+    FAProviderParamField,
     FAProviderAssignmentItem,
     FABulkAssignResponse,
     FABulkRemoveResponse,
@@ -305,37 +306,52 @@ async def delete_assets_bulk(
 
 
 @provider_router.get("", response_model=List[FAProviderInfo])
-async def list_providers(_current_user: User = Depends(get_current_user)):
-    """List all available asset pricing providers."""
-    providers = []
+async def list_providers(
+    providers: Optional[str] = Query(
+        None, description="Comma-separated provider codes to filter (default: all)"
+    ),
+    _current_user: User = Depends(get_current_user),
+):
+    """List all available asset pricing providers.
+
+    Optionally filter by provider codes (comma-separated).
+    """
+    result = []
+    filter_codes = None
+    if providers:
+        filter_codes = [c.strip() for c in providers.split(",") if c.strip()]
 
     # list_providers() returns list of dicts with 'code' and 'name' keys
     for provider_info in AssetProviderRegistry.list_providers():
         code = provider_info["code"]  # Extract code from dict
-        provider_class = AssetProviderRegistry.get_provider(code)
-        if provider_class:
-            instance = AssetProviderRegistry.get_provider_instance(code)
-            if instance:
-                # Check if provider supports search
-                supports_search = True
-                try:
-                    # Try calling search with empty query to see if it raises NOT_SUPPORTED
-                    await instance.search("")
-                except Exception as e:
-                    if "NOT_SUPPORTED" in str(e) or "not supported" in str(e).lower():
-                        supports_search = False
 
-                providers.append(
-                    FAProviderInfo(
-                        code=instance.provider_code,
-                        name=instance.provider_name,
-                        description=f"{instance.provider_name} pricing provider",
-                        icon_url=instance.get_icon,
-                        supports_search=supports_search,
-                        )
+        # Apply filter if specified
+        if filter_codes and code not in filter_codes:
+            continue
+
+        instance = AssetProviderRegistry.get_provider_instance(code)
+        if instance:
+            # Check if provider supports search (fast local check, no HTTP call)
+            supports_search = instance.test_search_query is not None
+
+            # Build params_schema from provider property
+            schema_fields = [
+                FAProviderParamField(**field_def)
+                for field_def in instance.params_schema
+            ]
+
+            result.append(
+                FAProviderInfo(
+                    code=instance.provider_code,
+                    name=instance.provider_name,
+                    description=f"{instance.provider_name} pricing provider",
+                    icon_url=instance.get_icon,
+                    supports_search=supports_search,
+                    params_schema=schema_fields,
                     )
+                )
 
-    return providers
+    return result
 
 
 @provider_router.get("/search", response_model=FAProviderSearchResponse)

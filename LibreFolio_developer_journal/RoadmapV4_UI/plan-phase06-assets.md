@@ -35,7 +35,8 @@ Le API per gli asset sono già implementate e testate:
 | `POST /api/v1/assets/provider` | POST | ✅ | Bulk assign providers |
 | `DELETE /api/v1/assets/provider` | DELETE | ✅ | Bulk remove providers |
 | `GET /api/v1/assets/provider/assignments` | GET | ✅ | Read provider assignments |
-| `GET /api/v1/assets/prices/{id}` | GET | ✅ | Price history con backward-fill |
+| ~~`GET /api/v1/assets/prices/{id}`~~ | ~~GET~~ | ❌ | ~~Price history con backward-fill~~ — **ELIMINATO in Step 2b** (delegava ai provider ad ogni lettura, disallineato con FX) |
+| `POST /api/v1/assets/prices/query` | POST | ✅ | **NUOVO in Step 2b** — Bulk price query (DB-only, singola query SQL, backward-fill) — analogo a `POST /fx/currencies/convert` |
 | `POST /api/v1/assets/prices` | POST | ✅ | Bulk upsert prices |
 | `DELETE /api/v1/assets/prices` | DELETE | ✅ | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/refresh` | POST | ✅ | Bulk refresh prices da provider |
@@ -335,12 +336,15 @@ Ogni card (`AssetCard.svelte`) segue il pattern di `FxCard.svelte`:
 
 `DataTable` con sorting su tutte le colonne, paginazione, filtri colonna.
 
-**Colonne andamento (Δ Abs, Δ %)**:
-- Calcolate in modo smart: il frontend chiede al backend solo il **primo** e **ultimo** price
-  point nell'intervallo date selezionato (`GET /assets/prices/{id}?start_date=X&end_date=Y`),
-  poi calcola `Δ abs = last.close - first.close` e `Δ % = Δ abs / first.close * 100` lato client.
-- Colorazione: verde se positivo, rosso se negativo.
-- L'intervallo date è quello selezionato nei filtri globali (stessi preset del DateRangePicker: 1W/1M/3M ecc.).
+**Colonne andamento (Δ multi-periodo)**:
+- Il frontend scarica **sempre l'intera serie** nel range selezionato via `POST /assets/prices/query`
+  (singola query DB per tutti gli asset), poi calcola i Δ% multi-periodo lato client.
+- Se il range selezionato è sufficientemente ampio, appaiono colonne aggiuntive:
+  1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y — ciascuna calcolata come `(Pₙ - P_{n-periodo}) / P_{n-periodo} × 100`
+  dove Pₙ è l'ultimo giorno del range (non necessariamente oggi).
+- Colonne appaiono/scompaiono dinamicamente al cambiare del range nel DateRangePicker.
+- Colorazione: verde (▲) se positivo, rosso (▼) se negativo, — se dato non disponibile.
+- Dettagli implementativi nel piano di rientro Step 2b §7c.
 
 **Configurazioni chart preservate**: quando si passa da grid a table, le ChartSettings (signals,
 aesthetics) restano memorizzate nel `chartSettingsStore` — non vengono perse. Semplicemente non
@@ -443,6 +447,24 @@ L'integrazione con `urlFilters.ts` è opzionale e può essere aggiunta in futuro
   - Δ Abs / Δ % calcolati da primo e ultimo rate nell'intervallo date (come Assets)
 - [ ] Aggiornare `fx/+page.svelte` con toggle grid/table usando `ViewModeToggle`
 - [ ] View mode FX indipendente da Assets: `lf_{userId}_fxViewMode`, default `'grid'`
+
+---
+
+### Step 2b — Bugfix, Migrazione e UX Refinement (Piano di Rientro)
+
+> **⚠️ Piano di rientro obbligatorio** — da completare **prima** di procedere con Step 3.
+>
+> Dopo il completamento degli Step 1+2, la review ha evidenziato bug bloccanti, debiti tecnici
+> e miglioramenti UX. Il piano di rientro è documentato in:
+>
+> **[`plan-phase06BugfixMigration.prompt.md`](plan-phase06BugfixMigration.prompt.md)**
+>
+> Contiene 9 sotto-step: fix crash `.toFixed()`, migrazione BrokerIcon Svelte 5, migrazione
+> localStorage user-scoped, fix FX delete 422, fix FX detail manual-only UX, ViewModeToggle
+> nell'header, endpoint bulk asset prices + colonne Δ multi-periodo + migrazione test,
+> fix test upload 401, pulizia i18n.
+>
+> **Durata stimata**: ~0.5 giorni
 
 ---
 
@@ -643,12 +665,13 @@ Quando l'utente seleziona un provider dal dropdown, il form genera i campi secon
 
 - [ ] Creare `assets/[id]/+page.ts` (load: fetch asset metadata + provider assignment)
 - [ ] Creare `assets/[id]/+page.svelte` (header, filter bar, chart, data editor, provider, metadata)
-- [ ] Integrare `PriceChartFull` con `GET /assets/prices/{id}`
+- [ ] Integrare `PriceChartFull` con `POST /assets/prices/query` (DB-only, come FX convert)
 - [ ] Integrare `ChartAestheticsSection` + `ChartSignalsSection` + `MeasurePanel` (foldable)
 - [ ] Creare `AssetDataEditorSection.svelte` (wrapper DataEditor con colonne OHLCV)
 - [ ] Adattare `DataImportModal` per supporto 6 colonne (o creare variante asset-specific)
 - [ ] Provider assignment section con form dinamico da `params_schema`
-- [ ] Pulsanti Refresh Metadata / Refresh Prices
+- [ ] Pulsante Refresh Prices: attivo solo se provider assegnato, chiama `POST /assets/prices/refresh`. Se no provider → **disabilitato** (opacity-50, tooltip "Assegna un provider o inserisci prezzi manualmente")
+- [ ] Chart empty state: se no provider → messaggio "Nessun dato — inserire prezzi manualmente" + bottone apre editor (pattern identico a FX detail manual-only, Step 2b §5)
 - [ ] Sezione Metadata readonly (identifiers, classification_params)
 - [ ] Adaptive layout (wide/tablet/mobile) con ResizeObserver
 - [ ] Chart settings store per-asset (come `chartSettingsStore.svelte.ts` per FX)

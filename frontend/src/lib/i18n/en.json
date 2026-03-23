@@ -240,7 +240,25 @@
     "title": "Assets",
     "subtitle": "View and manage your investment assets",
     "addAsset": "Add Asset",
-    "placeholderMessage": "Asset management will be available soon."
+    "placeholderMessage": "Asset management will be available soon.",
+    "searchPlaceholder": "Search assets...",
+    "allTypes": "All types",
+    "allCurrencies": "All currencies",
+    "showActive": "Active only",
+    "showAll": "Show all",
+    "table": {
+      "name": "Name",
+      "currency": "Currency",
+      "lastPrice": "Last Price",
+      "provider": "Provider",
+      "active": "Active"
+    },
+    "empty": {
+      "noAssets": "No assets yet",
+      "noAssetsDesc": "Add your first asset to start tracking prices.",
+      "noMatchesTitle": "No Matches",
+      "noMatchesDesc": "No assets match the current filters."
+    }
   },
   "transactions": {
     "title": "Transactions",

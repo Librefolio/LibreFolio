@@ -12,3 +12,4 @@ export {default as OrderableList} from './OrderableList.svelte';
 export {default as ThemeToggle} from './ThemeToggle.svelte';
 export {default as ToastContainer} from './ToastContainer.svelte';
 export {default as Tooltip} from './Tooltip.svelte';
+export {default as ViewModeToggle} from './ViewModeToggle.svelte';
