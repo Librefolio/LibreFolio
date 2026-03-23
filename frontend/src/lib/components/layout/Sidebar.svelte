@@ -4,6 +4,7 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {auth} from '$lib/stores/auth';
+    import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {userSettings} from '$lib/stores/settings';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, X} from 'lucide-svelte';
     import {APP_VERSION} from '$lib/version';
@@ -17,13 +18,11 @@
     // Current path for active state - reactive
     $: currentPath = $page.url.pathname;
 
-    // Load collapsed state from localStorage on mount
+    // Load collapsed state from user-scoped localStorage on mount
     onMount(() => {
         if (browser) {
-            const saved = localStorage.getItem('sidebar-collapsed');
-            if (saved !== null) {
-                collapsed = saved === 'true';
-            }
+            const saved = getUserStorage('sidebar-collapsed', 'false');
+            collapsed = saved === 'true';
         }
     });
 
@@ -65,7 +64,7 @@
     function toggleCollapsed() {
         collapsed = !collapsed;
         if (browser) {
-            localStorage.setItem('sidebar-collapsed', String(collapsed));
+            setUserStorage('sidebar-collapsed', String(collapsed));
         }
     }
 

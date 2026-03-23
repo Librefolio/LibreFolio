@@ -4,7 +4,6 @@ Handles provider assignment, price management, and price refresh operations.
 """
 
 import json
-from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -16,7 +15,6 @@ from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Use
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
-    FAPricePoint,
     FAClassificationParams,
     FAAssetMetadataResponse,
     FABulkMetadataRefreshResponse,
@@ -36,6 +34,8 @@ from backend.app.schemas.prices import (
     FAUpsertResult,
     FABulkUpsertResponse,
     FABulkDeleteResponse,
+    FAPriceQueryItem,
+    FAPriceQueryResponse,
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,
@@ -553,33 +553,23 @@ async def delete_prices_bulk(
 # ============================================================================
 
 
-# Use single asset price history with backward-fill support because
-# create a POST and encapsulate params is too much overhead and complexity
-@price_router.get("/{asset_id}", response_model=List[FAPricePoint])
-async def get_prices(
-    asset_id: int,
-    start_date: date = Query(..., description="Start date (required)"),
-    end_date: Optional[date] = Query(
-        None, description="End date (optional, defaults to start_date)"
-        ),
+@price_router.post("/query", response_model=FAPriceQueryResponse)
+async def query_prices_bulk(
+    requests: List[FAPriceQueryItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
     ):
-    """Get prices for asset with backward-fill support.
+    """Bulk query prices for multiple assets.
 
-    Returns a list of FAPricePoint with OHLC data, volume, and backward-fill info.
+    Reads from DB only (no provider delegation). Uses a single SQL query
+    for all assets, then applies backward-fill per asset.
+    Analogous to POST /fx/currencies/convert for FX rates.
     """
     try:
-        if end_date is None:
-            end_date = start_date
-
-        prices = await AssetSourceManager.get_prices(asset_id, start_date, end_date, session)
-
-        return prices  # Already List[FAPricePoint] from service
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        results = await AssetSourceManager.get_prices_bulk(requests, session)
+        return FAPriceQueryResponse(items=results)
     except Exception as e:
-        logger.error(f"Error getting prices for asset {asset_id}: {e}")
+        logger.error(f"Error querying prices bulk: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -6,6 +6,8 @@
      * 2. portal_url favicon
      * 3. default_import_plugin icon (loads from API to get real icon_url)
      * 4. Briefcase fallback
+     *
+     * Svelte 5 runes.
      */
     import {onMount} from 'svelte';
     import {Briefcase} from 'lucide-svelte';
@@ -13,11 +15,21 @@
     import {debug} from '$lib/debug';
 
     // Props
-    export let iconUrl: string | null | undefined = null;
-    export let portalUrl: string | null | undefined = null;
-    export let pluginCode: string | null | undefined = null;
-    export let altText: string = 'Broker icon';
-    export let size: 'sm' | 'md' | 'lg' = 'md';
+    interface Props {
+        iconUrl?: string | null;
+        portalUrl?: string | null;
+        pluginCode?: string | null;
+        altText?: string;
+        size?: 'sm' | 'md' | 'lg';
+    }
+
+    let {
+        iconUrl = null,
+        portalUrl = null,
+        pluginCode = null,
+        altText = 'Broker icon',
+        size = 'md',
+    }: Props = $props();
 
     // Size mappings
     const sizes = {
@@ -27,16 +39,13 @@
     };
 
     // State
-    let currentAttempt: 'icon' | 'portal' | 'plugin' | 'fallback' = 'icon';
-    let imgElement: HTMLImageElement | null = null;
-    let imageLoaded = false;
-    let currentUrl: string | null = null;
-    let pluginIconUrl: string | null = null;
-    let pluginsLoaded = false;
-    let imageKey = 0;
-
-    // Track previous props key
-    let prevMainPropsKey = '';
+    let currentAttempt = $state<'icon' | 'portal' | 'plugin' | 'fallback'>('icon');
+    let imgElement = $state<HTMLImageElement | null>(null);
+    let imageLoaded = $state(false);
+    let currentUrl = $state<string | null>(null);
+    let pluginIconUrl = $state<string | null>(null);
+    let pluginsLoaded = $state(false);
+    let imageKey = $state(0);
 
     // ============================================================
     // FUNCTIONS (defined BEFORE reactive statements that use them)
@@ -137,23 +146,28 @@
     });
 
     // Key for props
-    $: mainPropsKey = `${iconUrl ?? ''}|${portalUrl ?? ''}|${pluginCode ?? ''}`;
+    let mainPropsKey = $derived(`${iconUrl ?? ''}|${portalUrl ?? ''}|${pluginCode ?? ''}`);
 
     // Reset when props change
-    $: if (mainPropsKey !== prevMainPropsKey) {
-        prevMainPropsKey = mainPropsKey;
-        resetAttempt();
-    }
+    let prevMainPropsKey = '';
+    $effect(() => {
+        if (mainPropsKey !== prevMainPropsKey) {
+            prevMainPropsKey = mainPropsKey;
+            resetAttempt();
+        }
+    });
 
     // When plugins load while on plugin attempt
-    $: if (pluginsLoaded && pluginCode && !imageLoaded && currentAttempt === 'plugin') {
-        currentUrl = computeUrl('plugin');
-        if (currentUrl) {
-            imageKey++;
-        } else {
-            moveToNextFallback();
+    $effect(() => {
+        if (pluginsLoaded && pluginCode && !imageLoaded && currentAttempt === 'plugin') {
+            currentUrl = computeUrl('plugin');
+            if (currentUrl) {
+                imageKey++;
+            } else {
+                moveToNextFallback();
+            }
         }
-    }
+    });
 </script>
 
 <div class="broker-icon {sizes[size].container} rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
@@ -163,10 +177,9 @@
                     bind:this={imgElement}
                     src={currentUrl}
                     alt={altText}
-                    class="w-full h-full object-cover"
-                    class:opacity-0={!imageLoaded}
-                    on:load={handleLoad}
-                    on:error={handleError}
+                    class="w-full h-full object-cover {imageLoaded ? '' : 'opacity-0'}"
+                    onload={handleLoad}
+                    onerror={handleError}
             />
         {/key}
     {/if}

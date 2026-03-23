@@ -33,11 +33,38 @@ from backend.app.schemas.fx import (
     )
 from backend.app.schemas.refresh import FXSyncBulkResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success
+from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+
+
+async def create_user_and_login(client: httpx.AsyncClient) -> None:
+    """Create a test user, login, and set session cookie on client."""
+    username = f"fx_test_{unique_id('FX')}"
+    email = f"{username}@test.com"
+    password = "TestPass123!"
+
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    if resp.status_code != 201:
+        raise Exception(f"Failed to create user: {resp.text}")
+
+    login_resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"Failed to login: {login_resp.text}")
+
+    session = login_resp.cookies.get("session")
+    if session:
+        client.cookies.set("session", session)
 
 
 def _route_json(base: str, quote: str, provider: str, priority: int = 1) -> dict:
@@ -82,6 +109,7 @@ async def test_providers_include_target_currencies(test_server):
     print_section("Test 1: GET /fx/providers - target_currencies")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
 
         assert (
@@ -123,6 +151,7 @@ async def test_old_currencies_endpoint_removed(test_server):
     print_section("Test 1b: GET /fx/currencies - Removed endpoint")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         response = await client.get(f"{API_BASE}/fx/currencies", timeout=TIMEOUT)
 
         assert response.status_code in (404, 405), \
@@ -137,6 +166,7 @@ async def test_get_providers(test_server):
     print_section("Test 2: GET /fx/providers")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
 
         assert (
@@ -204,6 +234,7 @@ async def test_pair_sources_crud(test_server):
     print_section("Test 3: POST /fx/providers/routes - CRUD")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # 3a. List all pair sources (empty or existing)
         print_info("3a. List pair sources")
         response = await client.get(f"{API_BASE}/fx/providers/routes", timeout=TIMEOUT)
@@ -271,6 +302,7 @@ async def test_sync_rates(test_server):
     print_section("Test 4: POST /fx/currencies/sync")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         today = date.today()
         yesterday = today - timedelta(days=1)
 
@@ -317,6 +349,7 @@ async def test_sync_rates_auto_config(test_server):
     print_section("Test 4b: POST /fx/currencies/sync - Auto-config")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         today = date.today()
         yesterday = today - timedelta(days=1)
 
@@ -390,6 +423,7 @@ async def test_convert_currency(test_server):
     print_section("Test 5: POST /fx/currencies/convert")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         today = date.today()
 
         # First, ensure we have rates (sync via POST)
@@ -446,6 +480,7 @@ async def test_convert_missing_rate(test_server):
     print_section("Test 6: POST /fx/currencies/convert - Missing Rate")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Use a fake currency pair that definitely doesn't exist
         conversions = [
             {
@@ -481,6 +516,7 @@ async def test_manual_rate_upsert(test_server):
     print_section("Test 7: POST /fx/currencies/rate - Manual Upsert")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         today = date.today()
 
         # Upsert a test rate (use List directly)
@@ -525,6 +561,7 @@ async def test_bulk_conversions(test_server):
     print_section("Test 8: POST /fx/currencies/convert - Bulk")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         today = date.today()
 
         # Setup: Ensure we have some rates
@@ -575,6 +612,7 @@ async def test_bulk_rate_upserts(test_server):
     print_section("Test 9: POST /fx/currencies/rate - Bulk Upserts")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         today = date.today()
 
         # Bulk upsert
@@ -613,6 +651,7 @@ async def test_delete_rates(test_server):
     print_section("Test 10: DELETE /fx/currencies/rate")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         today = date.today()
         yesterday = today - timedelta(days=1)
 
@@ -671,6 +710,7 @@ async def test_invalid_requests(test_server):
     print_section("Test 11: Invalid Request Handling")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # 11a. Invalid currency code (too short)
         print_info("11a. Invalid currency code")
         request = {
@@ -779,6 +819,7 @@ async def test_manual_provider_hidden_from_list(test_server):
     print_section("Test 12: MANUAL provider hidden from GET /fx/providers")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
         assert response.status_code == 200
 
@@ -795,6 +836,7 @@ async def test_manual_pair_creation(test_server):
     print_section("Test 13: Create MANUAL-only pair")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create a MANUAL-only pair
         create_data = [
             {"base": "BRL", "quote": "MXN", "priority": 999, "chain_steps": [{"from": "BRL", "to": "MXN", "provider": "MANUAL"}]}
@@ -822,6 +864,7 @@ async def test_manual_auto_removed_on_real_provider(test_server):
     print_section("Test 14: MANUAL auto-removed when real provider added")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # First create a MANUAL-only pair
         create_manual = [
             {"base": "DKK", "quote": "PLN", "priority": 999, "chain_steps": [{"from": "DKK", "to": "PLN", "provider": "MANUAL"}]}
@@ -866,6 +909,7 @@ async def test_manual_auto_reinstated_on_last_provider_removed(test_server):
     print_section("Test 15: MANUAL auto-reinstated when last provider removed")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create a pair with a real provider
         create_real = [
             {"base": "HUF", "quote": "RON", "priority": 1, "chain_steps": [{"from": "HUF", "to": "RON", "provider": "ECB"}]}
@@ -910,6 +954,7 @@ async def test_manual_sync_returns_empty(test_server):
     print_section("Test 16: Sync with MANUAL provider — silent skip")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create a MANUAL-only pair
         create_data = [
             {"base": "ISK", "quote": "TRY", "priority": 999, "chain_steps": [{"from": "ISK", "to": "TRY", "provider": "MANUAL"}]}
@@ -947,6 +992,7 @@ async def test_manual_full_pair_delete_no_reinstate(test_server):
     print_section("Test 17: Full pair delete does not reinstate MANUAL")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create a MANUAL-only pair
         create_data = [
             {"base": "ARS", "quote": "CLP", "priority": 999, "chain_steps": [{"from": "ARS", "to": "CLP", "provider": "MANUAL"}]}
@@ -981,6 +1027,7 @@ async def test_manual_cleanup_from_previous_tests(test_server):
     print_section("Test 18: Cleanup MANUAL test pairs")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Cleanup BRL/MXN from test 13
         await client.request(
             "DELETE", f"{API_BASE}/fx/providers/routes",

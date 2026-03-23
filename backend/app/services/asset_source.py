@@ -1219,42 +1219,66 @@ class AssetSourceManager:
         return results
 
     @staticmethod
-    async def get_prices(
-        asset_id: int,
-        start_date: date_type,
-        end_date: date_type,
+    async def get_prices_bulk(
+        requests: list,
         session: AsyncSession,
-        ) -> list[FAPricePoint]:
-        """Get prices for asset with backward-fill and provider delegation.
+    ) -> list:
+        """Bulk query prices for multiple assets with a single DB read.
 
-        Logic:
-        1. Validate date range
-        2. Fetch asset
-        3. If provider assignment exists -> try provider fetch
-        4. Fallback to DB with backward-fill
+        Fetches all prices in one query and partitions the result by asset_id.
+        Each asset then gets its own backward-filled series.
 
-        Returns List[FAPricePoint] (uniform output).
-        Synthetic yield (scheduled investment) handled entirely inside the dedicated provider plugin.
+        This method reads ONLY from DB — it does NOT delegate to providers.
+        Provider fetch is a separate operation (POST /assets/prices/refresh).
         """
-        if start_date > end_date:
-            raise ValueError(f"Start date {start_date} is after end date {end_date}")
+        from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 
-        asset = await session.get(Asset, asset_id)
-        if not asset:
-            raise ValueError(f"Asset {asset_id} not found")
+        if not requests:
+            return []
 
-        assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
-        if assignment:
-            provider_prices = await AssetSourceManager._fetch_provider_history(
-                assignment, asset_id, start_date, end_date
+        # Build per-asset date ranges
+        asset_ranges: dict[int, tuple[date_type, date_type]] = {}
+        for req in requests:
+            end = req.date_range.end or req.date_range.start
+            asset_ranges[req.asset_id] = (req.date_range.start, end)
+
+        asset_ids = list(asset_ranges.keys())
+
+        # Compute global min/max date for single query
+        global_start = min(r[0] for r in asset_ranges.values())
+        global_end = max(r[1] for r in asset_ranges.values())
+
+        # Single DB query for ALL assets in the date range
+        stmt = (
+            select(PriceHistory)
+            .where(
+                and_(
+                    PriceHistory.asset_id.in_(asset_ids),
+                    PriceHistory.date >= global_start,
+                    PriceHistory.date <= global_end,
                 )
-            if provider_prices is not None:
-                return provider_prices
-        # Fallback DB if no provider is assigned at current asset
-        price_map = await AssetSourceManager._fetch_db_price_map(
-            session, asset_id, start_date, end_date
             )
-        return AssetSourceManager._build_backward_filled_series(price_map, start_date, end_date)
+            .order_by(PriceHistory.asset_id, PriceHistory.date)
+        )
+        db_result = await session.execute(stmt)
+        all_prices = db_result.scalars().all()
+
+        # Partition by asset_id
+        price_maps: dict[int, dict[date_type, PriceHistory]] = {aid: {} for aid in asset_ids}
+        for p in all_prices:
+            if p.asset_id in price_maps:
+                price_maps[p.asset_id][p.date] = p
+
+        # Build backward-filled series per asset (preserving request order)
+        results = []
+        for req in requests:
+            aid = req.asset_id
+            start, end = asset_ranges[aid]
+            price_map = price_maps.get(aid, {})
+            series = AssetSourceManager._build_backward_filled_series(price_map, start, end)
+            results.append(FAPriceQueryResult(asset_id=aid, prices=series))
+
+        return results
 
     # ========================================================================
     # PRICE REFRESH (PROVIDER) METHODS - NEW

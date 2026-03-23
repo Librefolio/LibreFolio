@@ -37,6 +37,32 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 
 
+
+
+async def create_user_and_login(client: httpx.AsyncClient) -> None:
+    """Create a test user, login, and set session cookie on client."""
+    import uuid as _uuid
+    username = f"test_{int(__import__('time').time()*1000)}_{_uuid.uuid4().hex[:4]}"
+    email = f"{username}@test.com"
+    password = "TestPass123!"
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    if resp.status_code != 201:
+        raise Exception(f"Failed to create user: {resp.text}")
+    login_resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"Failed to login: {login_resp.text}")
+    session = login_resp.cookies.get("session")
+    if session:
+        client.cookies.set("session", session)
+
 # ============================================================================
 # PYTEST FIXTURES
 # ============================================================================
@@ -63,6 +89,7 @@ async def create_test_asset(name_prefix: str = "META") -> int:
     Returns the asset ID.
     """
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         item = FAAssetCreateItem(
             display_name=f"{name_prefix} Test Asset {unique_id(name_prefix)}",
             currency="USD",
@@ -92,6 +119,7 @@ async def test_patch_metadata_valid_geographic_area(test_server):
     test_asset = await create_test_asset("PATCH1")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Prepare patch request
         patch_item = FAAssetPatchItem(
             asset_id=test_asset,
@@ -157,6 +185,7 @@ async def test_patch_metadata_invalid_geographic_area(test_server):
     test_asset = await create_test_asset("PATCH2")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Write json directly to bypass pydantic validation for invalid country code
         request = [
             {
@@ -191,6 +220,7 @@ async def test_patch_metadata_absent_fields(test_server):
     test_asset = await create_test_asset("PATCH3")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # First, set some initial metadata
         patch_item = FAAssetPatchItem(
             asset_id=test_asset,
@@ -257,6 +287,7 @@ async def test_patch_metadata_null_clears_field(test_server):
     test_asset = await create_test_asset("PATCH4")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # First, set sector_area
         patch_item = FAAssetPatchItem(
             asset_id=test_asset,
@@ -312,6 +343,7 @@ async def test_bulk_read_assets(test_server):
     test_asset = await create_test_asset("READ1")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         response = await client.get(
             f"{API_BASE}/assets", params={"asset_ids": [test_asset]}, timeout=TIMEOUT
             )
@@ -339,6 +371,7 @@ async def test_bulk_read_multiple_assets(test_server):
     print_section("Test 6: POST /assets - Bulk Read Multiple Assets")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create multiple test assets
         items = [
             FAAssetCreateItem(
@@ -382,6 +415,7 @@ async def test_metadata_refresh_single_no_provider(test_server):
     test_asset = await create_test_asset("REFRESH1")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Use bulk endpoint with single asset
         response = await client.post(
             f"{API_BASE}/assets/provider/refresh",
@@ -418,6 +452,7 @@ async def test_metadata_refresh_bulk(test_server):
     test_asset = await create_test_asset("REFRESH2")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         response = await client.post(
             f"{API_BASE}/assets/provider/refresh",
             params={"asset_ids": [test_asset]},
@@ -451,6 +486,7 @@ async def test_patch_metadata_geographic_area_sum_validation(test_server):
     test_asset = await create_test_asset("PATCH9")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Test 1: Weights within tolerance are auto-renormalized
         requests = [
             {
@@ -508,6 +544,7 @@ async def test_patch_metadata_multiple_assets(test_server):
     print_section("Test 10: PATCH /assets - Multiple Assets")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create 2 test assets
         items = [
             FAAssetCreateItem(
@@ -572,6 +609,7 @@ async def test_patch_with_geographic_area_invalid_weights(test_server):
     print_section("Test 11: PATCH /assets - Geographic Area Invalid Weights")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset
         asset_item = FAAssetCreateItem(
             display_name=f"Geo Invalid {unique_id('GEOINV')}",
@@ -634,6 +672,7 @@ async def test_patch_classification_validation(test_server):
     print_section("Test 12: PATCH /assets - Classification Validation")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset
         asset_item = FAAssetCreateItem(
             display_name=f"Class Valid {unique_id('CLSVAL')}", currency="USD"
@@ -670,6 +709,7 @@ async def test_patch_remove_all_classification(test_server):
     print_section("Test 13: PATCH /assets - Remove All Classification")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Create asset with classification_params
         asset_item = FAAssetCreateItem(
             display_name=f"Remove Class {unique_id('RMCLS')}",

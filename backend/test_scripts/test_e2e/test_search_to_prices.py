@@ -26,6 +26,31 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
 
 
+async def create_user_and_login(client: httpx.AsyncClient) -> None:
+    """Create a test user, login, and set session cookie on client."""
+    import uuid as _uuid
+    username = f"test_{int(__import__('time').time()*1000)}_{_uuid.uuid4().hex[:4]}"
+    email = f"{username}@test.com"
+    password = "TestPass123!"
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    if resp.status_code != 201:
+        raise Exception(f"Failed to create user: {resp.text}")
+    login_resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"Failed to login: {login_resp.text}")
+    session = login_resp.cookies.get("session")
+    if session:
+        client.cookies.set("session", session)
+
+
 # ============================================================================
 # PYTEST FIXTURES
 # ============================================================================
@@ -64,6 +89,7 @@ async def test_complete_e2e_flow_justetf(test_server):
     print_section("E2E Test: JustETF Complete Flow")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # =====================================================================
         # STEP 1: SEARCH
         # =====================================================================
@@ -244,14 +270,21 @@ async def test_complete_e2e_flow_justetf(test_server):
         # =====================================================================
         print("\n[STEP 6] Verify prices exist...")
 
-        response = await client.get(
-            f"{API_BASE}/assets/prices/{asset_id}",
-            params={"start_date": start_date.isoformat(), "end_date": today.isoformat()},
+        response = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {
+                    "start": start_date.isoformat(),
+                    "end": today.isoformat(),
+                },
+            }],
             timeout=TIMEOUT,
             )
 
-        assert response.status_code == 200, f"Get prices failed: {response.status_code}"
-        prices = response.json()  # Direct list response
+        assert response.status_code == 200, f"Query prices failed: {response.status_code}"
+        query_data = response.json()
+        prices = query_data["items"][0]["prices"]
 
         print_info(f"  Found {len(prices)} price records")
 

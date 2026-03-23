@@ -2006,6 +2006,29 @@ type FAPricePoint_Output = {
     ((BackwardFillInfo | null) | Array<BackwardFillInfo | null>)
     | undefined;
 };
+type FAPriceQueryItem = {
+  /**
+   * Asset ID to query
+   */
+  asset_id: number;
+  date_range: DateRangeModel;
+};
+type FAPriceQueryResponse = Partial<{
+  /**
+   * List of items
+   */
+  items: Array<FAPriceQueryResult>;
+}>;
+type FAPriceQueryResult = {
+  /**
+   * Asset ID queried
+   */
+  asset_id: number;
+  prices?: /**
+   * Price history with backward-fill
+   */
+  Array<FAPricePoint_Output> | undefined;
+};
 type FAProviderAssignmentItem = {
   /**
    * Asset ID
@@ -4312,10 +4335,30 @@ const FABulkDeleteResponse: z.ZodType<FABulkDeleteResponse> = z.object({
     .gte(0)
     .describe("Total number of records deleted across all items"),
 });
-const end_date = z
-  .union([z.string(), z.null()])
-  .describe("End date (optional, defaults to start_date)")
-  .optional();
+const FAPriceQueryItem: z.ZodType<FAPriceQueryItem> = z.object({
+  asset_id: z.number().int().describe("Asset ID to query"),
+  date_range:
+    DateRangeModel.describe(`Reusable date range model for FA and FX operations.
+
+Used across multiple operations: price deletion, FX rate queries, etc.
+Represents an inclusive date range [start, end].
+
+Attributes:
+    start: Start date (inclusive, required)
+    end: End date (inclusive, optional - defaults to start for single day)
+
+Design Notes:
+    - If end is None, represents a single day (start only)
+    - If end is provided, represents a range [start, end] inclusive
+    - Validator ensures end >= start when provided
+
+Examples:
+    # Single day
+    {"start": "2025-11-05", "end": null}  # Just 2025-11-05
+
+    # Range
+    {"start": "2025-11-01", "end": "2025-11-30"}  # Entire November`),
+});
 const FAPricePoint_Output: z.ZodType<FAPricePoint_Output> = z.object({
   date: z.string().describe("Price date"),
   open: z.union([z.string(), z.null()]).describe("Opening price").optional(),
@@ -4332,6 +4375,16 @@ const FAPricePoint_Output: z.ZodType<FAPricePoint_Output> = z.object({
     .describe("Backward-fill info (only in query results)")
     .optional(),
 });
+const FAPriceQueryResult: z.ZodType<FAPriceQueryResult> = z.object({
+  asset_id: z.number().int().describe("Asset ID queried"),
+  prices: z
+    .array(FAPricePoint_Output)
+    .describe("Price history with backward-fill")
+    .optional(),
+});
+const FAPriceQueryResponse: z.ZodType<FAPriceQueryResponse> = z
+  .object({ items: z.array(FAPriceQueryResult).describe("List of items") })
+  .partial();
 const FARefreshItem: z.ZodType<FARefreshItem> = z.object({
   asset_id: z.number().int().describe("Asset ID"),
   date_range:
@@ -5936,8 +5989,10 @@ export const schemas = {
   FAAssetDelete,
   FAPriceDeleteResult,
   FABulkDeleteResponse,
-  end_date,
+  FAPriceQueryItem,
   FAPricePoint_Output,
+  FAPriceQueryResult,
+  FAPriceQueryResponse,
   FARefreshItem,
   FARefreshResult,
   FABulkRefreshResponse,
@@ -6361,31 +6416,23 @@ Returns all active assets with identifier info.
     ],
   },
   {
-    method: "get",
-    path: "/api/v1/assets/prices/:asset_id",
-    alias: "get_prices_api_v1_assets_prices__asset_id__get",
-    description: `Get prices for asset with backward-fill support.
+    method: "post",
+    path: "/api/v1/assets/prices/query",
+    alias: "query_prices_bulk_api_v1_assets_prices_query_post",
+    description: `Bulk query prices for multiple assets.
 
-Returns a list of FAPricePoint with OHLC data, volume, and backward-fill info.`,
+Reads from DB only (no provider delegation). Uses a single SQL query
+for all assets, then applies backward-fill per asset.
+Analogous to POST /fx/currencies/convert for FX rates.`,
     requestFormat: "json",
     parameters: [
       {
-        name: "asset_id",
-        type: "Path",
-        schema: z.number().int(),
-      },
-      {
-        name: "start_date",
-        type: "Query",
-        schema: z.string().describe("Start date (required)"),
-      },
-      {
-        name: "end_date",
-        type: "Query",
-        schema: end_date,
+        name: "body",
+        type: "Body",
+        schema: z.array(FAPriceQueryItem),
       },
     ],
-    response: z.array(FAPricePoint_Output),
+    response: FAPriceQueryResponse,
     errors: [
       {
         status: 422,

@@ -145,6 +145,9 @@
         staleDays: d.backwardFillInfo?.daysBack ?? 0,
     })));
 
+    // True when no real provider is configured (MANUAL sentinel is already filtered out)
+    let isManualOnly = $derived(providers.length === 0);
+
     // Computed overlay signals from settings
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         const rendered: RenderedSignal[] = [];
@@ -625,9 +628,11 @@
             <!-- Row 2, Col 1: Sync -->
             <button
                     data-testid="fx-detail-sync-btn"
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
+                           {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
                     onclick={handleSync}
-                    disabled={syncing}
+                    disabled={syncing || isManualOnly}
+                    title={isManualOnly ? $t('fxDetail.syncDisabledManual') : ''}
             >
                 <RotateCw size={14} class={syncing ? 'animate-spin' : ''}/>
                 {#if showActionLabels}<span>{syncing ? $t('fx.syncing') : $t('common.sync')}</span>{/if}
@@ -764,14 +769,26 @@
         {:else}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
-                    <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('fxDetail.noData')}</p>
-                    <button
-                            class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                            onclick={handleSync}
-                            disabled={syncing}
-                    >
-                        {syncing ? $t('fx.syncing') : $t('fxDetail.syncRates')}
-                    </button>
+                    {#if isManualOnly}
+                        <p class="text-gray-400 dark:text-gray-500 mb-3">
+                            {$t('fxDetail.noDataManual')}
+                        </p>
+                        <button
+                                class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                                onclick={() => { showDataEditor = true; }}
+                        >
+                            {$t('fxDetail.insertManually')}
+                        </button>
+                    {:else}
+                        <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('fxDetail.noData')}</p>
+                        <button
+                                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                                onclick={handleSync}
+                                disabled={syncing}
+                        >
+                            {syncing ? $t('fx.syncing') : $t('fxDetail.syncRates')}
+                        </button>
+                    {/if}
                 </div>
             </div>
         {/if}

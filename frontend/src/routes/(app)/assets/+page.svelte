@@ -44,8 +44,21 @@
         deltaAbs: number | null;
         deltaPercent: number | null;
         chartData: Array<{date: string; value: number; staleDays?: number}>;
+        deltas: Record<string, number | null>;
         loadingPrices: boolean;
     }
+
+    // Delta periods for table columns
+    const DELTA_PERIODS = [
+        { key: '1W', days: 7 },
+        { key: '1M', days: 30 },
+        { key: '3M', days: 91 },
+        { key: '6M', days: 182 },
+        { key: '1Y', days: 365 },
+        { key: '2Y', days: 730 },
+        { key: '3Y', days: 1095 },
+        { key: '5Y', days: 1825 },
+    ] as const;
 
     // =========================================================================
     // State
@@ -102,6 +115,15 @@
         return true;
     }));
 
+    // Which delta periods are visible for the selected date range
+    let visiblePeriods = $derived(
+        DELTA_PERIODS.filter(p => {
+            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
+            const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
+            return rangeDays >= p.days;
+        })
+    );
+
     // Map to AssetRow for table
     let tableRows = $derived<AssetRow[]>(filteredAssets.map(a => ({
         id: a.id,
@@ -114,6 +136,7 @@
         lastPrice: a.lastPrice,
         deltaAbs: a.deltaAbs,
         deltaPercent: a.deltaPercent,
+        deltas: a.deltas,
     })));
 
     // =========================================================================
@@ -129,6 +152,41 @@
         const val = (e.target as HTMLInputElement).value;
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => { searchText = val; }, 300);
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    /**
+     * Compute Δ% for a given period from chartData.
+     * Pₙ = last data point, P_start = closest point <= (Pₙ - periodDays).
+     */
+    function computePeriodDelta(
+        chartData: Array<{date: string; value: number}>,
+        periodDays: number,
+    ): number | null {
+        if (chartData.length === 0) return null;
+
+        const pn = chartData[chartData.length - 1];
+        if (!pn || pn.value === 0) return null;
+
+        const targetDate = new Date(pn.date);
+        targetDate.setDate(targetDate.getDate() - periodDays);
+        const targetStr = targetDate.toISOString().slice(0, 10);
+
+        // Backward-fill lookup: find closest point <= targetDate
+        let startPoint: {date: string; value: number} | null = null;
+        for (const point of chartData) {
+            if (point.date <= targetStr) {
+                startPoint = point;
+            } else {
+                break;
+            }
+        }
+
+        if (!startPoint || startPoint.value === 0) return null;
+        return ((pn.value - startPoint.value) / startPoint.value) * 100;
     }
 
     // =========================================================================
@@ -156,10 +214,11 @@
                 deltaAbs: null,
                 deltaPercent: null,
                 chartData: [],
+                deltas: {},
                 loadingPrices: false,
             }));
 
-            // Fetch price data for all assets
+            // Fetch price data for all assets via bulk query
             await fetchAllPriceData();
         } catch (e: any) {
             console.error('Failed to load assets:', e);
@@ -170,56 +229,69 @@
     }
 
     async function fetchAllPriceData() {
-        const promises = assets.map((_, idx) => fetchPriceData(idx));
-        await Promise.allSettled(promises);
-    }
+        if (assets.length === 0) return;
 
-    async function fetchPriceData(index: number) {
-        const asset = assets[index];
-        if (!asset) return;
-
-        assets[index] = {...asset, loadingPrices: true};
+        // Mark all as loading
+        assets = assets.map(a => ({...a, loadingPrices: true}));
 
         try {
-            const prices = await zodiosApi.get_prices_api_v1_assets_prices__asset_id__get({
-                params: {asset_id: asset.id},
-                queries: {start_date: dateStart, end_date: dateEnd},
-            }) as any[];
+            // Build bulk query
+            const queries = assets.map(a => ({
+                asset_id: a.id,
+                date_range: { start: dateStart, end: dateEnd },
+            }));
 
-            if (prices.length > 0) {
-                const firstPrice = prices[0]?.close ?? null;
-                const lastPrice = prices[prices.length - 1]?.close ?? null;
+            const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries) as any;
+            const items = response.items ?? [];
 
-                let deltaAbs: number | null = null;
-                let deltaPercent: number | null = null;
-                if (firstPrice !== null && lastPrice !== null && firstPrice !== 0) {
-                    deltaAbs = lastPrice - firstPrice;
-                    deltaPercent = ((lastPrice - firstPrice) / firstPrice) * 100;
+            // Process results
+            const resultMap = new Map<number, any[]>();
+            for (const result of items) {
+                resultMap.set(result.asset_id, result.prices ?? []);
+            }
+
+            assets = assets.map(asset => {
+                const prices = resultMap.get(asset.id) ?? [];
+
+                if (prices.length > 0) {
+                    const firstPrice = prices[0]?.close != null ? Number(prices[0].close) : null;
+                    const lastPrice = prices[prices.length - 1]?.close != null
+                        ? Number(prices[prices.length - 1].close) : null;
+
+                    let deltaAbs: number | null = null;
+                    let deltaPercent: number | null = null;
+                    if (firstPrice !== null && lastPrice !== null && firstPrice !== 0) {
+                        deltaAbs = lastPrice - firstPrice;
+                        deltaPercent = ((lastPrice - firstPrice) / firstPrice) * 100;
+                    }
+
+                    const chartData = prices.map((p: any) => ({
+                        date: p.date,
+                        value: Number(p.close ?? 0),
+                        staleDays: p.backward_fill_info?.days_back ?? 0,
+                    }));
+
+                    // Compute multi-period deltas
+                    const deltas: Record<string, number | null> = {};
+                    for (const period of DELTA_PERIODS) {
+                        deltas[period.key] = computePeriodDelta(chartData, period.days);
+                    }
+
+                    return {
+                        ...asset,
+                        lastPrice,
+                        deltaAbs,
+                        deltaPercent,
+                        chartData,
+                        deltas,
+                        loadingPrices: false,
+                    };
                 }
-
-                const chartData = prices.map((p: any) => ({
-                    date: p.date,
-                    value: p.close ?? 0,
-                    staleDays: p.backward_fill_info?.days_back ?? 0,
-                }));
-
-                assets[index] = {
-                    ...asset,
-                    lastPrice,
-                    deltaAbs,
-                    deltaPercent,
-                    chartData,
-                    loadingPrices: false,
-                };
-            } else {
-                assets[index] = {...asset, loadingPrices: false};
-            }
+                return {...asset, loadingPrices: false, deltas: {}};
+            });
         } catch (e: any) {
-            // Silently handle 404 (no prices) — leave nulls
-            assets[index] = {...asset, loadingPrices: false};
-            if (e?.response?.status !== 404) {
-                console.error(`Failed to fetch prices for asset ${asset.id}:`, e);
-            }
+            console.error('Failed to fetch prices bulk:', e);
+            assets = assets.map(a => ({...a, loadingPrices: false, deltas: {}}));
         }
     }
 
@@ -257,7 +329,7 @@
 </script>
 
 <div class="space-y-6" data-testid="assets-page">
-    <!-- Header: Title left, Add Asset right -->
+    <!-- Header: Title left, ViewModeToggle + Add Asset right -->
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
@@ -268,14 +340,17 @@
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$t('assets.subtitle')}</p>
         </div>
-        <button
-            class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
-            onclick={handleAddAsset}
-            data-testid="assets-add-button"
-        >
-            <Plus size={16} />
-            {$t('assets.addAsset')}
-        </button>
+        <div class="flex items-center gap-2">
+            <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
+            <button
+                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
+                onclick={handleAddAsset}
+                data-testid="assets-add-button"
+            >
+                <Plus size={16} />
+                {$t('assets.addAsset')}
+            </button>
+        </div>
     </div>
 
     <!-- Filter Bar -->
@@ -347,12 +422,6 @@
                 <X size={16} />
             </button>
         {/if}
-
-        <!-- Spacer -->
-        <div class="flex-1"></div>
-
-        <!-- View mode toggle -->
-        <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
     </div>
 
     <!-- Content -->
@@ -426,6 +495,7 @@
         <AssetTable
             data={tableRows}
             loading={false}
+            {visiblePeriods}
             onedit={handleEditAsset}
             ondelete={handleDeleteAsset}
         />

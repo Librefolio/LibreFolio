@@ -4,7 +4,7 @@ Test Suite: Asset Prices API Endpoints
 Tests for price-related endpoints:
 - POST /api/v1/assets/prices - Bulk upsert prices
 - DELETE /api/v1/assets/prices - Bulk delete prices
-- GET /api/v1/assets/prices/{asset_id} - Get price history
+- POST /api/v1/assets/prices/query - Bulk query prices (replaces GET)
 - POST /api/v1/assets/prices/refresh - Refresh prices from providers
 """
 
@@ -37,6 +37,32 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
 
 
+
+
+async def create_user_and_login(client: httpx.AsyncClient) -> None:
+    """Create a test user, login, and set session cookie on client."""
+    import uuid as _uuid
+    username = f"test_{int(__import__('time').time()*1000)}_{_uuid.uuid4().hex[:4]}"
+    email = f"{username}@test.com"
+    password = "TestPass123!"
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    if resp.status_code != 201:
+        raise Exception(f"Failed to create user: {resp.text}")
+    login_resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"Failed to login: {login_resp.text}")
+    session = login_resp.cookies.get("session")
+    if session:
+        client.cookies.set("session", session)
+
 @pytest.fixture(scope="module")
 def test_server():
     """Start/stop test server for all tests in this module."""
@@ -55,6 +81,7 @@ async def test_bulk_upsert_prices(test_server):
     print_section("Test 1: POST /assets/prices - Bulk upsert")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create test asset
         create_item = FAAssetCreateItem(
             display_name=f"Price Upsert Test {unique_id('PRICE1')}", currency="USD"
@@ -99,31 +126,36 @@ async def test_bulk_upsert_prices(test_server):
         assert upsert_result.success_count >= 1
         print_success("Upserted 3 prices successfully")
 
-        # Step 3: Verify prices in DB via GET endpoint
-        get_resp = await client.get(
-            f"{API_BASE}/assets/prices/{asset_id}",
-            params={
-                "start_date": (today - timedelta(days=2)).isoformat(),
-                "end_date": today.isoformat(),
+        # Step 3: Verify prices in DB via POST query endpoint
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {
+                    "start": (today - timedelta(days=2)).isoformat(),
+                    "end": today.isoformat(),
                 },
+            }],
             timeout=TIMEOUT,
-            )
-        assert get_resp.status_code == 200
+        )
+        assert query_resp.status_code == 200
 
-        price_history = get_resp.json()
+        query_data = query_resp.json()
+        price_history = query_data["items"][0]["prices"]
         assert len(price_history) >= 3
         print_success(f"Price history verified: {len(price_history)} prices")
 
 
 # ============================================================
-# Test 2: GET /assets/prices/{asset_id} - Get price history
+# Test 2: POST /assets/prices/query - Get price history (bulk)
 # ============================================================
 @pytest.mark.asyncio
 async def test_get_price_history(test_server):
-    """Test 2: GET /assets/prices/{asset_id} - Get price history."""
-    print_section("Test 2: GET /assets/prices/{asset_id}")
+    """Test 2: POST /assets/prices/query - Get price history."""
+    print_section("Test 2: POST /assets/prices/query")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset
         create_item = FAAssetCreateItem(
             display_name=f"Price Get Test {unique_id('PRICEGET')}", currency="USD"
@@ -147,15 +179,19 @@ async def test_get_price_history(test_server):
             )
         print_info("Prices inserted")
 
-        # Step 3: GET prices with date range
-        get_resp = await client.get(
-            f"{API_BASE}/assets/prices/{asset_id}",
-            params={"start_date": "2025-01-01", "end_date": "2025-01-05"},
+        # Step 3: Query prices with date range via POST bulk
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {"start": "2025-01-01", "end": "2025-01-05"},
+            }],
             timeout=TIMEOUT,
-            )
-        assert get_resp.status_code == 200
+        )
+        assert query_resp.status_code == 200
 
-        price_history = get_resp.json()
+        query_data = query_resp.json()
+        price_history = query_data["items"][0]["prices"]
         assert len(price_history) >= 3, f"Expected at least 3 prices, got {len(price_history)}"
         print_success(f"Price history retrieved: {len(price_history)} prices")
 
@@ -169,6 +205,7 @@ async def test_bulk_delete_prices(test_server):
     print_section("Test 3: DELETE /assets/prices - Bulk delete")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset and insert prices
         create_item = FAAssetCreateItem(
             display_name=f"Price Delete Test {unique_id('PRICEDEL')}", currency="USD"
@@ -211,12 +248,16 @@ async def test_bulk_delete_prices(test_server):
         print_success("Deleted range Jan 3-7")
 
         # Step 3: Verify prices remain
-        get_resp = await client.get(
-            f"{API_BASE}/assets/prices/{asset_id}",
-            params={"start_date": "2025-01-01", "end_date": "2025-01-10"},
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {"start": "2025-01-01", "end": "2025-01-10"},
+            }],
             timeout=TIMEOUT,
-            )
-        remaining_prices = get_resp.json()
+        )
+        remaining_data = query_resp.json()
+        remaining_prices = remaining_data["items"][0]["prices"]
         print_success(f"Remaining prices: {len(remaining_prices)}")
 
 
@@ -229,6 +270,7 @@ async def test_refresh_prices_from_provider(test_server):
     print_section("Test 4: POST /assets/prices/refresh")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create asset and assign mockprov
         create_item = FAAssetCreateItem(
             display_name=f"Price Refresh Test {unique_id('PRICEREF')}", currency="USD"
@@ -275,13 +317,79 @@ async def test_refresh_prices_from_provider(test_server):
         print_success("Prices refresh requested")
 
         # Step 3: Verify prices were created (mockprov returns current value)
-        get_resp = await client.get(
-            f"{API_BASE}/assets/prices/{asset_id}",
-            params={
-                "start_date": (today - timedelta(days=5)).isoformat(),
-                "end_date": today.isoformat(),
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {
+                    "start": (today - timedelta(days=5)).isoformat(),
+                    "end": today.isoformat(),
                 },
+            }],
             timeout=TIMEOUT,
-            )
-        price_history = get_resp.json()
+        )
+        query_data = query_resp.json()
+        price_history = query_data["items"][0]["prices"]
         print_success(f"Prices after refresh: {len(price_history)}")
+
+# ============================================================
+# Test 5: POST /assets/prices/query - Multi-asset bulk query
+# ============================================================
+@pytest.mark.asyncio
+async def test_bulk_query_multi_asset(test_server):
+    """Test 5: POST /assets/prices/query - Multi-asset bulk query."""
+    print_section("Test 5: POST /assets/prices/query - Multi-asset bulk")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        # Step 1: Create two assets
+        asset_ids = []
+        for i in range(2):
+            create_item = FAAssetCreateItem(
+                display_name=f"Multi Query Test {i} {unique_id(f'MULTIQUERY{i}')}", currency="USD"
+            )
+            create_resp = await client.post(
+                f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+            create_data = FABulkAssetCreateResponse(**create_resp.json())
+            asset_ids.append(create_data.results[0].asset_id)
+        print_info(f"Created asset IDs: {asset_ids}")
+
+        # Step 2: Insert prices for each asset
+        for idx, asset_id in enumerate(asset_ids):
+            prices = [
+                FAPricePoint(
+                    date=date(2025, 1, d),
+                    close=Decimal(f"{100 + idx * 50 + d}.00"),
+                    currency="USD",
+                )
+                for d in range(1, 4)
+            ]
+            upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
+            await client.post(
+                f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        print_info("Prices inserted for both assets")
+
+        # Step 3: Query both assets in a single bulk POST
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[
+                {"asset_id": asset_ids[0], "date_range": {"start": "2025-01-01", "end": "2025-01-03"}},
+                {"asset_id": asset_ids[1], "date_range": {"start": "2025-01-01", "end": "2025-01-03"}},
+            ],
+            timeout=TIMEOUT,
+        )
+        assert query_resp.status_code == 200
+
+        query_data = query_resp.json()
+        items = query_data["items"]
+        assert len(items) == 2, f"Expected 2 items, got {len(items)}"
+
+        for item in items:
+            assert item["asset_id"] in asset_ids
+            assert len(item["prices"]) >= 3
+            print_info(f"  Asset {item['asset_id']}: {len(item['prices'])} prices")
+
+        print_success("Multi-asset bulk query succeeded")
+

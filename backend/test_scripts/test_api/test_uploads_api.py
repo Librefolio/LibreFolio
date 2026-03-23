@@ -319,6 +319,7 @@ class TestPluginStatic:
         print_section("UPLOAD-011: Plugin static not found")
 
         async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
             response = await client.get(
                 f"{API_BASE}/uploads/plugin/brim/nonexistent/logo.png", timeout=TIMEOUT
                 )

@@ -130,6 +130,9 @@ from backend.app.schemas.prices import (
     FABulkDeleteResponse,
     FAPriceDeleteResult,
     FAUpsertResult,
+    FAPriceQueryItem,
+    FAPriceQueryResult,
+    FAPriceQueryResponse,
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,

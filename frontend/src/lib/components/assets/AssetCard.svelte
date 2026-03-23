@@ -125,12 +125,12 @@
         {#if lastPrice !== null}
             <div class="flex items-baseline gap-2">
                 <span class="text-xl font-mono font-bold text-gray-800 dark:text-gray-100">
-                    {lastPrice.toFixed(2)}
+                    {Number(lastPrice).toFixed(2)}
                 </span>
                 <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)} {asset.currency}</span>
                 {#if deltaPercent !== null}
                     <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                        {deltaPercent >= 0 ? '▲' : '▼'} {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                        {deltaPercent >= 0 ? '▲' : '▼'} {deltaPercent >= 0 ? '+' : ''}{Number(deltaPercent).toFixed(2)}%
                     </span>
                 {/if}
             </div>
