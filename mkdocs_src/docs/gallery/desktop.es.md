@@ -3,6 +3,7 @@
 Experimenta la interfaz completa de escritorio de LibreFolio. Las capturas de pantalla se adaptan automáticamente al tema e idioma seleccionados.
 
 !!! consejo "Tema e Idioma"
+
 Usa el **conmutador de tema** en el encabezado (☀️/🌙) para alternar entre el modo claro y oscuro.
 Usa el **selector de idioma** (🇬🇧) en el encabezado para ver las capturas de pantalla en diferentes idiomas.
 

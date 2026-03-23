@@ -180,10 +180,10 @@
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-1.5">
                 <span data-testid="fx-pair-label" class="inline-flex items-center gap-1.5">
-                    <span class="text-lg">{currencyFlag(displayBase)}</span>
+                    <span class="text-lg emoji-flag">{currencyFlag(displayBase)}</span>
                     <span class="font-semibold text-gray-800 dark:text-gray-100">{displayBase}</span>
                     <span class="text-gray-400 dark:text-gray-500 text-sm">→</span>
-                    <span class="text-lg">{currencyFlag(displayQuote)}</span>
+                    <span class="text-lg emoji-flag">{currencyFlag(displayQuote)}</span>
                     <span class="font-semibold text-gray-800 dark:text-gray-100">{displayQuote}</span>
                 </span>
 

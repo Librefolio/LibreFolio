@@ -28,6 +28,7 @@ For exotic pairs (e.g., RON→JPY) where no single provider covers both currenci
 </div>
 
 !!! example "Chain Example"
+
     **RON → JPY** via ECB:
 
     1. RON → EUR (ECB provides RON/EUR)

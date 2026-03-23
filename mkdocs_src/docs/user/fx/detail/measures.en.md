@@ -31,6 +31,7 @@ For each measurement, the panel displays:
 | **Annualized Return** | Projected annual return based on the measured period | +17.8% p.a. |
 
 !!! info "📚 Annualized Return"
+
     The annualized return uses the **Compound Annual Growth Rate (CAGR)** formula. For a comprehensive explanation including log returns, compounding, and when to use which method, see:
 
     :material-book-open-variant: **[Returns & Growth Rates — Financial Theory](../../../financial-theory/returns.md)**

@@ -312,7 +312,7 @@
             {:else}
                 <div class="flex items-center space-x-2 min-w-0">
                     {#if selectedOption.icon && selectedOption.icon !== selectedOption.value}
-                        <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">
+                        <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium emoji-flag">
                             {selectedOption.icon}
                         </span>
                     {/if}
@@ -385,7 +385,7 @@
                                 </div>
                             {:else}
                                 {#if option.icon && option.icon !== option.value}
-                                    <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium">
+                                    <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium emoji-flag">
                                         {option.icon}
                                     </span>
                                 {/if}

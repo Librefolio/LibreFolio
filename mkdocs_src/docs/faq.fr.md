@@ -23,6 +23,7 @@ LibreFolio prend en charge :
 - **Espèces et Dépôts** — Suivi des liquidités
 
 !!! tip "Il manque quelque chose ? 💡"
+
     Si vous souhaitez un type d'actif ou une fonctionnalité que nous n'avons pas encore envisagé, faites-le nous savoir ! Ouvrez une [demande d'amélioration sur GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement).
 
 ## 🚀 Démarrer

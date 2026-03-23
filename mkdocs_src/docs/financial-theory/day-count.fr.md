@@ -40,6 +40,7 @@ La convention par défaut est **ACT/365**.
 - **Utilisation** : Normale pour les obligations du Trésor américain. Gère **précisément** les années bissextiles en calculant la fraction séparément pour chaque année.
 
 !!! info "Pourquoi est-ce important ?"
+
     La différence entre les conventions peut être significative pour des **montants élevés** ou des durées longues. Par exemple, pour 30 jours sur un prêt de 1 M€ à 5 % : ACT/365 donne 4 109,59 € d'intérêts, tandis qu'ACT/360 donne 4 166,67 € — une différence de 57 € sur la même période de 30 jours.
 
 :material-link: [Day Count Convention sur Wikipédia](https://en.wikipedia.org/wiki/Day_count_convention){ target="_blank" }

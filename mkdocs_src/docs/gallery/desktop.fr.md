@@ -3,6 +3,7 @@
 Découvrez l'interface complète de LibreFolio en version desktop. Les captures d'écran s'adaptent automatiquement au thème et à la langue que vous avez sélectionnés.
 
 !!! tip "Thème & Langue"
+
 Utilisez le **bouton de changement de thème** dans l'en-tête (☀️/🌙) pour basculer entre le mode clair et le mode sombre.
 Utilisez le **sélecteur de langue** (🇬🇧) dans l'en-tête pour voir les captures d'écran dans différentes langues.
 

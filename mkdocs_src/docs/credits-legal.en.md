@@ -19,6 +19,10 @@ This project was developed with the support of advanced AI coding assistants, ut
 * **Transparency**: The repository contains the complete history of these plans in the `LibreFolio_developer_journal` folder, serving as a testament to the development process and
   a resource for other developers.
 
+### 🌐 Documentation Translations
+
+The multilingual documentation (Italian, French, Spanish) was automatically generated using [**Aphra**](https://github.com/DavidLMS/aphra) — an open-source LLM-based agentic translation workflow by David LMS. The translation pipeline integrates Aphra's Analyze → Translate → Critique → Refine workflow with a custom structural diff system for quality assurance.
+
 ---
 
 ## 📜 Legal & License

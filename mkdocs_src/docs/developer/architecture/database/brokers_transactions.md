@@ -70,6 +70,7 @@ The dotted line in the ER diagram represents a **logical relationship**, not a r
 - The backend resolves conversion chains automatically — for example, to convert RON → JPY, it may route through EUR as an intermediate currency.
 
 !!! info "Why no currency table?"
+
     Currencies are an international standard (ISO 4217) with a fixed, well-known list. Storing them as strings avoids unnecessary joins while keeping validation strict at the application layer.
 
 For details on how FX conversion works, see [FX Architecture](../../backend/fx/architecture.md) and [FX Configuration & Routing](../../backend/fx/configuration.md).

@@ -20,6 +20,7 @@ LibreFolio supporta:
 - **Contanti & Depositi** — Tracciamento della liquidità
 
 !!! tip "Manca qualcosa? 💡"
+
     Se c'è un tipo di asset o una funzionalità che vorresti vedere e a cui non abbiamo ancora pensato, faccelo sapere! Apri una [richiesta di miglioramento su GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement) e condividi la tua idea.
 
 ## 🚀 Iniziare

@@ -24,6 +24,7 @@ LibreFolio supports:
 - **Cash & Deposits** — Track your liquidity
 
 !!! tip "Missing something? 💡"
+
     If there's an asset class or feature you'd like to see that we haven't thought of yet, we'd love to hear from you! Open a [feature request on GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement) and let us know.
 
 ## 🚀 Getting Started

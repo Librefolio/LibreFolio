@@ -7,6 +7,7 @@ equivalent that engineers from control systems or DSP backgrounds will recognise
 instantly.
 
 !!! info "Why two perspectives?"
+
     Financial markets are **not** stationary LTI (Linear Time-Invariant) systems — they
     are noisy, chaotic, and their spectral content shifts over time. Yet the mathematical
     tools we apply to extract trend, momentum, or volatility are *exactly* the same
@@ -96,6 +97,7 @@ When $\alpha$ is small ($N$ large) the pass-band narrows dramatically, attenuati
 but the DC component (the long-run trend).
 
 !!! tip "Pole location"
+
     The single pole sits at $z = 1-\alpha$. For $N = 200$, $\alpha \approx 0.01$, so
     the pole is at $z = 0.99$ — extremely close to the unit circle, which explains the
     heavy smoothing and large group delay.
@@ -164,6 +166,7 @@ a **matched filter**, delaying the signal slightly to reduce false-positive cros
 detections.
 
 !!! note "Derivative interpretation"
+
     For small $\alpha$, $EMA_{fast} - EMA_{slow}$ behaves like a smoothed first
     derivative $\frac{d}{dt}[\text{trend}]$. When the histogram flips sign, the
     "velocity" of the trend changes direction.
@@ -230,6 +233,7 @@ is near its rail. Like any oscillator in a feedback loop, the further from equil
 the stronger the restoring force — hence the mean-reverting property traders exploit.
 
 !!! warning "Non-stationarity"
+
     The 70/30 thresholds assume roughly symmetric return distributions. In strong
     trending markets the RSI can stay above 70 for weeks — it is a *probabilistic*
     indicator, not a deterministic one.
@@ -293,6 +297,7 @@ markets, low-entropy periods are reliably followed by high-entropy (high-volatil
 explosions — making the squeeze one of the most watched setups in technical analysis.
 
 !!! info "FIR vs IIR"
+
     Unlike the EMA (IIR, one pole), the SMA is a **FIR filter** with a perfectly flat
     group delay of $(N-1)/2$ samples. It trades off a wider transition band for
     zero-phase distortion — ideal for centring the confidence envelope.

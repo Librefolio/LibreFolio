@@ -3,10 +3,12 @@
 Découvrez l'interface mobile responsive de LibreFolio. Les captures d'écran s'adaptent automatiquement à votre thème et langue sélectionnés.
 
 !!! astuce "Thème et langue"
+
 Utilisez le **bouton de changement de thème** dans l'en-tête (☀️/🌙) pour basculer entre le mode clair et le mode sombre.
 Utilisez le **sélecteur de langue** (🇬🇧) dans l'en-tête pour voir les captures d'écran dans différentes langues.
 
 !!! info "Optimisé pour mobile"
+
 LibreFolio est entièrement responsive et fonctionne parfaitement sur les smartphones et tablettes. L'interface s'adapte automatiquement aux écrans plus petits grâce à un menu de navigation repliable.
 
 ---

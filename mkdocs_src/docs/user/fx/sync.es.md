@@ -38,9 +38,11 @@ El proceso de sincronización:
 Después de la sincronización, verás el número de **puntos descargados** y cuántos eran **realmente nuevos** (no presentes previamente en la base de datos).
 
 !!! warning "El proveedor es autoritativo"
+
     Volver a sincronizar un par sobrescribirá cualquier valor editado manualmente en el rango sincronizado. Para preservar las ediciones manuales, configura el par con el proveedor MANUAL (sin fuente de datos automática).
 
 !!! info "Precisión en las conversiones en cadena"
+
     Al usar rutas en cadena (ej. RON → EUR → JPY), cada conversión intermedia introduce un mínimo error de redondeo. Aunque es despreciable en la mayoría de los casos, los tipos convertidos por cadena pueden diferir ligeramente de las cotizaciones directas del mercado.
 
 ---

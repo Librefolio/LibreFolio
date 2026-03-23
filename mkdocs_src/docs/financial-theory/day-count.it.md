@@ -44,6 +44,7 @@ La convenzione predefinita è **ACT/365**.
 - **Utilizzo**: Standard per le **obbligazioni del Tesoro USA**. Gestisce correttamente gli anni bisestili calcolando la frazione per ciascun anno separatamente.
 
 !!! info "Perché questo è importante?"
+
     La differenza tra le convenzioni può essere significativa per capitali elevati o durate 
     lunghe. Ad esempio, 30 giorni su un prestito di €1.000.000 al 5%: ACT/365 dà €4.109,59 di 
     interessi, mentre ACT/360 dà €4.166,67 — una differenza di €57 dallo stesso periodo di 30 giorni.

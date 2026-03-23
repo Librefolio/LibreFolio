@@ -66,6 +66,7 @@ graph TD
 ### 💪 Strongly Recommended (Override)
 
 !!! tip "Implementing `search()` is strongly recommended"
+
     Without search, users must know the exact asset identifier (ticker, ISIN, URL) upfront. With search, they can type a name like "Apple" and pick from results.
 
 | Method | Default | Description |

@@ -155,7 +155,7 @@
         container.className = 'site-lang-selector';
         container.innerHTML = `
             <button class="site-lang-btn" aria-label="Select language" title="Language">
-                <span class="lang-flag">${lang.flag}</span>
+                <span class="lang-flag emoji-flag">${lang.flag}</span>
                 <span class="lang-name">${lang.name}</span>
                 <svg class="lang-chevron" viewBox="0 0 24 24" width="16" height="16">
                     <path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
@@ -164,7 +164,7 @@
             <div class="site-lang-dropdown">
                 ${LANGUAGES.map(l => `
                     <button class="site-lang-option ${l.code === lang.code ? 'active' : ''}" data-lang="${l.code}">
-                        <span class="lang-flag">${l.flag}</span>
+                        <span class="lang-flag emoji-flag">${l.flag}</span>
                         <span class="lang-name">${l.name}</span>
                     </button>
                 `).join('')}

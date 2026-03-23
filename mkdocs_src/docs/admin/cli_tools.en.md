@@ -3,6 +3,7 @@
 LibreFolio provides the `dev.py` script for administration tasks. This page covers the commands most relevant to **system administrators**.
 
 !!! info "👩‍💻 For Developers"
+
     For development-specific commands (frontend build, test runner, API sync, i18n audit), see the [Developer Installation Guide](../developer/dev-installation.md).
 
 ---
@@ -33,6 +34,7 @@ Install all project dependencies (Python and Node.js):
 ```
 
 !!! tip "Multi-worker"
+
     For production, use `--workers` to run multiple Uvicorn workers. This improves throughput and is recommended for any deployment with more than 1 CPU core.
 
 ---
@@ -78,6 +80,7 @@ Populates the database with default [Global Settings](settings.md) if they don't
 ```
 
 !!! warning "🗄️ Database reset"
+
     `./dev.py db create-clean` recreates the database from scratch — **all data is lost**. Use only if you need a fresh start.
 
 ---
@@ -103,6 +106,7 @@ For a complete list of all available commands:
 ```
 
 !!! info "👩‍💻 Developer Commands"
+
     Additional commands for development workflows:
 
     - **Frontend**: `./dev.py front build`, `front dev`, `front check` — see [Frontend Development](../developer/frontend/index.md)

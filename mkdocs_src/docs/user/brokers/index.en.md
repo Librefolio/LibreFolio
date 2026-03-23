@@ -36,6 +36,7 @@ All transactions, reports, and import data are tied to a broker. You need at lea
 | **View transactions** | List, filter, and manage imported trades | 🔜 Coming soon |
 
 !!! note "Work in Progress"
+
     The broker detail page and transaction management UI are under active development. Currently you can create brokers, upload reports, and share access. Full transaction import and visualization will be added in upcoming phases.
 
 ---

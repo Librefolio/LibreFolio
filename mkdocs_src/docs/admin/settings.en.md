@@ -18,6 +18,7 @@ LibreFolio has a set of **system-wide settings** that affect all users. These ar
 </div>
 
 !!! warning "Admin Only"
+
     Only users with **superuser** privileges can modify global settings. Regular users see a read-only view.
 
 ### 💻 From the CLI

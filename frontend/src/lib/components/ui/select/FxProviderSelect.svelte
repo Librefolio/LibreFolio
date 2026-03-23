@@ -478,7 +478,7 @@
                             {@const toInfo = getCurrencyInfo(step.to)}
                             {@const iconUrl = getProviderIconUrl(step.provider)}
                             {@const provColor = getProviderColor(step.provider)}
-                            <span class="text-sm flex-shrink-0">{fromInfo.flag_emoji}</span>
+                            <span class="text-sm flex-shrink-0 emoji-flag">{fromInfo.flag_emoji}</span>
                             <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
                             <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                 <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0"
@@ -493,7 +493,7 @@
                                     <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
                                 </span>
                             </Tooltip>
-                            <span class="text-sm flex-shrink-0">{toInfo.flag_emoji}</span>
+                            <span class="text-sm flex-shrink-0 emoji-flag">{toInfo.flag_emoji}</span>
                             <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
                         {:else}
                             <!-- Chain route -->
@@ -504,7 +504,7 @@
                                     {@const iconUrl = getProviderIconUrl(step.provider)}
                                     {@const provColor = getProviderColor(step.provider)}
                                     {#if i === 0}
-                                        <span class="text-sm">{fromInfo.flag_emoji}</span>
+                                        <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
                                         <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
                                     {/if}
                                     <Tooltip html={providerTooltipHtml(step.provider)} position="top">
@@ -520,7 +520,7 @@
                                             <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
                                         </span>
                                     </Tooltip>
-                                    <span class="text-sm">{toInfo.flag_emoji}</span>
+                                    <span class="text-sm emoji-flag">{toInfo.flag_emoji}</span>
                                     <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
                                 {/each}
                             </span>
@@ -651,7 +651,7 @@
                             >
                                 <span class="flex items-center gap-1.5">
                                     <Plus size={12} class="text-emerald-500 flex-shrink-0" />
-                                    <span class="text-sm">{fromInfo.flag_emoji}</span>
+                                    <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
                                     <span class="font-medium text-gray-600 dark:text-gray-300 text-[11px]">{step.from}</span>
                                     <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                         <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0"
@@ -665,7 +665,7 @@
                                             <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                         </span>
                                     </Tooltip>
-                                    <span class="text-sm">{toInfo.flag_emoji}</span>
+                                    <span class="text-sm emoji-flag">{toInfo.flag_emoji}</span>
                                     <span class="font-medium text-gray-600 dark:text-gray-300 text-[11px]">{step.to}</span>
                                     {#if warnings.length > 0}
                                         <Tooltip html={warningsTooltipHtml(warnings)} position="top">
@@ -722,7 +722,7 @@
                                                 {@const iconUrl = getProviderIconUrl(step.provider)}
                                                 {@const provColor = getProviderColor(step.provider)}
                                                 {#if i === 0}
-                                                    <span class="text-sm">{fromInfo.flag_emoji}</span>
+                                                    <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
                                                     <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
                                                 {/if}
                                                 <Tooltip html={providerTooltipHtml(step.provider)} position="top">
@@ -737,7 +737,7 @@
                                                         <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                                     </span>
                                                 </Tooltip>
-                                                <span class="text-sm">{toInfo.flag_emoji}</span>
+                                                <span class="text-sm emoji-flag">{toInfo.flag_emoji}</span>
                                                 <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
                                             {/each}
                                         </span>

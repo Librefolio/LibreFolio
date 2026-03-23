@@ -31,6 +31,7 @@ When switching to % mode, all overlay signals are also recalculated as percentag
 You can also use the **time range presets** (1W, 1M, 3M, 6M, 1Y, 2Y) or select a **Custom** date range to quickly jump to specific periods.
 
 !!! info "Data availability"
+
     If the selected time range exceeds the available data, LibreFolio displays whatever is available. Use **Sync** to try fetching older data from the provider — but note that some providers have limited historical coverage.
 
 ---

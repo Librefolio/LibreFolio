@@ -26,6 +26,7 @@ The synchronization process is automated via `dev.py`:
 3. **Client Generation**: `./dev.py api client` uses `openapi-zod-client` to read the JSON schema and generate a TypeScript client (`frontend/src/lib/api/generated.ts`).
 
 !!! tip "One-step sync"
+
     Use `./dev.py api sync` to run both steps (schema export + client generation) in a single command. This is the recommended workflow after any backend API change.
 
 ### 💻 CLI Commands

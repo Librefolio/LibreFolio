@@ -36,6 +36,7 @@ Tutte le transazioni, i report e i dati importati sono associati a un broker. È
 | **Visualizza transazioni** | Elenco, filtra e gestisci le operazioni importate | 🔜 Prossimamente |
 
 !!! note "Work in Progress"
+
     La pagina dei dettagli del broker e l'interfaccia di gestione delle transazioni sono in fase di sviluppo attivo. Attualmente puoi creare broker, caricare report e condividere accessi. L'importazione e la visualizzazione complete delle transazioni saranno disponibili nelle prossime fasi.
 
 ---

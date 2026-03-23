@@ -47,6 +47,7 @@ Lorsque plusieurs routes sont configurées pour une paire :
 - Vous pouvez **réorganiser** les routes pour changer les priorités
 
 !!! example "Exemple d'itinéraire de secours"
+
     EUR/USD configurée avec :
 
     1. **BCE** (principale) — Banque Centrale Européenne
@@ -63,4 +64,5 @@ Lorsque plusieurs routes sont configurées pour une paire :
 - 📋 **[Liste des fournisseurs FX](../../../developer/backend/fx/providers_list.md)** — Détails techniques sur chaque fournisseur (BCE, Fed, Banque d'Angleterre, BNS)
 
 !!! tip "🔗 Comment les routes en chaîne sont calculées"
+
     Pour l'algorithme mathématique derrière les conversions multi-saut, voir [Algorithme de chaîne FX](../../../developer/frontend/fx-chain-algorithm.md).

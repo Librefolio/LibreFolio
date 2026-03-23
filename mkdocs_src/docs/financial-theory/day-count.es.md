@@ -40,6 +40,7 @@ El convenio predeterminado es **ACT/365**.
 - **Uso**: Estándar para bonos del Tesoro de EE. UU. Maneja correctamente los años bisiestos calculando la fracción para cada año por separado.
 
 !!! info "¿Por qué es importante?"
+
     La diferencia entre convenios puede ser significativa para capitales grandes o plazos largos. Por ejemplo, para un préstamo de 1.000.000 € al 5% con duración de 30 días: ACT/365 produce 4.109,59 € en intereses, mientras que ACT/360 produce 4.166,67 € — una diferencia de 57 €.
 
 :material-link: [Convenio de Cómputo de Días en Wikipedia](https://en.wikipedia.org/wiki/Day_count_convention){ target="_blank" }

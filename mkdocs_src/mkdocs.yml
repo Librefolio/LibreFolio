@@ -104,6 +104,7 @@ plugins:
             "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
             Technical Indicators: Indicatori Tecnici
             Synthetic Benchmarks: Benchmark Sintetici
+            "Taxation & Tax Efficiency": "Tassazione & Efficienza Fiscale"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galleria
             Desktop: Desktop
@@ -148,6 +149,7 @@ plugins:
             "Returns & Growth Rates": "Rendements & Taux de Croissance"
             Technical Indicators: Indicateurs Techniques
             Synthetic Benchmarks: Benchmarks Synthétiques
+            "Taxation & Tax Efficiency": "Fiscalité & Efficience Fiscale"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galerie
             Desktop: Bureau
@@ -192,6 +194,7 @@ plugins:
             "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
             Technical Indicators: Indicadores Técnicos
             Synthetic Benchmarks: Benchmarks Sintéticos
+            "Taxation & Tax Efficiency": "Fiscalidad & Eficiencia Fiscal"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galería
             Desktop: Escritorio

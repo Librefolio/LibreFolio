@@ -18,6 +18,7 @@ LibreFolio dispose d'un ensemble de **paramètres système** qui affectent tous 
 </div>
 
 !!! attention "Administrateurs uniquement"
+
     Seuls les utilisateurs avec des privilèges de **super-admin** peuvent modifier les paramètres système. Les utilisateurs réguliers voient une **vue en lecture seule**.
 
 ### 💻 Depuis la ligne de commande (CLI)

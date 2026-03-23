@@ -3,6 +3,7 @@
 Comprendere la tassazione è essenziale per massimizzare i rendimenti degli investimenti a lungo termine. Questa pagina tratta le basi teoriche — **non le regole specifiche per giurisdizione** — di come le tasse interagiscono con la crescita del portafoglio.
 
 !!! warning "Non è consulenza finanziaria"
+
     LibreFolio non fornisce consulenza fiscale. Ogni giurisdizione ha regole diverse riguardo aliquote fiscali, periodi di detenzione, riporto delle perdite e metodi di abbinamento. Consulta un professionista fiscale qualificato per la tua situazione specifica.
 
 ---
@@ -38,6 +39,7 @@ Quando hai acquistato lo stesso asset più volte a prezzi diversi, quale acquist
 | **Identificazione Specifica** | Scegli tu quale lotto vendere | Massima ottimizzazione fiscale |
 
 !!! info "LibreFolio usa il FIFO"
+
     LibreFolio calcola le plusvalenze utilizzando l'abbinamento **FIFO** a runtime. L'abbinamento viene calcolato on-demand, non memorizzato nel database.
 
 ---
@@ -131,6 +133,7 @@ Ogni paese ha il proprio quadro fiscale. Parametri chiave che variano:
 | **Regole specifiche per le crypto** | In rapida evoluzione; spesso trattate diversamente dagli asset tradizionali |
 
 !!! abstract "Il ruolo di LibreFolio"
+
     LibreFolio traccia le tue transazioni e calcola le plusvalenze/minusvalenze realizzate usando l'abbinamento FIFO. Fornisce le **basi dati** per la dichiarazione fiscale, ma non genera dichiarazioni fiscali né applica regole specifiche per giurisdizione. Esporta i dati delle tue transazioni e consulta un professionista fiscale.
 
 ---

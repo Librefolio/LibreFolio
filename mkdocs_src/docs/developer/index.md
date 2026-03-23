@@ -12,6 +12,7 @@ Set up your local development environment and learn the daily workflow:
 - 🔄 **[Development Workflow](dev-installation.md#development-workflow)** — All `dev.py` commands at a glance
 
 !!! tip "Quick start"
+
     ```bash
     ./dev.py install         # Install all dependencies
     ./dev.py db create-clean # Create fresh database

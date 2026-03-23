@@ -36,6 +36,7 @@ Todas las transacciones, informes y datos importados están vinculados a un corr
 | **Ver transacciones** | Listar, filtrar y gestionar operaciones importadas | 🔜 Próximamente |
 
 !!! note "En desarrollo"
+
     La página de detalles del corredor y la interfaz de gestión de transacciones están en desarrollo activo. Actualmente puedes crear corredores, subir informes y compartir acceso. La importación y visualización completa de transacciones se añadirán en fases próximas.
 
 ---

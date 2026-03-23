@@ -38,9 +38,11 @@ Il processo di sincronizzazione:
 Dopo la sincronizzazione, vengono mostrati il numero di **punti scaricati** e quanti erano **effettivamente nuovi** (non già presenti nel database).
 
 !!! warning "Il provider è autorevole"
+
     Risincronizzare una coppia sovrascriverà qualsiasi valore modificato manualmente nell'intervallo sincronizzato. Se desideri preservare le modifiche manuali, configura la coppia con il provider MANUAL (nessuna fonte di dati automatica).
 
 !!! info "Precisione nelle conversioni a catena"
+
     Quando si usano percorsi a catena (es. RON → EUR → JPY), ogni conversione intermedia introduce un minimo errore di arrotondamento. Sebbene trascurabile nella maggior parte dei casi, i tassi convertiti tramite catena possono differire leggermente dalle quotazioni dirette di mercato.
 
 ---

@@ -3,6 +3,7 @@
 Comprendre la fiscalité est essentiel pour maximiser les rendements des investissements à long terme. Cette page couvre les fondements théoriques — **pas les règles spécifiques à chaque juridiction** — de l'interaction entre les impôts et la croissance du portefeuille.
 
 !!! warning "Ceci n'est pas un conseil financier"
+
     LibreFolio ne fournit pas de conseil fiscal. Chaque juridiction a ses propres règles concernant les taux d'imposition, les durées de détention, le report des pertes et les méthodes d'appariement. Consultez un professionnel fiscal qualifié pour votre situation personnelle.
 
 ---
@@ -38,6 +39,7 @@ Lorsque vous avez acheté le même actif plusieurs fois à des prix différents,
 | **Identification Spécifique** | Vous choisissez quel lot vendre | Optimisation fiscale maximale |
 
 !!! info "LibreFolio utilise le FIFO"
+
     LibreFolio calcule les plus-values en utilisant l'appariement **FIFO** à l'exécution. L'appariement est calculé à la demande, non stocké dans la base de données.
 
 ---
@@ -131,6 +133,7 @@ Chaque pays a son propre cadre fiscal. Paramètres clés qui varient :
 | **Règles spécifiques aux cryptos** | En évolution rapide ; souvent traitées différemment des actifs traditionnels |
 
 !!! abstract "Le rôle de LibreFolio"
+
     LibreFolio suit vos transactions et calcule les plus-values/moins-values réalisées en utilisant l'appariement FIFO. Il fournit les **données de base** pour la déclaration fiscale, mais ne génère pas de déclarations ni n'applique de règles spécifiques à une juridiction. Exportez vos données de transactions et consultez un professionnel fiscal.
 
 ---

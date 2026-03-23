@@ -19,6 +19,7 @@ LibreFolio vous permet de partager l'accès à vos comptes de courtage avec d'au
 7. Cliquez sur **Enregistrer** pour appliquer les modifications
 
 !!! warning "Seuls les Propriétaires peuvent gérer les accès"
+
     Vous devez être **Propriétaire** du courtier pour ajouter, supprimer ou modifier l'accès d'autres utilisateurs.
 
 ---
@@ -49,6 +50,7 @@ Lorsque vous partagez un courtier, vous assignez un **rôle** qui détermine ce 
 Chaque utilisateur ayant accès à un courtier dispose d'un **pourcentage de part** (0% à 100%). Cela représente la part de la valeur du portefeuille du courtier qui appartient à cet utilisateur.
 
 !!! example "Compte joint"
+
     Vous et votre conjoint(e) partagez un compte de courtage à 50/50 :
 
     - Vous (Propriétaire) : **50%**
@@ -57,6 +59,7 @@ Chaque utilisateur ayant accès à un courtier dispose d'un **pourcentage de par
     Lors du calcul de la valeur totale du portefeuille, le système compte 50% de la valeur de ce courtier pour chacun d'entre vous.
 
 !!! example "Conseiller financier"
+
     Votre conseiller financier a besoin de voir votre portefeuille mais n'en possède aucune part :
 
     - Vous (Propriétaire) : **100%**
@@ -76,4 +79,5 @@ La somme de tous les pourcentages de part pour un courtier **ne doit pas dépass
 | **Membre de la famille** | Consulteur ou Éditeur, pourcentage de part personnalisé |
 
 !!! note "Agrégation de portefeuille"
+
     Le pourcentage de part est conçu pour les futures fonctionnalités d'agrégation de portefeuille. Lorsqu'elles seront implémentées, le tableau de bord de chaque utilisateur affichera sa part proportionnelle de tous les courtiers auxquels il a accès.

@@ -3,6 +3,7 @@
 Cette page documente les indicateurs d'analyse technique disponibles en superposition sur les graphiques dans le module FX de LibreFolio. Chaque indicateur est expliqué selon deux perspectives complémentaires : l'interprétation **financière** que les traders utilisent au quotidien, et l'équivalent en **traitement du signal** que les ingénieurs en systèmes de commande ou en traitement du signal reconnaîtront instantanément.
 
 !!! info "Pourquoi deux perspectives ?"
+
     Les marchés financiers ne sont **pas** des systèmes LTI (Linéaires et Invariants dans le Temps) stationnaires — ils sont bruyants, chaotiques, et leur contenu spectral évolue dans le temps. Pourtant, les outils mathématiques que nous appliquons pour extraire tendance, momentum ou volatilité sont *exactement* les mêmes filtres à temps discret enseignés dans tout cours de traitement du signal. Si vous avez déjà conçu un filtre passe-bas de Butterworth ou calculé une variance glissante, vous comprenez déjà ces indicateurs — simplement sous d'autres noms.
 
 ---
@@ -76,6 +77,7 @@ $$
 Lorsque $\alpha$ est petit ($N$ grand), la bande passante se rétrécit dramatiquement, atténuant toute composante autre que la continue (la tendance à long terme).
 
 !!! astuce "Position du pôle"
+
     Le pôle unique se situe à $z = 1-\alpha$. Pour $N = 200$, $\alpha \approx 0,01$, donc le pôle est à $z = 0,99$ — extrêmement proche du cercle unité, ce qui explique le lissage important et le grand retard de groupe.
 
 :material-link: [EMA sur Wikipédia](https://en.wikipedia.org/wiki/Exponential_smoothing){ target="_blank" }
@@ -133,6 +135,7 @@ $$
 La Ligne de Signal est une autre application de passe-bas à cette sortie passe-bande — elle agit comme un **filtre adapté**, retardant légèrement le signal pour réduire les détections de croisements faux positifs.
 
 !!! note "Interprétation dérivée"
+
     Pour de petits $\alpha$, $EMA_{rapide} - EMA_{lente}$ se comporte comme une première dérivée lissée $\frac{d}{dt}[\text{tendance}]$. Lorsque l'histogramme change de signe, la "vitesse" de la tendance change de direction.
 
 :material-link: [MACD sur Wikipédia](https://en.wikipedia.org/wiki/MACD){ target="_blank" }
@@ -188,6 +191,7 @@ Imaginez séparer le signal de delta de prix $\Delta P[n]$ en ses composants red
 En termes de systèmes de commande, c'est un **détecteur de saturation** : lorsque la sortie du système (prix) a évolué dans une direction trop longtemps, le RSI signale que l'actionneur (marché) est près de sa butée. Comme tout oscillateur en boucle de rétroaction, plus il s'éloigne de l'équilibre, plus la force de rappel est forte — d'où la propriété de retour à la moyenne que les traders exploitent.
 
 !!! warning "Non-stationnarité"
+
     Les seuils 70/30 supposent des distributions de rendement approximativement symétriques. Dans des marchés en forte tendance, le RSI peut rester au-dessus de 70 pendant des semaines — c'est un indicateur *probabiliste*, pas déterministe.
 
 :material-link: [RSI sur Wikipédia](https://en.wikipedia.org/wiki/Relative_strength_index){ target="_blank" }
@@ -237,6 +241,7 @@ La Bande médiane est un filtre **FIR (Impulsionnelle Finie) de moyenne mobile**
 Dans le langage des filtres adaptatifs, c'est un **suivi d'espérance avec intervalle de confiance adaptatif**. Lorsque la variance $\sigma^2$ baisse (le "serrement"), le système est dans un état basse entropie. Dans les systèmes chaotiques comme les marchés financiers, les périodes basse entropie sont systématiquement suivies d'explosions haute entropie (haute volatilité) — faisant du serrement l'une des configurations les plus surveillées en analyse technique.
 
 !!! info "FIR vs IIR"
+
     Contrairement à l'EMA (IIR, un pôle), la SMA est un **filtre FIR** avec un retard de groupe parfaitement plat de $(N-1)/2$ échantillons. Elle sacrifie une bande de transition plus large pour éviter la distorsion de phase — idéal pour centrer l'enveloppe de confiance.
 
 :material-link: [Bandes de Bollinger sur Wikipédia](https://en.wikipedia.org/wiki/Bollinger_Bands){ target="_blank" }

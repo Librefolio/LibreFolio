@@ -39,6 +39,7 @@ The editor shows a scrollable table of all data points for this currency pair, s
 2. Confirm the deletion
 
 !!! warning "Synced data overwrites manual edits"
+
     If you manually edit or add a data point for a date that is later covered by a sync, the provider's value will **overwrite** your manual edit — the provider is always treated as the authoritative source. For pairs where you want full manual control, use the MANUAL provider (no automatic data source) — see [Provider Config](provider.md).
 
 ---
@@ -157,5 +158,6 @@ When importing via CSV or adding points manually in the editor:
 This allows you to selectively update specific date ranges without affecting the rest of your data.
 
 !!! tip "Best for MANUAL pairs"
+
     The data editor is most useful for pairs configured with the MANUAL provider (no automatic data source). For provider-backed pairs, manual edits will be overwritten on the next sync.
 

@@ -97,6 +97,7 @@ graph TD
 - **[Front-FX](front-fx.md)** — Tests the FX module: pair list, detail chart, add-pair modal, data editor, sync, and FX-specific API calls.
 
 !!! info "Frontend tests require a running server"
+
     Frontend categories automatically start both the backend server and serve the frontend build. Use `--headed` to watch the browser in action.
 
 ---

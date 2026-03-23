@@ -486,6 +486,23 @@ def check_admonition_indent(
                             f"'{line.strip()[:60]}'",
                 ))
 
+    # ── 4. Empty line after directive (Prettier-safe) ──
+    # Admonitions MUST have an empty line between the directive and the body.
+    # Without it, Prettier removes the 4-space indentation, breaking the box.
+    for i, line in enumerate(lines):
+        if re.match(r'^(?:!!!|[?]{3})\s+\w+', line):
+            if i + 1 < len(lines) and lines[i + 1].strip() != '':
+                # Next line is NOT empty — check if it's indented body content
+                if lines[i + 1].startswith('    '):
+                    issues.append(Issue(
+                        severity=Severity.WARN,
+                        file=cache_key, lang=lang,
+                        check="admonition-empty-line",
+                        line=i + 1,
+                        message=f"Admonition missing empty line after directive "
+                                f"(Prettier will break it): '{line.strip()[:60]}'",
+                    ))
+
     return issues
 
 

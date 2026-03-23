@@ -467,9 +467,45 @@ def cmd_info_version(args):
 # MkDocs Commands
 # =============================================================================
 
+def _check_admonition_empty_lines():
+    """Warn if any admonition is missing the empty line after !!!/???.
+
+    Without the empty line, Prettier removes the 4-space body indentation,
+    breaking the MkDocs admonition rendering.
+    """
+    import re
+    docs_dir = PROJECT_ROOT / "mkdocs_src" / "docs"
+    adm_re = re.compile(r'^(?:!!!|[?]{3})\s+\w+')
+    bad_files = []
+
+    for md_file in sorted(docs_dir.rglob("*.md")):
+        lines = md_file.read_text().splitlines()
+        for i, line in enumerate(lines):
+            if adm_re.match(line):
+                if i + 1 < len(lines) and lines[i + 1].strip() != '':
+                    if lines[i + 1].startswith('    '):
+                        rel = md_file.relative_to(docs_dir)
+                        bad_files.append(f"  {rel}:{i + 1}")
+                        break  # one warning per file is enough
+
+    if bad_files:
+        print(Colors.warning(
+            f"⚠️  {len(bad_files)} file(s) have admonitions without empty line after !!!/??? "
+            f"(Prettier will break them):"
+        ))
+        for f in bad_files[:10]:
+            print(f)
+        if len(bad_files) > 10:
+            print(f"  ... and {len(bad_files) - 10} more")
+        print(Colors.info(
+            "  Fix: add an empty line between the !!! directive and the indented body."
+        ))
+        print()
+
 def cmd_mkdocs_build(args):
     """Build MkDocs documentation."""
     print(Colors.success("Building MkDocs site..."))
+    _check_admonition_empty_lines()
     copy_docs_assets()
     return run_pipenv(["mkdocs", "build", "-f", "mkdocs_src/mkdocs.yml"])
 

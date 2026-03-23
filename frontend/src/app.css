@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
 
 /* LibreFolio Design System */
 @theme {
@@ -41,6 +42,11 @@
 /* Base styles */
 html {
     font-family: Inter, system-ui, sans-serif;
+}
+
+/* Flag emoji — Windows doesn't support country flags with Segoe UI Emoji */
+.emoji-flag {
+    font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
 }
 
 /* Utility: Hidden scrollbar but still scrollable */
