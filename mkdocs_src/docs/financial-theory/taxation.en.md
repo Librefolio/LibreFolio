@@ -3,6 +3,7 @@
 Understanding taxation is essential for maximizing long-term investment returns. This page covers the theoretical foundations — **not jurisdiction-specific rules** — of how taxes interact with portfolio growth.
 
 !!! warning "Not financial advice"
+
     LibreFolio does not provide tax advice. Every jurisdiction has different rules regarding tax rates, holding periods, loss carry-forward, and matching methods. Consult a qualified tax professional for your specific situation.
 
 ---
@@ -38,6 +39,7 @@ When you've bought the same asset multiple times at different prices, which purc
 | **Specific Identification** | You choose which lot to sell | Maximum tax optimization |
 
 !!! info "LibreFolio uses FIFO"
+
     LibreFolio computes capital gains using **FIFO** matching at runtime. The matching is calculated on-demand, not stored in the database.
 
 ---
@@ -131,6 +133,7 @@ Every country has its own tax framework. Key parameters that vary:
 | **Crypto-specific rules** | Rapidly evolving; often treated differently from traditional assets |
 
 !!! abstract "LibreFolio's role"
+
     LibreFolio tracks your transactions and computes realized gains/losses using FIFO matching. It provides the **data foundation** for tax reporting, but does not generate tax declarations or apply jurisdiction-specific rules. Export your transaction data and consult a tax professional.
 
 ---

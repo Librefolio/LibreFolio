@@ -39,6 +39,7 @@ L'éditeur affiche un tableau déroulant de tous les points de données pour cet
 2. Confirmez la suppression
 
 !!! avertissement "Les données synchronisées écrasent les modifications manuelles"
+
     Si vous modifiez manuellement un point de données pour une date ensuite couverte par une synchronisation, la valeur du fournisseur **écrasera** votre modification — le fournisseur est toujours considéré comme la source faisant autorité. Pour les paires où vous souhaitez un contrôle manuel complet, utilisez le fournisseur MANUAL (pas de source automatique) — voir [Configuration du fournisseur](provider.md).
 
 ---
@@ -152,4 +153,5 @@ Lors de l'importation CSV ou de l'ajout manuel de points dans l'éditeur :
 - ✅ Les **dates non présentes dans l'importation** restent inchangées
 
 !!! tip "Idéal pour les paires MANUAL"
+
     L'éditeur de données est particulièrement utile pour les paires configurées avec le fournisseur MANUAL (pas de source de données automatique). Pour les paires avec fournisseur, les modifications manuelles seront écrasées lors de la prochaine synchronisation.

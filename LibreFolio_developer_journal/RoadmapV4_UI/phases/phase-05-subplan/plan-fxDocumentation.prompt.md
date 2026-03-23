@@ -2,7 +2,8 @@
 
 **Data creazione**: 12 Marzo 2026
 **Ultimo aggiornamento**: 20 Marzo 2026
-**Status**: ⏳ IN CORSO — Fasi 1, 2, 2.5 completate. Fase 3 (i18n Pipeline) pendente.
+**Status**: ✅ COMPLETATO — Fasi 1, 2, 2.5 completate. Fase 3 (i18n) delegata a `plan-mkdocsI18nPipeline.prompt.md`, completata.
+**Completato**: 22 Marzo 2026
 **Priorità**: Media (ultima fase di Phase 5)
 **Stima**: ~4-5 giorni
 **Dipendenze**: `phases/phase-05-subplan/plan-fxTestingCleanup.prompt.md` completato ✅ (screenshot da E2E, JWT, gallery)

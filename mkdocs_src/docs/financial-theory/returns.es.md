@@ -13,6 +13,7 @@ R_{simple} = \frac{P_{final} - P_{inicial}}{P_{inicial}} = \frac{P_{final}}{P_{i
 $$
 
 !!! example
+
     Si EUR/USD pasa de 1.10 a 1.14:
 
     $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
@@ -71,6 +72,7 @@ $$
 Esto es lo que muestra la herramienta [Medidas](../user/fx/detail/measures.md) de LibreFolio.
 
 !!! example
+
     EUR/USD pasa de 1.10 a 1.14 en 90 días:
 
     $$R_{annual} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
@@ -99,6 +101,7 @@ Esta linealidad es una de las ventajas clave de los rendimientos logarítmicos e
 | **Interpretación** | "Gané un 5%" | "La tasa de crecimiento logarítmica fue 0.0488" |
 
 !!! tip "¿Qué rendimiento usar en cada caso?"
+
     - **Rendimientos simples** para informar a usuarios y calcular rendimientos a nivel de cartera
     - **Rendimientos logarítmicos** para análisis estadístico, estimación de volatilidad y modelos de series temporales
 

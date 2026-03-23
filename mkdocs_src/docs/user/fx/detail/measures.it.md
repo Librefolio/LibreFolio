@@ -31,6 +31,7 @@ Per ogni misurazione, il pannello mostra:
 | **Rendimento annualizzato** | Rendimento annuo proiettato basato sul periodo misurato | +17,8% p.a. |
 
 !!! info "📚 Rendimento annualizzato"
+
     Il rendimento annualizzato utilizza la formula del **Compound Annual Growth Rate (CAGR, tasso di crescita annuo composto)**. Per una spiegazione completa che includa i rendimenti logaritmici, il compounding e quando utilizzare ciascun metodo, vedere:
 
     :material-book-open-variant: **[Rendimenti e tassi di crescita — Teoria finanziaria](../../../financial-theory/returns.md)**

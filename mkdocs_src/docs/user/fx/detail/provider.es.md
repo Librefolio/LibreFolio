@@ -47,6 +47,7 @@ Cuando se configuran múltiples rutas para un par:
 - Puede **reordenar** las rutas para cambiar las prioridades
 
 !!! example "Ejemplo de Respaldo"
+
     EUR/USD configurado con:
 
     1. **BCE** (principal) — Banco Central Europeo
@@ -63,5 +64,6 @@ Cuando se configuran múltiples rutas para un par:
 - 📋 **[Lista de Proveedores de FX](../../../developer/backend/fx/providers_list.md)** — Detalles técnicos de cada proveedor (BCE, FED, BOE, SNB)
 
 !!! tip "🔗 Cómo se calculan las rutas en cadena"
+
     Para ver el algoritmo matemático detrás de las cadenas de conversión multi-salto, consulte [Algoritmo de Cadena FX](../../../developer/frontend/fx-chain-algorithm.md).
 

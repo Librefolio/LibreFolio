@@ -19,6 +19,7 @@ LibreFolio ti permette di condividere l'accesso ai tuoi broker con altri utenti.
 7. Fai clic su **Salva** per applicare le modifiche
 
 !!! warning "Solo i Proprietari possono gestire l'accesso"
+
     Devi essere il **titolare** del broker per aggiungere, rimuovere o modificare l'accesso di altri utenti.
 
 ---
@@ -49,6 +50,7 @@ Quando condividi un broker, assegni un **ruolo** che determina cosa l'altro uten
 Ogni utente con accesso a un broker ha una **percentuale di possesso** (da 0% a 100%). Questa rappresenta quanto del valore del portafoglio del broker appartiene a quell'utente.
 
 !!! example "Conto Cointestato"
+
     Tu e il tuo coniuge condividete un conto di intermediazione al 50/50:
 
     - Tu (Proprietario): **50%**
@@ -57,6 +59,7 @@ Ogni utente con accesso a un broker ha una **percentuale di possesso** (da 0% a 
     Quando si calcola il valore totale del portafoglio, il sistema conta il 50% del valore di questo broker per ciascuno di voi.
 
 !!! example "Consulente Finanziario"
+
     Il tuo consulente finanziario deve vedere il tuo portafoglio ma non ne possiede nessuna parte:
 
     - Tu (Proprietario): **100%**
@@ -76,4 +79,5 @@ La somma di tutte le percentuali di possesso per un broker **non deve superare i
 | **Membro della famiglia** | Visualizzatore o Editore, percentuale personalizzata |
 
 !!! note "Aggregazione del Portafoglio"
+
     La **percentuale di possesso** è progettata per future funzionalità di aggregazione del portafoglio. Quando queste saranno implementate, la dashboard di ogni utente mostrerà la quota proporzionale di tutti i broker a cui ha accesso.

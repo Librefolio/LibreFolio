@@ -18,6 +18,10 @@ Ce projet a été développé avec le soutien d'assistants de codage IA avancés
 * **Méthodologie** : Chaque fonctionnalité commence par un plan détaillé, suivi d'un développement itératif, de tests rigoureux et d'une revue.
 * **Transparence** : Le dépôt contient l'historique complet de ces plans dans le dossier `LibreFolio_developer_journal`, témoignant du processus de développement et servant de ressource pour les autres développeurs.
 
+### 🌐 Traductions de la Documentation
+
+La documentation multilingue (italien, français, espagnol) a été générée automatiquement à l'aide d'[**Aphra**](https://github.com/DavidLMS/aphra) — un workflow de traduction open-source basé sur les LLM, créé par David LMS. Le pipeline de traduction intègre le flux Analyze → Translate → Critique → Refine d'Aphra avec un système personnalisé de diff structurel pour l'assurance qualité.
+
 ---
 
 ## 📜 Mentions légales et licence

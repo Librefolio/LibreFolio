@@ -23,6 +23,7 @@ LibreFolio es compatible con:
 - **Efectivo y Depósitos** — Sigue tu liquidez
 
 !!! tip "¿Falta algo? 💡"
+
     Si hay un tipo de activo o una función que te gustaría ver y en la que no hemos pensado, ¡nos encantaría saberlo! Abre una [solicitud de mejora en GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement).
 
 ## 🚀 Primeros Pasos

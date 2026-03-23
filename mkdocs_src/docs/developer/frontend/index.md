@@ -114,6 +114,7 @@ Frontend tasks are managed via `dev.py front`:
 | `front preview` | Serves the production build locally for testing |
 
 !!! tip "Development workflow"
+
     Run `./dev.py server` in one terminal and `./dev.py front dev` in another. The Vite dev server proxies `/api` calls to the backend automatically.
 
 ## 🔗 Quick Links

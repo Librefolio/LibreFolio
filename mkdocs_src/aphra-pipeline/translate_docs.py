@@ -540,6 +540,25 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
             f"(Δ{len(trn['admonitions']) - len(src['admonitions']):+d})"
         )
 
+    # ── 7b. Admonition empty line (Prettier-safe) ──
+    # Each !!!/??? directive MUST be followed by an empty line before the
+    # indented body.  Without it, Prettier strips the 4-space indent.
+    _adm_re = re.compile(r'^(?:!!!|[?]{3})\s+\w+')
+    tr_lines = translated_text.splitlines()
+    bad_adm_lines = []
+    for i, line in enumerate(tr_lines):
+        if _adm_re.match(line):
+            if i + 1 < len(tr_lines) and tr_lines[i + 1].strip() != '':
+                if tr_lines[i + 1].startswith('    '):
+                    bad_adm_lines.append(i + 1)
+    if bad_adm_lines:
+        issues.append(
+            f"ADMONITION_EMPTY_LINE: {len(bad_adm_lines)} admonition(s) missing "
+            f"empty line after directive (lines {bad_adm_lines}). "
+            f"Add a blank line between the !!! directive and the indented body — "
+            f"without it Prettier will strip the indentation and break the box."
+        )
+
     # ── 8. Horizontal rules ──
     if src["hr_count"] != trn["hr_count"]:
         issues.append(

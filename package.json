@@ -8,7 +8,7 @@
 		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
-		"@playwright/test": "^1.48.2"
+		"@playwright/test": "^1.48.2",
+		"prettier": "^3.8.1"
 	}
 }
-

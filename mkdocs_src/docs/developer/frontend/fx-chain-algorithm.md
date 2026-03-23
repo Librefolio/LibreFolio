@@ -92,6 +92,7 @@ Starting from **RON**, the DFS finds these paths:
 Route 1 is the shortest (2 steps) and uses only ECB. Route 2 mixes ECB and FED. Longer chains provide more fallback options but carry higher failure risk.
 
 !!! warning "Chain Failure Risk"
+
     If **any single step** in a chain fails (provider down, API error), the **entire chain** fails. Shorter chains are more reliable.
 
 ## 🔍 DFS Algorithm
@@ -158,6 +159,7 @@ Each node (currency) can appear **at most once** in a path. This eliminates:
 The source node is added to `visitedNodes` at initialization, so the DFS can never return to it. The target node is **not** in `visitedNodes` — it serves as the exit condition.
 
 !!! note "Evolution"
+
     The original algorithm used `usedEdgePairs: Set<string>` (tracking visited *edges*, not *nodes*). This allowed the same node to appear multiple times if reached via different edge pairs, producing redundant cycles like `EUR→USD→GBP→EUR→RON`. Switching to `visitedNodes` (simple paths) eliminated these and guarantees each conversion chain is **unique and optimal**.
 
 #### 2️⃣ Constraint 2 — Max 2 Uses per Provider
@@ -246,6 +248,7 @@ graph TD
 ```
 
 !!! info "Pruning"
+
     Branches are pruned early: if a neighbor is in `visitedNodes` or the provider is at max usage, `tryEdge` returns immediately without recursing.
 
 ## Complexity

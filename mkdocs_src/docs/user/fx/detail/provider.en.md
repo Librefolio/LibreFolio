@@ -47,6 +47,7 @@ When multiple routes are configured for a pair:
 - You can **reorder** routes to change priorities
 
 !!! example "Fallback Example"
+
     EUR/USD configured with:
 
     1. **ECB** (primary) — European Central Bank
@@ -63,4 +64,5 @@ When multiple routes are configured for a pair:
 - 📋 **[FX Providers List](../../../developer/backend/fx/providers_list.md)** — Technical details on each provider (ECB, FED, BOE, SNB)
 
 !!! tip "🔗 How chain routes are calculated"
+
     For the mathematical algorithm behind multi-hop conversion chains, see [FX Chain Algorithm](../../../developer/frontend/fx-chain-algorithm.md).

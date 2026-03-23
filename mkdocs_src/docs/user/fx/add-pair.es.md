@@ -28,6 +28,7 @@ Para pares exóticos (por ejemplo, RON→JPY) donde ningún proveedor cubre amba
 </div>
 
 !!! example "Ejemplo de Ruta en Cadena"
+
     **RON → JPY** a través de ECB:
 
     1. RON → EUR (ECB proporciona RON/EUR)

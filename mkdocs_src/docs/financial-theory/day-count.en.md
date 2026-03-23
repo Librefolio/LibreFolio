@@ -44,6 +44,7 @@ The default convention is **ACT/365**.
 - **Usage**: Standard for US Treasury bonds. Handles leap years correctly by calculating the fraction for each year separately.
 
 !!! info "Why does this matter?"
+
     The difference between conventions can be significant for large principals or long
     durations. For example, 30 days on a €1M loan at 5%: ACT/365 gives €4,109.59 in
     interest, while ACT/360 gives €4,166.67 — a €57 difference from the same 30-day

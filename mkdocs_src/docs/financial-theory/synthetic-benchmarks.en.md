@@ -32,6 +32,7 @@ over long horizons. This is why the Linear benchmark appears as a straight line 
 the Compound benchmark curves upward exponentially.
 
 !!! abstract "Capital gains & losses"
+
     When selling an asset above its purchase price, the difference is a **capital gain**;
     below, a **capital loss**. Each jurisdiction has its own rules regarding tax rates,
     holding period thresholds, loss carry-forward duration, and matching methods
@@ -129,6 +130,7 @@ expensive power operations with $N$ simple multiplications — the same principl
 how banks actually accrue daily compound interest.
 
 !!! tip "Rule of 72"
+
     A quick mental shortcut: an investment growing at $r$% per year will approximately
     double in $72 / r$ years. At 7% → ~10.3 years.
 

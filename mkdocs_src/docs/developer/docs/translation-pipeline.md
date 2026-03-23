@@ -1,4 +1,4 @@
-# 🌐 Translation Pipeline
+ # 🌐 Translation Pipeline
 
 Automated translation of LibreFolio MkDocs documentation into multiple languages using [Aphra](https://github.com/DavidLMS/aphra) — an LLM-based agentic translation workflow. Supports both **cloud** (OpenRouter) and **local** (Ollama) LLM backends.
 
@@ -74,6 +74,7 @@ flowchart TB
 ```
 
 !!! note "Step 2 (Search) skipped by default"
+
     Aphra's optional web search step adds cost ($4/1000 queries via OpenRouter `:online` plugin) and latency. It's disabled by default for technical documentation where terms are well-known.
 
 ### Multi-language flow
@@ -250,4 +251,53 @@ APHRA_MODEL=google/gemini-2.5-flash
 The pipeline caches **source file MD5 hashes** in `.translate-hashes.json` to skip unchanged files between runs. If a source `.en.md` hasn't changed, all its translations are skipped.
 
 Use `--force` to ignore the cache and re-translate everything.
+
+---
+
+## Prettier Compatibility
+
+### The Problem
+
+Prettier uses the **remark** parser (CommonMark). In CommonMark, `!!! info "title"` is an unknown construct — admonitions don't exist. Prettier treats the 4-space indented body as "continuation text" and **strips the indentation**, breaking the admonition box:
+
+```markdown
+<!-- BEFORE Prettier -->
+!!! note "Title"
+    Content inside the box.     ← 4 spaces (INSIDE the box)
+
+<!-- AFTER Prettier — BROKEN -->
+!!! note "Title"
+Content inside the box.         ← 0 spaces (OUTSIDE the box)
+```
+
+`tabWidth: 4` does NOT fix this — it only controls tab→space conversion, not paragraph indentation preservation.
+
+### The Solution
+
+Add an **empty line** between the directive and the indented body. With the empty line, Prettier leaves the block completely untouched, and MkDocs renders identically:
+
+```markdown
+<!-- ✅ CORRECT — survives Prettier unchanged -->
+!!! note "Title"
+
+    Content inside the box.
+    Second line.
+
+<!-- ❌ WRONG — Prettier will strip indentation -->
+!!! note "Title"
+    Content inside the box.
+    Second line.
+```
+
+This applies to both `!!!` (admonitions) and `???` (collapsible details).
+
+### Automated Checks
+
+The empty-line rule is enforced at three levels:
+
+| Check | Where | Severity | Description |
+|-------|-------|----------|-------------|
+| **Pre-build warning** | `dev.py` → `_check_admonition_empty_lines()` | ⚠️ Warning | Runs before every `./dev.py mkdocs build`. Scans all `.md` files and warns if any admonition is missing the empty line. |
+| **Translation validation** | `validate_translations.py` → `admonition-empty-line` | ⚠️ WARN | Checks translated files during `./dev.py mkdocs translate-validate`. |
+| **Structural diff (critic)** | `translate_docs.py` → `_structural_diff()` → `ADMONITION_EMPTY_LINE` | Info to LLM | Injected into the Step 4 (Critique) context so the critic LLM can flag and fix the issue during refinement. |
 

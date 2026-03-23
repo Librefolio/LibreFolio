@@ -21,6 +21,7 @@ Si en cambio **reinviertes** esas ganancias — manualmente o automáticamente a
 En la práctica, la diferencia entre crecimiento lineal y compuesto se amplía drásticamente en horizontes largos. Por eso la referencia Lineal aparece como una línea recta mientras que la referencia Compuesta curva hacia arriba exponencialmente.
 
 !!! abstract "Ganancias y pérdidas de capital"
+
     Cuando se vende un activo por encima de su precio de compra, la diferencia es una **ganancia de capital**; por debajo, una **pérdida de capital**. Cada jurisdicción tiene sus propias reglas respecto a tipos impositivos, umbrales de período de tenencia, duración de la compensación de pérdidas y métodos de asignación (FIFO, LIFO, identificación específica). Para una visión general teórica, ver [Fiscalidad & Eficiencia Fiscal](taxation.md).
 
 ### 🔢 Fórmula Matemática
@@ -103,6 +104,7 @@ $$
 Esto es matemáticamente equivalente a la forma cerrada $y_0(1+r)^t$ pero reemplaza $N$ operaciones de potencia costosas por $N$ multiplicaciones simples — el mismo principio **que utilizan** los bancos para devengar intereses compuestos diarios.
 
 !!! tip "Regla del 72"
+
     Un atajo mental rápido: una inversión que crece al $r$% anual se duplicará aproximadamente en $72 / r$ años. Al 7% → ~10.3 años.
 
 ### ⚙️ Parámetros

@@ -38,9 +38,11 @@ Le processus de synchronisation :
 Après la synchronisation, vous verrez le nombre de **points téléchargés** et combien étaient **réellement nouveaux** (non déjà présents dans la base de données).
 
 !!! warning "Le fournisseur fait autorité"
+
     Resynchroniser une paire écrasera toute valeur modifiée manuellement dans la plage synchronisée. Pour préserver les modifications manuelles, configurez la paire avec le fournisseur MANUAL (pas de source de données automatique).
 
 !!! info "Précision des conversions en chaîne"
+
     Lors de l'utilisation de routes en chaîne (ex. RON → EUR → JPY), chaque conversion intermédiaire introduit une erreur d'arrondi minimale. Bien que négligeable dans la plupart des cas, les taux convertis en chaîne peuvent légèrement différer des cotations directes du marché.
 
 ---

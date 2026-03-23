@@ -53,6 +53,7 @@ Per caricare un file:
 </div>
 
 !!! tip "Dimensione Massima dei File"
+
     La dimensione massima di caricamento è configurata dall'amministratore di sistema in [Impostazioni Globali](../../admin/settings.md). Il valore predefinito è tipicamente 10 MB.
 
 ---
@@ -67,9 +68,11 @@ Se vuoi importare transazioni dal tuo broker:
 4. Il sistema tenterà successivamente di **rilevare automaticamente** il formato del file tramite il sistema di importazione BRIM e analizzare le transazioni
 
 !!! info "Associazione ≠ Analisi"
+
     Il broker scelto durante il caricamento serve solo per l'**associazione** — determina quale conto broker riceve le transazioni importate. Il rilevamento del formato e l'analisi avvengono in un passaggio separato e sono **indipendenti** dal broker: lo stesso plugin BRIM può funzionare per più broker se esportano nello stesso formato.
 
 !!! note "Lavori in Corso"
+
     L'interfaccia utente completa per l'importazione dei report broker (BRIM) è in sviluppo attivo. Attualmente, puoi caricare report e associarli ai broker, ma la procedura guidata di importazione non è ancora disponibile.
 
 ---

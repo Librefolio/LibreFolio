@@ -19,6 +19,7 @@ LibreFolio allows you to share access to your brokerage accounts with other user
 7. Click **Save** to apply changes
 
 !!! warning "Only Owners can manage access"
+
     You must be an **Owner** of the broker to add, remove, or modify other users' access.
 
 ---
@@ -49,6 +50,7 @@ When you share a broker, you assign a **role** that determines what the other us
 Each user with access to a broker has a **share percentage** (0% to 100%). This represents how much of the broker's portfolio value belongs to that user.
 
 !!! example "Joint Account"
+
     You and your spouse share a brokerage account 50/50:
 
     - You (Owner): **50%**
@@ -57,6 +59,7 @@ Each user with access to a broker has a **share percentage** (0% to 100%). This 
     When computing total portfolio value, the system counts 50% of this broker's value for each of you.
 
 !!! example "Financial Advisor"
+
     Your financial advisor needs to see your portfolio but doesn't own any of it:
 
     - You (Owner): **100%**
@@ -76,4 +79,5 @@ The sum of all share percentages for a broker **must not exceed 100%**, but it c
 | **Family member** | Viewer or Editor, custom share % |
 
 !!! note "Portfolio Aggregation"
+
     The share percentage is designed for future portfolio aggregation features. When these are implemented, each user's dashboard will show their proportional share of all brokers they have access to.

@@ -3,10 +3,12 @@
 Experience LibreFolio's responsive mobile interface. Screenshots automatically adapt to your selected theme and language.
 
 !!! tip "Theme & Language"
+
 Use the **theme toggle** in the header (☀️/🌙) to switch between light and dark mode.
 Use the **language selector** (🇬🇧) in the header to view screenshots in different languages.
 
 !!! info "Mobile Optimized"
+
 LibreFolio is fully responsive and works great on smartphones and tablets. The interface automatically adapts to smaller screens with a collapsible navigation menu.
 
 ---

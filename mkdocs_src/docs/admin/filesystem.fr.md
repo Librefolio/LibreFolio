@@ -108,6 +108,7 @@ Au minimum, sauvegardez :
 3. **`broker_reports/uploaded/`** — Rapports de courtiers originaux (au cas où vous devriez ré-analyser)
 
 !!! tip "Sauvegarde de la base de données uniquement"
+
     Si l'espace de stockage est limité, sauvegarder uniquement `sqlite/app.db` préserve toutes les données structurées. Les fichiers peuvent toujours être re-téléversés.
 
 ---

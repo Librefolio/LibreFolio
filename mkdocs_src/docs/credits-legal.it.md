@@ -18,6 +18,10 @@ Questo progetto è stato sviluppato con il supporto di avanzati assistenti di sv
 * **Metodologia**: Ogni funzionalità inizia con un piano scritto dettagliato, seguito da sviluppo iterativo, test rigorosi e revisione.
 * **Trasparenza**: Il repository contiene la cronologia completa di questi piani nella cartella `LibreFolio_developer_journal`, costituendo una documentazione del processo di sviluppo e una risorsa per altri sviluppatori.
 
+### 🌐 Traduzioni della Documentazione
+
+La documentazione multilingue (italiano, francese, spagnolo) è stata generata automaticamente utilizzando [**Aphra**](https://github.com/DavidLMS/aphra) — un workflow di traduzione open-source basato su LLM di David LMS. La pipeline di traduzione integra il flusso Analyze → Translate → Critique → Refine di Aphra con un sistema custom di diff strutturale per il controllo qualità.
+
 ---
 
 ## 📜 Licenza & Aspetti Legali

@@ -13,6 +13,7 @@ R_{simple} = \frac{P_{end} - P_{start}}{P_{start}} = \frac{P_{end}}{P_{start}} -
 $$
 
 !!! example
+
     If EUR/USD moves from 1.10 to 1.14:
 
     $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
@@ -71,6 +72,7 @@ $$
 This is what LibreFolio's [Measures tool](../user/fx/detail/measures.md) displays.
 
 !!! example
+
     EUR/USD moves from 1.10 to 1.14 over 90 days:
 
     $$R_{annual} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
@@ -99,6 +101,7 @@ This linearity is one of the key advantages of log returns in quantitative finan
 | **Interpretation** | "I gained 5%" | "Log growth rate was 0.0488" |
 
 !!! tip "When to use which?"
+
     - **Simple returns** for reporting to users and computing portfolio-level returns
     - **Log returns** for statistical analysis, volatility estimation, and time-series models
 

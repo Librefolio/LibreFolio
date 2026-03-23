@@ -47,6 +47,7 @@ Quando sono configurati più percorsi per una coppia:
 - Puoi **riordinare** i percorsi per cambiare le priorità
 
 !!! example "Esempio di fallback"
+
     EUR/USD configurato con:
 
     1. **BCE** (primario) — Banca Centrale Europea
@@ -63,4 +64,5 @@ Quando sono configurati più percorsi per una coppia:
 - 📋 **[Elenco dei provider FX](../../../developer/backend/fx/providers_list.md)** — Dettagli tecnici su ogni provider (BCE, FED, BOE, SNB)
 
 !!! tip "🔗 Come vengono calcolati i percorsi a catena"
+
     Per l'algoritmo matematico dietro le catene di conversione multi‑salto, vedi [Algoritmo della catena FX](../../../developer/frontend/fx-chain-algorithm.md).

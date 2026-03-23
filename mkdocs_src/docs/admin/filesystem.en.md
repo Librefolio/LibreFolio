@@ -108,6 +108,7 @@ At minimum, back up:
 3. **`broker_reports/uploaded/`** — Original broker reports (in case you need to re-parse)
 
 !!! tip "Database-only backup"
+
     If storage is limited, backing up just `sqlite/app.db` preserves all structured data. Files can always be re-uploaded.
 
 ---

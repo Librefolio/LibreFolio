@@ -3,10 +3,12 @@
 Experimenta la interfaz móvil adaptable de LibreFolio. Las capturas de pantalla se adaptan automáticamente al tema e idioma seleccionados.
 
 !!! tip "Tema e Idioma"
+
 Usa el **selector de tema** en el encabezado (☀️/🌙) para cambiar entre modo claro y oscuro.
 Usa el **selector de idioma** (🇬🇧) en el encabezado para ver las capturas en diferentes idiomas.
 
 !!! info "Optimizado para Móvil"
+
 LibreFolio es completamente adaptable y funciona a la perfección en smartphones y tablets. La interfaz se adapta automáticamente a pantallas más pequeñas con un menú de navegación plegable.
 
 ---

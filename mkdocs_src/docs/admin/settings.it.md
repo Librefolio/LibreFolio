@@ -18,6 +18,7 @@ LibreFolio ha un set di **impostazioni di sistema** che riguardano tutti gli ute
 </div>
 
 !!! warning "**Solo Superutenti**"
+
     Solo gli utenti con privilegi di **superutente** possono modificare le impostazioni globali. Gli utenti standard vedono una vista di sola lettura.
 
 ### 💻 Tramite CLI

@@ -39,6 +39,7 @@ El editor muestra una tabla desplazable con todos los puntos de datos de este pa
 2. Confirma la eliminación
 
 !!! warning "Los datos sincronizados sobrescriben las ediciones manuales"
+
     Si editas o agregas manualmente un punto de datos para una fecha que luego es cubierta por una sincronización, el valor del proveedor **sobrescribirá** tu edición manual — el proveedor siempre se considera la fuente autorizada. Para pares donde desees control manual completo, usa el proveedor MANUAL (sin fuente de datos automática) — ver [Configuración de Proveedor](provider.md).
 
 ---
@@ -155,4 +156,5 @@ Al importar vía CSV o al añadir puntos manualmente en el editor:
 - ✅ Las **fechas que no están en la importación** se dejan sin cambios
 
 !!! tip "Ideal para pares MANUAL"
+
     El editor de datos es particularmente útil para pares configurados con el proveedor MANUAL (sin fuente de datos automática). Para pares con proveedor, las ediciones manuales serán sobrescritas en la próxima sincronización.

@@ -67,6 +67,7 @@ Before confirming, you can adjust:
 - 📐 **Output size**: Width and height in pixels (linked to the preset, but editable)
 
 !!! tip "Ellipse Preview"
+
     For avatar and icon presets, a circular **ellipse overlay** is shown on the crop area. This helps you preview how the image will look in a circular frame (e.g., user avatars in the navigation bar).
 
 ---
@@ -81,4 +82,5 @@ Before confirming, you can adjust:
 6. Click **Cancel** or close the modal to discard changes
 
 !!! info "Non-image files"
+
     If you upload a non-image file (PDF, CSV, etc.), the crop modal is skipped. Instead, a simple rename dialog appears.

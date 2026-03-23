@@ -3,6 +3,7 @@
 Esta página documenta los indicadores de análisis técnico disponibles como superposiciones de gráficos en el módulo FX de LibreFolio. Cada indicador se explica desde dos perspectivas complementarias: la interpretación **financiera** que los traders usan a diario, y el equivalente en **procesamiento de señales** que los ingenieros de sistemas de control o con formación en DSP reconocerán al instante.
 
 !!! info "¿Por qué dos perspectivas?"
+
     Los mercados financieros **no** son sistemas LTI (Lineales e Invariantes en el Tiempo) estacionarios — son ruidosos, caóticos y su contenido espectral cambia con el tiempo. Sin embargo, las herramientas matemáticas que aplicamos para extraer tendencia, momento o volatilidad son *exactamente* los mismos filtros de tiempo discreto que se enseñan en cualquier curso de procesamiento de señales. Si alguna vez has diseñado un pasa-bajos Butterworth o calculado una varianza móvil, ya entiendes estos indicadores — solo con nombres diferentes.
 
 ---
@@ -76,6 +77,7 @@ $$
 Cuando $\alpha$ es pequeño ($N$ grande) la banda de paso se estrecha dramáticamente, atenuando todo excepto el componente DC (la tendencia a largo plazo).
 
 !!! tip "Ubicación del polo"
+
     El único polo está en $z = 1-\alpha$. Para $N = 200$, $\alpha \approx 0.01$, entonces el polo está en $z = 0.99$ — extremadamente cerca del círculo unitario, lo que explica el fuerte suavizado y el gran retraso de grupo.
 
 :material-link: [EMA en Wikipedia](https://en.wikipedia.org/wiki/Exponential_smoothing){ target="_blank" }
@@ -133,6 +135,7 @@ $$
 La Línea de Señal es otro pasa-bajos aplicado a esta salida pasa-banda — actúa como un **filtro adaptado**, retrasando ligeramente la señal para reducir detecciones de cruce falsos positivos.
 
 !!! note "Interpretación como derivada"
+
     Para $\alpha$ pequeño, $EMA_{fast} - EMA_{slow}$ se comporta como una primera derivada suavizada $\frac{d}{dt}[\text{tendencia}]$. Cuando el histograma cambia de signo, la "velocidad" de la tendencia cambia de dirección.
 
 :material-link: [MACD en Wikipedia](https://en.wikipedia.org/wiki/MACD){ target="_blank" }
@@ -188,6 +191,7 @@ Imagina dividir la señal de delta de precio $\Delta P[n]$ en sus componentes re
 En términos de sistemas de control, es un **detector de saturación**: cuando la salida del sistema (precio) ha estado moviéndose en una dirección por demasiado tiempo, el RSI señaliza que el actuador (mercado) está cerca de su riel. Como cualquier oscilador en un bucle de retroalimentación, cuanto más lejos del equilibrio, más fuerte es la fuerza restauradora — de ahí la propiedad de reversión a la media que los traders explotan.
 
 !!! warning "No estacionariedad"
+
     Los umbrales 70/30 asumen distribuciones de retorno aproximadamente simétricas. En mercados con tendencias fuertes, el RSI puede permanecer por encima de 70 durante semanas — es un indicador *probabilístico*, no determinista.
 
 :material-link: [RSI en Wikipedia](https://en.wikipedia.org/wiki/Relative_strength_index){ target="_blank" }
@@ -237,6 +241,7 @@ La Banda Media es un filtro de media móvil **FIR (Finite Impulse Response)** �
 En el lenguaje de filtros adaptativos, esto es un **rastreador de valor esperado con un intervalo de confianza adaptativo**. Cuando la varianza $\sigma^2$ cae (la "contracción de Bollinger" o *squeeze*), el sistema está en un estado de baja entropía. En sistemas caóticos como los mercados financieros, los períodos de baja entropía son seguidos de manera confiable por explosiones de alta entropía (alta volatilidad) — haciendo de la contracción una de las configuraciones más vigiladas en el análisis técnico.
 
 !!! info "FIR vs IIR"
+
     A diferencia de la EMA (IIR, un polo), la SMA es un filtro **FIR** con un retraso de grupo perfectamente plano de $(N-1)/2$ muestras. Compensa una banda de transición más ancha por distorsión de fase cero — ideal para centrar la envolvente de confianza.
 
 :material-link: [Bandas de Bollinger en Wikipedia](https://en.wikipedia.org/wiki/Bollinger_Bands){ target="_blank" }

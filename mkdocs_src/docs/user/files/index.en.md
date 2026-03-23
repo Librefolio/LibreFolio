@@ -53,6 +53,7 @@ To upload a file:
 </div>
 
 !!! tip "File Size Limit"
+
     The maximum upload size is configured by the system administrator in [Global Settings](../../admin/settings.md). The default is typically 10 MB.
 
 ---
@@ -67,9 +68,11 @@ If you want to import transactions from your broker:
 4. The system will later attempt to **automatically detect** the file format via the BRIM import system and parse the transactions
 
 !!! info "Association ≠ Parsing"
+
     The broker you choose when uploading is for **association** only — it determines which broker account receives the imported transactions. The format detection and parsing happen in a separate step and are **independent** of the broker: the same BRIM plugin can work for multiple brokers if they export in the same format.
 
 !!! note "Work in Progress"
+
     The full broker report import UI (BRIM) is under active development. Currently, you can upload reports and associate them with brokers, but the guided import wizard is not yet available.
 
 ---

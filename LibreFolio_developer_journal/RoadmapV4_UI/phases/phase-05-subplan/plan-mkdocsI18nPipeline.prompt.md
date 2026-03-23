@@ -1,7 +1,8 @@
 # Plan: Pipeline i18n MkDocs con Aphra
 
 **Data creazione**: 21 Marzo 2026
-**Status**: 🔄 IN CORSO — Step 1-6.3 completati, Step 6.4 (traduzione pilota) in test con Ollama locale, Step 6.5 (validation script) completato, nav_translations completate per it/fr/es
+**Status**: ✅ COMPLETATO — Pipeline completa, 100/100 file tradotti, validation script, structural diff, cache v2
+**Completato**: 22 Marzo 2026
 **Priorità**: Media (ultima fase di Phase 5)
 **Stima**: ~2-3 giorni
 **Dipendenze**: `plan-fxDocumentation.prompt.md` Fasi 1-2.5 completate ✅, `plan-docsPerfection.prompt.md` completato ✅
@@ -80,7 +81,7 @@ Il file attuale contiene la chiave raw senza nome variabile. Riscriverlo con for
 # Account: alfystar1701@gmail.com
 # Key name: Aphra-translate-pipeline
 # Setup: OpenRouter BYOK → Google Gemini
-OPENROUTER_API_KEY=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
+OPENROUTER_API_KEY=sk-or-v1-your-key-here
 ```
 
 ### 1.2 Creare `.env.example`

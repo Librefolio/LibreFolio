@@ -21,6 +21,7 @@ Se invece **reinvesti** quei guadagni — manualmente o automaticamente attraver
 In pratica, la differenza tra crescita lineare e composta si allarga drasticamente su orizzonti lunghi. Ecco perché il benchmark Lineare appare come una linea retta mentre il benchmark Composto curva verso l'alto esponenzialmente.
 
 !!! abstract "Plusvalenze e minusvalenze"
+
     Quando si vende un asset al di sopra del prezzo di acquisto, la differenza è una **plusvalenza**; al di sotto, una **minusvalenza**. Ogni giurisdizione ha le proprie regole riguardo aliquote fiscali, soglie per periodo di detenzione, durata del riporto delle perdite e metodi di abbinamento (FIFO, LIFO, identificazione specifica). Per una panoramica teorica, vedi [Tassazione & Efficienza Fiscale](taxation.md).
 
 ### 🔢 Formula Matematica
@@ -103,6 +104,7 @@ $$
 Questo è matematicamente equivalente alla forma chiusa $y_0(1+r)^t$ ma sostituisce $N$ costose operazioni di potenza con $N$ semplici moltiplicazioni — lo stesso principio dietro come le banche effettivamente **maturano** gli interessi composti giornalieri.
 
 !!! tip "Regola del 72"
+
     Una scorciatoia mentale rapida: un investimento che cresce al $r$% annuo raddoppierà approssimativamente in $72 / r$ anni. Al 7% → ~10,3 anni.
 
 ### ⚙️ Parametri

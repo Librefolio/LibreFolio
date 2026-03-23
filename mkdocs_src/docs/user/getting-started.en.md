@@ -23,6 +23,7 @@ Fill in your details:
 </div>
 
 !!! info "First User = Admin"
+
     The very first user to register automatically becomes the **system administrator** (superuser). This user can manage global settings, promote other users, and access all admin features.
 
 ---
@@ -42,6 +43,7 @@ After registering, you'll be redirected to the login page. Enter your credential
 A **Broker** in LibreFolio represents a brokerage account — the place where your investments live (e.g., Interactive Brokers, Degiro, a bank account, etc.).
 
 !!! note "Why do I need a Broker?"
+
     All transactions in LibreFolio are tied to a broker. It's the container that groups your trades, imports, and reports. You need at least one broker before you can start tracking anything.
 
 ### 📋 Steps
@@ -75,4 +77,5 @@ Now that you have an account and a broker, you can:
 - ⚙️ **[Customize settings](../admin/settings.md)** — Adjust language, theme, and system preferences
 
 !!! tip "Portfolio Calculations"
+
     Brokers are also used for portfolio aggregation calculations. When you share a broker with another user and set a **share percentage**, the system can compute each user's portion of the total portfolio value. This feature is under active development.

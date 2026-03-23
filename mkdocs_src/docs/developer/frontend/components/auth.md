@@ -3,6 +3,7 @@
 This section documents the authentication UI components used for login, registration, and password management.
 
 !!! note "Card Components (Not Modals)"
+
     These components were renamed from `*Modal` to `*Card` (Feb 2026) because they are card-style forms displayed inline on the login page, not modal overlays. They do **not** extend `ModalBase`.
 
 > Uses [PasswordInput and PasswordStrength](ui-base/atoms.md#passwordinput) from the UI Base components.

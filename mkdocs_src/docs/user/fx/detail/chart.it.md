@@ -31,6 +31,7 @@ Passando alla modalità %, anche tutti i segnali overlay vengono ricalcolati com
 Puoi anche utilizzare i **preset temporali** (1S, 1M, 3M, 6M, 1A, 2A) o selezionare un intervallo **Personalizzato** per passare rapidamente a periodi specifici.
 
 !!! info "Disponibilità dei dati"
+
     Se l'intervallo selezionato supera i dati disponibili, LibreFolio mostra quello che c'è. Usa **Sincronizza** per provare a scaricare dati più vecchi dal provider — ma nota che alcuni provider hanno una copertura storica limitata.
 
 ---

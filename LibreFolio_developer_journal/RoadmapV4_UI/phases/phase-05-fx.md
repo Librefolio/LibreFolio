@@ -2,7 +2,7 @@
 
 **Status**: ✅ Completata (Gennaio–Marzo 2026)  
 **Ultimo piano completato**: [`plan-fxTestingCleanup.prompt.md`](phase-05-subplan/plan-fxTestingCleanup.prompt.md)  
-**Piano documentazione (in corso)**: [`plan-fxDocumentation.prompt.md`](../plan-fxDocumentation.prompt.md)
+**Piano documentazione**: [`plan-fxDocumentation.prompt.md`](phase-05-subplan/plan-fxDocumentation.prompt.md) ✅ Completato
 
 ---
 
@@ -67,7 +67,7 @@ Tutti archiviati in [`phases/phase-05-subplan/`](phase-05-subplan/).
 
 ## Piano attivo: Testing & Cleanup
 
-Il piano corrente [`plan-fxDocumentation.prompt.md`](../plan-fxDocumentation.prompt.md) copre la documentazione finale.
+Il piano corrente [`plan-fxDocumentation.prompt.md`](phase-05-subplan/plan-fxDocumentation.prompt.md) copre la documentazione finale.
 
 I test sono completati — vedi [`plan-fxTestingCleanup.prompt.md`](phase-05-subplan/plan-fxTestingCleanup.prompt.md):
 
@@ -98,7 +98,6 @@ I test sono completati — vedi [`plan-fxTestingCleanup.prompt.md`](phase-05-sub
 ## Struttura file di riferimento
 
 ```
-phases/phase-05-subplan/          ← 24 sub-plan completati (incl. testing, JWT, auth-guard)
+phases/phase-05-subplan/          ← 29 sub-plan completati (incl. testing, JWT, auth-guard, docs, i18n)
   05FX_outofdate_plan/            ← plan legacy pre-redesign
-plan-fxDocumentation.prompt.md    ← piano attivo (documentazione MkDocs)
 ```

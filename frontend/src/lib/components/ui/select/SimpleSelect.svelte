@@ -198,7 +198,7 @@
             {#if selectedItem}
                 {@render selectedItem(selectedOption)}
             {:else if selectedOption.icon}
-                <span class="truncate">{selectedOption.icon} {selectedOption.label}</span>
+                <span class="truncate emoji-flag">{selectedOption.icon} {selectedOption.label}</span>
             {:else}
                 <span class="truncate">{selectedOption.label}</span>
             {/if}
@@ -250,7 +250,7 @@
                                 {@render item(option)}
                             </div>
                         {:else if option.icon}
-                            <span class="truncate">{option.icon} {option.label}</span>
+                            <span class="truncate emoji-flag">{option.icon} {option.label}</span>
                         {:else}
                             <span class="truncate">{option.label}</span>
                         {/if}

@@ -38,9 +38,11 @@ The sync process:
 After sync, you'll see the number of **points downloaded** and how many were **actually new** (not previously present in the database).
 
 !!! warning "Provider is authoritative"
+
     Re-syncing a pair will overwrite any manually edited values in the synced date range. If you need to preserve manual edits, consider using a pair configured with the MANUAL provider (no automatic data source).
 
 !!! info "Chain conversion precision"
+
     When using chain routes (e.g., RON → EUR → JPY), each intermediate conversion introduces a minimal rounding error. While negligible for most purposes, be aware that chain-converted rates may differ slightly from direct market quotes.
 
 ---

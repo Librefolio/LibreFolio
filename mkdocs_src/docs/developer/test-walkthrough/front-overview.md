@@ -45,6 +45,7 @@ When you run a frontend test category, `dev.py` handles everything automatically
 5. **Tears down** — Stops the server after tests complete
 
 !!! info "Test isolation"
+
     Test mode uses a completely separate database (`backend/data/test/sqlite/app.db`). Your production data is never touched.
 
 ---

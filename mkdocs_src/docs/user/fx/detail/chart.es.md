@@ -31,6 +31,7 @@ Al cambiar al modo %, todas las señales superpuestas también se recalculan com
 También puedes usar los **presets temporales** (1S, 1M, 3M, 6M, 1A, 2A) o seleccionar un rango **Personalizado** para acceder rápidamente a períodos específicos.
 
 !!! info "Disponibilidad de datos"
+
     Si el rango seleccionado excede los datos disponibles, LibreFolio muestra lo que hay. Usa **Sincronizar** para intentar descargar datos más antiguos — pero ten en cuenta que algunos proveedores tienen cobertura histórica limitada.
 
 ---

@@ -31,6 +31,7 @@ LibreFolio uses **stateless JWT (JSON Web Token)** authentication stored in **HT
 4. `<img>` tags, `fetch()` calls, and page navigations all send the cookie seamlessly
 
 !!! success "Why cookies over Bearer headers?"
+
     HTTP-only cookies are **automatically sent** by the browser for all same-origin requests — including `<img src>`, `<link href>`, and AJAX calls. This means uploaded files and plugin assets are served securely without any special frontend handling.
 
 ### 🗝️ JWT Secret
@@ -41,6 +42,7 @@ The JWT signing key (`JWT_SECRET`) is:
 - **🐳 Production/Docker**: Can be set as a fixed environment variable (`JWT_SECRET=your-secret-here`) for persistence across restarts.
 
 !!! warning "⚙️ Multi-worker support"
+
     On macOS, Uvicorn uses `spawn` (not `fork`) for worker processes. Each worker re-imports all modules, so the JWT secret **must** be shared via environment variable. `dev.py` handles this automatically by generating the secret before launching Uvicorn.
 
 ### ⏰ Token Expiration
@@ -95,6 +97,7 @@ All endpoints that access or modify user data require a valid session cookie (`D
 All other endpoints — including Auth (profile, password), Settings, Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Backup, and Users — require a valid session cookie.
 
 !!! info "📁 Files are protected too"
+
     Uploaded files (`/uploads/file/{id}`) and plugin assets (`/uploads/plugin/{type}/{path}`) **require authentication**. Since auth uses HTTP-only cookies, the browser includes the session automatically for `<img>` tags — no special handling needed.
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).

@@ -39,6 +39,7 @@ L'editor mostra una tabella scorrevole di tutti i punti dati per questa coppia d
 2. Conferma l'eliminazione
 
 !!! warning "I dati sincronizzati sovrascrivono le modifiche manuali"
+
     Se modifichi o aggiungi manualmente un punto dati per una data che viene successivamente coperta da una sincronizzazione, il valore del provider **sovrascriverà** la tua modifica manuale — il provider è sempre considerato la fonte autorevole. Per le coppie in cui desideri il pieno controllo manuale, usa il provider MANUAL (nessuna fonte di dati automatica) — vedi [Configurazione Provider](provider.md).
 
 ---
@@ -155,4 +156,5 @@ Durante l'importazione via CSV o l'aggiunta manuale di punti nell'editor:
 - ✅ Le **date non presenti nell'importazione** rimangono invariate
 
 !!! tip "Ideale per coppie MANUAL"
+
     L'editor dati è particolarmente utile per le coppie configurate con il provider MANUAL (nessuna fonte di dati automatica). Per le coppie con provider, le modifiche manuali verranno sovrascritte alla prossima sincronizzazione.

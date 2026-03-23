@@ -31,6 +31,7 @@ Para cada medición, el panel muestra:
 | **Retorno Anualizado** | Retorno anual proyectado basado en el período medido | +17.8% p.a. |
 
 !!! info "📚 Retorno Anualizado"
+
     El retorno anualizado utiliza la fórmula de **Tasa de Crecimiento Anual Compuesto (CAGR)**. Para una explicación comprensiva que incluye retornos logarítmicos, capitalización y cuándo usar cada método, consulta:
 
     :material-book-open-variant: **[Retornos & Tasas de Crecimiento — Teoría Financiera](../../../financial-theory/returns.md)**

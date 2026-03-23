@@ -53,6 +53,7 @@ Para subir un archivo:
 </div>
 
 !!! consejo "Límite de Tamaño de Archivo"
+
     El tamaño máximo de subida está configurado por el administrador del sistema en [Configuración Global](../../admin/settings.md). El valor predeterminado suele ser de 10 MB.
 
 ---
@@ -67,9 +68,11 @@ Si quieres importar transacciones desde tu broker:
 4. El sistema intentará luego **detectar automáticamente** el formato del archivo mediante el sistema de importación BRIM y procesar las transacciones
 
 !!! info "Asociación ≠ Análisis"
+
     El broker elegido al subir el archivo es solo para **asociación** — determina qué cuenta de broker recibe las transacciones importadas. La detección del formato y el análisis ocurren en un paso separado y son **independientes** del broker: el mismo plugin BRIM puede funcionar para varios brokers si exportan en el mismo formato.
 
 !!! note "En desarrollo"
+
     La interfaz completa para importar informes de broker (BRIM) está en desarrollo activo. Actualmente, puedes subir informes y asociarlos con brokers, pero el asistente de importación paso a paso aún no está disponible.
 
 ---

@@ -31,6 +31,7 @@ En passant en mode %, tous les signaux superposés sont également recalculés e
 Vous pouvez également utiliser les **préréglages temporels** (1S, 1M, 3M, 6M, 1A, 2A) ou sélectionner une plage **Personnalisée** pour accéder rapidement à des périodes spécifiques.
 
 !!! info "Disponibilité des données"
+
     Si la plage sélectionnée dépasse les données disponibles, LibreFolio affiche ce qui est disponible. Utilisez **Synchroniser** pour essayer de télécharger des données plus anciennes — mais notez que certains fournisseurs ont une couverture historique limitée.
 
 ---

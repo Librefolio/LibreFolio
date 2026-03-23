@@ -3,6 +3,7 @@
 Comprender la fiscalidad es esencial para maximizar los rendimientos de inversión a largo plazo. Esta página cubre los fundamentos teóricos — **no las reglas específicas de cada jurisdicción** — de cómo los impuestos interactúan con el crecimiento del portafolio.
 
 !!! warning "No es asesoramiento financiero"
+
     LibreFolio no proporciona asesoramiento fiscal. Cada jurisdicción tiene reglas diferentes respecto a tipos impositivos, períodos de tenencia, compensación de pérdidas y métodos de asignación. Consulta a un profesional fiscal cualificado para tu situación específica.
 
 ---
@@ -38,6 +39,7 @@ Cuando has comprado el mismo activo varias veces a precios diferentes, ¿qué co
 | **Identificación Específica** | Tú eliges qué lote vender | Máxima optimización fiscal |
 
 !!! info "LibreFolio usa FIFO"
+
     LibreFolio calcula las ganancias de capital utilizando la asignación **FIFO** en tiempo de ejecución. La asignación se calcula bajo demanda, no se almacena en la base de datos.
 
 ---
@@ -131,6 +133,7 @@ Cada país tiene su propio marco fiscal. Parámetros clave que varían:
 | **Reglas específicas para criptomonedas** | En rápida evolución; a menudo tratadas de forma diferente a los activos tradicionales |
 
 !!! abstract "El papel de LibreFolio"
+
     LibreFolio rastrea tus transacciones y calcula las ganancias/pérdidas de capital realizadas usando la asignación FIFO. Proporciona la **base de datos** para la declaración fiscal, pero no genera declaraciones fiscales ni aplica reglas específicas de jurisdicción. Exporta los datos de tus transacciones y consulta a un profesional fiscal.
 
 ---
