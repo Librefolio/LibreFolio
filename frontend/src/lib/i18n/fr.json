@@ -240,7 +240,25 @@
     "title": "Actifs",
     "subtitle": "Visualisez et gérez vos investissements",
     "addAsset": "Ajouter un Actif",
-    "placeholderMessage": "La gestion des actifs sera bientôt disponible."
+    "placeholderMessage": "La gestion des actifs sera bientôt disponible.",
+    "searchPlaceholder": "Rechercher des actifs...",
+    "allTypes": "Tous les types",
+    "allCurrencies": "Toutes les devises",
+    "showActive": "Actifs seulement",
+    "showAll": "Tout afficher",
+    "table": {
+      "name": "Nom",
+      "currency": "Devise",
+      "lastPrice": "Dernier Prix",
+      "provider": "Fournisseur",
+      "active": "Actif"
+    },
+    "empty": {
+      "noAssets": "Aucun actif",
+      "noAssetsDesc": "Ajoutez votre premier actif pour commencer à suivre les prix.",
+      "noMatchesTitle": "Aucun Résultat",
+      "noMatchesDesc": "Aucun actif ne correspond aux filtres actuels."
+    }
   },
   "transactions": {
     "title": "Transactions",

@@ -2117,6 +2117,66 @@ type FAProviderAssignmentReadItem = {
     ((string | null) | Array<string | null>)
     | undefined;
 };
+type FAProviderInfo = {
+  /**
+   * Provider code (e.g., yfinance, cssscraper)
+   */
+  code: string;
+  /**
+   * Provider full name
+   */
+  name: string;
+  /**
+   * Provider description
+   */
+  description: string;
+  icon_url?:
+    | /**
+     * Provider icon URL (hardcoded)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  /**
+   * Whether provider supports asset search
+   */
+  supports_search: boolean;
+  params_schema?: /**
+   * Form field definitions for provider_params
+   */
+  Array<FAProviderParamField> | undefined;
+};
+type FAProviderParamField = {
+  /**
+   * Parameter key name
+   */
+  key: string;
+  /**
+   * Field type: 'string', 'number', 'select', 'json'
+   */
+  type: string;
+  /**
+   * Whether this field is required
+   */
+  required: boolean;
+  description?: /**
+   * Human-readable description
+   *
+   * @default ""
+   */
+  string | undefined;
+  options?:
+    | /**
+     * Options for 'select' type
+     */
+    ((Array<string> | null) | Array<Array<string> | null>)
+    | undefined;
+  default?:
+    | /**
+     * Default value
+     */
+    ((unknown | null) | Array<unknown | null>)
+    | undefined;
+};
 type FAProviderSearchResponse = {
   /**
    * Original search query
@@ -4321,7 +4381,29 @@ const FABulkRefreshResponse: z.ZodType<FABulkRefreshResponse> = z.object({
     .describe("Operation-level errors (not per-item)")
     .optional(),
 });
-const FAProviderInfo = z.object({
+const providers__2 = z
+  .union([z.string(), z.null()])
+  .describe("Comma-separated provider codes to filter (default: all)")
+  .optional();
+const FAProviderParamField: z.ZodType<FAProviderParamField> = z.object({
+  key: z.string().describe("Parameter key name"),
+  type: z.string().describe("Field type: 'string', 'number', 'select', 'json'"),
+  required: z.boolean().describe("Whether this field is required"),
+  description: z
+    .string()
+    .describe("Human-readable description")
+    .optional()
+    .default(""),
+  options: z
+    .union([z.array(z.string()), z.null()])
+    .describe("Options for 'select' type")
+    .optional(),
+  default: z
+    .union([z.unknown(), z.null()])
+    .describe("Default value")
+    .optional(),
+});
+const FAProviderInfo: z.ZodType<FAProviderInfo> = z.object({
   code: z.string().describe("Provider code (e.g., yfinance, cssscraper)"),
   name: z.string().describe("Provider full name"),
   description: z.string().describe("Provider description"),
@@ -4332,6 +4414,10 @@ const FAProviderInfo = z.object({
   supports_search: z
     .boolean()
     .describe("Whether provider supports asset search"),
+  params_schema: z
+    .array(FAProviderParamField)
+    .describe("Form field definitions for provider_params")
+    .optional(),
 });
 const FAProviderAssignmentItem: z.ZodType<FAProviderAssignmentItem> = z.object({
   asset_id: z.number().int().describe("Asset ID"),
@@ -4462,7 +4548,7 @@ const FABulkRemoveResponse: z.ZodType<FABulkRemoveResponse> = z.object({
     .describe("Operation-level errors (not per-item)")
     .optional(),
 });
-const providers__2 = z
+const providers__3 = z
   .union([z.string(), z.null()])
   .describe("Comma-separated provider codes (default: all)")
   .optional();
@@ -5855,6 +5941,8 @@ export const schemas = {
   FARefreshItem,
   FARefreshResult,
   FABulkRefreshResponse,
+  providers__2,
+  FAProviderParamField,
   FAProviderInfo,
   FAProviderAssignmentItem,
   FAProviderRefreshFieldsDetail,
@@ -5862,7 +5950,7 @@ export const schemas = {
   FABulkAssignResponse,
   FAProviderRemovalResult,
   FABulkRemoveResponse,
-  providers__2,
+  providers__3,
   FAProviderSearchResultItem,
   FAProviderSearchResponse,
   FAProviderAssignmentReadItem,
@@ -6332,9 +6420,25 @@ Returns a list of FAPricePoint with OHLC data, volume, and backward-fill info.`,
     method: "get",
     path: "/api/v1/assets/provider",
     alias: "list_providers_api_v1_assets_provider_get",
-    description: `List all available asset pricing providers.`,
+    description: `List all available asset pricing providers.
+
+Optionally filter by provider codes (comma-separated).`,
     requestFormat: "json",
+    parameters: [
+      {
+        name: "providers",
+        type: "Query",
+        schema: providers__2,
+      },
+    ],
     response: z.array(FAProviderInfo),
+    errors: [
+      {
+        status: 422,
+        description: `Validation Error`,
+        schema: HTTPValidationError,
+      },
+    ],
   },
   {
     method: "post",
@@ -6558,7 +6662,7 @@ GET /api/v1/assets/provider/search?q&#x3D;AAPL&amp;providers&#x3D;yfinance,juste
       {
         name: "providers",
         type: "Query",
-        schema: providers__2,
+        schema: providers__3,
       },
     ],
     response: FAProviderSearchResponse,

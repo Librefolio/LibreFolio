@@ -240,7 +240,25 @@
     "title": "Asset",
     "subtitle": "Visualizza e gestisci i tuoi investimenti",
     "addAsset": "Aggiungi Asset",
-    "placeholderMessage": "La gestione degli asset sarà disponibile a breve."
+    "placeholderMessage": "La gestione degli asset sarà disponibile a breve.",
+    "searchPlaceholder": "Cerca asset...",
+    "allTypes": "Tutti i tipi",
+    "allCurrencies": "Tutte le valute",
+    "showActive": "Solo attivi",
+    "showAll": "Mostra tutti",
+    "table": {
+      "name": "Nome",
+      "currency": "Valuta",
+      "lastPrice": "Ultimo Prezzo",
+      "provider": "Provider",
+      "active": "Attivo"
+    },
+    "empty": {
+      "noAssets": "Nessun asset",
+      "noAssetsDesc": "Aggiungi il tuo primo asset per iniziare a monitorare i prezzi.",
+      "noMatchesTitle": "Nessun Risultato",
+      "noMatchesDesc": "Nessun asset corrisponde ai filtri attuali."
+    }
   },
   "transactions": {
     "title": "Transazioni",

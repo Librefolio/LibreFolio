@@ -37,6 +37,27 @@ from backend.app.schemas.common import BaseDeleteResult, BaseBulkResponse, OldNe
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
 # ============================================================================
+# FA PROVIDER PARAM FIELD
+# ============================================================================
+
+
+class FAProviderParamField(BaseModel):
+    """Single field definition for provider_params form.
+
+    Used by the frontend to generate dynamic forms for provider configuration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(..., description="Parameter key name")
+    type: str = Field(..., description="Field type: 'string', 'number', 'select', 'json'")
+    required: bool = Field(..., description="Whether this field is required")
+    description: str = Field("", description="Human-readable description")
+    options: Optional[List[str]] = Field(None, description="Options for 'select' type")
+    default: Optional[Any] = Field(None, description="Default value")
+
+
+# ============================================================================
 # FA PROVIDER INFO
 # ============================================================================
 
@@ -54,6 +75,10 @@ class FAProviderInfo(BaseModel):
     description: str = Field(..., description="Provider description")
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
     supports_search: bool = Field(..., description="Whether provider supports asset search")
+    params_schema: List[FAProviderParamField] = Field(
+        default_factory=list,
+        description="Form field definitions for provider_params"
+    )
 
 
 # ============================================================================

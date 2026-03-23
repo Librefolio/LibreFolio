@@ -13,11 +13,14 @@
     import {zodiosApi} from '$lib/api';
     import {Coins, Plus, RefreshCw, RotateCw, Settings, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
+    import FxTable from '$lib/components/fx/FxTable.svelte';
+    import type {FxRow} from '$lib/components/fx/FxTable.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
     import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {
         getGlobalSettings, setGlobalSettings,
@@ -62,6 +65,9 @@
     let dateEnd = $state(new Date().toISOString().slice(0, 10));
     let activePreset: any = $state('3M');
     let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
+
+    // View mode (grid/list)
+    let viewMode = $state<'grid' | 'list'>('grid');
 
 
     // Delete
@@ -128,6 +134,16 @@
         const fc2 = filterCurrency2.toUpperCase();
         return p.config.base === fc2 || p.config.quote === fc2;
     }));
+
+    // Map to FxRow for table view
+    let fxTableRows = $derived<FxRow[]>(filteredPairs.map(p => ({
+        slug: p.config.slug,
+        base: p.config.base,
+        quote: p.config.quote,
+        data: p.data,
+        manualOnly: p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL',
+        providers: p.config.providers,
+    })));
 
     // =========================================================================
     // Lifecycle
@@ -601,6 +617,8 @@
                 <RefreshCw size={14} />
                 {#if showActionLabels}<span>{$_('fx.actions.refreshAll')}</span>{/if}
             </button>
+            <!-- View mode toggle -->
+            <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
         </div>
     </div>
 
@@ -645,7 +663,7 @@
                 <p class="text-gray-500 dark:text-gray-400">{$_('fx.empty.noMatchesDesc')}</p>
             {/if}
         </div>
-    {:else}
+    {:else if viewMode === 'grid'}
         <!-- Card Grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {#each filteredPairs as pair (pair.config.slug)}
@@ -667,6 +685,14 @@
                 />
             {/each}
         </div>
+    {:else}
+        <!-- Table View -->
+        <FxTable
+            data={fxTableRows}
+            loading={false}
+            onedit={handleEditPair}
+            ondelete={handleDeletePair}
+        />
     {/if}
 </div>
 

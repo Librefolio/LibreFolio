@@ -3,6 +3,7 @@ LibreFolio FastAPI application.
 Main entry point for the backend API.
 """
 
+import asyncio
 import os
 import sqlite3
 import subprocess
@@ -163,6 +164,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Initialize global settings with defaults (if not already present)
     await _initialize_global_settings()
 
+    # Pre-warm provider caches in background (non-blocking)
+    asyncio.create_task(_prewarm_provider_caches())
+
     yield
     # Shutdown
     logger.info("Shutting down LibreFolio")
@@ -179,6 +183,18 @@ async def _initialize_global_settings():
         created = await initialize_global_settings(session)
         if created > 0:
             logger.info(f"Initialized {created} global setting(s)")
+
+
+async def _prewarm_provider_caches():
+    """Pre-warm provider instances and their caches in background."""
+    try:
+        from backend.app.services.provider_registry import AssetProviderRegistry
+        for provider_info in AssetProviderRegistry.list_providers():
+            code = provider_info["code"]
+            AssetProviderRegistry.get_provider_instance(code)
+        logger.info("Provider caches pre-warmed successfully")
+    except Exception as e:
+        logger.warning(f"Provider cache pre-warm failed (non-blocking): {e}")
 
 
 # Create FastAPI app

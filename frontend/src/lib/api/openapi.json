@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.7-7-g871d511-dirty"
+    "version": "v0.5.8-1-ge40d065-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -805,7 +805,7 @@
     "/api/v1/users/search": {
       "get": {
         "tags": [
-          "users"
+          "Users"
         ],
         "summary": "Search users by username",
         "description": "Search for users by username (ILIKE match). Does NOT expose email for privacy. Optionally excludes users already having access to a specific broker.",
@@ -1913,8 +1913,28 @@
           "FA Provider"
         ],
         "summary": "List Providers",
-        "description": "List all available asset pricing providers.",
+        "description": "List all available asset pricing providers.\n\nOptionally filter by provider codes (comma-separated).",
         "operationId": "list_providers_api_v1_assets_provider_get",
+        "parameters": [
+          {
+            "name": "providers",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated provider codes to filter (default: all)",
+              "title": "Providers"
+            },
+            "description": "Comma-separated provider codes to filter (default: all)"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1926,6 +1946,16 @@
                     "$ref": "#/components/schemas/FAProviderInfo"
                   },
                   "title": "Response List Providers Api V1 Assets Provider Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -7613,6 +7643,14 @@
             "type": "boolean",
             "title": "Supports Search",
             "description": "Whether provider supports asset search"
+          },
+          "params_schema": {
+            "items": {
+              "$ref": "#/components/schemas/FAProviderParamField"
+            },
+            "type": "array",
+            "title": "Params Schema",
+            "description": "Form field definitions for provider_params"
           }
         },
         "additionalProperties": false,
@@ -7625,6 +7663,65 @@
         ],
         "title": "FAProviderInfo",
         "description": "Information about a single Financial Asset pricing provider.\n\nUsed for provider discovery and capability inspection."
+      },
+      "FAProviderParamField": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Parameter key name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Field type: 'string', 'number', 'select', 'json'"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "description": "Whether this field is required"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Human-readable description",
+            "default": ""
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options",
+            "description": "Options for 'select' type"
+          },
+          "default": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default",
+            "description": "Default value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "type",
+          "required"
+        ],
+        "title": "FAProviderParamField",
+        "description": "Single field definition for provider_params form.\n\nUsed by the frontend to generate dynamic forms for provider configuration."
       },
       "FAProviderRefreshFieldsDetail": {
         "properties": {

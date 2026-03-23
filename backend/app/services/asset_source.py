@@ -441,6 +441,18 @@ class AssetSourceProvider(ABC):
         """
         pass  # Default: no validation, accepts any params including None
 
+    @property
+    def params_schema(self) -> list[dict]:
+        """
+        Schema of fields required by provider_params for this provider.
+        The frontend uses this to generate dynamic forms.
+        Default: empty list (no parameters required).
+
+        Returns:
+            List of dicts with keys: key, type, required, description, options, default
+        """
+        return []
+
     async def fetch_asset_metadata(
         self,
         identifier: str,

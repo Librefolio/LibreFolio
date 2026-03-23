@@ -76,11 +76,11 @@ LibreFolio/
 
 | File | Quando leggerlo |
 |------|----------------|
-| [`01_backend.md`](01_backend.md) | Task su API, DB, services, providers, test backend |
-| [`02_frontend.md`](02_frontend.md) | Task su pagine, componenti, stores, charts, i18n |
-| [`03_documentation.md`](03_documentation.md) | Task su MkDocs: scrittura docs, stile, emoji, admonition, traduzione |
-| [`04_devpy_reference.md`](04_devpy_reference.md) | Usare `dev.py`: command tree completo, scenari comuni |
-| [`05_project_conventions.md`](05_project_conventions.md) | Convenzioni: lingua, naming, test users, dark mode, edit vs rewrite |
+| [`01_backend.md`](LibreFolio_developer_journal/knowledge_base/01_backend.md) | Task su API, DB, services, providers, test backend |
+| [`02_frontend.md`](LibreFolio_developer_journal/knowledge_base/02_frontend.md) | Task su pagine, componenti, stores, charts, i18n |
+| [`03_documentation.md`](LibreFolio_developer_journal/knowledge_base/03_documentation.md) | Task su MkDocs: scrittura docs, stile, emoji, admonition, traduzione |
+| [`04_devpy_reference.md`](LibreFolio_developer_journal/knowledge_base/04_devpy_reference.md) | Usare `dev.py`: command tree completo, scenari comuni |
+| [`05_project_conventions.md`](LibreFolio_developer_journal/knowledge_base/05_project_conventions.md) | Convenzioni: lingua, naming, test users, dark mode, edit vs rewrite |
 
 ---
 
