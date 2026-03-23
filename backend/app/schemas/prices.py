@@ -38,6 +38,7 @@ from backend.app.schemas.common import (
     BaseDeleteResult,
     BaseBulkResponse,
     BaseBulkDeleteResponse,
+    BaseListResponse,
     Currency,
     )
 
@@ -219,3 +220,40 @@ class FAHistoricalData(BaseModel):
     prices: List[FAPricePoint]
     currency: Optional[str] = None
     source: Optional[str] = None
+
+
+# ============================================================================
+# FA PRICE BULK QUERY
+# ============================================================================
+
+
+class FAPriceQueryItem(BaseModel):
+    """Single asset price query in a bulk request.
+
+    Uses DateRangeModel from common.py (same as FXConversionRequest.date_range).
+    If date_range.end is None, defaults to date_range.start (single day).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., description="Asset ID to query")
+    date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
+
+
+class FAPriceQueryResult(BaseModel):
+    """Response for a single asset price query."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., description="Asset ID queried")
+    prices: List[FAPricePoint] = Field(default_factory=list, description="Price history with backward-fill")
+
+
+class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
+    """Bulk response for price queries.
+
+    Inherits from BaseListResponse[FAPriceQueryResult]:
+    - items: List[FAPriceQueryResult]  (one per asset queried)
+    """
+    pass
+

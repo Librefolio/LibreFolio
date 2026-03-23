@@ -240,7 +240,6 @@
     "title": "Actifs",
     "subtitle": "Visualisez et gérez vos investissements",
     "addAsset": "Ajouter un Actif",
-    "placeholderMessage": "La gestion des actifs sera bientôt disponible.",
     "searchPlaceholder": "Rechercher des actifs...",
     "allTypes": "Tous les types",
     "allCurrencies": "Toutes les devises",
@@ -675,7 +674,10 @@
     "addMeasure": "Ajouter une mesure",
     "closeEditor": "Fermer l'éditeur",
     "swapConfirmTitle": "Modifications non enregistrées",
-    "swapConfirmMessage": "Vous avez des modifications non enregistrées dans l'éditeur de taux. Inverser la direction les supprimera. Continuer ?"
+    "swapConfirmMessage": "Vous avez des modifications non enregistrées dans l'éditeur de taux. Inverser la direction les supprimera. Continuer ?",
+    "noDataManual": "Aucune donnée disponible — insérez les taux manuellement",
+    "insertManually": "Insérer manuellement",
+    "syncDisabledManual": "Sync désactivé — aucun fournisseur configuré. Ajoutez un fournisseur ou insérez les taux manuellement."
   },
   "csvImport": {
     "title": "Importer des données CSV",

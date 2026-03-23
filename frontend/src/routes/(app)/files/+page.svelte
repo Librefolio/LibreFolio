@@ -21,6 +21,7 @@
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {uploadFile, formatBytes} from '$lib/utils/upload';
+    import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/globalSettings';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {ImageEditModal, FileEditModal} from '$lib/components/ui/media';
@@ -48,56 +49,36 @@
     ];
 
 
-    // LocalStorage keys
+    // LocalStorage keys (user-scoped via storage utils)
     const STORAGE_KEY_VIEW_MODE = 'filesPage_viewMode';
     const STORAGE_KEY_ACTIVE_TAB = 'filesPage_activeTab';
     const STORAGE_KEY_BROKER_FILTER = 'filesPage_brokerFilter';
 
-    // Load view mode from localStorage (default: list/table)
+    // Load view mode from user-scoped localStorage (default: list/table)
     function loadViewMode(): 'grid' | 'list' {
-        if (typeof window === 'undefined') return 'list';
-        try {
-            const stored = localStorage.getItem(STORAGE_KEY_VIEW_MODE);
-            return stored === 'grid' ? 'grid' : 'list';
-        } catch {
-            return 'list';
-        }
+        const stored = getUserStorage(STORAGE_KEY_VIEW_MODE, 'list');
+        return stored === 'grid' ? 'grid' : 'list';
     }
 
     function saveViewMode(mode: 'grid' | 'list'): void {
-        if (typeof window === 'undefined') return;
-        try {
-            localStorage.setItem(STORAGE_KEY_VIEW_MODE, mode);
-        } catch {
-            // Ignore storage errors
-        }
+        setUserStorage(STORAGE_KEY_VIEW_MODE, mode);
     }
 
-    // Load active tab from localStorage (default: static)
+    // Load active tab from user-scoped localStorage (default: static)
     function loadActiveTab(): Tab {
-        if (typeof window === 'undefined') return 'static';
-        try {
-            const stored = localStorage.getItem(STORAGE_KEY_ACTIVE_TAB);
-            return stored === 'brim' ? 'brim' : 'static';
-        } catch {
-            return 'static';
-        }
+        const stored = getUserStorage(STORAGE_KEY_ACTIVE_TAB, 'static');
+        return stored === 'brim' ? 'brim' : 'static';
     }
 
     function saveActiveTab(tab: Tab): void {
-        if (typeof window === 'undefined') return;
-        try {
-            localStorage.setItem(STORAGE_KEY_ACTIVE_TAB, tab);
-        } catch {
-            // Ignore storage errors
-        }
+        setUserStorage(STORAGE_KEY_ACTIVE_TAB, tab);
     }
 
-    // Load broker filter from localStorage
+    // Load broker filter from user-scoped localStorage
     function loadBrokerFilter(): Set<number> {
         if (typeof window === 'undefined') return new Set();
         try {
-            const stored = localStorage.getItem(STORAGE_KEY_BROKER_FILTER);
+            const stored = getUserStorage(STORAGE_KEY_BROKER_FILTER, '');
             if (stored) {
                 return new Set(JSON.parse(stored) as number[]);
             }
@@ -108,12 +89,7 @@
     }
 
     function saveBrokerFilter(filter: Set<number>): void {
-        if (typeof window === 'undefined') return;
-        try {
-            localStorage.setItem(STORAGE_KEY_BROKER_FILTER, JSON.stringify(Array.from(filter)));
-        } catch {
-            // Ignore
-        }
+        setUserStorage(STORAGE_KEY_BROKER_FILTER, JSON.stringify(Array.from(filter)));
     }
 
     let activeTab: Tab = 'static';

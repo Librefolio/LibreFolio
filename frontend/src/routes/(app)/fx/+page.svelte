@@ -479,7 +479,7 @@
 </script>
 
 <div class="space-y-6" data-testid="fx-page">
-    <!-- Header: Title left, + Add Pair right -->
+    <!-- Header: Title left, ViewModeToggle + Add Pair right -->
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
@@ -490,14 +490,17 @@
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
         </div>
-        <button
-            class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
-            onclick={handleAddPair}
-            data-testid="fx-add-pair-button"
-        >
-            <Plus size={16} />
-            {$_('fx.actions.addPair')}
-        </button>
+        <div class="flex items-center gap-2">
+            <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
+            <button
+                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
+                onclick={handleAddPair}
+                data-testid="fx-add-pair-button"
+            >
+                <Plus size={16} />
+                {$_('fx.actions.addPair')}
+            </button>
+        </div>
     </div>
 
     <!-- Filter Bar: 100% programmatic layout — NO flex-wrap, NO CSS-driven wrapping.
@@ -617,8 +620,6 @@
                 <RefreshCw size={14} />
                 {#if showActionLabels}<span>{$_('fx.actions.refreshAll')}</span>{/if}
             </button>
-            <!-- View mode toggle -->
-            <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
         </div>
     </div>
 

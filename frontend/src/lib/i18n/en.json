@@ -240,7 +240,6 @@
     "title": "Assets",
     "subtitle": "View and manage your investment assets",
     "addAsset": "Add Asset",
-    "placeholderMessage": "Asset management will be available soon.",
     "searchPlaceholder": "Search assets...",
     "allTypes": "All types",
     "allCurrencies": "All currencies",
@@ -675,7 +674,10 @@
     "addMeasure": "Add measurement",
     "closeEditor": "Close editor",
     "swapConfirmTitle": "Unsaved changes",
-    "swapConfirmMessage": "You have unsaved changes in the rate editor. Swapping direction will discard them. Continue?"
+    "swapConfirmMessage": "You have unsaved changes in the rate editor. Swapping direction will discard them. Continue?",
+    "noDataManual": "No data available — insert rates manually",
+    "insertManually": "Insert Manually",
+    "syncDisabledManual": "Sync disabled — no provider configured. Add a provider or insert rates manually."
   },
   "csvImport": {
     "title": "Import CSV Data",

@@ -240,7 +240,6 @@
     "title": "Activos",
     "subtitle": "Visualiza y gestiona tus inversiones",
     "addAsset": "Agregar Activo",
-    "placeholderMessage": "La gestión de activos estará disponible pronto.",
     "searchPlaceholder": "Buscar activos...",
     "allTypes": "Todos los tipos",
     "allCurrencies": "Todas las divisas",
@@ -675,7 +674,10 @@
     "addMeasure": "Añadir medición",
     "closeEditor": "Cerrar editor",
     "swapConfirmTitle": "Cambios sin guardar",
-    "swapConfirmMessage": "Tienes cambios sin guardar en el editor de tasas. Invertir la dirección los descartará. ¿Continuar?"
+    "swapConfirmMessage": "Tienes cambios sin guardar en el editor de tasas. Invertir la dirección los descartará. ¿Continuar?",
+    "noDataManual": "No hay datos disponibles — inserte las tasas manualmente",
+    "insertManually": "Insertar manualmente",
+    "syncDisabledManual": "Sync deshabilitado — ningún proveedor configurado. Agregue un proveedor o inserte las tasas manualmente."
   },
   "csvImport": {
     "title": "Importar datos CSV",

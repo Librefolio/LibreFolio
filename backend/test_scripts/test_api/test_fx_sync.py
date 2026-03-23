@@ -33,6 +33,32 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
 
 
+
+
+async def create_user_and_login(client: httpx.AsyncClient) -> None:
+    """Create a test user, login, and set session cookie on client."""
+    import uuid as _uuid
+    username = f"test_{int(__import__('time').time()*1000)}_{_uuid.uuid4().hex[:4]}"
+    email = f"{username}@test.com"
+    password = "TestPass123!"
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    if resp.status_code != 201:
+        raise Exception(f"Failed to create user: {resp.text}")
+    login_resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"Failed to login: {login_resp.text}")
+    session = login_resp.cookies.get("session")
+    if session:
+        client.cookies.set("session", session)
+
 def print_section(title: str):
     """Print test section header."""
     print(f"\n{'=' * 60}\n  {title}\n{'=' * 60}")
@@ -77,6 +103,7 @@ async def test_sync_invalid_date_range(test_server):
     print_section("Test 1: POST /fx/currencies/sync - Invalid date range")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         resp = await client.post(
             f"{API_BASE}/fx/currencies/sync",
             json={
@@ -99,6 +126,7 @@ async def test_sync_auto_config(test_server):
     print_section("Test 2: POST /fx/currencies/sync - Auto-config")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Create routes for EUR-USD and GBP-USD
         routes = [
             _route_json("EUR", "USD", "ECB"),
@@ -158,6 +186,7 @@ async def test_sync_manual_only_skipped(test_server):
     print_section("Test 3: POST /fx/currencies/sync - MANUAL-only pair")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Use an isolated pair not present in populate_mock_data
         # (CHF-JPY has a real chain in mock data, so it would sync OK)
         await client.post(
@@ -200,6 +229,7 @@ async def test_sync_weekend_no_rates(test_server):
     print_section("Test 4: POST /fx/currencies/sync - Weekend sync")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Ensure route exists
         await client.post(
             f"{API_BASE}/fx/providers/routes",
@@ -243,6 +273,7 @@ async def test_convert_multi_day_process(test_server):
     print_section("Test 5: POST /fx/currencies/convert - Multi-day")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Ensure route + sync rates
         await client.post(
             f"{API_BASE}/fx/providers/routes",
@@ -309,6 +340,7 @@ async def test_convert_bulk_multi_day(test_server):
     print_section("Test 6: POST /fx/currencies/convert - Bulk multi-day")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
         # Step 1: Ensure routes + sync
         # Use pairs that ECB supports directly (base=EUR)
         await client.post(

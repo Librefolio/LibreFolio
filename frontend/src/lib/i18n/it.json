@@ -240,7 +240,6 @@
     "title": "Asset",
     "subtitle": "Visualizza e gestisci i tuoi investimenti",
     "addAsset": "Aggiungi Asset",
-    "placeholderMessage": "La gestione degli asset sarà disponibile a breve.",
     "searchPlaceholder": "Cerca asset...",
     "allTypes": "Tutti i tipi",
     "allCurrencies": "Tutte le valute",
@@ -675,7 +674,10 @@
     "addMeasure": "Aggiungi misura",
     "closeEditor": "Chiudi editor",
     "swapConfirmTitle": "Modifiche non salvate",
-    "swapConfirmMessage": "Hai modifiche non salvate nell'editor dei tassi. Invertire la direzione le cancellerà. Continuare?"
+    "swapConfirmMessage": "Hai modifiche non salvate nell'editor dei tassi. Invertire la direzione le cancellerà. Continuare?",
+    "noDataManual": "Nessun dato disponibile — inserire i tassi manualmente",
+    "insertManually": "Inserisci manualmente",
+    "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente."
   },
   "csvImport": {
     "title": "Importa dati CSV",

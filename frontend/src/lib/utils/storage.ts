@@ -6,10 +6,6 @@
  *
  * Pattern: lf_{userId}_{baseKey}
  *
- * TODO: Existing localStorage keys (librefolio-locale, theme, filesPage_viewMode,
- * filesPage_activeTab, filesPage_brokerFilter) should eventually be migrated
- * to user-scoped keys. The migration can be done as a separate task.
- *
  * @module utils/storage
  */
 
