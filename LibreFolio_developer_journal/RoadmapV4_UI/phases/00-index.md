@@ -12,7 +12,18 @@
 Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facilitare la navigazione e il tracking del progresso.
 
 **📌 Piano Principale**: [→ plan-frontendDevelopment.prompt.md](../plan-frontendDevelopment.prompt.md)  
-**📌 Phase 4 Summary**: [→ plan-phase04-summary.md](phase-04-subplan/plan-phase04-summary.md)
+**📌 Phase 4 Summary**: [→ plan-phase04-summary.md](phase-04-subplan/plan-phase04-summary.md)  
+**📌 Master Plan Phase 5–8**: [→ plan-phase05-to-08-upgrade.md](../plan-phase05-to-08-upgrade.md)
+
+### Piani di Dettaglio per Fase
+
+| Fase | Piano dettagliato | Status |
+|------|-------------------|--------|
+| **Phase 6** | [→ plan-phase06-assets.md](../plan-phase06-assets.md) | 📋 Pianificato |
+| **Phase 7** | `plan-phase07-transactions.md` (da creare) | ⏳ |
+| **Phase 8** | `plan-phase08-dashboard.md` (da creare) | ⏳ |
+
+I sotto-piani di implementazione per ogni fase vanno in `phases/phase-XX-subplan/`.
 
 ---
 
@@ -27,7 +38,7 @@ Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facil
 | **3**   | [phase-03-layout-settings.md](./phase-03-layout-settings.md)       | Layout Sidebar + Settings Page             | ✅      | 3      |
 | **4**   | [phase-04-brokers.md](./phase-04-brokers.md)                       | Brokers, Files, Image Crop, ModalBase      | ✅      | 15+    |
 | **5**   | [phase-05-fx.md](./phase-05-fx.md)                                 | FX Currencies, Pair Sources, Sync          | ⏳      | 3      |
-| **6**   | [phase-06-assets.md](./phase-06-assets.md)                         | Assets List, Add/Edit, Detail              | ⏳      | 4      |
+| **6**   | [phase-06-assets.md](./phase-06-assets.md)                         | Assets: Dual View, Chart, Signals, Wizard  | 📋      | 7      |
 | **7**   | phase-07-transactions.md                                           | Transactions List, Add/Edit, Import        | ⏳      | 5      |
 | **8**   | [phase-08-dashboard.md](./phase-08-dashboard.md)                   | Dashboard con KPI e Charts                 | ⏳      | 3      |
 | **9**   | [phase-09-polish.md](./phase-09-polish.md)                         | UI Components, Responsive                  | ⏳      | 2      |
@@ -83,7 +94,7 @@ Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facil
 | 3-4       | 4        | Brokers, Files, Image Crop, ModalBase        |
 | 4         | Pre-work | Schema Changes (share%, cost_basis_override) |
 | 5         | 5        | FX Management + PriceChartShared             |
-| 6         | 6        | Assets + Gain/Loss + Matching Wizard         |
+| 6         | 6        | Assets: Dual View, Chart, Signals, Wizard    |
 | 7-8       | 7        | Transactions + Fiscal + Multi-Import         |
 | 8         | 7.5      | File Preview                                 |
 | 9         | 8        | Dashboard + KPI + Dual Axis Charts           |

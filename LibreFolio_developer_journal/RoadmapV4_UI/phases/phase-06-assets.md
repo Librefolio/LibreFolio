@@ -1,487 +1,177 @@
-# Phase 6: Assets Management
+# Phase 6: Assets Management — Progress Summary
 
-**Status**: ⏳ TODO  
-**Durata**: ~5 giorni (aggiornata)  
+**Status**: 📋 PIANIFICATO  
+**Durata stimata**: ~7 giorni  
 **Priorità**: P0 (MVP)  
-**Dipendenze**: Phase 5 (PriceChartShared), Phase 4.8 (user_role per permessi)
+**Dipendenze**: Phase 5 (PriceChartFull, Signal Library), Phase 4.8 (user_role)
 
-> **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §5](../plan-phase05-to-08-upgrade.md)
-> Questa sezione è stata **SUPERATA** dal piano aggiornato. Quando si arriva a implementare Phase 6,
-> ripartire da §5 di `plan-phase05-to-08-upgrade.md` che contiene:
-> - **Step 6.1**: Asset list con `DataTable` e filtri URL-based (`urlFilters.ts`)
-> - **Step 6.2**: AssetModal CRUD con `ModalBase`, `ImagePickerWrapper` per icona, smart search multi-provider
-> - **Step 6.3**: AssetDetail con `PriceChartShared` (riusato da Phase 5), `AssetGainLossTable` con metodo selezionabile (PMC formale + FIFO/LIFO analitico) e disclaimer PMC
-> - **Step 6.4**: `AssetMatchingWizard` a 3 step (search DB → search providers → create new) — **CONDIVISO con Phase 7** (BRIM import)
+---
+
+## 📌 Piano di Riferimento
+
+> **Il piano di dettaglio attuale è**: [`plan-phase06-assets.md`](../plan-phase06-assets.md)
 >
-> **Componenti da riusare (già esistenti da Phase 4)**:
-> `DataTable`, `ModalBase`, `ConfirmModal`, `SearchSelect`, `SimpleSelect`, `ImagePickerWrapper`, `LazyImage`, `urlFilters.ts`
->
-> **Novità rispetto a questo vecchio plan**:
-> - Gain/loss per transazione con regime fiscale selezionabile (PMC default, FIFO/LIFO analitico)
-> - Disclaimer sempre presente: "I calcoli fiscali usano sempre il Prezzo Medio di Carico"
-> - `AssetMatchingWizard` standalone e riusabile dall'import BRIM (Phase 7)
-> - `user_role` condiziona: VIEWER non può creare/editare asset, EDITOR/OWNER sì
+> Sotto-piani di implementazione creati durante lo sviluppo andranno in:
+> `phases/phase-06-subplan/`
 
 ---
 
-## Obiettivo
+## 🎯 Obiettivo
 
-Implementare la gestione completa degli asset: lista con filtri, creazione con smart search, e vista dettaglio con price chart.
+Implementare il sistema grafico per gli asset finanziari: lista con doppia visualizzazione
+(card grid + tabella), CRUD con smart search multi-provider, pagina dettaglio con
+`PriceChartFull` + segnali tecnici, import CSV prezzi OHLCV, e `AssetMatchingWizard`
+condiviso con Phase 7.
 
----
-
-## ⚠️ Nota: Plan Originale (Legacy)
-
-Il contenuto sotto è il **plan originale** scritto prima delle fasi 4.5–4.8. I componenti UI suggeriti
-(AssetTable, AssetFilters, PriceChart, etc.) andranno **riscritti** usando `DataTable`, `ModalBase`, e gli
-altri componenti unificati creati in Phase 4. Fare riferimento a §5 di `plan-phase05-to-08-upgrade.md`
-per la versione aggiornata.
-
-**Componenti previsti per questa fase (aggiornati)**:
-
-- `AssetModal.svelte` - Create/Edit con ModalBase, SearchSelect, ImagePickerWrapper
-- `AssetSearchAutocomplete.svelte` - Ricerca smart multi-provider
-- `AssetGainLossTable.svelte` - Gain/loss per transazione con DataTable
-- `AssetMatchingWizard.svelte` - Flow search DB → providers → create (**CONDIVISO con Phase 7**)
+**Escluso**: gain/loss, transazioni, regimi fiscali (Phase 7/8).
 
 ---
 
-## 6.1 Assets List (Query & Filter) (1 giorno)
+## 📋 Step di Implementazione
 
-### Tasks
-
-- [ ] Creare `src/routes/(app)/assets/+page.svelte`
-- [ ] Creare `src/routes/(app)/assets/+page.ts`
-- [ ] Creare `src/lib/components/assets/AssetTable.svelte`
-- [ ] Creare `src/lib/components/assets/AssetFilters.svelte`
-- [ ] Implementare paginazione (se > 50 risultati)
-
-### Filter Controls
-
-```svelte
-<!-- AssetFilters.svelte -->
-<div class="filters flex flex-wrap gap-4 mb-4">
-  <!-- Search -->
-  <div class="field flex-1">
-    <input 
-      type="search" 
-      placeholder="Search by name, ticker, ISIN..."
-      bind:value={search}
-      on:input={debounce(applyFilters, 300)}
-    />
-  </div>
-  
-  <!-- Asset Type -->
-  <div class="field">
-    <select bind:value={assetType} on:change={applyFilters}>
-      <option value="">All Types</option>
-      <option value="STOCK">Stock</option>
-      <option value="ETF">ETF</option>
-      <option value="BOND">Bond</option>
-      <option value="FUND">Fund</option>
-      <option value="CRYPTO">Crypto</option>
-      <option value="COMMODITY">Commodity</option>
-      <option value="OTHER">Other</option>
-    </select>
-  </div>
-  
-  <!-- Currency -->
-  <div class="field">
-    <CurrencySelect 
-      bind:value={currency} 
-      on:change={applyFilters}
-      allowEmpty
-      emptyLabel="All Currencies"
-    />
-  </div>
-  
-  <!-- Active Only -->
-  <div class="field">
-    <label class="flex items-center gap-2">
-      <input type="checkbox" bind:checked={activeOnly} on:change={applyFilters} />
-      Active Only
-    </label>
-  </div>
-  
-  <!-- Reset -->
-  <button on:click={resetFilters} class="text-gray-600">Reset</button>
-</div>
-```
-
-### Asset Table
-
-```svelte
-<!-- AssetTable.svelte -->
-<table class="w-full">
-  <thead>
-    <tr>
-      <th on:click={() => sortBy('display_name')}>Name {sortIcon('display_name')}</th>
-      <th on:click={() => sortBy('asset_type')}>Type</th>
-      <th on:click={() => sortBy('currency')}>Currency</th>
-      <th>Identifiers</th>
-      <th>Provider</th>
-      <th>Status</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {#each assets as asset}
-      <tr>
-        <td class="flex items-center gap-2">
-          <img src={asset.icon_url || defaultIcon} class="w-6 h-6" />
-          <span>{asset.display_name}</span>
-        </td>
-        <td><Badge variant={asset.asset_type}>{asset.asset_type}</Badge></td>
-        <td>{getFlag(asset.currency)} {asset.currency}</td>
-        <td class="text-xs text-gray-600">
-          {#if asset.identifier_ticker}{asset.identifier_ticker}{/if}
-          {#if asset.identifier_isin} / {asset.identifier_isin}{/if}
-        </td>
-        <td>
-          {#if asset.has_provider}
-            <Badge variant="success">Assigned</Badge>
-          {:else}
-            <Badge variant="neutral">None</Badge>
-          {/if}
-        </td>
-        <td>
-          {#if asset.active}
-            <Badge variant="success">Active</Badge>
-          {:else}
-            <Badge variant="neutral">Inactive</Badge>
-          {/if}
-        </td>
-        <td>
-          <button on:click={() => goto(`/assets/${asset.id}`)}>View</button>
-          <button on:click={() => editAsset(asset)}>Edit</button>
-          <button on:click={() => deleteAsset(asset.id)}>Delete</button>
-        </td>
-      </tr>
-    {/each}
-  </tbody>
-</table>
-```
-
-### API Endpoints
-
-| Endpoint               | Metodo | Descrizione      |
-|------------------------|--------|------------------|
-| `/api/v1/assets/query` | GET    | Lista con filtri |
-
-Query params: `search`, `asset_type`, `currency`, `active`
-
-### File da Creare
-
-| File                                            | Descrizione    |
-|-------------------------------------------------|----------------|
-| `src/routes/(app)/assets/+page.svelte`          | Lista assets   |
-| `src/routes/(app)/assets/+page.ts`              | Load function  |
-| `src/lib/components/assets/AssetTable.svelte`   | Tabella assets |
-| `src/lib/components/assets/AssetFilters.svelte` | Filtri         |
+| Step | Descrizione | Stima | Status |
+|------|-------------|-------|--------|
+| **1** | Backend: `params_schema` su provider, fix perf `list_providers`, pre-warm async cache | 0.5g | ⏳ |
+| **2** | Asset List: dual view (card grid + DataTable), poi replica su FX (FxTable + ViewModeToggle) | 1g | ⏳ |
+| **3** | AssetModal + AssetSearchAutocomplete (search → auto-fill → create + assign) | 1.5g | ⏳ |
+| **4** | Asset Detail: PriceChartFull + segnali + AssetDataEditorSection (OHLCV) + provider form | 2g | ⏳ |
+| **5** | AssetMatchingWizard 3-step (condiviso Phase 7) | 1g | ⏳ |
+| **6** | i18n (30 keys × 4 lingue), E2E test, gallery, docs MkDocs | 1g | ⏳ |
 
 ---
 
-## 6.2 Add/Edit Asset Modal (Smart Search) (2 giorni)
+## 🗂️ File da Creare/Modificare
 
-### Tasks
+### Backend (modifiche)
 
-- [ ] Creare `src/lib/components/assets/AddAssetModal.svelte`
-- [ ] Creare `src/lib/components/assets/EditAssetModal.svelte`
-- [ ] Creare `src/lib/components/assets/AssetSearchAutocomplete.svelte`
-- [ ] Implementare multi-provider search
-- [ ] Implementare auto-fill da search result
+| File | Modifica |
+|------|----------|
+| `backend/app/services/asset_source.py` | `params_schema` property nella base class |
+| `backend/app/services/asset_source_providers/css_scraper.py` | Override `params_schema` |
+| `backend/app/services/asset_source_providers/scheduled_investment.py` | Override `params_schema` |
+| `backend/app/schemas/provider.py` | `FAProviderParamField` + `FAProviderInfo` esteso |
+| `backend/app/api/v1/assets.py` | `list_providers`: filtro `providers` param + fix `supports_search` |
+| `backend/app/main.py` | `asyncio.create_task(_prewarm_provider_caches)` in lifespan |
 
-### Smart Search Flow
+### Frontend (nuovi)
 
-1. User digita query (es. "AAPL" o "Apple")
-2. Sistema cerca su provider selezionati (yfinance, justetf, etc.)
-3. Dropdown mostra risultati con info
-4. User seleziona → form auto-compilato
-5. User può modificare campi
-6. Submit crea asset nel DB
+| File | Descrizione |
+|------|-------------|
+| `src/lib/components/ui/ViewModeToggle.svelte` | Toggle grid/table riusabile |
+| `src/lib/components/assets/AssetIcon.svelte` | Icon con fallback chain (pattern BrokerIcon) |
+| `src/lib/components/assets/AssetCard.svelte` | Card con mini chart (pattern FxCard) |
+| `src/lib/components/assets/AssetTable.svelte` | DataTable wrapper per assets |
+| `src/lib/components/assets/AssetModal.svelte` | Create/Edit modale con ModalBase |
+| `src/lib/components/assets/AssetSearchAutocomplete.svelte` | Smart search multi-provider |
+| `src/lib/components/assets/AssetDataEditorSection.svelte` | DataEditor con colonne OHLCV |
+| `src/lib/components/assets/AssetMatchingWizard.svelte` | Wizard 3-step (condiviso Phase 7) |
+| `src/lib/components/fx/FxTable.svelte` | DataTable wrapper per FX pairs |
+| `src/routes/(app)/assets/[id]/+page.svelte` | Detail page |
+| `src/routes/(app)/assets/[id]/+page.ts` | Detail load function |
+| `src/routes/(app)/assets/+page.ts` | List load function |
 
-### Search Autocomplete
+### Frontend (riscritture)
 
-```svelte
-<!-- AssetSearchAutocomplete.svelte -->
-<div class="autocomplete relative">
-  <!-- Provider Selection -->
-  <div class="providers mb-2 flex gap-2">
-    {#each providers as p}
-      <label class="flex items-center gap-1">
-        <input 
-          type="checkbox" 
-          checked={selectedProviders.includes(p.code)}
-          on:change={() => toggleProvider(p.code)}
-        />
-        {p.name}
-      </label>
-    {/each}
-  </div>
-  
-  <!-- Search Input -->
-  <input 
-    type="search"
-    placeholder="Search by ticker, ISIN, or name..."
-    bind:value={query}
-    on:input={debounce(search, 300)}
-    on:focus={() => showDropdown = true}
-  />
-  
-  <!-- Results Dropdown -->
-  {#if showDropdown && results.length > 0}
-    <ul class="dropdown absolute w-full bg-white shadow-lg rounded mt-1 max-h-64 overflow-auto">
-      {#each results as result}
-        <li 
-          class="p-3 hover:bg-gray-100 cursor-pointer"
-          on:click={() => selectResult(result)}
-        >
-          <div class="flex items-center gap-3">
-            <img src={result.icon_url || getTypeIcon(result.asset_type)} class="w-8 h-8" />
-            <div>
-              <div class="font-bold">{result.display_name}</div>
-              <div class="text-sm text-gray-600">
-                {result.symbol || result.isin} · {result.currency} · {result.asset_type}
-              </div>
-              <div class="text-xs text-gray-400">via {result.source}</div>
-            </div>
-          </div>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</div>
-```
-
-### Add Asset Form
-
-```svelte
-<!-- AddAssetModal.svelte -->
-<div class="modal">
-  <h2>Add Asset</h2>
-  
-  <!-- Smart Search -->
-  <div class="section">
-    <h3>Search External Providers</h3>
-    <AssetSearchAutocomplete on:select={autoFillForm} />
-  </div>
-  
-  <hr />
-  
-  <!-- Manual Form -->
-  <form on:submit|preventDefault={handleSubmit}>
-    <!-- Display Name -->
-    <div class="field">
-      <label>Display Name *</label>
-      <input type="text" bind:value={displayName} required />
-    </div>
-    
-    <!-- Asset Type -->
-    <div class="field">
-      <label>Asset Type *</label>
-      <select bind:value={assetType} required>
-        <option value="STOCK">Stock</option>
-        <option value="ETF">ETF</option>
-        <option value="BOND">Bond</option>
-        <option value="FUND">Fund</option>
-        <option value="CRYPTO">Crypto</option>
-        <option value="COMMODITY">Commodity</option>
-        <option value="OTHER">Other</option>
-      </select>
-    </div>
-    
-    <!-- Currency -->
-    <div class="field">
-      <label>Currency *</label>
-      <CurrencySelect bind:value={currency} required />
-    </div>
-    
-    <!-- Icon URL -->
-    <div class="field">
-      <label>Icon URL (optional)</label>
-      <input type="url" bind:value={iconUrl} />
-    </div>
-    
-    <!-- Identifiers (collapsible) -->
-    <details class="identifiers">
-      <summary>Identifiers</summary>
-      <div class="grid grid-cols-2 gap-4 mt-2">
-        <div class="field">
-          <label>ISIN</label>
-          <input type="text" bind:value={isin} maxlength="12" />
-        </div>
-        <div class="field">
-          <label>Ticker</label>
-          <input type="text" bind:value={ticker} />
-        </div>
-        <div class="field">
-          <label>CUSIP</label>
-          <input type="text" bind:value={cusip} />
-        </div>
-        <div class="field">
-          <label>SEDOL</label>
-          <input type="text" bind:value={sedol} />
-        </div>
-        <div class="field">
-          <label>FIGI</label>
-          <input type="text" bind:value={figi} />
-        </div>
-        <div class="field">
-          <label>Other</label>
-          <input type="text" bind:value={other} />
-        </div>
-      </div>
-    </details>
-    
-    <button type="submit">Create Asset</button>
-  </form>
-</div>
-```
-
-### API Endpoints
-
-| Endpoint                         | Metodo | Descrizione                |
-|----------------------------------|--------|----------------------------|
-| `/api/v1/assets/provider`        | GET    | Lista provider disponibili |
-| `/api/v1/assets/provider/search` | GET    | Cerca su provider esterni  |
-| `/api/v1/assets`                 | POST   | Crea asset                 |
-| `/api/v1/assets`                 | PATCH  | Modifica asset             |
-
-### File da Creare
-
-| File                                                       | Descrizione     |
-|------------------------------------------------------------|-----------------|
-| `src/lib/components/assets/AddAssetModal.svelte`           | Modal creazione |
-| `src/lib/components/assets/EditAssetModal.svelte`          | Modal modifica  |
-| `src/lib/components/assets/AssetSearchAutocomplete.svelte` | Ricerca smart   |
+| File | Modifica |
+|------|----------|
+| `src/routes/(app)/assets/+page.svelte` | Placeholder → dual view page completa |
+| `src/routes/(app)/fx/+page.svelte` | Aggiunta toggle grid/table + FxTable |
 
 ---
 
-## 6.3 Asset Detail Page (1 giorno)
+## 📊 Componenti Condivisi Prodotti
 
-### Tasks
-
-- [ ] Creare `src/routes/(app)/assets/[id]/+page.svelte`
-- [ ] Creare `src/routes/(app)/assets/[id]/+page.ts`
-- [ ] Creare `src/lib/components/assets/AssetDetailHeader.svelte`
-- [ ] Creare `src/lib/components/assets/ProviderAssignmentSection.svelte`
-- [ ] Creare `src/lib/components/assets/PriceChart.svelte` (ECharts)
-
-### Page Sections
-
-1. **Header**
-    - Icon + Display Name + Type badge
-    - Currency + Active status
-    - Edit button
-
-2. **Provider Assignment**
-    - Current provider (if any)
-    - Button to assign/change provider
-    - Modal con form
-
-3. **Price History Chart**
-    - ECharts line chart
-    - Range selector: 1M, 3M, 6M, 1Y, ALL
-
-4. **Metadata**
-    - Identifiers (ISIN, Ticker, etc.)
-    - Classification (sector, geographic area)
-
-### Price Chart (ECharts)
-
-```svelte
-<!-- PriceChart.svelte -->
-<script>
-  import * as echarts from 'echarts';
-  import { onMount, onDestroy } from 'svelte';
-  
-  export let priceData: { date: string; close: number }[] = [];
-  export let currency: string = 'EUR';
-  
-  let chartContainer: HTMLDivElement;
-  let chart: echarts.ECharts;
-  
-  $: if (chart && priceData) {
-    updateChart();
-  }
-  
-  onMount(() => {
-    chart = echarts.init(chartContainer);
-    updateChart();
-    
-    const resizeObserver = new ResizeObserver(() => chart.resize());
-    resizeObserver.observe(chartContainer);
-    
-    return () => resizeObserver.disconnect();
-  });
-  
-  onDestroy(() => chart?.dispose());
-  
-  function updateChart() {
-    chart.setOption({
-      tooltip: { trigger: 'axis' },
-      xAxis: {
-        type: 'category',
-        data: priceData.map(d => d.date)
-      },
-      yAxis: {
-        type: 'value',
-        name: currency
-      },
-      series: [{
-        type: 'line',
-        data: priceData.map(d => d.close),
-        smooth: true,
-        itemStyle: { color: '#1A4D3E' },
-        areaStyle: { color: 'rgba(26, 77, 62, 0.1)' }
-      }]
-    });
-  }
-</script>
-
-<div class="chart-container h-64" bind:this={chartContainer}></div>
-```
-
-### API Endpoints
-
-| Endpoint                                             | Metodo | Descrizione         |
-|------------------------------------------------------|--------|---------------------|
-| `/api/v1/assets?ids={id}`                            | GET    | Dettaglio asset     |
-| `/api/v1/assets/provider/assignments?asset_ids={id}` | GET    | Provider assignment |
-| `/api/v1/assets/prices/{id}`                         | GET    | Price history       |
-| `/api/v1/assets/provider`                            | POST   | Assign provider     |
-
-### File da Creare
-
-| File                                                         | Descrizione     |
-|--------------------------------------------------------------|-----------------|
-| `src/routes/(app)/assets/[id]/+page.svelte`                  | Dettaglio asset |
-| `src/routes/(app)/assets/[id]/+page.ts`                      | Load function   |
-| `src/lib/components/assets/AssetDetailHeader.svelte`         | Header          |
-| `src/lib/components/assets/ProviderAssignmentSection.svelte` | Provider        |
-| `src/lib/components/assets/PriceChart.svelte`                | Chart ECharts   |
+| Componente | Riusato in |
+|-----------|-----------|
+| `ViewModeToggle.svelte` | Assets, FX, future pages |
+| `AssetCard.svelte` | Assets list, Phase 8 dashboard |
+| `AssetMatchingWizard.svelte` | Assets, **Phase 7 import BRIM** |
+| `FxTable.svelte` | FX list page |
 
 ---
 
-## Verifica Completamento
+## ✅ Checklist Completamento
 
-### Test Manuali
+### Backend
+- [ ] `params_schema` implementato su tutti i provider
+- [ ] `FAProviderInfo` esteso con `params_schema` field
+- [ ] `list_providers` fix: no `search("")`, usa `test_search_query`
+- [ ] `list_providers` filtro: query param `providers`
+- [ ] Pre-warm cache async in `main.py`
+- [ ] `./dev.py api sync` completato
+- [ ] Test API esistenti passano
 
-- [ ] Lista assets visibile (anche vuota con empty state)
-- [ ] Filtri funzionano (search, type, currency, active)
-- [ ] Smart search trova asset su provider esterni
-- [ ] Selezione da search auto-compila form
-- [ ] Crea asset manualmente → appare in lista
-- [ ] Edit asset → modifiche salvate
-- [ ] Delete asset → rimosso
-- [ ] Dettaglio asset → tutte le sezioni visibili
-- [ ] Assign provider → price chart popolato
-- [ ] Chart range selector funziona
+### Frontend — Asset List
+- [ ] Dual view: card grid + DataTable
+- [ ] ViewModeToggle con localStorage persistence
+- [ ] Filtri: search, type, currency, active
+- [ ] Empty state
+- [ ] Click card/row → `/assets/[id]`
+- [ ] VIEWER: no edit/delete/add buttons
+
+### Frontend — FX List (aggiornamento)
+- [ ] FxTable.svelte con DataTable
+- [ ] Toggle grid/table nella pagina FX
+- [ ] Colonne FX: pair (flags), rate, variazione, provider, actions
+
+### Frontend — AssetModal
+- [ ] AssetSearchAutocomplete funzionante
+- [ ] Auto-fill form da search result
+- [ ] Auto-assign provider post-create
+- [ ] Edit mode (PATCH)
+- [ ] ImagePickerWrapper per icon
+- [ ] Collapsible identifiers
+
+### Frontend — Asset Detail
+- [ ] PriceChartFull con dati da API
+- [ ] Segnali tecnici (EMA, MACD, RSI, Bollinger)
+- [ ] Edit mode + Measure mode
+- [ ] AssetDataEditorSection (OHLCV)
+- [ ] CSV import con colonne mappabili
+- [ ] Provider assignment con form dinamico (params_schema)
+- [ ] Metadata section (readonly + refresh)
+- [ ] Responsive layout
+
+### Frontend — AssetMatchingWizard
+- [ ] Step 1: search DB (DataTable)
+- [ ] Step 2: search providers online
+- [ ] Step 3: create manuale
+- [ ] Emissione `onselect(asset_id)`
+- [ ] Embeddabile standalone + inline
+
+### Qualità
+- [ ] i18n completo (30 keys × 4 lingue)
+- [ ] E2E tests (~20 scenari)
+- [ ] Screenshot gallery (light/dark × desktop/mobile)
+- [ ] Documentazione MkDocs
+- [ ] Dark mode coerente
+- [ ] `npm run build` senza errori
 
 ---
 
-## Dipendenze
+## 📝 Note Storiche
 
-- **Richiede**: Phase 3 (Layout)
-- **Sblocca**: Phase 7 (Transactions con asset_id)
+### Piano Originale (Legacy — Gennaio 2026)
 
+Il contenuto originale di questo file è stato **sostituito** dal piano aggiornato.
+Il vecchio piano prevedeva: `AssetTable.svelte`, `AssetFilters.svelte`, `PriceChart.svelte`
+custom, senza riuso della component library Phase 4. Quei componenti sono stati **rimpiazzati**
+da `DataTable`, `ModalBase`, `PriceChartFull` etc.
+
+### Aggiornamento Febbraio 2026 (plan-phase05-to-08-upgrade.md §5)
+
+Il master plan `plan-phase05-to-08-upgrade.md` §5 ha ridefinito Phase 6 con:
+- `AssetMatchingWizard` condiviso con Phase 7
+- `AssetGainLossTable` con metodo fiscale selezionabile
+- URL-based filters (`urlFilters.ts`)
+
+### Aggiornamento Marzo 2026 (Piano Attuale)
+
+Il piano corrente (`plan-phase06-assets.md`) include ulteriori evoluzioni:
+- **Dual view** (card grid + tabella) per Assets e FX
+- **Backend `params_schema`** per form dinamici provider
+- **Fix performance** `list_providers` (eliminata `search("")`)
+- **Pre-warm async** cache dei provider in `main.py`
+- **AssetDataEditorSection** con colonne OHLCV (6 colonne)
+- **Gain/loss posticipato** a Phase 7/8 (non serve senza transazioni)
+- **urlFilters.ts** escluso (filtri con `$state` locale)
