@@ -100,6 +100,10 @@ export interface EditableNumberCell {
     value: number | null;
     /** Step for input increment (default: 1) */
     step?: number;
+    /** Minimum allowed value */
+    min?: number;
+    /** Maximum allowed value */
+    max?: number;
     /** Placeholder text when value is null */
     placeholder?: string;
     /** Callback when value changes (blur or Enter) */
