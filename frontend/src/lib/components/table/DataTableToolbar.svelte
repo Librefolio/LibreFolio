@@ -4,11 +4,11 @@
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import type {Component} from 'svelte';
 
     interface BulkActionInfo {
         id: string;
-        icon: Component;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        icon: any;
         label: string | (() => string);
         variant?: 'default' | 'danger';
         onClick: () => void;

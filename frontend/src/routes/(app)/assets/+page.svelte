@@ -97,13 +97,25 @@
         STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
         FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
     };
+    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'] as const;
+
+    // Count assets per type (for E5b badge in type filter dropdown)
+    let typeCounts = $derived(
+        assets.reduce((acc, a) => {
+            const t = a.asset_type ?? 'OTHER';
+            acc[t] = (acc[t] ?? 0) + 1;
+            return acc;
+        }, {} as Record<string, number>)
+    );
+    // Only show types that have at least 1 asset
+    let availableTypes = $derived(ALL_ASSET_TYPES.filter(t => (typeCounts[t] ?? 0) > 0));
 
     // Debounce timer
     let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
     // Filter bar adaptive layout (same pattern as FX page)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    let layoutMode = $state<'wide' | 'tablet' | 'mobile'>('tablet');
+    let layoutMode = $state<'wide' | 'tablet' | 'tablet-s' | 'mobile'>('tablet');
     let showActionLabels = $state(true);
 
     // Type filter dropdown
@@ -171,20 +183,23 @@
     // Measures contentRect.width = CSS box-width − padding(32px) − border(2px)
     //
     // Threshold tuning guide (CSS box → contentRect):
-    //   wide   ≥ 1044px box → 1010 contentRect  (datepicker + search + active + type + currency + ×)
-    //   tablet ≥  644px box →  610 contentRect  (datepicker | filters 2-row)
-    //   mobile <  644px box                      (everything stacked)
+    //   wide     ≥ 1100  (datepicker + all filters + 2×2 buttons in one row)
+    //   tablet   ≥  770  (datepicker + filters 2-row | 2×2 buttons right)
+    //   tablet-s ≥  500  (datepicker above filters, left | buttons column right, icon-only)
+    //   mobile   <  500  (everything stacked centered)
+    //   labels   ≥  820  (action buttons show text labels)
     //
-    // To adjust: edit the numbers in the if/else below (lines ~175-177)
+    // To adjust: edit the numbers in the if/else below
     $effect(() => {
         const el = filterBarRef;
         if (!el) return;
         const ro = new ResizeObserver(([entry]) => {
             const w = entry.contentRect.width;
-            if (w >= 1100) layoutMode = 'wide';       // ← wide threshold
-            else if (w >= 770) layoutMode = 'tablet';  // ← tablet threshold
-            else layoutMode = 'mobile';                // ← mobile fallback
-            showActionLabels = w >= 820;               // ← labels threshold
+            if (w >= 1200) layoutMode = 'wide';            // ← wide threshold
+            else if (w >= 920) layoutMode = 'tablet';       // ← tablet threshold
+            else if (w >= 500) layoutMode = 'tablet-s';     // ← tablet-s threshold
+            else layoutMode = 'mobile';                     // ← mobile fallback
+            showActionLabels = w >= 400;                    // ← labels threshold
         });
         ro.observe(el);
         return () => ro.disconnect();
@@ -444,9 +459,9 @@
                 <DataTableToolbar
                     selectedCount={selectedAssetRows.length}
                     bulkActions={[
-                        { id: 'sync', icon: RotateCw, label: 'Sync', onClick: () => handleBulkSyncAssets() },
-                        { id: 'refresh', icon: RefreshCw, label: 'Refresh', onClick: () => handleBulkRefreshAssets() },
-                        { id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger', onClick: () => handleBulkDeleteAssets() },
+                        { id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets() },
+                        { id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets() },
+                        { id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets() },
                     ]}
                     onClearSelection={() => { assetTableComponent?.getTableRef()?.clearSelection(); selectedAssetRows = []; }}
                 />
@@ -480,17 +495,24 @@
     </div>
 
     <!-- Filter Bar: Proposta D responsive layout
-         wide:   [ datepicker | search active type currency × | 2×2 ]
-         tablet: [ datepicker | search  active  | 2×2 ]
-                 [            | type    currency × |     ]
-         mobile: [ datepicker ][ search ][ active type × ][ currency ][ 2×2 ] -->
+         wide:     [ datepicker | search active type currency × | 2×2 ]
+         tablet:   [ datepicker                     | 2×2 ]
+                   [ search active type currency ×  |     ]
+         tablet-s: [ datepicker                     | col  ]
+                   [ search active type currency ×  | btns ]
+         mobile:   [ datepicker ][ search ][ active type × ][ currency ][ btns ] -->
     <div
         bind:this={filterBarRef}
         class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center justify-between'}"
+               {layoutMode === 'mobile' ? 'flex-col items-center'
+                : layoutMode === 'wide' ? 'flex-row items-center justify-between'
+                : 'flex-row items-start justify-between'}"
     >
         <!-- Filters block -->
-        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center flex-1 flex-wrap'}">
+        <div class="flex gap-3
+                    {layoutMode === 'mobile' ? 'flex-col items-center'
+                     : layoutMode === 'wide' ? 'flex-row items-center flex-1 flex-wrap'
+                     : 'flex-col items-start flex-1'}">
             <!-- DateRangePicker -->
             <div class="max-w-md" data-testid="assets-date-range">
                 <DateRangePicker
@@ -502,8 +524,8 @@
                 />
             </div>
 
-            <!-- Filters 2×2 block (tablet) / inline (wide) / stacked (mobile) -->
-            <div class="flex gap-2 {layoutMode === 'tablet' ? 'flex-col' : layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center'}">
+            <!-- Filters 2×2 block (tablet+tablet-s) / inline (wide) / stacked (mobile) -->
+            <div class="flex gap-2 {layoutMode === 'wide' ? 'flex-row items-center flex-wrap' : layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-col'}">
                 <!-- Row 1: Search + Active -->
                 <div class="flex items-center gap-2">
                     <!-- Search -->
@@ -565,7 +587,7 @@
                                 <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
                                     <button type="button"
                                         class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                                        onclick={() => { filterTypes = new Set(['STOCK','ETF','BOND','CRYPTO','FUND','HOLD','CROWDFUND_LOAN','OTHER']); }}
+                                        onclick={() => { filterTypes = new Set(availableTypes); }}
                                     >{$t('common.selectAll')}</button>
                                     <button type="button"
                                         class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
@@ -574,7 +596,7 @@
                                 </div>
                                 <!-- Option list -->
                                 <div class="max-h-52 overflow-y-auto border border-gray-100 dark:border-slate-700 mx-2.5 my-2 rounded-md">
-                                    {#each ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'] as typeVal}
+                                    {#each availableTypes as typeVal}
                                         <button type="button"
                                             class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                                             onclick={() => {
@@ -593,7 +615,8 @@
                                                 {/if}
                                             </span>
                                             <img src="/icons/asset-types/{TYPE_ICON_MAP[typeVal] ?? 'other'}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
-                                            <span>{$t(`assets.types.${typeVal}`) || typeVal}</span>
+                                            <span class="flex-1">{$t(`assets.types.${typeVal}`) || typeVal}</span>
+                                            <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 tabular-nums">{typeCounts[typeVal] ?? 0}</span>
                                         </button>
                                     {/each}
                                 </div>
@@ -631,9 +654,11 @@
             </div>
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), horizontal row (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet), column (tablet-s), horizontal row (mobile) -->
         <div class="flex shrink-0 gap-1.5
-                    {layoutMode === 'mobile' ? 'flex-row justify-center' : 'grid grid-cols-2'}">
+                    {layoutMode === 'mobile' ? 'flex-row justify-center'
+                     : layoutMode === 'tablet-s' ? 'flex-col'
+                     : 'grid grid-cols-2'}">
             <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
             {#if viewMode === 'list'}
                 <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={showActionLabels} />
@@ -657,28 +682,28 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleGlobalSettings}
-                title="Settings"
+                title={$t('sharedResource.settings')}
             >
                 <Settings size={14} />
-                {#if showActionLabels}<span>{$t('fx.actions.settings')}</span>{/if}
+                {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
             </button>
             <!-- Sync All -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleSyncAsset}
-                title="Sync all assets with providers"
+                title={$t('sharedResource.syncAll')}
             >
                 <RotateCw size={14} />
-                {#if showActionLabels}<span>Sync</span>{/if}
+                {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={() => fetchAllPriceData()}
-                title="Refresh all prices from DB"
+                title={$t('sharedResource.refreshAll')}
             >
                 <RefreshCw size={14} />
-                {#if showActionLabels}<span>Refresh</span>{/if}
+                {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
             </button>
         </div>
     </div>

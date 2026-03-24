@@ -281,9 +281,6 @@
     "title": "Taux de Change",
     "subtitle": "Consultez et synchronisez les taux de change",
     "actions": {
-      "syncAll": "Sync. Tout",
-      "refreshAll": "Actualiser Tout",
-      "settings": "Paramètres",
       "addPair": "Ajouter Paire"
     },
     "empty": {
@@ -714,5 +711,10 @@
   "dataEditor": {
     "clearSelection": "Effacer la sélection",
     "deleteSelected": "Supprimer la sélection"
+  },
+  "sharedResource": {
+    "syncAll": "Sync. Tout",
+    "refreshAll": "Actualiser Tout",
+    "settings": "Paramètres"
   }
 }

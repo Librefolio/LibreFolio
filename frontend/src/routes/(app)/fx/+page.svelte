@@ -42,6 +42,8 @@
     } from '$lib/stores/fxStoreRegistry';
     import {isCardInverted, setCardInverted} from '$lib/stores/fxCardInversionStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
+    import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
+    import {getCurrencyInfo} from '$lib/stores/currencyStore';
 
     // =========================================================================
     // Types
@@ -76,10 +78,15 @@
     let syncModalPairs = $state<string[]>([]);
 
 
-    // Delete
+    // Delete (single)
     let deleteDialogOpen = $state(false);
     let deletingPair = $state<{base: string; quote: string; slug: string} | null>(null);
     let deleteLoading = $state(false);
+
+    // Delete (bulk)
+    let bulkDeleteDialogOpen = $state(false);
+    let deletingPairs = $state<Array<{base: string; quote: string; slug: string}>>([]);
+    let bulkDeleteLoading = $state(false);
 
     // Modals
     let addModalOpen = $state(false);
@@ -96,10 +103,11 @@
     let filterBarRef = $state<HTMLDivElement | null>(null);
     /** Layout mode based on measured container width:
      *  - 'wide' (≥950px): filters left + actions 2×2 grid right, all inline
-     *  - 'tablet' (≥500px): filters left (wrapping) + actions column right
+     *  - 'tablet' (≥610px): filters left (wrapping) + actions column right
+     *  - 'tablet-s' (≥500px): like tablet but buttons column, icon-only
      *  - 'mobile' (<500px): all stacked vertically, actions row at bottom
      */
-    let layoutMode = $state<'wide' | 'tablet' | 'mobile'>('tablet');
+    let layoutMode = $state<'wide' | 'tablet' | 'tablet-s' | 'mobile'>('tablet');
     /** Whether action buttons show text labels (≥700px) */
     let showActionLabels = $state(true);
 
@@ -202,6 +210,8 @@
     // =========================================================================
 
     onMount(async () => {
+        // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
+        getCurrencyGraph();
         await loadPairSources();
     });
 
@@ -220,10 +230,11 @@
         if (!el) return;
         const ro = new ResizeObserver(([entry]) => {
             const w = entry.contentRect.width;
-            if (w >= 1010) layoutMode = 'wide';
-            else if (w >= 610) layoutMode = 'tablet';
+            if (w >= 1020) layoutMode = 'wide';
+            else if (w >= 700) layoutMode = 'tablet';
+            else if (w >= 530) layoutMode = 'tablet-s';
             else layoutMode = 'mobile';
-            showActionLabels = w >= 690;
+            showActionLabels = w >= 450;
         });
         ro.observe(el);
         return () => ro.disconnect();
@@ -485,7 +496,7 @@
 
     async function handleBulkRefreshFx() {
         for (const row of selectedFxRows) {
-            await handleRefreshPair({base: row.base, quote: row.quote, slug: row.slug});
+            await handleRefreshPair({slug: row.slug});
         }
         fxTableComponent?.getTableRef()?.clearSelection();
         selectedFxRows = [];
@@ -501,8 +512,42 @@
     }
 
     async function handleBulkDeleteFx() {
-        for (const row of selectedFxRows) {
-            await handleDeletePair({base: row.base, quote: row.quote, slug: row.slug});
+        deletingPairs = selectedFxRows.map(r => ({base: r.base, quote: r.quote, slug: r.slug}));
+        bulkDeleteDialogOpen = true;
+    }
+
+    async function confirmBulkDelete() {
+        if (deletingPairs.length === 0) return;
+        bulkDeleteLoading = true;
+        try {
+            for (const pair of deletingPairs) {
+                await zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{
+                    base: pair.base,
+                    quote: pair.quote,
+                }]);
+                await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete([{
+                    from: pair.base,
+                    to: pair.quote,
+                    delete_all: true,
+                }]);
+                removeFxStore(pair.slug);
+            }
+            const deletedSlugs = new Set(deletingPairs.map(p => p.slug));
+            pairs = pairs.filter(p => !deletedSlugs.has(p.config.slug));
+
+            // Reset currency filters if selected currency no longer exists
+            const remaining = new Set(pairs.flatMap(p => [p.config.base, p.config.quote]));
+            if (filterCurrency1 && !remaining.has(filterCurrency1)) filterCurrency1 = '';
+            if (filterCurrency2 && !remaining.has(filterCurrency2)) filterCurrency2 = '';
+
+            bulkDeleteDialogOpen = false;
+            deletingPairs = [];
+            fxTableComponent?.getTableRef()?.clearSelection();
+            selectedFxRows = [];
+        } catch (e: any) {
+            console.error('Failed to bulk delete pairs:', e);
+        } finally {
+            bulkDeleteLoading = false;
         }
     }
 
@@ -579,10 +624,10 @@
                 <DataTableToolbar
                     selectedCount={selectedFxRows.length}
                     bulkActions={[
-                        { id: 'sync', icon: RotateCw, label: 'Sync', onClick: () => handleBulkSyncFx() },
-                        { id: 'refresh', icon: RefreshCw, label: 'Refresh', onClick: () => handleBulkRefreshFx() },
-                        { id: 'invert', icon: ArrowLeftRight, label: 'Invert', onClick: () => handleBulkInvertFx() },
-                        { id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger', onClick: () => handleBulkDeleteFx() },
+                        { id: 'sync', icon: RotateCw, label: () => $_('common.sync'), onClick: () => handleBulkSyncFx() },
+                        { id: 'refresh', icon: RefreshCw, label: () => $_('common.refresh'), onClick: () => handleBulkRefreshFx() },
+                        { id: 'invert', icon: ArrowLeftRight, label: () => $_('common.swapDirection'), onClick: () => handleBulkInvertFx() },
+                        { id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteFx() },
                     ]}
                     onClearSelection={() => { fxTableComponent?.getTableRef()?.clearSelection(); selectedFxRows = []; }}
                 />
@@ -600,19 +645,28 @@
     </div>
 
     <!-- Filter Bar: 100% programmatic layout — NO flex-wrap, NO CSS-driven wrapping.
-         wide:   [ datepicker  currency ─── actions-2×2 ]  all in one row
-         tablet: [ datepicker       ] [ actions-2×2 ]      filters stacked, actions grid right
-                 [ currency-filters ] [             ]
-         mobile: [ datepicker       ]  all stacked centered
-                 [ currency-filters ]
-                 [ actions-row      ] -->
+         wide:     [ datepicker  currency ─── actions-2×2 ]  all in one row
+         tablet:   [ datepicker       ] [ actions-2×2 ]      filters stacked, actions grid right
+                   [ currency-filters ] [             ]
+         tablet-s: [ datepicker                     | col  ]
+                   [ currency-filters               | btns ]
+         mobile:   [ datepicker       ]  all stacked centered
+                   [ currency-filters ]
+                   [ actions-row      ] -->
     <div
         bind:this={filterBarRef}
         class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center justify-between'}"
+               {layoutMode === 'mobile' ? 'flex-col items-center'
+                : layoutMode === 'tablet-s' ? 'flex-row items-start justify-between'
+                : 'flex-row items-center justify-between'}"
     >
         <!-- Filters block -->
-        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-center'}">
+        <div class="flex gap-3
+                    {layoutMode === 'mobile' ? 'flex-col items-center'
+                     : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1'
+                     : layoutMode === 'wide' ? 'flex-row items-center flex-1'
+                     : 'flex-col items-center'}"
+        >
             <!-- DateRangePicker -->
             <div class="max-w-md" data-testid="fx-date-range-picker">
                 <DateRangePicker
@@ -671,9 +725,12 @@
             </div>
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), horizontal row (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet), column (tablet-s), horizontal row (mobile) -->
         <div class="flex shrink-0 gap-1.5
-                    {layoutMode === 'mobile' ? 'flex-row justify-center' : 'grid grid-cols-2'}">
+                    {layoutMode === 'mobile' ? 'flex-row justify-center'
+                     : layoutMode === 'tablet-s' ? 'flex-col'
+                     : 'grid grid-cols-2'}"
+        >
             <!-- Top-left: Abs/% toggle in grid mode, ColumnVisibility in table mode -->
             {#if viewMode === 'list'}
                 <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels} />
@@ -700,7 +757,7 @@
                 data-testid="fx-chart-settings-button"
             >
                 <Settings size={14} />
-                {#if showActionLabels}<span>{$_('fx.actions.settings')}</span>{/if}
+                {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
             </button>
             <!-- Sync All -->
             <button
@@ -709,7 +766,7 @@
                 data-testid="fx-sync-all-button"
             >
                 <RotateCw size={14} />
-                {#if showActionLabels}<span>{$_('fx.actions.syncAll')}</span>{/if}
+                {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
             <button
@@ -718,7 +775,7 @@
                 data-testid="fx-refresh-all-button"
             >
                 <RefreshCw size={14} />
-                {#if showActionLabels}<span>{$_('fx.actions.refreshAll')}</span>{/if}
+                {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
             </button>
         </div>
     </div>
@@ -800,7 +857,7 @@
     {/if}
 </div>
 
-<!-- Delete Confirm Dialog -->
+<!-- Delete Confirm Dialog (single) -->
 <ConfirmModal
     open={deleteDialogOpen}
     title={$_('fx.deletePairTitle')}
@@ -809,6 +866,19 @@
     danger={true}
     onConfirm={confirmDelete}
     onCancel={() => { deleteDialogOpen = false; deletingPair = null; }}
+/>
+
+<!-- Delete Confirm Dialog (bulk) -->
+<ConfirmModal
+    open={bulkDeleteDialogOpen}
+    title={$_('fx.deletePairTitle')}
+    message={$_('fx.deletePairMessage', {values: {pair: `${deletingPairs.length} pairs`}})}
+    items={deletingPairs.map(p => `${getCurrencyInfo(p.base).flag_emoji} ${p.base} / ${getCurrencyInfo(p.quote).flag_emoji} ${p.quote}`)}
+    itemsLabel={`${deletingPairs.length} pairs`}
+    confirmText={$_('common.delete')}
+    danger={true}
+    onConfirm={confirmBulkDelete}
+    onCancel={() => { bulkDeleteDialogOpen = false; deletingPairs = []; }}
 />
 
 <!-- Add Pair Modal -->
