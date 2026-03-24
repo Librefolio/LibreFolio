@@ -24,6 +24,10 @@ export interface ColumnDef {
     required: boolean;
     /** Number step for type 'number' inputs */
     step?: number;
+    /** Minimum value for type 'number' inputs */
+    min?: number;
+    /** Maximum value for type 'number' inputs */
+    max?: number;
     /** Placeholder text for empty cells */
     placeholder?: string;
 }

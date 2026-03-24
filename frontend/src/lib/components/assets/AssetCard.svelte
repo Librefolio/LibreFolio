@@ -8,7 +8,7 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
-    import {Pencil, Trash2} from 'lucide-svelte';
+    import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import AssetIcon from './AssetIcon.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -42,7 +42,8 @@
         /** Loading state */
         loading?: boolean;
         /** Callbacks */
-        onedit?: (asset: AssetData) => void;
+        onsync?: (asset: AssetData) => void;
+        onrefresh?: (asset: AssetData) => void;
         ondelete?: (asset: AssetData) => void;
     }
 
@@ -53,7 +54,8 @@
         deltaAbs = null,
         chartData = [],
         loading = false,
-        onedit,
+        onsync,
+        onrefresh,
         ondelete,
     }: Props = $props();
 
@@ -161,22 +163,34 @@
         {/if}
     </div>
 
-    <!-- Footer: actions (edit, delete) -->
-    <div class="px-4 py-2.5 flex items-center justify-end gap-0.5 border-t border-gray-50 dark:border-slate-700/50">
-        <button
-            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-600 transition-colors"
-            onclick={(e) => { stop(e); onedit?.(asset); }}
-            title={$t('common.edit')}
-        >
-            <Pencil size={15} />
-        </button>
-        <button
-            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
-            onclick={(e) => { stop(e); ondelete?.(asset); }}
-            title={$t('common.delete')}
-        >
-            <Trash2 size={15} />
-        </button>
+    <!-- Footer: actions (sync, refresh, delete) -->
+    <div class="px-4 py-2.5 flex items-center justify-between border-t border-gray-50 dark:border-slate-700/50">
+        <div class="flex items-center gap-0.5">
+            <button
+                class="p-1.5 rounded-md transition-colors {!asset.has_provider ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
+                onclick={(e) => { stop(e); if (asset.has_provider) onsync?.(asset); }}
+                title={asset.has_provider ? 'Sync prices from provider' : 'No provider assigned'}
+                disabled={!asset.has_provider}
+            >
+                <RotateCw size={15} class={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                onclick={(e) => { stop(e); onrefresh?.(asset); }}
+                title={$t('common.refresh')}
+            >
+                <RefreshCw size={15} />
+            </button>
+        </div>
+        <div class="flex items-center gap-0.5">
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
+                onclick={(e) => { stop(e); ondelete?.(asset); }}
+                title={$t('common.delete')}
+            >
+                <Trash2 size={15} />
+            </button>
+        </div>
     </div>
 </div>
 

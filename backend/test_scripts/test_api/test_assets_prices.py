@@ -393,3 +393,89 @@ async def test_bulk_query_multi_asset(test_server):
 
         print_success("Multi-asset bulk query succeeded")
 
+
+# ============================================================
+# Test 6: Query without sync returns empty (architecture test)
+# ============================================================
+@pytest.mark.asyncio
+async def test_query_without_sync_returns_empty(test_server):
+    """Test 6: Query on asset with provider but no sync returns empty prices.
+
+    Certifies the architectural separation:
+    - Assigning a provider does NOT auto-fetch prices
+    - Prices appear in DB only after explicit sync (POST /assets/prices/refresh)
+    - Query (POST /assets/prices/query) reads ONLY from DB, never from provider
+    """
+    print_section("Test 6: Query without sync = empty (architecture test)")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # 1. Create asset
+        asset_item = FAAssetCreateItem(
+            display_name=f"No-Sync Test {unique_id('NOSYNC')}", currency="USD"
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert create_resp.status_code == 201
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+        print_info(f"  Created asset ID: {asset_id}")
+
+        # 2. Assign provider (yfinance/AAPL — always has data)
+        assignment = FAProviderAssignmentItem(
+            asset_id=asset_id,
+            provider_code="yfinance",
+            identifier="AAPL",
+            identifier_type=IdentifierType.TICKER,
+            provider_params=None,
+            )
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment.model_dump(mode="json")],
+            timeout=TIMEOUT,
+            )
+        assert assign_resp.status_code == 200
+        print_info("  Provider assigned: yfinance (AAPL)")
+
+        # 3. Query WITHOUT sync — must return 0 prices
+        today = date.today()
+        start = (today - timedelta(days=7)).isoformat()
+        end = today.isoformat()
+
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
+            timeout=TIMEOUT,
+            )
+        assert query_resp.status_code == 200
+        prices_before = query_resp.json()["items"][0]["prices"]
+        assert len(prices_before) == 0, f"Expected 0 prices before sync, got {len(prices_before)}"
+        print_success("  ✓ Query before sync returned 0 prices (DB-only, no provider call)")
+
+        # 4. Explicit sync — download from provider into DB
+        sync_resp = await client.post(
+            f"{API_BASE}/assets/prices/refresh",
+            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
+            timeout=TIMEOUT,
+            )
+        assert sync_resp.status_code == 200
+        sync_result = sync_resp.json()["results"][0]
+        print_info(f"  Sync fetched: {sync_result.get('fetched_count', 0)} prices")
+
+        # 5. Query AFTER sync — must return ≥1 price
+        query_resp2 = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
+            timeout=TIMEOUT,
+            )
+        assert query_resp2.status_code == 200
+        prices_after = query_resp2.json()["items"][0]["prices"]
+        assert len(prices_after) > 0, "Should have prices after sync"
+        print_success(f"  ✓ Query after sync returned {len(prices_after)} prices")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+        print_info("  Cleanup completed")
+

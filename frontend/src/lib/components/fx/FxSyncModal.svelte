@@ -185,6 +185,23 @@
         if (ms < 1000) return `${ms}ms`;
         return `${(ms / 1000).toFixed(1)}s`;
     }
+
+    // Provider chain badge rendering
+    const PROVIDER_COLORS: Record<string, string> = {
+        ECB: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+        FRANKFURTER: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
+        FIXED_RATE: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+        MANUAL: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    };
+    const DEFAULT_PROV_COLOR = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+
+    function parseProviderChain(providerUsed: string | null | undefined): string[] {
+        if (!providerUsed) return [];
+        if (providerUsed.startsWith('CHAIN:')) {
+            return providerUsed.slice(6).split('+');
+        }
+        return [providerUsed];
+    }
 </script>
 
 <ModalBase {open} onRequestClose={onclose} maxWidth="max-w-md" testId="fx-sync-modal">
@@ -305,7 +322,15 @@
                             <span class="text-gray-400">—</span>
                             <span>{pr.points_fetched ?? 0}↓ {pr.points_changed ?? 0}Δ</span>
                             {#if pr.provider_used}
-                                <span class="text-gray-400">({pr.provider_used})</span>
+                                {@const chain = parseProviderChain(pr.provider_used)}
+                                <span class="flex items-center gap-0.5">
+                                    {#each chain as prov, i}
+                                        <span class="px-1 py-0.5 text-[9px] font-medium rounded {PROVIDER_COLORS[prov] ?? DEFAULT_PROV_COLOR}">{prov}</span>
+                                        {#if i < chain.length - 1}
+                                            <span class="text-gray-400 text-[8px]">→</span>
+                                        {/if}
+                                    {/each}
+                                </span>
                             {/if}
                         {/if}
                         {#if pr.status === 'failed' && pr.message}

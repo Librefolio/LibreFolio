@@ -10,7 +10,7 @@
     import {_ as t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
-    import {ArrowLeftRight, Pencil, Trash2} from 'lucide-svelte';
+    import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {isCardInverted, setCardInverted} from '$lib/stores/fxCardInversionStore';
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
@@ -26,19 +26,31 @@
         quote: string;
         data: FxDataPoint[];
         manualOnly: boolean;
-        providers: Array<{providerCode: string; priority: number}>;
+        providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}>;
+        deltas?: Record<string, number | null>;
     }
 
     interface Props {
         data: FxRow[];
         loading?: boolean;
-        onedit?: (info: {base: string; quote: string; slug: string}) => void;
+        visiblePeriods?: ReadonlyArray<{key: string; days: number}>;
+        onsync?: (info: {base: string; quote: string; slug: string}) => void;
+        onrefresh?: (info: {base: string; quote: string; slug: string}) => void;
         ondelete?: (info: {base: string; quote: string; slug: string}) => void;
+        onselectionchange?: (rows: FxRow[]) => void;
     }
 
-    let {data = [], loading = false, onedit, ondelete}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
+
+    /** Exposed DataTable ref for ColumnVisibilityToggle */
+    let tableRef: DataTable<FxRow> | undefined = $state(undefined);
+    export function getTableRef() { return tableRef; }
+
+    /** Track rows currently being refreshed/synced for spin animation */
+    let refreshingRowIds = $state(new Set<string>());
+    let syncingRowIds = $state(new Set<string>());
 
     // =========================================================================
     // Helpers
@@ -104,22 +116,46 @@
             : 'text-red-500 dark:text-red-400';
     }
 
+    // Provider chain rendering helpers
+    const PROVIDER_COLORS: Record<string, string> = {
+        ECB: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+        FRANKFURTER: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
+        FIXED_RATE: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+        MANUAL: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    };
+    const DEFAULT_PROVIDER_COLOR = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+
+    function providerBadgeHtml(providerCode: string): string {
+        const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
+        return `<span class="px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
+    }
+
+    function providerChainHtml(row: FxRow): string {
+        const prov = row.providers[0]; // Primary provider (highest priority)
+        if (!prov) return '—';
+        const steps = prov.chainSteps;
+        if (steps && steps.length > 1) {
+            // Chain route: show provider badges with intermediate currencies
+            const parts: string[] = [];
+            for (let i = 0; i < steps.length; i++) {
+                parts.push(providerBadgeHtml(steps[i].provider));
+                if (i < steps.length - 1) {
+                    parts.push(`<span class="text-gray-400 text-[8px]">→</span>`);
+                    parts.push(`<span class="text-[9px] text-gray-400">${steps[i].to}</span>`);
+                    parts.push(`<span class="text-gray-400 text-[8px]">→</span>`);
+                }
+            }
+            return `<div class="flex items-center gap-0.5 flex-wrap">${parts.join('')}</div>`;
+        }
+        // Single provider
+        return providerBadgeHtml(prov.providerCode);
+    }
+
     // =========================================================================
     // Columns
     // =========================================================================
 
     let columns = $derived<ColumnDef<FxRow>[]>([
-        {
-            id: 'swap',
-            header: '⇄',
-            cell: () => '', // Rendered via rowAction
-            type: 'text',
-            sortable: false,
-            filterable: false,
-            width: 40,
-            minWidth: 40,
-            maxWidth: 40,
-        },
         {
             id: 'pair',
             header: () => $t('fx.filter.filterCurrency'),
@@ -128,7 +164,10 @@
                 const dq = getDisplayQuote(row);
                 const bFlag = getCurrencyInfo(db).flag_emoji;
                 const qFlag = getCurrencyInfo(dq).flag_emoji;
-                return {type: 'html', html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-gray-400">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>`};
+                const manualBadge = row.manualOnly
+                    ? ' <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 ml-1">✏️</span>'
+                    : '';
+                return {type: 'html', html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-gray-400">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>${manualBadge}`};
             },
             type: 'text',
             getValue: (row) => `${getDisplayBase(row)}-${getDisplayQuote(row)}`,
@@ -173,41 +212,39 @@
             width: 90,
             minWidth: 70,
         },
+        // Dynamic delta period columns
+        ...visiblePeriods.map(p => ({
+            id: `delta_${p.key}`,
+            header: `Δ ${p.key}`,
+            cell: (row: FxRow) => {
+                const val = row.deltas?.[p.key] ?? null;
+                return {type: 'html' as const, html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};
+            },
+            type: 'number' as const,
+            getValue: (row: FxRow) => row.deltas?.[p.key] ?? 0,
+            width: 90,
+            minWidth: 70,
+        })),
         {
             id: 'providers',
             header: () => $t('fx.providers'),
-            cell: (row) => {
-                const codes = row.providers.map(p => p.providerCode).join(', ');
-                return codes || '—';
-            },
+            cell: (row) => ({type: 'html', html: providerChainHtml(row)}),
             type: 'text',
             getValue: (row) => row.providers.map(p => p.providerCode).join(', '),
-            width: 140,
+            width: 160,
             minWidth: 100,
-        },
-        {
-            id: 'manualOnly',
-            header: 'Manual',
-            cell: (row) => ({
-                type: 'html',
-                html: row.manualOnly
-                    ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">✏️ Manual</span>'
-                    : '',
-            }),
-            type: 'enum',
-            enumOptions: [{value: 'true', label: 'Manual'}, {value: 'false', label: 'Auto'}],
-            getValue: (row) => String(row.manualOnly),
-            width: 80,
-            minWidth: 60,
+            hiddenByDefault: true,
         },
     ]);
 </script>
 
 <DataTable
+    bind:this={tableRef}
     {data}
     {columns}
     getRowId={(row) => row.slug}
     storageKey="fxTable"
+    onSelectionChange={onselectionchange}
     onRowClick={(row) => {
         const inv = isCardInverted(row.slug);
         const target = inv ? `${row.quote}-${row.base}` : row.slug;
@@ -228,10 +265,27 @@
             onClick: (row) => toggleInversion(row.slug),
         },
         {
-            id: 'edit',
-            label: () => $t('common.edit'),
-            icon: Pencil,
-            onClick: (row) => onedit?.({base: row.base, quote: row.quote, slug: row.slug}),
+            id: 'sync',
+            label: 'Sync',
+            icon: RotateCw,
+            onClick: async (row) => {
+                syncingRowIds = new Set([...syncingRowIds, row.slug]);
+                try { await onsync?.({base: row.base, quote: row.quote, slug: row.slug}); }
+                finally { syncingRowIds = new Set([...syncingRowIds].filter(id => id !== row.slug)); }
+            },
+            disabled: (row) => row.manualOnly,
+            iconClass: (row) => syncingRowIds.has(row.slug) ? 'animate-spin' : '',
+        },
+        {
+            id: 'refresh',
+            label: () => $t('common.refresh'),
+            icon: RefreshCw,
+            onClick: async (row) => {
+                refreshingRowIds = new Set([...refreshingRowIds, row.slug]);
+                try { await onrefresh?.({base: row.base, quote: row.quote, slug: row.slug}); }
+                finally { refreshingRowIds = new Set([...refreshingRowIds].filter(id => id !== row.slug)); }
+            },
+            iconClass: (row) => refreshingRowIds.has(row.slug) ? 'animate-spin' : '',
         },
         {
             id: 'delete',

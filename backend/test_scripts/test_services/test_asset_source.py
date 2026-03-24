@@ -56,7 +56,7 @@ from backend.app.schemas.assets import (
     DayCountConvention,
     )
 from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.prices import FAUpsert, FAPricePoint
+from backend.app.schemas.prices import FAUpsert, FAPricePoint, FAPriceQueryItem
 
 from backend.app.db.models import AssetProviderAssignment
 from sqlalchemy import delete
@@ -471,17 +471,19 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
 
 @pytest.mark.asyncio
 async def test_get_prices_with_backfill(asset_ids: list[int]):
-    """Test get_prices() with backward-fill logic."""
+    """Test get_prices_bulk() with backward-fill logic."""
     print_section("Test 10: Get Prices with Backward-Fill")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        # Query range with gaps
-        prices = await AssetSourceManager.get_prices(
-            asset_id=asset_ids[0],
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 5),
+        # Query range with gaps via bulk API
+        results = await AssetSourceManager.get_prices_bulk(
+            requests=[FAPriceQueryItem(
+                asset_id=asset_ids[0],
+                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 5)),
+            )],
             session=session,
             )
+        prices = results[0].prices
 
         assert len(prices) == 5, f"Expected 5 prices, got {len(prices)}"
 
@@ -562,12 +564,14 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
         await session.commit()
 
         # Query range Day 1-4 (Day 3 and 4 should be backfilled)
-        prices = await AssetSourceManager.get_prices(
-            asset_id=test_asset_id,
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 4),
+        results = await AssetSourceManager.get_prices_bulk(
+            requests=[FAPriceQueryItem(
+                asset_id=test_asset_id,
+                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 4)),
+            )],
             session=session,
             )
+        prices = results[0].prices
 
         assert len(prices) == 4, f"Expected 4 prices (2 actual + 2 backfilled), got {len(prices)}"
 
@@ -644,12 +648,14 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
         await session.commit()
 
         # Query range with no data
-        prices = await AssetSourceManager.get_prices(
-            asset_id=test_asset_id,
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 4),
+        results = await AssetSourceManager.get_prices_bulk(
+            requests=[FAPriceQueryItem(
+                asset_id=test_asset_id,
+                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 4)),
+            )],
             session=session,
             )
+        prices = results[0].prices
 
         # Should return empty list (no data to backfill from)
         assert (
@@ -660,20 +666,17 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
 
 @pytest.mark.asyncio
 async def test_provider_fallback_invalid(asset_ids: list[int]):
-    """Test provider fallback when invalid/unregistered provider assigned.
+    """Test sync/query separation when invalid/unregistered provider is assigned.
 
-    Scenario:
-    - Insert invalid provider assignment directly in DB (bypass Pydantic validation)
-    - Insert some prices in DB as fallback
-    - Query prices -> should fallback to DB gracefully
-    - Verify warning log is generated (manually via log inspection)
+    With the new architecture (Sync ≠ Query):
+    - Sync with invalid provider → should fail gracefully (error in result, no crash)
+    - Query from DB → should still return manually inserted prices (query is provider-agnostic)
 
-    Expected:
-    - No crash
-    - Prices returned from DB fallback
-    - Warning logged about provider not registered
+    This certifies that the query path is completely independent from the provider path.
     """
-    print_section("Test 13: Provider Fallback (Invalid Provider)")
+    print_section("Test 13: Sync/Query Separation with Invalid Provider")
+
+    from backend.app.schemas.refresh import FARefreshItem
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         test_asset_id = asset_ids[0]
@@ -702,7 +705,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             f"Inserted invalid provider '{invalid_provider}' directly in DB for asset {test_asset_id}"
             )
 
-        # Insert fallback prices in DB
+        # Insert manual prices in DB
         await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
         await session.commit()
 
@@ -715,26 +718,41 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             )
         session.add(fallback_price)
         await session.commit()
-        print_info(f"Inserted fallback price in DB: date=2025-01-10, close=999.00")
+        print_info(f"Inserted manual price in DB: date=2025-01-10, close=999.00")
 
-        # Query prices -> should fallback to DB (provider fetch will fail)
-        prices = await AssetSourceManager.get_prices(
-            asset_id=test_asset_id,
-            start_date=date(2025, 1, 10),
-            end_date=date(2025, 1, 10),
+        # Step 1: SYNC with invalid provider → should fail gracefully, no crash
+        sync_response = await AssetSourceManager.bulk_refresh_prices(
+            requests=[FARefreshItem(
+                asset_id=test_asset_id,
+                date_range=DateRangeModel(start=date(2025, 1, 10), end=date(2025, 1, 10)),
+            )],
             session=session,
             )
 
-        # Verify fallback worked
-        assert len(prices) == 1, f"Expected 1 price from DB fallback, got {len(prices)}"
+        sync_result = sync_response.results[0]
+        assert len(sync_result.errors) > 0, "Sync with invalid provider should produce errors"
+        print_success(f"✓ Sync failed gracefully with errors: {sync_result.errors}")
+
+        # Step 2: QUERY from DB → should still return the manual price (query is provider-agnostic)
+        query_results = await AssetSourceManager.get_prices_bulk(
+            requests=[FAPriceQueryItem(
+                asset_id=test_asset_id,
+                date_range=DateRangeModel(start=date(2025, 1, 10), end=date(2025, 1, 10)),
+            )],
+            session=session,
+            )
+        prices = query_results[0].prices
+
+        # Verify query returned manual data despite invalid provider
+        assert len(prices) == 1, f"Expected 1 price from DB query, got {len(prices)}"
         assert prices[0].close == Decimal("999.00"), f"Expected price 999.00, got {prices[0].close}"
         assert prices[0].date == date(
             2025, 1, 10
             ), f"Expected date 2025-01-10, got {prices[0].date}"
 
-        print_success(f"✓ Fallback to DB successful: retrieved price {prices[0].close}")
+        print_success(f"✓ Query returned manual price despite invalid provider: {prices[0].close}")
         print_info(
-            "⚠️  Check logs for warning: 'Provider not registered in registry, falling back to DB'"
+            "✓ Sync/Query separation verified: invalid provider blocks sync but NOT query"
             )
 
 

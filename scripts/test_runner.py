@@ -914,7 +914,7 @@ def api_assets_price(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Testing asset price management endpoints")
     print_info("Tests: POST /assets/prices (bulk upsert)")
     print_info("Tests: DELETE /assets/prices (bulk delete)")
-    print_info("Tests: GET /assets/prices/{asset_id}")
+    print_info("Tests: POST /assets/prices/query (bulk read from DB)")
     print_info("Tests: POST /assets/prices/refresh (from providers)")
     print_info("Note: Server will be automatically started and stopped by test")
 

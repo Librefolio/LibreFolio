@@ -8,7 +8,7 @@
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {ArrowLeftRight, Pencil, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
+    import {ArrowLeftRight, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
@@ -41,7 +41,6 @@
          */
         renderSignals?: (chartData: LineDataPoint[], viewMode: 'absolute' | 'percentage') => RenderedSignal[];
         /** Callbacks */
-        onedit?: (info: { base: string; quote: string; slug: string }) => void;
         ondelete?: (info: { base: string; quote: string; slug: string }) => void;
         onrefresh?: (info: { slug: string }) => void;
         onsync?: (info: { slug: string; base: string; quote: string }) => void;
@@ -58,7 +57,6 @@
         globalViewMode = 'absolute',
         chartSettings,
         renderSignals,
-        onedit,
         ondelete,
         onrefresh,
         onsync,
@@ -286,13 +284,6 @@
             </button>
         </div>
         <div class="flex items-center gap-0.5">
-            <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-600 transition-colors"
-                onclick={(e) => { stop(e); onedit?.({ base, quote, slug }); }}
-                title={$t('fx.editPairConfig')}
-            >
-                <Pencil size={15} />
-            </button>
             <button
                 class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
                 onclick={(e) => { stop(e); ondelete?.({ base, quote, slug }); }}

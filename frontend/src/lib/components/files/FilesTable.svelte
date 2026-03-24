@@ -445,7 +445,6 @@
             {rowActions}
             storageKey="filesTable_{type}"
             tableLayout="auto"
-            showToolbar={false}
     />
 </div>
 

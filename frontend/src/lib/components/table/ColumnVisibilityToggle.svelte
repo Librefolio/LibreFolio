@@ -6,6 +6,7 @@
 -->
 <script lang="ts">
     import {Eye, EyeOff, RotateCcw} from 'lucide-svelte';
+    import {_ as t} from '$lib/i18n';
     import type DataTable from './DataTable.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
 
@@ -15,11 +16,13 @@
 
     interface Props {
         tableRef?: DataTable<any>;
+        showLabel?: boolean;
         class?: string;
     }
 
     let {
         tableRef,
+        showLabel = false,
         class: extraClass = '',
     }: Props = $props();
 
@@ -39,6 +42,7 @@
 
     let open = $state(false);
     let triggerEl: HTMLButtonElement | undefined = $state(undefined);
+    let dropdownRef: HTMLDivElement | undefined = $state(undefined);
     let dropdownStyle = $state('');
     let columnItems: ColumnItem[] = $state([]);
 
@@ -77,10 +81,13 @@
         dropdownStyle = `position: fixed; top: ${top}; bottom: ${bottom}; right: ${right}px; z-index: 9999;`;
     }
 
-    // Close dropdown on scroll (capture phase catches all scrollable containers)
+    // Close dropdown on external scroll (ignore internal dropdown scrolling)
     $effect(() => {
         if (!open) return;
-        const handleScroll = () => close();
+        const handleScroll = (e: Event) => {
+            if (dropdownRef && dropdownRef.contains(e.target as Node)) return;
+            close();
+        };
         window.addEventListener('scroll', handleScroll, true);
         return () => window.removeEventListener('scroll', handleScroll, true);
     });
@@ -111,6 +118,7 @@
     title="Column visibility"
 >
     <Eye size={13} />
+    {#if showLabel}<span>{$t('table.columns')}</span>{/if}
 </button>
 
 {#if open}
@@ -121,6 +129,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
+        bind:this={dropdownRef}
         class="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg p-2 max-h-[400px] overflow-y-auto w-max"
         style={dropdownStyle}
         onclick={(e) => e.stopPropagation()}

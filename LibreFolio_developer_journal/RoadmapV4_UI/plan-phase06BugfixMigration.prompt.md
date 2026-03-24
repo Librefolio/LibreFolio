@@ -9,7 +9,26 @@ con Step 3 (AssetModal). Questo piano di rientro corregge tutto in ordine di dip
 **Durata stimata**: ~0.5 giorni
 **Dipendenze**: Phase 06 Step 1 + Step 2 completati
 
-**Stato**: ✅ Step 1-9 completati + fix auth test + ottimizzazione FX delete
+**Stato**: ✅ Step 1-15 completati | ✅ Feature F1-F5 completate | ✅ Step 2c (B1-B9) completati | ✅ Step 2d (C1-C12) completati | ⬜ Step 2e (D1-D12) in attesa
+
+---
+
+## Glossario Terminologia Sync/Query
+
+> **Convenzione progetto** (allineata con FX):
+>
+> | Termine | Direzione | Endpoint Asset | Endpoint FX |
+> |---------|-----------|----------------|-------------|
+> | **Sync** | Provider → DB | `POST /assets/prices/refresh` | `POST /fx/currencies/sync` |
+> | **Query** (refresh frontend) | DB → Frontend | `POST /assets/prices/query` | `POST /fx/currencies/convert` |
+> | **Upsert manuale** | Frontend → DB | `POST /assets/prices` | `POST /fx/currencies/rate` |
+>
+> **Anti-pattern rimosso**: Il vecchio `GET /assets/prices/{id}` faceva Sync+Query in un'unica
+> chiamata — se c'era un provider assegnato, contattava il provider (HTTP esterna a yfinance/justetf),
+> salvava nel DB, poi restituiva i dati. Ogni lettura poteva generare chiamate HTTP.
+> Con N asset = N chiamate HTTP sequenziali. Ora i due flussi sono separati:
+> - **Sync** è esplicita, solo su richiesta utente (bottone "Sync" / `prices/refresh`)
+> - **Query** è pura lettura da DB, nessun side-effect (bottone "Refresh" / `prices/query`)
 
 ---
 
@@ -28,14 +47,18 @@ con Step 3 (AssetModal). Questo piano di rientro corregge tutto in ordine di dip
 | 9 | Rimuovere chiave i18n orfana | i18n | 🟢 Pulizia | ✅ |
 | 10 | Fix auth in TUTTI i test API (8+1 file) | Backend test | 🔴 Bug | ✅ |
 | 11 | Ottimizzazione FX delete (merge date consecutive in range) | Frontend | 🟢 Ottimizzazione | ✅ |
+| 12 | Fix crash JustETF search (`.fillna` su colonne con NaN) | Backend | 🔴 Bug | ✅ |
+| 13 | Fix `FAAssetCreateResult` extra field `identifier` | Backend | 🔴 Bug | ✅ |
+| 14 | Migrazione COMPLETA test all'architettura Sync→Query | Backend test | 🟡 Test | ✅ |
+| 15 | Test runner label + nuovo test "query senza sync = vuoto" | Backend test | 🟢 Test | ✅ |
 
 ---
 
-## Feedback Review — TODO per Step 2b successivo
+## Feedback Review — TODO per Step 2b successivo ✅ Completati
 
-Questi punti emersi dalla review dell'utente vanno implementati in un batch successivo:
+Questi punti emersi dalla review dell'utente sono stati implementati:
 
-### F1 — Toast message dopo save in FxDataEditorSection
+### F1 — Toast message dopo save in FxDataEditorSection ✅
 **Area**: Frontend UX
 **File**: `FxDataEditorSection.svelte`
 **Problema**: Dopo il salvataggio (upsert + delete) non c'è feedback visivo.
@@ -43,13 +66,13 @@ Questi punti emersi dalla review dell'utente vanno implementati in un batch succ
 Toast error in caso di fallimento con messaggio di errore dal backend.
 Usare il componente toast custom esistente (`toasts.success()` / `toasts.error()`).
 
-### F2 — Impedire rate negativi nell'editor FX
+### F2 — Impedire rate negativi nell'editor FX ✅
 **Area**: Frontend validation
 **File**: `DataEditor.svelte` o `FxDataEditorSection.svelte`
 **Problema**: Il campo rate permette valori negativi tramite freccia giù della tastiera.
 **Soluzione**: Aggiungere `min="0"` all'input numerico e/o clamping nel handler.
 
-### F3 — Marker circolare per singolo punto nel chart
+### F3 — Marker circolare per singolo punto nel chart ✅
 **Area**: Frontend chart
 **File**: `PriceChartCompact.svelte`, `PriceChartFull.svelte`, `LineChart.svelte`
 **Problema**: Un singolo data point è invisibile perché non crea un segmento di linea.
@@ -57,19 +80,500 @@ Usare il componente toast custom esistente (`toasts.success()` / `toasts.error()
 Se il marker è assente o null, usare il circolare di default. Dal 2° punto in poi,
 si usa il comportamento normale (segmento di linea).
 
-### F4 — ColumnVisibilityToggle nella pagina Assets (table mode)
+### F4 — ColumnVisibilityToggle nella pagina Assets (table mode) ✅
 **Area**: Frontend UX
 **File**: `assets/+page.svelte`
 **Problema**: In modalità tabella manca il selettore di visibilità colonne (occhio).
 **Soluzione**: Accanto al ViewModeToggle, mostrare `ColumnVisibilityToggle` quando
 `viewMode === 'list'`, come già fatto nella pagina files.
 
-### F5 — Colonne Δ multi-periodo nella tabella FX
+### F5 — Colonne Δ multi-periodo nella tabella FX ✅
 **Area**: Frontend feature
 **File**: `fx/+page.svelte`, `FxTable.svelte`
 **Problema**: Le colonne Δ multi-periodo sono solo nella tabella Assets, non in FX.
 **Soluzione**: Replicare la stessa logica di `DELTA_PERIODS` + `visiblePeriods` +
 `computePeriodDelta()` nella pagina FX e nel componente FxTable.
+
+---
+
+## Step 2c — Post-Review Fixes & UX Improvements (24 Marzo 2026)
+
+Sezione aggiuntiva emersa dalla seconda e terza review. Copre bug, refactoring UX, nuove feature
+e migrazione test backend. I fix sono raggruppati per dipendenza: prima bug atomici (B1–B3),
+poi refactoring azioni (B4), poi visibilità colonne (B7), poi feature complesse (B5–B6),
+poi miglioramenti test (B8–B9).
+
+**Durata stimata**: ~1.5 giorni
+**Dipendenze**: Step 1-15 + F1-F5 completati
+
+### Indice Step 2c
+
+| # | Titolo | Area | Priorità | Stato |
+|---|--------|------|----------|-------|
+| B1 | Messaggio validazione rate: "strictly > 0" | Frontend copy | 🟢 Facile | ✅ |
+| B2 | Chart non si aggiorna dopo cancellazione dati FX | Frontend bug | 🔴 Bug | ✅ |
+| B3 | Action button in tabella naviga invece di eseguire azione | Frontend bug | 🔴 Bug | ✅ |
+| B4 | Rimuovere icona edit ridondante, aggiungere sync/refresh | Frontend UX | 🟡 Refactor | ✅ |
+| B5 | Multi-selezione con azioni di gruppo + toolbar esterna | Frontend feature | 🟡 Feature | ✅ |
+| B6 | Blocco 2×2 azioni mancante in pagina Assets + ColumnVisibility | Frontend UX | 🟡 Feature | ✅ |
+| B7 | Colonne Δ periodo: columnOrder non sincronizza colonne dinamiche | Frontend bug | 🟡 Bug | ✅ |
+| B8 | Test CSS Scraper: skip condizionale per mercato chiuso | Backend test | 🟢 Test | ✅ |
+| B9 | Migrazione test_asset_source.py: `get_prices` → `get_prices_bulk` | Backend test | 🔴 Bug | ✅ |
+
+**Ordine di implementazione**: B9 → B1 → B3 → B2 → B7 → B4 → B5 → B6 → B8
+
+---
+
+### B1 — Messaggio validazione rate: "strictly > 0"
+
+**Area**: Frontend copy
+**Priorità**: 🟢 Facile (1 riga)
+**File**: `frontend/src/lib/components/fx/FxDataEditorSection.svelte` (riga 169)
+
+**Problema**: Quando l'utente inserisce 0 come rate, il messaggio di errore dice
+`"Please enter a valid positive rate"`, che non chiarisce esplicitamente che 0 è escluso.
+La validazione (riga 160: `rate > 0`) è corretta, ma il messaggio è ambiguo.
+
+**Fix**: Cambiare il messaggio in:
+```
+"${invalidCount} row(s) have invalid rate values. Rate must be strictly greater than zero (0 is not allowed)."
+```
+
+**Tasks**:
+- [ ] Aggiornare stringa errore in `FxDataEditorSection.svelte` riga 169
+
+---
+
+### B2 — Chart non si aggiorna dopo cancellazione dati FX
+
+**Area**: Frontend bug
+**Priorità**: 🔴 Bug (UX rotto — chart mostra dati vecchi)
+**File**: `frontend/src/routes/(app)/fx/[pair]/+page.svelte` (righe 268-277)
+
+**Problema**: Dopo aver cancellato tutti i dati nell'editor, il banner "No rate data available"
+appare correttamente, ma il **grafico mostra ancora i dati pre-delete**. Dopo F5 funziona.
+
+**Root cause**: In `loadChartData()`, nel blocco `catch` path 404 (riga 272-273), viene settato
+`error` al messaggio banner ma `chartData` **NON viene resettato a `[]`**. Il vecchio array
+rimane in memoria e il chart continua a renderizzarlo.
+
+**Fix**:
+```javascript
+// Nel blocco catch, path 404:
+} else if (e?.response?.status === 404) {
+    chartData = [];  // ← AGGIUNGERE: pulire dati chart
+    store.invalidateRange(dateStart, dateEnd);  // ← AGGIUNGERE: invalidare cache store
+    error = 'No rate data available for this range. Try syncing first or adjusting the date range.';
+}
+// Anche nel path errore generico, aggiungere chartData = [] quando existingData è vuoto
+```
+
+**Tasks**:
+- [ ] Aggiungere `chartData = []` nel path 404 (prima di settare `error`)
+- [ ] Aggiungere `store.invalidateRange(dateStart, dateEnd)` nel path 404
+- [ ] Nel path errore generico (riga 275-276), se `existingData.length === 0`, settare `chartData = []`
+
+---
+
+### B3 — Action button in tabella naviga invece di eseguire azione
+
+**Area**: Frontend bug
+**Priorità**: 🔴 Bug (click handler ambiguo — double-fire)
+**File**: `frontend/src/lib/components/table/DataTable.svelte` (riga 1035)
+
+**Problema**: Cliccando un bottone azione (edit, delete, swap) nella riga della tabella FX,
+**sia** l'azione del bottone **sia** la navigazione al dettaglio vengono eseguite. L'utente
+finisce nella pagina dettaglio invece di eseguire solo l'azione.
+
+**Root cause**: Il bottone azione (riga 1035) ha `onclick={() => handleRowAction(action, row)}`
+senza `e.stopPropagation()`. Il click risale al `<tr>` (riga 897) che ha
+`onclick={() => handleRowClick(row)}` → `onRowClick` → `goto('/fx/...')`.
+
+Il checkbox (riga 906) **già ha** `e.stopPropagation()`. Manca solo nel bottone action.
+
+**Fix**:
+```svelte
+<!-- DataTable.svelte riga 1035 — PRIMA: -->
+onclick={() => handleRowAction(action, row)}
+
+<!-- DOPO: -->
+onclick={(e) => { e.stopPropagation(); handleRowAction(action, row); }}
+```
+
+**Tasks**:
+- [ ] Aggiungere `e.stopPropagation()` all'onclick del bottone action in `DataTable.svelte` riga 1035
+
+---
+
+### B4 — Rimuovere icona edit ridondante, aggiungere sync/refresh nelle azioni
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Refactor
+**File coinvolti**:
+- `frontend/src/lib/components/fx/FxTable.svelte`
+- `frontend/src/lib/components/assets/AssetTable.svelte`
+- `frontend/src/lib/components/fx/FxCard.svelte`
+- `frontend/src/lib/components/assets/AssetCard.svelte`
+- `frontend/src/routes/(app)/fx/+page.svelte`
+- `frontend/src/routes/(app)/assets/+page.svelte`
+
+**Problema**: Il click su riga/card già naviga al dettaglio. Il bottone Pencil/edit è ridondante.
+Servono invece Sync e Refresh come azioni dirette, oltre al Delete.
+
+**Fix per ciascun componente**:
+
+1. **FxTable.svelte**: Rimuovere azione `id: 'edit'` (Pencil). Aggiungere:
+   - `id: 'sync'` (icona `RotateCw`) — `disabled: (row) => row.manualOnly`
+   - `id: 'refresh'` (icona `RefreshCw`)
+   Aggiungere prop `onsync`, `onrefresh` al Props interface.
+
+2. **AssetTable.svelte**: Rimuovere azione `id: 'edit'` (Pencil). Aggiungere:
+   - `id: 'sync'` (icona `RotateCw`) — `disabled: (row) => !row.has_provider`
+   - `id: 'refresh'` (icona `RefreshCw`)
+   Aggiungere prop `onsync`, `onrefresh` al Props interface.
+
+3. **FxCard.svelte**: Rimuovere bottone Pencil dal footer destro (ha già sync/refresh nel footer sinistro).
+
+4. **AssetCard.svelte**: Rimuovere bottone Pencil. Aggiungere sync + refresh nel footer
+   (stesso pattern FxCard). Sync disabilitato se `!has_provider`.
+   Aggiungere prop `onsync`, `onrefresh`.
+
+5. **Pages parent**: Propagare i callback `onsync`/`onrefresh` da `fx/+page.svelte` e
+   `assets/+page.svelte` ai componenti tabella/card. Riusare handler già esistenti
+   (`handleSyncPair`, `handleRefreshPair` per FX).
+
+**Tasks**:
+- [ ] FxTable: rimuovere edit, aggiungere sync + refresh nelle rowActions; aggiungere prop `onsync`/`onrefresh`
+- [ ] AssetTable: rimuovere edit, aggiungere sync + refresh; aggiungere prop `onsync`/`onrefresh`
+- [ ] FxCard: rimuovere bottone Pencil dal footer destro
+- [ ] AssetCard: rimuovere Pencil, aggiungere sync + refresh; prop `onsync`/`onrefresh`
+- [ ] fx/+page.svelte: passare `onsync`/`onrefresh` a `FxTable`
+- [ ] assets/+page.svelte: implementare `handleSyncAsset(id)` e `handleRefreshAsset(id)`, passare a tabella e card
+- [ ] Rimuovere import `Pencil` dove non più usato
+
+---
+
+### B5 — Multi-selezione con azioni di gruppo + toolbar esterna
+
+**Area**: Frontend feature
+**Priorità**: 🟡 Feature (media complessità)
+**File coinvolti**:
+- `frontend/src/lib/components/table/DataTable.svelte` — rimuovere toolbar built-in
+- `frontend/src/lib/components/table/DataTableToolbar.svelte` — componente esterno (già esiste)
+- `frontend/src/lib/components/fx/FxTable.svelte`
+- `frontend/src/lib/components/assets/AssetTable.svelte`
+- `frontend/src/routes/(app)/fx/+page.svelte`
+- `frontend/src/routes/(app)/assets/+page.svelte`
+
+**Problema**: L'utente vuole selezionare più righe e applicare azioni in blocco:
+sync, refresh, invert, delete per FX; sync, refresh, delete per Assets.
+Inoltre, il sync di gruppo deve **aprire la modale sync-all** filtrata solo sulle coppie selezionate.
+
+**Decisione architetturale (confermata dall'utente)**: Usare `DataTableToolbar.svelte` come
+componente **esterno** nelle pagine parent. **Rimuovere la toolbar built-in** dal DataTable.svelte
+(righe 746-758: import + render di `DataTableToolbar` inside DataTable). I consumatori che la
+usavano vanno migrati al nuovo pattern esterno.
+
+**Pattern toolbar esterna**:
+```svelte
+<!-- Nella pagina parent (es. fx/+page.svelte) -->
+{#if selectedRows.length > 0}
+    <DataTableToolbar
+        selectedCount={selectedRows.length}
+        bulkActions={bulkActions}
+        onClearSelection={() => { /* reset selection */ }}
+    />
+{/if}
+<FxTable bind:this={fxTableComponent} onSelectionChange={(rows) => selectedRows = rows} ... />
+```
+
+Il DataTable deve esporre `selectedRows` (già espone `onSelectionChange`) e un metodo
+`clearSelection()` richiamabile dal parent.
+
+**Refactoring DataTable.svelte**:
+1. Rimuovere `import DataTableToolbar` (riga 21)
+2. Rimuovere blocco render `{#if showToolbar && ...}` (righe 746-758)
+3. Rimuovere prop `showToolbar` e `bulkActions` dall'interfaccia Props (non più necessari internamente)
+4. Esporre `export function clearSelection()` (chiama `clearAllSelection()` interno)
+5. Esporre `export function getSelectedRows(): T[]` per il parent
+
+**Fix per i componenti wrapper**:
+
+1. **FxTable.svelte**: Esporre `onselectionchange` callback al parent. Definire `bulkActions` come
+   dati (non come prop DataTable): `sync`, `refresh`, `invert`, `delete`.
+   - `Sync Selected` → apre modale sync-all con **solo le coppie selezionate** (non tutte)
+   - `Invert Selected` (icona `ArrowLeftRight`)
+
+2. **AssetTable.svelte**: Analogo, con azioni: `sync`, `refresh`, `delete` (no invert).
+
+3. **Pages parent**: Importare `DataTableToolbar` direttamente e renderizzarlo nell'header/filter
+   bar quando `selectedRows.length > 0`. Implementare handler bulk.
+
+**Sync di gruppo → modale sync-all filtrata**:
+Quando l'utente seleziona N coppie FX e clicca "Sync Selected", si apre la stessa modale
+di "Sync All" ma pre-filtrata per mostrare solo le coppie selezionate. Questo evita di
+creare una nuova modale e riusa l'infrastruttura esistente.
+
+**Tasks**:
+- [ ] DataTable: rimuovere import `DataTableToolbar`, blocco render toolbar, props `showToolbar`/`bulkActions`
+- [ ] DataTable: esporre `clearSelection()` e `getSelectedRows()`
+- [ ] FxTable: esporre callback `onselectionchange`; passare `selectionMode='multi'` al DataTable
+- [ ] AssetTable: analogo a FxTable
+- [ ] fx/+page.svelte: importare `DataTableToolbar`, renderizzare in header, implementare bulk handlers
+- [ ] fx/+page.svelte: `handleBulkSync` apre modale sync-all con solo coppie selezionate
+- [ ] assets/+page.svelte: analogo, con bulk handlers per assets
+- [ ] Verificare che nessun altro componente usi la toolbar built-in di DataTable
+
+---
+
+### B6 — Blocco 2×2 azioni mancante in pagina Assets + riposizionamento ColumnVisibility
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/routes/(app)/assets/+page.svelte`
+- `frontend/src/routes/(app)/fx/+page.svelte` (riferimento)
+
+**Problema**: La pagina Assets manca del blocco 2×2 azioni (Abs/%, Settings, Sync All, Refresh All)
+che la pagina FX ha nella filter bar (righe 629-674). Inoltre in modalità tabella il toggle Abs/%
+non serve (non ci sono mini chart), quindi quello slot potrebbe ospitare ColumnVisibilityToggle.
+
+**Fix proposto**:
+
+1. Aggiungere blocco 2×2 azioni nella filter bar Assets (stesso layout responsive FX
+   con `ResizeObserver` + `layoutMode`).
+
+2. Contenuto condizionale del blocco 2×2:
+   ```
+   Grid mode:                     Table mode:
+   ┌──────────┬──────────┐       ┌──────────────┬──────────┐
+   │ Abs / %  │ Settings │       │ ColVisibility │ Settings │
+   ├──────────┼──────────┤       ├──────────────┼──────────┤
+   │ Sync All │ Refresh  │       │ Sync All      │ Refresh  │
+   └──────────┴──────────┘       └──────────────┴──────────┘
+   ```
+
+3. Implementare `handleSyncAll()` in assets/+page.svelte: chiama `POST /assets/prices/refresh`
+   per tutti gli asset con provider. Implementare `handleRefreshAll()`: ri-chiama
+   `fetchAllPriceData()`.
+
+4. Spostare `ColumnVisibilityToggle` dall'header della pagina al blocco 2×2 (slot top-left
+   in table mode), rimuovendolo dalla sezione header.
+
+5. Replicare lo stesso pattern di condizionalità su FX page: in table mode mostrare
+   ColumnVisibilityToggle al posto di Abs/%.
+
+**Tasks**:
+- [ ] assets/+page.svelte: aggiungere `ResizeObserver` + `layoutMode` nella filter bar
+- [ ] assets/+page.svelte: creare blocco 2×2 con contenuto condizionale grid/table
+- [ ] Implementare `handleSyncAll()` e `handleRefreshAll()` nella pagina Assets
+- [ ] Spostare `ColumnVisibilityToggle` dall'header al blocco 2×2 (table mode slot)
+- [ ] Rimuovere `ColumnVisibilityToggle` dalla sezione header di assets
+- [ ] fx/+page.svelte: in table mode mostrare ColumnVisibilityToggle al posto di Abs/%
+
+---
+
+### B7 — Colonne Δ periodo: `columnOrder` non sincronizza colonne dinamiche
+
+**Area**: Frontend bug
+**Priorità**: 🟡 Bug (logica visibilità — root cause trovata)
+**File coinvolti**:
+- `frontend/src/lib/components/table/DataTable.svelte` — `columnOrder` e `columnVisibility`
+- `frontend/src/lib/components/fx/FxTable.svelte` — `hiddenByDefault: true` riga 194
+- `frontend/src/lib/components/assets/AssetTable.svelte`
+
+**Problema osservato**: Selezionando range 3M si vedono solo Δ 1W e Δ 1M (corretto).
+Cambiando a 6M, dovrebbero apparire anche Δ 3M, ma **restano solo 1W e 1M**.
+Andando su 1Y, mancano Δ 3M e Δ 6M. Il problema persiste in entrambe le pagine (FX e Assets).
+
+**Root cause (confermata da analisi codice)**:
+
+Il bug è in `DataTable.svelte`, **NON** nella logica `visiblePeriods` o `hiddenByDefault`.
+Il flusso è:
+
+1. **Mount con range 3M** → `visiblePeriods = [{key: '1W'}, {key: '1M'}]`
+   → `columns` $derived include `delta_1W`, `delta_1M`
+   → `columnOrder` (da localStorage o `defaultColumnOrder`) = `[..., 'delta_1W', 'delta_1M']`
+
+2. **Cambio a 6M** → `visiblePeriods` aggiunge `{key: '3M'}`
+   → `columns` $derived include ora anche `delta_3M`
+   → MA `columnOrder` è `$state`, inizializzato al mount, **non si aggiorna**!
+   → `orderedColumns = columnOrder.map(id => columns.find(c => c.id === id))` → `delta_3M` NON è in `columnOrder` → **non viene renderizzata**
+
+3. La `$effect` alle righe 674-684 aggiorna `columnOrder` solo se `length === 0` (primo mount).
+   Dopo il mount, `columnOrder` è "congelato".
+
+**Il `columnVisibility` non è il problema**: `columnVisibility[c.id] !== false` restituirebbe
+`true` per colonne non presenti nello state (undefined !== false). Ma la colonna non arriva
+nemmeno al filtro di visibilità perché viene eliminata prima da `orderedColumns`.
+
+**Fix proposto** (duplice):
+
+1. **DataTable.svelte — Sync `columnOrder` con colonne dinamiche**:
+   Aggiungere un `$effect` che, quando `columns` cambia, rileva le colonne nuove (non presenti
+   in `columnOrder`) e le aggiunge; rileva le colonne rimosse e le elimina.
+   ```typescript
+   $effect(() => {
+       const currentIds = new Set(columns.map(c => c.id));
+       const orderedIds = new Set(columnOrder);
+       // Add new columns at end
+       const newIds = columns.filter(c => !orderedIds.has(c.id)).map(c => c.id);
+       // Remove stale columns
+       const filtered = columnOrder.filter(id => currentIds.has(id));
+       if (newIds.length > 0 || filtered.length !== columnOrder.length) {
+           columnOrder = [...filtered, ...newIds];
+           saveToStorage(getStorageKey('columnOrder'), columnOrder);
+           // Also set visibility for new columns
+           for (const id of newIds) {
+               const col = columns.find(c => c.id === id);
+               columnVisibility[id] = col ? !col.hiddenByDefault : true;
+           }
+           // Remove stale visibility
+           for (const id of Object.keys(columnVisibility)) {
+               if (!currentIds.has(id)) delete columnVisibility[id];
+           }
+           saveToStorage(getStorageKey('columnVisibility'), columnVisibility);
+       }
+   });
+   ```
+
+2. **FxTable.svelte — Rimuovere `hiddenByDefault: true`** (riga 194):
+   L'utente vuole le colonne Δ visibili di default, con auto-show/hide al variare del periodo.
+   Con il fix al punto 1, il `hiddenByDefault` diventa opzionale per il toggle manuale,
+   non per colonne che appaiono/scompaiono dinamicamente.
+
+**Nota**: Questo fix risolve anche il caso inverso — quando il range si riduce (es. 1Y → 3M),
+le colonne `delta_6M`/`delta_1Y` scompaiono perché non sono più in `columns` (il spread
+`...visiblePeriods.map(...)` non le include) e vengono rimosse da `columnOrder`.
+
+**Tasks**:
+- [ ] DataTable: aggiungere `$effect` per sync `columnOrder` + `columnVisibility` con colonne dinamiche
+- [ ] FxTable: rimuovere `hiddenByDefault: true` dalla definizione colonne Δ periodo (riga 194)
+- [ ] Testare: cambiare range da 3M → 6M → 1Y → 3M e verificare colonne appaiono/scompaiono
+
+---
+
+### B8 — Test CSS Scraper: skip condizionale per mercato chiuso
+
+**Area**: Backend test
+**Priorità**: 🟢 Test (resiliency)
+**File**: `backend/test_scripts/test_external/test_asset_providers.py` (funzione `test_current_value`)
+
+**Problema**: Il test `test_current_value[cssscraper]` fallisce quando il mercato Borsa Italiana
+è in stato "Call" (pre-apertura, chiusura, festività). L'elemento `.summary-value strong` esiste
+ma è vuoto → `parse_price("")` lancia `AssetSourceError("Empty price text")`.
+
+**Non è un bug del codice**: il CSS scraper funziona correttamente. Il test è fragile perché
+dipende dall'orario di mercato.
+
+**Fix**: Aggiungere un `try/except` specifico nel test che cattura `AssetSourceError` con
+messaggio "Empty price text" e:
+1. Stampa un messaggio esplicativo con la causa probabile (mercato chiuso/Call)
+2. Suggerisce come verificare: "Visita la pagina Borsa Italiana e controlla lo status del mercato"
+3. Suggerisce di rieseguire il test quando il mercato è aperto
+4. Fa `pytest.skip()` con il motivo, non `pytest.fail()`
+
+```python
+try:
+    result = await provider.get_current_value(identifier, identifier_type, provider_params)
+except AssetSourceError as e:
+    if "Empty price text" in str(e):
+        msg = (
+            f"⚠️ CSS Scraper returned empty price text for {identifier}.\n"
+            f"   Probable cause: market is closed or in 'Call' status.\n"
+            f"   How to verify: open the URL in a browser and check the market status.\n"
+            f"   Retry this test when the market is open (Mon-Fri, 9:00-17:30 CET)."
+        )
+        print_warning(msg)
+        pytest.skip(f"Market likely closed: {e}")
+    raise  # Re-raise other AssetSourceError types
+```
+
+**Tasks**:
+- [ ] Aggiungere try/except in `test_current_value` per catturare "Empty price text"
+- [ ] Stampare messaggio esplicativo con causa probabile e istruzioni
+- [ ] Usare `pytest.skip()` anziché far fallire il test
+- [ ] Importare `AssetSourceError` nel file test
+
+---
+
+### B9 — Migrazione test_asset_source.py: `get_prices` → `get_prices_bulk`
+
+**Area**: Backend test
+**Priorità**: 🔴 Bug (test rotti — bloccano la suite di test)
+**File**: `backend/test_scripts/test_services/test_asset_source.py` (test 10-13)
+
+**Problema**: I test 10, 11, 12 e 13 chiamano `AssetSourceManager.get_prices()`, un metodo che
+**non esiste più**. È stato rimosso durante la separazione architetturale Sync/Query.
+Il metodo è stato sostituito da `get_prices_bulk()` (riga 1222 di `asset_source.py`).
+
+**Errore**: `AttributeError: type object 'AssetSourceManager' has no attribute 'get_prices'`
+
+**Migrazione per test 10, 11, 12 (backfill puro — solo lettura DB)**:
+
+Questi test inseriscono dati manualmente nel DB e poi li leggono con backward-fill.
+Non coinvolgono provider. La migrazione è diretta:
+
+```python
+# PRIMA (non esiste più):
+prices = await AssetSourceManager.get_prices(
+    asset_id=X, start_date=S, end_date=E, session=session)
+
+# DOPO:
+from backend.app.schemas.prices import FAPriceQueryItem
+from backend.app.schemas.common import DateRangeModel
+
+results = await AssetSourceManager.get_prices_bulk(
+    requests=[FAPriceQueryItem(asset_id=X, date_range=DateRangeModel(start=S, end=E))],
+    session=session)
+prices = results[0].prices  # list[FAPricePoint] con backward_fill_info
+```
+
+**Migrazione per test 13 (Provider Fallback — redesign necessario)**:
+
+Con la nuova architettura, `get_prices_bulk()` **non contatta MAI i provider** — è pura lettura DB.
+Il concetto di "fallback su DB quando il provider è invalido" non si applica più nel path di query.
+
+Il test va riscritto per testare la separazione:
+1. Inserire provider invalido + dati manuali nel DB
+2. **Sync** con provider invalido → deve fallire gracefully (errore catturato, no crash)
+3. **Query** dal DB → deve restituire i dati manuali comunque (la query è indipendente dal provider)
+
+Questo testa la robustezza di entrambi i path separatamente, anziché un singolo path combinato.
+
+**Import aggiuntivi** da aggiungere al file test:
+```python
+from backend.app.schemas.prices import FAPriceQueryItem
+from backend.app.schemas.common import DateRangeModel
+```
+
+**Tasks**:
+- [ ] Aggiungere import `FAPriceQueryItem` e `DateRangeModel` in testa al file
+- [ ] Test 10 (`test_get_prices_with_backfill`): migrare a `get_prices_bulk`
+- [ ] Test 11 (`test_backward_fill_volume_propagation`): migrare a `get_prices_bulk`
+- [ ] Test 12 (`test_backward_fill_edge_case_no_initial_data`): migrare a `get_prices_bulk`
+- [ ] Test 13 (`test_provider_fallback_invalid`): riscrivere con sync separato + query
+- [ ] Verificare che tutti e 13 i test passino
+
+---
+
+### Riepilogo dipendenze Step 2c
+
+```
+B9 (test backend) ──────────────────────────── indipendente, fare per primo (sblocca suite)
+B1 (copy) ──────────────────────────────────┐
+B3 (stopPropagation) ──────────────────────│── frontend, indipendenti, fare dopo B9
+B2 (chartData reset) ─────────────────────│
+B8 (test CSS skip) ───────────────────────│── indipendente, fare in parallelo a B1-B3
+                                            │
+B7 (columnOrder sync) ── prerequisito per corretta visualizzazione colonne
+    │
+B4 (rimuovere edit, aggiungere sync/refresh) ← dopo B3 (azioni funzionano senza navigate)
+    │
+    ├── B5 (bulk actions + toolbar esterna) ← dipende da B4 (sync/refresh callback esistono)
+    │
+    └── B6 (blocco 2×2 Assets) ← dipende da B4 (handleSyncAll/RefreshAll)
+```
 
 ---
 
@@ -956,6 +1460,300 @@ async def test_plugin_static_not_found(self, test_server):
 
 ---
 
+## Step 12 — Fix crash JustETF search (`.fillna` su colonne con NaN)
+
+**Problema**: La ricerca JustETF fallisce con `sequence item 2: expected str instance, float found`.
+Il metodo `search()` cerca di fare `" ".join()` sulle colonne `["name", "ticker", "wkn"]` del
+DataFrame, ma la colonna `wkn` (indice 2) contiene valori `float` (`NaN`) quando il dato originale
+è mancante o numerico. Il `.astype(str)` da solo non gestisce in modo affidabile `NaN`/`pd.NA` in
+tutte le versioni di pandas — `" ".join()` riceve un `float` e crasha.
+
+**Test falliti**: `test_search_assets_semiconductor` (Test 7), `test_search_assets_provider_filter`
+(Test 8), `test_search_to_asset_e2e` (Test 13 — parzialmente)
+
+**Log errore**:
+```
+ERROR  asset_source.py:2351 "Search error from provider 'justetf':
+  Search failed for 'Semiconductor' on JustETF: sequence item 2: expected str instance, float found"
+```
+
+**File**: `backend/app/services/asset_source_providers/justetf.py`, righe 266-270
+
+**Root cause**: `load_overview()` dalla libreria `justetf-scraping` restituisce un DataFrame in cui
+la colonna `wkn` può essere tipizzata come `float64` (quando valori mancanti producono `NaN` nel
+DataFrame). La sequenza `.astype(str).agg(" ".join, axis=1)` non converte in modo affidabile tutti
+i `NaN` a stringa prima del join.
+
+### Fix
+
+```python
+# PRIMA (riga 268-270 — crash se wkn ha NaN):
+mask_cols = (
+    df_all[cols_only].astype(str).agg(" ".join, axis=1).str.contains(query, case=False)
+)
+
+# DOPO (fillna forza tutti i NaN a stringa vuota prima del join):
+mask_cols = (
+    df_all[cols_only].fillna('').astype(str).agg(" ".join, axis=1).str.contains(query, case=False)
+)
+```
+
+### Checklist Step 12
+
+- [ ] Aggiungere `.fillna('')` prima di `.astype(str)` nella riga 268 di `justetf.py`
+- [ ] Test: `test_search_assets_semiconductor` passa (JustETF trova ETF semiconduttori)
+- [ ] Test: `test_search_assets_provider_filter` passa (JustETF trova ETF MSCI)
+- [ ] Test: `test_search_to_asset_e2e` non ha più errore JustETF search
+
+---
+
+## Step 13 — Fix `FAAssetCreateResult` extra field `identifier`
+
+**Problema**: La creazione asset fallisce con `Extra inputs are not permitted` quando il
+`display_name` esiste già (es. "Microsoft Corporation" da un test precedente). Il codice di
+controllo duplicati passa `identifier=None` a `FAAssetCreateResult`, ma lo schema ha
+`ConfigDict(extra="forbid")` e non prevede il campo `identifier`.
+
+**Test falliti**: `test_search_to_asset_e2e` (Test 13)
+
+**Log errore**:
+```
+ERROR  asset_source.py:1645 "Error creating asset Microsoft Corporation:
+  1 validation error for FAAssetCreateResult
+  identifier
+    Extra inputs are not permitted [type=extra_forbidden, input_value=None, input_type=NoneType]"
+```
+
+**File**: `backend/app/services/asset_source.py`, righe 1596-1604
+
+**Root cause**: Nel branch di controllo duplicati (riga 1595-1604), viene passato
+`identifier=None` al costruttore di `FAAssetCreateResult`. Questo campo **non esiste** nello
+schema (che ha solo: `asset_id`, `success`, `message`, `display_name`). La `ValidationError` di
+Pydantic viene catturata dal `except Exception` esterno (riga 1644), mascherando il messaggio
+di errore originale ("already exists").
+
+### Schema di riferimento (`backend/app/schemas/assets.py`, righe 722-730)
+
+```python
+class FAAssetCreateResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: Optional[int] = Field(None, description="Created asset ID (null if failed)")
+    success: bool = Field(..., description="Whether creation succeeded")
+    message: str = Field(..., description="Success message or error description")
+    display_name: str = Field(..., description="Asset display name (for identification)")
+```
+
+### Fix
+
+```python
+# PRIMA (riga 1596-1604):
+results.append(
+    FAAssetCreateResult(
+        asset_id=None,
+        success=False,
+        message=f"Asset with display_name '{item.display_name}' already exists",
+        display_name=item.display_name,
+        identifier=None,  # <-- BUG: campo extra non nello schema
+    )
+)
+
+# DOPO:
+results.append(
+    FAAssetCreateResult(
+        asset_id=None,
+        success=False,
+        message=f"Asset with display_name '{item.display_name}' already exists",
+        display_name=item.display_name,
+    )
+)
+```
+
+### Checklist Step 13
+
+- [ ] Rimuovere `identifier=None` dalla riga 1602 di `asset_source.py`
+- [ ] Test: creazione asset con `display_name` duplicato restituisce `success=False` con messaggio "already exists" (non più un errore Pydantic)
+- [ ] Test: `test_search_to_asset_e2e` crea asset con successo (se display_name unico)
+
+---
+
+## Step 14 — Migrazione COMPLETA test all'architettura Sync→Query
+
+**Problema architetturale**:
+Il vecchio `GET /assets/prices/{asset_id}` era un anti-pattern: faceva **Sync + Query** in un'unica
+chiamata. Se l'asset aveva un provider assegnato, il GET contattava il provider (HTTP call esterna),
+salvava i dati nel DB, poi li restituiva. Ogni lettura = potenziale chiamata HTTP.
+
+Con la nuova architettura (Step 7a), il flusso è separato in due operazioni indipendenti:
+1. **Sync** (`POST /assets/prices/refresh`): provider → DB — solo su richiesta esplicita
+2. **Query** (`POST /assets/prices/query`): DB → frontend — pura lettura, zero side-effect
+
+I test devono riflettere questa separazione: **prima sync, poi query**.
+
+### Stato migrazioni GET→POST
+
+Tutti i test che usavano il vecchio `GET /assets/prices/{asset_id}` sono stati migrati a
+`POST /assets/prices/query`. Nessun file di test contiene più il vecchio endpoint.
+
+| File | Test | Vecchio | Nuovo | Sync prima? | Stato |
+|------|------|---------|-------|-------------|-------|
+| `test_assets_prices.py` | Test 1 (upsert → read) | GET | POST /query | N/A (upsert manuale) | ✅ |
+| `test_assets_prices.py` | Test 2 (history) | GET | POST /query | N/A (upsert manuale) | ✅ |
+| `test_assets_prices.py` | Test 3 (delete → read) | GET | POST /query | N/A (upsert manuale) | ✅ |
+| `test_assets_prices.py` | Test 4 (refresh → read) | GET | POST /query | ✅ POST /refresh | ✅ |
+| `test_assets_prices.py` | Test 5 (multi-asset bulk) | — | POST /query | N/A (upsert manuale) | ✅ |
+| `test_search_to_prices.py` | Step 5→6 (refresh → verify) | GET | POST /query | ✅ POST /refresh | ✅ |
+| `test_assets_provider.py` | Test 13 Step 6→7 (e2e) | GET | POST /query | ✅ POST /refresh | ✅ |
+| `test_assets_provider.py` | Test 14 (current value) | GET | POST /query | ✅ POST /refresh | ✅ |
+| `test_assets_provider.py` | Test 15 (CSS scraper) | GET | POST /query | ✅ POST /refresh | ✅ |
+
+**Nota**: I test 1-3, 5 di `test_assets_prices.py` usano **upsert manuale** (`POST /assets/prices`)
+per inserire dati nel DB prima della query. Non passano per il provider — il flusso è:
+`upsert → query`, non `sync → query`. Questo è corretto: testano il CRUD puro, non il provider.
+
+I test 4, 14, 15 di provider e il test e2e usano **sync via provider** (`POST /assets/prices/refresh`)
+prima della query. Questo è il pattern corretto per testare il flusso provider → DB → frontend.
+
+### Residuo: label nel test_runner.py
+
+`scripts/test_runner.py` riga 917 ha ancora il label del vecchio endpoint:
+```python
+print_info("Tests: GET /assets/prices/{asset_id}")  # → da aggiornare
+```
+
+### Checklist Step 14
+
+- [x] `test_assets_prices.py` — Test 1-5: tutti migrati a POST /query
+- [x] `test_search_to_prices.py` — Step 6: migrato a POST /query
+- [x] `test_assets_provider.py` — Test 13 Step 7: migrato a POST /query
+- [x] `test_assets_provider.py` — Test 14: migrato a POST /query
+- [x] `test_assets_provider.py` — Test 15: migrato a POST /query
+- [ ] Tutti i test che leggono dal DB dopo sync hanno il sync esplicito prima (confermato ✅)
+- [ ] `scripts/test_runner.py` riga 917: aggiornare label
+- [ ] Grep finale: `grep -r "assets/prices/{" backend/` restituisce 0 risultati
+
+---
+
+## Step 15 — Test runner label + nuovo test "query senza sync = vuoto"
+
+**Obiettivo**: Certificare il nuovo comportamento architetturale con un test dedicato.
+
+### 15a — Aggiornare label test_runner.py
+
+`scripts/test_runner.py` riga 917:
+```python
+# PRIMA:
+print_info("Tests: GET /assets/prices/{asset_id}")
+
+# DOPO:
+print_info("Tests: POST /assets/prices/query (bulk read from DB)")
+```
+
+### 15b — Nuovo test: query senza sync restituisce vuoto
+
+Questo test **certifica** che la separazione Sync/Query funziona come previsto:
+un asset con provider assegnato ma MAI sincronizzato non ha dati nel DB.
+
+```python
+@pytest.mark.asyncio
+async def test_query_without_sync_returns_empty(test_server):
+    """Test: Query on asset with provider but no sync returns empty prices.
+    
+    Certifies the architectural separation:
+    - Assigning a provider does NOT auto-fetch prices
+    - Prices appear in DB only after explicit sync (POST /assets/prices/refresh)
+    - Query (POST /assets/prices/query) reads ONLY from DB, never from provider
+    """
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        
+        # 1. Create asset
+        asset_item = FAAssetCreateItem(
+            display_name=f"No-Sync Test {unique_id('NOSYNC')}",
+            currency="USD", asset_type=AssetType.STOCK,
+        )
+        create_resp = await client.post(
+            f"{API_BASE}/assets",
+            json=[asset_item.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+        
+        # 2. Assign provider (yfinance/AAPL — ha sempre dati)
+        assignment = FAProviderAssignmentItem(
+            asset_id=asset_id, provider_code="yfinance",
+            identifier="AAPL", identifier_type=IdentifierType.TICKER,
+        )
+        await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
+        
+        # 3. Query SENZA sync — deve restituire 0 prezzi
+        today = date.today()
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {
+                    "start": (today - timedelta(days=7)).isoformat(),
+                    "end": today.isoformat(),
+                },
+            }],
+            timeout=TIMEOUT,
+        )
+        assert query_resp.status_code == 200
+        prices = query_resp.json()["items"][0]["prices"]
+        assert len(prices) == 0, f"Expected 0 prices before sync, got {len(prices)}"
+        
+        # 4. Sync esplicita — scarica dal provider nel DB
+        sync_resp = await client.post(
+            f"{API_BASE}/assets/prices/refresh",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {
+                    "start": (today - timedelta(days=7)).isoformat(),
+                    "end": today.isoformat(),
+                },
+            }],
+            timeout=TIMEOUT,
+        )
+        assert sync_resp.status_code == 200
+        
+        # 5. Query DOPO sync — deve restituire ≥1 prezzo
+        query_resp2 = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {
+                    "start": (today - timedelta(days=7)).isoformat(),
+                    "end": today.isoformat(),
+                },
+            }],
+            timeout=TIMEOUT,
+        )
+        assert query_resp2.status_code == 200
+        prices_after = query_resp2.json()["items"][0]["prices"]
+        assert len(prices_after) > 0, "Should have prices after sync"
+        
+        # Cleanup
+        await client.delete(
+            f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT
+        )
+```
+
+**Dove inserirlo**: `test_assets_prices.py` come Test 6, oppure in `test_assets_provider.py`
+come Test 16 (dato che testa il comportamento del provider assignment).
+
+### Checklist Step 15
+
+- [ ] `scripts/test_runner.py` riga 917: label aggiornato
+- [ ] Nuovo test `test_query_without_sync_returns_empty` aggiunto
+- [ ] Test passa: query pre-sync = 0 prezzi, query post-sync ≥ 1 prezzo
+
+---
+
 ## Dependency Graph
 
 ```
@@ -972,16 +1770,26 @@ Step 1 (fix .toFixed crash) ─── bloccante, la pagina non si carica senza
    ├── Step 6 (ViewModeToggle header) ─── indipendente
    │
    ├── Step 7 (bulk prices + Δ multi-periodo) ─── richiede Step 1 (pagina funzionante)
-   │   ├── 7a (backend bulk endpoint) ─── prima
-   │   ├── 7b (test migration GET → POST) ─── dopo 7a
+   │   ├── 7a (backend: elimina GET, crea POST /query, elimina get_prices()) ─── prima
+   │   ├── 7b (test migration GET → POST /query) ─── dopo 7a
    │   └── 7c (frontend bulk + colonne Δ) ─── dopo 7a (serve client Zodios aggiornato)
    │
    ├── Step 8 (fix test upload) ─── indipendente (backend)
    │
-   └── Step 9 (i18n cleanup) ─── indipendente
+   ├── Step 9 (i18n cleanup) ─── indipendente
+   │
+   ├── Step 12 (fix JustETF search NaN) ─── indipendente (backend, bug pre-esistente)
+   │
+   ├── Step 13 (fix FAAssetCreateResult identifier) ─── indipendente (backend, bug pre-esistente)
+   │
+   ├── Step 14 (migrazione completa test Sync→Query) ─── dopo 7a (include Test 13/14/15 del file provider)
+   │
+   └── Step 15 (test runner label + test architettura Sync/Query) ─── dopo 14
+       ├── 15a (label test_runner.py)
+       └── 15b (test "query senza sync = vuoto")
 
-Step 2-6, 8-9 sono parallelizzabili.
-Step 7a → 7b/7c è sequenziale.
+Step 2-6, 8-9, 12-13 sono parallelizzabili.
+Step 7a → 7b/7c → 14 → 15 è sequenziale.
 Step 7 richiede Step 1.
 ```
 
@@ -1000,6 +1808,9 @@ Step 7 richiede Step 1.
 | `backend/test_scripts/test_api/test_assets_prices.py` | 7b | Migrare 4 GET → POST bulk + test multi-asset |
 | `backend/test_scripts/test_e2e/test_search_to_prices.py` | 7b | Migrare 1 GET → POST bulk (Step 6) |
 | `backend/test_scripts/test_api/test_uploads_api.py` | 8 | Login prima del test 404 |
+| `backend/app/services/asset_source_providers/justetf.py` | 12 | `.fillna('')` prima di `.astype(str)` nella search |
+| `backend/app/services/asset_source.py` | 13 | Rimuovere `identifier=None` da `FAAssetCreateResult` duplicato |
+| `backend/test_scripts/test_api/test_assets_provider.py` | 14 | Migrare `GET /prices/{id}` → `POST /prices/query` in test_price_refresh |
 
 ### Frontend — Modifiche
 
@@ -1056,64 +1867,1278 @@ introdurrà un `assetPriceStoreRegistry` con `TimeSeriesStore<AssetPricePoint>` 
 Confronto sistematico delle operazioni parallele tra i due sottosistemi.
 Il comportamento FX è considerato **corretto e di riferimento**.
 
+### Terminologia
+
+| Operazione utente | Direzione dati | FX | Assets |
+|---|---|---|---|
+| **Sync** (scarica dai provider) | Provider → DB | `POST /fx/currencies/sync` | `POST /assets/prices/refresh` |
+| **Refresh** (leggi dal DB) | DB → Frontend | `POST /fx/currencies/convert` | `POST /assets/prices/query` |
+| **Upsert manuale** | Frontend → DB | `POST /fx/currencies/rate` | `POST /assets/prices` |
+| **Delete** | DB ← Frontend | `DELETE /fx/currencies/rate` | `DELETE /assets/prices` |
+
+> **Nota nome endpoint**: L'endpoint Asset di sync si chiama `/refresh` nell'URL, ma
+> **semanticamente è un sync** (scarica dal provider nel DB). Questa è un'incongruenza
+> di naming che potrebbe essere risolta in futuro rinominandolo in `/sync`.
+> Per ora usiamo il termine "sync" nella documentazione e "refresh" nell'URL.
+
 ### Operazioni allineate ✅
 
 | Operazione | FX | Assets | Note |
 |---|---|---|---|
-| **Upsert manuale** | `POST /fx/currencies/rate` → loop per-item nel controller, chiama `upsert_rates_bulk()` | `POST /assets/prices` → chiama `bulk_upsert_prices()` direttamente | Entrambi bulk, loop nel service layer. ✅ |
-| **Delete** | `DELETE /fx/currencies/rate` → normalizza, separa `delete_all` da date-range, chiama `delete_rates_bulk()` | `DELETE /assets/prices` → chiama `bulk_delete_prices()` | Entrambi bulk. ✅ |
-| **Sync/Refresh da provider** | `POST /fx/currencies/sync` → `sync_pairs_bulk()` | `POST /assets/prices/refresh` → `bulk_refresh_prices()` | Entrambi: provider fetch → store in DB. ✅ |
+| **Upsert manuale** | `POST /fx/currencies/rate` → `upsert_rates_bulk()` | `POST /assets/prices` → `bulk_upsert_prices()` | Entrambi bulk. ✅ |
+| **Delete** | `DELETE /fx/currencies/rate` → `delete_rates_bulk()` | `DELETE /assets/prices` → `bulk_delete_prices()` | Entrambi bulk. ✅ |
+| **Sync da provider** | `POST /fx/currencies/sync` → `sync_pairs_bulk()` | `POST /assets/prices/refresh` → `bulk_refresh_prices()` | Entrambi: provider fetch → store in DB. ✅ |
 | **Provider management** | `GET/POST/DELETE /fx/providers/routes` | `GET/POST/DELETE /assets/provider` | Entrambi CRUD provider. ✅ |
-| **Bulk read** | `POST /fx/currencies/convert` → `convert_bulk()` → **1 query DB** | `POST /assets/prices/query` → `get_prices_bulk()` → **1 query DB** | Entrambi: singola query, partizionamento in memoria, backward-fill. ✅ |
+| **Query (refresh frontend)** | `POST /fx/currencies/convert` → `convert_bulk()` → **solo DB** | `POST /assets/prices/query` → `get_prices_bulk()` → **solo DB** | Entrambi: singola query SQL, backward-fill in memoria. ✅ |
 
-### Disallineamento corretto in questo piano ⚠️ → ✅
+### Anti-pattern rimosso in questo piano ⚠️ → ✅
 
 | Operazione | FX (corretto) | Assets (PRIMA) | Assets (DOPO) |
 |---|---|---|---|
-| **Read prezzi** | `convert()` → `convert_bulk()` → **solo DB**, mai provider | `GET /prices/{id}` → `get_prices()` → **provider HTTP + fallback DB** | **Eliminato.** Usa solo `POST /prices/query` → `get_prices_bulk()` → **solo DB** |
+| **Lettura prezzi** | `convert()` → **solo DB**, mai provider | `GET /prices/{id}` → **Sync + Query in un'unica chiamata** (provider HTTP + fallback DB) | **Eliminato.** Sync e Query sono operazioni separate |
 
-#### Dettaglio del problema originale
+#### Dettaglio dell'anti-pattern
 
-**FX** separa nettamente lettura da sync:
-- `sync` = scrivi dati nel DB (dai provider) — solo su richiesta utente
-- `convert` = leggi dati dal DB — mai provider
+**FX** separa nettamente le due operazioni:
+- **Sync** = scarica dati dai provider e salvali nel DB — solo su richiesta esplicita dell'utente
+- **Refresh/Query** = leggi dati dal DB e mandali al frontend — mai provider, zero side-effect
 
-**Asset `get_prices()`** (riga 1222 di `asset_source.py`) aveva una logica ibrida:
-1. Check se c'è un provider assignment
-2. Se sì → **chiama il provider** (HTTP call a yfinance/justetf/css scraper!)
-3. Se provider fallisce → fallback al DB
+**Asset `GET /prices/{id}`** (il vecchio metodo `get_prices()`) faceva entrambe le cose:
+1. Controllava se c'era un provider assegnato
+2. Se sì → **chiamava il provider** (HTTP call esterna a yfinance/justetf/cssscraper!)
+3. Salvava i risultati nel DB
+4. Restituiva i dati al frontend
 
-Ogni lettura poteva generare chiamate HTTP esterne. Per la lista con 50 asset = 50 HTTP calls.
+Ogni **lettura** generava potenziali chiamate HTTP esterne. Per una lista con 50 asset = 50 HTTP call
+sequenziali ai provider. Questo era un side-effect nascosto in un'operazione di lettura.
 
-#### Correzione (inclusa in questo piano)
+#### Correzione (completata)
 
 **Backend**:
-- **Eliminare** `GET /assets/prices/{asset_id}` e il metodo `get_prices()` dal service layer
-- **Eliminare** `_fetch_provider_history()` dal flusso di lettura (resta usata solo da `refresh`)
-- L'unico modo per leggere prezzi è `POST /assets/prices/query` → `get_prices_bulk()` → **solo DB**
-- I provider vengono contattati **solo** via `POST /assets/prices/refresh` su richiesta esplicita dell'utente
-
-**Frontend — pagina detail asset (Phase 06 Step 4)**:
-La pagina detail leggerà i prezzi dal DB via `POST /assets/prices/query` (stessa del list).
-Il comportamento del bottone Refresh/Sync segue lo **stesso pattern di FX detail**:
-- Se c'è almeno 1 provider → bottone Refresh attivo → `POST /assets/prices/refresh`
-- Se non c'è provider → bottone Refresh **disabilitato** (`opacity-50 cursor-not-allowed`)
-  e il grafico mostra un messaggio "Nessun dato — inserire i prezzi manualmente" con
-  bottone per aprire l'editor (identico a Step 5 per FX manual-only)
+- **Eliminato** `GET /assets/prices/{asset_id}` e il metodo `get_prices()` dal service layer
+- Il flusso è ora separato in due operazioni indipendenti:
+  - **Sync**: `POST /assets/prices/refresh` → `bulk_refresh_prices()` → provider HTTP → DB
+  - **Query**: `POST /assets/prices/query` → `get_prices_bulk()` → solo DB → frontend
 
 **Test**:
-- Tutti i test che usavano `GET /assets/prices/{id}` sono già migrati a `POST /query` (Step 7b)
-- L'endpoint GET non esiste più → nessun test da mantenere
+- Tutti i test che usavano `GET /prices/{id}` migrati a `POST /query` (Step 7b + Step 14)
+- Nessun test contiene più il vecchio endpoint (confermato via grep)
+- I test che leggono dopo sync hanno TUTTI il sync esplicito prima della query
+- Step 15b aggiunge un test che **certifica** la separazione: query senza sync = 0 risultati
 
-#### Impatto sul piano
+**Frontend (Phase 06 Step 4 — Asset Detail, futuro)**:
+La pagina detail leggerà dal DB via `POST /assets/prices/query`.
+Il bottone Sync (che chiama `POST /assets/prices/refresh`) segue lo stesso pattern di FX:
+- Provider presente → bottone Sync attivo
+- Nessun provider → bottone Sync **disabilitato**, messaggio "inserire manualmente"
 
-Lo Step 7a include già la rimozione: nella checklist aggiungere:
-- Eliminare `GET /{asset_id}` da `assets.py`
-- Eliminare `get_prices()` da `asset_source.py` (o rinominarlo in `_get_prices_with_provider`
-  e renderlo privato, usato solo internamente da `refresh`)
-- Aggiornare `./dev.py api sync` (il client Zodios non genererà più il metodo GET)
+#### Impatto sui test: flusso corretto
 
-Lo Step 4 del piano principale (Phase 06 Step 4 — Asset Detail) dovrà seguire il pattern
-FX detail per il bottone refresh, con le stesse chiavi i18n `assetDetail.noDataManual`,
-`assetDetail.insertManually`, `assetDetail.refreshDisabledNoProvider`.
+```
+┌─────────────────┐     ┌──────────────┐     ┌────────────────┐
+│  Provider API   │ ──→ │  DB (prices) │ ──→ │   Frontend     │
+│ (yfinance, etc) │     │              │     │   (Svelte)     │
+└─────────────────┘     └──────────────┘     └────────────────┘
+        ↑                      ↑                     ↑
+   POST /refresh          POST /query            Svelte fetch
+   (sync: provider→DB)   (query: DB→FE)        (in +page.svelte)
+```
+
+I test devono seguire la stessa sequenza:
+1. **Upsert manuale** OPPURE **Sync da provider** → dati nel DB
+2. **Query** → leggi dal DB, verifica risultati
+3. Mai aspettarsi dati nel DB senza un upsert o sync esplicito precedente
+
+---
+
+## Step 2d — UX Refinement Round 3 (24 Marzo 2026)
+
+Sezione emersa dalla terza review. Copre bug di interazione, raffinamento colonne tabella,
+visualizzazione provider chain, toolbar di selezione, icone asset e colonne dinamiche.
+
+**Durata stimata**: ~1.5 giorni
+**Dipendenze**: Step 2c (B1-B9) completati
+
+### Prompt Originale Utente (Step 2d)
+
+> b9, b9 e b3 ok
+> nel testarli però mi sono reso conto che il pulsante di refresh in riga, mentre è in corso non gira in senso orario (se cliccato singolarmente)
+> tra le colonne del columorder c'è anche una colonna swapped che se anche è mostrata non contiene nulla, ma in generale non ha senso mostrarla, essendo tutte le valute per loro natura bidirezionali.
+> in oltre la lista degli elementi nell'orderibleList ora è lunga abbastanza da far comparire la barra verticale, ma quando provo a scrollarla il menù si chiude immediatamente.
+>
+> La colonna manual la eliminerei e metterei semplicemente l'icona della matita accanto alle bandiere nel nome (sempre dentro il badge ambra)
+> La colonna Providers dovrebbe essere nascosta di default e se viene mostrata dovrebbe mostrare la catena sotto forma di icone dei provider, in maniera simile a come avviene in add Pair, che ha anche le valute ponte, in questo caso basta sapere l'ordine dei provider se non recuperi facilmente l'informazione. In realtà la stessa cosa la vorrei anche nella modale di sinc all, dove ora viene solo mostrato il testo alla stessa maniera. Parsa il contenuto della risposta e genera questa visualizzazione carina.
+>
+> Il toggleVisibleColums ha l'icona ma non la lable nella matrice 2x2, falla in tutte le lingue per uniformarla alle altre
+>
+> Le colonne delta extra non vanno inserite alla fine, ma una dopo l'altra, vicine, ed in ordine.
+>
+> B4 ok
+>
+> b5, si ma è sopra la tabella, deve essere nell'header a sinistra del togle griglia/tabella
+> in oltre il sinc della toolbar apre il sincall e mostra tutte e 14 le coppie, credo che devi modificare la modale per prendere in input la lista delle coppie, non sempre tutte.
+>
+> ---
+>
+> ti ho detto sopra riguardo forex, similmente anche in asset:
+> Manca nella matrice 2x2 il bottone settings, sia in tabella che in griglia, capisco che in tabella non serva molto, per ora, ma poi gli troveremo senso, intanto mettila, e anche in asset i settings devono fare le stesse cose, ovvero configurare l'estetica delle card.
+> la colonna active non ha senso, metterei quel pallino verdo o rosso a destra del nome, mentre a sinistra, se configurato metterei l'icona dell'asset custom, altrimenti come fallback l'icona del tipo dell'asset.
+> Nel tipo dell'asset, oltre al testo, vorrei anche l'immagine del tipo dell'asset
+> per entrambe le richieste, le icone le trovi qui:  frontend/static/icons/asset-types
+
+### Indice Step 2d
+
+| # | Titolo | Area | Priorità | Stato |
+|---|--------|------|----------|-------|
+| C1 | ColumnVisibilityToggle: scroll interno chiude il dropdown | Frontend bug | 🔴 Bug | ✅ |
+| C2 | ColumnVisibilityToggle: aggiungere label i18n nel bottone | Frontend i18n | 🟢 Facile | ✅ |
+| C3 | Colonne Δ dinamiche: inserimento posizionale (non in coda) | Frontend bug | 🟡 Bug | ✅ |
+| C4 | FxTable: eliminare colonne `swap` e `manualOnly`, mergiare badge manual nel nome | Frontend UX | 🟡 Refactor | ✅ |
+| C5 | FxTable: colonna `providers` nascosta di default + catena icone provider | Frontend feature | 🟡 Feature | ✅ |
+| C6 | FxSyncModal: visualizzazione catena provider con icone | Frontend feature | 🟡 Feature | ✅ |
+| C7 | FxSyncModal: accettare lista filtrata di coppie per bulk sync | Frontend bug | 🟡 Bug | ✅ |
+| C8 | DataTableToolbar: spostare nell'header (sinistra di ViewModeToggle) | Frontend UX | 🟡 Refactor | ✅ |
+| C9 | Assets: aggiungere bottone Settings nella matrice 2×2 | Frontend UX | 🟢 Facile | ✅ |
+| C10 | AssetTable: colonna nome con icona asset + indicatore active, rimuovere colonna `active` | Frontend UX | 🟡 Refactor | ✅ |
+| C11 | AssetTable: colonna type con icona PNG del tipo asset | Frontend UX | 🟡 Feature | ✅ |
+| C12 | Row-level refresh: animazione spin sul bottone singolo | Frontend bug | 🟡 Bug | ✅ |
+
+**Ordine di implementazione**: C1 → C2 → C3 → C4 → C5 → C6 → C7 → C8 → C9 → C10 → C11 → C12
+
+---
+
+### C1 — ColumnVisibilityToggle: scroll interno chiude il dropdown
+
+**Area**: Frontend bug
+**Priorità**: 🔴 Bug
+**File coinvolti**:
+- `frontend/src/lib/components/table/ColumnVisibilityToggle.svelte` (linee 80-86)
+
+**Problema**: Il dropdown del ColumnVisibilityToggle si chiude immediatamente quando l'utente
+prova a scrollare la lista degli elementi (OrderableList). La causa è il listener `scroll` in
+capture phase (`window.addEventListener('scroll', handleScroll, true)`) che cattura **tutti** gli
+eventi scroll, inclusi quelli interni al dropdown stesso.
+
+**Causa root**: L'evento `scroll` con `capture: true` cattura anche lo scroll del contenitore
+`overflow-y-auto` del dropdown. Il listener chiama `close()` senza verificare se la sorgente
+dello scroll è interna o esterna al dropdown.
+
+**Soluzione**:
+1. Aggiungere un `ref` al contenitore del dropdown (`dropdownRef`)
+2. Nel `handleScroll`, verificare se `e.target` è contenuto nel dropdown:
+   ```typescript
+   const handleScroll = (e: Event) => {
+       if (dropdownRef && dropdownRef.contains(e.target as Node)) return;
+       close();
+   };
+   ```
+3. Se lo scroll è interno al dropdown → ignorare. Se esterno → chiudere.
+
+**Stima**: 10 min
+
+---
+
+### C2 — ColumnVisibilityToggle: aggiungere label i18n nel bottone
+
+**Area**: Frontend i18n
+**Priorità**: 🟢 Facile
+**File coinvolti**:
+- `frontend/src/lib/components/table/ColumnVisibilityToggle.svelte` (linea 106-114)
+- `frontend/src/lib/i18n/en.json`
+- `frontend/src/lib/i18n/it.json`
+- `frontend/src/lib/i18n/fr.json`
+- `frontend/src/lib/i18n/es.json`
+
+**Problema**: Il bottone ColumnVisibilityToggle nella matrice 2×2 mostra solo l'icona `Eye`,
+senza label testuale, a differenza degli altri bottoni della matrice che hanno etichette
+(es. "Settings", "Sync", "Refresh").
+
+**Soluzione**:
+1. Aggiungere la chiave i18n `table.columns` in tutte e 4 le lingue:
+   - EN: `"Columns"`
+   - IT: `"Colonne"`
+   - FR: `"Colonnes"`
+   - ES: `"Columnas"`
+2. Aggiungere una prop `showLabel` (default `false`) al componente
+3. Nei punti d'uso (FX e Assets 2×2 block), passare `showLabel={showActionLabels}` o `showLabel={true}`
+4. Modificare il template del bottone per mostrare `<span>{$t('table.columns')}</span>` quando
+   `showLabel` è true
+
+**Stima**: 15 min
+
+---
+
+### C3 — Colonne Δ dinamiche: inserimento posizionale (non in coda)
+
+**Area**: Frontend bug
+**Priorità**: 🟡 Bug
+**File coinvolti**:
+- `frontend/src/lib/components/table/DataTable.svelte` (linee 669-720, `$effect` sync colonne)
+
+**Problema**: Quando il date range cambia e nuove colonne Δ periodo diventano visibili (es. da
+3M a 6M, compaiono `Δ 3M` e `Δ 6M`), queste vengono aggiunte **alla fine** di `columnOrder`
+invece che nella posizione corretta (adiacenti alle colonne Δ esistenti).
+
+**Causa root**: Il codice attuale fa `columnOrder = [...filtered, ...newIds]`, che appende
+sempre in coda. Non c'è logica per determinare la posizione semantica corretta.
+
+**Soluzione**:
+Modificare la logica di inserimento nel `$effect` di sync colonne per usare l'ordine del
+`columns` array come guida per la posizione:
+
+```typescript
+// Per ogni nuova colonna, trovare la posizione nell'array columns originale
+// e inserirla dopo l'ultima colonna già presente che la precede nel columns array
+for (const newId of newIds) {
+    const colIndex = columns.findIndex(c => c.id === newId);
+    // Trova l'ultima colonna nel filtered che precede newId nell'ordine di columns
+    let insertAfterIdx = -1;
+    for (let i = 0; i < filtered.length; i++) {
+        const existingColIdx = columns.findIndex(c => c.id === filtered[i]);
+        if (existingColIdx < colIndex) insertAfterIdx = i;
+    }
+    filtered.splice(insertAfterIdx + 1, 0, newId);
+}
+columnOrder = filtered;
+```
+
+Questo assicura che `delta_1W`, `delta_1M`, `delta_3M` appaiano sempre consecutivi e nell'ordine
+definito dall'array `columns`, che a sua volta rispecchia l'ordine dei `DELTA_PERIODS`.
+
+**Stima**: 30 min
+
+---
+
+### C4 — FxTable: eliminare colonne `swap` e `manualOnly`, mergiare badge manual nel nome
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Refactor
+**File coinvolti**:
+- `frontend/src/lib/components/fx/FxTable.svelte` (linee 119-224, definizione colonne)
+
+**Problema**:
+1. La colonna `swap` è mostrata nel ColumnVisibilityToggle ma non ha contenuto utile — lo swap
+   è già gestito tramite rowAction con icona ⇄
+2. La colonna `manualOnly` occupa spazio come colonna separata. L'utente preferisce un badge
+   ✏️ compatto nel nome della coppia (dentro il badge ambra esistente, accanto alle bandiere)
+
+**Soluzione**:
+1. **Rimuovere** la colonna `swap` dall'array `columns` (l'azione swap resta come rowAction)
+2. **Rimuovere** la colonna `manualOnly` dall'array `columns`
+3. **Modificare** la cella `pair` per aggiungere il badge manual inline:
+   ```typescript
+   cell: (row) => {
+       const db = getDisplayBase(row);
+       const dq = getDisplayQuote(row);
+       const bFlag = getCurrencyInfo(db).flag_emoji;
+       const qFlag = getCurrencyInfo(dq).flag_emoji;
+       const manualBadge = row.manualOnly
+           ? ' <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 ml-1">✏️</span>'
+           : '';
+       return {type: 'html', html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-gray-400">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>${manualBadge}`};
+   },
+   ```
+
+**Impatto localStorage**: L'utente potrebbe avere `swap` e `manualOnly` nel `columnOrder`
+salvato in localStorage. La logica di sync colonne dinamiche (C3/B7) elimina automaticamente
+gli ID orfani, quindi non serve pulizia manuale.
+
+**Stima**: 20 min
+
+---
+
+### C5 — FxTable: colonna `providers` nascosta di default + catena icone provider
+
+**Area**: Frontend feature
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/lib/components/fx/FxTable.svelte` (linea 197-208, colonna providers)
+- (Opzionale) Creare `frontend/src/lib/components/fx/ProviderChainIcons.svelte`
+
+**Problema**: La colonna `providers` è visibile di default e mostra solo testo piatto
+(es. `"CHAIN:ECB+FIXED_RATE"`). L'utente vuole:
+1. Nascosta di default (`hiddenByDefault: true`)
+2. Quando visibile, mostrare la catena come icone/badge (simile a FxPairAddModal)
+
+**Dati disponibili**: L'oggetto `FxRow` ha `providers: Array<{providerCode: string; priority: number}>`.
+Il `providerCode` è tipo `"CHAIN:ECB+FIXED_RATE"` o singolo `"ECB"`. Dalla pagina FX,
+i `chainSteps` sono disponibili nell'oggetto `FxPairConfig` (caricati da `list_routes`).
+
+**Soluzione**:
+1. Aggiungere `hiddenByDefault: true` alla colonna `providers`
+2. Aggiungere il campo `chainSteps` nel tipo `FxRow` (passato da `fx/+page.svelte`)
+3. Modificare la cella per mostrare icone/badge per ogni step della catena:
+   ```html
+   <!-- Catena: ECB → EUR/USD → FIXED_RATE → USD/CHF -->
+   <div class="flex items-center gap-0.5">
+     <span class="px-1 py-0.5 text-[9px] rounded bg-blue-100 text-blue-700">ECB</span>
+     <span class="text-gray-400 text-[8px]">→</span>
+     <span class="text-[9px] text-gray-400">EUR/USD</span>
+     <span class="text-gray-400 text-[8px]">→</span>
+     <span class="px-1 py-0.5 text-[9px] rounded bg-green-100 text-green-700">FIXED_RATE</span>
+   </div>
+   ```
+4. Per provider diretti (non chain), mostrare semplicemente il badge singolo
+
+**Mappa colori provider** (consistente con FxPairAddModal):
+| Provider | Badge color |
+|----------|-------------|
+| ECB | blue |
+| FRANKFURTER | indigo |
+| FIXED_RATE | emerald |
+| MANUAL | amber |
+| Fallback | gray |
+
+**Stima**: 45 min
+
+---
+
+### C6 — FxSyncModal: visualizzazione catena provider con icone
+
+**Area**: Frontend feature
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/lib/components/fx/FxSyncModal.svelte` (linee 276-318, per-pair results)
+
+**Problema**: Nella modale di sync, il campo `provider_used` è mostrato come testo piatto
+in parentesi (es. `(CHAIN:ECB+FIXED_RATE)`). L'utente vuole la stessa visualizzazione a catena
+icone definita in C5.
+
+**Soluzione**:
+1. Estrarre la logica di rendering della catena provider in un helper condiviso
+   (snippet Svelte o funzione che genera HTML)
+2. Sostituire `<span class="text-gray-400">({pr.provider_used})</span>` con la visualizzazione
+   a badge/icone
+3. Parsare `provider_used`: se inizia con `"CHAIN:"`, splitta per `+`; altrimenti singolo badge
+4. Riutilizzare la stessa mappa colori di C5
+
+**Stima**: 30 min
+
+---
+
+### C7 — FxSyncModal: accettare lista filtrata di coppie per bulk sync
+
+**Area**: Frontend bug
+**Priorità**: 🟡 Bug
+**File coinvolti**:
+- `frontend/src/routes/(app)/fx/+page.svelte` (linee 475-479, `handleBulkSyncFx`)
+- `frontend/src/routes/(app)/fx/+page.svelte` (linee 819-828, `<FxSyncModal>`)
+
+**Problema**: Quando l'utente fa una selezione multipla in tabella e clicca "Sync" dalla toolbar,
+la modale si apre ma mostra **tutte** le coppie (quelle passate dalla prop `pairs` che è fissa).
+Dovrebbe mostrare solo le coppie selezionate.
+
+**Causa root**: `handleBulkSyncFx()` semplicemente fa `syncModalOpen = true` senza passare
+le coppie selezionate. La prop `pairs` della modale è calcolata staticamente da `pairs.filter(...)`.
+
+**Soluzione**:
+1. Aggiungere uno state `syncModalPairs = $state<string[]>([])` in `fx/+page.svelte`
+2. In `handleBulkSyncFx()`:
+   ```typescript
+   function handleBulkSyncFx() {
+       syncModalPairs = selectedFxRows
+           .filter(r => !r.manualOnly)
+           .map(r => `${r.base}-${r.quote}`);
+       syncModalOpen = true;
+   }
+   ```
+3. In `handleSyncAll()`:
+   ```typescript
+   function handleSyncAll() {
+       syncModalPairs = pairs
+           .filter(p => !(p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL'))
+           .map(p => `${p.config.base}-${p.config.quote}`);
+       syncModalOpen = true;
+   }
+   ```
+4. Passare `syncModalPairs` alla prop `pairs` di `<FxSyncModal>`:
+   ```svelte
+   <FxSyncModal
+       bind:open={syncModalOpen}
+       {dateStart}
+       {dateEnd}
+       pairs={syncModalPairs}
+       onsynced={handleSynced}
+       onclose={() => syncModalOpen = false}
+   />
+   ```
+
+**Stima**: 15 min
+
+---
+
+### C8 — DataTableToolbar: spostare nell'header (sinistra di ViewModeToggle)
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Refactor
+**File coinvolti**:
+- `frontend/src/routes/(app)/fx/+page.svelte` (linee 560-583, header + linee 773-784, toolbar)
+- `frontend/src/routes/(app)/assets/+page.svelte` (linee 365-388, header + linee 561-571, toolbar)
+
+**Problema**: Il `DataTableToolbar` (contatore selezione + azioni bulk) è posizionato
+**sopra la tabella**, ma l'utente lo vuole **nell'header**, a sinistra del `ViewModeToggle`.
+Questo allinea visivamente la toolbar alla barra degli strumenti esistente.
+
+**Soluzione**:
+1. **FX page**: spostare il blocco `{#if selectedFxRows.length > 0} <DataTableToolbar .../> {/if}`
+   dall'area sopra `<FxTable>` nell'header, dentro il `<div class="flex items-center gap-2">`
+   che contiene `ViewModeToggle` e "Add Pair"
+2. **Assets page**: stessa operazione — spostare il blocco toolbar nell'header
+
+L'ordine nell'header sarà:
+```
+[Titolo + subtitolo]                    [DataTableToolbar?] [ViewModeToggle] [Add Pair/Asset]
+```
+
+Il `DataTableToolbar` appare solo quando c'è una selezione attiva e la vista è `list` (tabella).
+
+**Stima**: 20 min
+
+---
+
+### C9 — Assets: aggiungere bottone Settings nella matrice 2×2
+
+**Area**: Frontend UX
+**Priorità**: 🟢 Facile
+**File coinvolti**:
+- `frontend/src/routes/(app)/assets/+page.svelte` (linee 463-489, matrice 2×2)
+
+**Problema**: La matrice 2×2 azioni nella pagina Assets ha: ColumnVisibility (o vuoto),
+Sync, e Refresh. Manca il bottone **Settings** presente nella matrice FX.
+L'utente vuole uniformità: anche in Assets il bottone Settings deve aprire il modale per
+configurare l'estetica delle card (stesso `ChartSettingsModal` usato in FX).
+
+**Soluzione**:
+1. Importare `Settings` da `lucide-svelte` (già importato in FX)
+2. Importare `ChartSettingsModal` in `assets/+page.svelte`
+3. Aggiungere state `settingsModalOpen`, `settingsForModal` etc.
+4. Aggiungere il bottone Settings nella matrice 2×2 (posizione: top-right, come in FX)
+5. Aggiungere `<ChartSettingsModal>` nel template
+
+**Nota**: Per ora il settings potrebbe non avere tutte le opzioni significative per gli asset
+(es. signal overlay non è ancora implementato per asset), ma la modale si apre e funziona.
+Sarà esteso in Phase 06 Step 3/4.
+
+**Matrice 2×2 risultante**:
+```
+| ColumnVisibility (list) / vuoto (grid) | Settings |
+| Sync                                    | Refresh  |
+```
+
+**Stima**: 25 min
+
+---
+
+### C10 — AssetTable: colonna nome con icona asset + indicatore active
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Refactor
+**File coinvolti**:
+- `frontend/src/lib/components/assets/AssetTable.svelte` (linee 90-99, colonna `name`;
+  linee 164-178, colonna `active`)
+
+**Problema**:
+1. La colonna `active` mostra un pallino verde/rosso come colonna separata. L'utente vuole
+   il pallino **a destra del nome** nella colonna nome
+2. La colonna nome non mostra l'icona dell'asset. L'utente vuole:
+   - **A sinistra** del nome: icona custom dell'asset (`icon_url`), oppure fallback all'icona
+     PNG del tipo asset (da `frontend/static/icons/asset-types/{type}.png`)
+   - **A destra** del nome: pallino verde (active) o rosso (inactive)
+
+**Soluzione**:
+1. **Rimuovere** la colonna `active` dall'array `columns`
+2. **Modificare** la cella `name` per includere icona + pallino:
+   ```typescript
+   cell: (row) => {
+       // Icon: custom icon_url, fallback to asset-type PNG
+       const typeMap: Record<string, string> = {
+           STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
+           FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
+       };
+       const iconSrc = row.icon_url
+           || (row.asset_type ? `/icons/asset-types/${typeMap[row.asset_type] ?? 'other'}.png` : null);
+       const iconHtml = iconSrc
+           ? `<img src="${iconSrc}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
+           : `<div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0"><svg ...></svg></div>`;
+       const activeDot = row.active
+           ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>'
+           : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
+       return {
+           type: 'html',
+           html: `<div class="flex items-center gap-2">${iconHtml}<span class="font-medium text-gray-800 dark:text-gray-100">${row.display_name}</span>${activeDot}</div>`,
+       };
+   },
+   ```
+
+**Mappa tipo → file PNG**:
+| `asset_type` | File PNG |
+|--------------|----------|
+| STOCK | `stock.png` |
+| ETF | `etf.png` |
+| BOND | `bond.png` |
+| CRYPTO | `crypto.png` |
+| FUND | `fund.png` |
+| HOLD | `hold.png` |
+| CROWDFUND_LOAN | `crowdfunding.png` |
+| OTHER | `other.png` |
+
+**Stima**: 30 min
+
+---
+
+### C11 — AssetTable: colonna type con icona PNG del tipo asset
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/lib/components/assets/AssetTable.svelte` (linee 100-109, colonna `type`)
+
+**Problema**: La colonna `type` mostra solo un badge testuale (es. `ETF`, `STOCK`). L'utente
+vuole che, oltre al testo, venga mostrata anche l'icona PNG del tipo asset.
+
+**Soluzione**:
+Modificare `typeBadgeHtml()` per includere l'immagine:
+```typescript
+function typeBadgeHtml(type: string | null | undefined): string {
+    if (!type) return '<span class="text-gray-400">—</span>';
+    const typeMap: Record<string, string> = {
+        STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
+        FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
+    };
+    const imgSrc = `/icons/asset-types/${typeMap[type] ?? 'other'}.png`;
+    const colors: Record<string, string> = { /* ... colori esistenti ... */ };
+    const cls = colors[type] ?? '...';
+    return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}">
+        <img src="${imgSrc}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />
+        ${type}
+    </span>`;
+}
+```
+
+**Stima**: 15 min
+
+---
+
+### C12 — Row-level refresh: animazione spin sul bottone singolo
+
+**Area**: Frontend bug
+**Priorità**: 🟡 Bug
+**File coinvolti**:
+- `frontend/src/lib/components/table/DataTable.svelte` (linee 1060-1073, action buttons)
+- `frontend/src/lib/components/fx/FxTable.svelte` (rowActions `refresh`)
+- `frontend/src/lib/components/assets/AssetTable.svelte` (rowActions `refresh`)
+- `frontend/src/lib/components/table/types.ts` — aggiungere campo `iconClass` al tipo `RowAction`
+
+**Problema**: Quando l'utente clicca il bottone refresh su una singola riga, l'icona non gira
+(nessuna animazione `animate-spin`). L'utente si aspetta un feedback visivo durante il caricamento.
+
+**Causa root**: Il DataTable non ha un meccanismo per tracciare lo stato di loading per azione
+singola. L'azione `onClick` è fire-and-forget.
+
+**Soluzione** (approccio pragmatico: stato loading per riga nel componente wrapper):
+1. Aggiungere un campo `loadingRowIds` state in `FxTable.svelte` e `AssetTable.svelte`
+2. Il rowAction `refresh` diventa:
+   ```typescript
+   {
+       id: 'refresh',
+       label: () => $t('common.refresh'),
+       icon: RefreshCw,
+       onClick: async (row) => {
+           loadingRowIds.add(row.slug);
+           loadingRowIds = new Set(loadingRowIds); // trigger reactivity
+           await onrefresh?.({...});
+           loadingRowIds.delete(row.slug);
+           loadingRowIds = new Set(loadingRowIds);
+       },
+       // Classe CSS condizionale per animazione
+       iconClass: (row) => loadingRowIds.has(row.slug) ? 'animate-spin' : '',
+   }
+   ```
+3. **DataTable**: Estendere il tipo `RowAction` per supportare `iconClass?: (row: T) => string`
+4. Nel template DataTable, applicare la classe dinamica:
+   ```svelte
+   <action.icon size={16} class={action.iconClass?.(row) ?? ''} />
+   ```
+
+**Alternativa** (più semplice, tramite stato sulla riga):
+- Aggiungere un campo `_refreshing?: boolean` alla `FxRow` / `AssetRow`
+- Settarlo in `handleRefreshPair` prima e dopo l'operazione
+- Usare `iconClass: (row) => row._refreshing ? 'animate-spin' : ''`
+
+L'approccio con `loadingRowIds` è più pulito perché non inquina il modello dati.
+
+**Stima**: 40 min
+
+---
+
+### Riepilogo Dipendenze Step 2d
+
+```
+C1 (scroll fix) ─────────────── indipendente, fare per primo (bug UX base)
+C2 (label i18n) ─────────────── indipendente, facile
+C3 (column position) ────────── indipendente, modifica DataTable.$effect
+    │
+C4 (swap/manual merge) ──────── dopo C3 (rimozione colonne swap/manualOnly usa il sync dinamico)
+    │
+C5 (providers chain FxTable) ── dopo C4 (stessa area codice FxTable columns)
+    │
+C6 (providers chain SyncModal)─ dopo C5 (condivide helper rendering catena)
+    │
+C7 (sync modal filtered) ────── dopo C6 (modifica la stessa modale)
+    │
+C8 (toolbar header) ─────────── indipendente, refactor posizionamento
+C9 (settings Assets) ────────── indipendente
+C10 (nome + icon + active) ──── indipendente (modifica AssetTable)
+C11 (type icon) ──────────────── dopo C10 (stessa area AssetTable columns)
+C12 (refresh spin) ──────────── indipendente (modifica DataTable types + template)
+```
+
+### Checklist Pre-Implementazione Step 2d
+
+- [x] C1: Fix scroll ColumnVisibilityToggle — `dropdownRef.contains(e.target)`
+- [x] C2: Label i18n ColumnVisibilityToggle — 4 lingue + prop `showLabel`
+- [x] C3: Inserimento posizionale colonne Δ — logica `columns.findIndex` per posizione
+- [x] C4: FxTable rimozione `swap`/`manualOnly` + badge manual nel nome
+- [x] C5: FxTable colonna providers con catena icone + `hiddenByDefault`
+- [x] C6: FxSyncModal catena provider visualizzazione
+- [x] C7: FxSyncModal lista filtrata coppie + state `syncModalPairs`
+- [x] C8: DataTableToolbar nell'header (FX + Assets)
+- [x] C9: Assets matrice 2×2 + Settings + ChartSettingsModal
+- [x] C10: AssetTable nome con icona + active dot, rimozione colonna `active`
+- [x] C11: AssetTable type badge con icona PNG
+- [x] C12: Row-level refresh spin — `loadingRowIds` + `iconClass` in RowAction type
+
+---
+
+## Step 2e — Post-Review Fixes Step 2d + UX Filtro Assets (24 Marzo 2026)
+
+Correzioni emerse dalla review dello Step 2d, più nuove richieste UX per filtri pagina Assets,
+i18n tipi asset, icone tipo nelle card, e layout responsive della filter bar.
+
+**Durata stimata**: ~1.5 giorni
+**Dipendenze**: Step 2d (C1-C12) completati
+
+### Prompt Originale Utente (Step 2e — Review C + nuove richieste)
+
+> C1 e C2 corrette, ma il bottone è allineato a sinistra, mentre dovrebbe essere centrato
+>
+> C5 e C6: invece del badge mi aspettavo una visualizzazione come in FxProviderSelect
+> (con bandiere valute intermedie, icone provider favicon, frecce ⇆)
+>
+> C7: ho selezionato 3 e ho provato a fare la sinc ma il pacchetto dal frontend contiene
+> `"pairs":["undefined-undefined","undefined-undefined","undefined-undefined"]`
+>
+> C9: ora dovresti metterci la stessa modale di configurazione dei grafici con stessa logica
+>
+> C11: se riesci stessa icona anche nel filtro della tabella
+>
+> ---
+>
+> L'icona del tipo di asset non deve essere solo nella tabella, ma anche nella card.
+> Stavo pensando che è brutto avere i tipi solo in inglese, potremmo aggiungere delle chiavi
+> di traduzioni uguali ai nomi del backend e tradurli nelle varie lingue con i18n?
+> Idem per le icone vicino al nome nelle card, come per le tabelle.
+>
+> Riguardo i filtri nella parte alta, vicino ai tempi, mi torna, così è applicabile sia in
+> tabella che in card. Quindi bisognerebbe rimuovere dalla colonne tipo e valuta il filtro,
+> lasciare solo il riordinamento.
+>
+> Il filtro sui tipi globali dovrebbe essere delle checkbox come per la tabella, volendo potresti
+> riusare proprio quel pannello per il filtro. Lato valuta hai fatto benissimo a mettere il
+> CurrencySearchSelect, solo che non sono convinto che debba essere solo uno, mi dai delle
+> proposte per fare una selezione multi-valuta in cui le varie valute si sommano in OR?
+>
+> Il pulsante degli attivi mi torna al 100%, non essendoci più la colonna.
+>
+> In ogni caso quei 4 selettori così in riga non vanno bene, mi proponi 3 arrangiamenti in ASCII art.
+
+### Indice Step 2e
+
+| # | Titolo | Area | Priorità | Stato |
+|---|--------|------|----------|-------|
+| D1 | ColumnVisibilityToggle: centrare bottone nel layout 2×2 | Frontend UX | 🟢 Facile | ⬜ |
+| D2 | Provider chain: visualizzazione ricca con bandiere + icone favicon (FxTable + FxSyncModal) | Frontend feature | 🟡 Feature | ⬜ |
+| D3 | Bulk sync: fix `undefined-undefined` — `onSelectionChange` restituisce `string[]` non `FxRow[]` | Frontend bug | 🔴 Bug | ⬜ |
+| D4 | Assets: integrazione completa ChartSettingsModal (global + per-card) | Frontend feature | 🟡 Feature | ⬜ |
+| D5 | AssetTable + filtro enum: icone PNG tipo asset | Frontend UX | 🟢 Nice-to-have | ⬜ |
+| D6 | i18n tipi asset (STOCK → Azione, ETF → ETF, etc.) + icona tipo in AssetCard | Frontend i18n | 🟡 Feature | ⬜ |
+| D7 | AssetCard: icona asset nel nome (come in tabella) + indicatore active | Frontend UX | 🟡 Refactor | ⬜ |
+| D8 | Rimuovere filtro colonna type e currency dalla tabella (solo sorting) | Frontend UX | 🟡 Refactor | ⬜ |
+| D9 | Filtro tipo globale: checkbox multi-select con pannello (come DataTableColumnFilter enum) | Frontend feature | 🟡 Feature | ⬜ |
+| D10 | Filtro valuta: multi-select con badge rimuovibili (OR logic) | Frontend feature | 🟡 Feature | ⬜ |
+| D11 | Filter bar Assets: redesign layout responsive (3 proposte ASCII art) | Frontend UX | 🟡 Refactor | ⬜ |
+| D12 | Provider chain: fallback iniziali per icone non disponibili | Frontend UX | 🟢 Facile | ⬜ |
+
+**Ordine di implementazione**: D1 → D3 → D6 → D7 → D2 → D12 → D8 → D9 → D10 → D11 → D4 → D5
+
+---
+
+### D1 — ColumnVisibilityToggle: centrare bottone nel layout 2×2
+
+**Area**: Frontend UX
+**Priorità**: 🟢 Facile
+**File coinvolti**:
+- `frontend/src/lib/components/table/ColumnVisibilityToggle.svelte` (linea 116)
+
+**Problema**: Il bottone ColumnVisibilityToggle nella matrice 2×2 è allineato a sinistra
+anziché centrato come gli altri bottoni della griglia.
+
+**Causa root**: Il bottone non ha `justify-center` nella classe CSS. Gli altri bottoni
+della griglia 2×2 hanno `flex items-center justify-center`.
+
+**Soluzione**: Aggiungere `justify-center` alla classe del bottone trigger:
+```svelte
+class="flex items-center justify-center gap-1 px-2.5 py-1.5 ..."
+```
+
+**Stima**: 5 min
+
+---
+
+### D2 — Provider chain: visualizzazione ricca con bandiere + icone favicon
+
+**Area**: Frontend feature
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/lib/components/fx/FxTable.svelte` (funzione `providerChainHtml`)
+- `frontend/src/lib/components/fx/FxSyncModal.svelte` (rendering provider chain)
+- `frontend/src/lib/utils/colors.ts` (riuso `getProviderColor`)
+- `frontend/src/lib/stores/currencyGraphStore.ts` (`getCachedProviders`)
+
+**Problema**: La visualizzazione dei provider nella colonna tabella e nella modale sync
+mostra solo badge testuali (es. `ECB`). L'utente vuole la stessa visualizzazione ricca
+usata in `FxProviderSelect.svelte`: bandiere valuta, icone provider (favicon), frecce ⇆.
+
+**Dati disponibili**:
+- `FxRow.providers[0].chainSteps[]` → `{from, to, provider}` per ogni step
+- `getCurrencyInfo(code)` → `{flag_emoji}` per le bandiere
+- `getCachedProviders()` → `[{code, icon_url, name}]` per icone provider
+- `getProviderColor(code)` → `{bg, border}` per colori badge
+
+**Pattern di rendering** (da FxProviderSelect, adattato per inline HTML):
+```
+🇦🇺 AUD [⇆ 🌐ECB ⇆] 🇪🇺 EUR [⇆ 🌐ECB ⇆] 🇬🇧 GBP
+```
+
+**Soluzione — FxTable (HTML inline nella cella)**:
+1. Importare `getCachedProviders` da `$lib/stores/currencyGraphStore`
+2. Importare `getProviderColor` da `$lib/utils/colors`
+3. Costruire un `providerMap` derivato per lookup `icon_url` e iniziali
+4. Riscrivere `providerChainHtml()`:
+   - Per ogni step: `flag_from CODE_from [⇆ icon/initials ⇆] flag_to CODE_to`
+   - Badge con sfondo colorato via `getProviderColor`
+   - Icona = `<img>` se `icon_url` disponibile, altrimenti iniziali 2-char
+5. Per chain (>1 step): mostrare step intermedi concatenati
+
+**Soluzione — FxSyncModal (Svelte nativo)**:
+1. Parsare `provider_used` (es. `"CHAIN:ECB+FIXED_RATE"`) → lista codici
+2. Per ogni codice, renderizzare badge Svelte con icona/iniziali + colore
+3. Non serve la catena completa con bandiere (la modale mostra solo i provider usati)
+
+**Stima**: 45 min
+
+---
+
+### D3 — Bulk sync: fix `undefined-undefined`
+
+**Area**: Frontend bug
+**Priorità**: 🔴 Bug
+**File coinvolti**:
+- `frontend/src/lib/components/fx/FxTable.svelte` (linea 247, `onSelectionChange`)
+- `frontend/src/lib/components/assets/AssetTable.svelte` (stessa issue)
+
+**Problema**: `DataTable.onSelectionChange` passa `selectedIds: string[]` (gli ID delle righe),
+ma FxTable lo passa direttamente a `onselectionchange` che si aspetta `(rows: FxRow[])`.
+Il callback riceve stringhe, non oggetti, quindi `row.base` e `row.quote` sono `undefined`.
+
+**Soluzione**: In FxTable e AssetTable, mappare gli ID alle righe complete:
+```typescript
+// FxTable
+onSelectionChange={(ids: string[]) => {
+    onselectionchange?.(data.filter(row => ids.includes(row.slug)));
+}}
+
+// AssetTable
+onSelectionChange={(ids: string[]) => {
+    onselectionchange?.(data.filter(row => ids.includes(String(row.id))));
+}}
+```
+
+**Stima**: 10 min
+
+---
+
+### D4 — Assets: integrazione completa ChartSettingsModal (global + per-card)
+
+**Area**: Frontend feature
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/routes/(app)/assets/+page.svelte`
+- `frontend/src/lib/components/assets/AssetCard.svelte`
+
+**Problema**: Il bottone Settings nella matrice 2×2 è un placeholder. L'utente vuole:
+- Settings globale dalla matrice → configura tutti i grafici
+- Settings per-card dal bottone ⚙️ → configura solo quell'asset
+- Preview nella modale mostra solo i dati di quell'asset
+
+**Soluzione**:
+1. Importare `ChartSettingsModal`, `getGlobalSettings`, `setGlobalSettings`,
+   `getSettingsForPair`, `setPairSettings`, `getSettingsVersion`
+2. State: `settingsModalOpen`, `settingsTargetId: string | null`
+3. Derivata `settingsForModal` (globale o per-asset)
+4. `handleGlobalSettings()` e `handleCardSettings({id})`
+5. `handleSettingsSave(s)` → `setPairSettings` o `setGlobalSettings`
+6. `<ChartSettingsModal>` nel template con props corrette
+7. In `AssetCard`: aggiungere bottone ⚙️ nel footer + prop `onsettings`
+
+**Nota**: Per assets, la chiave nel `chartSettingsStore` è `asset-{id}` (stringa).
+
+**Stima**: 40 min
+
+---
+
+### D5 — AssetTable + filtro enum: icone PNG tipo asset
+
+**Area**: Frontend UX
+**Priorità**: 🟢 Nice-to-have
+**File coinvolti**:
+- `frontend/src/lib/components/table/types.ts` (tipo `EnumOption`)
+- `frontend/src/lib/components/table/DataTableColumnFilter.svelte` (rendering enum)
+- `frontend/src/lib/components/assets/AssetTable.svelte` (opzioni enum)
+
+**Problema**: Il filtro dropdown della colonna `type` mostra solo testo. L'utente vorrebbe
+le stesse icone PNG del badge nella cella.
+
+**Soluzione**:
+1. Estendere `EnumOption` con `iconUrl?: string`
+2. In `DataTableColumnFilter.svelte`, renderizzare `<img>` accanto a `.enum-label` se presente
+3. In `AssetTable`, popolare `iconUrl` per ogni tipo asset:
+   ```typescript
+   enumOptions: ASSET_TYPES.map(v => ({
+       value: v,
+       label: $t(`assets.types.${v}`),
+       iconUrl: `/icons/asset-types/${ASSET_TYPE_ICON_MAP[v] ?? 'other'}.png`,
+   }))
+   ```
+
+**Stima**: 20 min
+
+---
+
+### D6 — i18n tipi asset + icona tipo in badge AssetCard
+
+**Area**: Frontend i18n + UX
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/lib/i18n/en.json`, `it.json`, `fr.json`, `es.json`
+- `frontend/src/lib/components/assets/AssetTable.svelte` (badge tipo)
+- `frontend/src/lib/components/assets/AssetCard.svelte` (badge tipo)
+- `frontend/src/routes/(app)/assets/+page.svelte` (typeOptions)
+
+**Problema**: I tipi asset sono mostrati in inglese raw dal backend (`STOCK`, `ETF`, etc.).
+L'utente vuole traduzioni i18n. Inoltre il badge tipo nella card non ha l'icona PNG.
+
+**Chiavi i18n da aggiungere**:
+
+| Chiave | EN | IT | FR | ES |
+|--------|----|----|----|----|
+| `assets.types.STOCK` | Stock | Azione | Action | Acción |
+| `assets.types.ETF` | ETF | ETF | ETF | ETF |
+| `assets.types.BOND` | Bond | Obbligazione | Obligation | Bono |
+| `assets.types.CRYPTO` | Crypto | Cripto | Crypto | Cripto |
+| `assets.types.FUND` | Fund | Fondo | Fonds | Fondo |
+| `assets.types.HOLD` | Hold | Liquidità | Liquidité | Liquidez |
+| `assets.types.CROWDFUND_LOAN` | Crowdfund | Crowdfunding | Crowdfunding | Crowdfunding |
+| `assets.types.OTHER` | Other | Altro | Autre | Otro |
+
+**Soluzione**:
+1. Aggiungere le chiavi i18n `assets.types.*` in tutte le 4 lingue
+2. In `AssetTable.typeBadgeHtml()`: sostituire il testo raw con traduzione via `get(_)`
+3. In `AssetCard`: aggiungere icona PNG nel badge tipo (stessa logica della tabella)
+4. In `assets/+page.svelte typeOptions`: usare `$t('assets.types.STOCK')` come label
+5. In `AssetTable enumOptions`: usare label tradotta anziché raw
+
+**Stima**: 30 min
+
+---
+
+### D7 — AssetCard: icona asset nel nome + indicatore active (come tabella)
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Refactor
+**File coinvolti**:
+- `frontend/src/lib/components/assets/AssetCard.svelte` (linee 104-123)
+
+**Problema**: L'AssetCard usa `AssetIcon` (Lucide fallback), ma la tabella ora mostra
+l'icona PNG del tipo asset come fallback. Il comportamento deve essere uniforme.
+Inoltre, la card usa un badge "Inactive" separato — nella tabella si usa un pallino
+verde/rosso a destra del nome.
+
+**Soluzione**:
+1. Nel header card, assicurare che `AssetIcon` segua la stessa catena di fallback:
+   `icon_url` → type PNG → fallback SVG
+2. Aggiungere pallino active verde/rosso a destra del nome (come nella tabella)
+3. Rimuovere il badge "Inactive" separato (ridondante col pallino)
+
+**Stima**: 20 min
+
+---
+
+### D8 — Rimuovere filtro colonna type e currency dalla tabella (solo sorting)
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Refactor
+**File coinvolti**:
+- `frontend/src/lib/components/assets/AssetTable.svelte` (colonne `type` e `currency`)
+
+**Problema**: Ora che i filtri tipo e valuta sono nella filter bar globale (applicabili
+sia a card che a tabella), i filtri per-colonna nelle colonne `type` e `currency` sono
+ridondanti. L'utente vuole mantenerli solo per il sorting (ordinamento), non per il filtro.
+
+**Soluzione**:
+Aggiungere `filterable: false` alle colonne `type` e `currency`:
+```typescript
+{
+    id: 'type',
+    // ...existing...
+    filterable: false,  // ← filtro globale nella filter bar
+},
+{
+    id: 'currency',
+    // ...existing...
+    filterable: false,  // ← filtro globale nella filter bar
+},
+```
+
+**Stima**: 5 min
+
+---
+
+### D9 — Filtro tipo globale: checkbox multi-select con pannello
+
+**Area**: Frontend feature
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/routes/(app)/assets/+page.svelte` (filter bar, stato `filterType`)
+
+**Problema**: Il filtro tipo è un `SimpleSelect` singolo (dropdown con un valore).
+L'utente vuole un pannello con checkbox multi-select, come il filtro enum del DataTable,
+in modo da poter selezionare più tipi contemporaneamente (es. STOCK + ETF).
+
+**Soluzione**: Creare un componente `TypeFilterPopover.svelte` (o inline nella pagina):
+1. State: `filterTypes = $state<Set<string>>(new Set())` (vuoto = tutti)
+2. Bottone trigger: mostra "All Types" o il conteggio dei tipi selezionati
+3. Pannello dropdown con checkbox per ogni tipo (con icona PNG + label tradotta)
+4. Tasti "Select All" / "Clear All"
+5. Logica di filtraggio: `filterTypes.size === 0 || filterTypes.has(asset.asset_type)`
+
+**Pattern alternativo (semplice)**: Riusare `DataTableColumnFilter` con `type='enum'`
+come componente standalone, con un anchor button personalizzato. Ma DataTableColumnFilter
+è progettato per DataTable interno — meglio un componente leggero ad hoc.
+
+**Stima**: 35 min
+
+---
+
+### D10 — Filtro valuta: multi-select con badge rimuovibili (OR logic)
+
+**Area**: Frontend feature
+**Priorità**: 🟡 Feature
+**File coinvolti**:
+- `frontend/src/routes/(app)/assets/+page.svelte` (filter bar, stato `filterCurrency`)
+
+**Problema**: Il filtro valuta usa un singolo `CurrencySearchSelect`. L'utente vuole
+poter selezionare più valute contemporaneamente, con logica OR (es. EUR + USD mostra
+tutti gli asset in EUR o USD).
+
+**3 Proposte per multi-select valuta**:
+
+**Proposta A — Badge rimuovibili + CurrencySearchSelect**:
+Il CurrencySearchSelect resta, ma ogni selezione **aggiunge** un badge anziché sostituire.
+I badge selezionati compaiono come chips accanto/sotto il select. Click × per rimuovere.
+
+```
+┌─ All currencies ─▼─┐  [EUR ×] [USD ×] [CHF ×]
+```
+
+Pro: Minimo impatto UX, familiare. Contro: Occupa spazio orizzontale.
+
+**Proposta B — Multi-checkbox dropdown (come tipo)**:
+Un pannello dropdown con tutte le valute disponibili come checkbox, con bandiere.
+Ricerca testuale in cima.
+
+```
+┌─ Currencies (3) ─▼─┐
+│ 🔍 Search...         │
+│ ☑ 🇪🇺 EUR             │
+│ ☑ 🇺🇸 USD             │
+│ ☑ 🇨🇭 CHF             │
+│ ☐ 🇬🇧 GBP             │
+│ [All] [Clear]        │
+└──────────────────────┘
+```
+
+Pro: Compatto, uniforme con tipo. Contro: Se ci sono molte valute, serve scroll.
+
+**Proposta C — CurrencySearchSelect multiplo con chips integrate**:
+Il CurrencySearchSelect ha internamente un `mode: 'multi'` che mostra i valori
+selezionati come chips dentro il campo. Al click apre il dropdown, le scelte si
+accumulano. Pattern comune (Slack, Discord, JIRA tag picker).
+
+```
+┌─ [EUR ×] [USD ×] [+ Add...] ─┐
+│ 🇨🇭 CHF - Swiss Franc         │
+│ 🇬🇧 GBP - British Pound       │
+│ 🇯🇵 JPY - Japanese Yen        │
+└────────────────────────────────┘
+```
+
+Pro: Elegante, UX professionale. Contro: Più complesso da implementare.
+
+**Scelta**: **Proposta A** — badge rimuovibili + CurrencySearchSelect.
+State: `filterCurrencies = $state<Set<string>>(new Set())`.
+Logica: `filterCurrencies.size === 0 || filterCurrencies.has(asset.currency)`.
+
+> ℹ️ **Proposta C** (chips integrate nel campo, stile Slack/JIRA) rimandata a TODO_FUTURI
+> come evoluzione futura. Vedi `TODO_FUTURI.md § CurrencySearchSelect multi-mode`.
+
+**Stima**: 30 min
+
+---
+
+### D11 — Filter bar Assets: layout responsive dei filtri (Proposta D)
+
+**Area**: Frontend UX
+**Priorità**: 🟡 Refactor
+**File coinvolti**:
+- `frontend/src/routes/(app)/assets/+page.svelte` (filter bar)
+
+**Problema**: I filtri (Search, Type, Currency multi-select, Active, Reset) che sostituiscono
+la coppia di valute FX devono essere disposti in modo ergonomico nelle 3 modalità responsive.
+
+**Nota**: Il DateRangePicker e il blocco azioni 2×2 **non cambiano** — restano identici alla
+pagina FX. Questa sezione riguarda **solo** la disposizione dei filtri tra il datepicker e il
+blocco 2×2.
+
+**Contesto — FX filter bar attuale (riferimento)**:
+```
+FX wide:   [ datepicker ] [ valuta1 ] [ valuta2 ] [×]  ─── [ 2×2 ]
+FX tablet: [ datepicker              ]                  [ 2×2 ]
+           [ valuta1 ] [ valuta2 ] [×]
+FX mobile: [ datepicker              ]
+           [ valuta1 ] [ valuta2 ] [×]
+           [ 2×2 in riga orizzontale ]
+```
+
+**Scelta: Proposta D** (derivata da C, proposta dall'utente), con filtri in blocco 2×2 in
+tablet. Il layout dei 4 filtri segue l'ordine: 🔍Search → Active✓ → Type▼ → Currency badges.
+
+#### Layout base Proposta D (senza badge valuta)
+
+```
+WIDE (≥950px) — filtri inline tra datepicker e 2×2:
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ [◄3M►][24Dec—24Mar]  | [🔍Search] [Active✓] [Type▼(2)] [???badges???] × | [2×2] │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+TABLET (500–950px) — filtri come blocco 2×2 a sinistra del 2×2 azioni:
+┌──────────────────────────────────────────────────────────┐
+│ [◄3M►][24Dec—24Mar] | [🔍Search  ] [Active✓]         | [2×2] │
+│                      | [Type▼(2) ] [???badges???] ×  |       │
+└──────────────────────────────────────────────────────────┘
+
+MOBILE (<500px) — stacked centrato:
+┌────────────────────────────┐
+│   [◄ 3M ►][24Dec—24Mar]   │
+│   [🔍 Search...         ]  │
+│   [Active✓] [Type▼(2)]  × │
+│   [???badges???]           │
+│   [👁] [⚙] [↻] [↺]       │
+└────────────────────────────┘
+```
+
+#### Posizionamento badge valuta — 3 opzioni
+
+I badge (`[EUR×][USD×]`) hanno larghezza variabile (0-N valute). Il CurrencySearchSelect
+(dropdown per aggiungere valute) sta nella cella bottom-right del 2×2 filtri in tutte le
+opzioni. La domanda è: **dove finiscono i badge delle valute selezionate?**
+
+---
+
+**Opzione α — Badge nella cella bottom-right del 2×2 filtri**
+
+I badge stanno accanto al CurrencySearchSelect nella cella bottom-right. Se ci sono 3+ badge,
+la cella si espande e i badge wrappano.
+
+```
+WIDE (≥950px):
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│ [◄3M►][24Dec—24Mar] | [🔍Search] [Active✓] [Type▼(2)] [EUR×][USD×][+] × | [2×2] │
+└───────────────────────────────────────────────────────────────────────────────────┘
+
+TABLET (500–950px):
+┌───────────────────────────────────────────────────────────────┐
+│ [◄3M►][24Dec—24Mar] | [🔍Search     ] [Active✓]          | [2×2] │
+│                      | [Type▼(2)     ] [EUR×][USD×][+] × |       │
+└───────────────────────────────────────────────────────────────┘
+```
+
+Pro: Compatto, 1-2 badge stanno perfetti.
+Contro: 3+ badge rompono la simmetria; il CurrencySearchSelect diventa un ibrido
+(dropdown + badge container) → non riutilizzabile immediatamente.
+
+---
+
+**Opzione β — Badge su riga dedicata sotto il 2×2 filtri**
+
+Il CurrencySearchSelect resta un dropdown puro nella cella bottom-right. I badge compaiono
+come "chips row" sotto la griglia, visibile solo se `filterCurrencies.size > 0`.
+
+```
+TABLET (500–950px):
+┌───────────────────────────────────────────────────────────────┐
+│ [◄3M►][24Dec—24Mar] | [🔍Search     ] [Active✓]          | [2×2] │
+│                      | [Type▼(2)     ] [Currency ▼]    × |       │
+│                      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌       │
+│                        [EUR×] [USD×] [CHF×] [GBP×]               │
+└───────────────────────────────────────────────────────────────┘
+```
+
+Pro: 2×2 sempre simmetrico, CurrencySearchSelect riutilizzabile as-is.
+Contro: Riga extra quando ci sono selezioni.
+
+---
+
+**Opzione γ — Badge nell'header, a sinistra del ViewModeToggle** ⭐ SCELTA
+
+Il CurrencySearchSelect resta un dropdown puro nella cella bottom-right del 2×2 filtri
+(come β). I badge delle valute selezionate salgono nell'**header bar**, allineati a destra,
+immediatamente prima del toggle Grid/Table. Condizionali: appaiono solo se
+`filterCurrencies.size > 0`.
+
+```
+WIDE (≥950px):
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ Assets (12)                        [EUR×][USD×][CHF×]  [Grid|Table] [+ Add]  │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ [◄3M►][24Dec—24Mar] | [🔍Search] [Active✓] [Type▼(2)] [Currency▼] × | [2×2] │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+  senza selezioni valuta, header pulito:
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ Assets (12)                                            [Grid|Table] [+ Add]  │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ [◄3M►][24Dec—24Mar] | [🔍Search] [Active✓] [Type▼(2)] [Currency▼] × | [2×2] │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+TABLET (500–950px):
+┌──────────────────────────────────────────────────────────────┐
+│ Assets (12)                  [EUR×][USD×]  [Grid|Table] [+]  │
+├──────────────────────────────────────────────────────────────┤
+│ [◄3M►][24Dec—24Mar] | [🔍Search     ] [Active✓]          | [2×2] │
+│                      | [Type▼(2)     ] [Currency▼]     × |       │
+└──────────────────────────────────────────────────────────────┘
+
+  con DataTableToolbar attiva (bulk selection), i badge si nascondono:
+┌──────────────────────────────────────────────────────────────┐
+│ Assets (12)         [3 selected: Sync|Refresh|Delete|×]  [+] │
+├──────────────────────────────────────────────────────────────┤
+│ ...                                                          │
+└──────────────────────────────────────────────────────────────┘
+
+MOBILE (<500px):
+┌──────────────────────────────────┐
+│ Assets (12)      [Grid|Table] [+] │
+│ [EUR×] [USD×] [CHF×]             │
+├──────────────────────────────────┤
+│   [◄ 3M ►][24Dec—24Mar]         │
+│   [🔍 Search...              ]   │
+│   [Active✓] [Type▼(2)]          │
+│   [Currency▼]                 ×  │
+│   [👁] [⚙] [↻] [↺]             │
+└──────────────────────────────────┘
+```
+
+**Vantaggi di γ**:
+1. **CurrencySearchSelect riutilizzabile** — resta un dropdown puro, identico a quello FX
+2. **2×2 filtri sempre simmetrico** — nessuna cella che si espande
+3. **Badge sempre visibili** — nell'header restano visibili anche scrollando il contenuto
+4. **Separazione semantica chiara** — il dropdown (nel filter bar) è l'"azione di aggiungere",
+   i badge (nell'header) sono il "risultato visibile" dei filtri attivi
+5. **Graceful degradation** — quando la DataTableToolbar compare (bulk selection), i badge
+   si nascondono con un semplice `{#if}` (non servono entrambi contemporaneamente)
+6. **Pattern coerente** — l'header già ospita contenuto condizionale (DataTableToolbar)
+
+**Implementazione** (nell'header, tra DataTableToolbar e ViewModeToggle):
+```svelte
+<!-- Currency filter badges — nell'header -->
+{#if filterCurrencies.size > 0 && selectedAssetRows.length === 0}
+    <div class="flex items-center gap-1.5 flex-wrap">
+        {#each [...filterCurrencies] as currency}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium
+                         bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300
+                         border border-amber-200 dark:border-amber-700 rounded-full">
+                {currency}
+                <button onclick={() => filterCurrencies.delete(currency)}>×</button>
+            </span>
+        {/each}
+    </div>
+{/if}
+```
+
+**Stima**: 40 min (layout programmatico con `layoutMode` — pattern identico a FX page)
+
+---
+
+### D12 — Provider chain: fallback iniziali per icone non disponibili
+
+**Area**: Frontend UX
+**Priorità**: 🟢 Facile
+
+**Problema**: Se un provider non ha `icon_url`, la visualizzazione ricca (D2) deve
+mostrare le iniziali (2 char) come fallback, con sfondo colorato dal sistema di colori.
+
+**Nota**: Incluso nella logica di D2. Documentato qui come promemoria per test.
+
+**Stima**: incluso in D2
+
+---
+
+### Riepilogo Dipendenze Step 2e
+
+```
+D1 (centra bottone)  ────────── indipendente, facile
+D3 (fix undefined)   ────────── 🔴 indipendente, bug bloccante
+    │
+D6 (i18n tipi asset) ────────── prerequisito per D7, D5, D9
+    │
+D7 (card icon + active) ─────── dopo D6 (usa stessi i18n e PNG)
+    │
+D2 (provider chain ricca) ───── indipendente (FxTable/FxSyncModal)
+D12 (fallback iniziali) ─────── incluso in D2
+    │
+D8 (rimuovere filtro colonna)── indipendente, ma logico dopo D9
+    │
+D9 (tipo multi-checkbox) ────── dopo D6 (usa label tradotte)
+D10 (valuta multi-select) ────── indipendente
+D11 (layout filter bar) ──────── dopo D9 + D10 (dipende dalla UI dei filtri)
+    │
+D4 (ChartSettings Assets) ───── indipendente
+D5 (icone filtro enum) ──────── dopo D6 (usa stesse icon map)
+```
+
+### Checklist Pre-Implementazione Step 2e
+
+- [ ] D1: Centrare bottone ColumnVisibilityToggle — `justify-center`
+- [ ] D2: Provider chain ricca con bandiere + icone favicon (FxTable + FxSyncModal)
+- [ ] D3: Fix bulk sync undefined — mappare `string[]` a `FxRow[]` in `onSelectionChange`
+- [ ] D4: Assets integrazione ChartSettingsModal (global + per-card)
+- [ ] D5: AssetTable filtro tipo con icone PNG — estendere `EnumOption`
+- [ ] D6: i18n tipi asset (8 tipi × 4 lingue) + icona PNG nel badge card
+- [ ] D7: AssetCard icona asset + pallino active (come tabella)
+- [ ] D8: Rimuovere `filterable` da colonne type e currency in AssetTable
+- [ ] D9: Filtro tipo globale multi-checkbox con pannello
+- [ ] D10: Filtro valuta multi-select — **Proposta A** (badge rimuovibili + CurrencySearchSelect) — Proposta C in TODO_FUTURI
+- [ ] D11: Layout responsive filter bar Assets — **Proposta D** + **Opzione γ** (badge nell'header, CurrencySearchSelect puro nel 2×2)
+- [ ] D12: Provider chain fallback iniziali (incluso in D2)
 

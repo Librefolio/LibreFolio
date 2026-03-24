@@ -132,6 +132,25 @@ export function buildMainSeries(
     if (values.length === 0) return [];
 
     const n = values.length;
+
+    // ── Single-point: render as circle marker (no line segment possible) ──
+    if (n === 1) {
+        const color = useBaseline
+            ? (values[0] >= baseline ? greenColor : redColor)
+            : baseColor;
+        return [{
+            name: seriesName,
+            type: 'line',
+            data: [values[0]],
+            showSymbol: true,
+            symbol: 'circle',
+            symbolSize: 8,
+            itemStyle: { color },
+            lineStyle: { width: 0 },
+            areaStyle: undefined,
+        }];
+    }
+
     const hasStale = useStale && staleDays.some(d => d > 0);
 
     // ── Step 1: Assign per-point color and opacity ──

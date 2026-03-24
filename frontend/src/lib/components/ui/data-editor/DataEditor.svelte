@@ -174,6 +174,8 @@
                         type: 'editable-number',
                         value: r.values[col.key] !== undefined && r.values[col.key] !== null ? Number(r.values[col.key]) : null,
                         step: col.step ?? 0.0001,
+                        min: col.min,
+                        max: col.max,
                         placeholder: col.placeholder ?? '',
                         onchange: (newValue) => handleCellEditByDate(r.date, col.key, newValue),
                     }),
@@ -514,7 +516,6 @@
             getRowClass={rowBgClass}
             getRowStyle={rowStyleFn}
             emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
-            showToolbar={false}
             onSelectionChange={(ids) => selectedIds = ids}
         />
     </div>
