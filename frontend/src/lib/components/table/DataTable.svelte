@@ -18,7 +18,6 @@
     import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
-    import DataTableToolbar from './DataTableToolbar.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
@@ -59,8 +58,6 @@
         getRowStyle?: (row: T) => string;
         /** Table layout mode: 'fixed' (default) or 'auto' (columns expand to fill space) */
         tableLayout?: 'fixed' | 'auto';
-        /** Show or hide the internal column-visibility/bulk-action toolbar (default: true) */
-        showToolbar?: boolean;
     }
 
     let {
@@ -94,7 +91,6 @@
         getRowClass,
         getRowStyle,
         tableLayout = 'fixed',
-        showToolbar = true,
     }: Props = $props();
 
     // Derived: effective selection mode
@@ -670,8 +666,59 @@
         }
     });
 
-    // Init column order/visibility/widths when columns change
+    // Sync column order/visibility/widths when columns change dynamically
+    // (e.g. delta period columns added/removed when date range changes)
     $effect(() => {
+        const currentIds = new Set(columns.map(c => c.id));
+        const orderedIds = new Set(columnOrder);
+
+        // Detect new columns (not in current order)
+        const newIds = columns.filter(c => !orderedIds.has(c.id)).map(c => c.id);
+        // Remove stale columns (no longer in definition)
+        const filtered = columnOrder.filter(id => currentIds.has(id));
+
+        if (newIds.length > 0 || filtered.length !== columnOrder.length) {
+            // Insert new columns at their correct position based on the columns array order
+            // (not appended at end). This ensures delta columns stay grouped and ordered.
+            for (const newId of newIds) {
+                const colIndex = columns.findIndex(c => c.id === newId);
+                // Find the last column in filtered that precedes newId in columns order
+                let insertAfterIdx = -1;
+                for (let i = 0; i < filtered.length; i++) {
+                    const existingColIdx = columns.findIndex(c => c.id === filtered[i]);
+                    if (existingColIdx !== -1 && existingColIdx < colIndex) insertAfterIdx = i;
+                }
+                filtered.splice(insertAfterIdx + 1, 0, newId);
+            }
+            columnOrder = filtered;
+            saveToStorage(getStorageKey('columnOrder'), columnOrder);
+
+            // Set visibility for new columns (respect hiddenByDefault)
+            const updatedVisibility = {...columnVisibility};
+            for (const id of newIds) {
+                const col = columns.find(c => c.id === id);
+                updatedVisibility[id] = col ? !col.hiddenByDefault : true;
+            }
+            // Remove stale visibility entries
+            for (const id of Object.keys(updatedVisibility)) {
+                if (!currentIds.has(id)) delete updatedVisibility[id];
+            }
+            columnVisibility = updatedVisibility;
+            saveToStorage(getStorageKey('columnVisibility'), columnVisibility);
+
+            // Update widths for new columns
+            const updatedWidths = {...columnWidths};
+            for (const id of newIds) {
+                const col = columns.find(c => c.id === id);
+                updatedWidths[id] = col?.width ?? 150;
+            }
+            for (const id of Object.keys(updatedWidths)) {
+                if (!currentIds.has(id)) delete updatedWidths[id];
+            }
+            columnWidths = updatedWidths;
+        }
+
+        // Initial fallback (first mount before localStorage loads)
         if (columnOrder.length === 0) {
             columnOrder = [...defaultColumnOrder];
         }
@@ -739,24 +786,20 @@
     export function clearSelection() {
         clearAllSelection();
     }
+
+    /** Get currently selected rows (for external toolbar) */
+    export function getSelectedRows(): T[] {
+        return selectedRows;
+    }
+
+    /** Execute a bulk action by ID (triggers confirm modal if required) */
+    export function executeBulkAction(actionId: string) {
+        const action = bulkActions.find(a => a.id === actionId);
+        if (action) handleBulkAction(action);
+    }
 </script>
 
 <div class="datatable-container">
-    <!-- Toolbar: selection counter + bulk actions (shown when rows are selected) -->
-    {#if showToolbar && selectedRows.length > 0 && bulkActions.length > 0}
-        <DataTableToolbar
-                selectedCount={selectedRows.length}
-                bulkActions={bulkActions.map(a => ({
-				id: a.id,
-				icon: a.icon,
-				label: a.label,
-				variant: a.variant,
-				onClick: () => handleBulkAction(a),
-			}))}
-                onClearSelection={clearAllSelection}
-        />
-    {/if}
-
     <!-- Table -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="table-wrapper" onkeydown={() => { highlightedRowId = null; }}>
@@ -984,14 +1027,30 @@
                                             class="cell-editable-number"
                                             value={cellContent.value ?? ''}
                                             step={cellContent.step ?? 1}
+                                            min={cellContent.min}
+                                            max={cellContent.max}
                                             placeholder={cellContent.placeholder ?? ''}
                                             oninput={(e) => {
                                                 const raw = e.currentTarget.value;
-                                                cellContent.onchange(raw === '' ? null : Number(raw));
+                                                if (raw === '') { cellContent.onchange(null); return; }
+                                                let num = Number(raw);
+                                                if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
+                                                if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
+                                                cellContent.onchange(num);
                                             }}
                                             onblur={(e) => {
                                                 const raw = e.currentTarget.value;
-                                                cellContent.onchange(raw === '' ? null : Number(raw));
+                                                if (raw === '') { cellContent.onchange(null); return; }
+                                                let num = Number(raw);
+                                                if (cellContent.min !== undefined && num < cellContent.min) {
+                                                    num = cellContent.min;
+                                                    e.currentTarget.value = String(num);
+                                                }
+                                                if (cellContent.max !== undefined && num > cellContent.max) {
+                                                    num = cellContent.max;
+                                                    e.currentTarget.value = String(num);
+                                                }
+                                                cellContent.onchange(num);
                                             }}
                                             onkeydown={(e) => {
                                                 if (e.key === 'Enter') e.currentTarget.blur();
@@ -1016,10 +1075,10 @@
                                                     class="action-btn"
                                                     class:danger={action.variant === 'danger'}
                                                     disabled={action.disabled?.(row)}
-                                                    onclick={() => handleRowAction(action, row)}
+                                                    onclick={(e) => { e.stopPropagation(); handleRowAction(action, row); }}
                                                     title={typeof action.label === 'function' ? action.label() : action.label}
                                             >
-                                                <action.icon size={16}/>
+                                                <action.icon size={16} class={action.iconClass?.(row) ?? ''}/>
                                             </button>
                                         {/if}
                                     {/each}

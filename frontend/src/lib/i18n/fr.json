@@ -59,6 +59,7 @@
     "custom": "Personnalisé"
   },
   "table": {
+    "columns": "Colonnes",
     "clearSelection": "Effacer la sélection",
     "perPage": "par page",
     "items": "éléments",

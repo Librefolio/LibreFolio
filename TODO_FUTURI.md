@@ -412,6 +412,60 @@ reali dagli asset source provider (yfinance, JustETF).
 
 
 
+## 🪙 CurrencySearchSelect multi-mode — Chips integrate nel campo
+
+**Data aggiunta**: 24 Marzo 2026
+**Status**: 📋 PIANIFICATO
+**Priorità**: Bassa (evoluzione UX)
+**Origine**: Phase 6 Step 2e D10 — Proposta C (rimandata a favore di Proposta A)
+
+### Contesto
+
+Per il filtro valuta multi-select nella pagina Assets si è scelto la **Proposta A** (badge
+rimuovibili esterni accanto al CurrencySearchSelect). In futuro si può evolvere a una UX
+più professionale con chips integrate dentro il campo stesso (pattern Slack, Discord, JIRA).
+
+### Come diventerà (ASCII art)
+
+**Stato chiuso** — i valori selezionati come chips dentro il campo:
+```
+┌─ [🇪🇺EUR ×] [🇺🇸USD ×] [+ Add...] ─────────────┐
+└───────────────────────────────────────────────────┘
+```
+
+**Stato aperto** — click apre il dropdown, le scelte si accumulano:
+```
+┌─ [🇪🇺EUR ×] [🇺🇸USD ×] [🔍 search...] ─────────┐
+│ 🇨🇭 CHF — Swiss Franc                            │
+│ 🇬🇧 GBP — British Pound                          │
+│ 🇯🇵 JPY — Japanese Yen                           │
+│ 🇦🇺 AUD — Australian Dollar                      │
+│ ─────────────────────────────────                 │
+│ [Select All]  [Clear]                             │
+└───────────────────────────────────────────────────┘
+```
+
+**Nessuna selezione** — placeholder come prima:
+```
+┌─ All currencies ──────────────────────────────▼──┐
+└───────────────────────────────────────────────────┘
+```
+
+### Implementazione
+
+1. Aggiungere prop `mode: 'single' | 'multi'` a `CurrencySearchSelect.svelte`
+2. In `mode: 'multi'`: `bind:values={Set<string>}` invece di `bind:value={string}`
+3. Chips renderizzate come `<span>` con `×` button dentro il campo
+4. Il dropdown resta aperto dopo selezione (non si chiude)
+5. Supporto keyboard: Backspace sull'ultimo chip lo rimuove
+
+### File
+- `frontend/src/lib/components/ui/select/CurrencySearchSelect.svelte` — estendere con `mode`
+- `frontend/src/routes/(app)/assets/+page.svelte` — switchare da Proposta A a C
+
+---
+
+
 ## ~~Ripulire tutte le traduzioni non usate con i18n prima di aggiungere nuove lingue~~
 
 **Status**: ✅ COMPLETATO (20 Marzo 2026)  

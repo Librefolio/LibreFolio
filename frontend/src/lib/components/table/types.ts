@@ -230,6 +230,9 @@ export interface RowAction<T> {
     /** Disable action conditionally */
     disabled?: (row: T) => boolean;
 
+    /** Dynamic CSS class for the icon (e.g. 'animate-spin' when loading) */
+    iconClass?: (row: T) => string;
+
     /** Require confirmation modal before action */
     requireConfirm?: boolean;
 

@@ -18,6 +18,7 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {RenderedSignal} from '$lib/charts/signals';
+    import {toasts} from '$lib/stores/toastStore.svelte';
 
     // =========================================================================
     // Props
@@ -65,6 +66,7 @@
             editable: true,
             required: true,
             step: 0.0001,
+            min: 0,
             placeholder: '1.0823',
         },
     ];
@@ -164,10 +166,13 @@
 
             // If all upserts invalid and no deletes, show error
             if (invalidCount > 0 && validUpserts.length === 0 && deleteRows.length === 0) {
-                error = `${invalidCount} row(s) have invalid rate values. Please enter a valid positive rate.`;
+                error = `${invalidCount} row(s) have invalid rate values. Rate must be strictly greater than zero (0 is not allowed).`;
                 saving = false;
                 return;
             }
+
+            let upsertedCount = 0;
+            let deletedCount = 0;
 
             if (validUpserts.length > 0) {
                 // Normalize base/quote to alphabetical order (backend convention)
@@ -182,6 +187,7 @@
                     rate: isInverted ? 1 / Number(r.values.rate) : Number(r.values.rate),
                 }));
                 await zodiosApi.upsert_rates_endpoint_api_v1_fx_currencies_rate_post(rateItems);
+                upsertedCount = validUpserts.length;
             }
 
             if (deleteRows.length > 0) {
@@ -212,7 +218,15 @@
                     date_range: r,
                 }));
                 await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete(deleteItems);
+                deletedCount = deleteRows.length;
             }
+
+            // Toast success
+            const parts: string[] = [];
+            if (upsertedCount > 0) parts.push(`${upsertedCount} saved`);
+            if (deletedCount > 0) parts.push(`${deletedCount} deleted`);
+            if (invalidCount > 0) parts.push(`${invalidCount} skipped (invalid)`);
+            toasts.success(`FX rates: ${parts.join(', ')}`);
 
             // Compute expanded date range if appended rows fall outside current chart range
             const appendedRows = dirty.filter(r => r.status === 'appended');
@@ -232,7 +246,9 @@
             onsave?.(expandedRange);
         } catch (e: any) {
             console.error('Failed to save rates:', e);
-            error = 'Failed to save: ' + (e?.message || 'unknown error');
+            const msg = e?.message || 'unknown error';
+            error = 'Failed to save: ' + msg;
+            toasts.error(`FX save failed: ${msg}`);
         } finally {
             saving = false;
         }

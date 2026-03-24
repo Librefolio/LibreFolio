@@ -10,7 +10,7 @@
     import {_ as t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
-    import {Pencil, Trash2} from 'lucide-svelte';
+    import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
 
@@ -36,17 +36,42 @@
         data: AssetRow[];
         loading?: boolean;
         visiblePeriods?: ReadonlyArray<{key: string; days: number}>;
-        onedit?: (asset: AssetRow) => void;
+        onsync?: (asset: AssetRow) => void;
+        onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
+        onselectionchange?: (rows: AssetRow[]) => void;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], onedit, ondelete}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
+
+    /** Exposed DataTable ref for ColumnVisibilityToggle */
+    let tableRef: DataTable<AssetRow> | undefined = $state(undefined);
+    export function getTableRef() { return tableRef; }
+
+    /** Track rows currently being refreshed/synced for spin animation */
+    let refreshingRowIds = $state(new Set<string>());
+    let syncingRowIds = $state(new Set<string>());
 
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    // Asset type → icon PNG filename mapping
+    const ASSET_TYPE_ICON_MAP: Record<string, string> = {
+        STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
+        FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
+    };
+
+    function assetIconHtml(row: AssetRow): string {
+        const iconSrc = row.icon_url
+            || (row.asset_type ? `/icons/asset-types/${ASSET_TYPE_ICON_MAP[row.asset_type] ?? 'other'}.png` : null);
+        if (iconSrc) {
+            return `<img src="${iconSrc}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`;
+        }
+        return `<div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0 text-libre-green"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>`;
+    }
 
     function formatDelta(val: number | null | undefined, suffix: string = ''): string {
         if (val === null || val === undefined) return '—';
@@ -64,6 +89,8 @@
 
     function typeBadgeHtml(type: string | null | undefined): string {
         if (!type) return '<span class="text-gray-400">—</span>';
+        const imgFile = ASSET_TYPE_ICON_MAP[type] ?? 'other';
+        const imgSrc = `/icons/asset-types/${imgFile}.png`;
         const colors: Record<string, string> = {
             STOCK: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
             ETF: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
@@ -74,7 +101,7 @@
             CROWDFUND_LOAN: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
         };
         const cls = colors[type] ?? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-        return `<span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}">${type}</span>`;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${imgSrc}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />${type}</span>`;
     }
 
     // =========================================================================
@@ -85,7 +112,13 @@
         {
             id: 'name',
             header: () => $t('assets.table.name'),
-            cell: (row) => ({type: 'html', html: `<div class="flex items-center gap-2"><span class="font-medium text-gray-800 dark:text-gray-100">${row.display_name}</span></div>`}),
+            cell: (row) => {
+                const icon = assetIconHtml(row);
+                const activeDot = row.active
+                    ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>'
+                    : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
+                return {type: 'html', html: `<div class="flex items-center gap-2">${icon}<span class="font-medium text-gray-800 dark:text-gray-100">${row.display_name}</span>${activeDot}</div>`};
+            },
             type: 'text',
             getValue: (row) => row.display_name,
             width: 220,
@@ -155,29 +188,16 @@
             width: 80,
             minWidth: 60,
         },
-        {
-            id: 'active',
-            header: () => $t('assets.table.active'),
-            cell: (row) => ({
-                type: 'html' as const,
-                html: row.active
-                    ? '<span class="text-emerald-600 dark:text-emerald-400">●</span>'
-                    : '<span class="text-red-400 dark:text-red-500">●</span>',
-            }),
-            type: 'enum',
-            enumOptions: [{value: 'true', label: 'Active'}, {value: 'false', label: 'Inactive'}],
-            getValue: (row) => String(row.active),
-            width: 70,
-            minWidth: 50,
-        },
     ]);
 </script>
 
 <DataTable
+    bind:this={tableRef}
     {data}
     {columns}
     getRowId={(row) => String(row.id)}
     storageKey="assetsTable"
+    onSelectionChange={onselectionchange}
     onRowClick={(row) => goto(`/assets/${row.id}`)}
     enableSorting={true}
     enableColumnFilters={true}
@@ -188,10 +208,29 @@
     enableActions={true}
     rowActions={[
         {
-            id: 'edit',
-            label: () => $t('common.edit'),
-            icon: Pencil,
-            onClick: (row) => onedit?.(row),
+            id: 'sync',
+            label: 'Sync',
+            icon: RotateCw,
+            onClick: async (row) => {
+                const rid = String(row.id);
+                syncingRowIds = new Set([...syncingRowIds, rid]);
+                try { await onsync?.(row); }
+                finally { syncingRowIds = new Set([...syncingRowIds].filter(id => id !== rid)); }
+            },
+            disabled: (row) => !row.has_provider,
+            iconClass: (row) => syncingRowIds.has(String(row.id)) ? 'animate-spin' : '',
+        },
+        {
+            id: 'refresh',
+            label: () => $t('common.refresh'),
+            icon: RefreshCw,
+            onClick: async (row) => {
+                const rid = String(row.id);
+                refreshingRowIds = new Set([...refreshingRowIds, rid]);
+                try { await onrefresh?.(row); }
+                finally { refreshingRowIds = new Set([...refreshingRowIds].filter(id => id !== rid)); }
+            },
+            iconClass: (row) => refreshingRowIds.has(String(row.id)) ? 'animate-spin' : '',
         },
         {
             id: 'delete',

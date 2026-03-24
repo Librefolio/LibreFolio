@@ -265,9 +265,7 @@ class JustETFProvider(AssetSourceProvider):
             # Define only the normal columns (exclude index 'isin' from here)
             cols_only = ["name", "ticker", "wkn"]
             # Search in columns (Vectorized)
-            mask_cols = (
-                df_all[cols_only].astype(str).agg(" ".join, axis=1).str.contains(query, case=False)
-            )
+            mask_cols = (df_all[cols_only].fillna('').astype(str).agg(" ".join, axis=1).str.contains(query, case=False))
             # Search in Index (Directly, without reset_index)
             mask_index = df_all.index.to_series().astype(str).str.contains(query, case=False)
             # Combine results with logical OR
