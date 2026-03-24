@@ -258,6 +258,16 @@
       "noAssetsDesc": "Add your first asset to start tracking prices.",
       "noMatchesTitle": "No Matches",
       "noMatchesDesc": "No assets match the current filters."
+    },
+    "types": {
+      "STOCK": "Stock",
+      "ETF": "ETF",
+      "BOND": "Bond",
+      "CRYPTO": "Crypto",
+      "FUND": "Fund",
+      "HOLD": "Hold",
+      "CROWDFUND_LOAN": "Crowdfund",
+      "OTHER": "Other"
     }
   },
   "transactions": {

@@ -13,6 +13,7 @@
     import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {isCardInverted, setCardInverted} from '$lib/stores/fxCardInversionStore';
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
+    import {getCachedProviders} from '$lib/stores/currencyGraphStore';
     import {currentLanguage} from '$lib/stores/language';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
 
@@ -125,30 +126,42 @@
     };
     const DEFAULT_PROVIDER_COLOR = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
 
-    function providerBadgeHtml(providerCode: string): string {
+    /** Build provider icon or 2-char initials fallback */
+    function providerIconHtml(providerCode: string): string {
+        const providers = getCachedProviders();
+        const info = providers.find(p => p.code === providerCode);
         const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
-        return `<span class="px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
+        if (info?.icon_url) {
+            // Icon-only: show just the icon with tooltip for the code
+            return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${info.icon_url}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0,2)}'" /></span>`;
+        }
+        // Fallback: text code with colored background
+        return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
     }
 
     function providerChainHtml(row: FxRow): string {
         const prov = row.providers[0]; // Primary provider (highest priority)
         if (!prov) return '—';
         const steps = prov.chainSteps;
-        if (steps && steps.length > 1) {
-            // Chain route: show provider badges with intermediate currencies
+        if (steps && steps.length > 0) {
+            // Chain route: flag FROM → [icon PROVIDER] → flag TO for each step
             const parts: string[] = [];
             for (let i = 0; i < steps.length; i++) {
-                parts.push(providerBadgeHtml(steps[i].provider));
-                if (i < steps.length - 1) {
-                    parts.push(`<span class="text-gray-400 text-[8px]">→</span>`);
-                    parts.push(`<span class="text-[9px] text-gray-400">${steps[i].to}</span>`);
-                    parts.push(`<span class="text-gray-400 text-[8px]">→</span>`);
+                const step = steps[i];
+                const fromFlag = getCurrencyInfo(step.from).flag_emoji;
+                const toFlag = getCurrencyInfo(step.to).flag_emoji;
+                if (i === 0) {
+                    parts.push(`<span class="emoji-flag text-[10px]">${fromFlag}</span>`);
                 }
+                parts.push(`<span class="text-gray-400 text-[8px]">⇆</span>`);
+                parts.push(providerIconHtml(step.provider));
+                parts.push(`<span class="text-gray-400 text-[8px]">⇆</span>`);
+                parts.push(`<span class="emoji-flag text-[10px]">${toFlag}</span>`);
             }
             return `<div class="flex items-center gap-0.5 flex-wrap">${parts.join('')}</div>`;
         }
-        // Single provider
-        return providerBadgeHtml(prov.providerCode);
+        // Single provider, no steps detail
+        return providerIconHtml(prov.providerCode);
     }
 
     // =========================================================================
@@ -244,7 +257,7 @@
     {columns}
     getRowId={(row) => row.slug}
     storageKey="fxTable"
-    onSelectionChange={onselectionchange}
+    onSelectionChange={(ids) => onselectionchange?.(data.filter(row => ids.includes(row.slug)))}
     onRowClick={(row) => {
         const inv = isCardInverted(row.slug);
         const target = inv ? `${row.quote}-${row.base}` : row.slug;

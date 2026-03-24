@@ -101,7 +101,8 @@
             CROWDFUND_LOAN: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
         };
         const cls = colors[type] ?? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${imgSrc}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />${type}</span>`;
+        const label = $t(`assets.types.${type}`) || type;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${imgSrc}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />${label}</span>`;
     }
 
     // =========================================================================
@@ -129,8 +130,9 @@
             header: () => $t('common.type'),
             cell: (row) => ({type: 'html', html: typeBadgeHtml(row.asset_type)}),
             type: 'enum',
-            enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'].map(v => ({value: v, label: v})),
+            enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'].map(v => ({value: v, label: $t(`assets.types.${v}`) || v})),
             getValue: (row) => row.asset_type ?? '',
+            filterable: false,
             width: 110,
             minWidth: 80,
         },
@@ -143,6 +145,7 @@
             },
             type: 'text',
             getValue: (row) => row.currency,
+            filterable: false,
             width: 90,
             minWidth: 70,
         },
@@ -197,7 +200,7 @@
     {columns}
     getRowId={(row) => String(row.id)}
     storageKey="assetsTable"
-    onSelectionChange={onselectionchange}
+    onSelectionChange={(ids) => onselectionchange?.(data.filter(row => ids.includes(String(row.id))))}
     onRowClick={(row) => goto(`/assets/${row.id}`)}
     enableSorting={true}
     enableColumnFilters={true}

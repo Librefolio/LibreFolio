@@ -37,6 +37,8 @@
         deltaPercent?: number | null;
         /** Delta absolute */
         deltaAbs?: number | null;
+        /** Which delta to display on the card: 'percentage' (default) or 'absolute' */
+        deltaDisplayMode?: 'percentage' | 'absolute';
         /** Chart data points */
         chartData?: LineDataPoint[];
         /** Loading state */
@@ -52,6 +54,7 @@
         lastPrice = null,
         deltaPercent = null,
         deltaAbs = null,
+        deltaDisplayMode = 'percentage',
         chartData = [],
         loading = false,
         onsync,
@@ -88,6 +91,12 @@
             default: return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
         }
     }
+
+    // Asset type → icon PNG filename mapping
+    const ASSET_TYPE_ICON_MAP: Record<string, string> = {
+        STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
+        FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
+    };
 </script>
 
 <div
@@ -109,15 +118,12 @@
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
                 {#if asset.asset_type}
-                    <span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded {typeBadgeClass(asset.asset_type)}">
-                        {asset.asset_type}
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded {typeBadgeClass(asset.asset_type)}">
+                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[asset.asset_type] ?? 'other'}.png" alt="" class="w-3.5 h-3.5 object-contain" />
+                        {$t(`assets.types.${asset.asset_type}`) || asset.asset_type}
                     </span>
                 {/if}
-                {#if !asset.active}
-                    <span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
-                        Inactive
-                    </span>
-                {/if}
+                <span class="w-2 h-2 rounded-full shrink-0 {asset.active ? 'bg-emerald-500' : 'bg-red-400'}"></span>
             </div>
         </div>
     </div>
@@ -130,7 +136,11 @@
                     {Number(lastPrice).toFixed(2)}
                 </span>
                 <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)} {asset.currency}</span>
-                {#if deltaPercent !== null}
+                {#if deltaDisplayMode === 'absolute' && deltaAbs !== null}
+                    <span class="text-sm font-medium {deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                        {deltaAbs >= 0 ? '▲' : '▼'} {deltaAbs >= 0 ? '+' : ''}{Number(deltaAbs).toFixed(2)}
+                    </span>
+                {:else if deltaPercent !== null}
                     <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                         {deltaPercent >= 0 ? '▲' : '▼'} {deltaPercent >= 0 ? '+' : ''}{Number(deltaPercent).toFixed(2)}%
                     </span>
