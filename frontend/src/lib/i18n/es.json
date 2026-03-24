@@ -258,6 +258,16 @@
       "noAssetsDesc": "Añade tu primer activo para empezar a rastrear precios.",
       "noMatchesTitle": "Sin Resultados",
       "noMatchesDesc": "Ningún activo coincide con los filtros actuales."
+    },
+    "types": {
+      "STOCK": "Acción",
+      "ETF": "ETF",
+      "BOND": "Bono",
+      "CRYPTO": "Cripto",
+      "FUND": "Fondo",
+      "HOLD": "Liquidez",
+      "CROWDFUND_LOAN": "Crowdfunding",
+      "OTHER": "Otro"
     }
   },
   "transactions": {

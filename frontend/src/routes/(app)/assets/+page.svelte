@@ -17,7 +17,7 @@
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {BarChart3, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X, Check} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
@@ -25,7 +25,10 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
-    import {SimpleSelect, CurrencySearchSelect} from '$lib/components/ui/select';
+    import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
+    import {getGlobalSettings, setGlobalSettings, getSettingsForPair, setPairSettings, getSettingsVersion} from '$lib/stores/chartSettingsStore.svelte';
+    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {CurrencySearchSelect} from '$lib/components/ui/select';
 
     // =========================================================================
     // Types
@@ -74,8 +77,8 @@
 
     // Filters
     let searchText = $state('');
-    let filterType = $state('');
-    let filterCurrency = $state('');
+    let filterTypes = $state<Set<string>>(new Set());
+    let filterCurrencies = $state<Set<string>>(new Set());
     let filterActiveOnly = $state(true);
 
     // Date range for Δ columns
@@ -86,32 +89,45 @@
     // View mode
     let viewMode = $state<'grid' | 'list'>('grid');
 
+    // Grid delta display mode: absolute or percentage (E3)
+    let globalViewMode = $state<'percentage' | 'absolute'>('percentage');
+
+    // Asset type → icon PNG filename mapping (used in type filter dropdown)
+    const TYPE_ICON_MAP: Record<string, string> = {
+        STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
+        FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
+    };
+
     // Debounce timer
     let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // Filter bar adaptive layout (same pattern as FX page)
+    let filterBarRef = $state<HTMLDivElement | null>(null);
+    let layoutMode = $state<'wide' | 'tablet' | 'mobile'>('tablet');
+    let showActionLabels = $state(true);
+
+    // Type filter dropdown
+    let typeFilterOpen = $state(false);
+    let typeFilterTriggerEl = $state<HTMLButtonElement | null>(null);
+
+    // Chart settings modal (D4)
+    let settingsModalOpen = $state(false);
+    let settingsTargetId = $state<string | null>(null);
+    let settingsForModal = $derived(
+        settingsTargetId ? getSettingsForPair(`asset-${settingsTargetId}`) : getGlobalSettings()
+    );
 
     // =========================================================================
     // Derived
     // =========================================================================
-
-    let typeOptions = $derived([
-        {value: '', label: $t('assets.allTypes')},
-        {value: 'STOCK', label: 'Stock'},
-        {value: 'ETF', label: 'ETF'},
-        {value: 'BOND', label: 'Bond'},
-        {value: 'CRYPTO', label: 'Crypto'},
-        {value: 'FUND', label: 'Fund'},
-        {value: 'HOLD', label: 'Hold'},
-        {value: 'CROWDFUND_LOAN', label: 'Crowdfund Loan'},
-        {value: 'OTHER', label: 'Other'},
-    ]);
 
     // Extract unique currencies from all assets
     let configuredCurrencies = $derived([...new Set(assets.map(a => a.currency))].sort());
 
     let filteredAssets = $derived(assets.filter(a => {
         if (filterActiveOnly && !a.active) return false;
-        if (filterType && a.asset_type !== filterType) return false;
-        if (filterCurrency && a.currency !== filterCurrency) return false;
+        if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
+        if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
         if (searchText) {
             const q = searchText.toLowerCase();
             if (!a.display_name.toLowerCase().includes(q)) return false;
@@ -149,6 +165,42 @@
 
     onMount(async () => {
         await loadAssets();
+    });
+
+    // ResizeObserver for adaptive filter bar layout (same pattern as FX page)
+    // Measures contentRect.width = CSS box-width − padding(32px) − border(2px)
+    //
+    // Threshold tuning guide (CSS box → contentRect):
+    //   wide   ≥ 1044px box → 1010 contentRect  (datepicker + search + active + type + currency + ×)
+    //   tablet ≥  644px box →  610 contentRect  (datepicker | filters 2-row)
+    //   mobile <  644px box                      (everything stacked)
+    //
+    // To adjust: edit the numbers in the if/else below (lines ~175-177)
+    $effect(() => {
+        const el = filterBarRef;
+        if (!el) return;
+        const ro = new ResizeObserver(([entry]) => {
+            const w = entry.contentRect.width;
+            if (w >= 1100) layoutMode = 'wide';       // ← wide threshold
+            else if (w >= 770) layoutMode = 'tablet';  // ← tablet threshold
+            else layoutMode = 'mobile';                // ← mobile fallback
+            showActionLabels = w >= 820;               // ← labels threshold
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    });
+
+    // Close type filter dropdown on outside click
+    $effect(() => {
+        if (!typeFilterOpen) return;
+        function handleClick(e: MouseEvent) {
+            const target = e.target as HTMLElement;
+            if (typeFilterTriggerEl?.contains(target)) return;
+            if (target.closest?.('[data-type-filter-panel]')) return;
+            typeFilterOpen = false;
+        }
+        window.addEventListener('click', handleClick, true);
+        return () => window.removeEventListener('click', handleClick, true);
     });
 
     // Debounced search
@@ -353,13 +405,26 @@
         }
     }
 
-    function clearFilters() {
-        searchText = '';
-        filterType = '';
-        filterCurrency = '';
+    function handleGlobalSettings() {
+        settingsTargetId = null;
+        settingsModalOpen = true;
     }
 
-    let hasActiveFilters = $derived(!!searchText || !!filterType || !!filterCurrency);
+    function handleSettingsSave(s: ChartSettings) {
+        if (settingsTargetId) {
+            setPairSettings(`asset-${settingsTargetId}`, s);
+        } else {
+            setGlobalSettings(s);
+        }
+    }
+
+    function clearFilters() {
+        searchText = '';
+        filterTypes = new Set();
+        filterCurrencies = new Set();
+    }
+
+    let hasActiveFilters = $derived(!!searchText || filterTypes.size > 0 || filterCurrencies.size > 0);
 </script>
 
 <div class="space-y-6" data-testid="assets-page">
@@ -386,6 +451,22 @@
                     onClearSelection={() => { assetTableComponent?.getTableRef()?.clearSelection(); selectedAssetRows = []; }}
                 />
             {/if}
+            <!-- Currency filter badges — Opzione γ (D10+D11) -->
+            {#if filterCurrencies.size > 0 && selectedAssetRows.length === 0}
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    {#each [...filterCurrencies] as currency}
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium
+                                     bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300
+                                     border border-amber-200 dark:border-amber-700 rounded-full">
+                            {currency}
+                            <button
+                                class="hover:text-red-500 transition-colors"
+                                onclick={(e) => { e.stopPropagation(); filterCurrencies = new Set([...filterCurrencies].filter(c => c !== currency)); }}
+                            >×</button>
+                        </span>
+                    {/each}
+                </div>
+            {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
             <button
                 class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
@@ -398,95 +479,188 @@
         </div>
     </div>
 
-    <!-- Filter Bar -->
-    <div class="flex flex-wrap gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 items-center">
-        <!-- Date Range -->
-        <div class="max-w-md" data-testid="assets-date-range">
-            <DateRangePicker
-                bind:start={dateStart}
-                bind:end={dateEnd}
-                bind:activePreset
-                compact={true}
-                onchange={handleDateRangeChange}
-            />
+    <!-- Filter Bar: Proposta D responsive layout
+         wide:   [ datepicker | search active type currency × | 2×2 ]
+         tablet: [ datepicker | search  active  | 2×2 ]
+                 [            | type    currency × |     ]
+         mobile: [ datepicker ][ search ][ active type × ][ currency ][ 2×2 ] -->
+    <div
+        bind:this={filterBarRef}
+        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
+               {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center justify-between'}"
+    >
+        <!-- Filters block -->
+        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center flex-1 flex-wrap'}">
+            <!-- DateRangePicker -->
+            <div class="max-w-md" data-testid="assets-date-range">
+                <DateRangePicker
+                    bind:start={dateStart}
+                    bind:end={dateEnd}
+                    bind:activePreset
+                    compact={true}
+                    onchange={handleDateRangeChange}
+                />
+            </div>
+
+            <!-- Filters 2×2 block (tablet) / inline (wide) / stacked (mobile) -->
+            <div class="flex gap-2 {layoutMode === 'tablet' ? 'flex-col' : layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center'}">
+                <!-- Row 1: Search + Active -->
+                <div class="flex items-center gap-2">
+                    <!-- Search -->
+                    <div class="relative w-44">
+                        <Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            value={searchText}
+                            oninput={handleSearchInput}
+                            placeholder={$t('assets.searchPlaceholder')}
+                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
+                            data-testid="assets-search-input"
+                        />
+                    </div>
+
+                    <!-- Active toggle -->
+                    <button
+                        class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                               {filterActiveOnly
+                                   ? 'bg-libre-green text-white border-libre-green'
+                                   : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                        onclick={() => { filterActiveOnly = !filterActiveOnly; }}
+                        data-testid="assets-active-toggle"
+                    >
+                        {filterActiveOnly ? $t('assets.showActive') : $t('assets.showAll')}
+                    </button>
+                </div>
+
+                <!-- Row 2: Type multi-select + Currency dropdown + Reset -->
+                <div class="flex items-center gap-2">
+                    <!-- Type multi-checkbox dropdown (D9) -->
+                    <div class="relative">
+                        <button
+                            bind:this={typeFilterTriggerEl}
+                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                                   {filterTypes.size > 0
+                                       ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                                       : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                            onclick={() => { typeFilterOpen = !typeFilterOpen; }}
+                            data-testid="assets-type-filter"
+                        >
+                            {#if filterTypes.size > 0}
+                                {$t('common.type')} ({filterTypes.size})
+                            {:else}
+                                {$t('assets.allTypes')}
+                            {/if}
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+
+                        {#if typeFilterOpen}
+                            <!-- svelte-ignore a11y_interactive_supports_focus -->
+                            <div class="absolute z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                                 onclick={(e) => e.stopPropagation()}
+                                 onkeydown={(e) => { if (e.key === 'Escape') typeFilterOpen = false; }}
+                                 role="listbox"
+                                 tabindex="0"
+                                 data-type-filter-panel>
+                                <!-- Select All / Clear All buttons -->
+                                <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
+                                    <button type="button"
+                                        class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                                        onclick={() => { filterTypes = new Set(['STOCK','ETF','BOND','CRYPTO','FUND','HOLD','CROWDFUND_LOAN','OTHER']); }}
+                                    >{$t('common.selectAll')}</button>
+                                    <button type="button"
+                                        class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                                        onclick={() => { filterTypes = new Set(); }}
+                                    >{$t('common.clearAll')}</button>
+                                </div>
+                                <!-- Option list -->
+                                <div class="max-h-52 overflow-y-auto border border-gray-100 dark:border-slate-700 mx-2.5 my-2 rounded-md">
+                                    {#each ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'] as typeVal}
+                                        <button type="button"
+                                            class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                            onclick={() => {
+                                                const next = new Set(filterTypes);
+                                                if (next.has(typeVal)) next.delete(typeVal);
+                                                else next.add(typeVal);
+                                                filterTypes = next;
+                                            }}
+                                        >
+                                            <span class="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors shrink-0
+                                                         {filterTypes.has(typeVal)
+                                                             ? 'bg-libre-green border-libre-green text-white dark:bg-emerald-400 dark:border-emerald-400 dark:text-slate-900'
+                                                             : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-500'}">
+                                                {#if filterTypes.has(typeVal)}
+                                                    <Check size={12} />
+                                                {/if}
+                                            </span>
+                                            <img src="/icons/asset-types/{TYPE_ICON_MAP[typeVal] ?? 'other'}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                            <span>{$t(`assets.types.${typeVal}`) || typeVal}</span>
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/if}
+                    </div>
+
+                    <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set) -->
+                    <div class="w-36">
+                        <CurrencySearchSelect
+                            value=""
+                            includeAll={true}
+                            allowedCurrencies={configuredCurrencies}
+                            placeholder={$t('assets.allCurrencies')}
+                            maxVisibleItems={6}
+                            onchange={(v) => {
+                                if (v && !filterCurrencies.has(v)) {
+                                    filterCurrencies = new Set([...filterCurrencies, v]);
+                                }
+                            }}
+                        />
+                    </div>
+
+                    <!-- Reset filters -->
+                    {#if hasActiveFilters}
+                        <button
+                            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
+                            onclick={clearFilters}
+                            title={$t('fx.filter.resetFilters')}
+                        >
+                            <X size={16} />
+                        </button>
+                    {/if}
+                </div>
+            </div>
         </div>
 
-        <!-- Search -->
-        <div class="relative w-48">
-            <Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-                type="text"
-                value={searchText}
-                oninput={handleSearchInput}
-                placeholder={$t('assets.searchPlaceholder')}
-                class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
-                data-testid="assets-search-input"
-            />
-        </div>
-
-        <!-- Type Filter -->
-        <div class="w-40">
-            <SimpleSelect
-                bind:value={filterType}
-                options={typeOptions}
-                compact={true}
-                testId="assets-type-filter"
-            />
-        </div>
-
-        <!-- Currency Filter -->
-        <div class="w-36">
-            <CurrencySearchSelect
-                bind:value={filterCurrency}
-                includeAll={true}
-                allowedCurrencies={configuredCurrencies}
-                placeholder={$t('assets.allCurrencies')}
-                maxVisibleItems={6}
-            />
-        </div>
-
-        <!-- Active toggle -->
-        <button
-            class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
-                   {filterActiveOnly
-                       ? 'bg-libre-green text-white border-libre-green'
-                       : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-            onclick={() => { filterActiveOnly = !filterActiveOnly; }}
-            data-testid="assets-active-toggle"
-        >
-            {filterActiveOnly ? $t('assets.showActive') : $t('assets.showAll')}
-        </button>
-
-        <!-- Reset filters -->
-        {#if hasActiveFilters}
-            <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
-                onclick={clearFilters}
-                title={$t('fx.filter.resetFilters')}
-            >
-                <X size={16} />
-            </button>
-        {/if}
-
-        <!-- Spacer to push actions right -->
-        <div class="flex-1"></div>
-
-        <!-- Actions 2×2 grid -->
-        <div class="flex shrink-0 gap-1.5 grid grid-cols-2">
-            <!-- Top-left: ColumnVisibility in table mode, placeholder in grid mode -->
+        <!-- Actions: 2×2 grid (wide+tablet), horizontal row (mobile) -->
+        <div class="flex shrink-0 gap-1.5
+                    {layoutMode === 'mobile' ? 'flex-row justify-center' : 'grid grid-cols-2'}">
+            <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
             {#if viewMode === 'list'}
-                <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={true} />
+                <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={showActionLabels} />
             {:else}
-                <div></div>
+                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                    <button
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
+                            ? 'bg-libre-green text-white'
+                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => { globalViewMode = 'absolute'; }}
+                    >Abs</button>
+                    <button
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
+                            ? 'bg-libre-green text-white'
+                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => { globalViewMode = 'percentage'; }}
+                    >%</button>
+                </div>
             {/if}
             <!-- Settings -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={() => { /* TODO: open asset chart settings modal */ }}
+                onclick={handleGlobalSettings}
                 title="Settings"
             >
                 <Settings size={14} />
-                <span>{$t('fx.actions.settings')}</span>
+                {#if showActionLabels}<span>{$t('fx.actions.settings')}</span>{/if}
             </button>
             <!-- Sync All -->
             <button
@@ -495,7 +669,7 @@
                 title="Sync all assets with providers"
             >
                 <RotateCw size={14} />
-                <span>Sync</span>
+                {#if showActionLabels}<span>Sync</span>{/if}
             </button>
             <!-- Refresh All -->
             <button
@@ -504,7 +678,7 @@
                 title="Refresh all prices from DB"
             >
                 <RefreshCw size={14} />
-                <span>Refresh</span>
+                {#if showActionLabels}<span>Refresh</span>{/if}
             </button>
         </div>
     </div>
@@ -568,6 +742,7 @@
                     lastPrice={asset.lastPrice}
                     deltaPercent={asset.deltaPercent}
                     deltaAbs={asset.deltaAbs}
+                    deltaDisplayMode={globalViewMode}
                     chartData={asset.chartData}
                     loading={asset.loadingPrices}
                     onsync={handleSyncAsset}
@@ -591,3 +766,11 @@
     {/if}
 </div>
 
+<!-- Chart Settings Modal (D4) -->
+<ChartSettingsModal
+    bind:open={settingsModalOpen}
+    settings={settingsForModal}
+    mode={settingsTargetId ? 'pair' : 'global'}
+    onsave={handleSettingsSave}
+    onclose={() => { settingsModalOpen = false; settingsTargetId = null; }}
+/>

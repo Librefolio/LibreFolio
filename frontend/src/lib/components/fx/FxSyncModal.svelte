@@ -11,6 +11,7 @@
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
+    import {getCachedProviders} from '$lib/stores/currencyGraphStore';
 
     interface PairResult {
         pair: string;
@@ -44,8 +45,8 @@
     let pairResults = $state<PairResult[]>([]);
     let error = $state<string | null>(null);
     let isTimeout = $state(false);
-    /** Dynamic timeout: min 10s, then ~1s per pair to accommodate large configs */
-    let timeoutSec = $state(10);
+    /** Dynamic timeout: min 20s, then ~1s per pair to accommodate large configs */
+    let timeoutSec = $state(20);
     let elapsedMs = $state(0);
     let countdownInterval: ReturnType<typeof setInterval> | null = null;
     let hasResults = $derived(pairResults.length > 0);
@@ -82,7 +83,7 @@
             elapsedMs = 0;
             // Dynamic timeout: base 10s + 1s per pair (providers are fetched in parallel,
             // but DB writes and chain computations scale with pair count)
-            timeoutSec = Math.max(10, Math.ceil(pairs.length * 1));
+            timeoutSec = Math.max(20, Math.ceil(pairs.length * 1));
         }
         wasOpen = isOpen;
     });
@@ -201,6 +202,12 @@
             return providerUsed.slice(6).split('+');
         }
         return [providerUsed];
+    }
+
+    /** Get provider icon_url from cached providers (D12: fallback to initials if missing) */
+    function getProviderIconUrl(code: string): string | null {
+        const providers = getCachedProviders();
+        return providers.find(p => p.code === code)?.icon_url ?? null;
     }
 </script>
 
@@ -325,7 +332,14 @@
                                 {@const chain = parseProviderChain(pr.provider_used)}
                                 <span class="flex items-center gap-0.5">
                                     {#each chain as prov, i}
-                                        <span class="px-1 py-0.5 text-[9px] font-medium rounded {PROVIDER_COLORS[prov] ?? DEFAULT_PROV_COLOR}">{prov}</span>
+                                        {@const iconUrl = getProviderIconUrl(prov)}
+                                        <span class="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-medium rounded {PROVIDER_COLORS[prov] ?? DEFAULT_PROV_COLOR}" title={prov}>
+                                            {#if iconUrl}
+                                                <img src={iconUrl} alt={prov} class="w-3.5 h-3.5 rounded-sm object-contain" />
+                                            {:else}
+                                                {prov}
+                                            {/if}
+                                        </span>
                                         {#if i < chain.length - 1}
                                             <span class="text-gray-400 text-[8px]">→</span>
                                         {/if}

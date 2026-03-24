@@ -258,6 +258,16 @@
       "noAssetsDesc": "Ajoutez votre premier actif pour commencer à suivre les prix.",
       "noMatchesTitle": "Aucun Résultat",
       "noMatchesDesc": "Aucun actif ne correspond aux filtres actuels."
+    },
+    "types": {
+      "STOCK": "Action",
+      "ETF": "ETF",
+      "BOND": "Obligation",
+      "CRYPTO": "Crypto",
+      "FUND": "Fonds",
+      "HOLD": "Liquidité",
+      "CROWDFUND_LOAN": "Crowdfunding",
+      "OTHER": "Autre"
     }
   },
   "transactions": {
