@@ -318,6 +318,8 @@ async def test_complete_e2e_flow_yfinance(test_server):
     print_section("E2E Test: YFinance Complete Flow")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
         # STEP 1: SEARCH
         print("\n[STEP 1] Search for stock...")
 
@@ -441,6 +443,8 @@ async def test_search_provides_all_required_fields(test_server):
     print_section("E2E Test: Search Result Completeness")
 
     async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
         response = await client.get(
             f"{API_BASE}/assets/provider/search", params={"q": "World"}, timeout=TIMEOUT
             )

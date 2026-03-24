@@ -543,6 +543,8 @@ Creare `src/lib/components/assets/AssetSearchAutocomplete.svelte`.
 - [ ] Collapsible identifiers section (ISIN, Ticker, CUSIP, SEDOL, FIGI)
 - [ ] Validazione: display_name obbligatorio, unicità (feedback da backend)
 - [ ] user_role: VIEWER non può aprire il modal in create/edit mode
+- [ ] **E3**: Toggle Abs/% per AssetCard — aggiungere suffisso valuta in Abs mode (es. `+1.23 EUR`), collegare segnali visivi PriceChartCompact
+- [ ] **E4**: Segnali tecnici su AssetCard — estendere `PriceChartCompact` per accettare `settings?: ChartSettings` e renderizzare overlay segnali (SMA, Bollinger, ecc.)
 
 ---
 
