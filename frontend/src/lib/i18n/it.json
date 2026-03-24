@@ -281,9 +281,6 @@
     "title": "Tassi di Cambio",
     "subtitle": "Visualizza e sincronizza i tassi di cambio",
     "actions": {
-      "syncAll": "Sinc. Tutto",
-      "refreshAll": "Aggiorna Tutto",
-      "settings": "Impostazioni",
       "addPair": "Aggiungi Coppia"
     },
     "empty": {
@@ -714,5 +711,10 @@
   "dataEditor": {
     "clearSelection": "Deseleziona",
     "deleteSelected": "Elimina selezionati"
+  },
+  "sharedResource": {
+    "syncAll": "Sinc. Tutto",
+    "refreshAll": "Aggiorna Tutto",
+    "settings": "Impostazioni"
   }
 }

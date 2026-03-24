@@ -281,9 +281,6 @@
     "title": "FX Rates",
     "subtitle": "View and sync exchange rates",
     "actions": {
-      "syncAll": "Sync All",
-      "refreshAll": "Refresh All",
-      "settings": "Settings",
       "addPair": "Add Pair"
     },
     "empty": {
@@ -714,5 +711,10 @@
   "dataEditor": {
     "clearSelection": "Clear selection",
     "deleteSelected": "Delete selected"
+  },
+  "sharedResource": {
+    "syncAll": "Sync All",
+    "refreshAll": "Refresh All",
+    "settings": "Settings"
   }
 }

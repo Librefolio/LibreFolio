@@ -29,12 +29,12 @@ export function getUserStorageKey(baseKey: string): string {
  * Read a value from user-scoped localStorage.
  * Returns defaultValue if not found, not in browser, or on error.
  */
-export function getUserStorage<T extends string>(baseKey: string, defaultValue: T): T {
+export function getUserStorage(baseKey: string, defaultValue: string): string {
     if (typeof window === 'undefined') return defaultValue;
     try {
         const key = getUserStorageKey(baseKey);
         const stored = localStorage.getItem(key);
-        return (stored as T) ?? defaultValue;
+        return stored ?? defaultValue;
     } catch {
         return defaultValue;
     }

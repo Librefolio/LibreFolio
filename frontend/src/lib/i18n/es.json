@@ -281,9 +281,6 @@
     "title": "Tipos de Cambio",
     "subtitle": "Consulta y sincroniza los tipos de cambio",
     "actions": {
-      "syncAll": "Sinc. Todo",
-      "refreshAll": "Actualizar Todo",
-      "settings": "Ajustes",
       "addPair": "Añadir Par"
     },
     "empty": {
@@ -714,5 +711,10 @@
   "dataEditor": {
     "clearSelection": "Borrar selección",
     "deleteSelected": "Eliminar seleccionados"
+  },
+  "sharedResource": {
+    "syncAll": "Sinc. Todo",
+    "refreshAll": "Actualizar Todo",
+    "settings": "Ajustes"
   }
 }
