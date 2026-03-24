@@ -59,6 +59,7 @@
     "custom": "Custom"
   },
   "table": {
+    "columns": "Columns",
     "clearSelection": "Clear selection",
     "perPage": "per page",
     "items": "items",

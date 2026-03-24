@@ -183,6 +183,16 @@ async def test_current_value(provider_code: str):
         if "requires provider_params" in str(e).lower() or "not supported" in str(e).lower():
             print_warning(f"{provider_code}: {e} - SKIPPING")
             pytest.skip(str(e))
+        # Check if CSS scraper returned empty price text (market likely closed)
+        if "empty price text" in str(e).lower():
+            msg = (
+                f"⚠️  {provider_code} returned empty price text.\n"
+                f"   Probable cause: the target market is closed or in 'Call' status.\n"
+                f"   How to verify: open the test URL in a browser and check the market status.\n"
+                f"   Retry this test when the market is open (typically Mon-Fri, 9:00-17:30 CET)."
+                )
+            print_warning(msg)
+            pytest.skip(f"Market likely closed — {provider_code}: {e}")
         print_error(f"Provider error: {e}")
         raise
 

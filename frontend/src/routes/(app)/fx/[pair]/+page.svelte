@@ -270,9 +270,12 @@
             if (existingData.length > 0) {
                 chartData = existingData;
             } else if (e?.response?.status === 404) {
+                chartData = [];
+                store.invalidateRange(dateStart, dateEnd);
                 error = 'No rate data available for this range. Try syncing first or adjusting the date range.';
             } else {
                 console.error('Failed to load chart data:', e);
+                chartData = [];
                 error = e?.message || 'Failed to load rates';
             }
         } finally {

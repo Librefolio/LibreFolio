@@ -17,11 +17,13 @@
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {BarChart3, Plus, Search, X} from 'lucide-svelte';
+    import {BarChart3, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import {SimpleSelect, CurrencySearchSelect} from '$lib/components/ui/select';
 
@@ -67,6 +69,8 @@
     let assets = $state<AssetState[]>([]);
     let loading = $state(true);
     let error = $state<string | null>(null);
+    let assetTableComponent: AssetTable | undefined = $state(undefined);
+    let selectedAssetRows = $state<AssetRow[]>([]);
 
     // Filters
     let searchText = $state('');
@@ -310,13 +314,43 @@
         console.log('Add Asset clicked (placeholder)');
     }
 
-    function handleEditAsset(asset: any) {
-        goto(`/assets/${asset.id}`);
+    async function handleSyncAsset(asset: any) {
+        // TODO: implement actual sync via POST /assets/prices/refresh
+        console.log('Sync Asset clicked:', asset.id);
+    }
+
+    async function handleRefreshAsset(_asset: any) {
+        // Re-fetch price data from DB for all assets
+        await fetchAllPriceData();
     }
 
     function handleDeleteAsset(asset: any) {
         // Placeholder — Step 3 will add delete confirm
         console.log('Delete Asset clicked:', asset.id);
+    }
+
+    // =========================================================================
+    // Bulk Actions (table selection)
+    // =========================================================================
+
+    async function handleBulkSyncAssets() {
+        for (const row of selectedAssetRows) {
+            if (row.has_provider) await handleSyncAsset(row);
+        }
+        assetTableComponent?.getTableRef()?.clearSelection();
+        selectedAssetRows = [];
+    }
+
+    async function handleBulkRefreshAssets() {
+        await fetchAllPriceData();
+        assetTableComponent?.getTableRef()?.clearSelection();
+        selectedAssetRows = [];
+    }
+
+    async function handleBulkDeleteAssets() {
+        for (const row of selectedAssetRows) {
+            await handleDeleteAsset(row);
+        }
     }
 
     function clearFilters() {
@@ -341,6 +375,17 @@
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$t('assets.subtitle')}</p>
         </div>
         <div class="flex items-center gap-2">
+            {#if viewMode === 'list' && selectedAssetRows.length > 0}
+                <DataTableToolbar
+                    selectedCount={selectedAssetRows.length}
+                    bulkActions={[
+                        { id: 'sync', icon: RotateCw, label: 'Sync', onClick: () => handleBulkSyncAssets() },
+                        { id: 'refresh', icon: RefreshCw, label: 'Refresh', onClick: () => handleBulkRefreshAssets() },
+                        { id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger', onClick: () => handleBulkDeleteAssets() },
+                    ]}
+                    onClearSelection={() => { assetTableComponent?.getTableRef()?.clearSelection(); selectedAssetRows = []; }}
+                />
+            {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
             <button
                 class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
@@ -422,6 +467,46 @@
                 <X size={16} />
             </button>
         {/if}
+
+        <!-- Spacer to push actions right -->
+        <div class="flex-1"></div>
+
+        <!-- Actions 2×2 grid -->
+        <div class="flex shrink-0 gap-1.5 grid grid-cols-2">
+            <!-- Top-left: ColumnVisibility in table mode, placeholder in grid mode -->
+            {#if viewMode === 'list'}
+                <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={true} />
+            {:else}
+                <div></div>
+            {/if}
+            <!-- Settings -->
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                onclick={() => { /* TODO: open asset chart settings modal */ }}
+                title="Settings"
+            >
+                <Settings size={14} />
+                <span>{$t('fx.actions.settings')}</span>
+            </button>
+            <!-- Sync All -->
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                onclick={handleSyncAsset}
+                title="Sync all assets with providers"
+            >
+                <RotateCw size={14} />
+                <span>Sync</span>
+            </button>
+            <!-- Refresh All -->
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                onclick={() => fetchAllPriceData()}
+                title="Refresh all prices from DB"
+            >
+                <RefreshCw size={14} />
+                <span>Refresh</span>
+            </button>
+        </div>
     </div>
 
     <!-- Content -->
@@ -485,7 +570,8 @@
                     deltaAbs={asset.deltaAbs}
                     chartData={asset.chartData}
                     loading={asset.loadingPrices}
-                    onedit={handleEditAsset}
+                    onsync={handleSyncAsset}
+                    onrefresh={handleRefreshAsset}
                     ondelete={handleDeleteAsset}
                 />
             {/each}
@@ -493,11 +579,14 @@
     {:else}
         <!-- Table View -->
         <AssetTable
+            bind:this={assetTableComponent}
             data={tableRows}
             loading={false}
             {visiblePeriods}
-            onedit={handleEditAsset}
+            onsync={handleSyncAsset}
+            onrefresh={handleRefreshAsset}
             ondelete={handleDeleteAsset}
+            onselectionchange={(rows) => { selectedAssetRows = rows; }}
         />
     {/if}
 </div>

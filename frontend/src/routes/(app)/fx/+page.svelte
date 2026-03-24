@@ -21,6 +21,9 @@
     import {ConfirmModal} from '$lib/components/table';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import {ArrowLeftRight, Trash2} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {
         getGlobalSettings, setGlobalSettings,
@@ -37,7 +40,7 @@
         apiResultToFxDataPoint,
         type FxDataPoint, type FxPairConfig
     } from '$lib/stores/fxStoreRegistry';
-    import {isCardInverted} from '$lib/stores/fxCardInversionStore';
+    import {isCardInverted, setCardInverted} from '$lib/stores/fxCardInversionStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
 
     // =========================================================================
@@ -68,6 +71,9 @@
 
     // View mode (grid/list)
     let viewMode = $state<'grid' | 'list'>('grid');
+    let fxTableComponent: FxTable | undefined = $state(undefined);
+    let selectedFxRows = $state<FxRow[]>([]);
+    let syncModalPairs = $state<string[]>([]);
 
 
     // Delete
@@ -100,6 +106,44 @@
     // =========================================================================
     // Derived
     // =========================================================================
+
+    // Delta periods for table columns
+    const DELTA_PERIODS = [
+        { key: '1W', days: 7 },
+        { key: '1M', days: 30 },
+        { key: '3M', days: 91 },
+        { key: '6M', days: 182 },
+        { key: '1Y', days: 365 },
+        { key: '2Y', days: 730 },
+        { key: '3Y', days: 1095 },
+        { key: '5Y', days: 1825 },
+    ] as const;
+
+    // Which delta periods are visible for the selected date range
+    let visiblePeriods = $derived(
+        DELTA_PERIODS.filter(p => {
+            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
+            const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
+            return rangeDays >= p.days;
+        })
+    );
+
+    function computePeriodDelta(data: FxDataPoint[], periodDays: number, inverted: boolean): number | null {
+        if (data.length < 2) return null;
+        const lastPoint = data[data.length - 1];
+        const targetDate = new Date(lastPoint.date);
+        targetDate.setDate(targetDate.getDate() - periodDays);
+        const targetStr = targetDate.toISOString().slice(0, 10);
+        // Find closest point at or before target date (backward-fill)
+        let refPoint: FxDataPoint | null = null;
+        for (let i = data.length - 1; i >= 0; i--) {
+            if (data[i].date <= targetStr) { refPoint = data[i]; break; }
+        }
+        if (!refPoint || refPoint.rate === 0 || lastPoint.rate === 0) return null;
+        const refVal = inverted ? 1 / refPoint.rate : refPoint.rate;
+        const lastVal = inverted ? 1 / lastPoint.rate : lastPoint.rate;
+        return ((lastVal - refVal) / refVal) * 100;
+    }
 
     // Extract unique currencies from configured pairs for filter dropdown
     let configuredCurrencies = $derived([...new Set(pairs.flatMap(p => [p.config.base, p.config.quote]))].sort());
@@ -136,14 +180,22 @@
     }));
 
     // Map to FxRow for table view
-    let fxTableRows = $derived<FxRow[]>(filteredPairs.map(p => ({
-        slug: p.config.slug,
-        base: p.config.base,
-        quote: p.config.quote,
-        data: p.data,
-        manualOnly: p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL',
-        providers: p.config.providers,
-    })));
+    let fxTableRows = $derived<FxRow[]>(filteredPairs.map(p => {
+        const inv = isCardInverted(p.config.slug);
+        const deltas: Record<string, number | null> = {};
+        for (const period of visiblePeriods) {
+            deltas[period.key] = computePeriodDelta(p.data, period.days, inv);
+        }
+        return {
+            slug: p.config.slug,
+            base: p.config.base,
+            quote: p.config.quote,
+            data: p.data,
+            manualOnly: p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL',
+            providers: p.config.providers,
+            deltas,
+        };
+    }));
 
     // =========================================================================
     // Lifecycle
@@ -363,11 +415,6 @@
         await fetchPairData(idx);
     }
 
-    function handleEditPair(detail: {base: string; quote: string; slug: string}) {
-        const {slug} = detail;
-        goto(`/fx/${slug}`);
-    }
-
     function handleDeletePair(detail: {base: string; quote: string; slug: string}) {
         deletingPair = detail;
         deleteDialogOpen = true;
@@ -419,7 +466,44 @@
     }
 
     function handleSyncAll() {
+        syncModalPairs = pairs
+            .filter(p => !(p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL'))
+            .map(p => `${p.config.base}-${p.config.quote}`);
         syncModalOpen = true;
+    }
+
+    // =========================================================================
+    // Bulk Actions (table selection)
+    // =========================================================================
+
+    function handleBulkSyncFx() {
+        syncModalPairs = selectedFxRows
+            .filter(r => !r.manualOnly)
+            .map(r => `${r.base}-${r.quote}`);
+        syncModalOpen = true;
+    }
+
+    async function handleBulkRefreshFx() {
+        for (const row of selectedFxRows) {
+            await handleRefreshPair({base: row.base, quote: row.quote, slug: row.slug});
+        }
+        fxTableComponent?.getTableRef()?.clearSelection();
+        selectedFxRows = [];
+    }
+
+    function handleBulkInvertFx() {
+        for (const row of selectedFxRows) {
+            const current = isCardInverted(row.slug);
+            setCardInverted(row.slug, !current);
+        }
+        fxTableComponent?.getTableRef()?.clearSelection();
+        selectedFxRows = [];
+    }
+
+    async function handleBulkDeleteFx() {
+        for (const row of selectedFxRows) {
+            await handleDeletePair({base: row.base, quote: row.quote, slug: row.slug});
+        }
     }
 
     async function handleSyncPair(detail: {slug: string; base: string; quote: string}) {
@@ -491,6 +575,18 @@
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
         </div>
         <div class="flex items-center gap-2">
+            {#if viewMode === 'list' && selectedFxRows.length > 0}
+                <DataTableToolbar
+                    selectedCount={selectedFxRows.length}
+                    bulkActions={[
+                        { id: 'sync', icon: RotateCw, label: 'Sync', onClick: () => handleBulkSyncFx() },
+                        { id: 'refresh', icon: RefreshCw, label: 'Refresh', onClick: () => handleBulkRefreshFx() },
+                        { id: 'invert', icon: ArrowLeftRight, label: 'Invert', onClick: () => handleBulkInvertFx() },
+                        { id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger', onClick: () => handleBulkDeleteFx() },
+                    ]}
+                    onClearSelection={() => { fxTableComponent?.getTableRef()?.clearSelection(); selectedFxRows = []; }}
+                />
+            {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
             <button
                 class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
@@ -578,21 +674,25 @@
         <!-- Actions: 2×2 grid (wide+tablet), horizontal row (mobile) -->
         <div class="flex shrink-0 gap-1.5
                     {layoutMode === 'mobile' ? 'flex-row justify-center' : 'grid grid-cols-2'}">
-            <!-- Abs/% toggle -->
-            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                <button
-                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
-                        ? 'bg-libre-green text-white'
-                        : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => { globalViewMode = 'absolute'; }}
-                >Abs</button>
-                <button
-                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
-                        ? 'bg-libre-green text-white'
-                        : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => { globalViewMode = 'percentage'; }}
-                >%</button>
-            </div>
+            <!-- Top-left: Abs/% toggle in grid mode, ColumnVisibility in table mode -->
+            {#if viewMode === 'list'}
+                <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels} />
+            {:else}
+                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                    <button
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
+                            ? 'bg-libre-green text-white'
+                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => { globalViewMode = 'absolute'; }}
+                    >Abs</button>
+                    <button
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
+                            ? 'bg-libre-green text-white'
+                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => { globalViewMode = 'percentage'; }}
+                    >%</button>
+                </div>
+            {/if}
             <!-- Settings -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
@@ -678,7 +778,6 @@
                     {globalViewMode}
                     chartSettings={getSettingsForPair(pair.config.slug)}
                     renderSignals={(chartData, vm) => getRenderedSignals(pair.config.slug, chartData, vm)}
-                    onedit={handleEditPair}
                     ondelete={handleDeletePair}
                     onrefresh={handleRefreshPair}
                     onsync={handleSyncPair}
@@ -689,10 +788,14 @@
     {:else}
         <!-- Table View -->
         <FxTable
+            bind:this={fxTableComponent}
             data={fxTableRows}
             loading={false}
-            onedit={handleEditPair}
+            {visiblePeriods}
+            onsync={handleSyncPair}
+            onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
+            onselectionchange={(rows) => { selectedFxRows = rows; }}
         />
     {/if}
 </div>
@@ -722,9 +825,7 @@
     bind:open={syncModalOpen}
     {dateStart}
     {dateEnd}
-    pairs={pairs
-        .filter(p => !(p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL'))
-        .map(p => `${p.config.base}-${p.config.quote}`)}
+    pairs={syncModalPairs}
     onsynced={handleSynced}
     onclose={() => syncModalOpen = false}
 />

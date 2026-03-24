@@ -1599,7 +1599,6 @@ class AssetCRUDService:
                             success=False,
                             message=f"Asset with display_name '{item.display_name}' already exists",
                             display_name=item.display_name,
-                            identifier=None,
                             )
                         )
                     continue

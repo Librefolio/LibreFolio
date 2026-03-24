@@ -807,24 +807,28 @@ async def test_search_to_asset_e2e(test_server):
                     f"  Price refresh warning for {asset_info['asset_id']}: {price_refresh_resp.status_code}"
                     )
 
-        # Step 7: Verify prices were stored
+        # Step 7: Verify prices were stored (using bulk query endpoint)
         print_info("\nStep 7: Verifying stored prices...")
-        for asset_info in created_assets:
-            prices_resp = await client.get(
-                f"{API_BASE}/assets/prices/{asset_info['asset_id']}",
-                params={"start_date": yesterday.isoformat(), "end_date": today.isoformat()},
-                timeout=TIMEOUT,
-                )
+        query_items = [
+            {
+                "asset_id": a["asset_id"],
+                "date_range": {"start": yesterday.isoformat(), "end": today.isoformat()},
+            }
+            for a in created_assets
+        ]
+        prices_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=query_items,
+            timeout=TIMEOUT,
+            )
 
-            if prices_resp.status_code == 200:
-                prices_data = prices_resp.json()
-                # Response is a list of FAPricePoint directly, not {"prices": [...]}
-                prices = (
-                    prices_data if isinstance(prices_data, list) else prices_data.get("prices", [])
-                )
-                print_info(f"  Asset {asset_info['asset_id']}: {len(prices)} price point(s)")
+        if prices_resp.status_code == 200:
+            query_data = prices_resp.json()
+            for item in query_data.get("items", []):
+                aid = item.get("asset_id")
+                prices = item.get("prices", [])
+                print_info(f"  Asset {aid}: {len(prices)} price point(s)")
                 if prices:
-                    # Check if we have today's price
                     today_prices = [p for p in prices if p.get("date") == today.isoformat()]
                     if today_prices:
                         print_success(f"  ✓ Today's price found: {today_prices[0].get('close')}")
@@ -921,16 +925,18 @@ async def test_price_refresh_uses_current_value(test_server):
         assert fetched_count >= 1 or not errors, f"Should fetch current price. Errors: {errors}"
 
         # Verify the price was stored
-        prices_resp = await client.get(
-            f"{API_BASE}/assets/prices/{asset_id}",
-            params={"start_date": today.isoformat(), "end_date": today.isoformat()},
+        prices_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {"start": today.isoformat(), "end": today.isoformat()},
+            }],
             timeout=TIMEOUT,
             )
 
         assert prices_resp.status_code == 200
-        prices_data = prices_resp.json()
-        # Response is a list directly, not {"prices": [...]}
-        prices = prices_data if isinstance(prices_data, list) else prices_data.get("prices", [])
+        query_data = prices_resp.json()
+        prices = query_data["items"][0]["prices"] if query_data.get("items") else []
 
         print_info(f"  Stored prices: {len(prices)}")
 
@@ -1037,17 +1043,19 @@ async def test_css_scraper_current_price(test_server):
             # Could be network issue with Borsa Italiana
             print_info(f"  Could not fetch (may be network issue): {errors}")
 
-        # Verify if price was stored
-        prices_resp = await client.get(
-            f"{API_BASE}/assets/prices/{asset_id}",
-            params={"start_date": today.isoformat(), "end_date": today.isoformat()},
+        # Verify if price was stored (using bulk query endpoint)
+        prices_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{
+                "asset_id": asset_id,
+                "date_range": {"start": today.isoformat(), "end": today.isoformat()},
+            }],
             timeout=TIMEOUT,
             )
 
         if prices_resp.status_code == 200:
-            prices_data = prices_resp.json()
-            # Response is a list directly
-            prices = prices_data if isinstance(prices_data, list) else prices_data.get("prices", [])
+            query_data = prices_resp.json()
+            prices = query_data["items"][0]["prices"] if query_data.get("items") else []
 
             if prices:
                 today_price = prices[0]

@@ -445,7 +445,6 @@
                                 enableColumnResize={true}
                                 enablePagination={false}
                                 tableLayout="auto"
-                                showToolbar={false}
                             />
                         </div>
                         {/if}
