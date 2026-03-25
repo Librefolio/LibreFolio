@@ -96,7 +96,7 @@ export class FxPairSignal extends ChartSignal {
         const quote = isInverted ? a : b;
         const baseFlag = getCurrencyInfo(base).flag_emoji;
         const quoteFlag = getCurrencyInfo(quote).flag_emoji;
-        const prefix = isMain ? '👑 ' : '● ';
+        const prefix = isMain ? '👑 ' : '';
         return `${prefix}${baseFlag} ${base} → ${quoteFlag} ${quote}`;
     }
 }

@@ -468,6 +468,36 @@ L'integrazione con `urlFilters.ts` è opzionale e può essere aggiunta in futuro
 
 ---
 
+### Step 2c — Modali Sync-All e Multi-Delete per Asset (~0.5 giorni)
+
+> **Miglioramento UX** — allinea l'esperienza asset a quella già implementata in FX.
+
+#### Modale Sync-All Asset (pattern FxSyncModal)
+
+Come la modale FX "Sync All", creare `AssetSyncModal.svelte`:
+- Mostra lista degli asset con provider assegnato
+- Progress bar per ogni asset durante il sync
+- Risultato per riga: fetched↓ / changed Δ / errore
+- Summary finale: totale sincronizzati, errori, tempo
+- Bottone "Sync All" nella 2×2 grid apre la modale invece di eseguire direttamente
+
+#### Modale Multi-Delete Asset (pattern ConfirmModal con lista)
+
+Migliorare `handleBulkDeleteAssets`:
+- Mostrare `ConfirmModal` con lista nomi asset da eliminare
+- Warning se alcuni asset hanno transazioni (blocco backend)
+- Risultato: conteggio eliminati / falliti con dettaglio errori
+
+#### Tasks
+
+- [ ] Creare `AssetSyncModal.svelte` (riusa pattern `FxSyncModal`)
+- [ ] Creare `AssetBulkDeleteModal.svelte` (o usare `ConfirmModal` con lista items)
+- [ ] Collegare "Sync All" (2×2) alla modale invece di `handleSyncAllAssets()`
+- [ ] Collegare bulk delete (DataTableToolbar) alla modale di conferma con lista
+- [ ] i18n keys per modale sync e delete
+
+---
+
 ### Step 3 — `AssetModal.svelte` + `AssetSearchAutocomplete.svelte` (~1.5 giorni)
 
 Creare `src/lib/components/assets/AssetModal.svelte` con `ModalBase`.

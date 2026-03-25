@@ -53,6 +53,8 @@
         hideToolbar?: boolean;
         /** Externally controlled view mode (when toolbar is hidden) */
         externalViewMode?: ViewMode;
+        /** Custom label for the main series in the tooltip (overrides currency) */
+        mainSeriesLabel?: string;
     }
 
     let {
@@ -76,6 +78,7 @@
         onMeasureHover,
         hideToolbar = false,
         externalViewMode,
+        mainSeriesLabel,
     }: Props = $props();
 
     // =========================================================================
@@ -318,7 +321,7 @@
         const useBaselineColoring = colorByBaseline;
         const baselineValue = isPercentage ? 0 : (displayData[0]?.value ?? 0);
         const staleDaysArr = displayData.map(d => d.staleDays ?? 0);
-        const mainSeriesName = currency || 'Value';
+        const mainSeriesName = mainSeriesLabel || currency || 'Value';
 
         const series: any[] = [];
         const values = displayData.map(d => d.value);
