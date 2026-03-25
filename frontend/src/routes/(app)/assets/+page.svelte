@@ -473,9 +473,16 @@
     // Bulk Actions (table selection)
     // =========================================================================
 
+    let bulkSyncLoading = $state(false);
+
     async function handleBulkSyncAssets() {
-        for (const row of selectedAssetRows) {
-            if (row.has_provider) await handleSyncAsset(row);
+        bulkSyncLoading = true;
+        try {
+            for (const row of selectedAssetRows) {
+                if (row.has_provider) await handleSyncAsset(row);
+            }
+        } finally {
+            bulkSyncLoading = false;
         }
         assetTableComponent?.getTableRef()?.clearSelection();
         selectedAssetRows = [];
@@ -550,7 +557,7 @@
                 <DataTableToolbar
                     selectedCount={selectedAssetRows.length}
                     bulkActions={[
-                        { id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets() },
+                        { id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets(), iconClass: bulkSyncLoading ? 'animate-spin' : '', disabled: bulkSyncLoading },
                         { id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets() },
                         { id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets() },
                     ]}

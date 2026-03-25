@@ -389,7 +389,9 @@
                         }
                     }));
                 } else if (r.status === 'partial') {
-                    toasts.warning(tr('fx.sync.toastPartial', {values: {pair: label, changed: r.points_changed ?? 0}}));
+                    let msg = tr('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}});
+                    if (r.message) msg += '\n' + r.message;
+                    toasts.warning(msg);
                 } else if (r.status === 'skipped') {
                     toasts.info(tr('fx.sync.toastSkipped', {values: {pair: label}}));
                 } else {
@@ -813,6 +815,7 @@
                 <PriceChartFull
                         data={lineData}
                         currency={displayQuote}
+                        mainSeriesLabel={`👑 ${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
                         chartHeight="400px"
                         overlaySignals={allOverlaySignals}
                         colorByBaseline={settings.colorByBaseline}
@@ -948,7 +951,7 @@
                     bind:this={measurePanel}
                     chartData={lineData}
                     overlaySignals={overlaySignals}
-                    pairLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
+                    pairLabel={`👑 ${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
                     onmeasureschange={(m) => measureSignals = m}
                     onmeasuremodechange={(active) => measureMode = active}
                     {viewMode}

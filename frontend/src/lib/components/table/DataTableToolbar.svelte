@@ -12,6 +12,10 @@
         label: string | (() => string);
         variant?: 'default' | 'danger';
         onClick: () => void;
+        /** CSS class applied to the icon (e.g. 'animate-spin' for loading) */
+        iconClass?: string;
+        /** Disable the button */
+        disabled?: boolean;
     }
 
     interface Props {
@@ -47,8 +51,9 @@
                             class:danger={action.variant === 'danger'}
                             onclick={action.onClick}
                             title={getActionLabel(action)}
+                            disabled={action.disabled}
                     >
-                        <action.icon size={16}/>
+                        <action.icon size={16} class={action.iconClass || ''} />
                     </button>
                 {/each}
             </div>
