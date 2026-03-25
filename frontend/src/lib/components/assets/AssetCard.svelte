@@ -43,6 +43,8 @@
         chartData?: LineDataPoint[];
         /** Loading state */
         loading?: boolean;
+        /** True when this asset is currently syncing */
+        syncing?: boolean;
         /** Callbacks */
         onsync?: (asset: AssetData) => void;
         onrefresh?: (asset: AssetData) => void;
@@ -57,6 +59,7 @@
         deltaDisplayMode = 'percentage',
         chartData = [],
         loading = false,
+        syncing = false,
         onsync,
         onrefresh,
         ondelete,
@@ -180,9 +183,9 @@
                 class="p-1.5 rounded-md transition-colors {!asset.has_provider ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
                 onclick={(e) => { stop(e); if (asset.has_provider) onsync?.(asset); }}
                 title={asset.has_provider ? 'Sync prices from provider' : 'No provider assigned'}
-                disabled={!asset.has_provider}
+                disabled={!asset.has_provider || syncing}
             >
-                <RotateCw size={15} class={loading ? 'animate-spin' : ''} />
+                <RotateCw size={15} class={syncing ? 'animate-spin' : ''} />
             </button>
             <button
                 class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"

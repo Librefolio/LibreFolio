@@ -29,7 +29,7 @@
     "multipleFiles": "Multiple files allowed",
     "remove": "Remove",
     "discard": "Discard",
-    "refresh": "Refresh",
+    "refresh": "Reload",
     "restore": "Restore original",
     "type": "Type",
     "retry": "Retry",
@@ -250,14 +250,24 @@
       "name": "Name",
       "currency": "Currency",
       "lastPrice": "Last Price",
-      "provider": "Provider",
-      "active": "Active"
+      "provider": "Provider"
     },
     "empty": {
       "noAssets": "No assets yet",
       "noAssetsDesc": "Add your first asset to start tracking prices.",
       "noMatchesTitle": "No Matches",
       "noMatchesDesc": "No assets match the current filters."
+    },
+    "sync": {
+      "toastOk": "{name} synced\n{fetched}↓ {changed}Δ",
+      "toastFailed": "Sync failed for {name}"
+    },
+    "delete": {
+      "confirmMessage": "Delete \"{name}\"? Provider assignments and price history will be removed.",
+      "toastOk": "{name} deleted",
+      "toastFailed": "Failed to delete {name}",
+      "bulkOk": "{count} assets deleted",
+      "bulkPartial": "{failed} assets could not be deleted (have transactions)"
     },
     "types": {
       "STOCK": "Stock",
@@ -338,7 +348,6 @@
     },
     "syncing": "Syncing...",
     "providers": "Providers",
-    "editPairConfig": "Edit pair config",
     "deletePair": "Delete pair",
     "deletePairTitle": "Delete FX Pair",
     "deletePairMessage": "Are you sure you want to delete {pair}? This will remove the provider configuration and all historical exchange rates.",
@@ -714,7 +723,7 @@
   },
   "sharedResource": {
     "syncAll": "Sync All",
-    "refreshAll": "Refresh All",
+    "refreshAll": "Reload All",
     "settings": "Settings"
   }
 }

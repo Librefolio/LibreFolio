@@ -10,7 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {Trash2, ArrowLeftRight, Info, RefreshCw, ExternalLink} from 'lucide-svelte';
+    import {Trash2, ArrowLeftRight, Info, RotateCw, ExternalLink} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -196,6 +196,24 @@
         }
         return [];
     }
+
+    /** Set of pair slugs currently syncing (for rotating icon) */
+    let syncingPairs = $state<Set<string>>(new Set());
+
+    async function handleSyncPairWithSpin(slug: string) {
+        syncingPairs = new Set([...syncingPairs, slug]);
+        try {
+            await onsyncpair?.(slug);
+        } finally {
+            syncingPairs = new Set([...syncingPairs].filter(s => s !== slug));
+        }
+    }
+
+    /** Set of pair slugs already used by other FxPair signals */
+    let usedPairSlugs = $derived(new Set(
+        signals.filter(s => s.signalType === 'fx-pair' && s.params.pairSlug)
+            .map(s => String(s.params.pairSlug))
+    ));
 </script>
 
 <div>
@@ -300,28 +318,6 @@
                                 {/if}
                             </div>
                             <div class="flex items-center gap-0.5 flex-shrink-0">
-                                {#if signal.signalType === 'fx-pair' && signal.params.pairSlug}
-                                    {#if onsyncpair}
-                                        <button
-                                            type="button"
-                                            class="p-1 rounded text-gray-400 hover:text-blue-500 transition-colors"
-                                            title={$t('common.sync')}
-                                            onclick={() => onsyncpair?.(String(signal.params.pairSlug))}
-                                        >
-                                            <RefreshCw size={13} />
-                                        </button>
-                                    {/if}
-                                    {#if ondetailpair}
-                                        <button
-                                            type="button"
-                                            class="p-1 rounded text-gray-400 hover:text-libre-green transition-colors"
-                                            title={$t('common.detail')}
-                                            onclick={() => ondetailpair?.(String(signal.params.pairSlug))}
-                                        >
-                                            <ExternalLink size={13} />
-                                        </button>
-                                    {/if}
-                                {/if}
                                 <button
                                     type="button"
                                     class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
@@ -363,15 +359,19 @@
                                             </div>
                                         {:else if desc.type === 'select'}
                                             {#if desc.dynamicOptionsKey === 'configuredFxPairs'}
+                                                {@const currentPairSlug = getParamString(signal, desc.key)}
                                                 <div class="flex items-center gap-1">
                                                     <div class="w-48">
                                                         <SimpleSelect
-                                                            value={getParamString(signal, desc.key)}
+                                                            value={currentPairSlug}
                                                             options={resolveDynamicOptions('configuredFxPairs').map(o => {
                                                                 const parts = o.value.split('-');
                                                                 const flag1 = getCurrencyInfo(parts[0]).flag_emoji;
                                                                 const flag2 = getCurrencyInfo(parts[1]).flag_emoji;
-                                                                return {value: o.value, label: `${flag1} ${parts[0]} → ${flag2} ${parts[1]}`};
+                                                                const isCurrent = o.value === currentPairSlug;
+                                                                const isUsedElsewhere = !isCurrent && usedPairSlugs.has(o.value);
+                                                                const prefix = isCurrent ? '✓ ' : isUsedElsewhere ? '● ' : '';
+                                                                return {value: o.value, label: `${prefix}${flag1} ${parts[0]} → ${flag2} ${parts[1]}`};
                                                             })}
                                                             placeholder="— {$t('chartSettings.params.currencyPair')}"
                                                             dropdownPosition="auto"
@@ -390,6 +390,28 @@
                                                     >
                                                         <ArrowLeftRight size={12} />
                                                     </button>
+                                                    {#if onsyncpair}
+                                                        {@const pairSlug = String(signal.params.pairSlug)}
+                                                        <button
+                                                            type="button"
+                                                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-500 transition-colors"
+                                                            title={$t('common.sync')}
+                                                            disabled={syncingPairs.has(pairSlug)}
+                                                            onclick={() => handleSyncPairWithSpin(pairSlug)}
+                                                        >
+                                                            <RotateCw size={12} class={syncingPairs.has(pairSlug) ? 'animate-spin' : ''} />
+                                                        </button>
+                                                    {/if}
+                                                    {#if ondetailpair}
+                                                        <button
+                                                            type="button"
+                                                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                                                            title={$t('common.detail')}
+                                                            onclick={() => ondetailpair?.(String(signal.params.pairSlug))}
+                                                        >
+                                                            <ExternalLink size={12} />
+                                                        </button>
+                                                    {/if}
                                                 </div>
                                             {:else}
                                                 {@const opts = desc.options ?? []}
