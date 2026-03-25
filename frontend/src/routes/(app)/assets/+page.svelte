@@ -26,6 +26,8 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import {toasts} from '$lib/stores/toastStore.svelte';
     import {getGlobalSettings, setGlobalSettings, getSettingsForPair, setPairSettings, getSettingsVersion} from '$lib/stores/chartSettingsStore.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
@@ -74,6 +76,15 @@
     let error = $state<string | null>(null);
     let assetTableComponent: AssetTable | undefined = $state(undefined);
     let selectedAssetRows = $state<AssetRow[]>([]);
+    /** True while "Sync All" is running */
+    let syncAllLoading = $state(false);
+    /** Set of asset IDs currently syncing (for per-card/row rotating icon) */
+    let syncingAssetIds = $state<Set<number>>(new Set());
+
+    // Delete dialog
+    let deleteDialogOpen = $state(false);
+    let deletingAsset: AssetRow | null = $state(null);
+    let deleteLoading = $state(false);
 
     // Filters
     let searchText = $state('');
@@ -195,11 +206,11 @@
         if (!el) return;
         const ro = new ResizeObserver(([entry]) => {
             const w = entry.contentRect.width;
-            if (w >= 1200) layoutMode = 'wide';            // ← wide threshold
+            if (w >= 1240) layoutMode = 'wide';            // ← wide threshold
             else if (w >= 920) layoutMode = 'tablet';       // ← tablet threshold
             else if (w >= 500) layoutMode = 'tablet-s';     // ← tablet-s threshold
             else layoutMode = 'mobile';                     // ← mobile fallback
-            showActionLabels = w >= 400;                    // ← labels threshold
+            showActionLabels = w >= 460;                    // ← labels threshold
         });
         ro.observe(el);
         return () => ro.disconnect();
@@ -382,8 +393,47 @@
     }
 
     async function handleSyncAsset(asset: any) {
-        // TODO: implement actual sync via POST /assets/prices/refresh
-        console.log('Sync Asset clicked:', asset.id);
+        syncingAssetIds = new Set([...syncingAssetIds, asset.id]);
+        try {
+            const response = await zodiosApi.refresh_prices_bulk_api_v1_assets_prices_refresh_post([{
+                asset_id: asset.id,
+                date_range: { start: dateStart, end: dateEnd },
+            }]);
+            const r = (response as any)?.results?.[0];
+            if (r && (!r.errors || r.errors.length === 0)) {
+                const fetched = r.fetched_count ?? 0;
+                const inserted = r.inserted_count ?? 0;
+                const updated = r.updated_count ?? 0;
+                const changed = inserted + updated;
+                toasts.success($t('assets.sync.toastOk', {
+                    values: { name: asset.display_name, fetched, changed }
+                }));
+            } else {
+                toasts.error($t('assets.sync.toastFailed', {
+                    values: { name: asset.display_name }
+                }) + (r?.errors?.[0] ? ': ' + r.errors[0] : ''));
+            }
+            await fetchAllPriceData();
+        } catch (e: any) {
+            toasts.error($t('assets.sync.toastFailed', {
+                values: { name: asset.display_name }
+            }) + ': ' + (e?.message || 'unknown'));
+        } finally {
+            syncingAssetIds = new Set([...syncingAssetIds].filter(id => id !== asset.id));
+        }
+    }
+
+    /** Sync all assets that have a provider */
+    async function handleSyncAllAssets() {
+        syncAllLoading = true;
+        try {
+            const withProvider = assets.filter(a => a.has_provider);
+            for (const asset of withProvider) {
+                await handleSyncAsset(asset);
+            }
+        } finally {
+            syncAllLoading = false;
+        }
     }
 
     async function handleRefreshAsset(_asset: any) {
@@ -392,8 +442,31 @@
     }
 
     function handleDeleteAsset(asset: any) {
-        // Placeholder — Step 3 will add delete confirm
-        console.log('Delete Asset clicked:', asset.id);
+        deletingAsset = asset;
+        deleteDialogOpen = true;
+    }
+
+    async function confirmDeleteAsset() {
+        if (!deletingAsset) return;
+        deleteLoading = true;
+        try {
+            const response = await zodiosApi.delete_assets_bulk_api_v1_assets_delete(undefined, {
+                queries: { asset_ids: [deletingAsset.id] },
+            });
+            const r = (response as any)?.results?.[0];
+            if (r?.success) {
+                assets = assets.filter(a => a.id !== deletingAsset!.id);
+                toasts.success($t('assets.delete.toastOk', { values: { name: deletingAsset!.display_name } }));
+            } else {
+                toasts.error(r?.message || $t('assets.delete.toastFailed', { values: { name: deletingAsset!.display_name } }));
+            }
+        } catch (e: any) {
+            toasts.error($t('assets.delete.toastFailed', { values: { name: deletingAsset!.display_name } }));
+        } finally {
+            deleteLoading = false;
+            deleteDialogOpen = false;
+            deletingAsset = null;
+        }
     }
 
     // =========================================================================
@@ -415,8 +488,26 @@
     }
 
     async function handleBulkDeleteAssets() {
-        for (const row of selectedAssetRows) {
-            await handleDeleteAsset(row);
+        const ids = selectedAssetRows.map(r => r.id);
+        if (ids.length === 0) return;
+        try {
+            const response = await zodiosApi.delete_assets_bulk_api_v1_assets_delete(undefined, {
+                queries: { asset_ids: ids },
+            });
+            const res = (response as any);
+            const succeeded = res.results?.filter((r: any) => r.success).map((r: any) => r.asset_id) ?? [];
+            assets = assets.filter(a => !succeeded.includes(a.id));
+            if (succeeded.length > 0) {
+                toasts.success($t('assets.delete.bulkOk', { values: { count: succeeded.length } }));
+            }
+            if (res.failed_count > 0) {
+                toasts.warning($t('assets.delete.bulkPartial', { values: { failed: res.failed_count } }));
+            }
+        } catch (e: any) {
+            toasts.error('Delete failed: ' + (e?.message || 'unknown'));
+        } finally {
+            assetTableComponent?.getTableRef()?.clearSelection();
+            selectedAssetRows = [];
         }
     }
 
@@ -511,8 +602,8 @@
         <!-- Filters block -->
         <div class="flex gap-3
                     {layoutMode === 'mobile' ? 'flex-col items-center'
-                     : layoutMode === 'wide' ? 'flex-row items-center flex-1 flex-wrap'
-                     : 'flex-col items-start flex-1'}">
+                     : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1'
+                     : 'flex-row items-center flex-1 flex-wrap'}">
             <!-- DateRangePicker -->
             <div class="max-w-md" data-testid="assets-date-range">
                 <DateRangePicker
@@ -682,7 +773,6 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleGlobalSettings}
-                title={$t('sharedResource.settings')}
             >
                 <Settings size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
@@ -690,17 +780,16 @@
             <!-- Sync All -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={handleSyncAsset}
-                title={$t('sharedResource.syncAll')}
+                onclick={handleSyncAllAssets}
+                disabled={syncAllLoading}
             >
-                <RotateCw size={14} />
+                <RotateCw size={14} class={syncAllLoading ? 'animate-spin' : ''} />
                 {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={() => fetchAllPriceData()}
-                title={$t('sharedResource.refreshAll')}
             >
                 <RefreshCw size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
@@ -770,6 +859,7 @@
                     deltaDisplayMode={globalViewMode}
                     chartData={asset.chartData}
                     loading={asset.loadingPrices}
+                    syncing={syncingAssetIds.has(asset.id)}
                     onsync={handleSyncAsset}
                     onrefresh={handleRefreshAsset}
                     ondelete={handleDeleteAsset}
@@ -799,3 +889,15 @@
     onsave={handleSettingsSave}
     onclose={() => { settingsModalOpen = false; settingsTargetId = null; }}
 />
+
+<!-- Delete Asset Confirm Dialog -->
+<ConfirmModal
+    open={deleteDialogOpen}
+    title={$t('common.confirmDelete')}
+    message={$t('assets.delete.confirmMessage', { values: { name: deletingAsset?.display_name ?? '' } })}
+    confirmText={$t('common.delete')}
+    danger={true}
+    onConfirm={confirmDeleteAsset}
+    onCancel={() => { deleteDialogOpen = false; deletingAsset = null; }}
+/>
+

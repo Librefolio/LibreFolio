@@ -11,6 +11,7 @@
 
 import {ChartSignal, type SignalParamDescriptor, type RenderedSignal} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+import {getCurrencyInfo} from '$lib/stores/currencyStore';
 
 export class FxPairSignal extends ChartSignal {
     static override signalType = 'fx-pair';
@@ -88,9 +89,15 @@ export class FxPairSignal extends ChartSignal {
     getLabel(): string {
         const slug = String(this.params.pairSlug || '');
         const isInverted = Boolean(this.params._inverted);
+        const isMain = Boolean(this.params._isMainPair);
         if (!slug) return 'FX Pair';
         const [a, b] = slug.split('-');
-        return isInverted ? `${b}/${a}` : `${a}/${b}`;
+        const base = isInverted ? b : a;
+        const quote = isInverted ? a : b;
+        const baseFlag = getCurrencyInfo(base).flag_emoji;
+        const quoteFlag = getCurrencyInfo(quote).flag_emoji;
+        const prefix = isMain ? '👑 ' : '● ';
+        return `${prefix}${baseFlag} ${base} → ${quoteFlag} ${quote}`;
     }
 }
 
