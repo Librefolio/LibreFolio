@@ -247,6 +247,7 @@
             width: 160,
             minWidth: 100,
             hiddenByDefault: true,
+            filterable: false,
         },
     ]);
 </script>
@@ -279,7 +280,7 @@
         },
         {
             id: 'sync',
-            label: 'Sync',
+            label: () => $t('common.sync'),
             icon: RotateCw,
             onClick: async (row) => {
                 syncingRowIds = new Set([...syncingRowIds, row.slug]);

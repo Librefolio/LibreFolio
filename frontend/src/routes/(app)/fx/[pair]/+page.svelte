@@ -114,6 +114,9 @@
     // Panel states before edit mode (to restore when exiting)
     let savedPanelStates: { aesthetics: boolean; measures: boolean; signals: boolean } | null = $state(null);
 
+    /** Incremented to force overlay signals recomputation after store data changes */
+    let overlayDataVersion = $state(0);
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -150,6 +153,7 @@
 
     // Computed overlay signals from settings
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
+        void overlayDataVersion; // trigger recomputation when overlay data changes
         const rendered: RenderedSignal[] = [];
         for (const cfg of signals) {
             const instance = signalFromConfig(cfg);
@@ -159,6 +163,8 @@
             if (cfg.signalType === 'fx-pair') {
                 const pairSlug = String(cfg.params.pairSlug || '');
                 if (!pairSlug) continue;
+                // Mark the main pair with a crown prefix
+                instance.params._isMainPair = (pairSlug === data.canonicalSlug);
                 try {
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
@@ -337,6 +343,28 @@
         const store = getFxStore(data.canonicalSlug);
         store.invalidateRange(dateStart, dateEnd);
         await loadChartData();
+        // Also invalidate overlay pair stores so comparison signals refresh
+        for (const cfg of signals) {
+            if (cfg.signalType === 'fx-pair') {
+                const pairSlug = String(cfg.params.pairSlug || '');
+                if (pairSlug && pairSlug !== data.canonicalSlug) {
+                    const overlayStore = getFxStore(pairSlug);
+                    overlayStore.invalidateRange(dateStart, dateEnd);
+                    try {
+                        const convertRequests = [{
+                            from_amount: {code: pairSlug.split('-')[0], amount: 1},
+                            to: pairSlug.split('-')[1],
+                            date_range: {start: dateStart, end: dateEnd},
+                        }];
+                        const resp = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
+                        const results = (resp as any)?.results || [];
+                        const points = results.map((r: any) => apiResultToFxDataPoint(r));
+                        overlayStore.merge(points);
+                    } catch { /* best effort */ }
+                }
+            }
+        }
+        overlayDataVersion++;
     }
 
     async function handleSync() {
@@ -402,13 +430,47 @@
     async function handleSyncPair(slug: string) {
         try {
             syncing = true;
-            const tr = get(t);
-            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+            const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
                 pairs: [slug], start: dateStart, end: dateEnd,
             });
-            toasts.success(tr('fx.sync.toastSuccess', {values: {pair: slug}}));
-            // If it's our pair, refresh chart
-            if (slug === data.canonicalSlug) await handleRefresh();
+            const r = (response as any)?.results?.[0];
+            if (r) {
+                const label = slug.replace('-', '/');
+                const tr = get(t);
+                if (r.status === 'ok') {
+                    toasts.success(tr('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}}));
+                } else if (r.status === 'partial') {
+                    let msg = tr('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}});
+                    if (r.message) msg += '\n' + r.message;
+                    toasts.warning(msg);
+                } else if (r.status === 'skipped') {
+                    toasts.info(tr('fx.sync.toastSkipped', {values: {pair: label}}));
+                } else {
+                    let msg = tr('fx.sync.toastFailed', {values: {pair: label}});
+                    if (r.message) msg += ': ' + r.message;
+                    toasts.error(msg);
+                }
+            }
+            // Invalidate store + refresh if it's our pair, also reload overlay data
+            const store = getFxStore(slug);
+            store.invalidateRange(dateStart, dateEnd);
+            if (slug === data.canonicalSlug) {
+                await handleRefresh();
+            } else {
+                // Overlay pair: re-fetch data from DB so the chart updates
+                try {
+                    const convertRequests = [{
+                        from_amount: {code: slug.split('-')[0], amount: 1},
+                        to: slug.split('-')[1],
+                        date_range: {start: dateStart, end: dateEnd},
+                    }];
+                    const resp = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
+                    const results = (resp as any)?.results || [];
+                    const points = results.map((r: any) => apiResultToFxDataPoint(r));
+                    store.merge(points);
+                } catch { /* best effort */ }
+                overlayDataVersion++;
+            }
         } catch (e: any) {
             toasts.error('Sync failed: ' + (e?.message || 'unknown'));
         } finally {

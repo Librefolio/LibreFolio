@@ -284,15 +284,44 @@
         return [...counts].sort((a, b) => a - b);
     }
 
+    /**
+     * Build a direction-agnostic key for a chain: sort each step's currencies
+     * alphabetically and sort steps, so both directions produce the same key.
+     */
+    function normalizeChainKey(steps: ChainStep[]): string {
+        return steps
+            .map(s => {
+                const [a, b] = [s.from, s.to].sort();
+                return `${a}-${b}:${s.provider}`;
+            })
+            .sort()
+            .join('|');
+    }
+
     // Sync internal selectedKeys when selectedRoutes is set externally (e.g., by parent's loadRoutesFromBackend)
     $effect(() => {
         if (allRoutes.length === 0 || selectedRoutes.length === 0) return;
-        // Build key for each selectedRoute by matching chainSteps against allRoutes
+
+        // Build a normalized-key → route-key lookup from DFS-computed allRoutes
+        const normalizedToKey = new Map<string, string>();
+        for (const route of allRoutes) {
+            normalizedToKey.set(normalizeChainKey(route.chainSteps), route.key);
+        }
+
+        // Match each selectedRoute by normalized key (direction-agnostic)
         const matchedKeys: string[] = [];
         for (const route of selectedRoutes) {
-            const key = route.map(s => `${s.from}-${s.to}:${s.provider}`).join('|');
-            if (routeMap.has(key) && !selectedKeys.has(key)) {
-                matchedKeys.push(key);
+            // Try exact key first
+            const exactKey = route.map(s => `${s.from}-${s.to}:${s.provider}`).join('|');
+            if (routeMap.has(exactKey) && !selectedKeys.has(exactKey)) {
+                matchedKeys.push(exactKey);
+                continue;
+            }
+            // Fallback: direction-agnostic match
+            const normKey = normalizeChainKey(route);
+            const dfsKey = normalizedToKey.get(normKey);
+            if (dfsKey && !selectedKeys.has(dfsKey)) {
+                matchedKeys.push(dfsKey);
             }
         }
         if (matchedKeys.length > 0) {

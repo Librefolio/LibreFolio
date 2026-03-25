@@ -29,7 +29,7 @@
     "multipleFiles": "Archivos múltiples permitidos",
     "remove": "Quitar",
     "discard": "Descartar",
-    "refresh": "Actualizar",
+    "refresh": "Recargar",
     "restore": "Restaurar original",
     "type": "Tipo",
     "retry": "Reintentar",
@@ -250,14 +250,24 @@
       "name": "Nombre",
       "currency": "Divisa",
       "lastPrice": "Último Precio",
-      "provider": "Proveedor",
-      "active": "Activo"
+      "provider": "Proveedor"
     },
     "empty": {
       "noAssets": "Sin activos",
       "noAssetsDesc": "Añade tu primer activo para empezar a rastrear precios.",
       "noMatchesTitle": "Sin Resultados",
       "noMatchesDesc": "Ningún activo coincide con los filtros actuales."
+    },
+    "sync": {
+      "toastOk": "{name} sincronizado\n{fetched}↓ {changed}Δ",
+      "toastFailed": "Error de sincronización para {name}"
+    },
+    "delete": {
+      "confirmMessage": "¿Eliminar \"{name}\"? Las asignaciones y el historial serán eliminados.",
+      "toastOk": "{name} eliminado",
+      "toastFailed": "Error al eliminar {name}",
+      "bulkOk": "{count} activos eliminados",
+      "bulkPartial": "{failed} activos no eliminados (tienen transacciones)"
     },
     "types": {
       "STOCK": "Acción",
@@ -338,7 +348,6 @@
     },
     "syncing": "Sincronizando...",
     "providers": "Proveedores",
-    "editPairConfig": "Editar configuración del par",
     "deletePair": "Eliminar par",
     "deletePairTitle": "Eliminar Par FX",
     "deletePairMessage": "¿Estás seguro de que quieres eliminar {pair}? Esto eliminará la configuración de proveedores y todos los tipos de cambio históricos.",
@@ -714,7 +723,7 @@
   },
   "sharedResource": {
     "syncAll": "Sinc. Todo",
-    "refreshAll": "Actualizar Todo",
+    "refreshAll": "Recargar Todo",
     "settings": "Ajustes"
   }
 }

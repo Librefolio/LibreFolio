@@ -185,11 +185,11 @@
                     ? '<span class="text-emerald-600 dark:text-emerald-400">✅</span>'
                     : '<span class="text-gray-400 dark:text-gray-500">❌</span>',
             }),
-            type: 'enum',
-            enumOptions: [{value: 'true', label: '✅ Yes'}, {value: 'false', label: '❌ No'}],
+            type: 'text',
             getValue: (row) => String(row.has_provider),
             width: 80,
             minWidth: 60,
+            filterable: false,
         },
     ]);
 </script>

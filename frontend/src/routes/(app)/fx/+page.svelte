@@ -230,11 +230,11 @@
         if (!el) return;
         const ro = new ResizeObserver(([entry]) => {
             const w = entry.contentRect.width;
-            if (w >= 1020) layoutMode = 'wide';
+            if (w >= 1030) layoutMode = 'wide';
             else if (w >= 700) layoutMode = 'tablet';
             else if (w >= 530) layoutMode = 'tablet-s';
             else layoutMode = 'mobile';
-            showActionLabels = w >= 450;
+            showActionLabels = w >= 460;
         });
         ro.observe(el);
         return () => ro.disconnect();
