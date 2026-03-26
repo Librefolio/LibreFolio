@@ -134,6 +134,7 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
+            void mainSeriesLabel;
             tick().then(renderChart);
         }
     });

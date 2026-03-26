@@ -329,7 +329,10 @@
       "toastOk": "{pair} synced\n{fetched}↓ {changed}Δ ({provider})",
       "toastPartial": "{pair} — partial\n{fetched}↓ {changed}Δ ({provider})",
       "toastSkipped": "{pair} — manual only, nothing to sync",
-      "toastFailed": "{pair} sync failed"
+      "toastFailed": "{pair} sync failed",
+      "legBreakdown": "Per-leg breakdown",
+      "legNoData": "0 dates — no data",
+      "legDates": "dates"
     },
     "route": {
       "title": "Conversion Routes",

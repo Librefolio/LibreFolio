@@ -36,6 +36,7 @@
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultToFxDataPoint, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fxCardInversionStore';
+    import {formatSyncDetail, formatProviderText} from '$lib/utils/fxSync';
 
     // =========================================================================
     // Page data
@@ -163,8 +164,6 @@
             if (cfg.signalType === 'fx-pair') {
                 const pairSlug = String(cfg.params.pairSlug || '');
                 if (!pairSlug) continue;
-                // Mark the main pair with a crown prefix
-                instance.params._isMainPair = (pairSlug === data.canonicalSlug);
                 try {
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
@@ -385,12 +384,12 @@
                             pair: label,
                             fetched: r.points_fetched ?? 0,
                             changed: r.points_changed ?? 0,
-                            provider: r.provider_used ?? '?'
+                            provider: formatProviderText(r.provider_used)
                         }
                     }));
                 } else if (r.status === 'partial') {
-                    let msg = tr('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}});
-                    if (r.message) msg += '\n' + r.message;
+                    let msg = tr('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}});
+                    msg += formatSyncDetail(r, tr);
                     toasts.warning(msg);
                 } else if (r.status === 'skipped') {
                     toasts.info(tr('fx.sync.toastSkipped', {values: {pair: label}}));
@@ -440,10 +439,10 @@
                 const label = slug.replace('-', '/');
                 const tr = get(t);
                 if (r.status === 'ok') {
-                    toasts.success(tr('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}}));
+                    toasts.success(tr('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}}));
                 } else if (r.status === 'partial') {
-                    let msg = tr('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}});
-                    if (r.message) msg += '\n' + r.message;
+                    let msg = tr('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}});
+                    msg += formatSyncDetail(r, tr);
                     toasts.warning(msg);
                 } else if (r.status === 'skipped') {
                     toasts.info(tr('fx.sync.toastSkipped', {values: {pair: label}}));
@@ -815,7 +814,7 @@
                 <PriceChartFull
                         data={lineData}
                         currency={displayQuote}
-                        mainSeriesLabel={`👑 ${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
+                        mainSeriesLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
                         chartHeight="400px"
                         overlaySignals={allOverlaySignals}
                         colorByBaseline={settings.colorByBaseline}
@@ -979,6 +978,7 @@
                 <ChartSignalsSection
                         signals={[...signals]}
                         availablePairs={configuredPairSlugs}
+                        mainPairSlug={data.canonicalSlug}
                         onchange={handleSignalsChange}
                         onsyncpair={handleSyncPair}
                         ondetailpair={handleDetailPair}

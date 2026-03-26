@@ -125,6 +125,17 @@ class FXSyncPairRequest(BaseModel):
         return deduped
 
 
+class FXSyncLegDetail(BaseModel):
+    """Diagnostic detail for a single leg in a chain (or single-provider route)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(..., description="Provider code for this leg, e.g. 'ECB'")
+    leg: str = Field(..., description="Leg pair in the chain, e.g. 'EUR→GBP'")
+    dates_available: int = Field(0, ge=0, description="Number of dates with data from this provider in the requested range")
+    error: Optional[str] = Field(None, description="Error message if the leg failed (e.g. timeout, provider error)")
+
+
 class FXSyncPairResult(BaseModel):
     """Result of sync operation for a single pair."""
 
@@ -136,6 +147,12 @@ class FXSyncPairResult(BaseModel):
     points_fetched: int = Field(0, ge=0, description="Number of rate points fetched from provider")
     points_changed: int = Field(0, ge=0, description="Number of rate points actually inserted/updated in DB")
     message: Optional[str] = Field(None, description="Optional note (e.g. 'monthly data only', 'fallback used')")
+    detail: Optional[List[FXSyncLegDetail]] = Field(
+        None,
+        description="Per-leg diagnostic breakdown. Present for chains and single-provider routes "
+                    "when status is partial or failed. Each entry shows provider name, "
+                    "leg pair, dates available, and any error encountered."
+    )
     elapsed_ms: Optional[int] = Field(
         None, ge=0,
         description="Backend sync time for this pair in integer milliseconds. "

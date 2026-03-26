@@ -44,6 +44,7 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {formatSyncDetail, formatProviderText} from '$lib/utils/fxSync';
 
     // =========================================================================
     // Types
@@ -567,10 +568,10 @@
                 const label = slug.replace('-', '/');
                 const t = get(_);
                 if (r.status === 'ok') {
-                    toasts.success(t('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}}));
+                    toasts.success(t('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}}));
                 } else if (r.status === 'partial') {
-                    let msg = t('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}});
-                    if (r.message) msg += '\n' + r.message;
+                    let msg = t('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}});
+                    msg += formatSyncDetail(r, t);
                     toasts.warning(msg);
                 } else if (r.status === 'skipped') {
                     toasts.info(t('fx.sync.toastSkipped', {values: {pair: label}}));

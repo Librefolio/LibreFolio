@@ -36,6 +36,8 @@
         signals?: SignalConfig[];
         /** Available FX pairs for FxPairSignal (slug format: 'EUR-GBP') */
         availablePairs?: string[];
+        /** Slug of the main chart pair (for crown emoji in dropdown) */
+        mainPairSlug?: string;
         /** Called when signals change */
         onchange?: (signals: SignalConfig[]) => void;
         /** Called when user clicks Sync on an FxPair signal */
@@ -47,6 +49,7 @@
     let {
         signals = $bindable([]),
         availablePairs = [],
+        mainPairSlug = '',
         onchange,
         onsyncpair,
         ondetailpair,
@@ -370,8 +373,11 @@
                                                                 const flag2 = getCurrencyInfo(parts[1]).flag_emoji;
                                                                 const isCurrent = o.value === currentPairSlug;
                                                                 const isUsedElsewhere = !isCurrent && usedPairSlugs.has(o.value);
-                                                                const prefix = isCurrent ? '✓ ' : isUsedElsewhere ? '● ' : '';
-                                                                return {value: o.value, label: `${prefix}${flag1} ${parts[0]} → ${flag2} ${parts[1]}`};
+                                                                const isMain = !!mainPairSlug && o.value === mainPairSlug;
+                                                                const isUsed = isCurrent || isUsedElsewhere;
+                                                                // Suffix: 👑 if main+used, ✓ if current card, 📌 if used by other card
+                                                                const suffix = isUsed && isMain ? ' 👑' : isCurrent ? ' ✓' : isUsedElsewhere ? ' 📌' : '';
+                                                                return {value: o.value, label: `${flag1} ${parts[0]} → ${flag2} ${parts[1]}${suffix}`};
                                                             })}
                                                             placeholder="— {$t('chartSettings.params.currencyPair')}"
                                                             dropdownPosition="auto"

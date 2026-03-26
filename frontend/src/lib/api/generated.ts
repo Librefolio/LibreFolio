@@ -2746,6 +2746,12 @@ type FXSyncPairResult = {
      */
     ((string | null) | Array<string | null>)
     | undefined;
+  detail?:
+    | /**
+     * Per-leg diagnostic breakdown. Present for chains and single-provider routes when status is partial or failed. Each entry shows provider name, leg pair, dates available, and any error encountered.
+     */
+    ((Array<FXSyncLegDetail> | null) | Array<Array<FXSyncLegDetail> | null>)
+    | undefined;
   elapsed_ms?:
     | /**
      * Backend sync time for this pair in integer milliseconds. Measured from bulk start (Phase 1) to commit completion, via time.monotonic_ns() with integer division (// 1_000_000). None for SKIPPED/MANUAL pairs.
@@ -2770,6 +2776,29 @@ type FXSyncStatus =
    * @enum ok, partial, failed, skipped
    */
   "ok" | "partial" | "failed" | "skipped";
+type FXSyncLegDetail = {
+  /**
+   * Provider code for this leg, e.g. 'ECB'
+   */
+  provider: string;
+  /**
+   * Leg pair in the chain, e.g. 'EUR→GBP'
+   */
+  leg: string;
+  dates_available?: /**
+   * Number of dates with data from this provider in the requested range
+   *
+   * @default 0
+   * @minimum 0
+   */
+  number | undefined;
+  error?:
+    | /**
+     * Error message if the leg failed (e.g. timeout, provider error)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+};
 type GlobalSettingsListResponse = Partial<{
   /**
    * List of items
@@ -3571,6 +3600,23 @@ const FXSyncPairRequest = z.object({
   end: z.string().describe("End date (inclusive)"),
 });
 const FXSyncStatus = z.enum(["ok", "partial", "failed", "skipped"]);
+const FXSyncLegDetail: z.ZodType<FXSyncLegDetail> = z.object({
+  provider: z.string().describe("Provider code for this leg, e.g. 'ECB'"),
+  leg: z.string().describe("Leg pair in the chain, e.g. 'EUR→GBP'"),
+  dates_available: z
+    .number()
+    .int()
+    .gte(0)
+    .describe(
+      "Number of dates with data from this provider in the requested range"
+    )
+    .optional()
+    .default(0),
+  error: z
+    .union([z.string(), z.null()])
+    .describe("Error message if the leg failed (e.g. timeout, provider error)")
+    .optional(),
+});
 const FXSyncPairResult: z.ZodType<FXSyncPairResult> = z.object({
   pair: z.string().describe("Normalized pair slug, e.g. 'EUR-USD'"),
   status: FXSyncStatus.describe("Status of a single pair sync operation."),
@@ -3595,6 +3641,12 @@ const FXSyncPairResult: z.ZodType<FXSyncPairResult> = z.object({
   message: z
     .union([z.string(), z.null()])
     .describe("Optional note (e.g. 'monthly data only', 'fallback used')")
+    .optional(),
+  detail: z
+    .union([z.array(FXSyncLegDetail), z.null()])
+    .describe(
+      "Per-leg diagnostic breakdown. Present for chains and single-provider routes when status is partial or failed. Each entry shows provider name, leg pair, dates available, and any error encountered."
+    )
     .optional(),
   elapsed_ms: z
     .union([z.number(), z.null()])
@@ -5937,6 +5989,7 @@ export const schemas = {
   FXDeleteRoutesResponse,
   FXSyncPairRequest,
   FXSyncStatus,
+  FXSyncLegDetail,
   FXSyncPairResult,
   DateRangeModel,
   FXSyncBulkResponse,

@@ -11,7 +11,18 @@
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
-    import {getCachedProviders} from '$lib/stores/currencyGraphStore';
+    import {get} from 'svelte/store';
+    import {
+        PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR,
+        parseProviderChain, getProviderIconUrl, formatSyncDetail,
+    } from '$lib/utils/fxSync';
+
+    interface LegDetail {
+        provider: string;
+        leg: string;
+        dates_available: number;
+        error?: string | null;
+    }
 
     interface PairResult {
         pair: string;
@@ -20,6 +31,7 @@
         points_fetched?: number;
         points_changed?: number;
         message?: string | null;
+        detail?: LegDetail[] | null;
         elapsedMs?: number;
     }
 
@@ -187,28 +199,8 @@
         return `${(ms / 1000).toFixed(1)}s`;
     }
 
-    // Provider chain badge rendering
-    const PROVIDER_COLORS: Record<string, string> = {
-        ECB: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-        FRANKFURTER: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
-        FIXED_RATE: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
-        MANUAL: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-    };
-    const DEFAULT_PROV_COLOR = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-
-    function parseProviderChain(providerUsed: string | null | undefined): string[] {
-        if (!providerUsed) return [];
-        if (providerUsed.startsWith('CHAIN:')) {
-            return providerUsed.slice(6).split('+');
-        }
-        return [providerUsed];
-    }
-
-    /** Get provider icon_url from cached providers (D12: fallback to initials if missing) */
-    function getProviderIconUrl(code: string): string | null {
-        const providers = getCachedProviders();
-        return providers.find(p => p.code === code)?.icon_url ?? null;
-    }
+    // Provider colours & helpers imported from $lib/utils/fxSync
+    const DEFAULT_PROV_COLOR = DEFAULT_PROVIDER_COLOR;
 </script>
 
 <ModalBase {open} onRequestClose={onclose} maxWidth="max-w-md" testId="fx-sync-modal">
@@ -301,9 +293,11 @@
             <div class="space-y-1.5">
                 {#each pairResults as pr (pr.pair)}
                     {@const Icon = statusIcon[pr.status] ?? AlertCircle}
-                    {@const tooltipMsg = pr.message
-                        ? `${(pr.points_fetched ?? 0)}↓ ${(pr.points_changed ?? 0)}Δ\n${pr.message}`
-                        : `${(pr.points_fetched ?? 0)}↓ ${(pr.points_changed ?? 0)}Δ`}
+                    {@const tooltipMsg = (() => {
+                        let base = `${(pr.points_fetched ?? 0)}↓ ${(pr.points_changed ?? 0)}Δ`;
+                        base += formatSyncDetail(pr, get(t));
+                        return base;
+                    })()}
                     <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 group">
                         {#if (pr.status === 'failed' || pr.status === 'partial') && !syncing}
                             <Tooltip text={tooltipMsg} position="top">
