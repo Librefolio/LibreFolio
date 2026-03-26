@@ -31,6 +31,7 @@
     import {getGlobalSettings, setGlobalSettings, getSettingsForPair, setPairSettings, getSettingsVersion} from '$lib/stores/chartSettingsStore.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
+    import {getCurrencyInfo} from '$lib/stores/currencyStore';
 
     // =========================================================================
     // Types
@@ -571,7 +572,7 @@
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium
                                      bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300
                                      border border-amber-200 dark:border-amber-700 rounded-full">
-                            {currency}
+                            {getCurrencyInfo(currency).flag_emoji} {currency}
                             <button
                                 class="hover:text-red-500 transition-colors"
                                 onclick={(e) => { e.stopPropagation(); filterCurrencies = new Set([...filterCurrencies].filter(c => c !== currency)); }}
