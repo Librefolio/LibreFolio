@@ -8,12 +8,8 @@
  * 3. Done — the UI automatically picks it up via getRegisteredSignalTypes()
  */
 
-import {
-    ChartSignal,
-    type SignalConfig,
-    type SignalStyle,
-    DEFAULT_SIGNAL_COLORS,
-} from './ChartSignal';
+import type {SignalParamDescriptor} from './ChartSignal';
+import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalStyle,} from './ChartSignal';
 import {FxPairSignal} from './FxPairSignal';
 import {LinearSignal} from './LinearSignal';
 import {CompoundSignal} from './CompoundSignal';
@@ -90,8 +86,6 @@ function pickBestColor(usedColors: string[]): string {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════════
-
-import type {SignalParamDescriptor} from './ChartSignal';
 
 export interface SignalTypeInfo {
     type: string;

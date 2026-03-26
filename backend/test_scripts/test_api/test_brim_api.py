@@ -735,7 +735,7 @@ class TestMultiUserBRIM:
                 json=[
                     {"user_id": owner_id, "role": "OWNER", "share_percentage": 1.0},
                     {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
-                ],
+                    ],
                 timeout=TIMEOUT,
                 )
             assert add_access_response.status_code == 200

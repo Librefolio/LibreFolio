@@ -44,10 +44,10 @@ from backend.app.schemas.common import Currency, DateRangeModel, BaseBulkRespons
 
 class SyncStatus(str, Enum):
     """Status of a single sync operation (shared by FA and FX)."""
-    OK = "ok"             # Provider returned data, inserted/updated in DB
-    PARTIAL = "partial"   # Provider has data but incomplete (e.g. SNB monthly, gaps)
-    FAILED = "failed"     # All providers for this pair/asset failed
-    SKIPPED = "skipped"   # Pair is MANUAL-only or asset has no provider
+    OK = "ok"  # Provider returned data, inserted/updated in DB
+    PARTIAL = "partial"  # Provider has data but incomplete (e.g. SNB monthly, gaps)
+    FAILED = "failed"  # All providers for this pair/asset failed
+    SKIPPED = "skipped"  # Pair is MANUAL-only or asset has no provider
 
 
 # Backward-compatible alias (will be removed in future)
@@ -168,14 +168,14 @@ class FXSyncPairResult(BaseModel):
         description="Per-leg diagnostic breakdown. Present for chains and single-provider routes "
                     "when status is partial or failed. Each entry shows provider name, "
                     "leg pair, dates available, and any error encountered."
-    )
+        )
     elapsed_ms: Optional[int] = Field(
         None, ge=0,
         description="Backend sync time for this pair in integer milliseconds. "
                     "Measured from bulk start (Phase 1) to commit completion, "
                     "via time.monotonic_ns() with integer division (// 1_000_000). "
                     "None for SKIPPED/MANUAL pairs."
-    )
+        )
 
     @field_validator('pair')
     @classmethod
@@ -205,4 +205,3 @@ class FXSyncBulkResponse(BaseBulkResponse[FXSyncPairResult]):
 
     date_range: DateRangeModel = Field(..., description="Requested date range")
     total_points_changed: int = Field(0, ge=0, description="Sum of points_changed across all pairs")
-

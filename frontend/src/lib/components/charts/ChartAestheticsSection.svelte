@@ -66,10 +66,10 @@
                 <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.baselineColorsDesc')}</span>
             </span>
             <button
-                type="button"
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
-                onclick={() => { colorByBaseline = !colorByBaseline; emitChange(); }}
-                aria-label={$t('chartSettings.baselineColors')}
+                    aria-label={$t('chartSettings.baselineColors')}
+                    class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                    onclick={() => { colorByBaseline = !colorByBaseline; emitChange(); }}
+                    type="button"
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {colorByBaseline ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
@@ -82,10 +82,10 @@
                 <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.areaFillDesc')}</span>
             </span>
             <button
-                type="button"
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
-                onclick={() => { areaFill = !areaFill; emitChange(); }}
-                aria-label={$t('chartSettings.areaFill')}
+                    aria-label={$t('chartSettings.areaFill')}
+                    class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                    onclick={() => { areaFill = !areaFill; emitChange(); }}
+                    type="button"
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {areaFill ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
@@ -98,10 +98,10 @@
                 <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.gridLinesDesc')}</span>
             </span>
             <button
-                type="button"
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
-                onclick={() => { gridLines = !gridLines; emitChange(); }}
-                aria-label={$t('chartSettings.gridLines')}
+                    aria-label={$t('chartSettings.gridLines')}
+                    class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                    onclick={() => { gridLines = !gridLines; emitChange(); }}
+                    type="button"
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {gridLines ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
@@ -114,10 +114,10 @@
                 <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.staleGradientDesc')}</span>
             </span>
             <button
-                type="button"
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
-                onclick={() => { staleGradient = !staleGradient; emitChange(); }}
-                aria-label={$t('chartSettings.staleGradient')}
+                    aria-label={$t('chartSettings.staleGradient')}
+                    class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                    onclick={() => { staleGradient = !staleGradient; emitChange(); }}
+                    type="button"
             >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {staleGradient ? 'translate-x-6' : 'translate-x-1'}"></span>
             </button>
@@ -132,48 +132,49 @@
             <div class="flex items-center gap-2 flex-wrap">
                 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                     <button
-                        type="button"
-                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'auto' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { yAxisMode = 'auto'; emitChange(); }}
-                    >Auto</button>
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'auto' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            onclick={() => { yAxisMode = 'auto'; emitChange(); }}
+                            type="button"
+                    >Auto
+                    </button>
                     <button
-                        type="button"
-                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'include0' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { yAxisMode = 'include0'; emitChange(); }}
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'include0' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            onclick={() => { yAxisMode = 'include0'; emitChange(); }}
+                            type="button"
                     >{$t('chartSettings.yAxisInclude0')}</button>
                     <button
-                        type="button"
-                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'custom' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { yAxisMode = 'custom'; emitChange(); }}
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'custom' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            onclick={() => { yAxisMode = 'custom'; emitChange(); }}
+                            type="button"
                     >{$t('common.custom')}</button>
                 </div>
                 {#if yAxisMode === 'custom'}
                     <div class="flex items-center gap-1.5 text-xs">
                         <span class="text-[10px] text-gray-500 dark:text-gray-400">Min</span>
                         <input
-                            type="number"
-                            class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
-                            step="any"
-                            value={yAxisMin ?? ''}
-                            oninput={(e) => {
+                                type="number"
+                                class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                step="any"
+                                value={yAxisMin ?? ''}
+                                oninput={(e) => {
                                 const v = e.currentTarget.value;
                                 yAxisMin = v === '' ? undefined : Number(v);
                                 emitChange();
                             }}
-                            placeholder="—"
+                                placeholder="—"
                         />
                         <span class="text-[10px] text-gray-500 dark:text-gray-400">Max</span>
                         <input
-                            type="number"
-                            class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
-                            step="any"
-                            value={yAxisMax ?? ''}
-                            oninput={(e) => {
+                                type="number"
+                                class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                step="any"
+                                value={yAxisMax ?? ''}
+                                oninput={(e) => {
                                 const v = e.currentTarget.value;
                                 yAxisMax = v === '' ? undefined : Number(v);
                                 emitChange();
                             }}
-                            placeholder="—"
+                                placeholder="—"
                         />
                     </div>
                 {/if}

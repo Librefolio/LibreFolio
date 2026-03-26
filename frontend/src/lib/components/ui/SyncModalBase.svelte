@@ -6,13 +6,13 @@
 -->
 <script lang="ts">
     import type {Snippet} from 'svelte';
-    import {RefreshCw, X, Clock, Timer, SkipForward, Info} from 'lucide-svelte';
+    import {Clock, Info, RefreshCw, SkipForward, Timer, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
-    import type {SyncResult, SyncStatus} from '$lib/utils/syncHelpers';
-    import {STATUS_ICONS, STATUS_COLORS, formatTime} from '$lib/utils/syncHelpers';
+    import type {SyncResult} from '$lib/utils/syncHelpers';
+    import {formatTime} from '$lib/utils/syncHelpers';
 
     interface Props {
         open: boolean;
@@ -161,22 +161,22 @@
     }
 </script>
 
-<ModalBase {open} onRequestClose={onclose} maxWidth="max-w-md" testId={testId}>
+<ModalBase maxWidth="max-w-md" onRequestClose={onclose} {open} testId={testId}>
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-center gap-2.5">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg {headerIconBg}">
-                <HeaderIcon size={18} class={headerIconColor} />
+                <HeaderIcon class={headerIconColor} size={18}/>
             </div>
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
                 {title}
             </h2>
         </div>
         <button
-            class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            onclick={onclose}
+                class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onclick={onclose}
         >
-            <X size={18} />
+            <X size={18}/>
         </button>
     </div>
 
@@ -197,16 +197,16 @@
         <!-- Timeout setting -->
         {#if !hasResults || failedItems.length > 0 || isTimeout}
             <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <Timer size={13} class="shrink-0" />
+                <Timer size={13} class="shrink-0"/>
                 <span>{$t('fx.sync.timeout') ?? 'Timeout'}:</span>
                 <input
-                    type="number"
-                    min="10"
-                    max="600"
-                    step="10"
-                    bind:value={timeoutSec}
-                    disabled={syncing}
-                    class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                        type="number"
+                        min="10"
+                        max="600"
+                        step="10"
+                        bind:value={timeoutSec}
+                        disabled={syncing}
+                        class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
                 />
                 <span>sec</span>
             </div>
@@ -217,32 +217,32 @@
             <div class="space-y-1.5">
                 <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span class="flex items-center gap-1.5">
-                        <Clock size={13} class="animate-pulse" />
+                        <Clock size={13} class="animate-pulse"/>
                         {$t('fx.syncing') ?? 'Syncing...'}
                     </span>
                     <span class="font-mono tabular-nums">{formatTime(remainingSec)}</span>
                 </div>
                 <div class="h-1.5 w-full bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
-                        class="h-full bg-amber-500 rounded-full transition-all duration-100"
-                        style="width: {progressPct}%"
+                            class="h-full bg-amber-500 rounded-full transition-all duration-100"
+                            style="width: {progressPct}%"
                     ></div>
                 </div>
             </div>
         {/if}
 
         {#if error}
-            <InfoBanner variant="error" message={error} />
+            <InfoBanner variant="error" message={error}/>
         {/if}
 
         {#if hasResults}
             <!-- Retry all failed button -->
             {#if failedItems.length > 1 && !syncing}
                 <button
-                    class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                    onclick={handleRetryFailed}
+                        class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                        onclick={handleRetryFailed}
                 >
-                    <SkipForward size={13} />
+                    <SkipForward size={13}/>
                     Retry {failedItems.length} failed
                 </button>
             {/if}
@@ -261,11 +261,11 @@
                     ·
                     <span>{totalPointsFetched}↓</span>
                     <Tooltip text={$t('fx.sync.tooltipFetched')} position="top">
-                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors"/>
                     </Tooltip>
                     <span>{totalPointsChanged}Δ</span>
                     <Tooltip text={$t('fx.sync.tooltipChanged')} position="top">
-                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors"/>
                     </Tooltip>
                 </span>
             </InfoBanner>
@@ -275,18 +275,18 @@
     <!-- Footer -->
     <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
         <button
-            class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-            onclick={onclose}
+                class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                onclick={onclose}
         >
             {hasResults || isTimeout ? ($t('common.close') ?? 'Close') : ($t('common.cancel') ?? 'Cancel')}
         </button>
         {#if !hasResults || failedItems.length > 0}
             <button
-                class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                onclick={hasResults && failedItems.length > 0 ? handleRetryFailed : handleSyncAll}
-                disabled={syncing || itemCount === 0}
+                    class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                    onclick={hasResults && failedItems.length > 0 ? handleRetryFailed : handleSyncAll}
+                    disabled={syncing || itemCount === 0}
             >
-                <RefreshCw size={15} class={syncing ? 'animate-spin' : ''} />
+                <RefreshCw size={15} class={syncing ? 'animate-spin' : ''}/>
                 {#if failedItems.length > 0 && hasResults}
                     {$t('common.retry') ?? 'Retry'} {failedItems.length} failed
                 {:else if syncing}

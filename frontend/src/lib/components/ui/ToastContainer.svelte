@@ -10,7 +10,7 @@
 <script lang="ts">
     import {fly} from 'svelte/transition';
     import {toasts, type ToastVariant} from '$lib/stores/toastStore.svelte';
-    import {AlertTriangle, Info, AlertCircle, CheckCircle, X} from 'lucide-svelte';
+    import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
 
     const variantStyles: Record<ToastVariant, string> = {
         success: 'bg-emerald-600 text-white',
@@ -32,27 +32,27 @@
         {#each toasts.items as toast (toast.id)}
             {@const Icon = variantIcons[toast.variant]}
             <div
-                class="pointer-events-auto relative rounded-lg shadow-lg overflow-hidden {variantStyles[toast.variant]}"
-                transition:fly={{ y: -30, duration: 250 }}
+                    class="pointer-events-auto relative rounded-lg shadow-lg overflow-hidden {variantStyles[toast.variant]}"
+                    transition:fly={{ y: -30, duration: 250 }}
             >
                 <div class="flex flex-col items-center gap-1 px-4 py-3 text-sm leading-snug text-center">
                     <div class="flex items-start gap-1.5">
-                        <Icon size={15} class="shrink-0 mt-0.5" />
+                        <Icon size={15} class="shrink-0 mt-0.5"/>
                         <span class="flex-1 whitespace-pre-line text-left">{toast.message}</span>
                     </div>
                     <button
-                        class="shrink-0 p-0.5 rounded hover:bg-white/20 transition-colors absolute top-1.5 right-1.5"
-                        onclick={() => toasts.dismiss(toast.id)}
-                        aria-label="Dismiss"
+                            class="shrink-0 p-0.5 rounded hover:bg-white/20 transition-colors absolute top-1.5 right-1.5"
+                            onclick={() => toasts.dismiss(toast.id)}
+                            aria-label="Dismiss"
                     >
-                        <X size={12} />
+                        <X size={12}/>
                     </button>
                 </div>
                 {#if toast.duration > 0}
                     <div class="h-0.5 w-full bg-white/15">
                         <div
-                            class="h-full bg-white/40 toast-countdown-bar"
-                            style="animation-duration: {toast.duration}ms"
+                                class="h-full bg-white/40 toast-countdown-bar"
+                                style="animation-duration: {toast.duration}ms"
                         ></div>
                     </div>
                 {/if}
@@ -70,7 +70,11 @@
     }
 
     @keyframes shrink {
-        from { width: 100%; }
-        to { width: 0%; }
+        from {
+            width: 100%;
+        }
+        to {
+            width: 0%;
+        }
     }
 </style>

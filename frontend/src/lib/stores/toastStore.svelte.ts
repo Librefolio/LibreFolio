@@ -39,7 +39,7 @@ function show(variant: ToastVariant, message: string, duration?: number): string
     const id = crypto.randomUUID();
     const ms = duration ?? DEFAULT_DURATION[variant];
 
-    const toast: Toast = { id, variant, message, duration: ms, createdAt: Date.now() };
+    const toast: Toast = {id, variant, message, duration: ms, createdAt: Date.now()};
 
     if (ms > 0) {
         toast._timeout = setTimeout(() => dismiss(id), ms);
@@ -63,7 +63,9 @@ function clear() {
 }
 
 export const toasts = {
-    get items() { return items; },
+    get items() {
+        return items;
+    },
 
     show,
     dismiss,

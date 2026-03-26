@@ -55,8 +55,12 @@ export function createResponsiveLayout(thresholds: LayoutThresholds) {
     }
 
     return {
-        get layoutMode() { return layoutMode; },
-        get showActionLabels() { return showActionLabels; },
+        get layoutMode() {
+            return layoutMode;
+        },
+        get showActionLabels() {
+            return showActionLabels;
+        },
         attach,
         detach,
     };

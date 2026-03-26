@@ -195,7 +195,7 @@
                 const baseNormDel = base < quote ? base : quote;
                 const quoteNormDel = base < quote ? quote : base;
                 const sortedDates = deleteRows.map(dr => dr.date).sort();
-                const ranges: Array<{start: string; end?: string}> = [];
+                const ranges: Array<{ start: string; end?: string }> = [];
                 let rangeStart = sortedDates[0];
                 let rangeEnd = sortedDates[0];
                 for (let i = 1; i < sortedDates.length; i++) {
@@ -292,9 +292,9 @@
 
     <!-- Data Editor -->
     <DataEditor
+            bind:rows
             bind:this={dataEditor}
             columns={fxColumns}
-            bind:rows
             displayBase={base}
             displayQuote={quote}
             onchange={handleDataChange}
@@ -304,8 +304,8 @@
     <div class="flex items-center justify-end gap-2 px-1">
         <button
                 class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors"
-                onclick={handleSave}
                 disabled={saving || _dirtyCount === 0}
+                onclick={handleSave}
         >
             <Save size={15}/> {saving ? 'Saving...' : `Save (${_dirtyCount})`}
         </button>

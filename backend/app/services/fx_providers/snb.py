@@ -118,7 +118,7 @@ class SNBProvider(FXRateProvider):
             "it": "Banca Nazionale Svizzera — pubblica tassi di cambio medi mensili per ~25 valute contro CHF. Aggiornamento verso il 2° giorno lavorativo del mese successivo. Un dato al mese (⚠️ nessun dato giornaliero).",
             "fr": "Banque Nationale Suisse — publie des taux de change moyens mensuels pour ~25 devises contre CHF. Mise à jour vers le 2e jour ouvrable du mois suivant. Un point par mois (⚠️ pas de données quotidiennes).",
             "es": "Banco Nacional Suizo — publica tipos de cambio promedio mensuales para ~25 monedas contra CHF. Actualizado hacia el 2° día hábil del mes siguiente. Un dato por mes (⚠️ sin datos diarios).",
-        }
+            }
 
     @property
     def warning_i18n(self) -> dict[str, str]:
@@ -127,7 +127,7 @@ class SNBProvider(FXRateProvider):
             "it": "La SNB fornisce solo medie mensili (un valore al mese, il 1°). Nelle catene di conversione, i tassi vengono calcolati solo nelle date in cui TUTTI i provider hanno dati — i giorni senza dati SNB non avranno tasso di catena.",
             "fr": "La BNS ne fournit que des moyennes mensuelles (une valeur par mois, le 1er). Dans les chaînes de conversion, les taux ne sont calculés que les jours où TOUS les fournisseurs ont des données — les jours sans données BNS n'auront pas de taux de chaîne.",
             "es": "El BNS solo proporciona promedios mensuales (un valor por mes, el 1°). En las cadenas de conversión, los tipos se calculan solo en fechas donde TODOS los proveedores tienen datos — los días sin datos del BNS no tendrán tipo de cadena.",
-        }
+            }
 
     @property
     def test_currencies(self) -> list[str]:
@@ -169,7 +169,7 @@ class SNBProvider(FXRateProvider):
         items: list[dict],
         iso_to_d1: dict[str, str],
         d1_to_iso: dict[str, tuple[str, int]],
-    ) -> None:
+        ) -> None:
         """Recursively walk dimension items to extract currency codes."""
         for item in items:
             d1_id = item.get("id", "")
@@ -178,7 +178,7 @@ class SNBProvider(FXRateProvider):
             if d1_id.startswith("D1_"):
                 SNBProvider._walk_dimension_items(
                     item.get("dimensionItems", []), iso_to_d1, d1_to_iso
-                )
+                    )
                 continue
 
             # Skip forward rates and SDR
@@ -212,7 +212,7 @@ class SNBProvider(FXRateProvider):
         date_range: tuple[date, date],
         currencies: list[str],
         base_currency: str | None = None,
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from SNB JSON API for given date range and currencies.
 
@@ -265,7 +265,7 @@ class SNBProvider(FXRateProvider):
             "dimSel": dim_sel,
             "fromDate": from_date,
             "toDate": to_date,
-        }
+            }
 
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -288,7 +288,7 @@ class SNBProvider(FXRateProvider):
         data: dict,
         start_date: date,
         end_date: date,
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Parse SNB JSON response.
 
@@ -382,6 +382,7 @@ if __name__ == "__main__":
     import asyncio
     import sys
 
+
     async def _debug_dimensions():
         """Fetch and display the dynamic currency map from /dimensions."""
         provider = SNBProvider()
@@ -393,6 +394,7 @@ if __name__ == "__main__":
             mult = provider._d1_to_iso[d1][1]
             print(f"    {iso:5s} → {d1:10s} (×{mult})")
 
+
     async def _debug_json_fetch():
         """Fetch filtered JSON for a few currencies and show structure."""
         url = "https://data.snb.ch/api/cube/devkum/data/json/en"
@@ -400,7 +402,7 @@ if __name__ == "__main__":
             "dimSel": "D0(M0),D1(USD1,CNY100,EUR1)",
             "fromDate": "2026-01",
             "toDate": "2026-03",
-        }
+            }
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             r = await client.get(url, params=params)
             data = r.json()
@@ -413,6 +415,7 @@ if __name__ == "__main__":
                 for v in values[:3]:
                     print(f"    {v}")
 
+
     async def _debug_test_parser():
         """Test the full fetch_rates pipeline — should show rates for USD, CNY, EUR, JPY."""
         provider = SNBProvider()
@@ -421,7 +424,7 @@ if __name__ == "__main__":
         result = await provider.fetch_rates(
             (date(2025, 10, 1), date(2026, 3, 6)),
             ["USD", "CNY", "EUR", "JPY"],
-        )
+            )
         for currency, rates in sorted(result.items()):
             print(f"[parser] {currency}: {len(rates)} rates")
             for r in rates:
@@ -429,6 +432,7 @@ if __name__ == "__main__":
         cny_count = len(result.get("CNY", []))
         print(f"\n[parser] CNY rates: {cny_count}")
         print("[parser] ✅ CNY works!" if cny_count > 0 else "[parser] ❌ CNY broken")
+
 
     async def _debug_supported():
         """List all supported currencies (from API, not hardcoded)."""
@@ -439,6 +443,7 @@ if __name__ == "__main__":
         print(f"[supported] {len(currencies)} currencies:")
         for c in currencies:
             print(f"    {c}")
+
 
     async def _debug_dataset_check():
         """Check which SNB datasets exist."""
@@ -458,24 +463,24 @@ if __name__ == "__main__":
                 except Exception as e:
                     print(f"[datasets] {ds}: ERROR {e}")
 
+
     tests = {
         "dimensions": _debug_dimensions,
         "json": _debug_json_fetch,
         "parser": _debug_test_parser,
         "supported": _debug_supported,
         "datasets": _debug_dataset_check,
-    }
+        }
 
     test_name = sys.argv[1] if len(sys.argv) > 1 else "all"
     if test_name == "all":
         for name, fn in tests.items():
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"  {name}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             asyncio.run(fn())
     elif test_name in tests:
         asyncio.run(tests[test_name]())
     else:
         print(f"Unknown test: {test_name}")
         print(f"Available: {', '.join(tests.keys())}, all")
-

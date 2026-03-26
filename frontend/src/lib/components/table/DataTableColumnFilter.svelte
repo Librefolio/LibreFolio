@@ -450,11 +450,13 @@
             <div class="number-filter">
                 <div class="range-row">
                     <label class="range-label" for="number-min-input">{$t('common.min')}</label>
-                    <input type="number" class="range-input" bind:value={numMin} min={numberMin} max={numMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }} id="number-min-input"/>
+                    <input type="number" class="range-input" bind:value={numMin} min={numberMin} max={numMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }}
+                           id="number-min-input"/>
                 </div>
                 <div class="range-row">
                     <label class="range-label" for="number-max-input">{$t('common.max')}</label>
-                    <input type="number" class="range-input" bind:value={numMax} min={numMin} max={numberMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }} id="number-max-input"/>
+                    <input type="number" class="range-input" bind:value={numMax} min={numMin} max={numberMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }}
+                           id="number-max-input"/>
                 </div>
                 <!-- Dual range slider -->
                 <div class="size-slider-container">
@@ -578,13 +580,13 @@
         {:else if type === 'date'}
             <div class="date-filter">
                 <DateRangePicker
-                    start={dateFrom}
-                    end={dateTo}
-                    showPresets={false}
-                    showCustomWindow={false}
-                    compact={true}
-                    stacked={true}
-                    onchange={(s, e) => { dateFrom = s; dateTo = e; applyFilter(); }}
+                        start={dateFrom}
+                        end={dateTo}
+                        showPresets={false}
+                        showCustomWindow={false}
+                        compact={true}
+                        stacked={true}
+                        onchange={(s, e) => { dateFrom = s; dateTo = e; applyFilter(); }}
                 />
             </div>
         {:else if type === 'enum'}

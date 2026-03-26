@@ -63,7 +63,7 @@ from backend.app.db import (
     )
 from backend.app.services.auth_service import hash_password
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
-from backend.app.services.static_uploads import seed_default_avatars, get_uploads_dir, save_upload
+from backend.app.services.static_uploads import seed_default_avatars, get_uploads_dir
 from backend.app.config import get_data_dir
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
@@ -200,7 +200,7 @@ def populate_broker_user_access(session: Session):
         # "Free" users — NOT assigned to any broker, useful for search tests
         ("e2e_user_frank", "frank@test.example.com", "FrankPass123!", False),
         ("e2e_user_grace", "grace@test.example.com", "GracePass123!", False),
-    ]
+        ]
 
     # Create any missing users
     for uname, email, pwd, is_admin in test_user_defs:
@@ -212,7 +212,7 @@ def populate_broker_user_access(session: Session):
                 hashed_password=hash_password(pwd),
                 is_active=True,
                 is_admin=is_admin,
-            )
+                )
             session.add(u)
             print(f"  ✅ Created user: {uname}{' (admin)' if is_admin else ''}")
     session.commit()
@@ -297,7 +297,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.OWNER,
             share_percentage=Decimal("0.2"),
-        )
+            )
         session.add(access1)
         print(f"  ✅ {alice.username} → {brokers[0].name} (OWNER, 20%)")
         access2 = BrokerUserAccess(
@@ -305,7 +305,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[1].id,
             role=UserRole.EDITOR,
             share_percentage=Decimal("0"),
-        )
+            )
         session.add(access2)
         print(f"  ✅ {alice.username} → {brokers[1].name} (EDITOR, 0%)")
 
@@ -316,7 +316,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.EDITOR,
             share_percentage=Decimal("0"),
-        )
+            )
         session.add(access1)
         print(f"  ✅ {bob.username} → {brokers[0].name} (EDITOR, 0%)")
         access2 = BrokerUserAccess(
@@ -324,7 +324,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[2].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-        )
+            )
         session.add(access2)
         print(f"  ✅ {bob.username} → {brokers[2].name} (VIEWER, 0%)")
 
@@ -335,7 +335,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-        )
+            )
         session.add(access)
         print(f"  ✅ {carol.username} → {brokers[0].name} (VIEWER, 0%)")
 
@@ -346,7 +346,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[1].id,
             role=UserRole.EDITOR,
             share_percentage=Decimal("0"),
-        )
+            )
         session.add(access)
         print(f"  ✅ {dave.username} → {brokers[1].name} (EDITOR, 0%)")
 
@@ -357,7 +357,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-        )
+            )
         session.add(access1)
         print(f"  ✅ {eve.username} → {brokers[0].name} (VIEWER, 0%)")
         access2 = BrokerUserAccess(
@@ -365,7 +365,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[1].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-        )
+            )
         session.add(access2)
         print(f"  ✅ {eve.username} → {brokers[1].name} (VIEWER, 0%)")
 
@@ -379,8 +379,8 @@ def populate_broker_user_access(session: Session):
             select(BrokerUserAccess).where(
                 BrokerUserAccess.user_id == user_obj.id,
                 BrokerUserAccess.broker_id == broker_obj.id,
-            )
-        ).first()
+                )
+            ).first()
         if existing:
             existing.role = role
             existing.share_percentage = share_pct
@@ -393,7 +393,7 @@ def populate_broker_user_access(session: Session):
                 broker_id=broker_obj.id,
                 role=role,
                 share_percentage=share_pct,
-            )
+                )
             session.add(access)
             pct = int(share_pct * 100)
             print(f"  ✅ {user_obj.username} → {broker_obj.name} ({role.value}, {pct}%)")
@@ -1257,7 +1257,7 @@ def configure_user_avatars(session: Session):
         "e2e_user_eve": "woman_04.png",
         "e2e_user_frank": "men_05.png",
         "e2e_user_grace": "woman_05.png",
-    }
+        }
 
     for username, avatar_filename in user_avatar_assignments.items():
         user = session.exec(select(User).where(User.username == username)).first()
@@ -1275,7 +1275,7 @@ def configure_user_avatars(session: Session):
         # Find or create UserSettings
         settings = session.exec(
             select(UserSettings).where(UserSettings.user_id == user.id)
-        ).first()
+            ).first()
 
         if settings:
             settings.avatar_url = avatar_url
@@ -1284,7 +1284,7 @@ def configure_user_avatars(session: Session):
             settings = UserSettings(
                 user_id=user.id,
                 avatar_url=avatar_url,
-            )
+                )
             session.add(settings)
 
         print(f"  ✅ {username} avatar → {avatar_filename} ({avatar_url})")
@@ -1300,7 +1300,7 @@ def clean_data_dirs():
         data_dir / "broker_reports" / "uploaded",
         data_dir / "broker_reports" / "parsed",
         data_dir / "broker_reports" / "failed",
-    ]
+        ]
 
     print("\n🧹 Cleaning data directories...")
     print("-" * 60)
@@ -1366,7 +1366,7 @@ def upload_broker_reports(session: Session):
         "eToro": "etoro-export.csv",
         "Coinbase": "coinbase-export.csv",
         "Recrowd": "generic_simple.csv",
-    }
+        }
 
     # Get admin user for uploaded_by_user_id
     admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()
@@ -1391,7 +1391,7 @@ def upload_broker_reports(session: Session):
             original_filename=sample_filename,
             user_id=admin_id,
             broker_id=broker.id,
-        )
+            )
         print(f"  ✅ {broker.name} → {sample_filename} (id: {file_info.file_id[:8]}…)")
 
 

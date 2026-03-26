@@ -256,4 +256,3 @@ class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
     - items: List[FAPriceQueryResult]  (one per asset queried)
     """
     pass
-

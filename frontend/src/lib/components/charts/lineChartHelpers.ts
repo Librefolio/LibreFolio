@@ -145,8 +145,8 @@ export function buildMainSeries(
             showSymbol: true,
             symbol: 'circle',
             symbolSize: 8,
-            itemStyle: { color },
-            lineStyle: { width: 0 },
+            itemStyle: {color},
+            lineStyle: {width: 0},
             areaStyle: undefined,
         }];
     }

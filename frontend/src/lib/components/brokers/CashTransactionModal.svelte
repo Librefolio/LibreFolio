@@ -103,107 +103,107 @@
 </script>
 
 <ModalBase
-    open={isOpen}
-    zIndex={50}
-    maxWidth="md"
-    closeOnEscape={!loading}
-    closeOnBackdropClick={!loading}
-    onRequestClose={handleClose}
+        closeOnBackdropClick={!loading}
+        closeOnEscape={!loading}
+        maxWidth="md"
+        onRequestClose={handleClose}
+        open={isOpen}
+        zIndex={50}
 >
-            <!-- Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
-                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                    {type === 'DEPOSIT' ? $_('brokers.deposit') : $_('brokers.withdraw')}
-                </h2>
-                <button
-                        on:click={handleClose}
-                        disabled={loading}
-                        class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-                >
-                    <X size={20}/>
-                </button>
-            </div>
+    <!-- Header -->
+    <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
+            {type === 'DEPOSIT' ? $_('brokers.deposit') : $_('brokers.withdraw')}
+        </h2>
+        <button
+                class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                disabled={loading}
+                on:click={handleClose}
+        >
+            <X size={20}/>
+        </button>
+    </div>
 
-            <!-- Error -->
-            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mx-4 mt-4" />
+    <!-- Error -->
+    <InfoBanner class="mx-4 mt-4" dismissible message={error} ondismiss={() => error = ''} variant="error"/>
 
-            <!-- Form -->
-            <form on:submit|preventDefault={handleSubmit} class="p-4 space-y-4">
-                <!-- Amount -->
-                <div>
-                    <label for="cash-amount" class="block text-sm font-medium text-gray-700 mb-1">
-                        {$_('brokers.amount')} *
-                    </label>
-                    <input
-                            id="cash-amount"
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            bind:value={amount}
-                            required
-                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green"
-                    />
-                </div>
+    <!-- Form -->
+    <form class="p-4 space-y-4" on:submit|preventDefault={handleSubmit}>
+        <!-- Amount -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="cash-amount">
+                {$_('brokers.amount')} *
+            </label>
+            <input
+                    bind:value={amount}
+                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green"
+                    id="cash-amount"
+                    min="0.01"
+                    required
+                    step="0.01"
+                    type="number"
+            />
+        </div>
 
-                <!-- Currency -->
-                <div>
+        <!-- Currency -->
+        <div>
                     <span class="block text-sm font-medium text-gray-700 mb-1">
                         Currency *
                     </span>
-                    <SearchSelect
-                            bind:value={currency}
-                            options={currencyOptions}
-                            placeholder={$_('settings.selectCurrency')}
-                            loading={loadingCurrencies}
-                    />
-                </div>
+            <SearchSelect
+                    bind:value={currency}
+                    loading={loadingCurrencies}
+                    options={currencyOptions}
+                    placeholder={$_('settings.selectCurrency')}
+            />
+        </div>
 
-                <!-- Date -->
-                <div>
-                    <label for="cash-date" class="block text-sm font-medium text-gray-700 mb-1">
-                        Date *
-                    </label>
-                    <input
-                            id="cash-date"
-                            type="date"
-                            bind:value={date}
-                            required
-                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green"
-                    />
-                </div>
+        <!-- Date -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="cash-date">
+                Date *
+            </label>
+            <input
+                    bind:value={date}
+                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green"
+                    id="cash-date"
+                    required
+                    type="date"
+            />
+        </div>
 
-                <!-- Description -->
-                <div>
-                    <label for="cash-description" class="block text-sm font-medium text-gray-700 mb-1">
-                        {$_('brokers.description')}
-                    </label>
-                    <textarea
-                            id="cash-description"
-                            bind:value={description}
-                            rows="2"
-                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green resize-none"
-                    ></textarea>
-                </div>
+        <!-- Description -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="cash-description">
+                {$_('brokers.description')}
+            </label>
+            <textarea
+                    bind:value={description}
+                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green resize-none"
+                    id="cash-description"
+                    rows="2"
+            ></textarea>
+        </div>
 
-                <!-- Actions -->
-                <div class="flex items-center justify-end space-x-3 pt-2">
-                    <button
-                            type="button"
-                            on:click={handleClose}
-                            disabled={loading}
-                            class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                        {$_('common.cancel')}
-                    </button>
-                    <button
-                            type="submit"
-                            disabled={!isValid || loading}
-                            class="px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+        <!-- Actions -->
+        <div class="flex items-center justify-end space-x-3 pt-2">
+            <button
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    disabled={loading}
+                    on:click={handleClose}
+                    type="button"
+            >
+                {$_('common.cancel')}
+            </button>
+            <button
+                    class="px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed
                                    {type === 'DEPOSIT' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-orange-600 hover:bg-orange-700 text-white'}"
-                    >
-                        {loading ? $_('common.loading') : (type === 'DEPOSIT' ? $_('brokers.deposit') : $_('brokers.withdraw'))}
-                    </button>
-                </div>
-            </form>
+                    disabled={!isValid || loading}
+                    type="submit"
+            >
+                {loading ? $_('common.loading') : (type === 'DEPOSIT' ? $_('brokers.deposit') : $_('brokers.withdraw'))}
+            </button>
+        </div>
+    </form>
 </ModalBase>
 

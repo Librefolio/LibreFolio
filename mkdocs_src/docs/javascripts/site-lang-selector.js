@@ -355,8 +355,10 @@
                 });
 
                 // Track if user manually scrolls (don't override their intent)
-                var onUserScroll = function () { userScrolled = true; };
-                window.addEventListener('scroll', onUserScroll, { passive: true });
+                var onUserScroll = function () {
+                    userScrolled = true;
+                };
+                window.addEventListener('scroll', onUserScroll, {passive: true});
 
                 // Phase 2: Re-apply after all images loaded (if user hasn't scrolled)
                 window.addEventListener('load', function () {

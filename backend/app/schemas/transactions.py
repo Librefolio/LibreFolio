@@ -133,7 +133,7 @@ class TXCreateItem(BaseModel):
     cost_basis_override: Optional[Decimal] = Field(
         default=None,
         description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
-    )
+        )
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -349,7 +349,7 @@ class TXUpdateItem(BaseModel):
     cost_basis_override: Optional[Decimal] = Field(
         default=None,
         description="Frozen cost basis for TRANSFER_IN. Set to override calculated cost basis.",
-    )
+        )
 
     @field_validator("tags", mode="before")
     @classmethod

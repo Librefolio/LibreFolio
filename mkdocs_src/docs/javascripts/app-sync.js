@@ -56,7 +56,8 @@
         var current = null;
         try {
             current = currentRaw ? JSON.parse(currentRaw) : null;
-        } catch (e) { /* ignore */ }
+        } catch (e) { /* ignore */
+        }
 
         var targetIndex = isDark ? 1 : 0;
         var targetScheme = isDark ? 'slate' : 'default';

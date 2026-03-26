@@ -758,7 +758,7 @@
     }
 
     /** Get ordered columns info for external visibility control */
-    export function getColumnsForVisibility(): Array<{id: string; header: string | (() => string); visible: boolean}> {
+    export function getColumnsForVisibility(): Array<{ id: string; header: string | (() => string); visible: boolean }> {
         return orderedColumns.map(c => ({id: c.id, header: c.header, visible: columnVisibility[c.id] !== false}));
     }
 
@@ -857,7 +857,7 @@
                                 {@const tooltipText = getColumnTooltip(column) ?? ''}
                                 <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
                                     <span class="header-tooltip-icon">
-                                        <Info size={12} />
+                                        <Info size={12}/>
                                     </span>
                                 </Tooltip>
                             {/if}
@@ -1001,19 +1001,19 @@
                                             <div class="cell-image" class:circle={cellContent.circle}
                                                  style="width:{cellContent.size || 32}px;height:{cellContent.size || 32}px;">
                                                 <img
-                                                    src={cellContent.src}
-                                                    alt={cellContent.alt}
-                                                    width={cellContent.size || 32}
-                                                    height={cellContent.size || 32}
-                                                    loading="lazy"
-                                                    onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                                        src={cellContent.src}
+                                                        alt={cellContent.alt}
+                                                        width={cellContent.size || 32}
+                                                        height={cellContent.size || 32}
+                                                        loading="lazy"
+                                                        onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
                                                 />
                                                 <span class="image-fallback hidden">
                                                     {#if cellContent.fallbackIcon}
                                                         {@const FallbackIcon = cellContent.fallbackIcon}
-                                                        <FallbackIcon size={cellContent.size ? cellContent.size * 0.6 : 20} />
+                                                        <FallbackIcon size={cellContent.size ? cellContent.size * 0.6 : 20}/>
                                                     {:else}
-                                                        <ImageIcon size={cellContent.size ? cellContent.size * 0.6 : 20} />
+                                                        <ImageIcon size={cellContent.size ? cellContent.size * 0.6 : 20}/>
                                                     {/if}
                                                 </span>
                                             </div>
@@ -1023,14 +1023,14 @@
                                         </div>
                                     {:else if cellContent.type === 'editable-number'}
                                         <input
-                                            type="number"
-                                            class="cell-editable-number"
-                                            value={cellContent.value ?? ''}
-                                            step={cellContent.step ?? 1}
-                                            min={cellContent.min}
-                                            max={cellContent.max}
-                                            placeholder={cellContent.placeholder ?? ''}
-                                            oninput={(e) => {
+                                                type="number"
+                                                class="cell-editable-number"
+                                                value={cellContent.value ?? ''}
+                                                step={cellContent.step ?? 1}
+                                                min={cellContent.min}
+                                                max={cellContent.max}
+                                                placeholder={cellContent.placeholder ?? ''}
+                                                oninput={(e) => {
                                                 const raw = e.currentTarget.value;
                                                 if (raw === '') { cellContent.onchange(null); return; }
                                                 let num = Number(raw);
@@ -1038,7 +1038,7 @@
                                                 if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
                                                 cellContent.onchange(num);
                                             }}
-                                            onblur={(e) => {
+                                                onblur={(e) => {
                                                 const raw = e.currentTarget.value;
                                                 if (raw === '') { cellContent.onchange(null); return; }
                                                 let num = Number(raw);
@@ -1052,10 +1052,10 @@
                                                 }
                                                 cellContent.onchange(num);
                                             }}
-                                            onkeydown={(e) => {
+                                                onkeydown={(e) => {
                                                 if (e.key === 'Enter') e.currentTarget.blur();
                                             }}
-                                            onclick={(e) => e.stopPropagation()}
+                                                onclick={(e) => e.stopPropagation()}
                                         />
                                     {:else if cellContent.type === 'html'}
                                         {@html cellContent.html}
@@ -1782,15 +1782,18 @@
         outline: none;
         transition: border-color 0.15s;
     }
+
     .cell-editable-number:focus {
         border-color: #1a4031;
         box-shadow: 0 0 0 1px #1a403140;
     }
+
     :global(.dark) .cell-editable-number {
         background: #0f172a;
         border-color: #475569;
         color: #e2e8f0;
     }
+
     :global(.dark) .cell-editable-number:focus {
         border-color: #4ade80;
         box-shadow: 0 0 0 1px #4ade8040;
@@ -1801,25 +1804,32 @@
         background: rgba(239, 68, 68, 0.06) !important;
         opacity: 0.55;
     }
+
     :global(.dark) :global(tr.row-deleted) td {
         background: rgba(239, 68, 68, 0.20) !important;
         opacity: 0.55;
     }
+
     :global(tr.row-edited) td {
         background: rgba(59, 130, 246, 0.06) !important;
     }
+
     :global(.dark) :global(tr.row-edited) td {
         background: rgba(59, 130, 246, 0.20) !important;
     }
+
     :global(tr.row-appended) td {
         background: rgba(16, 185, 129, 0.06) !important;
     }
+
     :global(.dark) :global(tr.row-appended) td {
         background: rgba(16, 185, 129, 0.20) !important;
     }
+
     :global(tr.row-stale) td {
         background: rgba(245, 158, 11, var(--stale-opacity, 0.04)) !important;
     }
+
     :global(.dark) :global(tr.row-stale) td {
         background: rgba(245, 158, 11, var(--stale-opacity, 0.08)) !important;
     }

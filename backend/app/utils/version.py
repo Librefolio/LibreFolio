@@ -27,7 +27,7 @@ def get_git_version() -> str:
             text=True,
             cwd=project_root,
             timeout=5
-        )
+            )
         if result.returncode == 0:
             version = result.stdout.strip()
             # If no tags exist, git describe --always returns just the hash
@@ -52,5 +52,4 @@ def get_version_info() -> dict:
         "version": version,
         "is_dirty": version.endswith("-dirty"),
         "is_release": "-" not in version.replace("-dirty", ""),
-    }
-
+        }

@@ -10,17 +10,11 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import type {ChartType, ViewMode} from './ChartToolbar.svelte';
     import ChartToolbar from './ChartToolbar.svelte';
     import type {LineDataPoint} from './LineChart.svelte';
-    import type {ChartType, ViewMode} from './ChartToolbar.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {
-        COLORS,
-        buildMainSeries,
-        buildBandSeries,
-        buildBarSeries,
-        updateArrowRotations,
-    } from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations,} from './lineChartHelpers';
 
     // =========================================================================
     // Props
@@ -92,8 +86,12 @@
     let resizeObserver: ResizeObserver | null = null;
     let chartOptionSet = false;
 
-    $effect(() => { chartType = initialChartType; });
-    $effect(() => { viewMode = externalViewMode ?? initialViewMode; });
+    $effect(() => {
+        chartType = initialChartType;
+    });
+    $effect(() => {
+        viewMode = externalViewMode ?? initialViewMode;
+    });
 
     // =========================================================================
     // Derived data
@@ -182,7 +180,8 @@
                     try {
                         chartInstance?.resize();
                         if (chartInstance) updateArrowRotations(chartInstance);
-                    } catch (_) {}
+                    } catch (_) {
+                    }
                 } else if (chartContainer && data.length > 0) {
                     renderChart();
                 }
@@ -263,15 +262,21 @@
 
             // Long-press handler for mobile (1s hold = double-click equivalent)
             let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-            let touchStartPos: {x: number; y: number} | null = null;
+            let touchStartPos: { x: number; y: number } | null = null;
 
             function clearLongPress() {
-                if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
                 touchStartPos = null;
             }
 
             function onTouchStart(e: TouchEvent) {
-                if (!chartInstance || e.touches.length !== 1) { clearLongPress(); return; }
+                if (!chartInstance || e.touches.length !== 1) {
+                    clearLongPress();
+                    return;
+                }
                 const touch = e.touches[0];
                 touchStartPos = {x: touch.clientX, y: touch.clientY};
                 longPressTimer = setTimeout(() => {
@@ -303,7 +308,9 @@
                 if (dx * dx + dy * dy > 100) clearLongPress(); // 10px threshold
             }
 
-            function onTouchEnd() { clearLongPress(); }
+            function onTouchEnd() {
+                clearLongPress();
+            }
 
             chartContainer.addEventListener('touchstart', onTouchStart, {passive: true});
             chartContainer.addEventListener('touchmove', onTouchMove, {passive: true});
@@ -343,7 +350,10 @@
 
                 if (sType === 'band' && signal.bandData) {
                     const bandSeries = buildBandSeries(signal, dates, isDark);
-                    for (const bs of bandSeries) { bs.xAxisIndex = 0; series.push(bs); }
+                    for (const bs of bandSeries) {
+                        bs.xAxisIndex = 0;
+                        series.push(bs);
+                    }
                     continue;
                 }
                 if (sType === 'bar') {
@@ -430,7 +440,7 @@
         }
 
         // Preserve zoom state across re-renders
-        let savedZoom: {start: number; end: number} | null = null;
+        let savedZoom: { start: number; end: number } | null = null;
         if (chartOptionSet && chartInstance) {
             try {
                 const opt = chartInstance.getOption() as any;
@@ -440,7 +450,8 @@
                         savedZoom = {start: dz.start, end: dz.end};
                     }
                 }
-            } catch (_) {}
+            } catch (_) {
+            }
         }
 
         // Pre-compute stale lookup map for O(1) tooltip access (instead of O(n) data.find per hover)
@@ -455,26 +466,50 @@
                 {top: 20, right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12, bottom: 20, left: 10, containLabel: true},
             ],
             xAxis: [
-                {type: 'category', data: dates, gridIndex: 0, axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}}, axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11}, splitLine: {show: false}},
+                {
+                    type: 'category',
+                    data: dates,
+                    gridIndex: 0,
+                    axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                    axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11},
+                    splitLine: {show: false}
+                },
             ],
             yAxis: [
-                {type: 'value', gridIndex: 0, position: 'left', min: effectiveMin, max: effectiveMax,
+                {
+                    type: 'value', gridIndex: 0, position: 'left', min: effectiveMin, max: effectiveMax,
                     axisLine: {show: true, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}}, axisTick: {show: true},
-                    axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11, formatter: isPercentage ? (v: number) => `${v.toFixed(1)}%` : (v: number) => { if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`; if (Math.abs(v) >= 1) return v.toFixed(2); return v.toFixed(4).replace(/\.?0+$/, ''); }},
-                    splitLine: {show: showGridLines, lineStyle: {color: isDark ? '#4b5563' : '#d1d5db', type: 'dashed'}}, scale: !isInclude0},
-                {type: 'value', gridIndex: 0, position: 'right', name: hasSecondaryAxis ? 'RSI' : '', nameLocation: 'start', nameGap: 5,
+                    axisLabel: {
+                        color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11, formatter: isPercentage ? (v: number) => `${v.toFixed(1)}%` : (v: number) => {
+                            if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+                            if (Math.abs(v) >= 1) return v.toFixed(2);
+                            return v.toFixed(4).replace(/\.?0+$/, '');
+                        }
+                    },
+                    splitLine: {show: showGridLines, lineStyle: {color: isDark ? '#4b5563' : '#d1d5db', type: 'dashed'}}, scale: !isInclude0
+                },
+                {
+                    type: 'value', gridIndex: 0, position: 'right', name: hasSecondaryAxis ? 'RSI' : '', nameLocation: 'start', nameGap: 5,
                     nameTextStyle: {color: isDark ? '#94a3b8' : '#9ca3af', fontSize: 9, fontWeight: 'bold', align: 'center'},
                     show: hasSecondaryAxis, min: hasSecondaryAxis ? undefined : 0, max: hasSecondaryAxis ? undefined : 100,
                     axisLine: {show: hasSecondaryAxis, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}}, axisTick: {show: hasSecondaryAxis},
                     axisLabel: {show: hasSecondaryAxis, color: isDark ? '#94a3b8' : '#9ca3af', fontSize: 10, formatter: (v: number) => v.toFixed(0)},
-                    splitLine: {show: false}, scale: hasSecondaryAxis},
-                {type: 'value', gridIndex: 0, position: 'right', name: hasTertiaryAxis ? 'MACD' : '', nameLocation: 'start', nameGap: 5,
+                    splitLine: {show: false}, scale: hasSecondaryAxis
+                },
+                {
+                    type: 'value', gridIndex: 0, position: 'right', name: hasTertiaryAxis ? 'MACD' : '', nameLocation: 'start', nameGap: 5,
                     nameTextStyle: {color: isDark ? '#a78bfa' : '#7c3aed', fontSize: 9, fontWeight: 'bold', align: 'center'},
                     show: hasTertiaryAxis, offset: hasSecondaryAxis && hasTertiaryAxis ? 55 : 0,
                     min: hasTertiaryAxis ? undefined : 0, max: hasTertiaryAxis ? undefined : 1,
                     axisLine: {show: hasTertiaryAxis, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}}, axisTick: {show: hasTertiaryAxis},
-                    axisLabel: {show: hasTertiaryAxis, color: isDark ? '#a78bfa' : '#7c3aed', fontSize: 10, formatter: (v: number) => Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(4).replace(/\.?0+$/, '')},
-                    splitLine: {show: false}, scale: hasTertiaryAxis},
+                    axisLabel: {
+                        show: hasTertiaryAxis,
+                        color: isDark ? '#a78bfa' : '#7c3aed',
+                        fontSize: 10,
+                        formatter: (v: number) => Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(4).replace(/\.?0+$/, '')
+                    },
+                    splitLine: {show: false}, scale: hasTertiaryAxis
+                },
             ],
             dataZoom: [
                 {type: 'inside', xAxisIndex: [0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, zoomOnMouseWheel: true, moveOnMouseMove: true},
@@ -491,10 +526,15 @@
                     let html = `<strong>${date}</strong>`;
                     const bandHelperNames = new Set<string>();
                     for (const sig of overlaySignals) {
-                        if ((sig.seriesType ?? 'line') === 'band') { bandHelperNames.add(`${sig.label} Lower`); bandHelperNames.add(`${sig.label} Band`); }
+                        if ((sig.seriesType ?? 'line') === 'band') {
+                            bandHelperNames.add(`${sig.label} Lower`);
+                            bandHelperNames.add(`${sig.label} Band`);
+                        }
                     }
                     const signalAxisMap = new Map<string, number>();
-                    for (const sig of overlaySignals) { signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0); }
+                    for (const sig of overlaySignals) {
+                        signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
+                    }
                     const shownNames = new Set<string>();
                     const firstValue = displayData.length > 0 ? displayData[0].value : null;
                     for (const p of items) {
@@ -545,27 +585,28 @@
 <div class="space-y-2">
     <!-- Toolbar (hidden when parent provides external controls) -->
     {#if !hideToolbar}
-    <ChartToolbar
-        {chartType}
-        {viewMode}
-        onChartTypeChange={handleChartTypeChange}
-        onViewModeChange={handleViewModeChange}
-        disableCandlestick={true}
-    />
+        <ChartToolbar
+                {chartType}
+                {viewMode}
+                onChartTypeChange={handleChartTypeChange}
+                onViewModeChange={handleViewModeChange}
+                disableCandlestick={true}
+        />
     {/if}
 
     <!-- Unified Chart -->
     <div class="relative">
         {#if chartType === 'line'}
             <div
-                bind:this={chartContainer}
-                class="w-full"
-                style="height: {chartHeight};"
-                class:cursor-crosshair={measureMode}
+                    bind:this={chartContainer}
+                    class="w-full"
+                    style="height: {chartHeight};"
+                    class:cursor-crosshair={measureMode}
             ></div>
         {:else}
             <!-- Candlestick stub — TODO Phase 6 (Assets) -->
-            <div class="flex items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-600" style="height: {chartHeight};">
+            <div class="flex items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-600"
+                 style="height: {chartHeight};">
                 <p class="text-gray-400 dark:text-slate-500 text-sm">Candlestick chart — Coming soon</p>
             </div>
         {/if}

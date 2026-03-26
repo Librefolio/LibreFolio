@@ -99,7 +99,7 @@ export async function getCroppedImageFromCropper(
     }
 
     // Build canvas options
-    const canvasOptions: {width?: number; height?: number} = {};
+    const canvasOptions: { width?: number; height?: number } = {};
     if (outputWidth) canvasOptions.width = outputWidth;
     if (outputHeight) canvasOptions.height = outputHeight;
 
@@ -174,7 +174,7 @@ export function blobToFile(blob: Blob, fileName: string): File {
     const ext = mimeToExt[blob.type] || '.png';
     const baseName = fileName.replace(/\.[^.]+$/, ''); // Remove existing extension
 
-    return new File([blob], `${baseName}${ext}`, { type: blob.type });
+    return new File([blob], `${baseName}${ext}`, {type: blob.type});
 }
 
 /**

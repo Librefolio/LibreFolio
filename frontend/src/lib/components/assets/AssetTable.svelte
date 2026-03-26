@@ -11,11 +11,9 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
-    import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
-    import {
-        ensureAssetProvidersCached, assetProviderBadgeHtml,
-    } from '$lib/utils/providerHelpers';
+    import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached,} from '$lib/utils/providerHelpers';
 
     // =========================================================================
     // Types
@@ -38,7 +36,7 @@
     interface Props {
         data: AssetRow[];
         loading?: boolean;
-        visiblePeriods?: ReadonlyArray<{key: string; days: number}>;
+        visiblePeriods?: ReadonlyArray<{ key: string; days: number }>;
         onsync?: (asset: AssetRow) => void;
         onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
@@ -52,7 +50,10 @@
 
     /** Exposed DataTable ref for ColumnVisibilityToggle */
     let tableRef: DataTable<AssetRow> | undefined = $state(undefined);
-    export function getTableRef() { return tableRef; }
+
+    export function getTableRef() {
+        return tableRef;
+    }
 
     /** Track rows currently being refreshed/synced for spin animation */
     let refreshingRowIds = $state(new Set<string>());
@@ -113,107 +114,111 @@
     // Columns
     // =========================================================================
 
-    let columns = $derived<ColumnDef<AssetRow>[]>([
-        {
-            id: 'name',
-            header: () => $t('assets.table.name'),
-            cell: (row) => {
-                const icon = assetIconHtml(row);
-                const activeDot = row.active
-                    ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>'
-                    : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
-                return {type: 'html', html: `<div class="flex items-center gap-2">${icon}<span class="font-medium text-gray-800 dark:text-gray-100">${row.display_name}</span>${activeDot}</div>`};
-            },
-            type: 'text',
-            getValue: (row) => row.display_name,
-            width: 220,
-            minWidth: 150,
-        },
-        {
-            id: 'type',
-            header: () => $t('common.type'),
-            cell: (row) => ({type: 'html', html: typeBadgeHtml(row.asset_type)}),
-            type: 'enum',
-            enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'].map(v => ({value: v, label: $t(`assets.types.${v}`) || v})),
-            getValue: (row) => row.asset_type ?? '',
-            filterable: false,
-            width: 110,
-            minWidth: 80,
-        },
-        {
-            id: 'currency',
-            header: () => $t('assets.table.currency'),
-            cell: (row) => {
-                const info = getCurrencyInfo(row.currency);
-                return {type: 'html', html: `<span class="emoji-flag">${info.flag_emoji}</span> ${row.currency}`};
-            },
-            type: 'text',
-            getValue: (row) => row.currency,
-            filterable: false,
-            width: 90,
-            minWidth: 70,
-        },
-        {
-            id: 'lastPrice',
-            header: () => $t('assets.table.lastPrice'),
-            cell: (row) => row.lastPrice !== null && row.lastPrice !== undefined
-                ? {type: 'html', html: `<span class="font-mono">${Number(row.lastPrice).toFixed(2)}</span>`}
-                : '—',
-            type: 'number',
-            getValue: (row) => row.lastPrice ?? 0,
-            width: 110,
-            minWidth: 80,
-        },
-        // Dynamic Δ multi-period columns
-        ...visiblePeriods.map(period => ({
-            id: `delta_${period.key}`,
-            header: `Δ ${period.key}`,
-            cell: (row: AssetRow) => {
-                const val = row.deltas?.[period.key] ?? null;
-                return {
-                    type: 'html' as const,
-                    html: `<span class="font-mono ${deltaColorClass(val)}">${formatDelta(val, '%')}</span>`,
-                };
-            },
-            type: 'number' as const,
-            getValue: (row: AssetRow) => row.deltas?.[period.key] ?? 0,
-            width: 80,
-            minWidth: 60,
-        })),
-        {
-            id: 'provider',
-            header: () => $t('assets.table.provider'),
-            cell: (row) => ({
-                type: 'html' as const,
-                html: row.provider_code
-                    ? assetProviderBadgeHtml(row.provider_code)
-                    : '<span class="text-gray-400 dark:text-gray-500">—</span>',
-            }),
-            type: 'text',
-            getValue: (row) => row.provider_code ?? '',
-            width: 80,
-            minWidth: 60,
-            filterable: false,
-        },
-    ]);
+    let columns = $derived<ColumnDef<AssetRow>[]>((
+        void $assetProvidersVersion, // trigger re-derive when asset provider icons are cached
+            [
+                {
+                    id: 'name',
+                    header: () => $t('assets.table.name'),
+                    cell: (row) => {
+                        const icon = assetIconHtml(row);
+                        const activeDot = row.active
+                            ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>'
+                            : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
+                        return {
+                            type: 'html',
+                            html: `<div class="flex items-center gap-2">${icon}<span class="font-medium text-gray-800 dark:text-gray-100">${row.display_name}</span>${activeDot}</div>`
+                        };
+                    },
+                    type: 'text',
+                    getValue: (row) => row.display_name,
+                    width: 220,
+                    minWidth: 150,
+                },
+                {
+                    id: 'type',
+                    header: () => $t('common.type'),
+                    cell: (row) => ({type: 'html', html: typeBadgeHtml(row.asset_type)}),
+                    type: 'enum',
+                    enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'].map(v => ({value: v, label: $t(`assets.types.${v}`) || v})),
+                    getValue: (row) => row.asset_type ?? '',
+                    filterable: false,
+                    width: 110,
+                    minWidth: 80,
+                },
+                {
+                    id: 'currency',
+                    header: () => $t('assets.table.currency'),
+                    cell: (row) => {
+                        const info = getCurrencyInfo(row.currency);
+                        return {type: 'html', html: `<span class="emoji-flag">${info.flag_emoji}</span> ${row.currency}`};
+                    },
+                    type: 'text',
+                    getValue: (row) => row.currency,
+                    filterable: false,
+                    width: 90,
+                    minWidth: 70,
+                },
+                {
+                    id: 'lastPrice',
+                    header: () => $t('assets.table.lastPrice'),
+                    cell: (row) => row.lastPrice !== null && row.lastPrice !== undefined
+                        ? {type: 'html', html: `<span class="font-mono">${Number(row.lastPrice).toFixed(2)}</span>`}
+                        : '—',
+                    type: 'number',
+                    getValue: (row) => row.lastPrice ?? 0,
+                    width: 110,
+                    minWidth: 80,
+                },
+                // Dynamic Δ multi-period columns
+                ...visiblePeriods.map(period => ({
+                    id: `delta_${period.key}`,
+                    header: `Δ ${period.key}`,
+                    cell: (row: AssetRow) => {
+                        const val = row.deltas?.[period.key] ?? null;
+                        return {
+                            type: 'html' as const,
+                            html: `<span class="font-mono ${deltaColorClass(val)}">${formatDelta(val, '%')}</span>`,
+                        };
+                    },
+                    type: 'number' as const,
+                    getValue: (row: AssetRow) => row.deltas?.[period.key] ?? 0,
+                    width: 80,
+                    minWidth: 60,
+                })),
+                {
+                    id: 'provider',
+                    header: () => $t('assets.table.provider'),
+                    cell: (row) => ({
+                        type: 'html' as const,
+                        html: row.provider_code
+                            ? assetProviderBadgeHtml(row.provider_code)
+                            : '<span class="text-gray-400 dark:text-gray-500">—</span>',
+                    }),
+                    type: 'text',
+                    getValue: (row) => row.provider_code ?? '',
+                    width: 80,
+                    minWidth: 60,
+                    filterable: false,
+                },
+            ]));
 </script>
 
 <DataTable
-    bind:this={tableRef}
-    {data}
-    {columns}
-    getRowId={(row) => String(row.id)}
-    storageKey="assetsTable"
-    onSelectionChange={(ids) => onselectionchange?.(data.filter(row => ids.includes(String(row.id))))}
-    onRowClick={(row) => goto(`/assets/${row.id}`)}
-    enableSorting={true}
-    enableColumnFilters={true}
-    enablePagination={true}
-    defaultPageSize={25}
-    isLoading={loading}
-    emptyMessage={$t('assets.empty.noAssets')}
-    enableActions={true}
-    rowActions={[
+        bind:this={tableRef}
+        {columns}
+        {data}
+        defaultPageSize={25}
+        emptyMessage={$t('assets.empty.noAssets')}
+        enableActions={true}
+        enableColumnFilters={true}
+        enablePagination={true}
+        enableSorting={true}
+        getRowId={(row) => String(row.id)}
+        isLoading={loading}
+        onRowClick={(row) => goto(`/assets/${row.id}`)}
+        onSelectionChange={(ids) => onselectionchange?.(data.filter(row => ids.includes(String(row.id))))}
+        rowActions={[
         {
             id: 'sync',
             label: 'Sync',
@@ -247,4 +252,5 @@
             variant: 'danger',
         },
     ]}
+        storageKey="assetsTable"
 />

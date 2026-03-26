@@ -5,7 +5,7 @@
     import {onDestroy, onMount} from 'svelte';
     import {debug} from '$lib/debug';
     import {AlertCircle, ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
-    import {SearchSelect, type SelectOption, SimpleSelect, CurrencySearchSelect} from '$lib/components/ui/select';
+    import {CurrencySearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/globalSettings';
     import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
@@ -525,7 +525,7 @@
         {/if}
 
         {#if isLoading}
-            <LoadingSpinner />
+            <LoadingSpinner/>
         {:else if settings.length === 0}
             <div class="text-center py-8 text-gray-500">
                 {$_('settings.noGlobalSettings')}

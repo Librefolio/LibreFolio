@@ -168,7 +168,7 @@
                             {role === 'OWNER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
                              role === 'EDITOR' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
                              'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}"
-                             title={$_(role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}>
+                              title={$_(role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}>
                             {#if role === 'OWNER'}<Crown size={13}/>{:else if role === 'EDITOR'}<Pencil size={13}/>{:else}<Eye size={13}/>{/if}
                         </span>
                     {/if}
@@ -182,14 +182,14 @@
             <div class="grid grid-cols-2 place-items-center sm:flex sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
                 <!-- Row 1 (mobile) / inline (desktop): Edit + Share -->
                 {#if canEdit}
-                <button
-                        on:click={handleEdit}
-                        class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                        data-testid="broker-edit-button"
-                >
-                    <Pencil size={18}/>
-                    <span class="hidden sm:inline">{$_('common.edit')}</span>
-                </button>
+                    <button
+                            on:click={handleEdit}
+                            class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                            data-testid="broker-edit-button"
+                    >
+                        <Pencil size={18}/>
+                        <span class="hidden sm:inline">{$_('common.edit')}</span>
+                    </button>
                 {/if}
                 {#if safeString(broker.user_role) === 'OWNER'}
                     <button
@@ -266,12 +266,12 @@
                             <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
                         </div>
                         {#if canEdit}
-                        <button
-                                on:click={handleNewDeposit}
-                                class="text-sm text-libre-green hover:underline"
-                        >
-                            + {$_('brokers.deposit')}
-                        </button>
+                            <button
+                                    on:click={handleNewDeposit}
+                                    class="text-sm text-libre-green hover:underline"
+                            >
+                                + {$_('brokers.deposit')}
+                            </button>
                         {/if}
                     </div>
 
@@ -405,24 +405,24 @@
 
                 <!-- Import Files Button -->
                 {#if canEdit}
-                <button
-                        data-testid="import-files-button"
-                        class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
-                        on:click={() => importFilesModalOpen = true}
-                >
-                    <div class="flex items-center gap-3">
-                        <div class="p-2 bg-libre-green/10 rounded-lg">
-                            <FileUp size={20} class="text-libre-green"/>
+                    <button
+                            data-testid="import-files-button"
+                            class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
+                            on:click={() => importFilesModalOpen = true}
+                    >
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-libre-green/10 rounded-lg">
+                                <FileUp size={20} class="text-libre-green"/>
+                            </div>
+                            <div class="text-left">
+                                <h3 class="font-semibold text-gray-700">{$_('brokers.importFiles')}</h3>
+                                <p class="text-sm text-gray-500">{$_('brokers.uploadHint')}</p>
+                            </div>
                         </div>
-                        <div class="text-left">
-                            <h3 class="font-semibold text-gray-700">{$_('brokers.importFiles')}</h3>
-                            <p class="text-sm text-gray-500">{$_('brokers.uploadHint')}</p>
-                        </div>
-                    </div>
-                    <span class="text-libre-green opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span class="text-libre-green opacity-0 group-hover:opacity-100 transition-opacity">
                         →
                     </span>
-                </button>
+                    </button>
                 {/if}
 
                 <!-- Recent Transactions -->

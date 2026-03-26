@@ -31,7 +31,8 @@
     /** Whether pressing Escape closes the modal */
     export let closeOnEscape: boolean = true;
     /** Called when the user requests to close (backdrop click or Escape) */
-    export let onRequestClose: () => void = () => {};
+    export let onRequestClose: () => void = () => {
+    };
     /** Extra CSS class for the modal-content div */
     export let contentClass: string = '';
     /** data-testid for testing */
@@ -100,46 +101,46 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     {#if noTransition}
         <div
-            class="modal-backdrop"
-            style="z-index: {zIndex};"
-            bind:this={backdropEl}
-            tabindex="-1"
-            on:mousedown={handleBackdropMouseDown}
-            on:click={handleBackdropClick}
-            on:keydown|stopPropagation={handleKeydown}
-            role="dialog"
-            aria-modal="true"
-            data-testid={testId || undefined}
+                class="modal-backdrop"
+                style="z-index: {zIndex};"
+                bind:this={backdropEl}
+                tabindex="-1"
+                on:mousedown={handleBackdropMouseDown}
+                on:click={handleBackdropClick}
+                on:keydown|stopPropagation={handleKeydown}
+                role="dialog"
+                aria-modal="true"
+                data-testid={testId || undefined}
         >
             <div
-                class="modal-content {contentClass}"
-                style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
-                on:click|stopPropagation
+                    class="modal-content {contentClass}"
+                    style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
+                    on:click|stopPropagation
             >
-                <slot />
+                <slot/>
             </div>
         </div>
     {:else}
         <div
-            class="modal-backdrop"
-            style="z-index: {zIndex};"
-            bind:this={backdropEl}
-            tabindex="-1"
-            on:mousedown={handleBackdropMouseDown}
-            on:click={handleBackdropClick}
-            on:keydown|stopPropagation={handleKeydown}
-            role="dialog"
-            aria-modal="true"
-            data-testid={testId || undefined}
-            transition:fade={{ duration: 150 }}
+                class="modal-backdrop"
+                style="z-index: {zIndex};"
+                bind:this={backdropEl}
+                tabindex="-1"
+                on:mousedown={handleBackdropMouseDown}
+                on:click={handleBackdropClick}
+                on:keydown|stopPropagation={handleKeydown}
+                role="dialog"
+                aria-modal="true"
+                data-testid={testId || undefined}
+                transition:fade={{ duration: 150 }}
         >
             <div
-                class="modal-content {contentClass}"
-                style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
-                on:click|stopPropagation
-                transition:scale={{ duration: 200, start: 0.95 }}
+                    class="modal-content {contentClass}"
+                    style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
+                    on:click|stopPropagation
+                    transition:scale={{ duration: 200, start: 0.95 }}
             >
-                <slot />
+                <slot/>
             </div>
         </div>
     {/if}

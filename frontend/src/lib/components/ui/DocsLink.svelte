@@ -22,12 +22,12 @@
     }
 </script>
 
-<Tooltip text={label} position="top" maxWidth="320px" {math}>
+<Tooltip {math} maxWidth="320px" position="top" text={label}>
     <button
-        type="button"
-        class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors"
-        onclick={() => window.open(getDocsUrl(), '_blank')}
+            class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors"
+            onclick={() => window.open(getDocsUrl(), '_blank')}
+            type="button"
     >
-        <HelpCircle {size} />
+        <HelpCircle {size}/>
     </button>
 </Tooltip>

@@ -15,7 +15,7 @@
     export let className: string = '';
 </script>
 
-<div class="loading-spinner {size} {className}" role="status" aria-live="polite">
+<div aria-live="polite" class="loading-spinner {size} {className}" role="status">
     <div class="spinner"></div>
     <span>{text || $t('common.loading') || 'Loading...'}</span>
 </div>
@@ -31,11 +31,21 @@
         font-size: 0.875rem;
     }
 
-    :global(.dark) .loading-spinner { color: #9ca3af; }
+    :global(.dark) .loading-spinner {
+        color: #9ca3af;
+    }
 
-    .loading-spinner.sm { padding: 1rem 0; }
-    .loading-spinner.md { padding: 2rem 0; }
-    .loading-spinner.lg { padding: 3rem 0; }
+    .loading-spinner.sm {
+        padding: 1rem 0;
+    }
+
+    .loading-spinner.md {
+        padding: 2rem 0;
+    }
+
+    .loading-spinner.lg {
+        padding: 3rem 0;
+    }
 
     .spinner {
         width: 24px;
@@ -52,7 +62,9 @@
     }
 
     @keyframes spin {
-        to { transform: rotate(360deg); }
+        to {
+            transform: rotate(360deg);
+        }
     }
 </style>
 

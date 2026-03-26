@@ -155,7 +155,7 @@ Generated: ${new Date().toISOString()}
         </div>
 
         {#if isLoading}
-            <LoadingSpinner />
+            <LoadingSpinner/>
         {:else if systemInfo}
             <div class="grid grid-cols-2 gap-4 text-sm">
                 <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">

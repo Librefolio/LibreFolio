@@ -11,11 +11,8 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import type {SyncResult} from '$lib/utils/syncHelpers';
-    import {STATUS_ICONS, STATUS_COLORS, formatElapsed} from '$lib/utils/syncHelpers';
-    import {
-        PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR,
-        parseProviderChain, getFxProviderIconUrl, formatSyncDetail,
-    } from '$lib/utils/providerHelpers';
+    import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/syncHelpers';
+    import {DEFAULT_PROVIDER_COLOR, formatSyncDetail, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS,} from '$lib/utils/providerHelpers';
 
     interface Props {
         open: boolean;
@@ -44,7 +41,7 @@
                 start: dateStart,
                 end: dateEnd,
             },
-            { timeout: 120 * 1000 },
+            {timeout: 120 * 1000},
         );
         const r = response as any;
         return (r.results ?? []).map((pr: any) => ({
@@ -62,19 +59,19 @@
 </script>
 
 <SyncModalBase
-    bind:this={syncModalBase}
-    bind:open
-    {dateStart}
-    {dateEnd}
-    itemCount={pairs.length}
-    title={$t('fx.sync.title') ?? 'Sync FX Rates'}
-    description={$t('fx.sync.description') ?? 'Synchronize exchange rates from configured providers for the selected date range.'}
-    countLabel={$t('fx.sync.pairsCount') ?? 'pairs'}
-    testId="fx-sync-modal"
-    {doSyncFn}
-    targetIds={pairs}
-    {onsynced}
-    {onclose}
+        bind:open
+        bind:this={syncModalBase}
+        countLabel={$t('fx.sync.pairsCount') ?? 'pairs'}
+        {dateEnd}
+        {dateStart}
+        description={$t('fx.sync.description') ?? 'Synchronize exchange rates from configured providers for the selected date range.'}
+        {doSyncFn}
+        itemCount={pairs.length}
+        {onclose}
+        {onsynced}
+        targetIds={pairs}
+        testId="fx-sync-modal"
+        title={$t('fx.sync.title') ?? 'Sync FX Rates'}
 >
     {#snippet resultRow(pr: SyncResult, syncing: boolean)}
         {@const Icon = STATUS_ICONS[pr.status] ?? STATUS_ICONS.failed}
@@ -87,21 +84,21 @@
             {#if (pr.status === 'failed' || pr.status === 'partial') && !syncing}
                 <Tooltip text={tooltipMsg} position="top">
                     <button
-                        class="shrink-0 p-0.5 rounded transition-colors
+                            class="shrink-0 p-0.5 rounded transition-colors
                             {pr.status === 'failed'
                                 ? 'hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500'
                                 : 'hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-500'}"
-                        onclick={() => syncModalBase?.handleRetrySingle(pr.id)}
+                            onclick={() => syncModalBase?.handleRetrySingle(pr.id)}
                     >
-                        <RotateCw size={13} />
+                        <RotateCw size={13}/>
                     </button>
                 </Tooltip>
             {:else if pr.status === 'partial'}
                 <Tooltip text={tooltipMsg} position="top">
-                    <Icon size={14} class="{STATUS_COLORS[pr.status] ?? 'text-gray-400'} shrink-0 cursor-help" />
+                    <Icon size={14} class="{STATUS_COLORS[pr.status] ?? 'text-gray-400'} shrink-0 cursor-help"/>
                 </Tooltip>
             {:else}
-                <Icon size={14} class="{STATUS_COLORS[pr.status] ?? 'text-gray-400'} shrink-0" />
+                <Icon size={14} class="{STATUS_COLORS[pr.status] ?? 'text-gray-400'} shrink-0"/>
             {/if}
             <span class="font-medium">{pr.id.replace('-', '/')}</span>
             {#if pr.status === 'ok' || pr.status === 'partial'}
@@ -112,9 +109,10 @@
                     <span class="flex items-center gap-0.5">
                         {#each chain as prov, i}
                             {@const iconUrl = getFxProviderIconUrl(prov)}
-                            <span class="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-medium rounded {PROVIDER_COLORS[prov] ?? DEFAULT_PROVIDER_COLOR}" title={prov}>
+                            <span class="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-medium rounded {PROVIDER_COLORS[prov] ?? DEFAULT_PROVIDER_COLOR}"
+                                  title={prov}>
                                 {#if iconUrl}
-                                    <img src={iconUrl} alt={prov} class="w-3.5 h-3.5 rounded-sm object-contain" />
+                                    <img src={iconUrl} alt={prov} class="w-3.5 h-3.5 rounded-sm object-contain"/>
                                 {:else}
                                     {prov}
                                 {/if}

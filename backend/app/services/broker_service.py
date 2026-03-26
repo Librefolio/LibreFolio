@@ -424,8 +424,8 @@ class BrokerService:
                 and_(
                     BrokerUserAccess.broker_id == broker_id,
                     BrokerUserAccess.user_id == check_user_id,
+                    )
                 )
-            )
             access_result = await self.session.execute(access_stmt)
             user_access = access_result.scalar_one_or_none()
             if user_access:
@@ -437,8 +437,8 @@ class BrokerService:
                 and_(
                     BrokerUserAccess.broker_id == broker_id,
                     BrokerUserAccess.user_id == user_id,
+                    )
                 )
-            )
             access_result = await self.session.execute(access_stmt)
             user_access = access_result.scalar_one_or_none()
             if user_access:
@@ -1133,4 +1133,3 @@ class BrokerService:
         await self.session.flush()
 
         return True, "Access configuration updated", []
-

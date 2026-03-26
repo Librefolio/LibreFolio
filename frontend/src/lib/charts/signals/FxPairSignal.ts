@@ -9,7 +9,7 @@
  * If the same pair is added twice, points overlap harmlessly (not permanent).
  */
 
-import {ChartSignal, type SignalParamDescriptor, type RenderedSignal} from './ChartSignal';
+import {ChartSignal, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {getCurrencyInfo} from '$lib/stores/currencyStore';
 

@@ -219,7 +219,6 @@ async def set_user_active(
     session.add(user)
     await session.commit()
 
-
     status = "activated" if active else "deactivated"
     logger.info(f"User {status}", user_id=user.id, username=username)
     return True, None
@@ -357,7 +356,6 @@ async def delete_user(session: AsyncSession, user_id: int) -> bool:
     if not user:
         return False
 
-
     # Delete user (cascades to related data via DB constraints)
     await session.delete(user)
     await session.commit()
@@ -394,7 +392,7 @@ async def search_users(
         .where(
             User.is_active == True,
             User.username.ilike(f"%{query}%"),
-        )
+            )
         .order_by(User.username)
     )
 
@@ -414,7 +412,6 @@ async def search_users(
             "id": user.id,
             "username": user.username,
             "avatar_url": settings.avatar_url if settings else None,
-        }
+            }
         for user, settings in rows
-    ]
-
+        ]

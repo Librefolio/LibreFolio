@@ -163,7 +163,7 @@
         const borderWidth = 2;
 
         // Pre-load circular avatars in parallel
-        const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];
+        const avatarPromises: Array<{ index: number; promise: Promise<string> }> = [];
         data.forEach((slice, i) => {
             if (slice.avatarUrl && slice.percentage > 0) {
                 const url = slice.avatarUrl.includes('?') ? slice.avatarUrl : `${slice.avatarUrl}?img_preview=64x64`;
@@ -180,7 +180,7 @@
         });
 
         // Build chart data
-        const chartData: Array<{value: number; name: string; itemStyle?: any; label?: any}> = [];
+        const chartData: Array<{ value: number; name: string; itemStyle?: any; label?: any }> = [];
         const totalAllocated = data.reduce((sum, s) => sum + s.percentage, 0);
 
         data.forEach((slice, i) => {
@@ -303,8 +303,8 @@
 </script>
 
 <div
-    bind:this={chartContainer}
-    class="w-full"
-    style="height: {height};"
+        bind:this={chartContainer}
+        class="w-full"
+        style="height: {height};"
 ></div>
 

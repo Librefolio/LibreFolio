@@ -88,7 +88,7 @@ class ManualProvider(FXRateProvider):
         date_range: tuple[date, date],
         currencies: list[str],
         base_currency: str | None = None,
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         No-op: manual pairs don't auto-sync.
 
@@ -98,6 +98,5 @@ class ManualProvider(FXRateProvider):
         logger.info(
             f"MANUAL provider: skipping sync for currencies={currencies}, "
             f"date_range={date_range} (manual-only pair)"
-        )
+            )
         return {}
-

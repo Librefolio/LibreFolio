@@ -9,7 +9,7 @@
  */
 
 import type {Component} from 'svelte';
-import {Check, AlertTriangle, AlertCircle, SkipForward} from 'lucide-svelte';
+import {AlertCircle, AlertTriangle, Check, SkipForward} from 'lucide-svelte';
 import type {LegDetail} from '$lib/utils/providerHelpers';
 
 // =========================================================================

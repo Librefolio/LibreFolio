@@ -25,8 +25,8 @@ from backend.app.schemas.auth import (
     UpdateProfileRequest,
     UpdateProfileResponse,
     )
-from backend.app.services import user_service
 from backend.app.services import settings_service
+from backend.app.services import user_service
 from backend.app.services.auth_service import (
     verify_password,
     hash_password,
@@ -151,7 +151,7 @@ async def login(
         user=AuthUserResponse.model_validate(user),
         user_settings=user_settings,
         message="Login successful"
-    )
+        )
 
 
 @router.post("/logout", response_model=AuthLogoutResponse)

@@ -41,7 +41,7 @@ export interface SignalParamDescriptor {
     suffix?: string;
     // ── For type === 'select' ──
     /** Static options list */
-    options?: Array<{value: string; label: string}>;
+    options?: Array<{ value: string; label: string }>;
     /**
      * If set, the modal resolves options at runtime using this key.
      * e.g. 'configuredFxPairs' → modal passes configured pairs as options
@@ -171,10 +171,6 @@ export interface RenderedSignal {
  *   - `getLabel()` — human-readable label for legend/tooltip
  */
 export abstract class ChartSignal {
-    readonly id: string;
-    style: SignalStyle;
-    params: Record<string, unknown>;
-
     // ── Static metadata (read by UI and registry) ────────────────────────────
     static signalType: string;
     static displayName: string;
@@ -187,6 +183,9 @@ export abstract class ChartSignal {
     static yAxisIndex: number = 0;
     /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-indicators/#ema' */
     static docsPath?: string;
+    readonly id: string;
+    style: SignalStyle;
+    params: Record<string, unknown>;
 
     constructor(id: string, style: SignalStyle, params: Record<string, unknown>) {
         this.id = id;

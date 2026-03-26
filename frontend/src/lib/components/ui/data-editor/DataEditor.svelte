@@ -15,10 +15,10 @@
 <script lang="ts">
     import {tick} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Plus, Upload, Trash2, Undo2} from 'lucide-svelte';
+    import {Plus, Trash2, Undo2, Upload} from 'lucide-svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
-    import DataImportModal from './DataImportModal.svelte';
     import type {ImportDirection} from './DataImportModal.svelte';
+    import DataImportModal from './DataImportModal.svelte';
     import type {ColumnDef, DataRow} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -96,10 +96,14 @@
     /** Row background class based on status */
     function rowBgClass(row: DataRow): string {
         switch (row.status) {
-            case 'edited': return 'row-edited';
-            case 'deleted': return 'row-deleted';
-            case 'appended': return 'row-appended';
-            default: return (row.staleDays && row.staleDays > 0) ? 'row-stale' : '';
+            case 'edited':
+                return 'row-edited';
+            case 'deleted':
+                return 'row-deleted';
+            case 'appended':
+                return 'row-appended';
+            default:
+                return (row.staleDays && row.staleDays > 0) ? 'row-stale' : '';
         }
     }
 
@@ -443,18 +447,20 @@
         <div class="flex items-center gap-2">
             {#if !isReadonly}
                 <button
-                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={() => importModalOpen = true}
-                    data-testid="fx-data-import-btn"
+                        class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                        onclick={() => importModalOpen = true}
+                        data-testid="fx-data-import-btn"
                 >
-                    <Upload size={13} /> Import CSV
+                    <Upload size={13}/>
+                    Import CSV
                 </button>
                 <button
-                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleAddRow}
-                    data-testid="fx-data-add-row-btn"
+                        class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                        onclick={handleAddRow}
+                        data-testid="fx-data-add-row-btn"
                 >
-                    <Plus size={13} /> Add Row
+                    <Plus size={13}/>
+                    Add Row
                 </button>
             {/if}
         </div>
@@ -472,23 +478,23 @@
             {/if}
             {#if selectedIds.length > 0}
                 <button
-                    type="button"
-                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-libre-green/10 text-libre-green dark:bg-emerald-400/10 dark:text-emerald-400 font-medium hover:bg-libre-green/20 dark:hover:bg-emerald-400/20 transition-colors"
-                    onclick={() => { dataTableRef?.clearSelection(); selectedIds = []; }}
-                    title={$t('dataEditor.clearSelection')}
+                        type="button"
+                        class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-libre-green/10 text-libre-green dark:bg-emerald-400/10 dark:text-emerald-400 font-medium hover:bg-libre-green/20 dark:hover:bg-emerald-400/20 transition-colors"
+                        onclick={() => { dataTableRef?.clearSelection(); selectedIds = []; }}
+                        title={$t('dataEditor.clearSelection')}
                 >
                     {selectedIds.length} {$t('common.selected')} <span class="opacity-60">×</span>
                 </button>
                 <button
-                    type="button"
-                    class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-                    onclick={() => { handleBulkDelete(selectedIds); dataTableRef?.clearSelection(); selectedIds = []; }}
-                    title={$t('dataEditor.deleteSelected')}
+                        type="button"
+                        class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                        onclick={() => { handleBulkDelete(selectedIds); dataTableRef?.clearSelection(); selectedIds = []; }}
+                        title={$t('dataEditor.deleteSelected')}
                 >
-                    <Trash2 size={14} />
+                    <Trash2 size={14}/>
                 </button>
             {/if}
-            <ColumnVisibilityToggle tableRef={dataTableRef} />
+            <ColumnVisibilityToggle tableRef={dataTableRef}/>
         </div>
     </div>
 
@@ -498,34 +504,34 @@
 
     <div class="max-h-[500px] overflow-y-auto">
         <DataTable
-            bind:this={dataTableRef}
-            data={sortedRows}
-            columns={dtColumns}
-            getRowId={(r) => r.date}
-            storageKey="data-editor"
-            enableSelection={!isReadonly}
-            enableActions={!isReadonly}
-            rowActions={dtRowActions}
-            enableSorting={true}
-            enableColumnFilters={true}
-            enableColumnVisibility={true}
-            enableColumnResize={true}
-            enablePagination={true}
-            defaultPageSize={10}
-            pageSizeOptions={[10, 25, 50, 100, 0]}
-            getRowClass={rowBgClass}
-            getRowStyle={rowStyleFn}
-            emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
-            onSelectionChange={(ids) => selectedIds = ids}
+                bind:this={dataTableRef}
+                columns={dtColumns}
+                data={sortedRows}
+                defaultPageSize={10}
+                emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
+                enableActions={!isReadonly}
+                enableColumnFilters={true}
+                enableColumnResize={true}
+                enableColumnVisibility={true}
+                enablePagination={true}
+                enableSelection={!isReadonly}
+                enableSorting={true}
+                getRowClass={rowBgClass}
+                getRowId={(r) => r.date}
+                getRowStyle={rowStyleFn}
+                onSelectionChange={(ids) => selectedIds = ids}
+                pageSizeOptions={[10, 25, 50, 100, 0]}
+                rowActions={dtRowActions}
+                storageKey="data-editor"
         />
     </div>
 </div>
 
 <!-- Import Modal -->
 <DataImportModal
-    bind:open={importModalOpen}
-    displayBase={displayBase}
-    displayQuote={displayQuote}
-    onimport={handleImport}
+        bind:open={importModalOpen}
+        displayBase={displayBase}
+        displayQuote={displayQuote}
+        onimport={handleImport}
 />
 

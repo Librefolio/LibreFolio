@@ -101,109 +101,109 @@
 </script>
 
 <ModalBase
-    open={isOpen}
-    zIndex={50}
-    maxWidth="md"
-    onRequestClose={handleClose}
-    testId="password-change-modal"
+        maxWidth="md"
+        onRequestClose={handleClose}
+        open={isOpen}
+        testId="password-change-modal"
+        zIndex={50}
 >
-        <div class="bg-white dark:bg-slate-800 rounded-xl w-full">
-            <!-- Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    {$_('settings.changePassword')}
-                </h2>
-                <button
-                        type="button"
-                        on:click={handleClose}
-                        class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
-                >
-                    <X size={20}/>
-                </button>
-            </div>
-
-            <!-- Body -->
-            <form on:submit|preventDefault={handleSubmit} class="p-4 space-y-4">
-                <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} />
-
-                {#if success}
-                    <div class="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
-                        <Check size={16}/>
-                        <span>{success}</span>
-                    </div>
-                {/if}
-
-                <div class="space-y-2">
-                    <label for="currentPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {$_('settings.currentPassword')}
-                    </label>
-                    <PasswordInput
-                            id="currentPassword"
-                            bind:value={currentPassword}
-                            placeholder={$_('settings.currentPassword')}
-                            autocomplete="current-password"
-                            disabled={isSubmitting}
-                            testId="password-current"
-                    />
-                </div>
-
-                <div class="space-y-2">
-                    <label for="newPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {$_('settings.newPassword')}
-                    </label>
-                    <PasswordInput
-                            id="newPassword"
-                            bind:value={newPassword}
-                            placeholder={$_('settings.newPassword')}
-                            autocomplete="new-password"
-                            disabled={isSubmitting}
-                            testId="password-new"
-                    />
-                    <PasswordStrength password={newPassword}/>
-                </div>
-
-                <div class="space-y-2">
-                    <label for="confirmPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {$_('settings.confirmNewPassword')}
-                    </label>
-                    <PasswordInput
-                            id="confirmPassword"
-                            bind:value={confirmPassword}
-                            placeholder={$_('settings.confirmNewPassword')}
-                            autocomplete="new-password"
-                            disabled={isSubmitting}
-                            testId="password-confirm"
-                    />
-                    {#if confirmPassword && newPassword !== confirmPassword}
-                        <p class="text-xs text-red-500">{$_('settings.passwordsMustMatch')}</p>
-                    {/if}
-                </div>
-            </form>
-
-            <!-- Footer -->
-            <div class="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-slate-700">
-                <button
-                        type="button"
-                        on:click={handleClose}
-                        disabled={isSubmitting}
-                        class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
-                        data-testid="password-change-cancel"
-                >
-                    {$_('common.cancel')}
-                </button>
-                <button
-                        type="button"
-                        on:click={handleSubmit}
-                        disabled={!canSubmit || isSubmitting}
-                        class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        data-testid="password-change-submit"
-                >
-                    {#if isSubmitting}
-                        {$_('common.loading')}
-                    {:else}
-                        {$_('common.save')}
-                    {/if}
-                </button>
-            </div>
+    <div class="bg-white dark:bg-slate-800 rounded-xl w-full">
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {$_('settings.changePassword')}
+            </h2>
+            <button
+                    class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
+                    on:click={handleClose}
+                    type="button"
+            >
+                <X size={20}/>
+            </button>
         </div>
+
+        <!-- Body -->
+        <form class="p-4 space-y-4" on:submit|preventDefault={handleSubmit}>
+            <InfoBanner dismissible message={error} ondismiss={() => error = ''} variant="error"/>
+
+            {#if success}
+                <div class="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
+                    <Check size={16}/>
+                    <span>{success}</span>
+                </div>
+            {/if}
+
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="currentPassword">
+                    {$_('settings.currentPassword')}
+                </label>
+                <PasswordInput
+                        autocomplete="current-password"
+                        bind:value={currentPassword}
+                        disabled={isSubmitting}
+                        id="currentPassword"
+                        placeholder={$_('settings.currentPassword')}
+                        testId="password-current"
+                />
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="newPassword">
+                    {$_('settings.newPassword')}
+                </label>
+                <PasswordInput
+                        autocomplete="new-password"
+                        bind:value={newPassword}
+                        disabled={isSubmitting}
+                        id="newPassword"
+                        placeholder={$_('settings.newPassword')}
+                        testId="password-new"
+                />
+                <PasswordStrength password={newPassword}/>
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="confirmPassword">
+                    {$_('settings.confirmNewPassword')}
+                </label>
+                <PasswordInput
+                        autocomplete="new-password"
+                        bind:value={confirmPassword}
+                        disabled={isSubmitting}
+                        id="confirmPassword"
+                        placeholder={$_('settings.confirmNewPassword')}
+                        testId="password-confirm"
+                />
+                {#if confirmPassword && newPassword !== confirmPassword}
+                    <p class="text-xs text-red-500">{$_('settings.passwordsMustMatch')}</p>
+                {/if}
+            </div>
+        </form>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-slate-700">
+            <button
+                    class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
+                    data-testid="password-change-cancel"
+                    disabled={isSubmitting}
+                    on:click={handleClose}
+                    type="button"
+            >
+                {$_('common.cancel')}
+            </button>
+            <button
+                    class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-testid="password-change-submit"
+                    disabled={!canSubmit || isSubmitting}
+                    on:click={handleSubmit}
+                    type="button"
+            >
+                {#if isSubmitting}
+                    {$_('common.loading')}
+                {:else}
+                    {$_('common.save')}
+                {/if}
+            </button>
+        </div>
+    </div>
 </ModalBase>

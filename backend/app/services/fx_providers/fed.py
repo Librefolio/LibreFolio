@@ -103,7 +103,7 @@ class FEDProvider(FXRateProvider):
             "it": "Federal Reserve Bank (FRED) — pubblica tassi di cambio giornalieri dal bollettino statistico H.10 per 20+ valute contro USD. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
             "fr": "Federal Reserve Bank (FRED) — publie des taux de change quotidiens du bulletin statistique H.10 pour 20+ devises contre USD. Mise à jour chaque jour ouvrable. Un point par jour.",
             "es": "Federal Reserve Bank (FRED) — publica tipos de cambio diarios del boletín estadístico H.10 para 20+ monedas contra USD. Actualizado cada día hábil. Un dato por día.",
-        }
+            }
 
     @property
     def test_currencies(self) -> list[str]:
@@ -221,7 +221,6 @@ class FEDProvider(FXRateProvider):
             else:
                 currency, observations = result
                 results[currency] = observations
-
 
         return results
 

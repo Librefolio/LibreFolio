@@ -11,7 +11,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {ExternalLink, FileUp, RefreshCw, X} from 'lucide-svelte';
+    import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
@@ -21,7 +21,6 @@
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
-    import {Trash2} from 'lucide-svelte';
     import type {BrimFile} from '$lib/types';
 
     interface Props {
@@ -148,7 +147,7 @@
     }
 
     function handleFileEditComplete(event: CustomEvent<{ url: string | null; file: File }>) {
-        const { file: renamedFile } = event.detail;
+        const {file: renamedFile} = event.detail;
         // Replace file in pending list with renamed version
         if (editingFileIndex >= 0 && editingFileIndex < pendingFiles.length) {
             pendingFiles[editingFileIndex] = renamedFile;
@@ -181,116 +180,116 @@
 
 
 <ModalBase
-    {open}
-    zIndex={50}
-    maxWidth="900px"
-    onRequestClose={tryClose}
-    testId="import-files-modal"
+        maxWidth="900px"
+        onRequestClose={tryClose}
+        {open}
+        testId="import-files-modal"
+        zIndex={50}
 >
-            <!-- Header with title and link -->
-            <div class="modal-header">
-                <div class="flex items-center gap-2">
-                    <FileUp size={20} class="text-libre-green"/>
-                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                        {$_('brokers.importFiles')} - {brokerName}
-                    </h2>
-                </div>
-                <div class="flex items-center gap-2 flex-wrap">
-                    <SelectionBar
-                        selectedCount={selectedFileIds.length}
-                        actions={[{id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: () => { handleDeleteMultiple(selectedFileIds); filesTableRef?.clearSelection(); }}]}
-                        onClearSelection={() => filesTableRef?.clearSelection()}
-                    />
-                    <ColumnVisibilityToggle tableRef={filesTableRef?.getTableRef()} />
-                    <a
-                            href="/files?tab=brim&broker={brokerId}"
-                            class="manage-link"
-                    >
-                        <ExternalLink size={14}/>
-                        {$_('brokers.manageFiles')}
-                    </a>
-                    <button
-                            class="close-btn"
-                            onclick={tryClose}
-                            title={$_('common.close')}
-                    >
-                        <X size={20}/>
-                    </button>
-                </div>
+    <!-- Header with title and link -->
+    <div class="modal-header">
+        <div class="flex items-center gap-2">
+            <FileUp class="text-libre-green" size={20}/>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                {$_('brokers.importFiles')} - {brokerName}
+            </h2>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+            <SelectionBar
+                    actions={[{id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: () => { handleDeleteMultiple(selectedFileIds); filesTableRef?.clearSelection(); }}]}
+                    onClearSelection={() => filesTableRef?.clearSelection()}
+                    selectedCount={selectedFileIds.length}
+            />
+            <ColumnVisibilityToggle tableRef={filesTableRef?.getTableRef()}/>
+            <a
+                    class="manage-link"
+                    href="/files?tab=brim&broker={brokerId}"
+            >
+                <ExternalLink size={14}/>
+                {$_('brokers.manageFiles')}
+            </a>
+            <button
+                    class="close-btn"
+                    onclick={tryClose}
+                    title={$_('common.close')}
+            >
+                <X size={20}/>
+            </button>
+        </div>
+    </div>
+
+    <!-- Upload Area (collapsible) -->
+    {#if showUploader && !uploading}
+        <div class="upload-area" transition:fade={{ duration: 150 }}>
+            <FileUploader
+                    on:upload={handleUpload}
+                    on:change={handleFileChange}
+                    on:editFile={handleEditFile}
+                    on:error={(e) => error = e.detail.message}
+                    multiple={true}
+                    accept=".csv,.xlsx,.xls"
+            />
+        </div>
+    {:else if uploading}
+        <div class="upload-area" transition:fade={{ duration: 150 }}>
+            <div class="flex items-center justify-center gap-2 py-8 text-gray-500">
+                <RefreshCw size={20} class="animate-spin"/>
+                <span>{$_('common.uploading')}...</span>
             </div>
+        </div>
+    {/if}
 
-            <!-- Upload Area (collapsible) -->
-            {#if showUploader && !uploading}
-                <div class="upload-area" transition:fade={{ duration: 150 }}>
-                    <FileUploader
-                            on:upload={handleUpload}
-                            on:change={handleFileChange}
-                            on:editFile={handleEditFile}
-                            on:error={(e) => error = e.detail.message}
-                            multiple={true}
-                            accept=".csv,.xlsx,.xls"
-                    />
-                </div>
-            {:else if uploading}
-                <div class="upload-area" transition:fade={{ duration: 150 }}>
-                    <div class="flex items-center justify-center gap-2 py-8 text-gray-500">
-                        <RefreshCw size={20} class="animate-spin"/>
-                        <span>{$_('common.uploading')}...</span>
-                    </div>
-                </div>
-            {/if}
+    <!-- Error Message -->
+    <InfoBanner dismissible message={error} ondismiss={() => error = ''} variant="error"/>
 
-            <!-- Error Message -->
-            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} />
-
-            <!-- Content -->
-            <div class="modal-body">
-                {#if loading && files.length === 0}
-                    <div class="loading-state">
-                        <RefreshCw size={32} class="animate-spin text-gray-400"/>
-                        <p class="text-gray-500 mt-2">{$_('common.loading')}</p>
-                    </div>
-                {:else if files.length === 0}
-                    <div class="empty-state">
-                        <FileUp size={48} class="text-gray-300 dark:text-gray-600"/>
-                        <p class="text-gray-500 dark:text-gray-400 mt-2">{$_('brokers.noImportFiles')}</p>
-                        <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">{$_('brokers.uploadHint')}</p>
-                    </div>
-                {:else}
-                    <FilesTable
-                            bind:this={filesTableRef}
-                            {files}
-                            type="brim"
-                            onDelete={handleDelete}
-                            onDeleteMultiple={handleDeleteMultiple}
-                            showBrokerColumn={false}
-                            onSelectionChange={(ids) => selectedFileIds = ids}
-                    />
-                {/if}
+    <!-- Content -->
+    <div class="modal-body">
+        {#if loading && files.length === 0}
+            <div class="loading-state">
+                <RefreshCw size={32} class="animate-spin text-gray-400"/>
+                <p class="text-gray-500 mt-2">{$_('common.loading')}</p>
             </div>
-
-            <!-- Footer with actions -->
-            <div class="modal-footer">
-                <div class="footer-actions">
-                    <button
-                            class="btn btn-ghost"
-                            onclick={loadFiles}
-                            disabled={loading}
-                            title={$_('common.refresh')}
-                    >
-                        <RefreshCw size={16} class={loading ? 'animate-spin' : ''}/>
-                        {$_('common.refresh')}
-                    </button>
-                    <button
-                            class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}"
-                            onclick={() => showUploader = !showUploader}
-                            disabled={uploading}
-                    >
-                        <FileUp size={16}/>
-                        {showUploader ? $_('common.close') : $_('uploads.upload')}
-                    </button>
-                </div>
+        {:else if files.length === 0}
+            <div class="empty-state">
+                <FileUp size={48} class="text-gray-300 dark:text-gray-600"/>
+                <p class="text-gray-500 dark:text-gray-400 mt-2">{$_('brokers.noImportFiles')}</p>
+                <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">{$_('brokers.uploadHint')}</p>
             </div>
+        {:else}
+            <FilesTable
+                    bind:this={filesTableRef}
+                    {files}
+                    type="brim"
+                    onDelete={handleDelete}
+                    onDeleteMultiple={handleDeleteMultiple}
+                    showBrokerColumn={false}
+                    onSelectionChange={(ids) => selectedFileIds = ids}
+            />
+        {/if}
+    </div>
+
+    <!-- Footer with actions -->
+    <div class="modal-footer">
+        <div class="footer-actions">
+            <button
+                    class="btn btn-ghost"
+                    disabled={loading}
+                    onclick={loadFiles}
+                    title={$_('common.refresh')}
+            >
+                <RefreshCw class={loading ? 'animate-spin' : ''} size={16}/>
+                {$_('common.refresh')}
+            </button>
+            <button
+                    class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}"
+                    disabled={uploading}
+                    onclick={() => showUploader = !showUploader}
+            >
+                <FileUp size={16}/>
+                {showUploader ? $_('common.close') : $_('uploads.upload')}
+            </button>
+        </div>
+    </div>
 </ModalBase>
 
 <!-- File Rename Modal (for BRIM files) -->

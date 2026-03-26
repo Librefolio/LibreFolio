@@ -50,7 +50,7 @@ async def create_user_and_login(client: httpx.AsyncClient) -> None:
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-    )
+        )
     if resp.status_code != 201:
         raise Exception(f"Failed to create user: {resp.text}")
 
@@ -58,7 +58,7 @@ async def create_user_and_login(client: httpx.AsyncClient) -> None:
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-    )
+        )
     if login_resp.status_code != 200:
         raise Exception(f"Failed to login: {login_resp.text}")
 

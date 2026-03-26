@@ -190,7 +190,7 @@ async def test_current_value(provider_code: str):
                 f"   Probable cause: the target market is closed or in 'Call' status.\n"
                 f"   How to verify: open the test URL in a browser and check the market status.\n"
                 f"   Retry this test when the market is open (typically Mon-Fri, 9:00-17:30 CET)."
-                )
+            )
             print_warning(msg)
             pytest.skip(f"Market likely closed — {provider_code}: {e}")
         print_error(f"Provider error: {e}")

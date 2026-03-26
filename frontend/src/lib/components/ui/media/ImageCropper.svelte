@@ -5,11 +5,11 @@
   Supports zoom, rotation (live preview), flip, aspect ratio selection, free crop with handles.
 -->
 <script lang="ts">
-    import {createEventDispatcher, onMount, onDestroy, tick} from 'svelte';
+    import {createEventDispatcher, onDestroy, onMount, tick} from 'svelte';
     import Cropper from 'cropperjs';
     // Note: cropperjs v2 uses Web Components, CSS is built-in
     import {_} from '$lib/i18n';
-    import {ZoomIn, ZoomOut, RotateCcw, RotateCw, FlipHorizontal, FlipVertical} from 'lucide-svelte';
+    import {FlipHorizontal, FlipVertical, RotateCcw, RotateCw, ZoomIn, ZoomOut} from 'lucide-svelte';
 
     // Props
     export let imageSrc: string;
@@ -18,7 +18,7 @@
     export let showRotateControls: boolean = true;
 
     const dispatch = createEventDispatcher<{
-        change: {selection: {x: number; y: number; width: number; height: number}};
+        change: { selection: { x: number; y: number; width: number; height: number } };
     }>();
 
     /** Helper to emit current selection state as a 'change' event */
@@ -81,7 +81,7 @@
         // Register wheel listener with passive: false to allow preventDefault()
         // This avoids Chrome's "Added non-passive event listener to scroll-blocking 'wheel' event" warning
         if (cropWrapperElement) {
-            cropWrapperElement.addEventListener('wheel', handleWheel, { passive: false });
+            cropWrapperElement.addEventListener('wheel', handleWheel, {passive: false});
         }
     });
 
@@ -100,7 +100,8 @@
     });
 
     // Placeholder for active clamping cleanup (set in initCropper)
-    let stopActiveClamping: () => void = () => {};
+    let stopActiveClamping: () => void = () => {
+    };
 
     // Middle mouse button handlers for panning
     function handleMiddleMouseDown(event: MouseEvent) {
@@ -722,7 +723,7 @@
         return cropper;
     }
 
-    export function getImageDimensions(): {width: number; height: number} {
+    export function getImageDimensions(): { width: number; height: number } {
         return {width: imageWidth, height: imageHeight};
     }
 
@@ -735,9 +736,15 @@
 
     // Update ellipse overlay position to match selection
     function updateEllipseOverlay() {
-        if (!showPreviewEllipse) { ellipseStyle = ''; return; }
+        if (!showPreviewEllipse) {
+            ellipseStyle = '';
+            return;
+        }
         const sel = cropper?.getCropperSelection();
-        if (!sel) { ellipseStyle = ''; return; }
+        if (!sel) {
+            ellipseStyle = '';
+            return;
+        }
         ellipseStyle = `left:${sel.x}px;top:${sel.y}px;width:${sel.width}px;height:${sel.height}px;`;
     }
 
@@ -747,16 +754,16 @@
 
 </script>
 
-<div class="image-cropper" data-testid="image-cropper" data-cropper-ready={cropperReady || undefined}>
+<div class="image-cropper" data-cropper-ready={cropperReady || undefined} data-testid="image-cropper">
     <!-- Crop Area with controls overlay -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-        class="crop-wrapper"
-        bind:this={cropWrapperElement}
-        on:mousedown={handleMiddleMouseDown}
-        on:contextmenu|preventDefault
+            bind:this={cropWrapperElement}
+            class="crop-wrapper"
+            on:contextmenu|preventDefault
+            on:mousedown={handleMiddleMouseDown}
     >
-        <div class="crop-container" bind:this={containerElement}>
+        <div bind:this={containerElement} class="crop-container">
             <!-- Cropper v2 creates its own DOM structure here -->
         </div>
 
@@ -770,28 +777,30 @@
             <div class="controls-overlay">
                 {#if showZoomSlider}
                     <button type="button" class="overlay-btn" on:click={zoomOut} title={$_('uploads.zoomOut') || 'Zoom out'} data-testid="cropper-zoom-out">
-                        <ZoomOut size={16} />
+                        <ZoomOut size={16}/>
                     </button>
                     <button type="button" class="overlay-btn" on:click={zoomIn} title={$_('uploads.zoomIn') || 'Zoom in'} data-testid="cropper-zoom-in">
-                        <ZoomIn size={16} />
+                        <ZoomIn size={16}/>
                     </button>
                 {/if}
 
                 {#if showRotateControls}
                     <button type="button" class="overlay-btn" on:click={rotateLeft} title="-15°" data-testid="cropper-rotate-left">
-                        <RotateCcw size={16} />
+                        <RotateCcw size={16}/>
                     </button>
                     <button type="button" class="overlay-btn" on:click={rotateRight} title="+15°" data-testid="cropper-rotate-right">
-                        <RotateCw size={16} />
+                        <RotateCw size={16}/>
                     </button>
 
                     <div class="overlay-separator"></div>
 
-                    <button type="button" class="overlay-btn" class:active={scaleX === -1} on:click={flipH} title={$_('uploads.flipHorizontal') || 'Flip H'} data-testid="cropper-flip-h">
-                        <FlipHorizontal size={16} />
+                    <button type="button" class="overlay-btn" class:active={scaleX === -1} on:click={flipH} title={$_('uploads.flipHorizontal') || 'Flip H'}
+                            data-testid="cropper-flip-h">
+                        <FlipHorizontal size={16}/>
                     </button>
-                    <button type="button" class="overlay-btn" class:active={scaleY === -1} on:click={flipV} title={$_('uploads.flipVertical') || 'Flip V'} data-testid="cropper-flip-v">
-                        <FlipVertical size={16} />
+                    <button type="button" class="overlay-btn" class:active={scaleY === -1} on:click={flipV} title={$_('uploads.flipVertical') || 'Flip V'}
+                            data-testid="cropper-flip-v">
+                        <FlipVertical size={16}/>
                     </button>
                 {/if}
             </div>
@@ -895,8 +904,6 @@
         width: 100%;
         height: 100%;
     }
-
-
 
 
     /* ==========================================================================

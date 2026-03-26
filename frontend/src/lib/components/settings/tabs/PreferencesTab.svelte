@@ -292,11 +292,11 @@
             {success}
         </div>
     {/if}
-    <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mb-4" />
+    <InfoBanner class="mb-4" dismissible message={error} ondismiss={() => error = ''} variant="error"/>
 
     <!-- Settings Fields -->
     {#if isLoading}
-        <LoadingSpinner />
+        <LoadingSpinner/>
     {:else}
 
         <!-- Language Setting -->

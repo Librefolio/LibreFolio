@@ -26,7 +26,7 @@ from backend.app.api.v1.router import router as api_v1_router
 from backend.app.config import (
     get_settings, set_test_mode, is_test_mode, PROJECT_ROOT, ensure_data_dirs,
     PROJECT_NAME, API_V1_PREFIX, get_version,
-)
+    )
 from backend.app.logging_config import configure_logging, get_logger
 from backend.app.utils.version import get_git_version
 

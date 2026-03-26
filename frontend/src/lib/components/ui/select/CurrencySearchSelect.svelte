@@ -15,8 +15,8 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/currencyStore';
     import type {CurrencyInfo} from '$lib/stores/currencyStore';
+    import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/currencyStore';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
 
     interface Props {
@@ -140,15 +140,15 @@
 </script>
 
 <SearchSelect
-    bind:value
-    {disabled}
-    {dropdownPosition}
-    inlineSearch={true}
-    loading={isLoading}
-    {maxVisibleItems}
-    onchange={handleChange}
-    options={currencyOptions}
-    placeholder={placeholder || $_('fx.filter.filterCurrency')}
+        bind:value
+        {disabled}
+        {dropdownPosition}
+        inlineSearch={true}
+        loading={isLoading}
+        {maxVisibleItems}
+        onchange={handleChange}
+        options={currencyOptions}
+        placeholder={placeholder || $_('fx.filter.filterCurrency')}
 >
     {#snippet item(option)}
         <div class="flex items-center space-x-2 min-w-0">

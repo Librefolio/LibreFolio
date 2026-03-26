@@ -6,9 +6,10 @@
   Used by FxCard, AssetCard, ChartSettingsModal preview, etc.
 -->
 <script lang="ts">
-    import LineChart from './LineChart.svelte';
     import type {LineDataPoint} from './LineChart.svelte';
+    import LineChart from './LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
+
     interface Props {
         data: LineDataPoint[];
         height?: string;
@@ -25,6 +26,7 @@
         /** Overlay signals to render as additional line series */
         overlaySignals?: RenderedSignal[];
     }
+
     let {
         data = [],
         height = '80px',
@@ -42,15 +44,15 @@
     let effectiveColorByBaseline = $derived(colorByBaseline ?? (viewMode === 'percentage'));
 </script>
 <LineChart
-    {data}
-    {height}
-    {lineColor}
-    areaFill={areaFill}
-    compact={true}
-    {showMiniAxis}
-    showGradient={showGradient}
-    colorByBaseline={effectiveColorByBaseline}
-    showGridLines={showGridLines}
-    {viewMode}
-    {overlaySignals}
+        areaFill={areaFill}
+        colorByBaseline={effectiveColorByBaseline}
+        compact={true}
+        {data}
+        {height}
+        {lineColor}
+        {overlaySignals}
+        showGradient={showGradient}
+        showGridLines={showGridLines}
+        {showMiniAxis}
+        {viewMode}
 />

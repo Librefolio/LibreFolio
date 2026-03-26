@@ -9,11 +9,7 @@
  */
 
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-import {
-    ChartSignal,
-    type SignalParamDescriptor,
-    type SignalStyle,
-} from './ChartSignal';
+import {ChartSignal, type SignalParamDescriptor, type SignalStyle,} from './ChartSignal';
 
 /** Computed measurement values between two points */
 export interface MeasurementResult {
@@ -127,7 +123,7 @@ export class MeasureSignal extends ChartSignal {
      */
     getMeasurementForSignal(
         signalData: LineDataPoint[],
-    ): {startValue: number; endValue: number; deltaAbs: number; deltaPct: number; annualizedPct: number} | null {
+    ): { startValue: number; endValue: number; deltaAbs: number; deltaPct: number; annualizedPct: number } | null {
         const startDate = String(this.params.startDate || '');
         const endDate = String(this.params.endDate || '');
         if (!startDate || !endDate) return null;

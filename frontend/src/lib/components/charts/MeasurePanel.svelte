@@ -11,11 +11,11 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Trash2, ChevronDown} from 'lucide-svelte';
+    import {ChevronDown, Trash2} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
     import type {MeasurementResult} from '$lib/charts/signals/MeasureSignal';
+    import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
     import {hslToHex} from '$lib/utils/colors';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
@@ -63,7 +63,9 @@
     $effect(() => {
         const mql = window.matchMedia('(max-width: 639px)');
         isNarrow = mql.matches;
-        const handler = (e: MediaQueryListEvent) => { isNarrow = e.matches; };
+        const handler = (e: MediaQueryListEvent) => {
+            isNarrow = e.matches;
+        };
         mql.addEventListener('change', handler);
         return () => mql.removeEventListener('change', handler);
     });
@@ -203,7 +205,7 @@
     // Derived
     // =========================================================================
 
-    let measurements: Array<{measure: MeasureSignal; result: MeasurementResult | null}> = $derived(
+    let measurements: Array<{ measure: MeasureSignal; result: MeasurementResult | null }> = $derived(
         measures.map(m => ({measure: m, result: m.getMeasurement(chartData)}))
     );
 
@@ -341,16 +343,16 @@
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-visible">
                     <!-- Card header: responsive layout (wide=1 row, tablet=2 rows via stacked DRP) -->
                     <div
-                        class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
+                            class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
                                     hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                     >
                         <!-- 1. Chevron -->
                         <button
-                            type="button"
-                            class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0 self-center"
-                            onclick={() => toggleExpand(measure.id)}
+                                type="button"
+                                class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0 self-center"
+                                onclick={() => toggleExpand(measure.id)}
                         >
-                            <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
+                            <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}"/>
                         </button>
 
                         <!-- 2. DateRangePicker (or collapsed summary) -->
@@ -359,19 +361,20 @@
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
                             <div class="min-w-0 max-w-[300px] shrink-0 self-center" onclick={(e) => e.stopPropagation()}>
                                 <DateRangePicker
-                                    start={String(measure.params.startDate)}
-                                    end={String(measure.params.endDate)}
-                                    showPresets={false}
-                                    showCustomWindow={false}
-                                    compact={true}
-                                    stacked={isNarrow}
-                                    onchange={(s, e) => updateMeasureDates(measure.id, s, e)}
+                                        start={String(measure.params.startDate)}
+                                        end={String(measure.params.endDate)}
+                                        showPresets={false}
+                                        showCustomWindow={false}
+                                        compact={true}
+                                        stacked={isNarrow}
+                                        onchange={(s, e) => updateMeasureDates(measure.id, s, e)}
                                 />
                             </div>
                         {:else}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
+                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer self-center"
+                                  onclick={() => toggleExpand(measure.id)}>
                                 📏 {measure.params.startDate} → {measure.params.endDate}
                                 {#if result}
                                     <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
@@ -396,9 +399,9 @@
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
                             <div class="{isNarrow ? 'w-full' : 'ml-auto flex-1 min-w-[100px] max-w-[400px]'}" onclick={(e) => e.stopPropagation()}>
                                 <SignalStyleEditor
-                                    style={measure.style}
-                                    onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
-                                    simplified
+                                        style={measure.style}
+                                        onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
+                                        simplified
                                 />
                             </div>
                         </div>
@@ -409,18 +412,18 @@
                                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                                 <div onclick={(e) => e.stopPropagation()}>
-                                    <ColumnVisibilityToggle tableRef={measureTableRefs[measure.id]} />
+                                    <ColumnVisibilityToggle tableRef={measureTableRefs[measure.id]}/>
                                 </div>
                             {/if}
                             <span
-                                class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex items-center justify-center"
-                                role="button"
-                                tabindex="-1"
-                                title={$t('common.remove')}
-                                onclick={(e) => { e.stopPropagation(); removeMeasure(measure.id); }}
-                                onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); removeMeasure(measure.id); }}}
+                                    class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex items-center justify-center"
+                                    role="button"
+                                    tabindex="-1"
+                                    title={$t('common.remove')}
+                                    onclick={(e) => { e.stopPropagation(); removeMeasure(measure.id); }}
+                                    onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); removeMeasure(measure.id); }}}
                             >
-                                <Trash2 size={13} />
+                                <Trash2 size={13}/>
                             </span>
                         </div>
                     </div>
@@ -430,23 +433,23 @@
 
                         <!-- Summary table (DataTable) -->
                         {#if result}
-                        <div class="border-t border-gray-200 dark:border-slate-600">
-                            <DataTable
-                                bind:this={measureTableRefs[measure.id]}
-                                data={buildSummaryRows(result, measure)}
-                                columns={summaryColumns}
-                                getRowId={(r) => r.id}
-                                storageKey="measure-summary-{measure.id}"
-                                enableSelection={false}
-                                enableActions={false}
-                                enableSorting={true}
-                                enableColumnFilters={true}
-                                enableColumnVisibility={true}
-                                enableColumnResize={true}
-                                enablePagination={false}
-                                tableLayout="auto"
-                            />
-                        </div>
+                            <div class="border-t border-gray-200 dark:border-slate-600">
+                                <DataTable
+                                        bind:this={measureTableRefs[measure.id]}
+                                        data={buildSummaryRows(result, measure)}
+                                        columns={summaryColumns}
+                                        getRowId={(r) => r.id}
+                                        storageKey="measure-summary-{measure.id}"
+                                        enableSelection={false}
+                                        enableActions={false}
+                                        enableSorting={true}
+                                        enableColumnFilters={true}
+                                        enableColumnVisibility={true}
+                                        enableColumnResize={true}
+                                        enablePagination={false}
+                                        tableLayout="auto"
+                                />
+                            </div>
                         {/if}
                     {/if}
                 </div>

@@ -41,6 +41,7 @@ from backend.app.db.models import (
     IdentifierType,
     AssetType,
     )
+from backend.app.db.session import get_async_engine
 from backend.app.schemas import (
     FACurrentValue,
     FAHistoricalData,
@@ -81,7 +82,6 @@ from backend.app.schemas.provider import (
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
     )
-from backend.app.db.session import get_async_engine
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -1225,7 +1225,7 @@ class AssetSourceManager:
     async def get_prices_bulk(
         requests: list,
         session: AsyncSession,
-    ) -> list:
+        ) -> list:
         """Bulk query prices for multiple assets with a single DB read.
 
         Fetches all prices in one query and partitions the result by asset_id.
@@ -1234,7 +1234,7 @@ class AssetSourceManager:
         This method reads ONLY from DB — it does NOT delegate to providers.
         Provider fetch is a separate operation (POST /assets/prices/sync).
         """
-        from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
+        from backend.app.schemas.prices import FAPriceQueryResult
 
         if not requests:
             return []
@@ -1259,8 +1259,8 @@ class AssetSourceManager:
                     PriceHistory.asset_id.in_(asset_ids),
                     PriceHistory.date >= global_start,
                     PriceHistory.date <= global_end,
+                    )
                 )
-            )
             .order_by(PriceHistory.asset_id, PriceHistory.date)
         )
         db_result = await session.execute(stmt)
@@ -1408,8 +1408,8 @@ class AssetSourceManager:
                 }
 
         # ── Phase 2: FETCH (no DB, parallel with semaphore) ──
-        fetch_results: Dict[int, dict] = {}   # asset_id → {"prices": [...], "source": "..."}
-        fetch_errors: Dict[int, str] = {}     # asset_id → error message
+        fetch_results: Dict[int, dict] = {}  # asset_id → {"prices": [...], "source": "..."}
+        fetch_errors: Dict[int, str] = {}  # asset_id → error message
 
         async def _fetch_single(asset_id: int, prep: dict):
             """Fetch prices from provider for a single asset (no DB access)."""

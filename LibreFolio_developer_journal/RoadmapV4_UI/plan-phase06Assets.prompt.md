@@ -574,11 +574,10 @@ Creare `src/lib/components/assets/AssetSearchAutocomplete.svelte`.
 - [ ] Validazione: display_name obbligatorio, unicità (feedback da backend)
 - [ ] user_role: VIEWER non può aprire il modal in create/edit mode
 - [ ] **E3**: Toggle Abs/% per AssetCard — aggiungere suffisso valuta in Abs mode (es. `+1.23 EUR`), collegare segnali visivi PriceChartCompact
-- [ ] **E4**: Segnali tecnici su AssetCard — estendere `PriceChartCompact` per accettare `settings?: ChartSettings` e renderizzare overlay segnali (SMA, Bollinger, ecc.)
 
 ---
 
-### Step 4 — Asset Detail Page con PriceChartFull + Analisi Tecnica (~2 giorni)
+### Step 4 — Asset Detail Page con PriceChartFull + Analisi Tecnica + Currency Conversion (~2.5 giorni)
 
 Creare `src/routes/(app)/assets/[id]/+page.svelte` e `+page.ts`.
 Creare `src/lib/components/assets/AssetDataEditorSection.svelte`.
@@ -708,6 +707,83 @@ Quando l'utente seleziona un provider dal dropdown, il form genera i campi secon
 - [ ] Adaptive layout (wide/tablet/mobile) con ResizeObserver
 - [ ] Chart settings store per-asset (come `chartSettingsStore.svelte.ts` per FX)
 - [ ] Dark mode coerente
+- [ ] **E4**: Segnali tecnici su AssetCard — estendere `PriceChartCompact` per accettare `settings?: ChartSettings` e renderizzare overlay segnali (SMA, Bollinger, ecc.). Spostato da Step 3: dipende dal chart settings store per-asset creato in questo step.
+
+#### Currency Conversion on Query (sotto-task backend + frontend)
+
+**Razionale**: ogni `PriceHistory` row ha la propria `currency` (può differire da `asset.currency`
+se il provider restituisce in una valuta diversa, es. ETF cross-listed). Il frontend deve poter
+visualizzare i prezzi nella valuta scelta dall'utente.
+
+**Approccio**: Opzione B — il backend converte in `POST /assets/prices/query` tramite un campo
+opzionale `target_currency`. Riusa `convert_bulk()` FX già esistente e ottimizzato.
+
+**Prerequisito**: le coppie FX necessarie (es. USD→EUR) devono essere configurate e sincronizzate.
+Se mancanti, il backend restituisce il prezzo originale non convertito con un warning in `errors`.
+
+##### BackwardFillInfo Split — `AssetBackwardFillInfo`
+
+Quando si converte un price point, ci sono **due fonti indipendenti di staleness**:
+il prezzo (backward-filled N giorni) e il rate FX usato per la conversione (backward-filled M giorni).
+Mescolarli in un unico `days_back` perde l'informazione su *quale* dato è vecchio.
+
+**Schema**:
+```python
+# common.py — invariato (usato da FX e come base)
+class BackwardFillInfo(BaseModel):
+    actual_rate_date: date      # Data del dato reale
+    days_back: int              # Giorni stale
+
+# prices.py — NUOVO, estende per asset con info FX conversion
+class AssetBackwardFillInfo(BackwardFillInfo):
+    fx_rate_date: Optional[date] = None   # Data del rate FX usato per convertire
+    fx_days_back: Optional[int] = None    # Giorni stale del rate FX
+```
+
+- **FX** (`FXConversionResult`): continua a usare `BackwardFillInfo` — zero modifiche
+- **Asset** (`FAPricePoint`): tipo cambia da `BackwardFillInfo` a `AssetBackwardFillInfo`
+- `AssetBackwardFillInfo` è un `BackwardFillInfo` (ereditarietà) → backward-compatible al 100%
+- Senza conversione: `fx_rate_date` e `fx_days_back` restano `None` (comportamento attuale invariato)
+
+**Comportamento per scenario**:
+
+| Scenario | `days_back` | `fx_days_back` |
+|----------|-------------|----------------|
+| Prezzo fresco, no conversione | `None` (= no backward_fill_info) | — |
+| Prezzo stale 3gg, no conversione | `3` | `None` |
+| Prezzo fresco, FX fresco | `None` | — |
+| Prezzo stale 3gg, FX fresco | `3` | `0` o `None` |
+| Prezzo fresco, FX stale 2gg | `0` | `2` |
+| Prezzo stale 3gg, FX stale 5gg | `3` | `5` |
+
+**Gradiente opacità**: usa `days_back` dell'asset (il prezzo è il dato più impattante; le valute
+oscillano poco). Il FX stale non influenza il gradiente del chart.
+
+**Tooltip**: quando `fx_days_back` > 0, aggiungere riga dedicata sotto lo stale del prezzo:
+`⚠ FX rate: N days old` — solo nel tooltip, non nel gradiente visivo.
+
+**Marker puntuale opzionale**: per i punti dove il prezzo è fresco ma il FX è stale (caso raro),
+valutare un piccolo marker ambra (⊙ 4px) sulla linea — da decidere in review durante l'implementazione.
+Se troppo invasivo, solo tooltip.
+
+##### Task Currency Conversion
+
+- [ ] Backend: creare `AssetBackwardFillInfo(BackwardFillInfo)` in `prices.py` con `fx_rate_date` e `fx_days_back`
+- [ ] Backend: aggiornare `FAPricePoint.backward_fill_info` tipo → `Optional[AssetBackwardFillInfo]`
+- [ ] Backend: aggiungere `target_currency: Optional[str]` a `FAPriceQueryItem`
+- [ ] Backend: aggiungere `original_currency: Optional[str]` a `FAPricePoint` (populated solo se convertito)
+- [ ] Backend: in `get_prices_bulk()`, se `target_currency` presente e diversa da `point.currency`:
+  - raggruppare punti per coppia `(from_currency, target_currency)`
+  - chiamare `convert_bulk()` in batch (una query SQL per coppia)
+  - sostituire OHLC con valori convertiti, impostare `original_currency`
+  - popolare `fx_rate_date` e `fx_days_back` dal risultato `convert_bulk()`
+- [ ] Backend: `./dev.py api sync` per rigenerare client Zodios
+- [ ] Frontend: dropdown "Display currency" nella filter bar della detail page (default = `asset.currency`)
+- [ ] Frontend: passare `target_currency` a `POST /assets/prices/query` quando selezionata
+- [ ] Frontend: gradiente opacità chart → usa `days_back` (prezzo), ignora `fx_days_back`
+- [ ] Frontend: tooltip chart → riga aggiuntiva `⚠ FX rate: N days old` quando `fx_days_back > 0`
+- [ ] Frontend: etichetta valuta nel chart e indicatore "converted from USD" quando `original_currency` presente
+- [ ] Documentazione MkDocs: `developer/backend/assets/price-conversion.md` — razionale currency per-row, flow conversione, BackwardFillInfo split, gestione stale composta, prerequisiti FX
 
 ---
 
@@ -946,6 +1022,7 @@ Phase 6 — Step 1 (Backend: params_schema, fix perf)
 | `PriceChartFull` | Phase 5 | Phase 5, **Phase 6**, Phase 8 |
 | `DataEditor` | Phase 5 | Phase 5, **Phase 6** |
 | `FxCard` | Phase 5 | Phase 5, Phase 6 (pattern reference) |
+
 
 
 

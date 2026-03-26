@@ -6,7 +6,7 @@
     import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
     import {debug} from '$lib/debug';
-    import {Calendar, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User, Camera} from 'lucide-svelte';
+    import {Calendar, Camera, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/components/settings/PasswordChangeModal.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
@@ -188,7 +188,7 @@
     }
 
     // Avatar change handler (from ImagePickerWrapper)
-    async function handleAvatarChange(event: CustomEvent<{url: string}>) {
+    async function handleAvatarChange(event: CustomEvent<{ url: string }>) {
         showAvatarPicker = false;
         editedAvatarUrl = event.detail.url;
         await saveAvatarField();
@@ -348,13 +348,13 @@
         <div class="relative group">
             {#if editedAvatarUrl}
                 <img
-                    src={editedAvatarUrl}
-                    alt="Avatar"
-                    class="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-slate-600"
+                        src={editedAvatarUrl}
+                        alt="Avatar"
+                        class="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-slate-600"
                 />
             {:else}
                 <div class="w-20 h-20 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center">
-                    <User size={32} class="text-gray-400 dark:text-slate-500" />
+                    <User size={32} class="text-gray-400 dark:text-slate-500"/>
                 </div>
             {/if}
             <!-- Upload overlay (only when not locked) - opens AssetPickerModal -->
@@ -364,7 +364,7 @@
                 <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"
                      on:click={() => showAvatarPicker = true}
                      data-testid="profile-avatar-trigger">
-                    <Camera size={20} class="text-white" />
+                    <Camera size={20} class="text-white"/>
                 </div>
             {/if}
         </div>
@@ -374,10 +374,10 @@
             <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.avatarHint')}</p>
             {#if !isLocked && editedAvatarUrl}
                 <button
-                    type="button"
-                    class="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline"
-                    on:click={requestRemoveAvatar}
-                    data-testid="avatar-remove-btn"
+                        type="button"
+                        class="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline"
+                        on:click={requestRemoveAvatar}
+                        data-testid="avatar-remove-btn"
                 >
                     {$_('common.remove')}
                 </button>
@@ -729,16 +729,16 @@
             </p>
             <div class="flex justify-end gap-3">
                 <button
-                    type="button"
-                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-                    on:click={cancelRemoveAvatar}
+                        type="button"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                        on:click={cancelRemoveAvatar}
                 >
                     {$_('common.cancel')}
                 </button>
                 <button
-                    type="button"
-                    class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                    on:click={confirmRemoveAvatar}
+                        type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                        on:click={confirmRemoveAvatar}
                 >
                     {$_('common.remove')}
                 </button>
@@ -749,12 +749,12 @@
 
 <!-- Avatar Image Picker (AssetPicker + ImageEditModal combined) -->
 <ImagePickerWrapper
-    open={showAvatarPicker}
-    title={$_('settings.selectAvatar') || 'Select Avatar'}
-    preset="avatar"
-    initialUrl={editedAvatarUrl || ''}
-    circularPreview={true}
-    filterImages={true}
-    on:change={handleAvatarChange}
-    on:cancel={() => showAvatarPicker = false}
+        circularPreview={true}
+        filterImages={true}
+        initialUrl={editedAvatarUrl || ''}
+        on:cancel={() => showAvatarPicker = false}
+        on:change={handleAvatarChange}
+        open={showAvatarPicker}
+        preset="avatar"
+        title={$_('settings.selectAvatar') || 'Select Avatar'}
 />

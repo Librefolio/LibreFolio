@@ -12,9 +12,26 @@
     import {t} from '$lib/i18n';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
-    import {Download, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
+    import {
+        Download,
+        File as FileIcon,
+        FileArchive,
+        FileAudio,
+        FileCode,
+        FileJson,
+        FileSpreadsheet,
+        FileText,
+        FileType,
+        FileVideo,
+        Image as ImageIcon,
+        Link,
+        Trash2
+    } from 'lucide-svelte';
     import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
     import {safeNumber} from '$lib/types';
+    // Generate a consistent color based on broker id for visual distinction
+    // Uses shared golden-ratio color utility
+    import {getIndexColor} from '$lib/utils/colors';
 
     interface Props {
         files: FileData[];
@@ -39,10 +56,14 @@
     let dataTableRef: DataTable<FileData> | undefined = $state(undefined);
 
     /** Expose the internal DataTable ref for ColumnVisibilityToggle */
-    export function getTableRef() { return dataTableRef; }
+    export function getTableRef() {
+        return dataTableRef;
+    }
 
     /** Clear all selected rows */
-    export function clearSelection() { dataTableRef?.clearSelection(); }
+    export function clearSelection() {
+        dataTableRef?.clearSelection();
+    }
 
     // Helper functions
     function getFileName(file: FileData): string {
@@ -174,10 +195,6 @@
         // If broker not in map, it belongs to another user (shown to superuser)
         return broker?.name || `#${brokerId} (${$t('uploads.otherUser') || 'other user'})`;
     }
-
-    // Generate a consistent color based on broker id for visual distinction
-    // Uses shared golden-ratio color utility
-    import {getIndexColor} from '$lib/utils/colors';
 
     function getBrokerColor(brokerId: number): { bg: string; text: string; darkBg: string; darkText: string } {
         return getIndexColor(brokerId, 120);
