@@ -374,9 +374,8 @@
                                                                 const isCurrent = o.value === currentPairSlug;
                                                                 const isUsedElsewhere = !isCurrent && usedPairSlugs.has(o.value);
                                                                 const isMain = !!mainPairSlug && o.value === mainPairSlug;
-                                                                const isUsed = isCurrent || isUsedElsewhere;
-                                                                // Suffix: 👑 if main+used, ✓ if current card, 📌 if used by other card
-                                                                const suffix = isUsed && isMain ? ' 👑' : isCurrent ? ' ✓' : isUsedElsewhere ? ' 📌' : '';
+                                                                // Suffix: 👑 always on the main chart pair, ✓ on this card's selection, 📌 on other overlay signals
+                                                                const suffix = isMain ? ' 👑' : isCurrent ? ' ✓' : isUsedElsewhere ? ' 📌' : '';
                                                                 return {value: o.value, label: `${flag1} ${parts[0]} → ${flag2} ${parts[1]}${suffix}`};
                                                             })}
                                                             placeholder="— {$t('chartSettings.params.currencyPair')}"
