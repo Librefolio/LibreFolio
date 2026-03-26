@@ -40,7 +40,7 @@
         apiResultToFxDataPoint,
         type FxDataPoint, type FxPairConfig
     } from '$lib/stores/fxStoreRegistry';
-    import {isCardInverted, setCardInverted} from '$lib/stores/fxCardInversionStore';
+    import {isCardInverted} from '$lib/stores/fxCardInversionStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
@@ -498,10 +498,8 @@
     }
 
     function handleBulkInvertFx() {
-        for (const row of selectedFxRows) {
-            const current = isCardInverted(row.slug);
-            setCardInverted(row.slug, !current);
-        }
+        const slugs = selectedFxRows.map(r => r.slug);
+        fxTableComponent?.bulkToggleInversion(slugs);
         fxTableComponent?.getTableRef()?.clearSelection();
         selectedFxRows = [];
     }
