@@ -45,7 +45,6 @@
         currency: string;
         icon_url?: string | null;
         asset_type?: string | null;
-        has_provider: boolean;
         provider_code?: string | null;
         active: boolean;
     }
@@ -186,7 +185,6 @@
         currency: a.currency,
         icon_url: a.icon_url,
         asset_type: a.asset_type,
-        has_provider: a.has_provider,
         provider_code: a.provider_code,
         active: a.active,
         lastPrice: a.lastPrice,
@@ -285,7 +283,6 @@
                 currency: item.currency,
                 icon_url: item.icon_url ?? null,
                 asset_type: item.asset_type ?? null,
-                has_provider: item.has_provider ?? false,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
                 lastPrice: null,
@@ -391,7 +388,7 @@
     async function handleSyncAsset(asset: any) {
         syncingAssetIds = new Set([...syncingAssetIds, asset.id]);
         try {
-            const response = await zodiosApi.refresh_prices_bulk_api_v1_assets_prices_refresh_post([{
+            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{
                 asset_id: asset.id,
                 date_range: { start: dateStart, end: dateEnd },
             }]);
@@ -421,7 +418,7 @@
 
     /** Open sync modal for all assets that have a provider */
     function handleSyncAllAssets() {
-        syncModalAssets = assets.filter(a => a.has_provider);
+        syncModalAssets = assets.filter(a => !!a.provider_code);
         syncModalOpen = true;
     }
 
@@ -465,7 +462,7 @@
     // =========================================================================
 
     function handleBulkSyncAssets() {
-        syncModalAssets = selectedAssetRows.filter(r => r.has_provider);
+        syncModalAssets = selectedAssetRows.filter(r => !!r.provider_code);
         syncModalOpen = true;
     }
 
@@ -865,7 +862,7 @@
                         currency: asset.currency,
                         icon_url: asset.icon_url,
                         asset_type: asset.asset_type,
-                        has_provider: asset.has_provider,
+                        provider_code: asset.provider_code,
                         active: asset.active,
                     }}
                     lastPrice={asset.lastPrice}

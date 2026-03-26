@@ -10,7 +10,7 @@
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {getProviderColor, getPriorityBadgeStyle} from '$lib/utils/colors';
-    import {getCachedProviders} from '$lib/stores/currencyGraphStore';
+    import {getCachedFxProviders} from '$lib/stores/currencyGraphStore';
     import {_ as t} from '$lib/i18n';
 
     // =========================================================================
@@ -133,7 +133,7 @@
     }
 
     // Provider info from currencyGraphStore cache (for tooltips)
-    let providerInfoMap = $derived(new Map(getCachedProviders().map(p => [p.code, p])));
+    let providerInfoMap = $derived(new Map(getCachedFxProviders().map(p => [p.code, p])));
 
     function getProviderDescription(code: string): string {
         const prov = providerInfoMap.get(code);

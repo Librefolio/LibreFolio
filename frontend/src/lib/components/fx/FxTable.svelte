@@ -15,7 +15,7 @@
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {
         PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR,
-        providerBadgeHtml,
+        fxProviderBadgeHtml,
     } from '$lib/utils/providerHelpers';
     import {currentLanguage} from '$lib/stores/language';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
@@ -137,14 +137,14 @@
                     parts.push(`<span class="emoji-flag text-[10px]">${fromFlag}</span>`);
                 }
                 parts.push(`<span class="text-gray-400 text-[8px]">⇆</span>`);
-                parts.push(providerBadgeHtml(step.provider));
+                parts.push(fxProviderBadgeHtml(step.provider));
                 parts.push(`<span class="text-gray-400 text-[8px]">⇆</span>`);
                 parts.push(`<span class="emoji-flag text-[10px]">${toFlag}</span>`);
             }
             return `<div class="flex items-center gap-0.5 flex-wrap">${parts.join('')}</div>`;
         }
         // Single provider, no steps detail
-        return providerBadgeHtml(prov.providerCode);
+        return fxProviderBadgeHtml(prov.providerCode);
     }
 
     // =========================================================================

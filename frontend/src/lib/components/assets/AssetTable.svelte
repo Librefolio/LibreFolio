@@ -27,7 +27,6 @@
         currency: string;
         icon_url?: string | null;
         asset_type?: string | null;
-        has_provider: boolean;
         provider_code?: string | null;
         active: boolean;
         lastPrice?: number | null;
@@ -225,7 +224,7 @@
                 try { await onsync?.(row); }
                 finally { syncingRowIds = new Set([...syncingRowIds].filter(id => id !== rid)); }
             },
-            disabled: (row) => !row.has_provider,
+            disabled: (row) => !row.provider_code,
             iconClass: (row) => syncingRowIds.has(String(row.id)) ? 'animate-spin' : '',
         },
         {

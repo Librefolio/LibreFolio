@@ -1232,7 +1232,7 @@ class AssetSourceManager:
         Each asset then gets its own backward-filled series.
 
         This method reads ONLY from DB — it does NOT delegate to providers.
-        Provider fetch is a separate operation (POST /assets/prices/refresh).
+        Provider fetch is a separate operation (POST /assets/prices/sync).
         """
         from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 
@@ -1827,7 +1827,6 @@ class AssetCRUDService:
                     icon_url=asset.icon_url,
                     asset_type=asset.asset_type,
                     active=asset.active,
-                    has_provider=provider_id is not None,
                     provider_code=provider_code,
                     has_metadata=asset.classification_params is not None,
                     # Identifier columns from Asset

@@ -79,7 +79,7 @@ Il conteggio `1 skipped` su 64 totali è il risultato atteso.
 | **assets.py** | `POST /assets/prices` | POST | **Upsert prezzi!** |
 | **assets.py** | `DELETE /assets/prices` | DELETE | **Cancella prezzi!** |
 | **assets.py** | `GET /assets/prices/{id}` | GET | Prezzi asset |
-| **assets.py** | `POST /assets/prices/refresh` | POST | **Refresh prezzi!** |
+| **assets.py** | `POST /assets/prices/sync` | POST | **Refresh prezzi!** |
 | **assets.py** | `POST /assets/provider/search-assign` | POST | **Search+assign!** |
 | **transactions.py** | `GET /transactions` | GET | **Lista transazioni!** |
 | **transactions.py** | `GET /transactions/types` | GET | Metadata tipi |

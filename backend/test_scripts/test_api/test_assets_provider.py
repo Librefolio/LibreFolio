@@ -122,7 +122,7 @@ async def test_assign_provider(test_server):
         assert query_resp.status_code == 200
         assets = [FAAssetMetadataResponse(**a) for a in query_resp.json()]
         assert len(assets) == 1
-        assert assets[0].has_provider is True
+        assert assets[0].provider_code == "yfinance"
         print_success("✓ Provider assignment verified via GET /assets")
 
 
@@ -225,7 +225,7 @@ async def test_remove_provider(test_server):
             f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT
             )
         assets = [FAAssetMetadataResponse(**a) for a in query_resp.json()]
-        assert assets[0].has_provider is False
+        assert assets[0].provider_code is None
         print_success("✓ Provider removal verified")
 
 
@@ -760,9 +760,9 @@ async def test_search_to_asset_e2e(test_server):
                 asset = assets[0]
                 print_info(f"  Asset {asset_info['asset_id']} ({asset_info['provider_code']}):")
                 print_info(f"    - Name: {asset.display_name[:50]}...")
-                print_info(f"    - Has provider: {asset.has_provider}")
+                print_info(f"    - Provider: {asset.provider_code}")
                 print_info(f"    - Currency: {asset.currency}")
-                assert asset.has_provider is True, "Asset should have provider assigned"
+                assert asset.provider_code is not None, "Asset should have provider assigned"
 
         print_success("✓ All assets verified successfully")
 
@@ -775,7 +775,7 @@ async def test_search_to_asset_e2e(test_server):
 
         for asset_info in created_assets:
             price_refresh_resp = await client.post(
-                f"{API_BASE}/assets/prices/refresh",
+                f"{API_BASE}/assets/prices/sync",
                 json=[
                     {
                         "asset_id": asset_info["asset_id"],
@@ -898,7 +898,7 @@ async def test_price_refresh_uses_current_value(test_server):
         print_info(f"  Refreshing price for today: {today}")
 
         refresh_resp = await client.post(
-            f"{API_BASE}/assets/prices/refresh",
+            f"{API_BASE}/assets/prices/sync",
             json=[
                 {
                     "asset_id": asset_id,
@@ -1008,7 +1008,7 @@ async def test_css_scraper_current_price(test_server):
         print_info(f"  Refreshing price for today: {today}")
 
         refresh_resp = await client.post(
-            f"{API_BASE}/assets/prices/refresh",
+            f"{API_BASE}/assets/prices/sync",
             json=[
                 {
                     "asset_id": asset_id,

@@ -19,7 +19,7 @@ con Step 3 (AssetModal). Questo piano di rientro corregge tutto in ordine di dip
 >
 > | Termine | Direzione | Endpoint Asset | Endpoint FX |
 > |---------|-----------|----------------|-------------|
-> | **Sync** | Provider → DB | `POST /assets/prices/refresh` | `POST /fx/currencies/sync` |
+> | **Sync** | Provider → DB | `POST /assets/prices/sync` | `POST /fx/currencies/sync` |
 > | **Query** (refresh frontend) | DB → Frontend | `POST /assets/prices/query` | `POST /fx/currencies/convert` |
 > | **Upsert manuale** | Frontend → DB | `POST /assets/prices` | `POST /fx/currencies/rate` |
 >
@@ -353,7 +353,7 @@ non serve (non ci sono mini chart), quindi quello slot potrebbe ospitare ColumnV
    └──────────┴──────────┘       └──────────────┴──────────┘
    ```
 
-3. Implementare `handleSyncAll()` in assets/+page.svelte: chiama `POST /assets/prices/refresh`
+3. Implementare `handleSyncAll()` in assets/+page.svelte: chiama `POST /assets/prices/sync`
    per tutti gli asset con provider. Implementare `handleRefreshAll()`: ri-chiama
    `fetchAllPriceData()`.
 
@@ -1083,7 +1083,7 @@ async def get_prices_bulk(
     since it's always this same process executing the flow sequentially.
 
     This method reads ONLY from DB — it does NOT delegate to providers.
-    Provider fetch is a separate operation (POST /assets/prices/refresh).
+    Provider fetch is a separate operation (POST /assets/prices/sync).
     For the list/detail pages, data should already be in DB after refresh.
     """
     if not requests:
@@ -1585,7 +1585,7 @@ chiamata. Se l'asset aveva un provider assegnato, il GET contattava il provider 
 salvava i dati nel DB, poi li restituiva. Ogni lettura = potenziale chiamata HTTP.
 
 Con la nuova architettura (Step 7a), il flusso è separato in due operazioni indipendenti:
-1. **Sync** (`POST /assets/prices/refresh`): provider → DB — solo su richiesta esplicita
+1. **Sync** (`POST /assets/prices/sync`): provider → DB — solo su richiesta esplicita
 2. **Query** (`POST /assets/prices/query`): DB → frontend — pura lettura, zero side-effect
 
 I test devono riflettere questa separazione: **prima sync, poi query**.
@@ -1611,7 +1611,7 @@ Tutti i test che usavano il vecchio `GET /assets/prices/{asset_id}` sono stati m
 per inserire dati nel DB prima della query. Non passano per il provider — il flusso è:
 `upsert → query`, non `sync → query`. Questo è corretto: testano il CRUD puro, non il provider.
 
-I test 4, 14, 15 di provider e il test e2e usano **sync via provider** (`POST /assets/prices/refresh`)
+I test 4, 14, 15 di provider e il test e2e usano **sync via provider** (`POST /assets/prices/sync`)
 prima della query. Questo è il pattern corretto per testare il flusso provider → DB → frontend.
 
 ### Residuo: label nel test_runner.py
@@ -1661,7 +1661,7 @@ async def test_query_without_sync_returns_empty(test_server):
     
     Certifies the architectural separation:
     - Assigning a provider does NOT auto-fetch prices
-    - Prices appear in DB only after explicit sync (POST /assets/prices/refresh)
+    - Prices appear in DB only after explicit sync (POST /assets/prices/sync)
     - Query (POST /assets/prices/query) reads ONLY from DB, never from provider
     """
     async with httpx.AsyncClient() as client:
@@ -1709,7 +1709,7 @@ async def test_query_without_sync_returns_empty(test_server):
         
         # 4. Sync esplicita — scarica dal provider nel DB
         sync_resp = await client.post(
-            f"{API_BASE}/assets/prices/refresh",
+            f"{API_BASE}/assets/prices/sync",
             json=[{
                 "asset_id": asset_id,
                 "date_range": {
@@ -1871,7 +1871,7 @@ Il comportamento FX è considerato **corretto e di riferimento**.
 
 | Operazione utente | Direzione dati | FX | Assets |
 |---|---|---|---|
-| **Sync** (scarica dai provider) | Provider → DB | `POST /fx/currencies/sync` | `POST /assets/prices/refresh` |
+| **Sync** (scarica dai provider) | Provider → DB | `POST /fx/currencies/sync` | `POST /assets/prices/sync` |
 | **Refresh** (leggi dal DB) | DB → Frontend | `POST /fx/currencies/convert` | `POST /assets/prices/query` |
 | **Upsert manuale** | Frontend → DB | `POST /fx/currencies/rate` | `POST /assets/prices` |
 | **Delete** | DB ← Frontend | `DELETE /fx/currencies/rate` | `DELETE /assets/prices` |
@@ -1887,7 +1887,7 @@ Il comportamento FX è considerato **corretto e di riferimento**.
 |---|---|---|---|
 | **Upsert manuale** | `POST /fx/currencies/rate` → `upsert_rates_bulk()` | `POST /assets/prices` → `bulk_upsert_prices()` | Entrambi bulk. ✅ |
 | **Delete** | `DELETE /fx/currencies/rate` → `delete_rates_bulk()` | `DELETE /assets/prices` → `bulk_delete_prices()` | Entrambi bulk. ✅ |
-| **Sync da provider** | `POST /fx/currencies/sync` → `sync_pairs_bulk()` | `POST /assets/prices/refresh` → `bulk_refresh_prices()` | Entrambi: provider fetch → store in DB. ✅ |
+| **Sync da provider** | `POST /fx/currencies/sync` → `sync_pairs_bulk()` | `POST /assets/prices/sync` → `bulk_refresh_prices()` | Entrambi: provider fetch → store in DB. ✅ |
 | **Provider management** | `GET/POST/DELETE /fx/providers/routes` | `GET/POST/DELETE /assets/provider` | Entrambi CRUD provider. ✅ |
 | **Query (refresh frontend)** | `POST /fx/currencies/convert` → `convert_bulk()` → **solo DB** | `POST /assets/prices/query` → `get_prices_bulk()` → **solo DB** | Entrambi: singola query SQL, backward-fill in memoria. ✅ |
 
@@ -1917,7 +1917,7 @@ sequenziali ai provider. Questo era un side-effect nascosto in un'operazione di 
 **Backend**:
 - **Eliminato** `GET /assets/prices/{asset_id}` e il metodo `get_prices()` dal service layer
 - Il flusso è ora separato in due operazioni indipendenti:
-  - **Sync**: `POST /assets/prices/refresh` → `bulk_refresh_prices()` → provider HTTP → DB
+  - **Sync**: `POST /assets/prices/sync` → `bulk_refresh_prices()` → provider HTTP → DB
   - **Query**: `POST /assets/prices/query` → `get_prices_bulk()` → solo DB → frontend
 
 **Test**:
@@ -1928,7 +1928,7 @@ sequenziali ai provider. Questo era un side-effect nascosto in un'operazione di 
 
 **Frontend (Phase 06 Step 4 — Asset Detail, futuro)**:
 La pagina detail leggerà dal DB via `POST /assets/prices/query`.
-Il bottone Sync (che chiama `POST /assets/prices/refresh`) segue lo stesso pattern di FX:
+Il bottone Sync (che chiama `POST /assets/prices/sync`) segue lo stesso pattern di FX:
 - Provider presente → bottone Sync attivo
 - Nessun provider → bottone Sync **disabilitato**, messaggio "inserire manualmente"
 
@@ -2603,7 +2603,7 @@ class="flex items-center justify-center gap-1 px-2.5 py-1.5 ..."
 - `frontend/src/lib/components/fx/FxTable.svelte` (funzione `providerChainHtml`)
 - `frontend/src/lib/components/fx/FxSyncModal.svelte` (rendering provider chain)
 - `frontend/src/lib/utils/colors.ts` (riuso `getProviderColor`)
-- `frontend/src/lib/stores/currencyGraphStore.ts` (`getCachedProviders`)
+- `frontend/src/lib/stores/currencyGraphStore.ts` (`getCachedFxProviders`)
 
 **Problema**: La visualizzazione dei provider nella colonna tabella e nella modale sync
 mostra solo badge testuali (es. `ECB`). L'utente vuole la stessa visualizzazione ricca
@@ -2612,7 +2612,7 @@ usata in `FxProviderSelect.svelte`: bandiere valuta, icone provider (favicon), f
 **Dati disponibili**:
 - `FxRow.providers[0].chainSteps[]` → `{from, to, provider}` per ogni step
 - `getCurrencyInfo(code)` → `{flag_emoji}` per le bandiere
-- `getCachedProviders()` → `[{code, icon_url, name}]` per icone provider
+- `getCachedFxProviders()` → `[{code, icon_url, name}]` per icone provider
 - `getProviderColor(code)` → `{bg, border}` per colori badge
 
 **Pattern di rendering** (da FxProviderSelect, adattato per inline HTML):
@@ -2621,7 +2621,7 @@ usata in `FxProviderSelect.svelte`: bandiere valuta, icone provider (favicon), f
 ```
 
 **Soluzione — FxTable (HTML inline nella cella)**:
-1. Importare `getCachedProviders` da `$lib/stores/currencyGraphStore`
+1. Importare `getCachedFxProviders` da `$lib/stores/currencyGraphStore`
 2. Importare `getProviderColor` da `$lib/utils/colors`
 3. Costruire un `providerMap` derivato per lookup `icon_url` e iniziali
 4. Riscrivere `providerChainHtml()`:

@@ -350,12 +350,12 @@ Questo fix si propaga automaticamente a:
 `handleSyncAsset` è un placeholder:
 ```typescript
 async function handleSyncAsset(asset: any) {
-    // TODO: implement actual sync via POST /assets/prices/refresh
+    // TODO: implement actual sync via POST /assets/prices/sync
     console.log('Sync Asset clicked:', asset.id);
 }
 ```
 
-L'API backend è pronta: `POST /api/v1/assets/prices/refresh` (alias
+L'API backend è pronta: `POST /api/v1/assets/prices/sync` (alias
 `refresh_prices_bulk_api_v1_assets_prices_refresh_post`).
 
 **Request body** (`FARefreshItem[]`):

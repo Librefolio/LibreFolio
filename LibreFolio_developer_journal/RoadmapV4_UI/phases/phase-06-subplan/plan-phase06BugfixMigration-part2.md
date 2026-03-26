@@ -191,7 +191,7 @@ Riferimento: checklist D1–D12 da `plan-phase06BugfixMigration.prompt.md` + Ste
 
 ### E1c — FxTable provider chain mostra testo in tabella
 
-**Problema**: `providerIconHtml()` in `FxTable.svelte` chiama `getCachedProviders()` che restituisce `[]` se il grafo currency non è stato ancora costruito al momento del primo render. Risultato: `info` è `undefined`, cade nel fallback testuale (es. `ECB` invece dell'icona).
+**Problema**: `providerIconHtml()` in `FxTable.svelte` chiama `getCachedFxProviders()` che restituisce `[]` se il grafo currency non è stato ancora costruito al momento del primo render. Risultato: `info` è `undefined`, cade nel fallback testuale (es. `ECB` invece dell'icona).
 
 Il fix E1 precedente funziona solo quando i provider sono già in cache (es. FxSyncModal che si apre dopo, o dopo navigazione). Ma al primo render della tabella, la cache è vuota.
 

@@ -39,7 +39,7 @@ Le API per gli asset sono già implementate e testate:
 | `POST /api/v1/assets/prices/query` | POST | ✅ | **NUOVO in Step 2b** — Bulk price query (DB-only, singola query SQL, backward-fill) — analogo a `POST /fx/currencies/convert` |
 | `POST /api/v1/assets/prices` | POST | ✅ | Bulk upsert prices |
 | `DELETE /api/v1/assets/prices` | DELETE | ✅ | Bulk delete price ranges |
-| `POST /api/v1/assets/prices/refresh` | POST | ✅ | Bulk refresh prices da provider |
+| `POST /api/v1/assets/prices/sync` | POST | ✅ | Bulk refresh prices da provider |
 | `POST /api/v1/assets/provider/refresh` | POST | ✅ | Refresh metadata da provider |
 
 **Test E2E di riferimento**: `backend/test_scripts/test_e2e/test_search_to_prices.py` — dimostra il flusso
@@ -702,7 +702,7 @@ Quando l'utente seleziona un provider dal dropdown, il form genera i campi secon
 - [ ] Creare `AssetDataEditorSection.svelte` (wrapper DataEditor con colonne OHLCV)
 - [ ] Adattare `DataImportModal` per supporto 6 colonne (o creare variante asset-specific)
 - [ ] Provider assignment section con form dinamico da `params_schema`
-- [ ] Pulsante Refresh Prices: attivo solo se provider assegnato, chiama `POST /assets/prices/refresh`. Se no provider → **disabilitato** (opacity-50, tooltip "Assegna un provider o inserisci prezzi manualmente")
+- [ ] Pulsante Refresh Prices: attivo solo se provider assegnato, chiama `POST /assets/prices/sync`. Se no provider → **disabilitato** (opacity-50, tooltip "Assegna un provider o inserisci prezzi manualmente")
 - [ ] Chart empty state: se no provider → messaggio "Nessun dato — inserire prezzi manualmente" + bottone apre editor (pattern identico a FX detail manual-only, Step 2b §5)
 - [ ] Sezione Metadata readonly (identifiers, classification_params)
 - [ ] Adaptive layout (wide/tablet/mobile) con ResizeObserver
