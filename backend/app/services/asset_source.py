@@ -81,6 +81,7 @@ from backend.app.schemas.provider import (
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
     )
+from backend.app.db.session import get_async_engine
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -1296,302 +1297,276 @@ class AssetSourceManager:
         """
         Refresh prices for multiple assets using their configured providers.
 
+        Uses a 3-phase pipeline (pattern from FX sync_pairs_bulk):
+          Phase 1 — PREPARE: batch DB queries (shared session, read-only)
+          Phase 2 — FETCH: parallel provider calls (no DB, semaphore-limited)
+          Phase 3 — PERSIST: parallel upsert (per-task session, isolated commits)
+
+        This design avoids concurrent commits on the same session which caused
+        "This transaction is closed" errors in the previous monolithic approach.
+
         Args:
             requests: List of FARefreshItem (asset_id, start_date, end_date)
-            session: Database session
+            session: Database session (used ONLY in Phase 1 for reading)
             concurrency: Max concurrent provider calls
             semaphore_timeout: Timeout for acquiring semaphore (seconds)
 
         Returns:
             FABulkRefreshResponse with per-item results
-
-        Note: Already parallelized with asyncio.gather and semaphore
         """
         if not requests:
             return FABulkRefreshResponse(results=[], success_count=0, date_range=None, total_points_changed=0)
 
-        results = []
+        t_bulk_start_ns = time.monotonic_ns()
         sem = asyncio.Semaphore(concurrency)
 
-        async def _process_single(item: FARefreshItem) -> FARefreshResult:
-            asset_id = item.asset_id
-            start = item.date_range.start
-            end = item.date_range.end
-            t_start_ns = time.monotonic_ns()
+        # ── Phase 1: PREPARE (shared session, batch queries, read-only) ──
+        asset_ids = [r.asset_id for r in requests]
+        request_map = {r.asset_id: r for r in requests}
 
-            fetched_count = 0
-            inserted_count = 0
-            updated_count = 0
-            errors = []
-            provider_code_used = None
+        # Batch query: all assignments for requested assets
+        assign_stmt = select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids))
+        assign_res = await session.execute(assign_stmt)
+        assignment_map: Dict[int, AssetProviderAssignment] = {a.asset_id: a for a in assign_res.scalars().all()}
 
-            # Resolve provider assignment
-            try:
-                assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
-                if not assignment:
-                    errors.append("No provider assigned for asset")
-                    elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-                    return FARefreshResult(
-                        asset_id=asset_id,
-                        status=SyncStatus.SKIPPED,
-                        provider_used=None,
-                        points_fetched=0,
-                        points_changed=0,
-                        inserted_count=0,
-                        updated_count=0,
-                        message="No provider assigned",
-                        errors=errors,
-                        elapsed_ms=elapsed_ms,
-                        )
+        # Batch query: all requested assets
+        asset_stmt = select(Asset).where(Asset.id.in_(asset_ids))
+        asset_res = await session.execute(asset_stmt)
+        asset_map: Dict[int, Asset] = {a.id: a for a in asset_res.scalars().all()}
 
-                provider_code = assignment.provider_code
-                provider_code_used = provider_code
-                provider_params = assignment.provider_params or {}
-                identifier = assignment.identifier  # Identifier is in assignment, not asset
+        # Build prepared items and generate immediate SKIPPED/FAILED results
+        prepared_items: Dict[int, dict] = {}  # asset_id → {assignment, asset, prov, params, ...}
+        immediate_results: list[FARefreshResult] = []
 
-                # Verify asset exists
-                asset_stmt = select(Asset).where(Asset.id == asset_id)
-                asset_res = await session.execute(asset_stmt)
-                asset = asset_res.scalar_one_or_none()
-                if not asset:
-                    errors.append(f"Asset {asset_id} not found")
-                    elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-                    return FARefreshResult(
-                        asset_id=asset_id,
-                        status=SyncStatus.FAILED,
-                        provider_used=provider_code_used,
-                        points_fetched=0,
-                        points_changed=0,
-                        inserted_count=0,
-                        updated_count=0,
-                        errors=errors,
-                        elapsed_ms=elapsed_ms,
-                        )
-            except Exception as e:
-                errors.append(f"Failed to resolve provider or asset: {str(e)}")
-                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-                return FARefreshResult(
+        for asset_id in asset_ids:
+            item = request_map[asset_id]
+            assignment = assignment_map.get(asset_id)
+            asset = asset_map.get(asset_id)
+
+            if not asset:
+                immediate_results.append(FARefreshResult(
                     asset_id=asset_id,
                     status=SyncStatus.FAILED,
-                    provider_used=provider_code_used,
-                    points_fetched=0,
-                    points_changed=0,
-                    inserted_count=0,
-                    updated_count=0,
-                    errors=errors,
-                    elapsed_ms=elapsed_ms,
-                    )
+                    errors=[f"Asset {asset_id} not found"],
+                    elapsed_ms=(time.monotonic_ns() - t_bulk_start_ns) // 1_000_000,
+                    ))
+                continue
 
-            # Instantiate provider from registry
+            if not assignment:
+                immediate_results.append(FARefreshResult(
+                    asset_id=asset_id,
+                    status=SyncStatus.SKIPPED,
+                    message="No provider assigned",
+                    errors=["No provider assigned for asset"],
+                    elapsed_ms=(time.monotonic_ns() - t_bulk_start_ns) // 1_000_000,
+                    ))
+                continue
+
+            provider_code = assignment.provider_code
             prov = AssetProviderRegistry.get_provider_instance(provider_code)
             if not prov:
-                errors.append(f"Provider not found: {provider_code}")
-                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-                return FARefreshResult(
+                immediate_results.append(FARefreshResult(
                     asset_id=asset_id,
                     status=SyncStatus.FAILED,
-                    provider_used=provider_code_used,
-                    points_fetched=0,
-                    points_changed=0,
-                    inserted_count=0,
-                    updated_count=0,
-                    errors=errors,
-                    elapsed_ms=elapsed_ms,
-                    )
+                    provider_used=provider_code,
+                    errors=[f"Provider not found: {provider_code}"],
+                    elapsed_ms=(time.monotonic_ns() - t_bulk_start_ns) // 1_000_000,
+                    ))
+                continue
 
-            # Parse provider_params if stored as JSON string
+            # Parse provider_params
+            provider_params = assignment.provider_params or {}
             try:
                 if isinstance(provider_params, str):
                     provider_params = json.loads(provider_params)
             except Exception:
-                # keep as-is if parsing fails
                 pass
 
-            # Validate params if provider supports it
+            # Validate params
             try:
                 prov.validate_params(provider_params)
             except Exception as e:
-                errors.append(f"Invalid provider params: {str(e)}")
-                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-                return FARefreshResult(
+                immediate_results.append(FARefreshResult(
                     asset_id=asset_id,
                     status=SyncStatus.FAILED,
-                    provider_used=provider_code_used,
-                    points_fetched=0,
-                    points_changed=0,
-                    inserted_count=0,
-                    updated_count=0,
-                    errors=errors,
-                    elapsed_ms=elapsed_ms,
-                    )
+                    provider_used=provider_code,
+                    errors=[f"Invalid provider params: {str(e)}"],
+                    elapsed_ms=(time.monotonic_ns() - t_bulk_start_ns) // 1_000_000,
+                    ))
+                continue
 
-            # Fetch existing DB entries (prefetch) while calling remote
-            async def _fetch_db_existing():
-                # Query all existing price dates in range for this asset
-                stmt = select(PriceHistory).where(
-                    and_(
-                        PriceHistory.asset_id == asset_id,
-                        PriceHistory.date >= start,
-                        PriceHistory.date <= end,
-                        )
-                    )
-                db_res = await session.execute(stmt)
-                return {p.date: p for p in db_res.scalars().all()}
+            prepared_items[asset_id] = {
+                "assignment": assignment,
+                "asset": asset,
+                "prov": prov,
+                "provider_code": provider_code,
+                "provider_params": provider_params,
+                "identifier": assignment.identifier,
+                "identifier_type": assignment.identifier_type,
+                "start": item.date_range.start,
+                "end": item.date_range.end,
+                }
 
-            # Provider fetch coroutine
-            async def _fetch_remote():
-                try:
-                    prices_data = []
-                    today = date_type.today()
-                    identifier_type = assignment.identifier_type
+        # ── Phase 2: FETCH (no DB, parallel with semaphore) ──
+        fetch_results: Dict[int, dict] = {}   # asset_id → {"prices": [...], "source": "..."}
+        fetch_errors: Dict[int, str] = {}     # asset_id → error message
 
-                    # 1. Try to fetch historical data if provider supports it AND date range includes past dates
-                    if prov.supports_history and start < today:
-                        try:
-                            # Fetch history up to yesterday (or end if end < today)
-                            history_end = (
-                                min(end, today - timedelta(days=1)) if end >= today else end
-                            )
-                            if start <= history_end:
-                                hist_data = await prov.get_history_value(
-                                    identifier, identifier_type, provider_params, start, history_end
-                                    )
-                                if hist_data and hist_data.prices:
-                                    prices_data = [p.model_dump() for p in hist_data.prices]
-                                    logger.debug(
-                                        f"Fetched {len(prices_data)} historical prices for asset {asset_id}"
-                                        )
-                        except Exception as hist_e:
-                            logger.warning(f"History fetch failed for asset {asset_id}: {hist_e}")
-                            # Continue - we'll try current value
+        async def _fetch_single(asset_id: int, prep: dict):
+            """Fetch prices from provider for a single asset (no DB access)."""
+            prov = prep["prov"]
+            identifier = prep["identifier"]
+            identifier_type = prep["identifier_type"]
+            provider_params = prep["provider_params"]
+            provider_code = prep["provider_code"]
+            start = prep["start"]
+            end = prep["end"]
 
-                    # 2. Always try to get current value if end date includes today
-                    if end >= today:
-                        try:
-                            current_data = await prov.get_current_value(
-                                identifier, identifier_type, provider_params
-                                )
-                            if current_data and current_data.value:
-                                # Create a price point for today
-                                current_price = {
-                                    "date": current_data.as_of_date or today,
-                                    "close": current_data.value,
-                                    "currency": current_data.currency or "USD",
-                                    }
-
-                                # Remove any existing entry for today from history (current value takes precedence)
-                                prices_data = [
-                                    p for p in prices_data if p.get("date") != current_price["date"]
-                                    ]
-                                prices_data.append(current_price)
-                                logger.debug(
-                                    f"Added current price for asset {asset_id}: {current_data.value}"
-                                    )
-                        except Exception as curr_e:
-                            logger.warning(
-                                f"Current value fetch failed for asset {asset_id}: {curr_e}"
-                                )
-                            # Continue - we may still have history data
-
-                    if not prices_data:
-                        raise AssetSourceError(
-                            "No price data available from provider",
-                            "NO_DATA",
-                            {"asset_id": asset_id, "provider": provider_code},
-                            )
-
-                    return {"prices": prices_data, "source": provider_code}
-                except AssetSourceError:
-                    raise
-                except Exception as e:
-                    raise AssetSourceError(
-                        f"Provider fetch failed: {str(e)}", "PROVIDER_FETCH_ERROR", {}
-                        )
-
-            # Run both in parallel with semaphore
             try:
                 async with asyncio.timeout(semaphore_timeout):
                     async with sem:
-                        db_task = asyncio.create_task(_fetch_db_existing())
-                        fetch_task = asyncio.create_task(_fetch_remote())
+                        prices_data = []
+                        today = date_type.today()
 
-                        db_existing, remote_data = await asyncio.gather(db_task, fetch_task)
+                        # 1. Fetch historical data
+                        if prov.supports_history and start < today:
+                            try:
+                                history_end = min(end, today - timedelta(days=1)) if end >= today else end
+                                if start <= history_end:
+                                    hist_data = await prov.get_history_value(identifier, identifier_type, provider_params, start, history_end)
+                                    if hist_data and hist_data.prices:
+                                        prices_data = [p.model_dump() for p in hist_data.prices]
+                                        logger.debug(f"Fetched {len(prices_data)} historical prices for asset {asset_id}")
+                            except Exception as hist_e:
+                                logger.warning(f"History fetch failed for asset {asset_id}: {hist_e}")
+
+                        # 2. Fetch current value
+                        if end >= today:
+                            try:
+                                current_data = await prov.get_current_value(identifier, identifier_type, provider_params)
+                                if current_data and current_data.value:
+                                    current_price = {
+                                        "date": current_data.as_of_date or today,
+                                        "close": current_data.value,
+                                        "currency": current_data.currency or "USD",
+                                        }
+                                    prices_data = [p for p in prices_data if p.get("date") != current_price["date"]]
+                                    prices_data.append(current_price)
+                                    logger.debug(f"Added current price for asset {asset_id}: {current_data.value}")
+                            except Exception as curr_e:
+                                logger.warning(f"Current value fetch failed for asset {asset_id}: {curr_e}")
+
+                        if not prices_data:
+                            fetch_errors[asset_id] = "No price data available from provider"
+                            return
+
+                        fetch_results[asset_id] = {"prices": prices_data, "source": provider_code}
+
             except Exception as e:
-                errors.append(str(e))
+                fetch_errors[asset_id] = str(e)
+
+        fetch_tasks = [_fetch_single(aid, prep) for aid, prep in prepared_items.items()]
+        if fetch_tasks:
+            await asyncio.gather(*fetch_tasks)
+
+        # ── Phase 3: PERSIST (per-task session, parallel, isolated commits) ──
+        engine = get_async_engine()
+
+        async def _persist_single(asset_id: int) -> FARefreshResult:
+            """Upsert fetched prices and update assignment in an isolated session."""
+            t_start_ns = time.monotonic_ns()
+            prep = prepared_items[asset_id]
+            provider_code = prep["provider_code"]
+            prov = prep["prov"]
+            start = prep["start"]
+
+            # Check if fetch failed
+            if asset_id in fetch_errors:
                 elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                 return FARefreshResult(
                     asset_id=asset_id,
                     status=SyncStatus.FAILED,
-                    provider_used=provider_code_used,
-                    points_fetched=0,
-                    points_changed=0,
-                    inserted_count=0,
-                    updated_count=0,
-                    errors=errors,
+                    provider_used=provider_code,
+                    errors=[fetch_errors[asset_id]],
                     elapsed_ms=elapsed_ms,
                     )
 
-            # remote_data expected shape: {"prices": [ {date, open?, high?, low?, close, volume?, currency}, ... ], "source": "..."}
-            prices = remote_data.get("prices", []) if isinstance(remote_data, dict) else []
+            remote_data = fetch_results.get(asset_id)
+            if not remote_data:
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+                return FARefreshResult(
+                    asset_id=asset_id,
+                    status=SyncStatus.FAILED,
+                    provider_used=provider_code,
+                    errors=["No data available from provider"],
+                    elapsed_ms=elapsed_ms,
+                    )
+
+            prices = remote_data.get("prices", [])
             if not prices:
-                errors.append("No prices returned from provider")
                 elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                 return FARefreshResult(
                     asset_id=asset_id,
                     status=SyncStatus.FAILED,
-                    provider_used=provider_code_used,
-                    points_fetched=0,
-                    points_changed=0,
-                    inserted_count=0,
-                    updated_count=0,
-                    message="No data available from provider",
-                    errors=errors,
+                    provider_used=provider_code,
+                    errors=["No prices returned from provider"],
                     elapsed_ms=elapsed_ms,
                     )
 
-            # Convert prices to FAPricePoint objects
-            price_items = []
-            for p in prices:
-                price_items.append(
-                    FAPricePoint(
-                        date=p["date"],
-                        open=p.get("open"),
-                        high=p.get("high"),
-                        low=p.get("low"),
-                        close=p["close"],
-                        volume=p.get("volume"),
-                        currency=p.get("currency", "USD"),
-                        )
+            # Convert to FAPricePoint objects
+            price_items = [
+                FAPricePoint(
+                    date=p["date"],
+                    open=p.get("open"),
+                    high=p.get("high"),
+                    low=p.get("low"),
+                    close=p["close"],
+                    volume=p.get("volume"),
+                    currency=p.get("currency", "USD"),
                     )
-
-            # Build FAUpsert object
+                for p in prices
+                ]
             upsert_obj = FAUpsert(asset_id=asset_id, prices=price_items)
 
-            try:
-                upsert_res = await AssetSourceManager.bulk_upsert_prices([upsert_obj], session)
-                fetched_count = len(prices)
-                inserted_count = upsert_res.get("inserted_count", 0)
-            except Exception as e:
-                errors.append(f"DB upsert failed: {str(e)}")
+            errors = []
+            fetched_count = len(prices)
+            inserted_count = 0
+            updated_count = 0
 
-            # Update last_fetch_at on assignment
+            # Isolated session for this asset's DB writes
             try:
-                assignment.last_fetch_at = utcnow()
-                session.add(assignment)
-                await session.commit()
-            except Exception:
-                # Not critical, skip
-                pass
+                async with AsyncSession(engine, expire_on_commit=False) as persist_session:
+                    try:
+                        upsert_res = await AssetSourceManager.bulk_upsert_prices(
+                            [upsert_obj], persist_session
+                            )
+                        inserted_count = upsert_res.get("inserted_count", 0)
+                    except Exception as e:
+                        errors.append(f"DB upsert failed: {str(e)}")
+
+                    # Update last_fetch_at on assignment
+                    try:
+                        assign_stmt = select(AssetProviderAssignment).where(
+                            AssetProviderAssignment.asset_id == asset_id
+                            )
+                        assign_res = await persist_session.execute(assign_stmt)
+                        fresh_assignment = assign_res.scalar_one_or_none()
+                        if fresh_assignment:
+                            fresh_assignment.last_fetch_at = utcnow()
+                            persist_session.add(fresh_assignment)
+                            await persist_session.commit()
+                    except Exception:
+                        pass  # Not critical
+            except Exception as e:
+                errors.append(f"Persist session error: {str(e)}")
 
             points_changed = inserted_count + updated_count
             elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
 
-            # Determine status and message
+            # Determine status
             message = None
             if errors:
                 status = SyncStatus.FAILED if fetched_count == 0 else SyncStatus.PARTIAL
             elif fetched_count > 0:
-                # Check if only current value (no history) → partial
                 has_history = prov.supports_history and start < date_type.today()
                 if has_history and fetched_count == 1:
                     status = SyncStatus.PARTIAL
@@ -1605,7 +1580,7 @@ class AssetSourceManager:
             return FARefreshResult(
                 asset_id=asset_id,
                 status=status,
-                provider_used=provider_code_used,
+                provider_used=provider_code,
                 points_fetched=fetched_count,
                 points_changed=points_changed,
                 inserted_count=inserted_count,
@@ -1615,18 +1590,19 @@ class AssetSourceManager:
                 elapsed_ms=elapsed_ms,
                 )
 
-        # Create tasks for all items
-        tasks = [asyncio.create_task(_process_single(item)) for item in requests]
+        # Build persist tasks only for assets that had fetch results or errors
+        persist_asset_ids = [aid for aid in prepared_items if aid in fetch_results or aid in fetch_errors]
+        persist_tasks = [_persist_single(aid) for aid in persist_asset_ids]
 
-        # Wait for all to complete
-        completed = await asyncio.gather(*tasks)
+        persist_results: list[FARefreshResult] = []
+        if persist_tasks:
+            persist_results = list(await asyncio.gather(*persist_tasks))
 
-        results = list(completed)
+        # ── Combine all results ──
+        results = immediate_results + persist_results
         total_points_changed = sum(r.points_changed for r in results)
-        # Build date_range from first item
-        date_range_model = None
-        if requests:
-            date_range_model = requests[0].date_range
+        date_range_model = requests[0].date_range if requests else None
+
         return FABulkRefreshResponse(
             results=results,
             success_count=sum(1 for r in results if r.status in (SyncStatus.OK, SyncStatus.PARTIAL)),
@@ -1886,6 +1862,7 @@ class AssetCRUDService:
         results = []
 
         for asset_id in asset_ids:
+            asset_name = None
             try:
                 # Check if asset exists
                 stmt = select(Asset).where(Asset.id == asset_id)
@@ -1897,10 +1874,14 @@ class AssetCRUDService:
                         FAAssetDeleteResult(
                             asset_id=asset_id,
                             success=False,
+                            display_name=None,
+                            error_code="NOT_FOUND",
                             message=f"Asset with ID {asset_id} not found",
                             )
                         )
                     continue
+
+                asset_name = asset.display_name
 
                 # Try to delete (will fail if transactions exist due to FK constraint)
                 await session.delete(asset)
@@ -1911,6 +1892,7 @@ class AssetCRUDService:
                         asset_id=asset_id,
                         success=True,
                         deleted_count=1,
+                        display_name=asset_name,
                         message="Asset deleted successfully",
                         )
                     )
@@ -1927,12 +1909,19 @@ class AssetCRUDService:
                     or "foreign key" in error_msg.lower()
                 ):
                     message = f"Cannot delete asset {asset_id}: has existing transactions"
+                    error_code = "HAS_TRANSACTIONS"
                 else:
                     message = f"Error deleting asset {asset_id}: {error_msg}"
+                    error_code = None
 
                 results.append(
                     FAAssetDeleteResult(
-                        asset_id=asset_id, success=False, deleted_count=0, message=message
+                        asset_id=asset_id,
+                        success=False,
+                        deleted_count=0,
+                        display_name=asset_name,
+                        error_code=error_code,
+                        message=message,
                         )
                     )
                 logger.error(f"Error deleting asset {asset_id}: {e}")

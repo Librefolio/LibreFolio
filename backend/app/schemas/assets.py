@@ -841,6 +841,8 @@ class FAAssetDeleteResult(BaseDeleteResult):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
+    display_name: Optional[str] = Field(None, description="Asset display name (for UI feedback)")
+    error_code: Optional[str] = Field(None, description="Structured error code: 'HAS_TRANSACTIONS' | 'NOT_FOUND' | None")
     # Inherits from BaseDeleteResult:
     # - success: bool
     # - deleted_count: int (always 0 or 1 for single asset)
