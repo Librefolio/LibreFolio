@@ -31,7 +31,7 @@ let cachedGraph: CurrencyGraph | null = null;
 let cachedProvidersHash: string | null = null;
 
 /** Cached provider info list */
-let cachedProviders: ProviderInfo[] = [];
+let cachedFxProviders: ProviderInfo[] = [];
 
 /** Loading promise to avoid duplicate concurrent builds */
 let buildPromise: Promise<CurrencyGraph> | null = null;
@@ -90,7 +90,7 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
             const graph = buildCurrencyGraph(providers, allCurrencyCodes);
 
             // Cache
-            cachedProviders = providers;
+            cachedFxProviders = providers;
             cachedProvidersHash = JSON.stringify(providers.map(p => p.code).sort());
             cachedGraph = graph;
 
@@ -104,11 +104,11 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
 }
 
 /**
- * Get cached provider info (available after getCurrencyGraph() resolves).
+ * Get cached FX provider info (available after getCurrencyGraph() resolves).
  * Returns empty array if graph hasn't been built yet.
  */
-export function getCachedProviders(): ProviderInfo[] {
-    return cachedProviders;
+export function getCachedFxProviders(): ProviderInfo[] {
+    return cachedFxProviders;
 }
 
 /**
@@ -136,7 +136,7 @@ export async function findConversionPaths(
 export function invalidateCurrencyGraph(): void {
     cachedGraph = null;
     cachedProvidersHash = null;
-    cachedProviders = [];
+    cachedFxProviders = [];
     buildPromise = null;
 }
 

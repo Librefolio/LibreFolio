@@ -1252,10 +1252,6 @@ type FAAssetMetadataResponse = {
         | Array<FAClassificationParams_Output | null>
       )
     | undefined;
-  has_provider?: /**
-   * @default false
-   */
-  boolean | undefined;
   provider_code?:
     | /**
      * Provider code if assigned (e.g. 'yfinance')
@@ -2374,10 +2370,6 @@ type FAinfoResponse = {
    * Whether asset is active
    */
   active: boolean;
-  /**
-   * Whether asset has a provider assigned
-   */
-  has_provider: boolean;
   provider_code?:
     | /**
      * Provider code if assigned (e.g. 'yfinance')
@@ -4296,7 +4288,6 @@ const FAAssetMetadataResponse: z.ZodType<FAAssetMetadataResponse> = z.object({
   classification_params: z
     .union([FAClassificationParams_Output, z.null()])
     .optional(),
-  has_provider: z.boolean().optional().default(false),
   provider_code: z
     .union([z.string(), z.null()])
     .describe("Provider code if assigned (e.g. 'yfinance')")
@@ -4321,7 +4312,6 @@ const FAinfoResponse: z.ZodType<FAinfoResponse> = z.object({
     .optional(),
   asset_type: z.union([z.string(), z.null()]).describe("Asset type").optional(),
   active: z.boolean().describe("Whether asset is active"),
-  has_provider: z.boolean().describe("Whether asset has a provider assigned"),
   provider_code: z
     .union([z.string(), z.null()])
     .describe("Provider code if assigned (e.g. 'yfinance')")
@@ -6504,7 +6494,7 @@ GET /api/v1/assets?asset_ids&#x3D;1&amp;asset_ids&#x3D;2&amp;asset_ids&#x3D;3
         &quot;USA&quot;: &quot;1.0000&quot;
       }
     },
-    has_provider: false
+    &quot;provider_code&quot;: null
   },
   {
     &quot;asset_id&quot;: 2,
@@ -6517,7 +6507,7 @@ GET /api/v1/assets?asset_ids&#x3D;1&amp;asset_ids&#x3D;2&amp;asset_ids&#x3D;3
         &quot;USA&quot;: &quot;1.0000&quot;
       }
     },
-    has_provider: true
+    &quot;provider_code&quot;: &quot;yfinance&quot;
   }
 ]
 &#x60;&#x60;&#x60;
@@ -6641,9 +6631,9 @@ Analogous to POST /fx/currencies/convert for FX rates.`,
   },
   {
     method: "post",
-    path: "/api/v1/assets/prices/refresh",
-    alias: "refresh_prices_bulk_api_v1_assets_prices_refresh_post",
-    description: `Bulk refresh prices via providers (PRIMARY bulk endpoint).`,
+    path: "/api/v1/assets/prices/sync",
+    alias: "sync_prices_bulk_api_v1_assets_prices_sync_post",
+    description: `Bulk sync prices via providers (PRIMARY bulk endpoint).`,
     requestFormat: "json",
     parameters: [
       {
@@ -6940,7 +6930,7 @@ GET /api/v1/assets/provider/search?q&#x3D;AAPL&amp;providers&#x3D;yfinance,juste
 - &#x60;identifier_contains&#x60;: Partial match in any identifier
 
 **Response Fields**:
-- &#x60;has_provider&#x60;: True if asset has a pricing provider assigned
+- &#x60;provider_code&#x60;: Provider code string if assigned (e.g. &#x27;yfinance&#x27;), null otherwise
 - &#x60;has_metadata&#x60;: True if asset has classification metadata
 - &#x60;identifier&#x60;: Asset identifier (ticker, ISIN, etc.) if provider assigned
 - &#x60;identifier_type&#x60;: Type of identifier (TICKER, ISIN, UUID, OTHER)

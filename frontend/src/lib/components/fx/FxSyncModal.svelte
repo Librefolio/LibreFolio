@@ -14,7 +14,7 @@
     import {STATUS_ICONS, STATUS_COLORS, formatElapsed} from '$lib/utils/syncHelpers';
     import {
         PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR,
-        parseProviderChain, getProviderIconUrl, formatSyncDetail,
+        parseProviderChain, getFxProviderIconUrl, formatSyncDetail,
     } from '$lib/utils/providerHelpers';
 
     interface Props {
@@ -111,7 +111,7 @@
                     {@const chain = parseProviderChain(pr.provider_used)}
                     <span class="flex items-center gap-0.5">
                         {#each chain as prov, i}
-                            {@const iconUrl = getProviderIconUrl(prov)}
+                            {@const iconUrl = getFxProviderIconUrl(prov)}
                             <span class="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-medium rounded {PROVIDER_COLORS[prov] ?? DEFAULT_PROVIDER_COLOR}" title={prov}>
                                 {#if iconUrl}
                                     <img src={iconUrl} alt={prov} class="w-3.5 h-3.5 rounded-sm object-contain" />

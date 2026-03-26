@@ -440,8 +440,8 @@ async def test_list_active_filter(test_server):
 
 @pytest.mark.asyncio
 async def test_list_has_provider(test_server):
-    """Test 11: Check has_provider field."""
-    print_section("Test 11: GET /assets/query - Has Provider")
+    """Test 11: Check provider_code field (replaces has_provider)."""
+    print_section("Test 11: GET /assets/query - Provider Code")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -476,14 +476,14 @@ async def test_list_has_provider(test_server):
         resp_data = FABulkAssignResponse(**assign_resp.json())
         print_info(f"Provider assignment: {resp_data}")
 
-        # List and check has_provider
+        # List and check provider_code
         response = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
         data = [FAinfoResponse(**item) for item in response.json()]
         asset = [a for a in data if a.id == asset_id]
         assert asset, f"Asset {asset_id} not found in list"
         print_info(f"Asset data: {asset[0]}")
-        assert asset[0].has_provider, "has_provider should be true"
-        print_success("✓ has_provider field works")
+        assert asset[0].provider_code == "yfinance", f"provider_code should be 'yfinance', got {asset[0].provider_code}"
+        print_success("✓ provider_code field works")
 
 
 @pytest.mark.asyncio
@@ -731,13 +731,13 @@ async def test_bulk_remove_providers(test_server):
 
         print_success("✓ Provider removed successfully")
 
-        # Step 4: Verify provider removed (list assets and check has_provider)
+        # Step 4: Verify provider removed (list assets and check provider_code)
         list_resp = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
         assets = [FAinfoResponse(**a) for a in list_resp.json()]
         asset = next((a for a in assets if a.id == asset_id), None)
         assert asset is not None, f"Asset {asset_id} not found"
-        assert not asset.has_provider, "Asset should not have provider after removal"
-        print_info(f"  Verified: has_provider=False")
+        assert asset.provider_code is None, "Asset should not have provider after removal"
+        print_info(f"  Verified: provider_code=None")
 
 
 @pytest.mark.asyncio
@@ -765,8 +765,8 @@ async def test_bulk_delete_prices(test_server):
 
 @pytest.mark.asyncio
 async def test_bulk_refresh_prices(test_server):
-    """Test 19: POST /assets/prices/refresh - Refresh prices from providers."""
-    print_section("Test 19: POST /assets/prices/refresh - Bulk Refresh Prices")
+    """Test 19: POST /assets/prices/sync - Refresh prices from providers."""
+    print_section("Test 19: POST /assets/prices/sync - Bulk Refresh Prices")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)

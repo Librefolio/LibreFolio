@@ -915,7 +915,7 @@ def api_assets_price(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Tests: POST /assets/prices (bulk upsert)")
     print_info("Tests: DELETE /assets/prices (bulk delete)")
     print_info("Tests: POST /assets/prices/query (bulk read from DB)")
-    print_info("Tests: POST /assets/prices/refresh (from providers)")
+    print_info("Tests: POST /assets/prices/sync (from providers)")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_prices.py", test_names)

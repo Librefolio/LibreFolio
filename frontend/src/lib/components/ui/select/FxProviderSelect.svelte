@@ -21,7 +21,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {Link, Check, AlertTriangle, Loader2, ArrowLeftRight, Search, X, Plus, Trash2, ChevronDown, ChevronUp, Info} from 'lucide-svelte';
-    import {findConversionPaths, getCachedProviders} from '$lib/stores/currencyGraphStore';
+    import {findConversionPaths, getCachedFxProviders} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import type {ChainStep, ProviderInfo} from '$lib/utils/currencyGraph';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
@@ -101,7 +101,7 @@
     );
 
     /** Provider info map for quick lookup */
-    let providerMap = $derived(new Map(getCachedProviders().map(p => [p.code, p])));
+    let providerMap = $derived(new Map(getCachedFxProviders().map(p => [p.code, p])));
 
     /** All providers used in any route (for the info bar) */
     let usedProviders = $derived.by(() => {
@@ -111,7 +111,7 @@
                 usedCodes.add(code);
             }
         }
-        const providers = getCachedProviders().filter(p => usedCodes.has(p.code));
+        const providers = getCachedFxProviders().filter(p => usedCodes.has(p.code));
         return providers.sort((a, b) => a.code.localeCompare(b.code));
     });
 
@@ -225,7 +225,7 @@
         error = null;
         try {
             const paths = await findConversionPaths(base, quote, 4);
-            const providers = getCachedProviders();
+            const providers = getCachedFxProviders();
             const direct: RouteOption[] = [];
             const chain: RouteOption[] = [];
             const usedProviderCodes = new Set<string>();
@@ -342,8 +342,8 @@
         return code.slice(0, 2).toUpperCase();
     }
 
-    /** Get provider icon URL (or null if not available) */
-    function getProviderIconUrl(code: string): string | null {
+    /** Get FX provider icon URL (or null if not available) */
+    function getFxProviderIconUrl(code: string): string | null {
         return providerMap.get(code)?.icon_url ?? null;
     }
 
@@ -505,7 +505,7 @@
                             {@const step = route.chainSteps[0]}
                             {@const fromInfo = getCurrencyInfo(step.from)}
                             {@const toInfo = getCurrencyInfo(step.to)}
-                            {@const iconUrl = getProviderIconUrl(step.provider)}
+                            {@const iconUrl = getFxProviderIconUrl(step.provider)}
                             {@const provColor = getProviderColor(step.provider)}
                             <span class="text-sm flex-shrink-0 emoji-flag">{fromInfo.flag_emoji}</span>
                             <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
@@ -530,7 +530,7 @@
                                 {#each route.chainSteps as step, i}
                                     {@const fromInfo = getCurrencyInfo(step.from)}
                                     {@const toInfo = getCurrencyInfo(step.to)}
-                                    {@const iconUrl = getProviderIconUrl(step.provider)}
+                                    {@const iconUrl = getFxProviderIconUrl(step.provider)}
                                     {@const provColor = getProviderColor(step.provider)}
                                     {#if i === 0}
                                         <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
@@ -669,7 +669,7 @@
                             {@const step = route.chainSteps[0]}
                             {@const fromInfo = getCurrencyInfo(step.from)}
                             {@const toInfo = getCurrencyInfo(step.to)}
-                            {@const iconUrl = getProviderIconUrl(step.provider)}
+                            {@const iconUrl = getFxProviderIconUrl(step.provider)}
                             {@const provColor = getProviderColor(step.provider)}
                             {@const warnings = getRouteWarnings(route)}
                             <button
@@ -748,7 +748,7 @@
                                             {#each route.chainSteps as step, i}
                                                 {@const fromInfo = getCurrencyInfo(step.from)}
                                                 {@const toInfo = getCurrencyInfo(step.to)}
-                                                {@const iconUrl = getProviderIconUrl(step.provider)}
+                                                {@const iconUrl = getFxProviderIconUrl(step.provider)}
                                                 {@const provColor = getProviderColor(step.provider)}
                                                 {#if i === 0}
                                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>

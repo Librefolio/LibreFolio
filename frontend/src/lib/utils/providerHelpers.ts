@@ -1,18 +1,18 @@
 /**
- * Shared FX sync helpers — used by FxSyncModal, FxTable, fx/+page, fx/[pair]/+page.
+ * Provider helpers — shared by FX and Asset sync/table components.
  *
- * Centralises:
- *  - Provider chain parsing (CHAIN:ECB+BOE → ['ECB','BOE'])
- *  - Provider badge rendering (HTML for DataTable cells / Svelte innerHTML)
- *  - Per-leg breakdown text formatting (for toasts)
- *  - Provider text formatting for toasts (CHAIN:ECB+BOE → "ECB + BOE")
+ * Structure:
+ *  1. Shared (colours, chain parsing)
+ *  2. FX Provider (icon lookup from currencyGraphStore, badge HTML)
+ *  3. Asset Provider (lazy cache from API, icon lookup, badge HTML)
+ *  4. FX-specific formatting (toast text, per-leg breakdown)
  */
 
-import {getCachedProviders} from '$lib/stores/currencyGraphStore';
+import {getCachedFxProviders} from '$lib/stores/currencyGraphStore';
 import {zodiosApi} from '$lib/api';
 
 // =========================================================================
-// Provider badge colours — shared constant
+// 1. SHARED — colours, chain parsing
 // =========================================================================
 
 export const PROVIDER_COLORS: Record<string, string> = {
@@ -22,10 +22,6 @@ export const PROVIDER_COLORS: Record<string, string> = {
     MANUAL: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
 };
 export const DEFAULT_PROVIDER_COLOR = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-
-// =========================================================================
-// Provider chain parsing
-// =========================================================================
 
 /**
  * Parse a `provider_used` string into individual provider codes.
@@ -41,17 +37,28 @@ export function parseProviderChain(providerUsed: string | null | undefined): str
 }
 
 // =========================================================================
-// FX Provider icon URL lookup
+// 2. FX PROVIDER — icon from currencyGraphStore cache, badge HTML
 // =========================================================================
 
-/** Get FX provider icon_url from the in-memory FX provider cache. */
-export function getProviderIconUrl(code: string): string | null {
-    const fxProviders = getCachedProviders();
+/** Get FX provider icon_url from the FX provider cache (currencyGraphStore). */
+export function getFxProviderIconUrl(code: string): string | null {
+    const fxProviders = getCachedFxProviders();
     return fxProviders.find(p => p.code === code)?.icon_url ?? null;
 }
 
+/** Build a single FX provider badge as HTML (icon or 2-char initials). */
+export function fxProviderBadgeHtml(providerCode: string): string {
+    const providers = getCachedFxProviders();
+    const info = providers.find(p => p.code === providerCode);
+    const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
+    if (info?.icon_url) {
+        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${info.icon_url}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
+    }
+    return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
+}
+
 // =========================================================================
-// Asset Provider icon URL lookup (separate registry)
+// 3. ASSET PROVIDER — lazy cache from API, icon, badge HTML
 // =========================================================================
 
 /**
@@ -91,10 +98,7 @@ export function getAssetProviderIconUrl(code: string): string | null {
     return assetProviderIcons.get(code) ?? null;
 }
 
-/**
- * Build an asset provider badge as an HTML string (icon or text code).
- * Uses the asset provider cache (call ensureAssetProvidersCached first).
- */
+/** Build an asset provider badge as HTML (icon or text code). */
 export function assetProviderBadgeHtml(providerCode: string): string {
     const iconUrl = assetProviderIcons.get(providerCode);
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
@@ -105,22 +109,7 @@ export function assetProviderBadgeHtml(providerCode: string): string {
 }
 
 // =========================================================================
-// Provider badge HTML (for DataTable innerHTML / tooltip)
-// =========================================================================
-
-/** Build a single provider badge as an HTML string (icon or 2-char initials). */
-export function providerBadgeHtml(providerCode: string): string {
-    const providers = getCachedProviders();
-    const info = providers.find(p => p.code === providerCode);
-    const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
-    if (info?.icon_url) {
-        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${info.icon_url}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
-    }
-    return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
-}
-
-// =========================================================================
-// Provider text formatting (for toasts — plain text, no HTML)
+// 4. FX-SPECIFIC — text formatting for toasts, per-leg breakdown
 // =========================================================================
 
 /**
@@ -134,10 +123,6 @@ export function formatProviderText(providerUsed: string | null | undefined): str
     return chain.join(' + ');
 }
 
-// =========================================================================
-// Per-leg breakdown formatting (for toasts)
-// =========================================================================
-
 export interface LegDetail {
     provider: string;
     leg: string;
@@ -148,10 +133,6 @@ export interface LegDetail {
 /**
  * Format per-leg detail from a sync response into a human-readable text string.
  * Uses the provided translation function for UI strings.
- *
- * @param r      - sync result item with optional `detail[]` and `message`
- * @param tr     - translation function `(key, opts?) => string`
- * @returns multi-line string to append to the toast message (starts with \n)
  */
 export function formatSyncDetail(
     r: { detail?: LegDetail[] | null; message?: string | null },
@@ -170,4 +151,3 @@ export function formatSyncDetail(
     }
     return out;
 }
-

@@ -258,7 +258,7 @@ Aggiornare con le tabelle complete degli endpoint privati e pubblici:
 | **Assets** | `/assets/query` | GET | Ricerca asset |
 | **Assets** | `/assets/prices` | POST/DELETE | Upsert/elimina prezzi |
 | **Assets** | `/assets/prices/{id}` | GET | Storico prezzi |
-| **Assets** | `/assets/prices/refresh` | POST | Refresh prezzi da provider |
+| **Assets** | `/assets/prices/sync` | POST | Refresh prezzi da provider |
 | **Assets** | `/assets/provider` | GET/POST/DELETE | Provider assignments |
 | **Assets** | `/assets/provider/search` | GET | Cerca asset su provider |
 | **Assets** | `/assets/provider/assignments` | GET | Lista assegnazioni |
