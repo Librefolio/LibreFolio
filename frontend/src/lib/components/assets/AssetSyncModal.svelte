@@ -13,6 +13,7 @@
     import {STATUS_ICONS, STATUS_COLORS, formatElapsed} from '$lib/utils/syncHelpers';
     import {
         PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR,
+        getProviderIconUrl,
     } from '$lib/utils/providerHelpers';
 
     interface AssetSyncItem {
@@ -120,8 +121,13 @@
                 <span class="text-gray-400">—</span>
                 <span>{pr.points_fetched ?? 0}↓ {pr.points_changed ?? 0}Δ</span>
                 {#if pr.provider_used}
-                    <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded {PROVIDER_COLORS[pr.provider_used] ?? DEFAULT_PROVIDER_COLOR}" title={pr.provider_used}>
-                        {pr.provider_used}
+                    {@const iconUrl = getProviderIconUrl(pr.provider_used)}
+                    <span class="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-medium rounded {PROVIDER_COLORS[pr.provider_used] ?? DEFAULT_PROVIDER_COLOR}" title={pr.provider_used}>
+                        {#if iconUrl}
+                            <img src={iconUrl} alt={pr.provider_used} class="w-3.5 h-3.5 rounded-sm object-contain" />
+                        {:else}
+                            {pr.provider_used}
+                        {/if}
                     </span>
                 {/if}
             {/if}

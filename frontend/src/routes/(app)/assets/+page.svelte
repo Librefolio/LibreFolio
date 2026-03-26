@@ -90,6 +90,7 @@
     // Bulk delete confirmation dialog
     let bulkDeleteDialogOpen = $state(false);
     let deletingAssets = $state<AssetRow[]>([]);
+    let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string}[]>([]);
 
     // Sync modal
     let syncModalOpen = $state(false);
@@ -442,6 +443,8 @@
             if (r?.success) {
                 assets = assets.filter(a => a.id !== deletingAsset!.id);
                 toasts.success($t('assets.delete.toastOk', { values: { name: deletingAsset!.display_name } }));
+            } else if (r?.error_code === 'HAS_TRANSACTIONS') {
+                toasts.error($t('assets.delete.hasTransactions', { values: { name: deletingAsset!.display_name } }));
             } else {
                 toasts.error(r?.message || $t('assets.delete.toastFailed', { values: { name: deletingAsset!.display_name } }));
             }
@@ -484,20 +487,41 @@
             const res = (response as any);
             const succeeded = res.results?.filter((r: any) => r.success).map((r: any) => r.asset_id) ?? [];
             assets = assets.filter(a => !succeeded.includes(a.id));
-            if (succeeded.length > 0) {
-                toasts.success($t('assets.delete.bulkOk', { values: { count: succeeded.length } }));
-            }
-            if (res.failed_count > 0) {
-                toasts.warning($t('assets.delete.bulkPartial', { values: { failed: res.failed_count } }));
-            }
+
+            // Populate results for the ConfirmModal
+            bulkDeleteResults = (res.results ?? []).map((r: any) => ({
+                label: r.display_name || `Asset #${r.asset_id}`,
+                success: r.success,
+                detail: r.success
+                    ? $t('assets.delete.resultDeleted')
+                    : r.error_code === 'HAS_TRANSACTIONS'
+                        ? $t('assets.delete.resultHasTransactions')
+                        : (r.message || 'Error'),
+            }));
         } catch (e: any) {
             toasts.error('Delete failed: ' + (e?.message || 'unknown'));
-        } finally {
             bulkDeleteDialogOpen = false;
             deletingAssets = [];
             assetTableComponent?.getTableRef()?.clearSelection();
             selectedAssetRows = [];
         }
+    }
+
+    function closeBulkDeleteDialog() {
+        // Show summary toast on close
+        const successes = bulkDeleteResults.filter(r => r.success).length;
+        const failures = bulkDeleteResults.filter(r => !r.success).length;
+        if (successes > 0) {
+            toasts.success($t('assets.delete.bulkOk', { values: { count: successes } }));
+        }
+        if (failures > 0) {
+            toasts.warning($t('assets.delete.bulkPartial', { values: { failed: failures } }));
+        }
+        bulkDeleteDialogOpen = false;
+        bulkDeleteResults = [];
+        deletingAssets = [];
+        assetTableComponent?.getTableRef()?.clearSelection();
+        selectedAssetRows = [];
     }
 
     function handleGlobalSettings() {
@@ -882,7 +906,8 @@
 <ConfirmModal
     open={deleteDialogOpen}
     title={$t('common.confirmDelete')}
-    message={$t('assets.delete.confirmMessage', { values: { name: deletingAsset?.display_name ?? '' } })}
+    message={$t('assets.delete.confirmQuestion', { values: { name: deletingAsset?.display_name ?? '' } })}
+    description={$t('assets.delete.confirmWarning')}
     confirmText={$t('common.delete')}
     danger={true}
     onConfirm={confirmDeleteAsset}
@@ -898,8 +923,9 @@
     itemsLabel={`${deletingAssets.length} assets`}
     confirmText={$t('common.delete')}
     danger={true}
+    results={bulkDeleteResults}
     onConfirm={confirmBulkDeleteAssets}
-    onCancel={() => { bulkDeleteDialogOpen = false; deletingAssets = []; }}
+    onCancel={closeBulkDeleteDialog}
 />
 
 <!-- Asset Sync Modal -->

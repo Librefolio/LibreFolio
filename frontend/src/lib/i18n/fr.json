@@ -269,11 +269,16 @@
     },
     "delete": {
       "confirmMessage": "Supprimer \"{name}\" ? Les assignations et l'historique seront supprimés.",
+      "confirmQuestion": "Supprimer \"{name}\" ?",
+      "confirmWarning": "Les assignations de fournisseurs et l'historique des prix seront supprimés. ⚠️",
       "toastOk": "{name} supprimé",
       "toastFailed": "Échec de suppression de {name}",
+      "hasTransactions": "Impossible de supprimer \"{name}\" : des transactions existent",
       "bulkOk": "{count} actifs supprimés",
       "bulkPartial": "{failed} actifs non supprimés (ont des transactions)",
-      "bulkConfirmMessage": "Supprimer {count} actifs? Les assignations de fournisseurs et historique des prix seront supprimes."
+      "bulkConfirmMessage": "Supprimer {count} actifs? Les assignations de fournisseurs et historique des prix seront supprimes.",
+      "resultDeleted": "supprimé",
+      "resultHasTransactions": "a des transactions existantes"
     },
     "types": {
       "STOCK": "Action",
@@ -360,6 +365,11 @@
     "deletePair": "Supprimer la paire",
     "deletePairTitle": "Supprimer la Paire FX",
     "deletePairMessage": "Êtes-vous sûr de vouloir supprimer {pair} ? Cela supprimera la configuration des fournisseurs et tous les taux de change historiques.",
+    "delete": {
+      "toastOk": "{pair} supprimée ({count} taux supprimés)",
+      "toastFailed": "Échec de suppression de {pair}",
+      "resultDeleted": "supprimée ({count} taux)"
+    },
     "removeProvider": "Supprimer le fournisseur"
   },
   "settings": {

@@ -961,7 +961,7 @@ async def sync_pair(
             provider_used=None,
             points_fetched=0,
             points_changed=0,
-            message=str(e),
+            message=None,
             errors=[str(e)],
             elapsed_ms=elapsed_ms,
             )
@@ -1111,7 +1111,7 @@ async def sync_pairs_bulk(
                 provider_used=None,
                 points_fetched=0,
                 points_changed=0,
-                message=f"No route configuration found for {pair_slug}",
+                message=None,
                 errors=[f"No route configuration found for {pair_slug}"],
                 elapsed_ms=(time.monotonic_ns() - t_route_start) // 1_000_000,
                 )
@@ -1295,7 +1295,8 @@ async def sync_pairs_bulk(
                         error=str(leg_error) if leg_error else None,
                     ))
 
-                # Build human-readable message
+                # Build human-readable message and errors list
+                chain_errors: list[str] = []
                 if computed_rates:
                     chain_partial_msg = None
                     chain_detail = chain_leg_details  # always include detail for chains
@@ -1304,6 +1305,7 @@ async def sync_pairs_bulk(
                     for ld in chain_leg_details:
                         if ld.error:
                             leg_summaries.append(f"  • {ld.leg} ({ld.provider}): ERROR — {ld.error}")
+                            chain_errors.append(f"{ld.leg} ({ld.provider}): {ld.error}")
                         elif ld.dates_available == 0:
                             leg_summaries.append(f"  • {ld.leg} ({ld.provider}): 0 dates — no data returned")
                         else:
@@ -1323,6 +1325,7 @@ async def sync_pairs_bulk(
                     points_fetched=len(computed_rates),
                     points_changed=actual_changed,
                     message=chain_partial_msg,
+                    errors=chain_errors,
                     detail=chain_detail,
                     elapsed_ms=elapsed_ms,
                     )
@@ -1336,7 +1339,7 @@ async def sync_pairs_bulk(
                 provider_used=None,
                 points_fetched=0,
                 points_changed=0,
-                message=str(e),
+                message=None,
                 errors=[str(e)],
                 elapsed_ms=elapsed_ms,
                 )
