@@ -10,7 +10,7 @@
     <InfoBanner variant="success" message="Done!" />
 -->
 <script lang="ts">
-    import {AlertTriangle, Info, AlertCircle, CheckCircle, X} from 'lucide-svelte';
+    import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
     import type {Snippet} from 'svelte';
 
     type Variant = 'warning' | 'info' | 'error' | 'success';
@@ -80,7 +80,7 @@
 {#if hasContent}
     <div class="flex items-start gap-2 p-3 rounded-lg border text-xs {styles.container} {extraClass}" role={variant === 'error' ? 'alert' : 'status'}>
         {#if showIcon}
-            <IconComponent size={16} class="{styles.icon} mt-0.5 shrink-0" />
+            <IconComponent size={16} class="{styles.icon} mt-0.5 shrink-0"/>
         {/if}
         <div class="flex-1 min-w-0">
             {#if message}
@@ -91,12 +91,12 @@
         </div>
         {#if dismissible && ondismiss}
             <button
-                type="button"
-                class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity"
-                onclick={ondismiss}
-                aria-label="Dismiss"
+                    type="button"
+                    class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity"
+                    onclick={ondismiss}
+                    aria-label="Dismiss"
             >
-                <X size={14} />
+                <X size={14}/>
             </button>
         {/if}
     </div>

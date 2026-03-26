@@ -78,7 +78,7 @@ class FAProviderInfo(BaseModel):
     params_schema: List[FAProviderParamField] = Field(
         default_factory=list,
         description="Form field definitions for provider_params"
-    )
+        )
 
 
 # ============================================================================
@@ -202,7 +202,7 @@ class FAProviderRefreshFieldsDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    refreshed_fields: List[OldNew[str | None]] = Field(...,description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.",)
+    refreshed_fields: List[OldNew[str | None]] = Field(..., description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.", )
     missing_data_fields: List[str] = Field(..., description="Fields provider couldn't fetch (no data available)")
     ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
 

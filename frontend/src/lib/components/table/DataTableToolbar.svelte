@@ -53,7 +53,7 @@
                             title={getActionLabel(action)}
                             disabled={action.disabled}
                     >
-                        <action.icon size={16} class={action.iconClass || ''} />
+                        <action.icon size={16} class={action.iconClass || ''}/>
                     </button>
                 {/each}
             </div>

@@ -6,10 +6,10 @@
   Supports both 1-step (direct) and multi-step (chain) routes with visual distinction.
 -->
 <script lang="ts">
-    import {Plus, Trash2, Save, Undo2, Link, ArrowLeftRight, Info, AlertTriangle} from 'lucide-svelte';
+    import {AlertTriangle, ArrowLeftRight, Info, Link, Plus, Save, Trash2, Undo2} from 'lucide-svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
-    import {getProviderColor, getPriorityBadgeStyle} from '$lib/utils/colors';
+    import {getPriorityBadgeStyle, getProviderColor} from '$lib/utils/colors';
     import {getCachedFxProviders} from '$lib/stores/currencyGraphStore';
     import {_ as t} from '$lib/i18n';
 
@@ -45,8 +45,8 @@
         readonly?: boolean;
         language?: string;
         onSave?: (providers: ProviderEntry[]) => void;
-        onAddProvider?: (detail: {providerCode: string; priority: number}) => void;
-        onRemoveProvider?: (detail: {providerCode: string}) => void;
+        onAddProvider?: (detail: { providerCode: string; priority: number }) => void;
+        onRemoveProvider?: (detail: { providerCode: string }) => void;
     }
 
     let {
@@ -195,33 +195,33 @@
             Provider Configuration
             {#if hasChainRoutes}
                 <Tooltip text={$t('fx.route.chainWarning')} position="top">
-                    <Info size={12} class="text-blue-400 dark:text-blue-500" />
+                    <Info size={12} class="text-blue-400 dark:text-blue-500"/>
                 </Tooltip>
             {/if}
         </h3>
         <div class="flex items-center gap-2">
             {#if hasChanges && !isReadonly}
                 <button
-                    class="flex items-center gap-1 text-xs px-2 py-1 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                    onclick={handleSave}
+                        class="flex items-center gap-1 text-xs px-2 py-1 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                        onclick={handleSave}
                 >
-                    <Save size={12} />
+                    <Save size={12}/>
                     Save Order
                 </button>
                 <button
-                    class="flex items-center gap-1 text-xs px-2 py-1 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
-                    onclick={handleRevert}
+                        class="flex items-center gap-1 text-xs px-2 py-1 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
+                        onclick={handleRevert}
                 >
-                    <Undo2 size={12} />
+                    <Undo2 size={12}/>
                     Revert
                 </button>
             {/if}
             {#if !isReadonly && unusedProviders.length > 0}
                 <button
-                    class="flex items-center gap-1 text-xs text-libre-green hover:text-libre-green/80 transition-colors"
-                    onclick={() => addingProvider = !addingProvider}
+                        class="flex items-center gap-1 text-xs text-libre-green hover:text-libre-green/80 transition-colors"
+                        onclick={() => addingProvider = !addingProvider}
                 >
-                    <Plus size={14} />
+                    <Plus size={14}/>
                     Add Provider
                 </button>
             {/if}
@@ -233,16 +233,16 @@
         <p class="text-sm text-gray-400 dark:text-gray-500 py-2">No providers configured for this pair.</p>
     {:else}
         <OrderableList
-            items={providers}
-            keyFn={providerKey}
-            onReorder={handleReorder}
-            disabled={isReadonly}
+                items={providers}
+                keyFn={providerKey}
+                onReorder={handleReorder}
+                disabled={isReadonly}
         >
-            {#snippet children({ item, index })}
+            {#snippet children({item, index})}
                 <div class="flex items-center gap-2">
                     {#if item.chainSteps && item.chainSteps.length > 1}
                         <!-- Multi-step (chain) route -->
-                        <Link size={12} class="text-blue-500 dark:text-blue-400 flex-shrink-0" />
+                        <Link size={12} class="text-blue-500 dark:text-blue-400 flex-shrink-0"/>
                         <div class="flex items-center gap-0.5 flex-wrap flex-1 min-w-0">
                             {#each item.chainSteps as step, i}
                                 {@const provColor = getProviderColor(step.provider)}
@@ -252,11 +252,11 @@
                                 <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                     <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0"
                                           style="background: {provColor.bg}; border-color: {provColor.border}">
-                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0"/>
                                         <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
                                             {step.provider}
                                         </span>
-                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0"/>
                                     </span>
                                 </Tooltip>
                                 <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.to}</span>
@@ -271,11 +271,11 @@
                             <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                 <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0"
                                       style="background: {provColor.bg}; border-color: {provColor.border}">
-                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0"/>
                                     <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
                                         {step.provider}
                                     </span>
-                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0"/>
                                 </span>
                             </Tooltip>
                             <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.to}</span>
@@ -292,16 +292,16 @@
                     </span>
                     {#if getItemWarnings(item).length > 0}
                         <Tooltip html={warningsTooltipHtml(getItemWarnings(item))} position="top">
-                            <AlertTriangle size={13} class="text-amber-500" />
+                            <AlertTriangle size={13} class="text-amber-500"/>
                         </Tooltip>
                     {/if}
                     {#if !isReadonly}
                         <button
-                            class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all ml-auto"
-                            onclick={() => handleRemove(item.providerCode)}
-                            title={$t('fx.removeProvider')}
+                                class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all ml-auto"
+                                onclick={() => handleRemove(item.providerCode)}
+                                title={$t('fx.removeProvider')}
                         >
-                            <Trash2 size={14} />
+                            <Trash2 size={14}/>
                         </button>
                     {/if}
                 </div>
@@ -313,8 +313,8 @@
     {#if addingProvider && !isReadonly}
         <div class="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
             <select
-                bind:value={newProviderCode}
-                class="flex-1 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 px-2.5 py-1.5 focus:ring-1 focus:ring-libre-green"
+                    bind:value={newProviderCode}
+                    class="flex-1 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 px-2.5 py-1.5 focus:ring-1 focus:ring-libre-green"
             >
                 <option value="">Select provider...</option>
                 {#each unusedProviders as prov}
@@ -322,15 +322,15 @@
                 {/each}
             </select>
             <button
-                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                onclick={handleAdd}
-                disabled={!newProviderCode}
+                    class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                    onclick={handleAdd}
+                    disabled={!newProviderCode}
             >
                 Add
             </button>
             <button
-                class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
-                onclick={() => { addingProvider = false; newProviderCode = ''; }}
+                    class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
+                    onclick={() => { addingProvider = false; newProviderCode = ''; }}
             >
                 Cancel
             </button>
@@ -343,6 +343,7 @@
         background-color: var(--badge-bg);
         color: var(--badge-text);
     }
+
     :global(.dark) .priority-badge {
         background-color: var(--badge-dark-bg);
         color: var(--badge-dark-text);

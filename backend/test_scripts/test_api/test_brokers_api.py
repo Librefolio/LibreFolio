@@ -468,7 +468,7 @@ class TestBrokerDelete:
                 f"{API_BASE}/brokers",
                 params={"ids": [broker_id]},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -741,7 +741,7 @@ class TestMultipleOwners:
                 json=[
                     {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
                     {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
-                ],
+                    ],
                 timeout=TIMEOUT,
                 )
 
@@ -811,7 +811,7 @@ class TestMultipleOwners:
                 json=[
                     {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
                     {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
-                ],
+                    ],
                 timeout=TIMEOUT,
                 )
 
@@ -820,7 +820,7 @@ class TestMultipleOwners:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json=[
                     {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
-                ],
+                    ],
                 timeout=TIMEOUT,
                 )
 

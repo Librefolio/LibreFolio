@@ -508,7 +508,7 @@ def seed_default_avatars() -> int:
             "uploaded_at": now.isoformat(),
             "uploaded_by_user_id": 0,
             "description": f"Default avatar: {avatar_file.stem}",
-        }
+            }
         _save_metadata(file_id, metadata)
         count += 1
 
@@ -516,4 +516,3 @@ def seed_default_avatars() -> int:
     marker.write_text(f"Seeded {count} avatars at {now.isoformat()}\n")
     logger.info("Seeded default avatar images", count=count)
     return count
-

@@ -179,7 +179,7 @@
         </div>
     </div>
 
-    <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mb-3" />
+    <InfoBanner class="mb-3" dismissible message={error} ondismiss={() => error = ''} variant="error"/>
 
     {#if loading && files.length === 0}
         <div class="flex items-center justify-center py-8 text-gray-400">

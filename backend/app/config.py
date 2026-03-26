@@ -111,7 +111,7 @@ class Settings(BaseSettings):
         case_sensitive=True,
         env_file_encoding="utf-8",
         extra="ignore",  # Ignore env vars not defined as fields (e.g. LIBREFOLIO_DATA_DIR)
-    )
+        )
 
 
 # =============================================================================
@@ -185,5 +185,5 @@ def ensure_data_dirs() -> None:
         "broker_reports/parsed",
         "broker_reports/failed",
         "logs",
-    ]:
+        ]:
         (data_dir / subdir).mkdir(parents=True, exist_ok=True)

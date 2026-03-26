@@ -35,26 +35,26 @@
 
 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
     <button
-        class="flex items-center justify-center px-2.5 py-1.5 transition-colors
+            aria-label="Grid view"
+            class="flex items-center justify-center px-2.5 py-1.5 transition-colors
                {mode === 'grid'
                    ? 'bg-libre-green text-white'
                    : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-        onclick={() => setMode('grid')}
-        title="Grid view"
-        aria-label="Grid view"
+            onclick={() => setMode('grid')}
+            title="Grid view"
     >
-        <LayoutGrid size={16} />
+        <LayoutGrid size={16}/>
     </button>
     <button
-        class="flex items-center justify-center px-2.5 py-1.5 transition-colors
+            aria-label="Table view"
+            class="flex items-center justify-center px-2.5 py-1.5 transition-colors
                {mode === 'list'
                    ? 'bg-libre-green text-white'
                    : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-        onclick={() => setMode('list')}
-        title="Table view"
-        aria-label="Table view"
+            onclick={() => setMode('list')}
+            title="Table view"
     >
-        <List size={16} />
+        <List size={16}/>
     </button>
 </div>
 

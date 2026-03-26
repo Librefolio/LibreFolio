@@ -27,7 +27,7 @@
  * docs/financial-theory/technical-indicators.md#macd
  */
 
-import {ChartSignal, type SignalParamDescriptor, type RenderedSignal, type MarkerType} from './ChartSignal';
+import {ChartSignal, type MarkerType, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class MacdSignal extends ChartSignal {
@@ -73,69 +73,6 @@ export class MacdSignal extends ChartSignal {
             tooltip: 'chartSettings.tooltips.signalPeriod',
         },
     ];
-
-    /**
-     * Compute all three MACD components in one pass.
-     * Returns { macdLine, signalLine, histogram } aligned to baseData dates.
-     */
-    private _computeAll(baseData: LineDataPoint[]): {
-        macdLine: LineDataPoint[];
-        signalLine: LineDataPoint[];
-        histogram: LineDataPoint[];
-    } {
-        if (baseData.length < 2) {
-            return {macdLine: [], signalLine: [], histogram: []};
-        }
-
-        const fastN = Math.max(2, Math.round(Number(this.params.fastPeriod ?? 12)));
-        const slowN = Math.max(2, Math.round(Number(this.params.slowPeriod ?? 26)));
-        const sigN = Math.max(2, Math.round(Number(this.params.signalPeriod ?? 9)));
-
-        const alphaFast = 2 / (fastN + 1);
-        const alphaSlow = 2 / (slowN + 1);
-        const alphaSig = 2 / (sigN + 1);
-
-        let emaFast = baseData[0].value;
-        let emaSlow = baseData[0].value;
-        const macdValues: number[] = [];
-
-        for (let i = 0; i < baseData.length; i++) {
-            const price = baseData[i].value;
-            if (i === 0) {
-                emaFast = price;
-                emaSlow = price;
-            } else {
-                emaFast = alphaFast * price + (1 - alphaFast) * emaFast;
-                emaSlow = alphaSlow * price + (1 - alphaSlow) * emaSlow;
-            }
-            macdValues.push(emaFast - emaSlow);
-        }
-
-        let emaSig = macdValues[0];
-        const signalValues: number[] = [];
-
-        for (let i = 0; i < macdValues.length; i++) {
-            if (i === 0) {
-                emaSig = macdValues[i];
-            } else {
-                emaSig = alphaSig * macdValues[i] + (1 - alphaSig) * emaSig;
-            }
-            signalValues.push(emaSig);
-        }
-
-        const macdLine: LineDataPoint[] = [];
-        const signalLine: LineDataPoint[] = [];
-        const histogram: LineDataPoint[] = [];
-
-        for (let i = 0; i < baseData.length; i++) {
-            const date = baseData[i].date;
-            macdLine.push({date, value: macdValues[i]});
-            signalLine.push({date, value: signalValues[i]});
-            histogram.push({date, value: macdValues[i] - signalValues[i]});
-        }
-
-        return {macdLine, signalLine, histogram};
-    }
 
     computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         return this._computeAll(baseData).macdLine;
@@ -208,5 +145,68 @@ export class MacdSignal extends ChartSignal {
                 seriesType: 'bar',
             },
         ];
+    }
+
+    /**
+     * Compute all three MACD components in one pass.
+     * Returns { macdLine, signalLine, histogram } aligned to baseData dates.
+     */
+    private _computeAll(baseData: LineDataPoint[]): {
+        macdLine: LineDataPoint[];
+        signalLine: LineDataPoint[];
+        histogram: LineDataPoint[];
+    } {
+        if (baseData.length < 2) {
+            return {macdLine: [], signalLine: [], histogram: []};
+        }
+
+        const fastN = Math.max(2, Math.round(Number(this.params.fastPeriod ?? 12)));
+        const slowN = Math.max(2, Math.round(Number(this.params.slowPeriod ?? 26)));
+        const sigN = Math.max(2, Math.round(Number(this.params.signalPeriod ?? 9)));
+
+        const alphaFast = 2 / (fastN + 1);
+        const alphaSlow = 2 / (slowN + 1);
+        const alphaSig = 2 / (sigN + 1);
+
+        let emaFast = baseData[0].value;
+        let emaSlow = baseData[0].value;
+        const macdValues: number[] = [];
+
+        for (let i = 0; i < baseData.length; i++) {
+            const price = baseData[i].value;
+            if (i === 0) {
+                emaFast = price;
+                emaSlow = price;
+            } else {
+                emaFast = alphaFast * price + (1 - alphaFast) * emaFast;
+                emaSlow = alphaSlow * price + (1 - alphaSlow) * emaSlow;
+            }
+            macdValues.push(emaFast - emaSlow);
+        }
+
+        let emaSig = macdValues[0];
+        const signalValues: number[] = [];
+
+        for (let i = 0; i < macdValues.length; i++) {
+            if (i === 0) {
+                emaSig = macdValues[i];
+            } else {
+                emaSig = alphaSig * macdValues[i] + (1 - alphaSig) * emaSig;
+            }
+            signalValues.push(emaSig);
+        }
+
+        const macdLine: LineDataPoint[] = [];
+        const signalLine: LineDataPoint[] = [];
+        const histogram: LineDataPoint[] = [];
+
+        for (let i = 0; i < baseData.length; i++) {
+            const date = baseData[i].date;
+            macdLine.push({date, value: macdValues[i]});
+            signalLine.push({date, value: signalValues[i]});
+            histogram.push({date, value: macdValues[i] - signalValues[i]});
+        }
+
+        return {macdLine, signalLine, histogram};
     }
 }

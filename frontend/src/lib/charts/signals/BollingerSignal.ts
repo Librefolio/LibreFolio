@@ -20,7 +20,7 @@
  * See: docs/financial-theory/technical-indicators.md#bollinger-bands
  */
 
-import {ChartSignal, type SignalParamDescriptor, type RenderedSignal} from './ChartSignal';
+import {ChartSignal, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class BollingerSignal extends ChartSignal {
@@ -66,47 +66,6 @@ export class BollingerSignal extends ChartSignal {
         return middle;
     }
 
-    /** Compute upper, middle, lower arrays in one O(N) pass (absolute values) */
-    private _computeAllBands(
-        baseData: LineDataPoint[],
-    ): {upper: number[]; middle: LineDataPoint[]; lower: number[]} {
-        const period = Math.max(2, Math.round(Number(this.params.period ?? 20)));
-        const k = Number(this.params.multiplier ?? 2);
-
-        const upperArr: number[] = [];
-        const middleArr: LineDataPoint[] = [];
-        const lowerArr: number[] = [];
-
-        const window: number[] = [];
-        let windowSum = 0;
-
-        for (let i = 0; i < baseData.length; i++) {
-            const price = baseData[i].value;
-            window.push(price);
-            windowSum += price;
-
-            if (window.length > period) {
-                windowSum -= window.shift()!;
-            }
-
-            const n = window.length;
-            const sma = windowSum / n;
-
-            let variance = 0;
-            for (let j = 0; j < n; j++) {
-                const diff = window[j] - sma;
-                variance += diff * diff;
-            }
-            const sigma = Math.sqrt(variance / n);
-
-            upperArr.push(sma + k * sigma);
-            middleArr.push({date: baseData[i].date, value: sma});
-            lowerArr.push(sma - k * sigma);
-        }
-
-        return {upper: upperArr, middle: middleArr, lower: lowerArr};
-    }
-
     /**
      * Override render() to produce a confidence-band signal.
      * The LineChart reads seriesType='band' + bandData to generate the
@@ -144,5 +103,46 @@ export class BollingerSignal extends ChartSignal {
         const period = this.params.period ?? 20;
         const mult = this.params.multiplier ?? 2;
         return `BB(${period},${mult}σ)`;
+    }
+
+    /** Compute upper, middle, lower arrays in one O(N) pass (absolute values) */
+    private _computeAllBands(
+        baseData: LineDataPoint[],
+    ): { upper: number[]; middle: LineDataPoint[]; lower: number[] } {
+        const period = Math.max(2, Math.round(Number(this.params.period ?? 20)));
+        const k = Number(this.params.multiplier ?? 2);
+
+        const upperArr: number[] = [];
+        const middleArr: LineDataPoint[] = [];
+        const lowerArr: number[] = [];
+
+        const window: number[] = [];
+        let windowSum = 0;
+
+        for (let i = 0; i < baseData.length; i++) {
+            const price = baseData[i].value;
+            window.push(price);
+            windowSum += price;
+
+            if (window.length > period) {
+                windowSum -= window.shift()!;
+            }
+
+            const n = window.length;
+            const sma = windowSum / n;
+
+            let variance = 0;
+            for (let j = 0; j < n; j++) {
+                const diff = window[j] - sma;
+                variance += diff * diff;
+            }
+            const sigma = Math.sqrt(variance / n);
+
+            upperArr.push(sma + k * sigma);
+            middleArr.push({date: baseData[i].date, value: sma});
+            lowerArr.push(sma - k * sigma);
+        }
+
+        return {upper: upperArr, middle: middleArr, lower: lowerArr};
     }
 }

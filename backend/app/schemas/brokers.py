@@ -403,7 +403,7 @@ class BRAccessBulkItem(BaseModel):
 
     user_id: int = Field(..., gt=0, description="User ID")
     role: UserRole = Field(..., description="Access role (OWNER/EDITOR/VIEWER)")
-    share_percentage: Decimal = Field(default=Decimal("0"),ge=0,le=1,description="Ownership fraction (0.0-1.0). Only valid for OWNER role. Frontend displays as %.",)
+    share_percentage: Decimal = Field(default=Decimal("0"), ge=0, le=1, description="Ownership fraction (0.0-1.0). Only valid for OWNER role. Frontend displays as %.", )
 
     @model_validator(mode="after")
     def validate_share_for_role(self):
@@ -414,7 +414,6 @@ class BRAccessBulkItem(BaseModel):
                 f"Only OWNERs can have ownership percentage."
                 )
         return self
-
 
 
 class BRAccessBulkResponse(BaseBulkResponse[BRAccessItem]):

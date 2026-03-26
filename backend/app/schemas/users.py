@@ -25,4 +25,3 @@ class UserSearchItem(BaseModel):
 class UserSearchResponse(BaseListResponse[UserSearchItem]):
     """Response for user search endpoint."""
     pass
-

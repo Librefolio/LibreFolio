@@ -104,7 +104,7 @@ export function buildCurrencyGraph(
                 }
 
                 // Add directed edge base→target with provider attribution
-                graph.addDirectedEdge(base, target, { provider: provider.code });
+                graph.addDirectedEdge(base, target, {provider: provider.code});
             }
         }
     }
@@ -194,7 +194,7 @@ export function findAllPaths(
             if (currentUses >= 2) return;
 
             // --- ADVANCE ---
-            pathEdges.push({ from: currentNode, to: neighbor, provider });
+            pathEdges.push({from: currentNode, to: neighbor, provider});
             visitedNodes.add(neighbor);
             providerUseCount.set(provider, currentUses + 1);
 

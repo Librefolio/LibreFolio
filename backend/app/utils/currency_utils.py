@@ -40,7 +40,7 @@ _CURRENCY_FLAG_OVERRIDES: dict[str, str] = {
     "NOK": "🇳🇴",  # Norway (not Bouvet Island 🇧🇻)
     "NZD": "🇳🇿",  # New Zealand (not Cook Islands 🇨🇰)
     "ZAR": "🇿🇦",  # South Africa (not Lesotho 🇱🇸)
-}
+    }
 
 
 @lru_cache(maxsize=1)
@@ -90,6 +90,7 @@ def _build_currency_to_flag_map() -> dict[str, str]:
         currency_to_flag[code] = "🪙"
 
     return currency_to_flag
+
 
 # =============================================================================
 # CURRENCY → COUNTRY CODES MAPPING (for search by nation)
@@ -306,8 +307,8 @@ def list_currencies(language: str = "en") -> List[dict]:
                 "flag_emoji": flag_map.get(code, "🏳️"),
                 "country_codes": country_codes,
                 "country_names": country_names,
-            }
-        )
+                }
+            )
 
     # 2. Crypto currencies (from CRYPTO_CURRENCIES dict)
     for code, crypto_name in sorted(CRYPTO_CURRENCIES.items()):
@@ -319,7 +320,7 @@ def list_currencies(language: str = "en") -> List[dict]:
                 "flag_emoji": "🪙",
                 "country_codes": [],
                 "country_names": [],
-            }
-        )
+                }
+            )
 
     return currencies

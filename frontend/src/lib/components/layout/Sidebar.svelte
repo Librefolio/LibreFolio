@@ -209,22 +209,22 @@
 
         <!-- User Avatar & Info -->
         <a
-            href="/settings"
-            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition-colors
+                class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition-colors
                 {collapsed ? 'justify-center' : ''}"
-            title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
-            on:click={closeSidebar}
-            data-testid="sidebar-user-avatar"
+                data-testid="sidebar-user-avatar"
+                href="/settings"
+                on:click={closeSidebar}
+                title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
         >
             {#if avatarUrl}
                 <img
-                    src={avatarUrl}
-                    alt="Avatar"
-                    class="w-8 h-8 rounded-full object-cover border border-white/30 flex-shrink-0"
+                        src={avatarUrl}
+                        alt="Avatar"
+                        class="w-8 h-8 rounded-full object-cover border border-white/30 flex-shrink-0"
                 />
             {:else}
                 <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <User size={16} class="text-white/70" />
+                    <User size={16} class="text-white/70"/>
                 </div>
             {/if}
             {#if !collapsed}

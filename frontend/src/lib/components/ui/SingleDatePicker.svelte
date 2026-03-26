@@ -135,17 +135,31 @@
 
     // Navigation
     function prevMonth() {
-        if (calMonth === 0) { calMonth = 11; calYear--; }
-        else { calMonth--; }
+        if (calMonth === 0) {
+            calMonth = 11;
+            calYear--;
+        } else {
+            calMonth--;
+        }
     }
 
     function nextMonth() {
-        if (calMonth === 11) { calMonth = 0; calYear++; }
-        else { calMonth++; }
+        if (calMonth === 11) {
+            calMonth = 0;
+            calYear++;
+        } else {
+            calMonth++;
+        }
     }
 
-    function setMonth(m: number) { calMonth = m; }
-    function setYear(y: number) { calYear = y; }
+    function setMonth(m: number) {
+        calMonth = m;
+    }
+
+    function setYear(y: number) {
+        calYear = y;
+    }
+
     function goToToday() {
         const now = new Date();
         calYear = now.getFullYear();
@@ -154,16 +168,16 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
+<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown}/>
 
 <div class="relative sdp-trigger inline-block">
     <button
-        bind:this={triggerEl}
-        type="button"
-        class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
-        onclick={(e) => { e.stopPropagation(); openCalendar(); }}
+            bind:this={triggerEl}
+            class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
+            onclick={(e) => { e.stopPropagation(); openCalendar(); }}
+            type="button"
     >
-        <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0" />
+        <Calendar class="text-libre-green flex-shrink-0" size={compact ? 12 : 14}/>
         {#if label}<span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{label}</span>{/if}
         <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(value)}</span>
     </button>
@@ -171,18 +185,18 @@
     {#if calendarOpen}
         <div class="sdp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 w-[280px]" style={popoverStyle}>
             <CalendarMonth
-                year={calYear}
-                month={calMonth}
-                {weekdayLabels}
-                {monthLabels}
-                onDayClick={handleDayClick}
-                onPrevMonth={prevMonth}
-                onNextMonth={nextMonth}
-                onSetMonth={setMonth}
-                onSetYear={setYear}
-                onGoToToday={goToToday}
-                highlights={{ selected: value }}
-                {disabledDates}
+                    year={calYear}
+                    month={calMonth}
+                    {weekdayLabels}
+                    {monthLabels}
+                    onDayClick={handleDayClick}
+                    onPrevMonth={prevMonth}
+                    onNextMonth={nextMonth}
+                    onSetMonth={setMonth}
+                    onSetYear={setYear}
+                    onGoToToday={goToToday}
+                    highlights={{ selected: value }}
+                    {disabledDates}
             />
         </div>
     {/if}

@@ -142,7 +142,7 @@
         <form class="space-y-4" data-testid="register-form" on:submit|preventDefault={handleSubmit}>
 
             <!-- General Error Message -->
-            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} />
+            <InfoBanner dismissible message={error} ondismiss={() => error = ''} variant="error"/>
 
             <!-- Username Input -->
             <div>

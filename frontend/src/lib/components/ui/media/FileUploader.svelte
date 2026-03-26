@@ -10,7 +10,7 @@
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {t} from '$lib/i18n';
-    import {AlertTriangle, File as FileIcon, Upload, X, Pencil, ImageIcon, RefreshCw} from 'lucide-svelte';
+    import {AlertTriangle, File as FileIcon, ImageIcon, Pencil, RefreshCw, Upload, X} from 'lucide-svelte';
     import {isImageFile} from '$lib/utils/imageCrop';
     import {formatBytes} from '$lib/utils/upload';
 
@@ -145,11 +145,11 @@
     }
 
     function editImage(file: File, index: number) {
-        dispatch('editImage', { file, index });
+        dispatch('editImage', {file, index});
     }
 
     function editFile(file: File, index: number) {
-        dispatch('editFile', { file, index });
+        dispatch('editFile', {file, index});
     }
 
     // Public method to replace a file at a specific index (used after crop)
@@ -157,7 +157,7 @@
         if (index >= 0 && index < selectedFiles.length) {
             // Save original file for restore (only if not already edited)
             if (!(index in originalFiles)) {
-                originalFiles = { ...originalFiles, [index]: selectedFiles[index] };
+                originalFiles = {...originalFiles, [index]: selectedFiles[index]};
             }
             // Mark as edited - create new array to trigger reactivity
             if (!editedIndices.includes(index)) {
@@ -170,7 +170,7 @@
                 newFile,
                 ...selectedFiles.slice(index + 1)
             ];
-            dispatch('change', { files: selectedFiles });
+            dispatch('change', {files: selectedFiles});
         }
     }
 
@@ -184,11 +184,11 @@
                 ...selectedFiles.slice(index + 1)
             ];
             // Remove from originalFiles
-            const { [index]: _, ...rest } = originalFiles;
+            const {[index]: _, ...rest} = originalFiles;
             originalFiles = rest;
             // Remove from editedIndices
             editedIndices = editedIndices.filter(i => i !== index);
-            dispatch('change', { files: selectedFiles });
+            dispatch('change', {files: selectedFiles});
         }
     }
 

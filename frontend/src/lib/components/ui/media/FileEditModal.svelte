@@ -9,10 +9,10 @@
   - Uses ModalBase for backdrop/keydown/z-index handling
 -->
 <script lang="ts">
-    import {createEventDispatcher, tick} from 'svelte';
+    import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {X, Check, Loader2, FileIcon, RefreshCw} from 'lucide-svelte';
-    import {uploadFile, formatBytes} from '$lib/utils/upload';
+    import {Check, FileIcon, Loader2, RefreshCw, X} from 'lucide-svelte';
+    import {formatBytes, uploadFile} from '$lib/utils/upload';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     // Props
@@ -23,9 +23,9 @@
     export let zIndex: number = 60;
 
     const dispatch = createEventDispatcher<{
-        complete: {url: string | null; file: File};
+        complete: { url: string | null; file: File };
         cancel: void;
-        error: {message: string};
+        error: { message: string };
     }>();
 
     // Internal state
@@ -102,7 +102,7 @@
             const finalFileName = `${editedBaseName || 'file'}${fileExtension}`;
 
             // Create renamed file
-            const renamedFile = new File([file], finalFileName, { type: file.type });
+            const renamedFile = new File([file], finalFileName, {type: file.type});
 
             if (!uploadOnComplete) {
                 // Just return the renamed file
@@ -126,35 +126,35 @@
 
 {#if file}
     <ModalBase
-        {open}
-        {zIndex}
-        maxWidth="max-w-md"
-        onRequestClose={requestClose}
+            {open}
+            {zIndex}
+            maxWidth="max-w-md"
+            onRequestClose={requestClose}
     >
         <!-- Header -->
         <div class="modal-header" data-testid="file-edit-modal">
             <h2 class="modal-title">
-                <FileIcon size={20} />
+                <FileIcon size={20}/>
                 {$_('uploads.editFile') || 'Edit File'}
             </h2>
             <div class="header-actions">
                 {#if hasChanges}
                     <button
-                        type="button"
-                        class="restore-btn"
-                        on:click={restoreOriginal}
-                        title={$_('uploads.resetAll') || 'Reset All'}
+                            type="button"
+                            class="restore-btn"
+                            on:click={restoreOriginal}
+                            title={$_('uploads.resetAll') || 'Reset All'}
                     >
-                        <RefreshCw size={16} />
+                        <RefreshCw size={16}/>
                     </button>
                 {/if}
                 <button
-                    type="button"
-                    class="close-btn"
-                    on:click={requestClose}
-                    title={$_('common.close') || 'Close'}
+                        type="button"
+                        class="close-btn"
+                        on:click={requestClose}
+                        title={$_('common.close') || 'Close'}
                 >
-                    <X size={20} />
+                    <X size={20}/>
                 </button>
             </div>
         </div>
@@ -169,13 +169,13 @@
                 <div class="filename-input-group">
                     <!-- svelte-ignore a11y_autofocus -->
                     <input
-                        id="file-edit-name"
-                        type="text"
-                        class="filename-input"
-                        bind:value={editedBaseName}
-                        placeholder="file"
-                        on:input={handleNameChange}
-                        autofocus
+                            id="file-edit-name"
+                            type="text"
+                            class="filename-input"
+                            bind:value={editedBaseName}
+                            placeholder="file"
+                            on:input={handleNameChange}
+                            autofocus
                     />
                     <span class="file-extension">{fileExtension}</span>
                 </div>
@@ -200,25 +200,25 @@
         <!-- Footer -->
         <div class="modal-footer">
             <button
-                type="button"
-                class="btn btn-secondary"
-                on:click={requestClose}
-                disabled={isUploading}
+                    type="button"
+                    class="btn btn-secondary"
+                    on:click={requestClose}
+                    disabled={isUploading}
             >
                 {$_('common.cancel') || 'Cancel'}
             </button>
             <button
-                type="button"
-                class="btn btn-primary"
-                on:click={handleConfirm}
-                disabled={isUploading}
-                data-testid="file-edit-confirm"
+                    type="button"
+                    class="btn btn-primary"
+                    on:click={handleConfirm}
+                    disabled={isUploading}
+                    data-testid="file-edit-confirm"
             >
                 {#if isUploading}
-                    <Loader2 size={16} class="animate-spin" />
+                    <Loader2 size={16} class="animate-spin"/>
                     {$_('common.uploading') || 'Uploading...'}
                 {:else}
-                    <Check size={16} />
+                    <Check size={16}/>
                     {#if uploadOnComplete}
                         {$_('uploads.renameAndUpload') || 'Rename & Upload'}
                     {:else}
@@ -232,10 +232,10 @@
 
 <!-- Confirmation dialog (uses ModalBase at higher z-index) -->
 <ModalBase
-    open={showCloseConfirm}
-    zIndex={zIndex + 10}
-    maxWidth="max-w-sm"
-    onRequestClose={cancelClose}
+        maxWidth="max-w-sm"
+        onRequestClose={cancelClose}
+        open={showCloseConfirm}
+        zIndex={zIndex + 10}
 >
     <div class="confirm-content">
         <div class="confirm-header">
@@ -358,8 +358,13 @@
         font-size: 0.75rem;
     }
 
-    :global(.dark) .info-label { color: #9ca3af; }
-    :global(.dark) .info-value { color: #e5e7eb; }
+    :global(.dark) .info-label {
+        color: #9ca3af;
+    }
+
+    :global(.dark) .info-value {
+        color: #e5e7eb;
+    }
 
     .filename-editor {
         display: flex;
@@ -373,7 +378,9 @@
         color: #374151;
     }
 
-    :global(.dark) .filename-label { color: #d1d5db; }
+    :global(.dark) .filename-label {
+        color: #d1d5db;
+    }
 
     .filename-input-group {
         display: flex;
@@ -392,7 +399,9 @@
         transition: border-color 0.15s;
     }
 
-    .filename-input:focus { border-color: #1a4031; }
+    .filename-input:focus {
+        border-color: #1a4031;
+    }
 
     :global(.dark) .filename-input {
         background: #374151;
@@ -400,7 +409,9 @@
         color: #f3f4f6;
     }
 
-    :global(.dark) .filename-input:focus { border-color: #10b981; }
+    :global(.dark) .filename-input:focus {
+        border-color: #10b981;
+    }
 
     .file-extension {
         display: flex;
@@ -461,20 +472,58 @@
         transition: all 0.15s;
     }
 
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 
-    .btn-primary { background: #1a4031; color: white; }
-    .btn-primary:hover:not(:disabled) { background: #143326; }
-    :global(.dark) .btn-primary { background: #10b981; }
-    :global(.dark) .btn-primary:hover:not(:disabled) { background: #059669; }
+    .btn-primary {
+        background: #1a4031;
+        color: white;
+    }
 
-    .btn-secondary { background: #e5e7eb; color: #374151; }
-    .btn-secondary:hover:not(:disabled) { background: #d1d5db; }
-    :global(.dark) .btn-secondary { background: #374151; color: #d1d5db; }
-    :global(.dark) .btn-secondary:hover:not(:disabled) { background: #4b5563; }
+    .btn-primary:hover:not(:disabled) {
+        background: #143326;
+    }
 
-    :global(.animate-spin) { animation: spin 1s linear infinite; }
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    :global(.dark) .btn-primary {
+        background: #10b981;
+    }
+
+    :global(.dark) .btn-primary:hover:not(:disabled) {
+        background: #059669;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: #d1d5db;
+    }
+
+    :global(.dark) .btn-secondary {
+        background: #374151;
+        color: #d1d5db;
+    }
+
+    :global(.dark) .btn-secondary:hover:not(:disabled) {
+        background: #4b5563;
+    }
+
+    :global(.animate-spin) {
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
 
     /* Confirmation Dialog Content */
     .confirm-content {
@@ -488,7 +537,9 @@
         margin-bottom: 0.75rem;
     }
 
-    .confirm-icon { font-size: 1.5rem; }
+    .confirm-icon {
+        font-size: 1.5rem;
+    }
 
     .confirm-header h3 {
         margin: 0;
@@ -497,7 +548,9 @@
         color: #d97706;
     }
 
-    :global(.dark) .confirm-header h3 { color: #fbbf24; }
+    :global(.dark) .confirm-header h3 {
+        color: #fbbf24;
+    }
 
     .confirm-message {
         color: #6b7280;
@@ -505,7 +558,9 @@
         line-height: 1.5;
     }
 
-    :global(.dark) .confirm-message { color: #9ca3af; }
+    :global(.dark) .confirm-message {
+        color: #9ca3af;
+    }
 
     .confirm-actions {
         display: flex;
@@ -519,6 +574,8 @@
         border: none;
     }
 
-    .btn-warning:hover { background: #d97706; }
+    .btn-warning:hover {
+        background: #d97706;
+    }
 </style>
 

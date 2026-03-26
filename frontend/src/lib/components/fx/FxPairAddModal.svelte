@@ -17,7 +17,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Lock, X, ArrowDownUp, ArrowLeftRight, RotateCcw} from 'lucide-svelte';
+    import {ArrowDownUp, ArrowLeftRight, Lock, RotateCcw, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
@@ -43,7 +43,7 @@
         editQuote?: string;
         /** Pre-populated routes (used in editMode) */
         editRoutes?: ChainStep[][];
-        oncreated?: (detail: {base: string; quote: string; hasRealProvider: boolean}) => void;
+        oncreated?: (detail: { base: string; quote: string; hasRealProvider: boolean }) => void;
         onclose?: () => void;
     }
 
@@ -100,7 +100,7 @@
             const pairRoutes = items
                 .filter((i: any) =>
                     ((i.base === editBase && i.quote === editQuote) ||
-                    (i.base === editQuote && i.quote === editBase)) &&
+                        (i.base === editQuote && i.quote === editBase)) &&
                     !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')
                 )
                 .sort((a: any, b: any) => a.priority - b.priority);
@@ -304,7 +304,7 @@
     }
 </script>
 
-<ModalBase {open} onRequestClose={handleClose} maxWidth="lg" allowOverflow={true}>
+<ModalBase allowOverflow={true} maxWidth="lg" onRequestClose={handleClose} {open}>
     <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="fx-add-pair-modal">
         <!-- ============================================================= -->
         <!-- Header -->
@@ -314,9 +314,9 @@
                 {editMode ? $_('fx.addPair.titleEdit') : $_('fx.addPair.title')}
             </h2>
             <button
-                onclick={handleClose}
-                disabled={saving}
-                class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                    class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                    disabled={saving}
+                    onclick={handleClose}
             >
                 <X size={20}/>
             </button>
@@ -341,11 +341,10 @@
                             {$_('fx.addPair.baseCurrency')}
                         </div>
                         <CurrencySearchSelect
-                            bind:value={baseCurrency}
-                            placeholder={$_('fx.addPair.baseCurrency')}
-                            excludedCurrencies={editMode ? new Set() : excludedForBase}
-                            disabled={editMode}
-                            onchange={() => {
+                                bind:value={baseCurrency}
+                                disabled={editMode}
+                                excludedCurrencies={editMode ? new Set() : excludedForBase}
+                                onchange={() => {
                                 if (!editMode) {
                                     // Auto-focus the quote currency select after picking base
                                     setTimeout(() => {
@@ -355,27 +354,28 @@
                                     }, 30);
                                 }
                             }}
+                                placeholder={$_('fx.addPair.baseCurrency')}
                         />
                     </div>
                     <!-- Arrow: ↔ on desktop, ↕ on mobile -->
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:flex flex-col items-center">
-                        <div class="text-xs font-medium invisible mb-1 select-none" aria-hidden="true">&nbsp;</div>
+                        <div aria-hidden="true" class="text-xs font-medium invisible mb-1 select-none">&nbsp;</div>
                         <div class="flex-1 flex items-center justify-center px-1">
-                            <ArrowLeftRight size={18} />
+                            <ArrowLeftRight size={18}/>
                         </div>
                     </div>
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:hidden">
-                        <ArrowDownUp size={18} />
+                        <ArrowDownUp size={18}/>
                     </div>
-                    <div class="flex-1 min-w-0" bind:this={quoteSelectRef}>
+                    <div bind:this={quoteSelectRef} class="flex-1 min-w-0">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.quoteCurrency')}
                         </div>
                         <CurrencySearchSelect
-                            bind:value={quoteCurrency}
-                            placeholder={$_('fx.addPair.quoteCurrency')}
-                            excludedCurrencies={editMode ? new Set() : excludedForQuote}
-                            disabled={editMode}
+                                bind:value={quoteCurrency}
+                                disabled={editMode}
+                                excludedCurrencies={editMode ? new Set() : excludedForQuote}
+                                placeholder={$_('fx.addPair.quoteCurrency')}
                         />
                     </div>
                 </div>
@@ -397,29 +397,29 @@
                 <!-- Hint when currencies not selected -->
                 {#if !hasCurrencies}
                     <div class="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 text-xs text-gray-400 dark:text-gray-500">
-                        <Lock size={12} />
+                        <Lock size={12}/>
                         {$_('fx.addPair.providerDisabledHint')}
                     </div>
                 {/if}
 
                 <!-- Route selection (unified: DFS pathfinding + search + flags) -->
                 <FxProviderSelect
-                    {baseCurrency}
-                    {quoteCurrency}
-                    bind:selectedRoutes
-                    onSelectionChange={handleRoutesChange}
-                    language={$currentLanguage}
-                    disabled={!hasCurrencies}
-                    {configuredPairSlugs}
+                        {baseCurrency}
+                        bind:selectedRoutes
+                        {configuredPairSlugs}
+                        disabled={!hasCurrencies}
+                        language={$currentLanguage}
+                        onSelectionChange={handleRoutesChange}
+                        {quoteCurrency}
                 />
 
                 <!-- Create intermediate pairs checkbox (visible only when chain routes are selected) -->
                 {#if hasChainRoutes}
                     <label class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors">
                         <input
-                            type="checkbox"
-                            bind:checked={createIntermediatePairs}
-                            class="mt-0.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green"
+                                type="checkbox"
+                                bind:checked={createIntermediatePairs}
+                                class="mt-0.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green"
                         />
                         <div class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
                             <span class="font-medium">{$_('fx.addPair.createIntermediatePairs')}</span>
@@ -446,22 +446,22 @@
         <!-- ============================================================= -->
         <div class="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0">
             <button
-                type="button"
-                class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
-                onclick={handleClose}
-                disabled={saving || syncing}
+                    class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
+                    disabled={saving || syncing}
+                    onclick={handleClose}
+                    type="button"
             >
                 {$_('common.cancel')}
             </button>
             <button
-                type="button"
-                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                onclick={handleSave}
-                disabled={!isValid || saving || syncing}
-                data-testid="fx-add-pair-save"
+                    class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    data-testid="fx-add-pair-save"
+                    disabled={!isValid || saving || syncing}
+                    onclick={handleSave}
+                    type="button"
             >
                 {#if syncing}
-                    <RotateCcw size={14} class="animate-spin" />
+                    <RotateCcw size={14} class="animate-spin"/>
                     {$_('fx.syncing')}
                 {:else if saving}
                     {$_('common.saving')}
@@ -475,13 +475,13 @@
 
 <!-- Discard changes confirmation -->
 <ConfirmModal
-    open={showDiscardConfirm}
-    title={$_('common.discardChanges')}
-    message={$_('common.discardChangesMessage')}
-    confirmText={$_('common.discard')}
-    danger={false}
-    warning={true}
-    onConfirm={resetAndClose}
-    onCancel={() => { showDiscardConfirm = false; }}
-    zIndex={70}
+        confirmText={$_('common.discard')}
+        danger={false}
+        message={$_('common.discardChangesMessage')}
+        onCancel={() => { showDiscardConfirm = false; }}
+        onConfirm={resetAndClose}
+        open={showDiscardConfirm}
+        title={$_('common.discardChanges')}
+        warning={true}
+        zIndex={70}
 />

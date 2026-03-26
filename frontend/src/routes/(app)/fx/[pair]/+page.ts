@@ -4,9 +4,11 @@
  * URL order determines display direction; canonical (alphabetical) order is used for stores/API.
  */
 import {redirect} from '@sveltejs/kit';
+
 export const prerender = false;
 export const csr = true;
-export async function load({params}: {params: {pair: string}}) {
+
+export async function load({params}: { params: { pair: string } }) {
     const slug = params.pair;
     const parts = slug.split('-');
     if (parts.length !== 2 || parts[0].length !== 3 || parts[1].length !== 3) {

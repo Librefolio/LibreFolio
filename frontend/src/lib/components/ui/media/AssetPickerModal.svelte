@@ -12,13 +12,12 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {formatBytes} from '$lib/utils/upload';
-    import {X, Link, FolderOpen, Upload, Search, LayoutGrid, List, File as FileIcon, Image as ImageIcon} from 'lucide-svelte';
+    import {File as FileIcon, FolderOpen, Image as ImageIcon, LayoutGrid, Link, List, Search, Upload, X} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import {DataTable} from '$lib/components/table';
     import type {ColumnDef} from '$lib/components/table';
+    import {DataTable} from '$lib/components/table';
     import type {UploadedFile} from '$lib/types';
 
     // Props
@@ -32,7 +31,7 @@
     export let circularPreview: boolean = false;
 
     const dispatch = createEventDispatcher<{
-        select: {url: string};
+        select: { url: string };
         cancel: void;
     }>();
 
@@ -219,105 +218,105 @@
 </script>
 
 <ModalBase
-    {open}
-    zIndex={50}
-    maxWidth="600px"
-    onRequestClose={close}
+        maxWidth="600px"
+        onRequestClose={close}
+        {open}
+        zIndex={50}
 >
-        <div class="picker-modal-inner" role="dialog" aria-modal="true" tabindex="-1" data-testid="asset-picker-modal">
-            <!-- Header -->
-            <div class="picker-header">
-                <h2 class="picker-title">{modalTitle}</h2>
-                <button type="button" class="close-btn" on:click={close}>
-                    <X size={20} />
-                </button>
-            </div>
+    <div aria-modal="true" class="picker-modal-inner" data-testid="asset-picker-modal" role="dialog" tabindex="-1">
+        <!-- Header -->
+        <div class="picker-header">
+            <h2 class="picker-title">{modalTitle}</h2>
+            <button class="close-btn" on:click={close} type="button">
+                <X size={20}/>
+            </button>
+        </div>
 
-            <!-- Tabs -->
-            <div class="picker-tabs">
-                <button type="button" class="tab-btn" class:active={activeTab === 'existing'}
-                        on:click={() => activeTab = 'existing'}
-                        data-testid="asset-picker-existing-tab">
-                    <FolderOpen size={14} />
-                    {$_('uploads.existingFiles') || 'Existing'}
-                </button>
-                <button type="button" class="tab-btn" class:active={activeTab === 'url'}
-                        on:click={() => activeTab = 'url'}
-                        data-testid="asset-picker-url-tab">
-                    <Link size={14} />
-                    {$_('uploads.fromUrl') || 'URL'}
-                </button>
-                <button type="button" class="tab-btn" class:active={activeTab === 'upload'}
-                        on:click={handleUploadClick}
-                        data-testid="asset-picker-upload-tab">
-                    <Upload size={14} />
-                    {$_('uploads.upload') || 'Upload'}
-                </button>
-                <input type="file" bind:this={uploadInput} accept="image/*"
-                       on:change={handleFileSelected} class="hidden-input" />
-            </div>
+        <!-- Tabs -->
+        <div class="picker-tabs">
+            <button class="tab-btn" class:active={activeTab === 'existing'} data-testid="asset-picker-existing-tab"
+                    on:click={() => activeTab = 'existing'}
+                    type="button">
+                <FolderOpen size={14}/>
+                {$_('uploads.existingFiles') || 'Existing'}
+            </button>
+            <button class="tab-btn" class:active={activeTab === 'url'} data-testid="asset-picker-url-tab"
+                    on:click={() => activeTab = 'url'}
+                    type="button">
+                <Link size={14}/>
+                {$_('uploads.fromUrl') || 'URL'}
+            </button>
+            <button class="tab-btn" class:active={activeTab === 'upload'} data-testid="asset-picker-upload-tab"
+                    on:click={handleUploadClick}
+                    type="button">
+                <Upload size={14}/>
+                {$_('uploads.upload') || 'Upload'}
+            </button>
+            <input accept="image/*" bind:this={uploadInput} class="hidden-input"
+                   on:change={handleFileSelected} type="file"/>
+        </div>
 
-            <!-- Body -->
-            <div class="picker-body">
-                {#if activeTab === 'url'}
-                    <!-- URL Input -->
-                    <div class="url-section">
-                        <label class="url-label" for="asset-url-input">{$_('uploads.imageUrl') || 'Image URL'}</label>
-                        <input type="url" id="asset-url-input" class="url-input" bind:value={urlInput}
-                               placeholder="https://example.com/image.png" />
-                        <p class="url-hint">{$_('uploads.urlHint') || 'Enter a remote URL or a local path from Files'}</p>
-                        {#if urlInput && urlValid}
-                            <div class="url-preview" class:circular={circularPreview}>
-                                <div class="url-preview-img-wrapper">
-                                    <LazyImage src={urlInput} alt="Preview" placeholder="generic"
-                                               width="100%" height="auto" />
-                                    {#if circularPreview}
-                                        <div class="url-preview-circle-overlay"></div>
-                                    {/if}
-                                </div>
-                            </div>
-                        {/if}
-                    </div>
-
-                {:else if activeTab === 'existing'}
-                    <!-- Existing files browser -->
-                    <div class="existing-section">
-                        <!-- Toolbar: search + view toggle -->
-                        <div class="existing-toolbar">
-                            <div class="search-box">
-                                <Search size={14} />
-                                <input type="text" class="search-input" bind:value={searchQuery}
-                                       placeholder={$_('common.search') || 'Search...'}
-                                       data-testid="asset-picker-search" />
-                                {#if searchQuery}
-                                    <button type="button" class="search-clear" on:click={() => searchQuery = ''}>
-                                        <X size={12} />
-                                    </button>
+        <!-- Body -->
+        <div class="picker-body">
+            {#if activeTab === 'url'}
+                <!-- URL Input -->
+                <div class="url-section">
+                    <label class="url-label" for="asset-url-input">{$_('uploads.imageUrl') || 'Image URL'}</label>
+                    <input type="url" id="asset-url-input" class="url-input" bind:value={urlInput}
+                           placeholder="https://example.com/image.png"/>
+                    <p class="url-hint">{$_('uploads.urlHint') || 'Enter a remote URL or a local path from Files'}</p>
+                    {#if urlInput && urlValid}
+                        <div class="url-preview" class:circular={circularPreview}>
+                            <div class="url-preview-img-wrapper">
+                                <LazyImage src={urlInput} alt="Preview" placeholder="generic"
+                                           width="100%" height="auto"/>
+                                {#if circularPreview}
+                                    <div class="url-preview-circle-overlay"></div>
                                 {/if}
                             </div>
-                            <div class="view-toggle">
-                                <button type="button" class="toggle-btn" class:active={existingViewMode === 'grid'}
-                                        on:click={() => existingViewMode = 'grid'}>
-                                    <LayoutGrid size={14} />
-                                </button>
-                                <button type="button" class="toggle-btn" class:active={existingViewMode === 'list'}
-                                        on:click={() => existingViewMode = 'list'}>
-                                    <List size={14} />
-                                </button>
-                            </div>
                         </div>
+                    {/if}
+                </div>
 
-                        <!-- File browser -->
-                        {#if loadingFiles}
-                            <div class="empty-state">{$_('common.loading') || 'Loading...'}</div>
-                        {:else if filteredFiles.length === 0}
-                            <div class="empty-state">
-                                {searchQuery
-                                    ? ($_('common.noResults') || 'No results')
-                                    : ($_('uploads.noFiles') || 'No files')}
-                            </div>
-                        {:else if existingViewMode === 'grid'}
-                            <FileGrid
+            {:else if activeTab === 'existing'}
+                <!-- Existing files browser -->
+                <div class="existing-section">
+                    <!-- Toolbar: search + view toggle -->
+                    <div class="existing-toolbar">
+                        <div class="search-box">
+                            <Search size={14}/>
+                            <input type="text" class="search-input" bind:value={searchQuery}
+                                   placeholder={$_('common.search') || 'Search...'}
+                                   data-testid="asset-picker-search"/>
+                            {#if searchQuery}
+                                <button type="button" class="search-clear" on:click={() => searchQuery = ''}>
+                                    <X size={12}/>
+                                </button>
+                            {/if}
+                        </div>
+                        <div class="view-toggle">
+                            <button type="button" class="toggle-btn" class:active={existingViewMode === 'grid'}
+                                    on:click={() => existingViewMode = 'grid'}>
+                                <LayoutGrid size={14}/>
+                            </button>
+                            <button type="button" class="toggle-btn" class:active={existingViewMode === 'list'}
+                                    on:click={() => existingViewMode = 'list'}>
+                                <List size={14}/>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- File browser -->
+                    {#if loadingFiles}
+                        <div class="empty-state">{$_('common.loading') || 'Loading...'}</div>
+                    {:else if filteredFiles.length === 0}
+                        <div class="empty-state">
+                            {searchQuery
+                                ? ($_('common.noResults') || 'No results')
+                                : ($_('uploads.noFiles') || 'No files')}
+                        </div>
+                    {:else if existingViewMode === 'grid'}
+                        <FileGrid
                                 files={filteredFiles}
                                 mode="select"
                                 cardSize="compact"
@@ -327,11 +326,11 @@
                                 previewSize="120x120"
                                 on:select={(e) => selectExistingFile(e.detail.file)}
                                 on:dblselect={() => confirmSelection()}
-                            />
-                        {:else}
-                            <!-- List/table view using DataTable -->
-                            <div class="list-table-wrapper">
-                                <DataTable
+                        />
+                    {:else}
+                        <!-- List/table view using DataTable -->
+                        <div class="list-table-wrapper">
+                            <DataTable
                                     data={filteredFiles}
                                     columns={listColumns}
                                     getRowId={(row) => row.id}
@@ -351,97 +350,208 @@
                                         ? ($_('common.noResults') || 'No results')
                                         : ($_('uploads.noFiles') || 'No files')}
                                     isLoading={loadingFiles}
-                                />
-                            </div>
-                        {/if}
-                    </div>
-                {/if}
-            </div>
-
-            <!-- Footer -->
-            <div class="picker-footer">
-                <button type="button" class="btn btn-secondary" on:click={close}>
-                    {$_('common.cancel') || 'Cancel'}
-                </button>
-                <button type="button" class="btn btn-primary" on:click={confirmSelection}
-                        disabled={(activeTab === 'url' && !urlValid) || (activeTab === 'existing' && !selectedFile)}
-                        data-testid="asset-picker-confirm">
-                    {$_('uploads.useSelected') || 'Use Selected'}
-                </button>
-            </div>
+                            />
+                        </div>
+                    {/if}
+                </div>
+            {/if}
         </div>
+
+        <!-- Footer -->
+        <div class="picker-footer">
+            <button class="btn btn-secondary" on:click={close} type="button">
+                {$_('common.cancel') || 'Cancel'}
+            </button>
+            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid) || (activeTab === 'existing' && !selectedFile)}
+                    on:click={confirmSelection}
+                    type="button">
+                {$_('uploads.useSelected') || 'Use Selected'}
+            </button>
+        </div>
+    </div>
 </ModalBase>
 
 <style>
     /* Backdrop handled by ModalBase */
     .picker-modal-inner {
-        display: flex; flex-direction: column;
-        max-height: 80vh; overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: 80vh;
+        overflow: hidden;
     }
 
     /* Header */
     .picker-header {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #e5e7eb;
     }
-    :global(.dark) .picker-header { border-bottom-color: #374151; }
-    .picker-title { font-size: 1rem; font-weight: 600; margin: 0; color: #1f2937; }
-    :global(.dark) .picker-title { color: #f3f4f6; }
+
+    :global(.dark) .picker-header {
+        border-bottom-color: #374151;
+    }
+
+    .picker-title {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0;
+        color: #1f2937;
+    }
+
+    :global(.dark) .picker-title {
+        color: #f3f4f6;
+    }
+
     .close-btn {
-        display: flex; align-items: center; justify-content: center;
-        width: 32px; height: 32px; border: none; border-radius: 0.375rem;
-        background: transparent; color: #6b7280; cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 0.375rem;
+        background: transparent;
+        color: #6b7280;
+        cursor: pointer;
     }
-    .close-btn:hover { background: #f3f4f6; color: #1f2937; }
-    :global(.dark) .close-btn:hover { background: #374151; color: #f3f4f6; }
+
+    .close-btn:hover {
+        background: #f3f4f6;
+        color: #1f2937;
+    }
+
+    :global(.dark) .close-btn:hover {
+        background: #374151;
+        color: #f3f4f6;
+    }
 
     /* Tabs */
     .picker-tabs {
-        display: flex; gap: 0; border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        gap: 0;
+        border-bottom: 1px solid #e5e7eb;
         padding: 0 0.5rem;
     }
-    :global(.dark) .picker-tabs { border-bottom-color: #374151; }
+
+    :global(.dark) .picker-tabs {
+        border-bottom-color: #374151;
+    }
+
     .tab-btn {
-        display: flex; align-items: center; gap: 0.375rem;
-        padding: 0.5rem 0.75rem; font-size: 0.8125rem; font-weight: 500;
-        border: none; border-bottom: 2px solid transparent;
-        background: transparent; color: #6b7280; cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        border: none;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        color: #6b7280;
+        cursor: pointer;
         transition: all 0.15s;
     }
-    .tab-btn:hover { color: #1f2937; }
-    .tab-btn.active { color: #1a4031; border-bottom-color: #1a4031; }
-    :global(.dark) .tab-btn { color: #9ca3af; }
-    :global(.dark) .tab-btn:hover { color: #f3f4f6; }
-    :global(.dark) .tab-btn.active { color: #10b981; border-bottom-color: #10b981; }
-    .hidden-input { display: none; }
+
+    .tab-btn:hover {
+        color: #1f2937;
+    }
+
+    .tab-btn.active {
+        color: #1a4031;
+        border-bottom-color: #1a4031;
+    }
+
+    :global(.dark) .tab-btn {
+        color: #9ca3af;
+    }
+
+    :global(.dark) .tab-btn:hover {
+        color: #f3f4f6;
+    }
+
+    :global(.dark) .tab-btn.active {
+        color: #10b981;
+        border-bottom-color: #10b981;
+    }
+
+    .hidden-input {
+        display: none;
+    }
 
     /* Body */
     .picker-body {
-        flex: 1; overflow-y: auto; padding: 0.75rem;
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.75rem;
         min-height: 300px;
     }
 
     /* URL tab */
-    .url-section { display: flex; flex-direction: column; gap: 0.5rem; }
-    .url-label { font-size: 0.75rem; font-weight: 500; color: #6b7280; }
-    :global(.dark) .url-label { color: #9ca3af; }
-    .url-input {
-        padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem;
-        font-size: 0.8125rem; outline: none; background: white; color: #1f2937;
+    .url-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
     }
-    .url-input:focus { border-color: #1a4031; }
-    :global(.dark) .url-input { background: #374151; border-color: #4b5563; color: #f3f4f6; }
-    :global(.dark) .url-input:focus { border-color: #10b981; }
+
+    .url-label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #6b7280;
+    }
+
+    :global(.dark) .url-label {
+        color: #9ca3af;
+    }
+
+    .url-input {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-size: 0.8125rem;
+        outline: none;
+        background: white;
+        color: #1f2937;
+    }
+
+    .url-input:focus {
+        border-color: #1a4031;
+    }
+
+    :global(.dark) .url-input {
+        background: #374151;
+        border-color: #4b5563;
+        color: #f3f4f6;
+    }
+
+    :global(.dark) .url-input:focus {
+        border-color: #10b981;
+    }
+
     .url-preview {
-        border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden;
-        max-height: 250px; display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        max-height: 250px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         background: #f9fafb;
     }
-    :global(.dark) .url-preview { border-color: #374151; background: #1a2332; }
+
+    :global(.dark) .url-preview {
+        border-color: #374151;
+        background: #1a2332;
+    }
 
     .url-preview-img-wrapper {
-        position: relative; width: 100%; max-height: 250px;
-        display: flex; align-items: center; justify-content: center;
+        position: relative;
+        width: 100%;
+        max-height: 250px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         overflow: hidden;
     }
 
@@ -453,6 +563,7 @@
         align-items: center;
         justify-content: center;
     }
+
     .url-preview-img-wrapper :global(img) {
         max-height: 250px;
         width: auto;
@@ -462,15 +573,20 @@
     }
 
     .url-preview-circle-overlay {
-        position: absolute; inset: 0;
-        display: flex; align-items: center; justify-content: center;
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         pointer-events: none;
     }
+
     /* Circle cutout: shows original image inside, dark overlay outside.
        Uses a percentage of the container so it scales with image size. */
     .url-preview-circle-overlay::before {
         content: '';
-        width: min(100%, 200px); aspect-ratio: 1;
+        width: min(100%, 200px);
+        aspect-ratio: 1;
         border-radius: 50%;
         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
         border: 2px solid rgba(255, 255, 255, 0.6);
@@ -478,81 +594,213 @@
     }
 
     .url-hint {
-        font-size: 0.6875rem; color: #9ca3af; margin-top: 0.25rem; font-style: italic;
+        font-size: 0.6875rem;
+        color: #9ca3af;
+        margin-top: 0.25rem;
+        font-style: italic;
     }
-    :global(.dark) .url-hint { color: #6b7280; }
+
+    :global(.dark) .url-hint {
+        color: #6b7280;
+    }
 
     /* Existing tab */
-    .existing-section { display: flex; flex-direction: column; gap: 0.5rem; }
-    .existing-toolbar {
-        display: flex; align-items: center; gap: 0.5rem;
+    .existing-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
     }
-    .search-box {
-        flex: 1; display: flex; align-items: center; gap: 0.375rem;
-        padding: 0.375rem 0.5rem; border: 1px solid #e5e7eb; border-radius: 0.375rem;
-        background: white; color: #9ca3af;
-    }
-    :global(.dark) .search-box { background: #374151; border-color: #4b5563; }
-    .search-input {
-        flex: 1; border: none; outline: none; background: transparent;
-        font-size: 0.8125rem; color: #374151;
-    }
-    :global(.dark) .search-input { color: #f3f4f6; }
-    .search-clear {
-        display: flex; align-items: center; justify-content: center;
-        width: 16px; height: 16px; border: none; background: #e5e7eb;
-        border-radius: 50%; color: #6b7280; cursor: pointer;
-    }
-    :global(.dark) .search-clear { background: #4b5563; color: #9ca3af; }
 
-    .view-toggle { display: flex; gap: 0.125rem; }
-    .toggle-btn {
-        display: flex; align-items: center; justify-content: center;
-        width: 28px; height: 28px; border: 1px solid #e5e7eb; border-radius: 0.25rem;
-        background: white; color: #6b7280; cursor: pointer;
+    .existing-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
-    .toggle-btn:hover { background: #f3f4f6; }
-    .toggle-btn.active { background: #1a4031; color: white; border-color: #1a4031; }
-    :global(.dark) .toggle-btn { background: #374151; border-color: #4b5563; color: #9ca3af; }
-    :global(.dark) .toggle-btn.active { background: #10b981; border-color: #10b981; color: white; }
+
+    .search-box {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.375rem 0.5rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.375rem;
+        background: white;
+        color: #9ca3af;
+    }
+
+    :global(.dark) .search-box {
+        background: #374151;
+        border-color: #4b5563;
+    }
+
+    .search-input {
+        flex: 1;
+        border: none;
+        outline: none;
+        background: transparent;
+        font-size: 0.8125rem;
+        color: #374151;
+    }
+
+    :global(.dark) .search-input {
+        color: #f3f4f6;
+    }
+
+    .search-clear {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border: none;
+        background: #e5e7eb;
+        border-radius: 50%;
+        color: #6b7280;
+        cursor: pointer;
+    }
+
+    :global(.dark) .search-clear {
+        background: #4b5563;
+        color: #9ca3af;
+    }
+
+    .view-toggle {
+        display: flex;
+        gap: 0.125rem;
+    }
+
+    .toggle-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.25rem;
+        background: white;
+        color: #6b7280;
+        cursor: pointer;
+    }
+
+    .toggle-btn:hover {
+        background: #f3f4f6;
+    }
+
+    .toggle-btn.active {
+        background: #1a4031;
+        color: white;
+        border-color: #1a4031;
+    }
+
+    :global(.dark) .toggle-btn {
+        background: #374151;
+        border-color: #4b5563;
+        color: #9ca3af;
+    }
+
+    :global(.dark) .toggle-btn.active {
+        background: #10b981;
+        border-color: #10b981;
+        color: white;
+    }
 
     .empty-state {
-        display: flex; align-items: center; justify-content: center;
-        padding: 2rem; color: #9ca3af; font-size: 0.875rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        color: #9ca3af;
+        font-size: 0.875rem;
     }
 
     /* Grid view — now handled by FileGrid component */
 
     /* List view (DataTable) */
     .list-table-wrapper {
-        max-height: 320px; overflow-y: auto;
-        border: 1px solid #e5e7eb; border-radius: 0.375rem;
+        max-height: 320px;
+        overflow-y: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.375rem;
     }
-    :global(.dark) .list-table-wrapper { border-color: #374151; }
+
+    :global(.dark) .list-table-wrapper {
+        border-color: #374151;
+    }
+
     /* Make DataTable compact inside picker */
-    .list-table-wrapper :global(.table-container) { max-height: none !important; }
-    .list-table-wrapper :global(.table-header) { display: none; }
+    .list-table-wrapper :global(.table-container) {
+        max-height: none !important;
+    }
+
+    .list-table-wrapper :global(.table-header) {
+        display: none;
+    }
 
     /* Footer */
     .picker-footer {
-        display: flex; justify-content: flex-end; gap: 0.5rem;
-        padding: 0.75rem 1rem; border-top: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        border-top: 1px solid #e5e7eb;
     }
-    :global(.dark) .picker-footer { border-top-color: #374151; }
+
+    :global(.dark) .picker-footer {
+        border-top-color: #374151;
+    }
 
     .btn {
-        display: inline-flex; align-items: center; gap: 0.375rem;
-        padding: 0.375rem 0.875rem; font-size: 0.8125rem; font-weight: 500;
-        border-radius: 0.375rem; border: none; cursor: pointer; transition: all 0.15s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.375rem 0.875rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        border-radius: 0.375rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s;
     }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-primary { background: #1a4031; color: white; }
-    .btn-primary:hover:not(:disabled) { background: #143326; }
-    :global(.dark) .btn-primary { background: #10b981; }
-    :global(.dark) .btn-primary:hover:not(:disabled) { background: #059669; }
-    .btn-secondary { background: #e5e7eb; color: #374151; }
-    .btn-secondary:hover:not(:disabled) { background: #d1d5db; }
-    :global(.dark) .btn-secondary { background: #374151; color: #d1d5db; }
-    :global(.dark) .btn-secondary:hover:not(:disabled) { background: #4b5563; }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-primary {
+        background: #1a4031;
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: #143326;
+    }
+
+    :global(.dark) .btn-primary {
+        background: #10b981;
+    }
+
+    :global(.dark) .btn-primary:hover:not(:disabled) {
+        background: #059669;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: #d1d5db;
+    }
+
+    :global(.dark) .btn-secondary {
+        background: #374151;
+        color: #d1d5db;
+    }
+
+    :global(.dark) .btn-secondary:hover:not(:disabled) {
+        background: #4b5563;
+    }
 </style>
 

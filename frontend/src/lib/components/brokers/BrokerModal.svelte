@@ -122,83 +122,83 @@
 </script>
 
 <ModalBase
-    open={isOpen}
-    zIndex={50}
-    maxWidth="lg"
-    closeOnEscape={!loading}
-    closeOnBackdropClick={!loading}
-    onRequestClose={handleClose}
-    testId="broker-modal"
+        closeOnBackdropClick={!loading}
+        closeOnEscape={!loading}
+        maxWidth="lg"
+        onRequestClose={handleClose}
+        open={isOpen}
+        testId="broker-modal"
+        zIndex={50}
 >
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <div
-                class="flex flex-col max-h-[85vh]"
-                on:input={handleFormChange}
-        >
-            <!-- Header (sticky top) -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                    {mode === 'create' ? $_('brokers.addBroker') : $_('brokers.editBroker')}
-                </h2>
-                <button
-                        on:click={handleClose}
-                        disabled={loading}
-                        class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-                >
-                    <X size={20}/>
-                </button>
-            </div>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+            class="flex flex-col max-h-[85vh]"
+            on:input={handleFormChange}
+    >
+        <!-- Header (sticky top) -->
+        <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
+                {mode === 'create' ? $_('brokers.addBroker') : $_('brokers.editBroker')}
+            </h2>
+            <button
+                    class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                    disabled={loading}
+                    on:click={handleClose}
+            >
+                <X size={20}/>
+            </button>
+        </div>
 
-            <!-- Error message -->
-            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mx-4 mt-4 shrink-0" />
+        <!-- Error message -->
+        <InfoBanner class="mx-4 mt-4 shrink-0" dismissible message={error} ondismiss={() => error = ''} variant="error"/>
 
-            <!-- Form (scrollable area with sticky footer inside) -->
-            <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">
-                <div class="p-4 pb-0">
-                    <BrokerForm
-                            {mode}
-                            {initialData}
-                            {loading}
-                            on:submit={handleSubmit}
-                            on:cancel={handleClose}
-                    />
-                </div>
+        <!-- Form (scrollable area with sticky footer inside) -->
+        <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">
+            <div class="p-4 pb-0">
+                <BrokerForm
+                        {initialData}
+                        {loading}
+                        {mode}
+                        on:cancel={handleClose}
+                        on:submit={handleSubmit}
+                />
             </div>
         </div>
+    </div>
 </ModalBase>
 
 <!-- Discard Changes Confirmation Modal -->
 <ModalBase
-    open={showDiscardConfirm}
-    zIndex={60}
-    maxWidth="sm"
-    onRequestClose={cancelDiscard}
+        maxWidth="sm"
+        onRequestClose={cancelDiscard}
+        open={showDiscardConfirm}
+        zIndex={60}
 >
-        <div class="p-6">
-            <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
-                    <AlertTriangle size={20} class="text-amber-600 dark:text-amber-400"/>
-                </div>
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                    {$_('common.discardChanges')}
-                </h2>
+    <div class="p-6">
+        <div class="flex items-center gap-3 mb-3">
+            <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
+                <AlertTriangle class="text-amber-600 dark:text-amber-400" size={20}/>
             </div>
-            <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
-                {$_('brokers.discardChangesWarning')}
-            </p>
-            <div class="flex justify-end gap-3">
-                <button
-                        on:click={cancelDiscard}
-                        class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                    {$_('common.continueEditing')}
-                </button>
-                <button
-                        on:click={confirmDiscard}
-                        class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-                >
-                    {$_('common.discardAndClose')}
-                </button>
-            </div>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                {$_('common.discardChanges')}
+            </h2>
         </div>
+        <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
+            {$_('brokers.discardChangesWarning')}
+        </p>
+        <div class="flex justify-end gap-3">
+            <button
+                    class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                    on:click={cancelDiscard}
+            >
+                {$_('common.continueEditing')}
+            </button>
+            <button
+                    class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                    on:click={confirmDiscard}
+            >
+                {$_('common.discardAndClose')}
+            </button>
+        </div>
+    </div>
 </ModalBase>

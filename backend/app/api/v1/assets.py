@@ -309,9 +309,9 @@ async def delete_assets_bulk(
 async def list_providers(
     providers: Optional[str] = Query(
         None, description="Comma-separated provider codes to filter (default: all)"
-    ),
+        ),
     _current_user: User = Depends(get_current_user),
-):
+    ):
     """List all available asset pricing providers.
 
     Optionally filter by provider codes (comma-separated).
@@ -338,7 +338,7 @@ async def list_providers(
             schema_fields = [
                 FAProviderParamField(**field_def)
                 for field_def in instance.params_schema
-            ]
+                ]
 
             result.append(
                 FAProviderInfo(

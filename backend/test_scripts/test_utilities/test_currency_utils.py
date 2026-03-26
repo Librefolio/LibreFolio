@@ -8,13 +8,11 @@ Ensures:
 - Flag emoji are correctly assigned for major currencies
 """
 
-import pytest
-
 from backend.app.schemas.common import CRYPTO_CURRENCIES, _validate_currency_code_cached
 from backend.app.utils.currency_utils import (
     _build_currency_to_flag_map,
     list_currencies,
-)
+    )
 
 
 class TestListCurrencies:
@@ -44,7 +42,7 @@ class TestListCurrencies:
             "ADP", "AFA", "ATS", "ARA", "ARL",
             "BEF", "DEM", "FRF", "ITL", "ESP",
             "GRD", "NLG", "PTE", "FIM", "IEP",
-        ]
+            ]
         for h in historic:
             assert h not in codes, f"Historic currency {h} should not be in the list"
 
@@ -118,7 +116,7 @@ class TestCurrencyFlagMap:
             "PLN": "🇵🇱", "CZK": "🇨🇿", "HUF": "🇭🇺", "RON": "🇷🇴",
             "BGN": "🇧🇬", "TRY": "🇹🇷", "KRW": "🇰🇷", "SGD": "🇸🇬",
             "HKD": "🇭🇰", "THB": "🇹🇭", "RUB": "🇷🇺", "ILS": "🇮🇱",
-        }
+            }
         for code, exp_flag in expected.items():
             actual = fm.get(code, "?")
             assert actual == exp_flag, f"{code}: expected {exp_flag}, got {actual}"
@@ -133,4 +131,3 @@ class TestCurrencyFlagMap:
         """EUR must map to 🇪🇺 (EU flag), not any single Eurozone country."""
         fm = _build_currency_to_flag_map()
         assert fm["EUR"] == "🇪🇺"
-

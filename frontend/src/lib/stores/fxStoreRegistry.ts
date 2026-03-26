@@ -11,8 +11,8 @@
  * @module stores/fxStoreRegistry
  */
 
-import {TimeSeriesStore} from './TimeSeriesStore';
 import type {TimeSeriesPoint} from './TimeSeriesStore';
+import {TimeSeriesStore} from './TimeSeriesStore';
 import type {ChainStep} from '$lib/utils/currencyGraph';
 
 // Re-export ChainStep for consumers that import from fxStoreRegistry

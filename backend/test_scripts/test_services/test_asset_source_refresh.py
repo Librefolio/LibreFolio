@@ -25,22 +25,24 @@ def _unique(prefix: str) -> str:
 
 async def _create_asset_with_provider(
     session: AsyncSession, name: str, provider_code: str = "mockprov", identifier: str = "MOCK"
-) -> int:
+    ) -> int:
     """Helper: create asset + assign provider, return asset_id."""
     asset = Asset(display_name=name, currency="USD", asset_type=AssetType.STOCK, active=True)
     session.add(asset)
     await session.commit()
     await session.refresh(asset)
     await AssetSourceManager.bulk_assign_providers(
-        [FAProviderAssignmentItem(
-            asset_id=asset.id,
-            provider_code=provider_code,
-            identifier=identifier,
-            identifier_type=IdentifierType.UUID,
-            provider_params={},
-        )],
+        [
+            FAProviderAssignmentItem(
+                asset_id=asset.id,
+                provider_code=provider_code,
+                identifier=identifier,
+                identifier_type=IdentifierType.UUID,
+                provider_params={},
+                )
+            ],
         session,
-    )
+        )
     return asset.id
 
 
@@ -53,10 +55,12 @@ async def test_bulk_refresh_prices_orchestration():
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         asset_id = await _create_asset_with_provider(session, _unique("Refresh Test"))
 
-        payload = [FARefreshItem(
-            asset_id=asset_id,
-            date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
-        )]
+        payload = [
+            FARefreshItem(
+                asset_id=asset_id,
+                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
+                )
+            ]
         results = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         assert results is not None
@@ -72,10 +76,12 @@ async def test_refresh_single_asset_status_and_points():
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         asset_id = await _create_asset_with_provider(session, _unique("Single Status"))
 
-        payload = [FARefreshItem(
-            asset_id=asset_id,
-            date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
-        )]
+        payload = [
+            FARefreshItem(
+                asset_id=asset_id,
+                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
+                )
+            ]
         response = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         assert len(response.results) == 1
@@ -106,16 +112,16 @@ async def test_refresh_multi_asset_concurrent():
         for i in range(N_ASSETS):
             aid = await _create_asset_with_provider(
                 session, _unique(f"Concurrent_{i}"), identifier=f"CONC_{i}"
-            )
+                )
             asset_ids.append(aid)
 
         payload = [
             FARefreshItem(
                 asset_id=aid,
                 date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 5)),
-            )
+                )
             for aid in asset_ids
-        ]
+            ]
         response = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         assert len(response.results) == N_ASSETS
@@ -152,15 +158,17 @@ async def test_refresh_skipped_no_provider():
         asset = Asset(
             display_name=_unique("No Provider"),
             currency="EUR", asset_type=AssetType.BOND, active=True,
-        )
+            )
         session.add(asset)
         await session.commit()
         await session.refresh(asset)
 
-        payload = [FARefreshItem(
-            asset_id=asset.id,
-            date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
-        )]
+        payload = [
+            FARefreshItem(
+                asset_id=asset.id,
+                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
+                )
+            ]
         response = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         assert len(response.results) == 1
@@ -178,10 +186,12 @@ async def test_refresh_failed_nonexistent_asset():
     AssetProviderRegistry.auto_discover()
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        payload = [FARefreshItem(
-            asset_id=999999,
-            date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
-        )]
+        payload = [
+            FARefreshItem(
+                asset_id=999999,
+                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
+                )
+            ]
         response = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         assert len(response.results) == 1
@@ -206,7 +216,7 @@ async def test_refresh_mixed_results():
         no_prov = Asset(
             display_name=_unique("No Prov"), currency="EUR",
             asset_type=AssetType.ETF, active=True,
-        )
+            )
         session.add(no_prov)
         await session.commit()
         await session.refresh(no_prov)
@@ -218,7 +228,7 @@ async def test_refresh_mixed_results():
             FARefreshItem(asset_id=good_id, date_range=DateRangeModel(start=date(2025, 3, 1), end=date(2025, 3, 3))),
             FARefreshItem(asset_id=no_prov.id, date_range=DateRangeModel(start=date(2025, 3, 1), end=date(2025, 3, 3))),
             FARefreshItem(asset_id=fake_id, date_range=DateRangeModel(start=date(2025, 3, 1), end=date(2025, 3, 3))),
-        ]
+            ]
         response = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         assert len(response.results) == 3
@@ -242,24 +252,28 @@ async def test_refresh_currency_fallback_uses_asset_currency():
         asset = Asset(
             display_name=_unique("EUR Asset"), currency="EUR",
             asset_type=AssetType.STOCK, active=True,
-        )
+            )
         session.add(asset)
         await session.commit()
         await session.refresh(asset)
 
         await AssetSourceManager.bulk_assign_providers(
-            [FAProviderAssignmentItem(
-                asset_id=asset.id, provider_code="mockprov",
-                identifier="EUR_TEST", identifier_type=IdentifierType.UUID,
-                provider_params={},
-            )],
+            [
+                FAProviderAssignmentItem(
+                    asset_id=asset.id, provider_code="mockprov",
+                    identifier="EUR_TEST", identifier_type=IdentifierType.UUID,
+                    provider_params={},
+                    )
+                ],
             session,
-        )
+            )
 
-        payload = [FARefreshItem(
-            asset_id=asset.id,
-            date_range=DateRangeModel(start=date(2025, 4, 1), end=date(2025, 4, 2)),
-        )]
+        payload = [
+            FARefreshItem(
+                asset_id=asset.id,
+                date_range=DateRangeModel(start=date(2025, 4, 1), end=date(2025, 4, 2)),
+                )
+            ]
         response = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         assert len(response.results) == 1

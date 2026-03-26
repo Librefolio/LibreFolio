@@ -47,18 +47,28 @@ class CSSScraperProvider(AssetSourceProvider):
     @property
     def params_schema(self) -> list[dict]:
         return [
-            {"key": "current_css_selector", "type": "string", "required": True,
-             "description": "CSS selector for the price element on the web page"},
-            {"key": "currency", "type": "string", "required": True,
-             "description": "Currency code (ISO 4217, e.g. EUR, USD)"},
-            {"key": "decimal_format", "type": "select", "required": False,
-             "options": ["us", "eu"], "default": "us",
-             "description": "Number format: 'us' = 1,234.56 / 'eu' = 1.234,56"},
-            {"key": "timeout", "type": "number", "required": False, "default": 30,
-             "description": "HTTP request timeout in seconds"},
-            {"key": "user_agent", "type": "string", "required": False,
-             "default": "LibreFolio/1.0", "description": "Custom User-Agent header"},
-        ]
+            {
+                "key": "current_css_selector", "type": "string", "required": True,
+                "description": "CSS selector for the price element on the web page"
+                },
+            {
+                "key": "currency", "type": "string", "required": True,
+                "description": "Currency code (ISO 4217, e.g. EUR, USD)"
+                },
+            {
+                "key": "decimal_format", "type": "select", "required": False,
+                "options": ["us", "eu"], "default": "us",
+                "description": "Number format: 'us' = 1,234.56 / 'eu' = 1.234,56"
+                },
+            {
+                "key": "timeout", "type": "number", "required": False, "default": 30,
+                "description": "HTTP request timeout in seconds"
+                },
+            {
+                "key": "user_agent", "type": "string", "required": False,
+                "default": "LibreFolio/1.0", "description": "Custom User-Agent header"
+                },
+            ]
 
     @property
     def test_cases(self) -> list[dict]:

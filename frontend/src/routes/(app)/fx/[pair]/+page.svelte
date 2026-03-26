@@ -36,7 +36,7 @@
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultToFxDataPoint, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fxCardInversionStore';
-    import {formatSyncDetail, formatProviderText} from '$lib/utils/providerHelpers';
+    import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
 
     // =========================================================================
     // Page data
@@ -359,7 +359,8 @@
                         const results = (resp as any)?.results || [];
                         const points = results.map((r: any) => apiResultToFxDataPoint(r));
                         overlayStore.merge(points);
-                    } catch { /* best effort */ }
+                    } catch { /* best effort */
+                    }
                 }
             }
         }
@@ -388,7 +389,14 @@
                         }
                     }));
                 } else if (r.status === 'partial') {
-                    let msg = tr('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}});
+                    let msg = tr('fx.sync.toastPartial', {
+                        values: {
+                            pair: label,
+                            fetched: r.points_fetched ?? 0,
+                            changed: r.points_changed ?? 0,
+                            provider: formatProviderText(r.provider_used)
+                        }
+                    });
                     msg += formatSyncDetail(r, tr);
                     toasts.warning(msg);
                 } else if (r.status === 'skipped') {
@@ -439,9 +447,23 @@
                 const label = slug.replace('-', '/');
                 const tr = get(t);
                 if (r.status === 'ok') {
-                    toasts.success(tr('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}}));
+                    toasts.success(tr('fx.sync.toastOk', {
+                        values: {
+                            pair: label,
+                            fetched: r.points_fetched ?? 0,
+                            changed: r.points_changed ?? 0,
+                            provider: formatProviderText(r.provider_used)
+                        }
+                    }));
                 } else if (r.status === 'partial') {
-                    let msg = tr('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}});
+                    let msg = tr('fx.sync.toastPartial', {
+                        values: {
+                            pair: label,
+                            fetched: r.points_fetched ?? 0,
+                            changed: r.points_changed ?? 0,
+                            provider: formatProviderText(r.provider_used)
+                        }
+                    });
                     msg += formatSyncDetail(r, tr);
                     toasts.warning(msg);
                 } else if (r.status === 'skipped') {
@@ -469,7 +491,8 @@
                     const results = (resp as any)?.results || [];
                     const points = results.map((r: any) => apiResultToFxDataPoint(r));
                     store.merge(points);
-                } catch { /* best effort */ }
+                } catch { /* best effort */
+                }
                 overlayDataVersion++;
             }
         } catch (e: any) {
@@ -586,8 +609,8 @@
     <!-- ======================================================================= -->
     <div class="flex items-center gap-3" data-testid="fx-detail-header">
         <button
-                data-testid="fx-detail-back-btn"
                 class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors"
+                data-testid="fx-detail-back-btn"
                 onclick={() => goto('/fx')}
                 title={$t('fxDetail.backToList')}
         >
@@ -600,8 +623,8 @@
             <span class="text-2xl">{quoteFlag}</span>
             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayQuote}</h2>
             <button
-                    data-testid="fx-detail-swap-btn"
                     class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    data-testid="fx-detail-swap-btn"
                     onclick={handleSwapDirection}
                     title={$t('common.swapDirection')}
             >
@@ -629,18 +652,18 @@
     <!-- ======================================================================= -->
     <div
             bind:this={filterBarRef}
-            data-testid="fx-detail-filter-bar"
             class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
                {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
+            data-testid="fx-detail-filter-bar"
     >
         <!-- Filters block -->
         <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-start'}">
             <!-- DateRangePicker -->
             <div class="max-w-md">
                 <DateRangePicker
-                        bind:start={dateStart}
-                        bind:end={dateEnd}
                         bind:activePreset
+                        bind:end={dateEnd}
+                        bind:start={dateStart}
                         compact={true}
                         onchange={handleDateRangeChange}
                 />
@@ -684,8 +707,8 @@
             </div>
             <!-- Row 1, Col 2: Providers -->
             <button
-                    data-testid="fx-detail-provider-btn"
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    data-testid="fx-detail-provider-btn"
                     onclick={() => showProviderModal = true}
             >
                 <Wrench size={14}/>
@@ -693,24 +716,24 @@
             </button>
             <!-- Row 2, Col 1: Sync -->
             <button
-                    data-testid="fx-detail-sync-btn"
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
                            {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
-                    onclick={handleSync}
+                    data-testid="fx-detail-sync-btn"
                     disabled={syncing || isManualOnly}
+                    onclick={handleSync}
                     title={isManualOnly ? $t('fxDetail.syncDisabledManual') : ''}
             >
-                <RotateCw size={14} class={syncing ? 'animate-spin' : ''}/>
+                <RotateCw class={syncing ? 'animate-spin' : ''} size={14}/>
                 {#if showActionLabels}<span>{syncing ? $t('fx.syncing') : $t('common.sync')}</span>{/if}
             </button>
             <!-- Row 2, Col 2: Refresh -->
             <button
-                    data-testid="fx-detail-refresh-btn"
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleRefresh}
+                    data-testid="fx-detail-refresh-btn"
                     disabled={loading}
+                    onclick={handleRefresh}
             >
-                <RefreshCw size={14} class={loading ? 'animate-spin' : ''}/>
+                <RefreshCw class={loading ? 'animate-spin' : ''} size={14}/>
                 {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
         </div>
@@ -721,15 +744,15 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
-                data-testid="fx-detail-aesthetics-toggle"
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+                data-testid="fx-detail-aesthetics-toggle"
                 onclick={() => showAesthetics = !showAesthetics}
         >
             <span class="flex items-center gap-2">
-                <Settings size={15} class="text-libre-green"/>
+                <Settings class="text-libre-green" size={15}/>
                 {$t('common.aesthetics')}
             </span>
-            <ChevronDown size={15} class="transition-transform {showAesthetics ? 'rotate-180' : ''}"/>
+            <ChevronDown class="transition-transform {showAesthetics ? 'rotate-180' : ''}" size={15}/>
         </button>
         {#if showAesthetics}
             <div data-testid="fx-detail-aesthetics-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
@@ -750,7 +773,7 @@
     <!-- ======================================================================= -->
     <!-- Chart with overlay action buttons (Edit + Add Measure) -->
     <!-- ======================================================================= -->
-    <div data-testid="fx-detail-chart" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart">
         {#if loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
@@ -931,28 +954,28 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
-                data-testid="fx-detail-measures-toggle"
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+                data-testid="fx-detail-measures-toggle"
                 onclick={() => showMeasures = !showMeasures}
         >
             <span class="flex items-center gap-2">
-                <Ruler size={15} class="text-violet-500"/>
+                <Ruler class="text-violet-500" size={15}/>
                 {$t('fxDetail.measures')}
                 {#if measureMode}
                     <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
             </span>
-            <ChevronDown size={15} class="transition-transform {showMeasures ? 'rotate-180' : ''}"/>
+            <ChevronDown class="transition-transform {showMeasures ? 'rotate-180' : ''}" size={15}/>
         </button>
         <!-- Single MeasurePanel instance — always mounted, hidden via CSS to preserve state -->
-        <div data-testid="fx-detail-measures-panel" class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"}>
+        <div class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"} data-testid="fx-detail-measures-panel">
             <MeasurePanel
                     bind:this={measurePanel}
                     chartData={lineData}
+                    onmeasuremodechange={(active) => measureMode = active}
+                    onmeasureschange={(m) => measureSignals = m}
                     overlaySignals={overlaySignals}
                     pairLabel={`👑 ${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
-                    onmeasureschange={(m) => measureSignals = m}
-                    onmeasuremodechange={(active) => measureMode = active}
                     {viewMode}
             />
         </div>
@@ -963,15 +986,15 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
-                data-testid="fx-detail-signals-toggle"
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+                data-testid="fx-detail-signals-toggle"
                 onclick={() => showSignals = !showSignals}
         >
             <span class="flex items-center gap-2">
-                <TrendingUp size={15} class="text-blue-500"/>
+                <TrendingUp class="text-blue-500" size={15}/>
                 {$t('fxDetail.signals')}
             </span>
-            <ChevronDown size={15} class="transition-transform {showSignals ? 'rotate-180' : ''}"/>
+            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15}/>
         </button>
         {#if showSignals}
             <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
@@ -992,29 +1015,29 @@
     <!-- Provider Configuration Modal (reuses FxPairAddModal in editMode) -->
     <!-- ======================================================================= -->
     <div data-testid="fx-detail-provider-modal">
-    <FxPairAddModal
-            bind:open={showProviderModal}
-            editMode={true}
-            editBase={data.canonicalBase}
-            editQuote={data.canonicalQuote}
-            {editRoutes}
-            dateStart={dateStart}
-            dateEnd={dateEnd}
-            oncreated={handleProviderModalCreated}
-            onclose={() => showProviderModal = false}
-    />
+        <FxPairAddModal
+                bind:open={showProviderModal}
+                dateEnd={dateEnd}
+                dateStart={dateStart}
+                editBase={data.canonicalBase}
+                editMode={true}
+                editQuote={data.canonicalQuote}
+                {editRoutes}
+                onclose={() => showProviderModal = false}
+                oncreated={handleProviderModalCreated}
+        />
     </div>
 
     <!-- Confirm modal for swap direction while editing -->
     <ConfirmModal
+            cancelText={$t('common.cancel')}
+            confirmText={$t('common.continue')}
+            message={$t('fxDetail.swapConfirmMessage')}
+            onCancel={() => showSwapConfirm = false}
+            onConfirm={() => { showSwapConfirm = false; doSwap(); }}
             open={showSwapConfirm}
             title={$t('fxDetail.swapConfirmTitle')}
-            message={$t('fxDetail.swapConfirmMessage')}
-            confirmText={$t('common.continue')}
-            cancelText={$t('common.cancel')}
             warning={true}
-            onConfirm={() => { showSwapConfirm = false; doSwap(); }}
-            onCancel={() => showSwapConfirm = false}
     />
 </div>
 

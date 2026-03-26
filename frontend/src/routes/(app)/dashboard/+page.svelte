@@ -2,7 +2,7 @@
     import {_} from '$lib/i18n';
     import {currentUser} from '$lib/stores/auth';
     import {userSettings} from '$lib/stores/settings';
-    import {ArrowRightLeft, BarChart3, Briefcase, Coins, PieChart, TrendingUp, Wallet, User} from 'lucide-svelte';
+    import {ArrowRightLeft, BarChart3, Briefcase, Coins, PieChart, TrendingUp, Wallet} from 'lucide-svelte';
 
     // Get avatar URL from settings
     $: avatarUrl = $userSettings?.avatar_url as string | null | undefined;
@@ -60,7 +60,7 @@
                 </div>
                 <div class="hidden sm:flex items-center justify-center w-16 h-16 bg-white/20 rounded-full overflow-hidden">
                     {#if avatarUrl}
-                        <img src={avatarUrl} alt="Avatar" class="w-full h-full object-cover" />
+                        <img src={avatarUrl} alt="Avatar" class="w-full h-full object-cover"/>
                     {:else}
                         <span class="text-3xl font-bold">
                             {$currentUser.username.charAt(0).toUpperCase()}

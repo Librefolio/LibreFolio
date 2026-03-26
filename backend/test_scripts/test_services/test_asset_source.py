@@ -477,10 +477,12 @@ async def test_get_prices_with_backfill(asset_ids: list[int]):
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         # Query range with gaps via bulk API
         results = await AssetSourceManager.get_prices_bulk(
-            requests=[FAPriceQueryItem(
-                asset_id=asset_ids[0],
-                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 5)),
-            )],
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=asset_ids[0],
+                    date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 5)),
+                    )
+                ],
             session=session,
             )
         prices = results[0].prices
@@ -565,10 +567,12 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
 
         # Query range Day 1-4 (Day 3 and 4 should be backfilled)
         results = await AssetSourceManager.get_prices_bulk(
-            requests=[FAPriceQueryItem(
-                asset_id=test_asset_id,
-                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 4)),
-            )],
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=test_asset_id,
+                    date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 4)),
+                    )
+                ],
             session=session,
             )
         prices = results[0].prices
@@ -649,10 +653,12 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
 
         # Query range with no data
         results = await AssetSourceManager.get_prices_bulk(
-            requests=[FAPriceQueryItem(
-                asset_id=test_asset_id,
-                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 4)),
-            )],
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=test_asset_id,
+                    date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 4)),
+                    )
+                ],
             session=session,
             )
         prices = results[0].prices
@@ -722,10 +728,12 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
 
         # Step 1: SYNC with invalid provider → should fail gracefully, no crash
         sync_response = await AssetSourceManager.bulk_refresh_prices(
-            requests=[FARefreshItem(
-                asset_id=test_asset_id,
-                date_range=DateRangeModel(start=date(2025, 1, 10), end=date(2025, 1, 10)),
-            )],
+            requests=[
+                FARefreshItem(
+                    asset_id=test_asset_id,
+                    date_range=DateRangeModel(start=date(2025, 1, 10), end=date(2025, 1, 10)),
+                    )
+                ],
             session=session,
             )
 
@@ -735,10 +743,12 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
 
         # Step 2: QUERY from DB → should still return the manual price (query is provider-agnostic)
         query_results = await AssetSourceManager.get_prices_bulk(
-            requests=[FAPriceQueryItem(
-                asset_id=test_asset_id,
-                date_range=DateRangeModel(start=date(2025, 1, 10), end=date(2025, 1, 10)),
-            )],
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=test_asset_id,
+                    date_range=DateRangeModel(start=date(2025, 1, 10), end=date(2025, 1, 10)),
+                    )
+                ],
             session=session,
             )
         prices = query_results[0].prices

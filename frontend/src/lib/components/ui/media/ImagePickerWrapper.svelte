@@ -38,7 +38,7 @@
 
     const dispatch = createEventDispatcher<{
         /** Emitted when a URL is selected (from URL tab, existing tab, or after upload+crop) */
-        change: {url: string};
+        change: { url: string };
         /** Emitted when the picker is cancelled */
         cancel: void;
     }>();
@@ -48,7 +48,7 @@
     let imageEditorFile: File | null = null;
 
     // Handle asset picker selection (URL or existing file)
-    function handlePickerSelect(event: CustomEvent<{url: string}>) {
+    function handlePickerSelect(event: CustomEvent<{ url: string }>) {
         const url = event.detail.url;
         if (!url || url === '__upload__') return;
         open = false;
@@ -56,7 +56,7 @@
     }
 
     // Handle asset picker upload request
-    function handlePickerUpload(event: CustomEvent<{file: File}>) {
+    function handlePickerUpload(event: CustomEvent<{ file: File }>) {
         imageEditorFile = event.detail.file;
         // Hide picker temporarily, show image editor
         open = false;
@@ -70,7 +70,7 @@
     }
 
     // Handle image editor complete (upload done, got URL)
-    function handleEditorComplete(event: CustomEvent<{url: string | null; file: File}>) {
+    function handleEditorComplete(event: CustomEvent<{ url: string | null; file: File }>) {
         showImageEditor = false;
         imageEditorFile = null;
         if (event.detail.url) {
@@ -87,30 +87,30 @@
     }
 
     // Handle image editor error
-    function handleEditorError(event: CustomEvent<{message: string}>) {
+    function handleEditorError(event: CustomEvent<{ message: string }>) {
         console.error('ImagePickerWrapper: upload error:', event.detail.message);
     }
 </script>
 
 <!-- Asset Picker Modal -->
 <AssetPickerModal
-    {open}
-    {title}
-    {filterImages}
-    {initialUrl}
-    {circularPreview}
-    on:select={handlePickerSelect}
-    on:upload={handlePickerUpload}
-    on:cancel={handlePickerCancel}
+        {circularPreview}
+        {filterImages}
+        {initialUrl}
+        on:cancel={handlePickerCancel}
+        on:select={handlePickerSelect}
+        on:upload={handlePickerUpload}
+        {open}
+        {title}
 />
 
 <!-- Image Edit Modal (shown when user uploads from picker) -->
 <ImageEditModal
-    open={showImageEditor}
-    file={imageEditorFile}
-    {preset}
-    on:complete={handleEditorComplete}
-    on:cancel={handleEditorCancel}
-    on:error={handleEditorError}
+        file={imageEditorFile}
+        on:cancel={handleEditorCancel}
+        on:complete={handleEditorComplete}
+        on:error={handleEditorError}
+        open={showImageEditor}
+        {preset}
 />
 

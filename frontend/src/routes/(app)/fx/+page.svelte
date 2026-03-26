@@ -7,14 +7,13 @@
      * global abs/% slider toggle, Sync All, Refresh All, Add Pair.
      */
     import {onMount} from 'svelte';
-    import {goto} from '$app/navigation';
-    import {_, locale} from '$lib/i18n';
+    import {_} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
-    import {Coins, Plus, RefreshCw, RotateCw, Settings, X} from 'lucide-svelte';
+    import {ArrowLeftRight, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
-    import FxTable from '$lib/components/fx/FxTable.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
+    import FxTable from '$lib/components/fx/FxTable.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
     import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
@@ -23,28 +22,16 @@
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
-    import {ArrowLeftRight, Trash2} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
-    import {
-        getGlobalSettings, setGlobalSettings,
-        getSettingsForPair, setPairSettings, getSettingsVersion,
-        type ChartSettings,
-    } from '$lib/stores/chartSettingsStore.svelte';
-    import {
-        signalFromConfig,
-        type RenderedSignal,
-    } from '$lib/charts/signals';
+    import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings,} from '$lib/stores/chartSettingsStore.svelte';
+    import {type RenderedSignal, signalFromConfig,} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {
-        createPairSlug, getFxStore, invalidateAllFxStores, removeFxStore,
-        apiResultToFxDataPoint,
-        type FxDataPoint, type FxPairConfig
-    } from '$lib/stores/fxStoreRegistry';
+    import {apiResultToFxDataPoint, createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {isCardInverted} from '$lib/stores/fxCardInversionStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {formatSyncDetail, formatProviderText} from '$lib/utils/providerHelpers';
+    import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
 
     // =========================================================================
@@ -68,7 +55,11 @@
     // Filters
     let filterCurrency1 = $state('');
     let filterCurrency2 = $state('');
-    let dateStart = $state((() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10); })());
+    let dateStart = $state((() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 3);
+        return d.toISOString().slice(0, 10);
+    })());
     let dateEnd = $state(new Date().toISOString().slice(0, 10));
     let activePreset: any = $state('3M');
     let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
@@ -82,14 +73,14 @@
 
     // Delete (single)
     let deleteDialogOpen = $state(false);
-    let deletingPair = $state<{base: string; quote: string; slug: string} | null>(null);
+    let deletingPair = $state<{ base: string; quote: string; slug: string } | null>(null);
     let deleteLoading = $state(false);
 
     // Delete (bulk)
     let bulkDeleteDialogOpen = $state(false);
-    let deletingPairs = $state<Array<{base: string; quote: string; slug: string}>>([]);
+    let deletingPairs = $state<Array<{ base: string; quote: string; slug: string }>>([]);
     let bulkDeleteLoading = $state(false);
-    let bulkFxDeleteResults = $state<{label: string; success: boolean; detail?: string}[]>([]);
+    let bulkFxDeleteResults = $state<{ label: string; success: boolean; detail?: string }[]>([]);
 
     // Modals
     let addModalOpen = $state(false);
@@ -114,14 +105,14 @@
 
     // Delta periods for table columns
     const DELTA_PERIODS = [
-        { key: '1W', days: 7 },
-        { key: '1M', days: 30 },
-        { key: '3M', days: 91 },
-        { key: '6M', days: 182 },
-        { key: '1Y', days: 365 },
-        { key: '2Y', days: 730 },
-        { key: '3Y', days: 1095 },
-        { key: '5Y', days: 1825 },
+        {key: '1W', days: 7},
+        {key: '1M', days: 30},
+        {key: '3M', days: 91},
+        {key: '6M', days: 182},
+        {key: '1Y', days: 365},
+        {key: '2Y', days: 730},
+        {key: '3Y', days: 1095},
+        {key: '5Y', days: 1825},
     ] as const;
 
     // Which delta periods are visible for the selected date range
@@ -142,7 +133,10 @@
         // Find closest point at or before target date (backward-fill)
         let refPoint: FxDataPoint | null = null;
         for (let i = data.length - 1; i >= 0; i--) {
-            if (data[i].date <= targetStr) { refPoint = data[i]; break; }
+            if (data[i].date <= targetStr) {
+                refPoint = data[i];
+                break;
+            }
         }
         if (!refPoint || refPoint.rate === 0 || lastPoint.rate === 0) return null;
         const refVal = inverted ? 1 / refPoint.rate : refPoint.rate;
@@ -156,21 +150,21 @@
     // Allowed currencies for filter 1: if filter 2 is set, only currencies paired with filter 2
     // Exclude the value currently selected in filter 2
     let allowedForFilter1 = $derived((filterCurrency2
-        ? [...new Set(pairs
-            .filter(p => p.config.base === filterCurrency2 || p.config.quote === filterCurrency2)
-            .flatMap(p => [p.config.base, p.config.quote])
-        )]
-        : configuredCurrencies
+            ? [...new Set(pairs
+                .filter(p => p.config.base === filterCurrency2 || p.config.quote === filterCurrency2)
+                .flatMap(p => [p.config.base, p.config.quote])
+            )]
+            : configuredCurrencies
     ).filter(c => c !== filterCurrency2).sort());
 
     // Allowed currencies for filter 2: if filter 1 is set, only currencies paired with filter 1
     // Exclude the value currently selected in filter 1
     let allowedForFilter2 = $derived((filterCurrency1
-        ? [...new Set(pairs
-            .filter(p => p.config.base === filterCurrency1 || p.config.quote === filterCurrency1)
-            .flatMap(p => [p.config.base, p.config.quote])
-        )]
-        : configuredCurrencies
+            ? [...new Set(pairs
+                .filter(p => p.config.base === filterCurrency1 || p.config.quote === filterCurrency1)
+                .flatMap(p => [p.config.base, p.config.quote])
+            )]
+            : configuredCurrencies
     ).filter(c => c !== filterCurrency1).sort());
 
     // Filtered pairs
@@ -340,7 +334,7 @@
     // Chart Settings Helpers
     // =========================================================================
 
-    function handleCardSettings(detail: {slug: string}) {
+    function handleCardSettings(detail: { slug: string }) {
         settingsTargetSlug = detail.slug;
         settingsModalOpen = true;
     }
@@ -408,7 +402,7 @@
         await fetchAllPairData();
     }
 
-    async function handleRefreshPair(detail: {slug: string}) {
+    async function handleRefreshPair(detail: { slug: string }) {
         const idx = pairs.findIndex(p => p.config.slug === detail.slug);
         if (idx < 0) return;
         const store = getFxStore(detail.slug);
@@ -416,7 +410,7 @@
         await fetchPairData(idx);
     }
 
-    function handleDeletePair(detail: {base: string; quote: string; slug: string}) {
+    function handleDeletePair(detail: { base: string; quote: string; slug: string }) {
         deletingPair = detail;
         deleteDialogOpen = true;
     }
@@ -449,13 +443,13 @@
             if (filterCurrency2 && !remaining.has(filterCurrency2)) filterCurrency2 = '';
 
             const pairLabel = deletingPair.slug.replace('-', '/');
-            toasts.success($_('fx.delete.toastOk', { values: { pair: pairLabel, count: rateCount } }));
+            toasts.success($_('fx.delete.toastOk', {values: {pair: pairLabel, count: rateCount}}));
 
             deleteDialogOpen = false;
             deletingPair = null;
         } catch (e: any) {
             console.error('Failed to delete pair:', e);
-            toasts.error($_('fx.delete.toastFailed', { values: { pair: deletingPair?.slug?.replace('-', '/') ?? '' } }));
+            toasts.error($_('fx.delete.toastFailed', {values: {pair: deletingPair?.slug?.replace('-', '/') ?? ''}}));
         } finally {
             deleteLoading = false;
         }
@@ -512,7 +506,7 @@
     async function confirmBulkDelete() {
         if (deletingPairs.length === 0) return;
         bulkDeleteLoading = true;
-        const perPairResults: {label: string; success: boolean; detail?: string}[] = [];
+        const perPairResults: { label: string; success: boolean; detail?: string }[] = [];
         try {
             for (const pair of deletingPairs) {
                 try {
@@ -530,7 +524,7 @@
                     perPairResults.push({
                         label: `${pair.base}/${pair.quote}`,
                         success: true,
-                        detail: $_('fx.delete.resultDeleted', { values: { count: rateCount } }),
+                        detail: $_('fx.delete.resultDeleted', {values: {count: rateCount}}),
                     });
                 } catch (pairErr: any) {
                     perPairResults.push({
@@ -567,7 +561,7 @@
         selectedFxRows = [];
     }
 
-    async function handleSyncPair(detail: {slug: string; base: string; quote: string}) {
+    async function handleSyncPair(detail: { slug: string; base: string; quote: string }) {
         const {slug} = detail;
         const idx = pairs.findIndex(p => p.config.slug === slug);
         if (idx < 0) return;
@@ -583,9 +577,23 @@
                 const label = slug.replace('-', '/');
                 const t = get(_);
                 if (r.status === 'ok') {
-                    toasts.success(t('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}}));
+                    toasts.success(t('fx.sync.toastOk', {
+                        values: {
+                            pair: label,
+                            fetched: r.points_fetched ?? 0,
+                            changed: r.points_changed ?? 0,
+                            provider: formatProviderText(r.provider_used)
+                        }
+                    }));
                 } else if (r.status === 'partial') {
-                    let msg = t('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: formatProviderText(r.provider_used)}});
+                    let msg = t('fx.sync.toastPartial', {
+                        values: {
+                            pair: label,
+                            fetched: r.points_fetched ?? 0,
+                            changed: r.points_changed ?? 0,
+                            provider: formatProviderText(r.provider_used)
+                        }
+                    });
                     msg += formatSyncDetail(r, t);
                     toasts.warning(msg);
                 } else if (r.status === 'skipped') {
@@ -607,7 +615,7 @@
         }
     }
 
-    async function handlePairCreated(detail: {base: string; quote: string; hasRealProvider: boolean}) {
+    async function handlePairCreated(detail: { base: string; quote: string; hasRealProvider: boolean }) {
         addModalOpen = false;
         // Reload pair sources and fetch data (sync already done by modal)
         await loadPairSources();
@@ -630,7 +638,8 @@
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$_('fx.title')}
                 {#if pairs.length > 0}
-                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{pairs.length}</span>
+                    <span data-testid="fx-pair-count-badge"
+                          class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{pairs.length}</span>
                 {/if}
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
@@ -638,23 +647,23 @@
         <div class="flex items-center gap-2">
             {#if viewMode === 'list' && selectedFxRows.length > 0}
                 <DataTableToolbar
-                    selectedCount={selectedFxRows.length}
-                    bulkActions={[
+                        selectedCount={selectedFxRows.length}
+                        bulkActions={[
                         { id: 'sync', icon: RotateCw, label: () => $_('common.sync'), onClick: () => handleBulkSyncFx() },
                         { id: 'refresh', icon: RefreshCw, label: () => $_('common.refresh'), onClick: () => handleBulkRefreshFx() },
                         { id: 'invert', icon: ArrowLeftRight, label: () => $_('common.swapDirection'), onClick: () => handleBulkInvertFx() },
                         { id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteFx() },
                     ]}
-                    onClearSelection={() => { fxTableComponent?.getTableRef()?.clearSelection(); selectedFxRows = []; }}
+                        onClearSelection={() => { fxTableComponent?.getTableRef()?.clearSelection(); selectedFxRows = []; }}
                 />
             {/if}
-            <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
+            <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode"/>
             <button
-                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
-                onclick={handleAddPair}
-                data-testid="fx-add-pair-button"
+                    class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
+                    data-testid="fx-add-pair-button"
+                    onclick={handleAddPair}
             >
-                <Plus size={16} />
+                <Plus size={16}/>
                 {$_('fx.actions.addPair')}
             </button>
         </div>
@@ -670,8 +679,8 @@
                    [ currency-filters ]
                    [ actions-row      ] -->
     <div
-        bind:this={filterBarRef}
-        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
+            bind:this={filterBarRef}
+            class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
                {layoutMode === 'mobile' ? 'flex-col items-center'
                 : layoutMode === 'tablet-s' ? 'flex-row items-start justify-between'
                 : 'flex-row items-center justify-between'}"
@@ -686,11 +695,11 @@
             <!-- DateRangePicker -->
             <div class="max-w-md" data-testid="fx-date-range-picker">
                 <DateRangePicker
-                    bind:start={dateStart}
-                    bind:end={dateEnd}
-                    bind:activePreset
-                    compact={true}
-                    onchange={handleDateRangeChange}
+                        bind:activePreset
+                        bind:end={dateEnd}
+                        bind:start={dateStart}
+                        compact={true}
+                        onchange={handleDateRangeChange}
                 />
             </div>
 
@@ -698,12 +707,11 @@
             <div class="flex items-center gap-3">
                 <div class="w-40" data-testid="fx-currency-filter">
                     <CurrencySearchSelect
-                        bind:value={filterCurrency1}
-                        includeAll={true}
-                        allowedCurrencies={allowedForFilter1}
-                        placeholder={$_('fx.filter.filterCurrency')}
-                        maxVisibleItems={6}
-                        onchange={(v) => {
+                            allowedCurrencies={allowedForFilter1}
+                            bind:value={filterCurrency1}
+                            includeAll={true}
+                            maxVisibleItems={6}
+                            onchange={(v) => {
                             if (v === '' && filterCurrency2) {
                                 filterCurrency1 = filterCurrency2;
                                 filterCurrency2 = '';
@@ -714,29 +722,30 @@
                                 }
                             }
                         }}
+                            placeholder={$_('fx.filter.filterCurrency')}
                     />
                 </div>
                 <div class="w-40 transition-opacity {filterCurrency1 ? '' : 'opacity-50'}" data-testid="fx-currency-filter">
                     <CurrencySearchSelect
-                        bind:value={filterCurrency2}
-                        includeAll={true}
-                        allowedCurrencies={allowedForFilter2}
-                        disabled={!filterCurrency1}
-                        placeholder={$_('fx.filter.secondCurrency')}
-                        maxVisibleItems={6}
+                            allowedCurrencies={allowedForFilter2}
+                            bind:value={filterCurrency2}
+                            disabled={!filterCurrency1}
+                            includeAll={true}
+                            maxVisibleItems={6}
+                            placeholder={$_('fx.filter.secondCurrency')}
                     />
                 </div>
                 <!-- Reset filters button -->
                 <button
-                    class="p-1.5 rounded-md transition-colors {filterCurrency1
+                        class="p-1.5 rounded-md transition-colors {filterCurrency1
                         ? 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400'
                         : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}"
-                    onclick={() => { filterCurrency1 = ''; filterCurrency2 = ''; }}
-                    disabled={!filterCurrency1}
-                    title={$_('fx.filter.resetFilters')}
-                    data-testid="fx-reset-filters"
+                        data-testid="fx-reset-filters"
+                        disabled={!filterCurrency1}
+                        onclick={() => { filterCurrency1 = ''; filterCurrency2 = ''; }}
+                        title={$_('fx.filter.resetFilters')}
                 >
-                    <X size={16} />
+                    <X size={16}/>
                 </button>
             </div>
         </div>
@@ -749,48 +758,50 @@
         >
             <!-- Top-left: Abs/% toggle in grid mode, ColumnVisibility in table mode -->
             {#if viewMode === 'list'}
-                <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels} />
+                <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels}/>
             {:else}
                 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
                             ? 'bg-libre-green text-white'
                             : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { globalViewMode = 'absolute'; }}
-                    >Abs</button>
+                            onclick={() => { globalViewMode = 'absolute'; }}
+                    >Abs
+                    </button>
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
                             ? 'bg-libre-green text-white'
                             : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { globalViewMode = 'percentage'; }}
-                    >%</button>
+                            onclick={() => { globalViewMode = 'percentage'; }}
+                    >%
+                    </button>
                 </div>
             {/if}
             <!-- Settings -->
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={handleGlobalSettings}
-                data-testid="fx-chart-settings-button"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    data-testid="fx-chart-settings-button"
+                    onclick={handleGlobalSettings}
             >
-                <Settings size={14} />
+                <Settings size={14}/>
                 {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
             </button>
             <!-- Sync All -->
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={handleSyncAll}
-                data-testid="fx-sync-all-button"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    data-testid="fx-sync-all-button"
+                    onclick={handleSyncAll}
             >
-                <RotateCw size={14} />
+                <RotateCw size={14}/>
                 {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={handleRefreshAll}
-                data-testid="fx-refresh-all-button"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    data-testid="fx-refresh-all-button"
+                    onclick={handleRefreshAll}
             >
-                <RefreshCw size={14} />
+                <RefreshCw size={14}/>
                 {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
             </button>
         </div>
@@ -811,8 +822,8 @@
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
             <p class="text-red-600 dark:text-red-400">{error}</p>
             <button
-                class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                onclick={loadPairSources}
+                    class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    onclick={loadPairSources}
             >
                 {$_('common.retry')}
             </button>
@@ -826,10 +837,10 @@
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noPairsTitle')}</h3>
                 <p class="text-gray-500 dark:text-gray-400 mb-4">{$_('fx.empty.noPairsDesc')}</p>
                 <button
-                    class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                    onclick={handleAddPair}
+                        class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                        onclick={handleAddPair}
                 >
-                    <Plus size={16} class="inline mr-1" />
+                    <Plus size={16} class="inline mr-1"/>
                     {$_('fx.empty.addFirstPair')}
                 </button>
             {:else}
@@ -842,97 +853,98 @@
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {#each filteredPairs as pair (pair.config.slug)}
                 <FxCard
-                    base={pair.config.base}
-                    quote={pair.config.quote}
-                    slug={pair.config.slug}
-                    data={pair.data}
-                    loading={pair.loading}
-                    manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
-                    {globalViewMode}
-                    chartSettings={getSettingsForPair(pair.config.slug)}
-                    renderSignals={(chartData, vm) => getRenderedSignals(pair.config.slug, chartData, vm)}
-                    ondelete={handleDeletePair}
-                    onrefresh={handleRefreshPair}
-                    onsync={handleSyncPair}
-                    onsettings={handleCardSettings}
+                        base={pair.config.base}
+                        quote={pair.config.quote}
+                        slug={pair.config.slug}
+                        data={pair.data}
+                        loading={pair.loading}
+                        manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
+                        {globalViewMode}
+                        chartSettings={getSettingsForPair(pair.config.slug)}
+                        renderSignals={(chartData, vm) => getRenderedSignals(pair.config.slug, chartData, vm)}
+                        ondelete={handleDeletePair}
+                        onrefresh={handleRefreshPair}
+                        onsync={handleSyncPair}
+                        onsettings={handleCardSettings}
                 />
             {/each}
         </div>
     {:else}
         <!-- Table View -->
         <FxTable
-            bind:this={fxTableComponent}
-            data={fxTableRows}
-            loading={false}
-            {visiblePeriods}
-            onsync={handleSyncPair}
-            onrefresh={handleRefreshPair}
-            ondelete={handleDeletePair}
-            onselectionchange={(rows) => { selectedFxRows = rows; }}
+                bind:this={fxTableComponent}
+                data={fxTableRows}
+                loading={false}
+                {visiblePeriods}
+                onsync={handleSyncPair}
+                onrefresh={handleRefreshPair}
+                ondelete={handleDeletePair}
+                onselectionchange={(rows) => { selectedFxRows = rows; }}
         />
     {/if}
 </div>
 
 <!-- Delete Confirm Dialog (single) -->
 <ConfirmModal
-    open={deleteDialogOpen}
-    title={$_('fx.deletePairTitle')}
-    message={$_('fx.deletePairQuestion', {values: {pair: `${deletingPair?.base ?? ''}/${deletingPair?.quote ?? ''}`}})}
-    description={$_('fx.deletePairWarning')}
-    confirmText={$_('common.delete')}
-    danger={true}
-    onConfirm={confirmDelete}
-    onCancel={() => { deleteDialogOpen = false; deletingPair = null; }}
+        confirmText={$_('common.delete')}
+        danger={true}
+        description={$_('fx.deletePairWarning')}
+        message={$_('fx.deletePairQuestion', {values: {pair: `${deletingPair?.base ?? ''}/${deletingPair?.quote ?? ''}`}})}
+        onCancel={() => { deleteDialogOpen = false; deletingPair = null; }}
+        onConfirm={confirmDelete}
+        open={deleteDialogOpen}
+        title={$_('fx.deletePairTitle')}
 />
 
 <!-- Delete Confirm Dialog (bulk) -->
 <ConfirmModal
-    open={bulkDeleteDialogOpen}
-    title={$_('fx.deletePairTitle')}
-    message={$_('fx.deletePairQuestion', {values: {pair: `${deletingPairs.length} pairs`}})}
-    description={$_('fx.deletePairWarning')}
-    items={deletingPairs.map(p => `${getCurrencyInfo(p.base).flag_emoji} ${p.base} / ${getCurrencyInfo(p.quote).flag_emoji} ${p.quote}`)}
-    itemsLabel={`${deletingPairs.length} pairs`}
-    confirmText={$_('common.delete')}
-    danger={true}
-    results={bulkFxDeleteResults}
-    onConfirm={confirmBulkDelete}
-    onCancel={closeBulkFxDeleteDialog}
+        confirmText={$_('common.delete')}
+        danger={true}
+        description={$_('fx.deletePairWarning')}
+        items={deletingPairs.map(p => `${getCurrencyInfo(p.base).flag_emoji} ${p.base} / ${getCurrencyInfo(p.quote).flag_emoji} ${p.quote}`)}
+        itemsLabel={`${deletingPairs.length} pairs`}
+        message={$_('fx.deletePairQuestion', {values: {pair: `${deletingPairs.length} pairs`}})}
+        onCancel={closeBulkFxDeleteDialog}
+        onConfirm={confirmBulkDelete}
+        open={bulkDeleteDialogOpen}
+        results={bulkFxDeleteResults}
+        title={$_('fx.deletePairTitle')}
 />
 
 <!-- Add Pair Modal -->
 <FxPairAddModal
-    bind:open={addModalOpen}
-    {dateStart}
-    {dateEnd}
-    oncreated={handlePairCreated}
-    onclose={() => addModalOpen = false}
+        bind:open={addModalOpen}
+        {dateEnd}
+        {dateStart}
+        onclose={() => addModalOpen = false}
+        oncreated={handlePairCreated}
 />
 
 <!-- Sync Modal -->
 <FxSyncModal
-    bind:open={syncModalOpen}
-    {dateStart}
-    {dateEnd}
-    pairs={syncModalPairs}
-    onsynced={handleSynced}
-    onclose={() => syncModalOpen = false}
+        bind:open={syncModalOpen}
+        {dateEnd}
+        {dateStart}
+        onclose={() => syncModalOpen = false}
+        onsynced={handleSynced}
+        pairs={syncModalPairs}
 />
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal
-    bind:open={settingsModalOpen}
-    settings={settingsForModal}
-    mode={settingsTargetSlug ? 'pair' : 'global'}
-    availablePairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
-    pairData={settingsTargetSlug
+        availablePairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
+        bind:open={settingsModalOpen}
+        mode={settingsTargetSlug ? 'pair' : 'global'}
+        onclose={() => { settingsModalOpen = false; settingsTargetSlug = null; }}
+        onsave={handleSettingsSave}
+        pairData={settingsTargetSlug
         ? pairs.find(p => p.config.slug === settingsTargetSlug)?.data?.map(d => {
             const inv = isCardInverted(settingsTargetSlug ?? '');
             const rate = inv && d.rate !== 0 ? 1 / d.rate : d.rate;
             return {date: d.date, value: rate, staleDays: d.backwardFillInfo?.daysBack ?? 0};
         })
         : undefined}
-    pairsDataMap={Object.fromEntries(
+        pairsDataMap={Object.fromEntries(
         pairs
             .filter(p => p.data.length > 0)
             .map(p => {
@@ -943,7 +955,6 @@
                 })];
             })
     )}
-    onsave={handleSettingsSave}
-    onclose={() => { settingsModalOpen = false; settingsTargetSlug = null; }}
+        settings={settingsForModal}
 />
 
