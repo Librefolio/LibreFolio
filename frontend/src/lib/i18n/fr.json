@@ -329,7 +329,10 @@
       "toastOk": "{pair} synchronisé\n{fetched}↓ {changed}Δ ({provider})",
       "toastPartial": "{pair} — partiel\n{fetched}↓ {changed}Δ ({provider})",
       "toastSkipped": "{pair} — manuel uniquement, rien à synchroniser",
-      "toastFailed": "{pair} échec de la synchronisation"
+      "toastFailed": "{pair} échec de la synchronisation",
+      "legBreakdown": "Détail par étape",
+      "legNoData": "0 dates — aucune donnée",
+      "legDates": "dates"
     },
     "route": {
       "title": "Routes de Conversion",

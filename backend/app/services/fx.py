@@ -19,7 +19,7 @@ from backend.app.db.models import FxConversionRoute, FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.refresh import FXSyncPairResult, FXSyncStatus, FXSyncBulkResponse
+from backend.app.schemas.refresh import FXSyncPairResult, FXSyncStatus, FXSyncBulkResponse, FXSyncLegDetail
 from backend.app.services.provider_registry import FXProviderRegistry
 from backend.app.utils.decimal_utils import truncate_fx_rate
 
@@ -1204,6 +1204,15 @@ async def sync_pairs_bulk(
                     f"Provider {provider_code} returned no data for "
                     f"{route.base}/{route.quote} in {start_date}–{end_date}"
                 )
+                # Build per-leg detail for single-step route
+                leg_detail = None
+                if not computed_rates:
+                    leg_detail = [FXSyncLegDetail(
+                        provider=provider_code,
+                        leg=f"{fc}→{tc}",
+                        dates_available=0,
+                        error=None,
+                    )]
                 return FXSyncPairResult(
                     pair=pair_slug,
                     status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
@@ -1211,6 +1220,7 @@ async def sync_pairs_bulk(
                     points_fetched=len(computed_rates),
                     points_changed=actual_changed,
                     message=partial_msg,
+                    detail=leg_detail,
                     elapsed_ms=elapsed_ms,
                     )
             else:
@@ -1257,11 +1267,53 @@ async def sync_pairs_bulk(
                     actual_changed = 0
 
                 elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
-                chain_partial_msg = None if computed_rates else (
-                    f"Chain {source} produced no data for "
-                    f"{route.base}/{route.quote} in {start_date}–{end_date} "
-                    f"({len(all_dates)} dates checked, no complete chain rates)"
-                )
+
+                # Build per-leg detail for diagnostics
+                chain_leg_details = []
+                for step in steps:
+                    fc, tc = step["from"], step["to"]
+                    prov = step["provider"]
+                    norm_b = min(fc, tc)
+                    norm_q = max(fc, tc)
+                    leg_key_prefix = (norm_b, norm_q)
+                    # Count dates this leg has in the requested range
+                    leg_date_count = sum(
+                        1 for key in leg_rates.keys()
+                        if key[0] == leg_key_prefix[0]
+                        and key[1] == leg_key_prefix[1]
+                        and start_date <= key[2] <= end_date
+                    )
+                    # Check if this leg had errors
+                    leg_err_key = (norm_b, norm_q, prov)
+                    leg_error = leg_errors.get(leg_err_key)
+                    chain_leg_details.append(FXSyncLegDetail(
+                        provider=prov,
+                        leg=f"{fc}→{tc}",
+                        dates_available=leg_date_count,
+                        error=str(leg_error) if leg_error else None,
+                    ))
+
+                # Build human-readable message
+                if computed_rates:
+                    chain_partial_msg = None
+                    chain_detail = chain_leg_details  # always include detail for chains
+                else:
+                    leg_summaries = []
+                    for ld in chain_leg_details:
+                        if ld.error:
+                            leg_summaries.append(f"  • {ld.leg} ({ld.provider}): ERROR — {ld.error}")
+                        elif ld.dates_available == 0:
+                            leg_summaries.append(f"  • {ld.leg} ({ld.provider}): 0 dates — no data returned")
+                        else:
+                            leg_summaries.append(f"  • {ld.leg} ({ld.provider}): {ld.dates_available} dates available")
+                    chain_partial_msg = (
+                        f"Chain {source} produced no complete rates for "
+                        f"{route.base}/{route.quote} in {start_date}–{end_date} "
+                        f"({len(all_dates)} dates checked).\n"
+                        f"Per-leg breakdown:\n" + "\n".join(leg_summaries)
+                    )
+                    chain_detail = chain_leg_details
+
                 return FXSyncPairResult(
                     pair=pair_slug,
                     status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
@@ -1269,6 +1321,7 @@ async def sync_pairs_bulk(
                     points_fetched=len(computed_rates),
                     points_changed=actual_changed,
                     message=chain_partial_msg,
+                    detail=chain_detail,
                     elapsed_ms=elapsed_ms,
                     )
 

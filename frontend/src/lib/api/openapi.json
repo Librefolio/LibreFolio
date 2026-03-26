@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.8-6-g5a59ce5-dirty"
+    "version": "v0.5.8-8-g2bb9b27-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -9015,6 +9015,47 @@
         "title": "FXSyncBulkResponse",
         "description": "Response for bulk pair-based FX sync.\n\nInherits from BaseBulkResponse:\n- results: List[FXSyncPairResult]\n- success_count: int (pairs with status ok or partial)\n- errors: List[str] (operation-level errors)\n- failed_count: computed property\n\nAdditional fields:\n- date_range: requested date range\n- total_points_changed: aggregate across all pairs"
       },
+      "FXSyncLegDetail": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "description": "Provider code for this leg, e.g. 'ECB'"
+          },
+          "leg": {
+            "type": "string",
+            "title": "Leg",
+            "description": "Leg pair in the chain, e.g. 'EUR\u2192GBP'"
+          },
+          "dates_available": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Dates Available",
+            "description": "Number of dates with data from this provider in the requested range",
+            "default": 0
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message if the leg failed (e.g. timeout, provider error)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "leg"
+        ],
+        "title": "FXSyncLegDetail",
+        "description": "Diagnostic detail for a single leg in a chain (or single-provider route)."
+      },
       "FXSyncPairRequest": {
         "properties": {
           "pairs": {
@@ -9097,6 +9138,21 @@
             ],
             "title": "Message",
             "description": "Optional note (e.g. 'monthly data only', 'fallback used')"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FXSyncLegDetail"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail",
+            "description": "Per-leg diagnostic breakdown. Present for chains and single-provider routes when status is partial or failed. Each entry shows provider name, leg pair, dates available, and any error encountered."
           },
           "elapsed_ms": {
             "anyOf": [

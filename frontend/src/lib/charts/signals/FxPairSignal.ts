@@ -89,15 +89,12 @@ export class FxPairSignal extends ChartSignal {
     getLabel(): string {
         const slug = String(this.params.pairSlug || '');
         const isInverted = Boolean(this.params._inverted);
-        const isMain = Boolean(this.params._isMainPair);
         if (!slug) return 'FX Pair';
         const [a, b] = slug.split('-');
         const base = isInverted ? b : a;
         const quote = isInverted ? a : b;
         const baseFlag = getCurrencyInfo(base).flag_emoji;
         const quoteFlag = getCurrencyInfo(quote).flag_emoji;
-        const prefix = isMain ? '👑 ' : '';
-        return `${prefix}${baseFlag} ${base} → ${quoteFlag} ${quote}`;
+        return `${baseFlag} ${base} → ${quoteFlag} ${quote}`;
     }
 }
-

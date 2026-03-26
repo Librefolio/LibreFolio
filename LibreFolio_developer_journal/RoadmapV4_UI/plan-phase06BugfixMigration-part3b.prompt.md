@@ -18,15 +18,19 @@
 | **H4** | i18n: "refresh/Aggiorna" confuso con "sync" → rinominare in "reload/Ricarica" | 4× `i18n/*.json` | ✅ Fatto |
 | **H5** | 2 chiavi i18n orfane: `assets.table.active`, `fx.editPairConfig` | 4× `i18n/*.json` | ✅ Fatto |
 | **H6** | FxTable row action `label: 'Sync'` hardcoded | `FxTable.svelte` | ✅ Fatto |
-| **H7** | Provider chain mancante nel Detail FX (modal vuoto) | `FxPairAddModal.svelte` (diagnostica) | ⏳ Manuale |
+| **H7** | Provider chain mancante nel Detail FX (modal vuoto) — direction-agnostic key matching | `FxProviderSelect.svelte` | ✅ Fatto |
 | **H8** | Filtro colonna "Provider" inutile (disabilitare) | `FxTable.svelte`, `AssetTable.svelte` | ✅ Fatto |
-| **H9** | Bottoni sync+open nel segnale FxPair: posizione errata (header → parametri) | `ChartSignalsSection.svelte` | ✅ Fatto |
-| **H10** | `handleSyncPair` nel detail: toast non tradotto + nessun risultato reale | `fx/[pair]/+page.svelte` | ✅ Fatto |
-| **H11** | FxPairSignal label: `A/B` → `🇦🇺 A → 🇪🇺 B` con bandiere | `FxPairSignal.ts` | ✅ Fatto |
-| **H12** | Bulk Sync Assets: placeholder `console.log` → API reale | `assets/+page.svelte` | ✅ Fatto |
+| **H9** | Bottoni sync+open nel segnale FxPair: icona RotateCw, highlight pair dropdown, overlay data refresh | `ChartSignalsSection.svelte`, `fx/[pair]/+page.svelte` | ✅ Fatto |
+| **H10** | `handleSyncPair` + overlay signal: re-fetch dati DB dopo sync, `overlayDataVersion` counter | `fx/[pair]/+page.svelte` | ✅ Fatto |
+| **H11** | FxPairSignal label con bandiere + 👑 crown solo in `mainSeriesLabel`/`pairLabel`, no doppio prefisso con `●` di MeasurePanel | `FxPairSignal.ts`, `PriceChartFull.svelte`, `fx/[pair]/+page.svelte` | ✅ Fatto |
+| **H12** | Bulk Sync Assets: `syncAllLoading`, `syncingAssetIds`, rotating icon, toast dettagliato con `fetched`/`changed` | `assets/+page.svelte`, `AssetCard.svelte`, `DataTableToolbar.svelte` | ✅ Fatto |
 | **H13** | Bulk Delete Assets: placeholder `console.log` → API reale + ConfirmModal | `assets/+page.svelte` | ✅ Fatto |
+| **H14** | Estrarre helper condivisi FX sync (`fxSync.ts`): `formatSyncDetail`, `parseProviderChain`, `PROVIDER_COLORS`, etc. | `$lib/utils/fxSync.ts`, `FxSyncModal.svelte`, `FxTable.svelte`, `fx/+page.svelte`, `fx/[pair]/+page.svelte` | ✅ Fatto |
+| **H15** | Tradurre stringhe per-leg breakdown (Per-leg breakdown, 0 dates — no data, dates) in 4 lingue | 4× `i18n/*.json` | ✅ Fatto |
+| **H16** | Provider toast: `CHAIN:ECB+BOE` → `ECB + BOE` via `formatProviderText()` | `fx/+page.svelte`, `fx/[pair]/+page.svelte` | ✅ Fatto |
+| **H17** | Dropdown segnali FxPair: suffisso `✓`/`📌`/`👑` + prop `mainPairSlug` | `ChartSignalsSection.svelte`, `fx/[pair]/+page.svelte` | ✅ Fatto |
 
-**Totale issue: 13** — 3 cause radice (i18n, segnale FxPair, placeholder assets).
+**Totale issue: 17** — 3 cause radice originali + 4 polish post-review.
 
 ---
 
@@ -541,14 +545,18 @@ async function handleBulkDeleteAssets() {
 | 5 | **H5** — Rimuovere chiavi i18n orfane | — | 3 min |
 | 6 | **H6** — Tradurre `'Sync'` in FxTable | — | 1 min |
 | 7 | **H8** — Disabilitare filtro Provider | — | 3 min |
-| 8 | **H9** — Spostare bottoni sync+open segnale FxPair | — | 5 min |
-| 9 | **H10** — Fix `handleSyncPair` detail | — | 5 min |
-| 10 | **H11** — FxPairSignal label con bandiere | — | 3 min |
-| 11 | **H12** — Implementare `handleSyncAsset` | H4 (chiavi i18n) | 10 min |
+| 8 | **H9** — Spostare bottoni sync+open segnale FxPair + RotateCw + highlight dropdown + overlay refresh | — | 5 min |
+| 9 | **H10** — Fix `handleSyncPair` detail + re-fetch overlay data + `overlayDataVersion` | — | 5 min |
+| 10 | **H11** — FxPairSignal label con bandiere + crown in mainSeriesLabel/pairLabel + fix doppio prefisso + `void mainSeriesLabel` in $effect | — | 10 min |
+| 11 | **H12** — Implementare `handleSyncAsset` + rotating icon + toast dettagliato | H4 (chiavi i18n) | 10 min |
 | 12 | **H13** — Implementare `handleDeleteAsset` + ConfirmModal + bulk | H12 | 15 min |
-| 13 | **H7** — Diagnostica provider chain (manuale con DevTools) | — | 10-15 min |
+| 13 | **H7** — Direction-agnostic key matching in FxProviderSelect | — | 10 min |
+| 14 | **H14** — Estrarre `$lib/utils/fxSync.ts` con helper condivisi | H9, H10 | 10 min |
+| 15 | **H15** — Tradurre stringhe per-leg breakdown in 4 lingue | H14 | 5 min |
+| 16 | **H16** — `formatProviderText()`: CHAIN:ECB+BOE → ECB + BOE nei toast | H14 | 3 min |
+| 17 | **H17** — Dropdown segnali FxPair: suffisso ✓/📌/👑 + prop `mainPairSlug` | — | 5 min |
 
-**Tempo totale stimato**: ~70 minuti
+**Tempo totale stimato**: ~100 minuti
 
 ---
 
@@ -572,6 +580,9 @@ async function handleBulkDeleteAssets() {
 | `assets.delete.toastFailed` | `Failed to delete {name}` | `Impossibile eliminare {name}` | `Échec de suppression de {name}` | `Error al eliminar {name}` |
 | `assets.delete.bulkOk` | `{count} assets deleted` | `{count} asset eliminati` | `{count} actifs supprimés` | `{count} activos eliminados` |
 | `assets.delete.bulkPartial` | `{failed} assets could not be deleted (have transactions)` | `{failed} asset non eliminabili (hanno transazioni)` | `{failed} actifs non supprimés (ont des transactions)` | `{failed} activos no eliminados (tienen transacciones)` |
+| `fx.sync.legBreakdown` | Per-leg breakdown | Dettaglio per tratta | Détail par étape | Detalle por tramo |
+| `fx.sync.legNoData` | 0 dates — no data | 0 date — nessun dato | 0 dates — aucune donnée | 0 fechas — sin datos |
+| `fx.sync.legDates` | dates | date | dates | fechas |
 
 ### Chiavi RIMOSSE:
 
@@ -579,6 +590,50 @@ async function handleBulkDeleteAssets() {
 |--------|
 | `assets.table.active` |
 | `fx.editPairConfig` |
+
+---
+
+## Dettaglio Tecnico H14-H17
+
+### H14 — Estrarre helper condivisi FX sync (`$lib/utils/fxSync.ts`)
+
+**Problema**: Le stesse funzioni (`parseProviderChain`, `PROVIDER_COLORS`, `getProviderIconUrl`,
+`formatSyncDetail` inline) erano duplicate in 3+ file: `FxSyncModal.svelte`, `FxTable.svelte`,
+`fx/[pair]/+page.svelte`, `fx/+page.svelte`.
+
+**Fix**: Creato `src/lib/utils/fxSync.ts` con export condivisi:
+- `PROVIDER_COLORS`, `DEFAULT_PROVIDER_COLOR` — costanti badge colori
+- `parseProviderChain(providerUsed)` — CHAIN:ECB+BOE → ['ECB','BOE']
+- `getProviderIconUrl(code)` — lookup icon da cache provider
+- `providerBadgeHtml(providerCode)` — HTML badge per DataTable innerHTML
+- `formatProviderText(providerUsed)` — CHAIN:ECB+BOE → "ECB + BOE" (per toast)
+- `formatSyncDetail(r, tr)` — per-leg breakdown text con traduzione
+
+### H15 — Tradurre stringhe per-leg breakdown
+
+**Problema**: Le stringhe "Per-leg breakdown", "0 dates — no data", "dates" erano hardcoded
+in inglese nel frontend.
+
+**Fix**: Aggiunte 3 chiavi i18n (`fx.sync.legBreakdown`, `fx.sync.legNoData`, `fx.sync.legDates`)
+in 4 lingue. La funzione `formatSyncDetail` in `fxSync.ts` accetta `tr` come parametro.
+
+### H16 — Provider toast: CHAIN:ECB+BOE → ECB + BOE
+
+**Problema**: Nei toast ok/partial, il placeholder `{provider}` mostrava il valore grezzo
+`CHAIN:ECB+BOE` anziché un formato leggibile.
+
+**Fix**: Tutti i call-site che passano `provider` ai toast ora usano `formatProviderText(r.provider_used)`
+che produce `ECB + BOE`.
+
+### H17 — Dropdown segnali FxPair: suffisso ✓/📌/👑
+
+**Problema**: Nel dropdown di selezione coppia FX nei segnali overlay, i prefissi ✓/● non
+distinguevano la coppia principale del grafico.
+
+**Fix**: Aggiunto prop `mainPairSlug` a `ChartSignalsSection`. Logica suffisso:
+- `✓` — questa card sta già mostrando la coppia
+- `📌` — coppia usata da un'altra card segnale
+- `👑` — coppia in uso E coincide con la coppia principale del grafico
 
 ---
 
@@ -613,4 +668,8 @@ cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio && ./dev.py i18n aud
 | 15 | FxTable: nessun filtro dropdown sulla colonna Provider |
 | 16 | AssetTable: nessun filtro dropdown sulla colonna Provider |
 | 17 | `./dev.py i18n audit`: 0 unused, 0 missing |
+| 18 | Toast sync partial: mostra "ECB + BOE" (non "CHAIN:ECB+BOE") |
+| 19 | Toast sync partial: "Dettaglio per tratta" (IT) / "Per-leg breakdown" (EN) / "Détail par étape" (FR) |
+| 20 | Toast sync partial: "0 date — nessun dato" (IT) / "0 dates — no data" (EN) |
+| 21 | Dropdown segnale FxPair: coppia corrente → suffisso ✓, coppia usata altrove → 📌, coppia principale+usata → 👑 |
 
