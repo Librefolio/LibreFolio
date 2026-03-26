@@ -9,6 +9,7 @@
  */
 
 import {getCachedProviders} from '$lib/stores/currencyGraphStore';
+import {zodiosApi} from '$lib/api';
 
 // =========================================================================
 // Provider badge colours — shared constant
@@ -40,13 +41,52 @@ export function parseProviderChain(providerUsed: string | null | undefined): str
 }
 
 // =========================================================================
-// Provider icon URL lookup
+// Provider icon URL lookup (FX + Asset providers)
 // =========================================================================
 
-/** Get provider icon_url from the in-memory provider cache. */
+/**
+ * In-memory cache for asset provider icons.
+ * Populated lazily via ensureAssetProvidersCached().
+ */
+let assetProviderIcons: Map<string, string | null> = new Map();
+let assetProvidersFetched = false;
+let assetProvidersFetchPromise: Promise<void> | null = null;
+
+/**
+ * Ensure asset provider info is cached (lazy, one-shot).
+ * Safe to call multiple times — deduplicates concurrent calls.
+ */
+export async function ensureAssetProvidersCached(): Promise<void> {
+    if (assetProvidersFetched) return;
+    if (assetProvidersFetchPromise) return assetProvidersFetchPromise;
+    assetProvidersFetchPromise = (async () => {
+        try {
+            const providers = await zodiosApi.list_providers_api_v1_assets_provider_get();
+            for (const p of providers as any[]) {
+                assetProviderIcons.set(p.code, p.icon_url ?? null);
+            }
+        } catch {
+            // Fail silently — icon lookup will just return null
+        } finally {
+            assetProvidersFetched = true;
+            assetProvidersFetchPromise = null;
+        }
+    })();
+    return assetProvidersFetchPromise;
+}
+
+/**
+ * Get provider icon_url from the in-memory caches.
+ * Checks FX providers first (from currencyGraphStore), then asset providers.
+ */
 export function getProviderIconUrl(code: string): string | null {
-    const providers = getCachedProviders();
-    return providers.find(p => p.code === code)?.icon_url ?? null;
+    // 1. Check FX providers (populated by currencyGraphStore)
+    const fxProviders = getCachedProviders();
+    const fxMatch = fxProviders.find(p => p.code === code)?.icon_url;
+    if (fxMatch) return fxMatch;
+
+    // 2. Check asset providers (populated by ensureAssetProvidersCached)
+    return assetProviderIcons.get(code) ?? null;
 }
 
 // =========================================================================

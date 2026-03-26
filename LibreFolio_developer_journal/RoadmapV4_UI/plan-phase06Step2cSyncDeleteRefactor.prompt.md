@@ -17,7 +17,33 @@
 
 ---
 
-## Step G — Fix Post-Review
+## Step G — Fix Post-Review — ✅ COMPLETATO
+
+### Riepilogo Implementazione
+
+| Sub-step | Status | Note |
+|----------|--------|------|
+| **G1** | ✅ | Pipeline 3-fasi: PREPARE (batch queries) → FETCH (parallel, no DB) → PERSIST (per-task session). Fix "transaction closed". |
+| **G2** | ✅ | FX FAILED: `message=None`, errore solo in `errors[]`. Chain PARTIAL: `errors[]` da leg_errors. |
+| **G3** | ~~SCARTATO~~ | |
+| **G4** | ✅ | `getProviderIconUrl` esteso con asset provider cache (`ensureAssetProvidersCached()`). |
+| **G5** | ✅ | `ConfirmModal`: prop `description` + CSS. Chiavi i18n `confirmQuestion`/`confirmWarning` (4 lingue). |
+| **G6** | ✅ | `ConfirmModal`: prop `results` con ✅/❌. Toast FX con count rate. Bulk delete mostra per-item. |
+| **G7** | ✅ | `FAAssetDeleteResult`: `display_name` + `error_code` ("HAS_TRANSACTIONS"/"NOT_FOUND"). |
+| **G8** | ✅ | TODO_FUTURI: nota Phase 7 link transazioni in delete modal. |
+| **G9** | ✅ | `front-utility.all.name` → "All Frontend Utility Tests". |
+
+### Fix aggiuntivi post-review
+
+- **Currency fallback**: rimosso `"USD"` hardcoded → usa `asset.currency` come fallback (semanticamente corretto).
+- **Asset provider icon cache**: `providerHelpers.ts` ora cerca icone in FX providers **e** asset providers (via `ensureAssetProvidersCached()`).
+- **Test rafforzati**: `test_asset_source_refresh.py` passa da 1 smoke test a 7 test: single status, multi-asset concurrent (5 asset), SKIPPED, FAILED, mixed, currency fallback.
+
+### Nota su crypto (BTC/ETH): 1↓ 1Δ
+
+Bitcoin ed Ethereum restituiscono solo 1 punto (current value) perché:
+- yfinance fornisce la cronologia per crypto ma il `db populate` potrebbe non configurare correttamente l'identifier o le date
+- Lo status PARTIAL ("Current value only") è corretto — il provider funziona, ma la history non è disponibile per quell'identifier
 
 ### G1. Rearchitettura `bulk_refresh_prices` → pipeline 3-fasi (pattern FX)
 
@@ -239,12 +265,15 @@ G8 (TODO_FUTURI nota)
 
 ## Verifiche Finali
 
-- [ ] `npm run build` — senza errori
-- [ ] `./dev.py front check` — 0 errors, 0 warnings
-- [ ] `./dev.py test all` — **10/10**
-- [ ] Asset sync bulk (7 asset) — tutti OK/PARTIAL, nessun "transaction closed"
+- [x] `npm run build` — senza errori ✅
+- [x] `svelte-check` — 0 errors, 0 warnings ✅
+- [x] `./dev.py test all` — **10/10** ✅ (confermato dall'utente)
+- [x] Asset sync bulk (7 asset) — 5 OK, 2 PARTIAL (crypto = current value only) ✅
 - [ ] FX sync — funziona come prima
 - [ ] Delete singola asset con transazioni — toast con nome tradotto
 - [ ] Delete bulk asset mix successo/fallimento — modale mostra dettaglio per-item
 - [ ] FX delete singola — toast con count rate
 - [ ] FX delete bulk — modale mostra dettaglio per-coppia
+- [x] Test asset-source-refresh: 7/7 passati (da 1 smoke → 7 test robusti) ✅
+- [x] Provider icon nella sync modal — ora carica icone asset provider ✅
+- [x] Currency fallback — usa `asset.currency` invece di USD hardcoded ✅

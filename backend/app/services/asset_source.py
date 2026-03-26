@@ -1447,7 +1447,7 @@ class AssetSourceManager:
                                     current_price = {
                                         "date": current_data.as_of_date or today,
                                         "close": current_data.value,
-                                        "currency": current_data.currency or "USD",
+                                        "currency": current_data.currency,
                                         }
                                     prices_data = [p for p in prices_data if p.get("date") != current_price["date"]]
                                     prices_data.append(current_price)
@@ -1512,7 +1512,8 @@ class AssetSourceManager:
                     elapsed_ms=elapsed_ms,
                     )
 
-            # Convert to FAPricePoint objects
+            # Convert to FAPricePoint objects — fallback to asset's own currency
+            asset_currency = prep["asset"].currency
             price_items = [
                 FAPricePoint(
                     date=p["date"],
@@ -1521,7 +1522,7 @@ class AssetSourceManager:
                     low=p.get("low"),
                     close=p["close"],
                     volume=p.get("volume"),
-                    currency=p.get("currency", "USD"),
+                    currency=p.get("currency") or asset_currency,
                     )
                 for p in prices
                 ]
