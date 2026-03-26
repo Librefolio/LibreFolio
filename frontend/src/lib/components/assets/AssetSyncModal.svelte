@@ -13,7 +13,7 @@
     import {STATUS_ICONS, STATUS_COLORS, formatElapsed} from '$lib/utils/syncHelpers';
     import {
         PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR,
-        getProviderIconUrl,
+        getProviderIconUrl, ensureAssetProvidersCached,
     } from '$lib/utils/providerHelpers';
 
     interface AssetSyncItem {
@@ -46,6 +46,11 @@
 
     // Build a lookup for quick name/icon resolution from asset id
     let assetMap = $derived(new Map(assets.map(a => [a.id.toString(), a])));
+
+    // Ensure asset provider icons are cached when modal opens
+    $effect(() => {
+        if (open) ensureAssetProvidersCached();
+    });
 
     async function doSyncFn(targetIds: string[]): Promise<SyncResult[]> {
         const items = targetIds.map(id => ({
