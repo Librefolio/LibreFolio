@@ -44,7 +44,8 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {formatSyncDetail, formatProviderText} from '$lib/utils/fxSync';
+    import {formatSyncDetail, formatProviderText} from '$lib/utils/providerHelpers';
+    import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
 
     // =========================================================================
     // Types
@@ -100,17 +101,11 @@
         settingsTargetSlug ? getSettingsForPair(settingsTargetSlug) : getGlobalSettings()
     );
 
-    // Filter bar adaptive layout
+    // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    /** Layout mode based on measured container width:
-     *  - 'wide' (≥950px): filters left + actions 2×2 grid right, all inline
-     *  - 'tablet' (≥610px): filters left (wrapping) + actions column right
-     *  - 'tablet-s' (≥500px): like tablet but buttons column, icon-only
-     *  - 'mobile' (<500px): all stacked vertically, actions row at bottom
-     */
-    let layoutMode = $state<'wide' | 'tablet' | 'tablet-s' | 'mobile'>('tablet');
-    /** Whether action buttons show text labels (≥700px) */
-    let showActionLabels = $state(true);
+    const fxLayout = createResponsiveLayout({wide: 1030, tablet: 700, tabletS: 530, labelHide: 460});
+    let layoutMode = $derived(fxLayout.layoutMode);
+    let showActionLabels = $derived(fxLayout.showActionLabels);
 
     // =========================================================================
     // Derived
@@ -226,19 +221,12 @@
     //   wide  ≈ 970px box → 936 contentRect
     //   tablet ≈ 635px box → 601 contentRect
     //   labels ≈ 720px box → 686 contentRect
+    // ResizeObserver for adaptive filter bar layout
     $effect(() => {
         const el = filterBarRef;
         if (!el) return;
-        const ro = new ResizeObserver(([entry]) => {
-            const w = entry.contentRect.width;
-            if (w >= 1030) layoutMode = 'wide';
-            else if (w >= 700) layoutMode = 'tablet';
-            else if (w >= 530) layoutMode = 'tablet-s';
-            else layoutMode = 'mobile';
-            showActionLabels = w >= 460;
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
+        fxLayout.attach(el);
+        return () => fxLayout.detach();
     });
 
     // =========================================================================

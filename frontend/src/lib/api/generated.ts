@@ -1704,23 +1704,84 @@ type FABulkRefreshResponse = {
    * Operation-level errors (not per-item)
    */
   Array<string> | undefined;
+  date_range?:
+    | /**
+     * Requested date range
+     */
+    ((DateRangeModel | null) | Array<DateRangeModel | null>)
+    | undefined;
+  total_points_changed?: /**
+   * Sum of points_changed across all assets
+   *
+   * @default 0
+   * @minimum 0
+   */
+  number | undefined;
 };
 type FARefreshResult = {
   asset_id: number;
-  /**
+  status?: SyncStatus | undefined;
+  provider_used?:
+    | /**
+     * Provider code that served data
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  points_fetched?: /**
    * Number of prices fetched from provider
+   *
+   * @default 0
    */
-  fetched_count: number;
-  /**
+  number | undefined;
+  points_changed?: /**
+   * Number of prices actually inserted/updated in DB
+   *
+   * @default 0
+   */
+  number | undefined;
+  inserted_count?: /**
    * Number of prices inserted into DB
+   *
+   * @default 0
    */
-  inserted_count: number;
-  /**
+  number | undefined;
+  updated_count?: /**
    * Number of prices updated in DB
+   *
+   * @default 0
    */
-  updated_count: number;
+  number | undefined;
+  message?:
+    | /**
+     * Optional note/summary (non-error)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
   errors?: Array<string> | undefined;
+  elapsed_ms?:
+    | /**
+     * Backend sync time for this asset in ms
+     */
+    (| /**
+         * @minimum 0
+         */
+        (number | null)
+        | Array<
+            /**
+             * @minimum 0
+             */
+            number | null
+          >
+      )
+    | undefined;
 };
+type SyncStatus =
+  /**
+   * Status of a single sync operation (shared by FA and FX).
+   *
+   * @enum ok, partial, failed, skipped
+   */
+  "ok" | "partial" | "failed" | "skipped";
 type FABulkRemoveResponse = {
   /**
    * Per-item operation results
@@ -2719,7 +2780,7 @@ type FXSyncPairResult = {
    * Normalized pair slug, e.g. 'EUR-USD'
    */
   pair: string;
-  status: FXSyncStatus;
+  status: SyncStatus;
   provider_used?:
     | /**
      * Provider code that served data (None if failed/skipped)
@@ -2746,6 +2807,10 @@ type FXSyncPairResult = {
      */
     ((string | null) | Array<string | null>)
     | undefined;
+  errors?: /**
+   * List of error messages for this pair
+   */
+  Array<string> | undefined;
   detail?:
     | /**
      * Per-leg diagnostic breakdown. Present for chains and single-provider routes when status is partial or failed. Each entry shows provider name, leg pair, dates available, and any error encountered.
@@ -2769,13 +2834,6 @@ type FXSyncPairResult = {
       )
     | undefined;
 };
-type FXSyncStatus =
-  /**
-   * Status of a single pair sync operation.
-   *
-   * @enum ok, partial, failed, skipped
-   */
-  "ok" | "partial" | "failed" | "skipped";
 type FXSyncLegDetail = {
   /**
    * Provider code for this leg, e.g. 'ECB'
@@ -3599,7 +3657,7 @@ const FXSyncPairRequest = z.object({
   start: z.string().describe("Start date (inclusive)"),
   end: z.string().describe("End date (inclusive)"),
 });
-const FXSyncStatus = z.enum(["ok", "partial", "failed", "skipped"]);
+const SyncStatus = z.enum(["ok", "partial", "failed", "skipped"]);
 const FXSyncLegDetail: z.ZodType<FXSyncLegDetail> = z.object({
   provider: z.string().describe("Provider code for this leg, e.g. 'ECB'"),
   leg: z.string().describe("Leg pair in the chain, e.g. 'EUR→GBP'"),
@@ -3619,7 +3677,9 @@ const FXSyncLegDetail: z.ZodType<FXSyncLegDetail> = z.object({
 });
 const FXSyncPairResult: z.ZodType<FXSyncPairResult> = z.object({
   pair: z.string().describe("Normalized pair slug, e.g. 'EUR-USD'"),
-  status: FXSyncStatus.describe("Status of a single pair sync operation."),
+  status: SyncStatus.describe(
+    "Status of a single sync operation (shared by FA and FX)."
+  ),
   provider_used: z
     .union([z.string(), z.null()])
     .describe("Provider code that served data (None if failed/skipped)")
@@ -3641,6 +3701,10 @@ const FXSyncPairResult: z.ZodType<FXSyncPairResult> = z.object({
   message: z
     .union([z.string(), z.null()])
     .describe("Optional note (e.g. 'monthly data only', 'fallback used')")
+    .optional(),
+  errors: z
+    .array(z.string())
+    .describe("List of error messages for this pair")
     .optional(),
   detail: z
     .union([z.array(FXSyncLegDetail), z.null()])
@@ -4463,16 +4527,46 @@ Examples:
 });
 const FARefreshResult: z.ZodType<FARefreshResult> = z.object({
   asset_id: z.number().int(),
-  fetched_count: z
+  status: SyncStatus.describe(
+    "Status of a single sync operation (shared by FA and FX)."
+  ).optional(),
+  provider_used: z
+    .union([z.string(), z.null()])
+    .describe("Provider code that served data")
+    .optional(),
+  points_fetched: z
     .number()
     .int()
-    .describe("Number of prices fetched from provider"),
+    .describe("Number of prices fetched from provider")
+    .optional()
+    .default(0),
+  points_changed: z
+    .number()
+    .int()
+    .describe("Number of prices actually inserted/updated in DB")
+    .optional()
+    .default(0),
   inserted_count: z
     .number()
     .int()
-    .describe("Number of prices inserted into DB"),
-  updated_count: z.number().int().describe("Number of prices updated in DB"),
+    .describe("Number of prices inserted into DB")
+    .optional()
+    .default(0),
+  updated_count: z
+    .number()
+    .int()
+    .describe("Number of prices updated in DB")
+    .optional()
+    .default(0),
+  message: z
+    .union([z.string(), z.null()])
+    .describe("Optional note/summary (non-error)")
+    .optional(),
   errors: z.array(z.string()).optional(),
+  elapsed_ms: z
+    .union([z.number(), z.null()])
+    .describe("Backend sync time for this asset in ms")
+    .optional(),
 });
 const FABulkRefreshResponse: z.ZodType<FABulkRefreshResponse> = z.object({
   results: z.array(FARefreshResult).describe("Per-item operation results"),
@@ -4485,6 +4579,17 @@ const FABulkRefreshResponse: z.ZodType<FABulkRefreshResponse> = z.object({
     .array(z.string())
     .describe("Operation-level errors (not per-item)")
     .optional(),
+  date_range: z
+    .union([DateRangeModel, z.null()])
+    .describe("Requested date range")
+    .optional(),
+  total_points_changed: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Sum of points_changed across all assets")
+    .optional()
+    .default(0),
 });
 const providers__2 = z
   .union([z.string(), z.null()])
@@ -5988,7 +6093,7 @@ export const schemas = {
   FXDeleteRouteResult,
   FXDeleteRoutesResponse,
   FXSyncPairRequest,
-  FXSyncStatus,
+  SyncStatus,
   FXSyncLegDetail,
   FXSyncPairResult,
   DateRangeModel,

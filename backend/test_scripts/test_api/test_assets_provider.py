@@ -790,7 +790,7 @@ async def test_search_to_asset_e2e(test_server):
                 results = refresh_data.get("results", [])
                 if results:
                     result = results[0]
-                    fetched = result.get("fetched_count", 0)
+                    fetched = result.get("points_fetched", 0)
                     inserted = result.get("inserted_count", 0)
                     errors = result.get("errors", [])
                     print_info(
@@ -914,7 +914,7 @@ async def test_price_refresh_uses_current_value(test_server):
 
         assert len(results) > 0, "Should have refresh result"
         result = results[0]
-        fetched_count = result.get("fetched_count", 0)
+        fetched_count = result.get("points_fetched", 0)
         errors = result.get("errors", [])
 
         print_info(f"  Fetched count: {fetched_count}")
@@ -1024,7 +1024,7 @@ async def test_css_scraper_current_price(test_server):
 
         assert len(results) > 0, "Should have refresh result"
         result = results[0]
-        fetched_count = result.get("fetched_count", 0)
+        fetched_count = result.get("points_fetched", 0)
         errors = result.get("errors", [])
 
         print_info(f"  Fetched count: {fetched_count}")
