@@ -19,7 +19,7 @@ from backend.app.db.models import FxConversionRoute, FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.refresh import FXSyncPairResult, FXSyncStatus, FXSyncBulkResponse, FXSyncLegDetail
+from backend.app.schemas.refresh import FXSyncPairResult, SyncStatus, FXSyncBulkResponse, FXSyncLegDetail
 from backend.app.services.provider_registry import FXProviderRegistry
 from backend.app.utils.decimal_utils import truncate_fx_rate
 
@@ -822,7 +822,7 @@ async def sync_pair(
         logger.info(f"Pair {pair_slug}: MANUAL-only, skipping sync")
         return FXSyncPairResult(
             pair=pair_slug,
-            status=FXSyncStatus.SKIPPED,
+            status=SyncStatus.SKIPPED,
             provider_used=None,
             points_fetched=0,
             points_changed=0,
@@ -847,7 +847,7 @@ async def sync_pair(
             if total_fetched > 0:
                 return FXSyncPairResult(
                     pair=pair_slug,
-                    status=FXSyncStatus.OK,
+                    status=SyncStatus.OK,
                     provider_used=provider_code,
                     points_fetched=total_fetched,
                     points_changed=total_changed,
@@ -857,7 +857,7 @@ async def sync_pair(
             else:
                 return FXSyncPairResult(
                     pair=pair_slug,
-                    status=FXSyncStatus.PARTIAL,
+                    status=SyncStatus.PARTIAL,
                     provider_used=provider_code,
                     points_fetched=0,
                     points_changed=0,
@@ -944,7 +944,7 @@ async def sync_pair(
 
             return FXSyncPairResult(
                 pair=pair_slug,
-                status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
+                status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
                 provider_used=source,
                 points_fetched=len(computed_rates),
                 points_changed=actual_changed,
@@ -957,11 +957,12 @@ async def sync_pair(
         logger.error(f"Pair {pair_slug}: sync failed: {e}")
         return FXSyncPairResult(
             pair=pair_slug,
-            status=FXSyncStatus.FAILED,
+            status=SyncStatus.FAILED,
             provider_used=None,
             points_fetched=0,
             points_changed=0,
             message=str(e),
+            errors=[str(e)],
             elapsed_ms=elapsed_ms,
             )
 
@@ -1106,11 +1107,12 @@ async def sync_pairs_bulk(
         if route is None:
             return FXSyncPairResult(
                 pair=pair_slug,
-                status=FXSyncStatus.FAILED,
+                status=SyncStatus.FAILED,
                 provider_used=None,
                 points_fetched=0,
                 points_changed=0,
                 message=f"No route configuration found for {pair_slug}",
+                errors=[f"No route configuration found for {pair_slug}"],
                 elapsed_ms=(time.monotonic_ns() - t_route_start) // 1_000_000,
                 )
 
@@ -1120,7 +1122,7 @@ async def sync_pairs_bulk(
         if all(s["provider"].upper() == "MANUAL" for s in steps):
             return FXSyncPairResult(
                 pair=pair_slug,
-                status=FXSyncStatus.SKIPPED,
+                status=SyncStatus.SKIPPED,
                 provider_used=None,
                 points_fetched=0,
                 points_changed=0,
@@ -1215,7 +1217,7 @@ async def sync_pairs_bulk(
                     )]
                 return FXSyncPairResult(
                     pair=pair_slug,
-                    status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
+                    status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
                     provider_used=provider_code,
                     points_fetched=len(computed_rates),
                     points_changed=actual_changed,
@@ -1316,7 +1318,7 @@ async def sync_pairs_bulk(
 
                 return FXSyncPairResult(
                     pair=pair_slug,
-                    status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
+                    status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
                     provider_used=source,
                     points_fetched=len(computed_rates),
                     points_changed=actual_changed,
@@ -1330,11 +1332,12 @@ async def sync_pairs_bulk(
             logger.error(f"Pair {pair_slug}: sync failed: {e}")
             return FXSyncPairResult(
                 pair=pair_slug,
-                status=FXSyncStatus.FAILED,
+                status=SyncStatus.FAILED,
                 provider_used=None,
                 points_fetched=0,
                 points_changed=0,
                 message=str(e),
+                errors=[str(e)],
                 elapsed_ms=elapsed_ms,
                 )
 
@@ -1343,9 +1346,9 @@ async def sync_pairs_bulk(
     results: list[FXSyncPairResult] = list(await asyncio.gather(*route_tasks))
 
     # Build summary
-    success_count = sum(1 for r in results if r.status in (FXSyncStatus.OK, FXSyncStatus.PARTIAL))
+    success_count = sum(1 for r in results if r.status in (SyncStatus.OK, SyncStatus.PARTIAL))
     total_points_changed = sum(r.points_changed for r in results)
-    operation_errors = [r.message for r in results if r.status == FXSyncStatus.FAILED and r.message]
+    operation_errors = [r.message for r in results if r.status == SyncStatus.FAILED and r.message]
 
     return FXSyncBulkResponse(
         results=results,

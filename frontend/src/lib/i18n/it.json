@@ -260,14 +260,20 @@
     },
     "sync": {
       "toastOk": "{name} sincronizzato\n{fetched}↓ {changed}Δ",
-      "toastFailed": "Sincronizzazione fallita per {name}"
+      "toastFailed": "Sincronizzazione fallita per {name}",
+      "modalTitle": "Sincronizza Prezzi",
+      "modalDescription": "Sincronizza i prezzi dai provider configurati per l'intervallo di date selezionato.",
+      "assetsCount": "asset",
+      "noProvider": "Nessun provider assegnato",
+      "currentValueOnly": "Solo valore corrente (senza storico)"
     },
     "delete": {
       "confirmMessage": "Eliminare \"{name}\"? Assegnazioni provider e storico prezzi verranno rimossi.",
       "toastOk": "{name} eliminato",
       "toastFailed": "Impossibile eliminare {name}",
       "bulkOk": "{count} asset eliminati",
-      "bulkPartial": "{failed} asset non eliminabili (hanno transazioni)"
+      "bulkPartial": "{failed} asset non eliminabili (hanno transazioni)",
+      "bulkConfirmMessage": "Eliminare {count} asset? Le assegnazioni dei provider e lo storico prezzi verranno rimossi."
     },
     "types": {
       "STOCK": "Azione",

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.8-11-g2c5d86c-dirty"
+    "version": "v0.5.8-12-g4af1dec-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -6908,6 +6908,24 @@
             "type": "array",
             "title": "Errors",
             "description": "Operation-level errors (not per-item)"
+          },
+          "date_range": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Requested date range"
+          },
+          "total_points_changed": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Points Changed",
+            "description": "Sum of points_changed across all assets",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -7962,20 +7980,58 @@
             "type": "integer",
             "title": "Asset Id"
           },
-          "fetched_count": {
+          "status": {
+            "$ref": "#/components/schemas/SyncStatus",
+            "description": "Sync status for this asset",
+            "default": "failed"
+          },
+          "provider_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Used",
+            "description": "Provider code that served data"
+          },
+          "points_fetched": {
             "type": "integer",
-            "title": "Fetched Count",
-            "description": "Number of prices fetched from provider"
+            "title": "Points Fetched",
+            "description": "Number of prices fetched from provider",
+            "default": 0
+          },
+          "points_changed": {
+            "type": "integer",
+            "title": "Points Changed",
+            "description": "Number of prices actually inserted/updated in DB",
+            "default": 0
           },
           "inserted_count": {
             "type": "integer",
             "title": "Inserted Count",
-            "description": "Number of prices inserted into DB"
+            "description": "Number of prices inserted into DB",
+            "default": 0
           },
           "updated_count": {
             "type": "integer",
             "title": "Updated Count",
-            "description": "Number of prices updated in DB"
+            "description": "Number of prices updated in DB",
+            "default": 0
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "Optional note/summary (non-error)"
           },
           "errors": {
             "items": {
@@ -7983,15 +8039,25 @@
             },
             "type": "array",
             "title": "Errors"
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Ms",
+            "description": "Backend sync time for this asset in ms"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "asset_id",
-          "fetched_count",
-          "inserted_count",
-          "updated_count"
+          "asset_id"
         ],
         "title": "FARefreshResult",
         "description": "Result of refresh for single asset."
@@ -9098,7 +9164,7 @@
             "description": "Normalized pair slug, e.g. 'EUR-USD'"
           },
           "status": {
-            "$ref": "#/components/schemas/FXSyncStatus",
+            "$ref": "#/components/schemas/SyncStatus",
             "description": "Sync status for this pair"
           },
           "provider_used": {
@@ -9139,6 +9205,14 @@
             "title": "Message",
             "description": "Optional note (e.g. 'monthly data only', 'fallback used')"
           },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "List of error messages for this pair"
+          },
           "detail": {
             "anyOf": [
               {
@@ -9176,17 +9250,6 @@
         ],
         "title": "FXSyncPairResult",
         "description": "Result of sync operation for a single pair."
-      },
-      "FXSyncStatus": {
-        "type": "string",
-        "enum": [
-          "ok",
-          "partial",
-          "failed",
-          "skipped"
-        ],
-        "title": "FXSyncStatus",
-        "description": "Status of a single pair sync operation."
       },
       "FXUpsertItem": {
         "properties": {
@@ -9518,6 +9581,17 @@
         "type": "object",
         "title": "SectorListResponse",
         "description": "Response for sectors list endpoint."
+      },
+      "SyncStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "partial",
+          "failed",
+          "skipped"
+        ],
+        "title": "SyncStatus",
+        "description": "Status of a single sync operation (shared by FA and FX)."
       },
       "SystemInfoResponse": {
         "properties": {

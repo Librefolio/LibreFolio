@@ -462,7 +462,7 @@ async def test_query_without_sync_returns_empty(test_server):
             )
         assert sync_resp.status_code == 200
         sync_result = sync_resp.json()["results"][0]
-        print_info(f"  Sync fetched: {sync_result.get('fetched_count', 0)} prices")
+        print_info(f"  Sync fetched: {sync_result.get('points_fetched', 0)} prices")
 
         # 5. Query AFTER sync — must return ≥1 price
         query_resp2 = await client.post(

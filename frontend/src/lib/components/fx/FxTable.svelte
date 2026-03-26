@@ -16,7 +16,7 @@
     import {
         PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR,
         providerBadgeHtml,
-    } from '$lib/utils/fxSync';
+    } from '$lib/utils/providerHelpers';
     import {currentLanguage} from '$lib/stores/language';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
 

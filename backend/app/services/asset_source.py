@@ -25,6 +25,7 @@ Design principles:
 
 import asyncio
 import json
+import time
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta
 from typing import Optional, List, Dict
@@ -58,6 +59,7 @@ from backend.app.schemas import (
     FAProviderRemovalResult,
     FABulkRefreshResponse,
     FARefreshResult,
+    SyncStatus,
     )
 from backend.app.schemas.assets import (
     FAAssetPatchItem,
@@ -1306,7 +1308,7 @@ class AssetSourceManager:
         Note: Already parallelized with asyncio.gather and semaphore
         """
         if not requests:
-            return FABulkRefreshResponse(results=[])
+            return FABulkRefreshResponse(results=[], success_count=0, date_range=None, total_points_changed=0)
 
         results = []
         sem = asyncio.Semaphore(concurrency)
@@ -1315,26 +1317,35 @@ class AssetSourceManager:
             asset_id = item.asset_id
             start = item.date_range.start
             end = item.date_range.end
+            t_start_ns = time.monotonic_ns()
 
             fetched_count = 0
             inserted_count = 0
             updated_count = 0
             errors = []
+            provider_code_used = None
 
             # Resolve provider assignment
             try:
                 assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
                 if not assignment:
                     errors.append("No provider assigned for asset")
+                    elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                     return FARefreshResult(
                         asset_id=asset_id,
-                        fetched_count=fetched_count,
-                        inserted_count=inserted_count,
-                        updated_count=updated_count,
+                        status=SyncStatus.SKIPPED,
+                        provider_used=None,
+                        points_fetched=0,
+                        points_changed=0,
+                        inserted_count=0,
+                        updated_count=0,
+                        message="No provider assigned",
                         errors=errors,
+                        elapsed_ms=elapsed_ms,
                         )
 
                 provider_code = assignment.provider_code
+                provider_code_used = provider_code
                 provider_params = assignment.provider_params or {}
                 identifier = assignment.identifier  # Identifier is in assignment, not asset
 
@@ -1344,33 +1355,48 @@ class AssetSourceManager:
                 asset = asset_res.scalar_one_or_none()
                 if not asset:
                     errors.append(f"Asset {asset_id} not found")
+                    elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                     return FARefreshResult(
                         asset_id=asset_id,
-                        fetched_count=fetched_count,
-                        inserted_count=inserted_count,
-                        updated_count=updated_count,
+                        status=SyncStatus.FAILED,
+                        provider_used=provider_code_used,
+                        points_fetched=0,
+                        points_changed=0,
+                        inserted_count=0,
+                        updated_count=0,
                         errors=errors,
+                        elapsed_ms=elapsed_ms,
                         )
             except Exception as e:
                 errors.append(f"Failed to resolve provider or asset: {str(e)}")
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                 return FARefreshResult(
                     asset_id=asset_id,
-                    fetched_count=fetched_count,
-                    inserted_count=inserted_count,
-                    updated_count=updated_count,
+                    status=SyncStatus.FAILED,
+                    provider_used=provider_code_used,
+                    points_fetched=0,
+                    points_changed=0,
+                    inserted_count=0,
+                    updated_count=0,
                     errors=errors,
+                    elapsed_ms=elapsed_ms,
                     )
 
             # Instantiate provider from registry
             prov = AssetProviderRegistry.get_provider_instance(provider_code)
             if not prov:
                 errors.append(f"Provider not found: {provider_code}")
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                 return FARefreshResult(
                     asset_id=asset_id,
-                    fetched_count=fetched_count,
-                    inserted_count=inserted_count,
-                    updated_count=updated_count,
+                    status=SyncStatus.FAILED,
+                    provider_used=provider_code_used,
+                    points_fetched=0,
+                    points_changed=0,
+                    inserted_count=0,
+                    updated_count=0,
                     errors=errors,
+                    elapsed_ms=elapsed_ms,
                     )
 
             # Parse provider_params if stored as JSON string
@@ -1386,12 +1412,17 @@ class AssetSourceManager:
                 prov.validate_params(provider_params)
             except Exception as e:
                 errors.append(f"Invalid provider params: {str(e)}")
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                 return FARefreshResult(
                     asset_id=asset_id,
-                    fetched_count=fetched_count,
-                    inserted_count=inserted_count,
-                    updated_count=updated_count,
+                    status=SyncStatus.FAILED,
+                    provider_used=provider_code_used,
+                    points_fetched=0,
+                    points_changed=0,
+                    inserted_count=0,
+                    updated_count=0,
                     errors=errors,
+                    elapsed_ms=elapsed_ms,
                     )
 
             # Fetch existing DB entries (prefetch) while calling remote
@@ -1487,24 +1518,35 @@ class AssetSourceManager:
                         db_existing, remote_data = await asyncio.gather(db_task, fetch_task)
             except Exception as e:
                 errors.append(str(e))
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                 return FARefreshResult(
                     asset_id=asset_id,
-                    fetched_count=fetched_count,
-                    inserted_count=inserted_count,
-                    updated_count=updated_count,
+                    status=SyncStatus.FAILED,
+                    provider_used=provider_code_used,
+                    points_fetched=0,
+                    points_changed=0,
+                    inserted_count=0,
+                    updated_count=0,
                     errors=errors,
+                    elapsed_ms=elapsed_ms,
                     )
 
             # remote_data expected shape: {"prices": [ {date, open?, high?, low?, close, volume?, currency}, ... ], "source": "..."}
             prices = remote_data.get("prices", []) if isinstance(remote_data, dict) else []
             if not prices:
                 errors.append("No prices returned from provider")
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
                 return FARefreshResult(
                     asset_id=asset_id,
-                    fetched_count=fetched_count,
-                    inserted_count=inserted_count,
-                    updated_count=updated_count,
+                    status=SyncStatus.FAILED,
+                    provider_used=provider_code_used,
+                    points_fetched=0,
+                    points_changed=0,
+                    inserted_count=0,
+                    updated_count=0,
+                    message="No data available from provider",
                     errors=errors,
+                    elapsed_ms=elapsed_ms,
                     )
 
             # Convert prices to FAPricePoint objects
@@ -1541,12 +1583,36 @@ class AssetSourceManager:
                 # Not critical, skip
                 pass
 
+            points_changed = inserted_count + updated_count
+            elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+
+            # Determine status and message
+            message = None
+            if errors:
+                status = SyncStatus.FAILED if fetched_count == 0 else SyncStatus.PARTIAL
+            elif fetched_count > 0:
+                # Check if only current value (no history) → partial
+                has_history = prov.supports_history and start < date_type.today()
+                if has_history and fetched_count == 1:
+                    status = SyncStatus.PARTIAL
+                    message = "Current value only, history unavailable"
+                else:
+                    status = SyncStatus.OK
+            else:
+                status = SyncStatus.FAILED
+                message = "No data available from provider"
+
             return FARefreshResult(
                 asset_id=asset_id,
-                fetched_count=fetched_count,
+                status=status,
+                provider_used=provider_code_used,
+                points_fetched=fetched_count,
+                points_changed=points_changed,
                 inserted_count=inserted_count,
                 updated_count=updated_count,
+                message=message,
                 errors=errors,
+                elapsed_ms=elapsed_ms,
                 )
 
         # Create tasks for all items
@@ -1556,10 +1622,17 @@ class AssetSourceManager:
         completed = await asyncio.gather(*tasks)
 
         results = list(completed)
+        total_points_changed = sum(r.points_changed for r in results)
+        # Build date_range from first item
+        date_range_model = None
+        if requests:
+            date_range_model = requests[0].date_range
         return FABulkRefreshResponse(
             results=results,
-            success_count=sum(1 for r in results if not r.errors),  # Success = no errors
+            success_count=sum(1 for r in results if r.status in (SyncStatus.OK, SyncStatus.PARTIAL)),
             errors=[],
+            date_range=date_range_model,
+            total_points_changed=total_points_changed,
             )
 
 

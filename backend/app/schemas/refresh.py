@@ -38,6 +38,23 @@ from backend.app.schemas.common import Currency, DateRangeModel, BaseBulkRespons
 
 
 # ============================================================================
+# SHARED SYNC STATUS ENUM
+# ============================================================================
+
+
+class SyncStatus(str, Enum):
+    """Status of a single sync operation (shared by FA and FX)."""
+    OK = "ok"             # Provider returned data, inserted/updated in DB
+    PARTIAL = "partial"   # Provider has data but incomplete (e.g. SNB monthly, gaps)
+    FAILED = "failed"     # All providers for this pair/asset failed
+    SKIPPED = "skipped"   # Pair is MANUAL-only or asset has no provider
+
+
+# Backward-compatible alias (will be removed in future)
+FXSyncStatus = SyncStatus
+
+
+# ============================================================================
 # FA REFRESH SECTION
 # ============================================================================
 
@@ -60,29 +77,27 @@ class FARefreshResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
-    fetched_count: int = Field(..., description="Number of prices fetched from provider")
-    inserted_count: int = Field(..., description="Number of prices inserted into DB")
-    updated_count: int = Field(..., description="Number of prices updated in DB")
+    status: SyncStatus = Field(SyncStatus.FAILED, description="Sync status for this asset")
+    provider_used: Optional[str] = Field(None, description="Provider code that served data")
+    points_fetched: int = Field(0, description="Number of prices fetched from provider")
+    points_changed: int = Field(0, description="Number of prices actually inserted/updated in DB")
+    inserted_count: int = Field(0, description="Number of prices inserted into DB")
+    updated_count: int = Field(0, description="Number of prices updated in DB")
+    message: Optional[str] = Field(None, description="Optional note/summary (non-error)")
     errors: List[str] = Field(default_factory=list)
+    elapsed_ms: Optional[int] = Field(None, ge=0, description="Backend sync time for this asset in ms")
 
 
 class FABulkRefreshResponse(BaseBulkResponse[FARefreshResult]):
     """Response for bulk asset price refresh."""
 
-    pass
+    date_range: Optional[DateRangeModel] = Field(None, description="Requested date range")
+    total_points_changed: int = Field(0, ge=0, description="Sum of points_changed across all assets")
 
 
 # ============================================================================
 # FX SYNC SECTION — Pair-Based Bulk Sync
 # ============================================================================
-
-
-class FXSyncStatus(str, Enum):
-    """Status of a single pair sync operation."""
-    OK = "ok"             # Provider returned data, inserted/updated in DB
-    PARTIAL = "partial"   # Provider has data but incomplete (e.g. SNB monthly, gaps)
-    FAILED = "failed"     # All providers for this pair failed
-    SKIPPED = "skipped"   # Pair is MANUAL-only, nothing to sync
 
 
 class FXSyncPairRequest(BaseModel):
@@ -142,11 +157,12 @@ class FXSyncPairResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     pair: str = Field(..., description="Normalized pair slug, e.g. 'EUR-USD'")
-    status: FXSyncStatus = Field(..., description="Sync status for this pair")
+    status: SyncStatus = Field(..., description="Sync status for this pair")
     provider_used: Optional[str] = Field(None, description="Provider code that served data (None if failed/skipped)")
     points_fetched: int = Field(0, ge=0, description="Number of rate points fetched from provider")
     points_changed: int = Field(0, ge=0, description="Number of rate points actually inserted/updated in DB")
     message: Optional[str] = Field(None, description="Optional note (e.g. 'monthly data only', 'fallback used')")
+    errors: List[str] = Field(default_factory=list, description="List of error messages for this pair")
     detail: Optional[List[FXSyncLegDetail]] = Field(
         None,
         description="Per-leg diagnostic breakdown. Present for chains and single-provider routes "

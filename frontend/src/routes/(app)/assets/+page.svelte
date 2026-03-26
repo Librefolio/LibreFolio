@@ -20,6 +20,7 @@
     import {BarChart3, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X, Check} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
+    import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -32,6 +33,7 @@
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
 
     // =========================================================================
     // Types
@@ -77,15 +79,21 @@
     let error = $state<string | null>(null);
     let assetTableComponent: AssetTable | undefined = $state(undefined);
     let selectedAssetRows = $state<AssetRow[]>([]);
-    /** True while "Sync All" is running */
-    let syncAllLoading = $state(false);
     /** Set of asset IDs currently syncing (for per-card/row rotating icon) */
     let syncingAssetIds = $state<Set<number>>(new Set());
 
-    // Delete dialog
+    // Delete dialog (single)
     let deleteDialogOpen = $state(false);
     let deletingAsset: AssetRow | null = $state(null);
     let deleteLoading = $state(false);
+
+    // Bulk delete confirmation dialog
+    let bulkDeleteDialogOpen = $state(false);
+    let deletingAssets = $state<AssetRow[]>([]);
+
+    // Sync modal
+    let syncModalOpen = $state(false);
+    let syncModalAssets = $state<AssetInfo[]>([]);
 
     // Filters
     let searchText = $state('');
@@ -125,10 +133,11 @@
     // Debounce timer
     let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Filter bar adaptive layout (same pattern as FX page)
+    // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    let layoutMode = $state<'wide' | 'tablet' | 'tablet-s' | 'mobile'>('tablet');
-    let showActionLabels = $state(true);
+    const layout = createResponsiveLayout({wide: 1240, tablet: 920, tabletS: 500, labelHide: 460});
+    let layoutMode = $derived(layout.layoutMode);
+    let showActionLabels = $derived(layout.showActionLabels);
 
     // Type filter dropdown
     let typeFilterOpen = $state(false);
@@ -191,30 +200,12 @@
         await loadAssets();
     });
 
-    // ResizeObserver for adaptive filter bar layout (same pattern as FX page)
-    // Measures contentRect.width = CSS box-width − padding(32px) − border(2px)
-    //
-    // Threshold tuning guide (CSS box → contentRect):
-    //   wide     ≥ 1100  (datepicker + all filters + 2×2 buttons in one row)
-    //   tablet   ≥  770  (datepicker + filters 2-row | 2×2 buttons right)
-    //   tablet-s ≥  500  (datepicker above filters, left | buttons column right, icon-only)
-    //   mobile   <  500  (everything stacked centered)
-    //   labels   ≥  820  (action buttons show text labels)
-    //
-    // To adjust: edit the numbers in the if/else below
+    // ResizeObserver for adaptive filter bar layout
     $effect(() => {
         const el = filterBarRef;
         if (!el) return;
-        const ro = new ResizeObserver(([entry]) => {
-            const w = entry.contentRect.width;
-            if (w >= 1240) layoutMode = 'wide';            // ← wide threshold
-            else if (w >= 920) layoutMode = 'tablet';       // ← tablet threshold
-            else if (w >= 500) layoutMode = 'tablet-s';     // ← tablet-s threshold
-            else layoutMode = 'mobile';                     // ← mobile fallback
-            showActionLabels = w >= 460;                    // ← labels threshold
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
+        layout.attach(el);
+        return () => layout.detach();
     });
 
     // Close type filter dropdown on outside click
@@ -402,7 +393,7 @@
             }]);
             const r = (response as any)?.results?.[0];
             if (r && (!r.errors || r.errors.length === 0)) {
-                const fetched = r.fetched_count ?? 0;
+                const fetched = r.points_fetched ?? 0;
                 const inserted = r.inserted_count ?? 0;
                 const updated = r.updated_count ?? 0;
                 const changed = inserted + updated;
@@ -424,17 +415,10 @@
         }
     }
 
-    /** Sync all assets that have a provider */
-    async function handleSyncAllAssets() {
-        syncAllLoading = true;
-        try {
-            const withProvider = assets.filter(a => a.has_provider);
-            for (const asset of withProvider) {
-                await handleSyncAsset(asset);
-            }
-        } finally {
-            syncAllLoading = false;
-        }
+    /** Open sync modal for all assets that have a provider */
+    function handleSyncAllAssets() {
+        syncModalAssets = assets.filter(a => a.has_provider);
+        syncModalOpen = true;
     }
 
     async function handleRefreshAsset(_asset: any) {
@@ -474,19 +458,9 @@
     // Bulk Actions (table selection)
     // =========================================================================
 
-    let bulkSyncLoading = $state(false);
-
-    async function handleBulkSyncAssets() {
-        bulkSyncLoading = true;
-        try {
-            for (const row of selectedAssetRows) {
-                if (row.has_provider) await handleSyncAsset(row);
-            }
-        } finally {
-            bulkSyncLoading = false;
-        }
-        assetTableComponent?.getTableRef()?.clearSelection();
-        selectedAssetRows = [];
+    function handleBulkSyncAssets() {
+        syncModalAssets = selectedAssetRows.filter(r => r.has_provider);
+        syncModalOpen = true;
     }
 
     async function handleBulkRefreshAssets() {
@@ -495,8 +469,13 @@
         selectedAssetRows = [];
     }
 
-    async function handleBulkDeleteAssets() {
-        const ids = selectedAssetRows.map(r => r.id);
+    function handleBulkDeleteAssets() {
+        deletingAssets = [...selectedAssetRows];
+        bulkDeleteDialogOpen = true;
+    }
+
+    async function confirmBulkDeleteAssets() {
+        const ids = deletingAssets.map(r => r.id);
         if (ids.length === 0) return;
         try {
             const response = await zodiosApi.delete_assets_bulk_api_v1_assets_delete(undefined, {
@@ -514,6 +493,8 @@
         } catch (e: any) {
             toasts.error('Delete failed: ' + (e?.message || 'unknown'));
         } finally {
+            bulkDeleteDialogOpen = false;
+            deletingAssets = [];
             assetTableComponent?.getTableRef()?.clearSelection();
             selectedAssetRows = [];
         }
@@ -558,7 +539,7 @@
                 <DataTableToolbar
                     selectedCount={selectedAssetRows.length}
                     bulkActions={[
-                        { id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets(), iconClass: bulkSyncLoading ? 'animate-spin' : '', disabled: bulkSyncLoading },
+                        { id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets() },
                         { id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets() },
                         { id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets() },
                     ]}
@@ -789,9 +770,8 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={handleSyncAllAssets}
-                disabled={syncAllLoading}
             >
-                <RotateCw size={14} class={syncAllLoading ? 'animate-spin' : ''} />
+                <RotateCw size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
@@ -898,7 +878,7 @@
     onclose={() => { settingsModalOpen = false; settingsTargetId = null; }}
 />
 
-<!-- Delete Asset Confirm Dialog -->
+<!-- Delete Asset Confirm Dialog (single) -->
 <ConfirmModal
     open={deleteDialogOpen}
     title={$t('common.confirmDelete')}
@@ -907,5 +887,28 @@
     danger={true}
     onConfirm={confirmDeleteAsset}
     onCancel={() => { deleteDialogOpen = false; deletingAsset = null; }}
+/>
+
+<!-- Bulk Delete Confirm Dialog -->
+<ConfirmModal
+    open={bulkDeleteDialogOpen}
+    title={$t('common.confirmDelete')}
+    message={$t('assets.delete.bulkConfirmMessage', { values: { count: deletingAssets.length } })}
+    items={deletingAssets.map(a => a.display_name)}
+    itemsLabel={`${deletingAssets.length} assets`}
+    confirmText={$t('common.delete')}
+    danger={true}
+    onConfirm={confirmBulkDeleteAssets}
+    onCancel={() => { bulkDeleteDialogOpen = false; deletingAssets = []; }}
+/>
+
+<!-- Asset Sync Modal -->
+<AssetSyncModal
+    bind:open={syncModalOpen}
+    {dateStart}
+    {dateEnd}
+    assets={syncModalAssets}
+    onsynced={() => fetchAllPriceData()}
+    onclose={() => { syncModalOpen = false; }}
 />
 
