@@ -417,5 +417,27 @@ reali dagli asset source provider (yfinance, JustETF).
 **Status**: ✅ COMPLETATO (20 Marzo 2026)  
 **Nota**: Completato durante `plan-fxTestingCleanup.prompt.md` Step 9. Risultato: 724→590 chiavi, 0 inutilizzate, 100% coverage 4 lingue, ~20 duplicati residui intenzionali. Vedi `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-05-subplan/plan-fxTestingCleanup.prompt.md`.
 
+---
+
+## 🔗 Link Transazioni in Asset Delete Modal (Phase 7)
+
+**Data aggiunta**: 26 Marzo 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Media (richiede Phase 7 completata)
+
+### Contesto
+
+Quando un asset non può essere eliminato perché ha transazioni esistenti (`error_code: HAS_TRANSACTIONS`), il messaggio è generico. Quando la pagina transazioni sarà implementata (Phase 7), bisognerà:
+
+1. **Delete modal**: mostrare il conteggio transazioni e un link diretto alla pagina transazioni filtrata (es. "This asset has 3 transactions: [View → /transactions?asset_id=123]")
+2. **Pagina dettaglio asset**: sezione con link alle transazioni collegate
+3. **Backend**: endpoint o campo aggiuntivo nel delete result con `transaction_count`
+
+### Azione Futura
+
+- Aggiungere `transaction_count: int` a `FAAssetDeleteResult` quando `error_code == "HAS_TRANSACTIONS"`
+- Nel frontend, renderizzare un link cliccabile nella ConfirmModal results e nei toast
+- Implementare il filtro `?asset_id=` nella pagina transazioni
+
 
 

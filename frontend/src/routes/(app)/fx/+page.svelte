@@ -89,6 +89,7 @@
     let bulkDeleteDialogOpen = $state(false);
     let deletingPairs = $state<Array<{base: string; quote: string; slug: string}>>([]);
     let bulkDeleteLoading = $state(false);
+    let bulkFxDeleteResults = $state<{label: string; success: boolean; detail?: string}[]>([]);
 
     // Modals
     let addModalOpen = $state(false);
@@ -431,11 +432,12 @@
             }]);
 
             // Step 2: Delete all historical rates for this pair
-            await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete([{
+            const deleteResponse = await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete([{
                 from: deletingPair.base,
                 to: deletingPair.quote,
                 delete_all: true,
             }]);
+            const rateCount = (deleteResponse as any)?.results?.[0]?.deleted_count ?? 0;
 
             // Step 3: Clean up frontend state
             removeFxStore(deletingPair.slug);
@@ -446,10 +448,14 @@
             if (filterCurrency1 && !remaining.has(filterCurrency1)) filterCurrency1 = '';
             if (filterCurrency2 && !remaining.has(filterCurrency2)) filterCurrency2 = '';
 
+            const pairLabel = deletingPair.slug.replace('-', '/');
+            toasts.success($_('fx.delete.toastOk', { values: { pair: pairLabel, count: rateCount } }));
+
             deleteDialogOpen = false;
             deletingPair = null;
         } catch (e: any) {
             console.error('Failed to delete pair:', e);
+            toasts.error($_('fx.delete.toastFailed', { values: { pair: deletingPair?.slug?.replace('-', '/') ?? '' } }));
         } finally {
             deleteLoading = false;
         }
@@ -508,20 +514,38 @@
     async function confirmBulkDelete() {
         if (deletingPairs.length === 0) return;
         bulkDeleteLoading = true;
+        const perPairResults: {label: string; success: boolean; detail?: string}[] = [];
         try {
             for (const pair of deletingPairs) {
-                await zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{
-                    base: pair.base,
-                    quote: pair.quote,
-                }]);
-                await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete([{
-                    from: pair.base,
-                    to: pair.quote,
-                    delete_all: true,
-                }]);
-                removeFxStore(pair.slug);
+                try {
+                    await zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{
+                        base: pair.base,
+                        quote: pair.quote,
+                    }]);
+                    const deleteResponse = await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete([{
+                        from: pair.base,
+                        to: pair.quote,
+                        delete_all: true,
+                    }]);
+                    const rateCount = (deleteResponse as any)?.results?.[0]?.deleted_count ?? 0;
+                    removeFxStore(pair.slug);
+                    perPairResults.push({
+                        label: `${pair.base}/${pair.quote}`,
+                        success: true,
+                        detail: $_('fx.delete.resultDeleted', { values: { count: rateCount } }),
+                    });
+                } catch (pairErr: any) {
+                    perPairResults.push({
+                        label: `${pair.base}/${pair.quote}`,
+                        success: false,
+                        detail: pairErr?.message || 'Error',
+                    });
+                }
             }
-            const deletedSlugs = new Set(deletingPairs.map(p => p.slug));
+
+            const deletedSlugs = new Set(
+                perPairResults.filter(r => r.success).map((_, i) => deletingPairs[i].slug)
+            );
             pairs = pairs.filter(p => !deletedSlugs.has(p.config.slug));
 
             // Reset currency filters if selected currency no longer exists
@@ -529,15 +553,20 @@
             if (filterCurrency1 && !remaining.has(filterCurrency1)) filterCurrency1 = '';
             if (filterCurrency2 && !remaining.has(filterCurrency2)) filterCurrency2 = '';
 
-            bulkDeleteDialogOpen = false;
-            deletingPairs = [];
-            fxTableComponent?.getTableRef()?.clearSelection();
-            selectedFxRows = [];
+            bulkFxDeleteResults = perPairResults;
         } catch (e: any) {
             console.error('Failed to bulk delete pairs:', e);
         } finally {
             bulkDeleteLoading = false;
         }
+    }
+
+    function closeBulkFxDeleteDialog() {
+        bulkDeleteDialogOpen = false;
+        bulkFxDeleteResults = [];
+        deletingPairs = [];
+        fxTableComponent?.getTableRef()?.clearSelection();
+        selectedFxRows = [];
     }
 
     async function handleSyncPair(detail: {slug: string; base: string; quote: string}) {
@@ -866,8 +895,9 @@
     itemsLabel={`${deletingPairs.length} pairs`}
     confirmText={$_('common.delete')}
     danger={true}
+    results={bulkFxDeleteResults}
     onConfirm={confirmBulkDelete}
-    onCancel={() => { bulkDeleteDialogOpen = false; deletingPairs = []; }}
+    onCancel={closeBulkFxDeleteDialog}
 />
 
 <!-- Add Pair Modal -->

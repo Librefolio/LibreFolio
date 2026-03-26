@@ -269,11 +269,16 @@
     },
     "delete": {
       "confirmMessage": "Eliminare \"{name}\"? Assegnazioni provider e storico prezzi verranno rimossi.",
+      "confirmQuestion": "Eliminare \"{name}\"?",
+      "confirmWarning": "Assegnazioni provider e storico prezzi verranno rimossi. ⚠️",
       "toastOk": "{name} eliminato",
       "toastFailed": "Impossibile eliminare {name}",
+      "hasTransactions": "Impossibile eliminare \"{name}\": ha transazioni esistenti",
       "bulkOk": "{count} asset eliminati",
       "bulkPartial": "{failed} asset non eliminabili (hanno transazioni)",
-      "bulkConfirmMessage": "Eliminare {count} asset? Le assegnazioni dei provider e lo storico prezzi verranno rimossi."
+      "bulkConfirmMessage": "Eliminare {count} asset? Le assegnazioni dei provider e lo storico prezzi verranno rimossi.",
+      "resultDeleted": "eliminato",
+      "resultHasTransactions": "ha transazioni esistenti"
     },
     "types": {
       "STOCK": "Azione",
@@ -360,6 +365,11 @@
     "deletePair": "Elimina coppia",
     "deletePairTitle": "Elimina Coppia FX",
     "deletePairMessage": "Sei sicuro di voler eliminare {pair}? Questo rimuoverà la configurazione dei provider e tutti i tassi di cambio storici.",
+    "delete": {
+      "toastOk": "{pair} eliminata ({count} tassi rimossi)",
+      "toastFailed": "Impossibile eliminare {pair}",
+      "resultDeleted": "eliminata ({count} tassi)"
+    },
     "removeProvider": "Rimuovi provider"
   },
   "settings": {

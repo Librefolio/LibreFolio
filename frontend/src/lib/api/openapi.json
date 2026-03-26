@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.8-12-g4af1dec-dirty"
+    "version": "v0.5.8-13-g87338b5-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -6378,6 +6378,30 @@
             "type": "integer",
             "title": "Asset Id",
             "description": "Asset ID"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "Asset display name (for UI feedback)"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code",
+            "description": "Structured error code: 'HAS_TRANSACTIONS' | 'NOT_FOUND' | None"
           }
         },
         "additionalProperties": false,

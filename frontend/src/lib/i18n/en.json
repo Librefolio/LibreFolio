@@ -269,11 +269,16 @@
     },
     "delete": {
       "confirmMessage": "Delete \"{name}\"? Provider assignments and price history will be removed.",
+      "confirmQuestion": "Delete \"{name}\"?",
+      "confirmWarning": "Provider assignments and price history will be removed. ⚠️",
       "toastOk": "{name} deleted",
       "toastFailed": "Failed to delete {name}",
+      "hasTransactions": "Cannot delete \"{name}\": has existing transactions",
       "bulkOk": "{count} assets deleted",
       "bulkPartial": "{failed} assets could not be deleted (have transactions)",
-      "bulkConfirmMessage": "Delete {count} assets? Provider assignments and price history will be removed."
+      "bulkConfirmMessage": "Delete {count} assets? Provider assignments and price history will be removed.",
+      "resultDeleted": "deleted",
+      "resultHasTransactions": "has existing transactions"
     },
     "types": {
       "STOCK": "Stock",
@@ -360,6 +365,11 @@
     "deletePair": "Delete pair",
     "deletePairTitle": "Delete FX Pair",
     "deletePairMessage": "Are you sure you want to delete {pair}? This will remove the provider configuration and all historical exchange rates.",
+    "delete": {
+      "toastOk": "{pair} deleted ({count} rates removed)",
+      "toastFailed": "Failed to delete {pair}",
+      "resultDeleted": "deleted ({count} rates)"
+    },
     "removeProvider": "Remove provider"
   },
   "settings": {

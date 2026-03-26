@@ -2469,7 +2469,7 @@ Options: --ui, --headed, --debug
         "all": {
             "func": front_utility_all,
             "test_names": False,
-            "name": "All Utility Tests",
+            "name": "All Frontend Utility Tests",
             "desc": "Run all utility/component E2E tests",
             },
         },

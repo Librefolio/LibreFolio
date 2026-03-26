@@ -1555,6 +1555,18 @@ type FAAssetDeleteResult = {
    * Asset ID
    */
   asset_id: number;
+  display_name?:
+    | /**
+     * Asset display name (for UI feedback)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  error_code?:
+    | /**
+     * Structured error code: 'HAS_TRANSACTIONS' | 'NOT_FOUND' | None
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
 };
 type FABulkAssetPatchResponse = {
   /**
@@ -4221,6 +4233,14 @@ const FAAssetDeleteResult: z.ZodType<FAAssetDeleteResult> = z.object({
     .describe("Info/warning/error message")
     .optional(),
   asset_id: z.number().int().describe("Asset ID"),
+  display_name: z
+    .union([z.string(), z.null()])
+    .describe("Asset display name (for UI feedback)")
+    .optional(),
+  error_code: z
+    .union([z.string(), z.null()])
+    .describe("Structured error code: 'HAS_TRANSACTIONS' | 'NOT_FOUND' | None")
+    .optional(),
 });
 const FABulkAssetDeleteResponse: z.ZodType<FABulkAssetDeleteResponse> =
   z.object({

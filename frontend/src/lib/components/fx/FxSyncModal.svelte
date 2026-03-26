@@ -126,8 +126,8 @@
                     </span>
                 {/if}
             {/if}
-            {#if pr.status === 'failed' && pr.message}
-                <span class="text-red-400 truncate" title={pr.message}>{pr.message}</span>
+            {#if pr.status === 'failed'}
+                <span class="text-red-400 truncate" title={pr.errors?.join('; ') ?? pr.message ?? ''}>{pr.errors?.[0] ?? pr.message ?? 'Failed'}</span>
             {/if}
             {#if pr.elapsed_ms}
                 <span class="ml-auto text-gray-400 font-mono tabular-nums text-[10px]">{formatElapsed(pr.elapsed_ms)}</span>

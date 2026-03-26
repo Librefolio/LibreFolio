@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import {AlertTriangle, ChevronDown, ChevronUp, X} from 'lucide-svelte';
+    import {AlertTriangle, ChevronDown, ChevronUp, X, Check, XCircle} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
@@ -21,6 +21,8 @@
         title: string;
         /** Main message */
         message: string;
+        /** Optional description rendered below message (e.g., warning text) */
+        description?: string;
         /** Optional list of items to show (collapsible) */
         items?: string[];
         /** Label for the list section */
@@ -39,12 +41,15 @@
         onCancel: () => void;
         /** Z-index for stacking (default 60 = above first-level modals) */
         zIndex?: number;
+        /** Operation results to display after action completes (replaces message+items when present) */
+        results?: {label: string; success: boolean; detail?: string}[];
     }
 
     let {
         open,
         title,
         message,
+        description = '',
         items = [],
         itemsLabel = '',
         confirmText = $t('common.confirm'),
@@ -54,6 +59,7 @@
         onConfirm,
         onCancel,
         zIndex = 60,
+        results = [],
     }: Props = $props();
 
     // Auto-show items if there's only 1 (no need for toggle)
@@ -61,6 +67,7 @@
 
     // Reactive: if items.length === 1, always show
     let shouldShowItems = $derived(items.length === 1 || showItems);
+    let hasResults = $derived(results.length > 0);
 </script>
 
 <ModalBase
@@ -89,50 +96,78 @@
 
     <!-- Body -->
     <div class="modal-body">
-        <p class="message">{message}</p>
-
-        {#if items.length > 0}
-            <div class="items-section">
-                {#if items.length > 1}
-                    <button
-                            type="button"
-                            class="items-toggle"
-                            onclick={() => (showItems = !showItems)}
-                    >
-                        <span class="items-label">
-                            {itemsLabel || `${items.length} items`}
-                        </span>
-                        {#if shouldShowItems}
-                            <ChevronUp size={16}/>
+        {#if hasResults}
+            <!-- Results mode: show ✅/❌ per-item results -->
+            <ul class="results-list">
+                {#each results as r}
+                    <li class="result-item">
+                        {#if r.success}
+                            <Check size={14} class="text-emerald-500 shrink-0" />
                         {:else}
-                            <ChevronDown size={16}/>
+                            <XCircle size={14} class="text-red-500 shrink-0" />
                         {/if}
-                    </button>
-                {/if}
+                        <span class="result-label">{r.label}</span>
+                        {#if r.detail}
+                            <span class="result-detail">— {r.detail}</span>
+                        {/if}
+                    </li>
+                {/each}
+            </ul>
+        {:else}
+            <p class="message">{message}</p>
+            {#if description}
+                <p class="description">{description}</p>
+            {/if}
 
-                {#if shouldShowItems}
-                    <ul class="items-list" transition:fade={{ duration: 100 }}>
-                        {#each items as item}
-                            <li class="item">{item}</li>
-                        {/each}
-                    </ul>
-                {/if}
-            </div>
+            {#if items.length > 0}
+                <div class="items-section">
+                    {#if items.length > 1}
+                        <button
+                                type="button"
+                                class="items-toggle"
+                                onclick={() => (showItems = !showItems)}
+                        >
+                            <span class="items-label">
+                                {itemsLabel || `${items.length} items`}
+                            </span>
+                            {#if shouldShowItems}
+                                <ChevronUp size={16}/>
+                            {:else}
+                                <ChevronDown size={16}/>
+                            {/if}
+                        </button>
+                    {/if}
+
+                    {#if shouldShowItems}
+                        <ul class="items-list" transition:fade={{ duration: 100 }}>
+                            {#each items as item}
+                                <li class="item">{item}</li>
+                            {/each}
+                        </ul>
+                    {/if}
+                </div>
+            {/if}
         {/if}
     </div>
 
     <!-- Footer -->
     <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick={onCancel}>
-            {cancelText}
-        </button>
-        <button
-                type="button"
-                class="btn {danger ? 'btn-danger' : warning ? 'btn-warning' : 'btn-primary'}"
-                onclick={onConfirm}
-        >
-            {confirmText}
-        </button>
+        {#if hasResults}
+            <button type="button" class="btn btn-primary" onclick={onCancel}>
+                {$t('common.close')}
+            </button>
+        {:else}
+            <button type="button" class="btn btn-secondary" onclick={onCancel}>
+                {cancelText}
+            </button>
+            <button
+                    type="button"
+                    class="btn {danger ? 'btn-danger' : warning ? 'btn-warning' : 'btn-primary'}"
+                    onclick={onConfirm}
+            >
+                {confirmText}
+            </button>
+        {/if}
     </div>
 </ModalBase>
 
@@ -199,6 +234,51 @@
     }
 
     :global(.dark) .message {
+        color: #94a3b8;
+    }
+
+    .description {
+        color: #64748b;
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        margin: 0.5rem 0 0;
+    }
+
+    :global(.dark) .description {
+        color: #94a3b8;
+    }
+
+    .results-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .result-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        color: #334155;
+    }
+
+    :global(.dark) .result-item {
+        color: #e2e8f0;
+    }
+
+    .result-label {
+        font-weight: 500;
+    }
+
+    .result-detail {
+        color: #64748b;
+        font-size: 0.75rem;
+    }
+
+    :global(.dark) .result-detail {
         color: #94a3b8;
     }
 
