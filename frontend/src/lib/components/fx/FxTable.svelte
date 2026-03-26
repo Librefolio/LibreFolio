@@ -69,6 +69,15 @@
         inversionVersion++;
     }
 
+    /** Bulk-toggle inversion for multiple slugs (called by parent for bulk actions). */
+    export function bulkToggleInversion(slugs: string[]) {
+        for (const slug of slugs) {
+            const current = isCardInverted(slug);
+            setCardInverted(slug, !current);
+        }
+        inversionVersion++;
+    }
+
     function getDisplayBase(row: FxRow): string {
         void inversionVersion; // register reactivity
         return isCardInverted(row.slug) ? row.quote : row.base;
