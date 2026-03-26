@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.8-15-g384c685-dirty"
+    "version": "v0.5.8-16-g8c3622c-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -1366,7 +1366,7 @@
           "FA CRUD"
         ],
         "summary": "Read Assets Bulk",
-        "description": "Bulk read assets with classification metadata (preserves request order).\n\nFetches basic asset information along with parsed classification_params\nfor multiple assets in a single request. Assets not found are silently\nskipped.\n\n**Request query**:\n```json\nGET /api/v1/assets?asset_ids=1&asset_ids=2&asset_ids=3\n```\n\n**Response** (ordered by request):\n```json\n[\n  {\n    \"asset_id\": 1,\n    \"display_name\": \"Apple Inc.\",\n    \"identifier\": \"AAPL\",\n    \"currency\": \"USD\",\n    \"asset_type\": \"stock\",\n    \"classification_params\": {\n      \"sector\": \"Technology\",\n      \"short_description\": \"Consumer electronics\",\n      \"geographic_area\": {\n        \"USA\": \"1.0000\"\n      }\n    },\n    has_provider: false\n  },\n  {\n    \"asset_id\": 2,\n    \"display_name\": \"Vanguard S&P 500\",\n    \"identifier\": \"VOO\",\n    \"currency\": \"USD\",\n    \"asset_type\": \"etf\",\n    \"classification_params\": {\n      \"geographic_area\": {\n        \"USA\": \"1.0000\"\n      }\n    },\n    has_provider: true\n  }\n]\n```\n\n**Classification Params**:\n- Parsed from JSON stored in database\n- May be null if no metadata set\n- Geographic area contains ISO-3166-A3 codes\n- Weights are Decimal strings (4 decimal places)\n\nArgs:\n    asset_ids: Bulk read request with list of asset IDs\n    session: Database session\n\nReturns:\n    List of FAAssetMetadataResponse in request order (missing assets skipped)\n\nRaises:\n    HTTPException: 500 if unexpected error occurs",
+        "description": "Bulk read assets with classification metadata (preserves request order).\n\nFetches basic asset information along with parsed classification_params\nfor multiple assets in a single request. Assets not found are silently\nskipped.\n\n**Request query**:\n```json\nGET /api/v1/assets?asset_ids=1&asset_ids=2&asset_ids=3\n```\n\n**Response** (ordered by request):\n```json\n[\n  {\n    \"asset_id\": 1,\n    \"display_name\": \"Apple Inc.\",\n    \"identifier\": \"AAPL\",\n    \"currency\": \"USD\",\n    \"asset_type\": \"stock\",\n    \"classification_params\": {\n      \"sector\": \"Technology\",\n      \"short_description\": \"Consumer electronics\",\n      \"geographic_area\": {\n        \"USA\": \"1.0000\"\n      }\n    },\n    \"provider_code\": null\n  },\n  {\n    \"asset_id\": 2,\n    \"display_name\": \"Vanguard S&P 500\",\n    \"identifier\": \"VOO\",\n    \"currency\": \"USD\",\n    \"asset_type\": \"etf\",\n    \"classification_params\": {\n      \"geographic_area\": {\n        \"USA\": \"1.0000\"\n      }\n    },\n    \"provider_code\": \"yfinance\"\n  }\n]\n```\n\n**Classification Params**:\n- Parsed from JSON stored in database\n- May be null if no metadata set\n- Geographic area contains ISO-3166-A3 codes\n- Weights are Decimal strings (4 decimal places)\n\nArgs:\n    asset_ids: Bulk read request with list of asset IDs\n    session: Database session\n\nReturns:\n    List of FAAssetMetadataResponse in request order (missing assets skipped)\n\nRaises:\n    HTTPException: 500 if unexpected error occurs",
         "operationId": "read_assets_bulk_api_v1_assets_get",
         "parameters": [
           {
@@ -1446,7 +1446,7 @@
           "FA CRUD"
         ],
         "summary": "List Assets",
-        "description": "List all assets with optional filters - enhanced for BRIM asset matching.\n\n**Query Parameters**:\n- `currency`: Filter by currency code (e.g., \"USD\", \"EUR\")\n- `asset_type`: Filter by type enum (STOCK, ETF, BOND, etc.)\n- `active`: Include only active assets (default: true)\n- `search`: Search text in display_name (case-insensitive partial match)\n- `isin`: Exact ISIN match\n- `ticker`: Exact ticker match\n- `cusip`: Exact CUSIP match\n- `sedol`: Exact SEDOL match\n- `figi`: Exact FIGI match\n- `uuid`: Exact UUID match\n- `identifier_other`: Partial match in identifier_other field\n- `identifier_contains`: Partial match in any identifier\n\n**Response Fields**:\n- `has_provider`: True if asset has a pricing provider assigned\n- `has_metadata`: True if asset has classification metadata\n- `identifier`: Asset identifier (ticker, ISIN, etc.) if provider assigned\n- `identifier_type`: Type of identifier (TICKER, ISIN, UUID, OTHER)\n\n**Example**:\n```\nGET /api/v1/assets/query?currency=USD&asset_type=STOCK&search=Apple\nGET /api/v1/assets/query?isin=US0378331005\nGET /api/v1/assets/query?ticker=AAPL\n```",
+        "description": "List all assets with optional filters - enhanced for BRIM asset matching.\n\n**Query Parameters**:\n- `currency`: Filter by currency code (e.g., \"USD\", \"EUR\")\n- `asset_type`: Filter by type enum (STOCK, ETF, BOND, etc.)\n- `active`: Include only active assets (default: true)\n- `search`: Search text in display_name (case-insensitive partial match)\n- `isin`: Exact ISIN match\n- `ticker`: Exact ticker match\n- `cusip`: Exact CUSIP match\n- `sedol`: Exact SEDOL match\n- `figi`: Exact FIGI match\n- `uuid`: Exact UUID match\n- `identifier_other`: Partial match in identifier_other field\n- `identifier_contains`: Partial match in any identifier\n\n**Response Fields**:\n- `provider_code`: Provider code string if assigned (e.g. 'yfinance'), null otherwise\n- `has_metadata`: True if asset has classification metadata\n- `identifier`: Asset identifier (ticker, ISIN, etc.) if provider assigned\n- `identifier_type`: Type of identifier (TICKER, ISIN, UUID, OTHER)\n\n**Example**:\n```\nGET /api/v1/assets/query?currency=USD&asset_type=STOCK&search=Apple\nGET /api/v1/assets/query?isin=US0378331005\nGET /api/v1/assets/query?ticker=AAPL\n```",
         "operationId": "list_assets_api_v1_assets_query_get",
         "parameters": [
           {
@@ -1827,15 +1827,15 @@
         }
       }
     },
-    "/api/v1/assets/prices/refresh": {
+    "/api/v1/assets/prices/sync": {
       "post": {
         "tags": [
           "FA (Financial Assets)",
           "FA Prices"
         ],
-        "summary": "Refresh Prices Bulk",
-        "description": "Bulk refresh prices via providers (PRIMARY bulk endpoint).",
-        "operationId": "refresh_prices_bulk_api_v1_assets_prices_refresh_post",
+        "summary": "Sync Prices Bulk",
+        "description": "Bulk sync prices via providers (PRIMARY bulk endpoint).",
+        "operationId": "sync_prices_bulk_api_v1_assets_prices_sync_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6460,11 +6460,6 @@
               }
             ]
           },
-          "has_provider": {
-            "type": "boolean",
-            "title": "Has Provider",
-            "default": false
-          },
           "provider_code": {
             "anyOf": [
               {
@@ -6486,7 +6481,7 @@
           "currency"
         ],
         "title": "FAAssetMetadataResponse",
-        "description": "Asset with metadata fields.\n\nUsed for GET/PATCH responses and bulk read operations.\n\nFields:\n- asset_id: Asset database ID\n- display_name: User-friendly asset name\n- currency: Asset currency code\n- icon_url: Asset icon URL (optional)\n- asset_type: Asset type (STOCK, BOND, ETF, etc.)\n- classification_params: Optional classification metadata\n- has_provider: Whether asset has pricing provider assigned"
+        "description": "Asset with metadata fields.\n\nUsed for GET/PATCH responses and bulk read operations.\n\nFields:\n- asset_id: Asset database ID\n- display_name: User-friendly asset name\n- currency: Asset currency code\n- icon_url: Asset icon URL (optional)\n- asset_type: Asset type (STOCK, BOND, ETF, etc.)\n- classification_params: Optional classification metadata\n- provider_code: Provider code if assigned (e.g. 'yfinance'), None otherwise"
       },
       "FAAssetPatchItem": {
         "properties": {
@@ -8242,11 +8237,6 @@
             "title": "Active",
             "description": "Whether asset is active"
           },
-          "has_provider": {
-            "type": "boolean",
-            "title": "Has Provider",
-            "description": "Whether asset has a provider assigned"
-          },
           "provider_code": {
             "anyOf": [
               {
@@ -8379,7 +8369,6 @@
           "display_name",
           "currency",
           "active",
-          "has_provider",
           "has_metadata"
         ],
         "title": "FAinfoResponse",

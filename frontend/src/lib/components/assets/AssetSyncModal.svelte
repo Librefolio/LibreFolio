@@ -21,7 +21,7 @@
         display_name: string;
         asset_type?: string | null;
         icon_url?: string | null;
-        has_provider: boolean;
+        provider_code?: string | null;
     }
 
     interface Props {
@@ -57,7 +57,7 @@
             asset_id: parseInt(id),
             date_range: { start: dateStart, end: dateEnd },
         }));
-        const response = await zodiosApi.refresh_prices_bulk_api_v1_assets_prices_refresh_post(
+        const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(
             items,
             { timeout: 120 * 1000 },
         );
@@ -76,7 +76,7 @@
         } satisfies SyncResult));
     }
 
-    let targetIds = $derived(assets.filter(a => a.has_provider).map(a => a.id.toString()));
+    let targetIds = $derived(assets.filter(a => !!a.provider_code).map(a => a.id.toString()));
 </script>
 
 <SyncModalBase

@@ -220,7 +220,7 @@ async def list_assets(
     - `identifier_contains`: Partial match in any identifier
 
     **Response Fields**:
-    - `has_provider`: True if asset has a pricing provider assigned
+    - `provider_code`: Provider code string if assigned (e.g. 'yfinance'), null otherwise
     - `has_metadata`: True if asset has classification metadata
     - `identifier`: Asset identifier (ticker, ISIN, etc.) if provider assigned
     - `identifier_type`: Type of identifier (TICKER, ISIN, UUID, OTHER)
@@ -608,7 +608,7 @@ async def read_assets_bulk(
             "USA": "1.0000"
           }
         },
-        has_provider: false
+        "provider_code": null
       },
       {
         "asset_id": 2,
@@ -621,7 +621,7 @@ async def read_assets_bulk(
             "USA": "1.0000"
           }
         },
-        has_provider: true
+        "provider_code": "yfinance"
       }
     ]
     ```
@@ -652,7 +652,7 @@ async def read_assets_bulk(
         assets = result.scalars().all()
         asset_map = {asset.id: asset for asset in assets}
 
-        # Fetch provider assignments for has_provider flag and provider_code
+        # Fetch provider assignments for provider_code
         provider_stmt = select(
             AssetProviderAssignment.asset_id,
             AssetProviderAssignment.provider_code,
@@ -690,7 +690,6 @@ async def read_assets_bulk(
                     icon_url=asset.icon_url,
                     asset_type=asset.asset_type,
                     classification_params=classification_params,
-                    has_provider=asset.id in provider_map,
                     provider_code=provider_map.get(asset.id),
                     )
                 )
@@ -706,12 +705,12 @@ async def read_assets_bulk(
 # ============================================================================
 
 
-@price_router.post("/refresh", response_model=FABulkRefreshResponse)
-async def refresh_prices_bulk(
+@price_router.post("/sync", response_model=FABulkRefreshResponse)
+async def sync_prices_bulk(
     requests: List[FARefreshItem], session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
     ):
-    """Bulk refresh prices via providers (PRIMARY bulk endpoint)."""
+    """Bulk sync prices via providers (PRIMARY bulk endpoint)."""
     try:
         return await AssetSourceManager.bulk_refresh_prices(requests, session)
     except Exception as e:

@@ -25,7 +25,7 @@
         currency: string;
         icon_url?: string | null;
         asset_type?: string | null;
-        has_provider: boolean;
+        provider_code?: string | null;
         active: boolean;
     }
 
@@ -180,10 +180,10 @@
     <div class="px-4 py-2.5 flex items-center justify-between border-t border-gray-50 dark:border-slate-700/50">
         <div class="flex items-center gap-0.5">
             <button
-                class="p-1.5 rounded-md transition-colors {!asset.has_provider ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
-                onclick={(e) => { stop(e); if (asset.has_provider) onsync?.(asset); }}
-                title={asset.has_provider ? 'Sync prices from provider' : 'No provider assigned'}
-                disabled={!asset.has_provider || syncing}
+                class="p-1.5 rounded-md transition-colors {!asset.provider_code ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
+                onclick={(e) => { stop(e); if (asset.provider_code) onsync?.(asset); }}
+                title={asset.provider_code ? 'Sync prices from provider' : 'No provider assigned'}
+                disabled={!asset.provider_code || syncing}
             >
                 <RotateCw size={15} class={syncing ? 'animate-spin' : ''} />
             </button>

@@ -602,7 +602,7 @@ class FAAssetMetadataResponse(BaseModel):
     - icon_url: Asset icon URL (optional)
     - asset_type: Asset type (STOCK, BOND, ETF, etc.)
     - classification_params: Optional classification metadata
-    - has_provider: Whether asset has pricing provider assigned
+    - provider_code: Provider code if assigned (e.g. 'yfinance'), None otherwise
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -613,7 +613,6 @@ class FAAssetMetadataResponse(BaseModel):
     icon_url: Optional[str] = None
     asset_type: Optional[str] = None
     classification_params: Optional[FAClassificationParams] = None
-    has_provider: bool = False
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
 
 
@@ -817,7 +816,6 @@ class FAinfoResponse(BaseModel):
     icon_url: Optional[str] = Field(None, description="Asset icon URL")
     asset_type: Optional[str] = Field(None, description="Asset type")
     active: bool = Field(..., description="Whether asset is active")
-    has_provider: bool = Field(..., description="Whether asset has a provider assigned")
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 

@@ -246,7 +246,7 @@ async def test_complete_e2e_flow_justetf(test_server):
         start_date = today - timedelta(days=7)
 
         response = await client.post(
-            f"{API_BASE}/assets/prices/refresh",
+            f"{API_BASE}/assets/prices/sync",
             json=[
                 {
                     "asset_id": asset_id,
@@ -394,7 +394,7 @@ async def test_complete_e2e_flow_yfinance(test_server):
 
         today = date.today()
         response = await client.post(
-            f"{API_BASE}/assets/prices/refresh",
+            f"{API_BASE}/assets/prices/sync",
             json=[
                 {
                     "asset_id": asset_id,

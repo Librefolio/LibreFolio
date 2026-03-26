@@ -5,7 +5,7 @@ Tests for price-related endpoints:
 - POST /api/v1/assets/prices - Bulk upsert prices
 - DELETE /api/v1/assets/prices - Bulk delete prices
 - POST /api/v1/assets/prices/query - Bulk query prices (replaces GET)
-- POST /api/v1/assets/prices/refresh - Refresh prices from providers
+- POST /api/v1/assets/prices/sync - Refresh prices from providers
 """
 
 from datetime import date, timedelta
@@ -262,12 +262,12 @@ async def test_bulk_delete_prices(test_server):
 
 
 # ============================================================
-# Test 4: POST /assets/prices/refresh - Refresh from provider
+# Test 4: POST /assets/prices/sync - Refresh from provider
 # ============================================================
 @pytest.mark.asyncio
 async def test_refresh_prices_from_provider(test_server):
-    """Test 4: POST /assets/prices/refresh - Refresh from provider."""
-    print_section("Test 4: POST /assets/prices/refresh")
+    """Test 4: POST /assets/prices/sync - Refresh from provider."""
+    print_section("Test 4: POST /assets/prices/sync")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -309,7 +309,7 @@ async def test_refresh_prices_from_provider(test_server):
                 }
             ]
         refresh_resp = await client.post(
-            f"{API_BASE}/assets/prices/refresh", json=refresh_request, timeout=TIMEOUT
+            f"{API_BASE}/assets/prices/sync", json=refresh_request, timeout=TIMEOUT
             )
         assert (
             refresh_resp.status_code == 200
@@ -403,7 +403,7 @@ async def test_query_without_sync_returns_empty(test_server):
 
     Certifies the architectural separation:
     - Assigning a provider does NOT auto-fetch prices
-    - Prices appear in DB only after explicit sync (POST /assets/prices/refresh)
+    - Prices appear in DB only after explicit sync (POST /assets/prices/sync)
     - Query (POST /assets/prices/query) reads ONLY from DB, never from provider
     """
     print_section("Test 6: Query without sync = empty (architecture test)")
@@ -456,7 +456,7 @@ async def test_query_without_sync_returns_empty(test_server):
 
         # 4. Explicit sync — download from provider into DB
         sync_resp = await client.post(
-            f"{API_BASE}/assets/prices/refresh",
+            f"{API_BASE}/assets/prices/sync",
             json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
             timeout=TIMEOUT,
             )
