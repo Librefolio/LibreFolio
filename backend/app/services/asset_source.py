@@ -1742,6 +1742,7 @@ class AssetCRUDService:
         stmt = select(
             Asset,
             AssetProviderAssignment.id.label("provider_id"),
+            AssetProviderAssignment.provider_code.label("provider_code_col"),
             AssetProviderAssignment.identifier.label("provider_identifier"),
             AssetProviderAssignment.identifier_type.label("provider_identifier_type"),
             ).outerjoin(AssetProviderAssignment, Asset.id == AssetProviderAssignment.asset_id)
@@ -1814,8 +1815,9 @@ class AssetCRUDService:
         for row in rows:
             asset = row[0]  # Asset object
             provider_id = row[1]  # provider_id from join
-            provider_identifier = row[2]  # identifier from provider assignment
-            provider_identifier_type = row[3]  # identifier_type from provider assignment
+            provider_code = row[2]  # provider_code from join
+            provider_identifier = row[3]  # identifier from provider assignment
+            provider_identifier_type = row[4]  # identifier_type from provider assignment
 
             assets.append(
                 FAinfoResponse(
@@ -1826,6 +1828,7 @@ class AssetCRUDService:
                     asset_type=asset.asset_type,
                     active=asset.active,
                     has_provider=provider_id is not None,
+                    provider_code=provider_code,
                     has_metadata=asset.classification_params is not None,
                     # Identifier columns from Asset
                     identifier_isin=asset.identifier_isin,

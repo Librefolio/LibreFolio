@@ -41,12 +41,23 @@ export function parseProviderChain(providerUsed: string | null | undefined): str
 }
 
 // =========================================================================
-// Provider icon URL lookup (FX + Asset providers)
+// FX Provider icon URL lookup
+// =========================================================================
+
+/** Get FX provider icon_url from the in-memory FX provider cache. */
+export function getProviderIconUrl(code: string): string | null {
+    const fxProviders = getCachedProviders();
+    return fxProviders.find(p => p.code === code)?.icon_url ?? null;
+}
+
+// =========================================================================
+// Asset Provider icon URL lookup (separate registry)
 // =========================================================================
 
 /**
  * In-memory cache for asset provider icons.
  * Populated lazily via ensureAssetProvidersCached().
+ * Kept separate from FX providers to avoid registry key collisions.
  */
 let assetProviderIcons: Map<string, string | null> = new Map();
 let assetProvidersFetched = false;
@@ -75,18 +86,22 @@ export async function ensureAssetProvidersCached(): Promise<void> {
     return assetProvidersFetchPromise;
 }
 
-/**
- * Get provider icon_url from the in-memory caches.
- * Checks FX providers first (from currencyGraphStore), then asset providers.
- */
-export function getProviderIconUrl(code: string): string | null {
-    // 1. Check FX providers (populated by currencyGraphStore)
-    const fxProviders = getCachedProviders();
-    const fxMatch = fxProviders.find(p => p.code === code)?.icon_url;
-    if (fxMatch) return fxMatch;
-
-    // 2. Check asset providers (populated by ensureAssetProvidersCached)
+/** Get asset provider icon_url from the asset provider cache. */
+export function getAssetProviderIconUrl(code: string): string | null {
     return assetProviderIcons.get(code) ?? null;
+}
+
+/**
+ * Build an asset provider badge as an HTML string (icon or text code).
+ * Uses the asset provider cache (call ensureAssetProvidersCached first).
+ */
+export function assetProviderBadgeHtml(providerCode: string): string {
+    const iconUrl = assetProviderIcons.get(providerCode);
+    const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
+    if (iconUrl) {
+        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${iconUrl}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
+    }
+    return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
 }
 
 // =========================================================================

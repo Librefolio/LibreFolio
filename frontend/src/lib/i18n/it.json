@@ -365,6 +365,8 @@
     "deletePair": "Elimina coppia",
     "deletePairTitle": "Elimina Coppia FX",
     "deletePairMessage": "Sei sicuro di voler eliminare {pair}? Questo rimuoverà la configurazione dei provider e tutti i tassi di cambio storici.",
+    "deletePairQuestion": "Eliminare {pair}?",
+    "deletePairWarning": "Questo rimuoverà la configurazione dei provider e tutti i tassi di cambio storici. ⚠️",
     "delete": {
       "toastOk": "{pair} eliminata ({count} tassi rimossi)",
       "toastFailed": "Impossibile eliminare {pair}",

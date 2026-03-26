@@ -1256,6 +1256,12 @@ type FAAssetMetadataResponse = {
    * @default false
    */
   boolean | undefined;
+  provider_code?:
+    | /**
+     * Provider code if assigned (e.g. 'yfinance')
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
 };
 type FAClassificationParams_Output = Partial<{
   short_description: (string | null) | Array<string | null>;
@@ -2372,6 +2378,12 @@ type FAinfoResponse = {
    * Whether asset has a provider assigned
    */
   has_provider: boolean;
+  provider_code?:
+    | /**
+     * Provider code if assigned (e.g. 'yfinance')
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
   /**
    * Whether asset has classification metadata
    */
@@ -4285,6 +4297,10 @@ const FAAssetMetadataResponse: z.ZodType<FAAssetMetadataResponse> = z.object({
     .union([FAClassificationParams_Output, z.null()])
     .optional(),
   has_provider: z.boolean().optional().default(false),
+  provider_code: z
+    .union([z.string(), z.null()])
+    .describe("Provider code if assigned (e.g. 'yfinance')")
+    .optional(),
 });
 const IdentifierType = z.enum([
   "ISIN",
@@ -4306,6 +4322,10 @@ const FAinfoResponse: z.ZodType<FAinfoResponse> = z.object({
   asset_type: z.union([z.string(), z.null()]).describe("Asset type").optional(),
   active: z.boolean().describe("Whether asset is active"),
   has_provider: z.boolean().describe("Whether asset has a provider assigned"),
+  provider_code: z
+    .union([z.string(), z.null()])
+    .describe("Provider code if assigned (e.g. 'yfinance')")
+    .optional(),
   has_metadata: z
     .boolean()
     .describe("Whether asset has classification metadata"),

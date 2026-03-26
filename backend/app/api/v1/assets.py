@@ -652,12 +652,15 @@ async def read_assets_bulk(
         assets = result.scalars().all()
         asset_map = {asset.id: asset for asset in assets}
 
-        # Fetch provider assignments for has_provider flag
-        provider_stmt = select(AssetProviderAssignment.asset_id).where(
+        # Fetch provider assignments for has_provider flag and provider_code
+        provider_stmt = select(
+            AssetProviderAssignment.asset_id,
+            AssetProviderAssignment.provider_code,
+            ).where(
             AssetProviderAssignment.asset_id.in_(asset_ids)
             )
         provider_result = await session.execute(provider_stmt)
-        assets_with_provider = {row[0] for row in provider_result.fetchall()}
+        provider_map = {row[0]: row[1] for row in provider_result.fetchall()}
 
         responses = []
         for asset_id in asset_ids:
@@ -687,7 +690,8 @@ async def read_assets_bulk(
                     icon_url=asset.icon_url,
                     asset_type=asset.asset_type,
                     classification_params=classification_params,
-                    has_provider=asset.id in assets_with_provider,
+                    has_provider=asset.id in provider_map,
+                    provider_code=provider_map.get(asset.id),
                     )
                 )
 

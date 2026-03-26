@@ -13,6 +13,9 @@
     import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
+    import {
+        ensureAssetProvidersCached, assetProviderBadgeHtml,
+    } from '$lib/utils/providerHelpers';
 
     // =========================================================================
     // Types
@@ -25,6 +28,7 @@
         icon_url?: string | null;
         asset_type?: string | null;
         has_provider: boolean;
+        provider_code?: string | null;
         active: boolean;
         lastPrice?: number | null;
         deltaAbs?: number | null;
@@ -45,6 +49,7 @@
     let {data = [], loading = false, visiblePeriods = [], onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
+    ensureAssetProvidersCached();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle */
     let tableRef: DataTable<AssetRow> | undefined = $state(undefined);
@@ -181,12 +186,12 @@
             header: () => $t('assets.table.provider'),
             cell: (row) => ({
                 type: 'html' as const,
-                html: row.has_provider
-                    ? '<span class="text-emerald-600 dark:text-emerald-400">✅</span>'
-                    : '<span class="text-gray-400 dark:text-gray-500">❌</span>',
+                html: row.provider_code
+                    ? assetProviderBadgeHtml(row.provider_code)
+                    : '<span class="text-gray-400 dark:text-gray-500">—</span>',
             }),
             type: 'text',
-            getValue: (row) => String(row.has_provider),
+            getValue: (row) => row.provider_code ?? '',
             width: 80,
             minWidth: 60,
             filterable: false,

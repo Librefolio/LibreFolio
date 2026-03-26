@@ -614,6 +614,7 @@ class FAAssetMetadataResponse(BaseModel):
     asset_type: Optional[str] = None
     classification_params: Optional[FAClassificationParams] = None
     has_provider: bool = False
+    provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
 
 
 class FAMetadataChangeDetail(BaseModel):
@@ -817,6 +818,7 @@ class FAinfoResponse(BaseModel):
     asset_type: Optional[str] = Field(None, description="Asset type")
     active: bool = Field(..., description="Whether asset is active")
     has_provider: bool = Field(..., description="Whether asset has a provider assigned")
+    provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 
     # Identifier columns (one per IdentifierType)

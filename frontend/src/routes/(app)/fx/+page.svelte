@@ -879,7 +879,8 @@
 <ConfirmModal
     open={deleteDialogOpen}
     title={$_('fx.deletePairTitle')}
-    message={$_('fx.deletePairMessage', {values: {pair: `${deletingPair?.base ?? ''}/${deletingPair?.quote ?? ''}`}})}
+    message={$_('fx.deletePairQuestion', {values: {pair: `${deletingPair?.base ?? ''}/${deletingPair?.quote ?? ''}`}})}
+    description={$_('fx.deletePairWarning')}
     confirmText={$_('common.delete')}
     danger={true}
     onConfirm={confirmDelete}
@@ -890,7 +891,8 @@
 <ConfirmModal
     open={bulkDeleteDialogOpen}
     title={$_('fx.deletePairTitle')}
-    message={$_('fx.deletePairMessage', {values: {pair: `${deletingPairs.length} pairs`}})}
+    message={$_('fx.deletePairQuestion', {values: {pair: `${deletingPairs.length} pairs`}})}
+    description={$_('fx.deletePairWarning')}
     items={deletingPairs.map(p => `${getCurrencyInfo(p.base).flag_emoji} ${p.base} / ${getCurrencyInfo(p.quote).flag_emoji} ${p.quote}`)}
     itemsLabel={`${deletingPairs.length} pairs`}
     confirmText={$_('common.delete')}
