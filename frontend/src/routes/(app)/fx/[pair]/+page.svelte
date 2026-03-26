@@ -36,7 +36,7 @@
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultToFxDataPoint, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fxCardInversionStore';
-    import {formatSyncDetail, formatProviderText} from '$lib/utils/fxSync';
+    import {formatSyncDetail, formatProviderText} from '$lib/utils/providerHelpers';
 
     // =========================================================================
     // Page data

@@ -262,7 +262,7 @@ async def test_complete_e2e_flow_justetf(test_server):
         assert "results" in price_refresh_data
         price_result = price_refresh_data["results"][0]
 
-        fetched_count = price_result.get("fetched_count", 0)
+        fetched_count = price_result.get("points_fetched", 0)
         print_info(f"  Fetched {fetched_count} price points")
 
         # =====================================================================

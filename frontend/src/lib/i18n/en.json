@@ -260,14 +260,20 @@
     },
     "sync": {
       "toastOk": "{name} synced\n{fetched}↓ {changed}Δ",
-      "toastFailed": "Sync failed for {name}"
+      "toastFailed": "Sync failed for {name}",
+      "modalTitle": "Sync Asset Prices",
+      "modalDescription": "Synchronize prices from configured providers for the selected date range.",
+      "assetsCount": "assets",
+      "noProvider": "No provider assigned",
+      "currentValueOnly": "Current value only (no history)"
     },
     "delete": {
       "confirmMessage": "Delete \"{name}\"? Provider assignments and price history will be removed.",
       "toastOk": "{name} deleted",
       "toastFailed": "Failed to delete {name}",
       "bulkOk": "{count} assets deleted",
-      "bulkPartial": "{failed} assets could not be deleted (have transactions)"
+      "bulkPartial": "{failed} assets could not be deleted (have transactions)",
+      "bulkConfirmMessage": "Delete {count} assets? Provider assignments and price history will be removed."
     },
     "types": {
       "STOCK": "Stock",
