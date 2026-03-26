@@ -369,14 +369,18 @@
                                                             value={currentPairSlug}
                                                             options={resolveDynamicOptions('configuredFxPairs').map(o => {
                                                                 const parts = o.value.split('-');
-                                                                const flag1 = getCurrencyInfo(parts[0]).flag_emoji;
-                                                                const flag2 = getCurrencyInfo(parts[1]).flag_emoji;
                                                                 const isCurrent = o.value === currentPairSlug;
+                                                                // When this card's signal is inverted, swap display order for the selected pair
+                                                                const showInverted = isCurrent && Boolean(signal.params._inverted);
+                                                                const base = showInverted ? parts[1] : parts[0];
+                                                                const quote = showInverted ? parts[0] : parts[1];
+                                                                const baseFlag = getCurrencyInfo(base).flag_emoji;
+                                                                const quoteFlag = getCurrencyInfo(quote).flag_emoji;
                                                                 const isUsedElsewhere = !isCurrent && usedPairSlugs.has(o.value);
                                                                 const isMain = !!mainPairSlug && o.value === mainPairSlug;
                                                                 // Suffix: 👑 always on the main chart pair, ✓ on this card's selection, 📌 on other overlay signals
                                                                 const suffix = isMain ? ' 👑' : isCurrent ? ' ✓' : isUsedElsewhere ? ' 📌' : '';
-                                                                return {value: o.value, label: `${flag1} ${parts[0]} → ${flag2} ${parts[1]}${suffix}`};
+                                                                return {value: o.value, label: `${baseFlag} ${base} → ${quoteFlag} ${quote}${suffix}`};
                                                             })}
                                                             placeholder="— {$t('chartSettings.params.currencyPair')}"
                                                             dropdownPosition="auto"
