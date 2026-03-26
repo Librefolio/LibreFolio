@@ -35,26 +35,27 @@ TIMEOUT = 30.0
 async def create_user_and_login(client: httpx.AsyncClient) -> None:
     """Create a test user, login, and set session cookie on client."""
     import uuid as _uuid
-    username = f"test_{int(__import__('time').time()*1000)}_{_uuid.uuid4().hex[:4]}"
+    username = f"test_{int(__import__('time').time() * 1000)}_{_uuid.uuid4().hex[:4]}"
     email = f"{username}@test.com"
     password = "TestPass123!"
     resp = await client.post(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-    )
+        )
     if resp.status_code != 201:
         raise Exception(f"Failed to create user: {resp.text}")
     login_resp = await client.post(
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-    )
+        )
     if login_resp.status_code != 200:
         raise Exception(f"Failed to login: {login_resp.text}")
     session = login_resp.cookies.get("session")
     if session:
         client.cookies.set("session", session)
+
 
 SEARCH_TIMEOUT = 90.0  # Search can be slow due to external API calls (yfinance, justetf)
 
@@ -813,9 +814,9 @@ async def test_search_to_asset_e2e(test_server):
             {
                 "asset_id": a["asset_id"],
                 "date_range": {"start": yesterday.isoformat(), "end": today.isoformat()},
-            }
+                }
             for a in created_assets
-        ]
+            ]
         prices_resp = await client.post(
             f"{API_BASE}/assets/prices/query",
             json=query_items,
@@ -927,10 +928,12 @@ async def test_price_refresh_uses_current_value(test_server):
         # Verify the price was stored
         prices_resp = await client.post(
             f"{API_BASE}/assets/prices/query",
-            json=[{
-                "asset_id": asset_id,
-                "date_range": {"start": today.isoformat(), "end": today.isoformat()},
-            }],
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": today.isoformat(), "end": today.isoformat()},
+                    }
+                ],
             timeout=TIMEOUT,
             )
 
@@ -1046,10 +1049,12 @@ async def test_css_scraper_current_price(test_server):
         # Verify if price was stored (using bulk query endpoint)
         prices_resp = await client.post(
             f"{API_BASE}/assets/prices/query",
-            json=[{
-                "asset_id": asset_id,
-                "date_range": {"start": today.isoformat(), "end": today.isoformat()},
-            }],
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": today.isoformat(), "end": today.isoformat()},
+                    }
+                ],
             timeout=TIMEOUT,
             )
 

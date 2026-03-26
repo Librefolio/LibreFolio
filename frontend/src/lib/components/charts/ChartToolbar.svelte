@@ -32,21 +32,21 @@
     <!-- Chart Type Toggle -->
     <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
         <button
-            class="px-3 py-1.5 transition-colors {chartType === 'line'
+                class="px-3 py-1.5 transition-colors {chartType === 'line'
                 ? 'bg-libre-green text-white'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-            onclick={() => onChartTypeChange?.('line')}
+                onclick={() => onChartTypeChange?.('line')}
         >
             Line
         </button>
         <button
-            class="px-3 py-1.5 transition-colors {chartType === 'candlestick'
+                class="px-3 py-1.5 transition-colors {chartType === 'candlestick'
                 ? 'bg-libre-green text-white'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}
                 {disableCandlestick ? 'opacity-50 cursor-not-allowed' : ''}"
-            onclick={() => !disableCandlestick && onChartTypeChange?.('candlestick')}
-            disabled={disableCandlestick}
-            title={disableCandlestick ? 'Coming soon' : ''}
+                disabled={disableCandlestick}
+                onclick={() => !disableCandlestick && onChartTypeChange?.('candlestick')}
+                title={disableCandlestick ? 'Coming soon' : ''}
         >
             Candle
         </button>
@@ -58,18 +58,18 @@
     <!-- View Mode Toggle -->
     <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
         <button
-            class="px-3 py-1.5 transition-colors {viewMode === 'absolute'
+                class="px-3 py-1.5 transition-colors {viewMode === 'absolute'
                 ? 'bg-libre-green text-white'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-            onclick={() => onViewModeChange?.('absolute')}
+                onclick={() => onViewModeChange?.('absolute')}
         >
             Abs
         </button>
         <button
-            class="px-3 py-1.5 transition-colors {viewMode === 'percentage'
+                class="px-3 py-1.5 transition-colors {viewMode === 'percentage'
                 ? 'bg-libre-green text-white'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-            onclick={() => onViewModeChange?.('percentage')}
+                onclick={() => onViewModeChange?.('percentage')}
         >
             %
         </button>

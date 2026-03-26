@@ -1,9 +1,9 @@
 /**
  * Unit tests for TimeSeriesStore — Generic client-side cache for time-series data.
  */
-import {describe, it, expect} from 'vitest';
-import {TimeSeriesStore} from '../TimeSeriesStore';
+import {describe, expect, it} from 'vitest';
 import type {TimeSeriesPoint} from '../TimeSeriesStore';
+import {TimeSeriesStore} from '../TimeSeriesStore';
 
 interface TestPoint extends TimeSeriesPoint {
     date: string;

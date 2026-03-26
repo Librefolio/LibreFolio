@@ -13,9 +13,14 @@
  */
 
 import type MultiDirectedGraph from 'graphology';
-import {buildCurrencyGraph, findAllPaths, type ChainStep, type ProviderInfo, type EdgeAttributes} from '$lib/utils/currencyGraph';
+import {buildCurrencyGraph, type ChainStep, type EdgeAttributes, findAllPaths, type ProviderInfo} from '$lib/utils/currencyGraph';
 import {zodiosApi} from '$lib/api';
 import {ensureCurrenciesLoaded, getAllCurrencies, isCurrenciesLoaded} from '$lib/stores/currencyStore';
+/**
+ * Reactive version counter — incremented when FX providers are cached.
+ * Subscribe in Svelte components to trigger re-evaluation when providers load.
+ */
+import {writable} from 'svelte/store';
 
 // ============================================================================
 // INTERNAL STATE
@@ -35,6 +40,8 @@ let cachedFxProviders: ProviderInfo[] = [];
 
 /** Loading promise to avoid duplicate concurrent builds */
 let buildPromise: Promise<CurrencyGraph> | null = null;
+
+export const fxProvidersVersion = writable(0);
 
 // ============================================================================
 // PUBLIC API
@@ -93,6 +100,7 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
             cachedFxProviders = providers;
             cachedProvidersHash = JSON.stringify(providers.map(p => p.code).sort());
             cachedGraph = graph;
+            fxProvidersVersion.update(v => v + 1);
 
             return graph;
         } finally {

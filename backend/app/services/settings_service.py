@@ -206,7 +206,7 @@ async def initialize_global_settings(session: AsyncSession) -> int:
                 updated_at=utcnow(),
                 )
             .on_conflict_do_nothing(index_elements=["key"])
-            )
+        )
         result = await session.execute(stmt)
         if result.rowcount and result.rowcount > 0:
             created += 1

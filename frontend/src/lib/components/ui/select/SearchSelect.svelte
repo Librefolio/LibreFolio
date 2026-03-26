@@ -221,7 +221,9 @@
                 event.preventDefault();
                 openDropdown();
                 // Defer setting searchQuery so the input is mounted first
-                setTimeout(() => { searchQuery = event.key; }, 20);
+                setTimeout(() => {
+                    searchQuery = event.key;
+                }, 20);
             }
             return;
         }

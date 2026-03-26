@@ -67,7 +67,7 @@ class ECBProvider(FXRateProvider):
             "it": "Banca Centrale Europea — pubblica tassi di cambio di riferimento giornalieri per 30+ valute contro EUR. Aggiornamento ogni giorno lavorativo verso le 16:00 CET. Un dato al giorno.",
             "fr": "Banque Centrale Européenne — publie des taux de change de référence quotidiens pour 30+ devises contre EUR. Mise à jour chaque jour ouvrable vers 16h00 CET. Un point par jour.",
             "es": "Banco Central Europeo — publica tipos de cambio de referencia diarios para 30+ monedas contra EUR. Actualizado cada día hábil alrededor de las 16:00 CET. Un dato por día.",
-        }
+            }
 
     @property
     def base_currency(self) -> str:

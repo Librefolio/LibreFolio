@@ -96,11 +96,15 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
     @property
     def params_schema(self) -> list[dict]:
         return [
-            {"key": "schedule", "type": "json", "required": True,
-             "description": "List of interest rate periods (FAInterestRatePeriod[])"},
-            {"key": "late_interest", "type": "json", "required": False,
-             "description": "Late interest configuration applied after maturity"},
-        ]
+            {
+                "key": "schedule", "type": "json", "required": True,
+                "description": "List of interest rate periods (FAInterestRatePeriod[])"
+                },
+            {
+                "key": "late_interest", "type": "json", "required": False,
+                "description": "Late interest configuration applied after maturity"
+                },
+            ]
 
     @property
     def test_cases(self) -> list[dict]:

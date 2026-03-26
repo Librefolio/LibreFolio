@@ -115,6 +115,7 @@
         from: string;
         to: string;
     }
+
     interface HeaderError {
         valid: false;
         error: string;
@@ -355,10 +356,14 @@
             {/if}
         </span>
         <span class="inline-flex items-center gap-1.5 text-gray-400 dark:text-gray-500 text-[10px]">
-            {$t('csvImport.sep')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">;</kbd>
-            · {$t('csvImport.decimal')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">.</kbd>
-            / <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">,</kbd>
-            · {$t('csvImport.thousands')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">_</kbd>
+            {$t('csvImport.sep')} <kbd
+                class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">;</kbd>
+            · {$t('csvImport.decimal')} <kbd
+                class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">.</kbd>
+            / <kbd
+                class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">,</kbd>
+            · {$t('csvImport.thousands')} <kbd
+                class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">_</kbd>
         </span>
     </div>
 
@@ -366,14 +371,14 @@
     <div class="flex overflow-hidden" style="min-height: {minHeight};">
         <!-- Line numbers -->
         <div
-            bind:this={lineNumbersEl}
-            class="flex-shrink-0 w-10 bg-gray-50 dark:bg-slate-700/30 border-r border-gray-200 dark:border-slate-600 overflow-hidden select-none"
+                bind:this={lineNumbersEl}
+                class="flex-shrink-0 w-10 bg-gray-50 dark:bg-slate-700/30 border-r border-gray-200 dark:border-slate-600 overflow-hidden select-none"
         >
             {#each validations as v}
                 <div
-                    class="h-5 flex items-center justify-end pr-2 text-xs font-mono leading-5
+                        class="h-5 flex items-center justify-end pr-2 text-xs font-mono leading-5
                         {v.duplicate ? 'bg-amber-50 dark:bg-amber-900/20' : v.isHeader && v.valid ? 'bg-emerald-50 dark:bg-emerald-900/10' : v.valid ? '' : 'bg-red-50 dark:bg-red-900/20'}"
-                    title={v.error || ''}
+                        title={v.error || ''}
                 >
                     <span class="{v.parsed && !v.duplicate ? 'text-emerald-500' : v.duplicate ? 'text-amber-500' : v.isHeader && v.valid ? 'text-emerald-600 dark:text-emerald-400' : v.valid ? 'text-gray-400 dark:text-gray-500' : 'text-red-500'}">{v.lineNumber}</span>
                 </div>
@@ -399,17 +404,17 @@
 
         <!-- Textarea -->
         <textarea
-            bind:this={textareaEl}
-            bind:value
-            oninput={handleInput}
-            onscroll={handleScroll}
-            class="flex-1 font-mono text-xs leading-5 p-0 pl-2 border-0 bg-transparent text-gray-700 dark:text-gray-300 focus:ring-0 resize-y overflow-y-auto"
-            style="min-height: {minHeight};"
-            readonly={isReadonly}
-            {placeholder}
-            spellcheck="false"
-            autocomplete="off"
-            wrap="off"
+                autocomplete="off"
+                bind:this={textareaEl}
+                bind:value
+                class="flex-1 font-mono text-xs leading-5 p-0 pl-2 border-0 bg-transparent text-gray-700 dark:text-gray-300 focus:ring-0 resize-y overflow-y-auto"
+                oninput={handleInput}
+                onscroll={handleScroll}
+                {placeholder}
+                readonly={isReadonly}
+                spellcheck="false"
+                style="min-height: {minHeight};"
+                wrap="off"
         ></textarea>
     </div>
 </div>

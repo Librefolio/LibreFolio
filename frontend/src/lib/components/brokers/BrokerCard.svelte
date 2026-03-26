@@ -90,7 +90,7 @@
                                 {broker.user_role === 'OWNER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
                                  broker.user_role === 'EDITOR' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
                                  'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}"
-                                 title={$_(broker.user_role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : broker.user_role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}>
+                                  title={$_(broker.user_role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : broker.user_role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}>
                                 {#if broker.user_role === 'OWNER'}<Crown size={11}/>{:else if broker.user_role === 'EDITOR'}<Pencil size={11}/>{:else}<Eye size={11}/>{/if}
                             </span>
                         {/if}

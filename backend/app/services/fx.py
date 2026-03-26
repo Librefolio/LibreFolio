@@ -1151,7 +1151,7 @@ async def sync_pairs_bulk(
                     raise FXServiceError(
                         f"Timeout waiting for provider data for {pair_slug} "
                         f"(waited 120s for {len(my_events)} leg(s))"
-                    )
+                        )
 
             # Check for failed legs
             for lk in my_leg_keys:
@@ -1209,12 +1209,14 @@ async def sync_pairs_bulk(
                 # Build per-leg detail for single-step route
                 leg_detail = None
                 if not computed_rates:
-                    leg_detail = [FXSyncLegDetail(
-                        provider=provider_code,
-                        leg=f"{fc}→{tc}",
-                        dates_available=0,
-                        error=None,
-                    )]
+                    leg_detail = [
+                        FXSyncLegDetail(
+                            provider=provider_code,
+                            leg=f"{fc}→{tc}",
+                            dates_available=0,
+                            error=None,
+                            )
+                        ]
                 return FXSyncPairResult(
                     pair=pair_slug,
                     status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
@@ -1284,7 +1286,7 @@ async def sync_pairs_bulk(
                         if key[0] == leg_key_prefix[0]
                         and key[1] == leg_key_prefix[1]
                         and start_date <= key[2] <= end_date
-                    )
+                        )
                     # Check if this leg had errors
                     leg_err_key = (norm_b, norm_q, prov)
                     leg_error = leg_errors.get(leg_err_key)
@@ -1293,7 +1295,7 @@ async def sync_pairs_bulk(
                         leg=f"{fc}→{tc}",
                         dates_available=leg_date_count,
                         error=str(leg_error) if leg_error else None,
-                    ))
+                        ))
 
                 # Build human-readable message and errors list
                 chain_errors: list[str] = []

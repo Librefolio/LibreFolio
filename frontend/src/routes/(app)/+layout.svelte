@@ -102,7 +102,7 @@
             </main>
         </div>
     </div>
-    <ToastContainer />
+    <ToastContainer/>
 {:else}
     <!-- Loading while checking auth -->
     <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">

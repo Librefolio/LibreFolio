@@ -128,7 +128,7 @@
     // Image picker state (uses ImagePickerWrapper)
     let showImagePicker = false;
 
-    function handleImagePickerChange(event: CustomEvent<{url: string}>) {
+    function handleImagePickerChange(event: CustomEvent<{ url: string }>) {
         iconUrl = event.detail.url;
         showImagePicker = false;
     }
@@ -269,9 +269,9 @@
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="icon-picker-trigger group relative cursor-pointer"
+                 data-testid="broker-icon-trigger"
                  on:click={() => showImagePicker = true}
-                 title={$_('uploads.selectIcon') || 'Select Icon'}
-                 data-testid="broker-icon-trigger">
+                 title={$_('uploads.selectIcon') || 'Select Icon'}>
                 <BrokerIcon
                         altText="Icon"
                         iconUrl={iconUrl}
@@ -280,7 +280,7 @@
                         size="lg"
                 />
                 <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <Upload size={16} class="text-white" />
+                    <Upload class="text-white" size={16}/>
                 </div>
             </div>
             <div class="flex-1 min-w-0">
@@ -288,9 +288,9 @@
                 {#if iconUrl}
                     <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={iconUrl}>{iconUrl}</p>
                     <button
-                        type="button"
-                        class="mt-1 text-xs text-red-600 dark:text-red-400 hover:underline"
-                        on:click={() => iconUrl = ''}
+                            type="button"
+                            class="mt-1 text-xs text-red-600 dark:text-red-400 hover:underline"
+                            on:click={() => iconUrl = ''}
                     >
                         {$_('common.remove')}
                     </button>
@@ -450,14 +450,14 @@
 
 <!-- Image Picker (AssetPicker + ImageEditModal combined) -->
 <ImagePickerWrapper
-    open={showImagePicker}
-    title={$_('uploads.selectIcon') || 'Select Icon'}
-    preset="broker-icon"
-    initialUrl={iconUrl}
-    circularPreview={true}
-    filterImages={true}
-    on:change={handleImagePickerChange}
-    on:cancel={() => showImagePicker = false}
+        circularPreview={true}
+        filterImages={true}
+        initialUrl={iconUrl}
+        on:cancel={() => showImagePicker = false}
+        on:change={handleImagePickerChange}
+        open={showImagePicker}
+        preset="broker-icon"
+        title={$_('uploads.selectIcon') || 'Select Icon'}
 />
 
 <!-- Actions (sempre visibili - fuori dal form scrollabile) -->

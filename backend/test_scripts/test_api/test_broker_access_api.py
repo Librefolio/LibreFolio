@@ -111,7 +111,7 @@ async def add_user_via_bulk(
     accesses = [
         {"user_id": owner_id, "role": "OWNER", "share_percentage": owner_share},
         {"user_id": target_user_id, "role": role, "share_percentage": share_pct},
-    ]
+        ]
     return await bulk_set_access(owner_client, broker_id, accesses)
 
 
@@ -242,7 +242,7 @@ class TestBulkAddAccess:
             resp = await bulk_set_access(client1, broker_id, [
                 {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
                 {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
-            ])
+                ])
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -271,7 +271,7 @@ class TestBulkAddAccess:
                 {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
                 {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
                 {"user_id": user3_id, "role": "VIEWER", "share_percentage": 0},
-            ])
+                ])
             assert resp.status_code == 403
 
             print_success("✓ Non-owner correctly rejected")
@@ -288,7 +288,7 @@ class TestBulkAddAccess:
             resp = await bulk_set_access(client, broker_id, [
                 {"user_id": user_id, "role": "OWNER", "share_percentage": 1.0},
                 {"user_id": 999999, "role": "VIEWER", "share_percentage": 0},
-            ])
+                ])
             assert resp.status_code == 400
             assert "not found" in resp.json()["detail"]
 
@@ -320,7 +320,7 @@ class TestBulkUpdateAccess:
             resp = await bulk_set_access(client1, broker_id, [
                 {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
                 {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
-            ])
+                ])
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -346,7 +346,7 @@ class TestBulkUpdateAccess:
             resp = await bulk_set_access(client1, broker_id, [
                 {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
                 {"user_id": user2_id, "role": "VIEWER", "share_percentage": 0},
-            ])
+                ])
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -367,7 +367,7 @@ class TestBulkUpdateAccess:
             # Try to set self as EDITOR (no OWNER left)
             resp = await bulk_set_access(client, broker_id, [
                 {"user_id": user_id, "role": "EDITOR", "share_percentage": 0},
-            ])
+                ])
             assert resp.status_code == 400
             assert "OWNER" in resp.json()["detail"]
 
@@ -400,7 +400,7 @@ class TestBulkRemoveAccess:
             # Remove by sending only owner
             resp = await bulk_set_access(client1, broker_id, [
                 {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
-            ])
+                ])
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -422,13 +422,13 @@ class TestBulkRemoveAccess:
             resp = await bulk_set_access(client1, broker_id, [
                 {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
                 {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
-            ])
+                ])
             assert resp.status_code == 200
 
             # Remove second owner
             resp = await bulk_set_access(client1, broker_id, [
                 {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
-            ])
+                ])
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -552,7 +552,7 @@ class TestSelfModification:
 
             resp = await bulk_set_access(client, broker_id, [
                 {"user_id": user_id, "role": "EDITOR", "share_percentage": 0},
-            ])
+                ])
             assert resp.status_code == 400
             assert "OWNER" in resp.json()["detail"]
 
@@ -572,14 +572,14 @@ class TestSelfModification:
             resp = await bulk_set_access(client1, broker_id, [
                 {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
                 {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
-            ])
+                ])
             assert resp.status_code == 200
 
             # User1 degrades self to EDITOR (user2 remains OWNER)
             resp = await bulk_set_access(client1, broker_id, [
                 {"user_id": user1_id, "role": "EDITOR", "share_percentage": 0},
                 {"user_id": user2_id, "role": "OWNER", "share_percentage": 1.0},
-            ])
+                ])
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)

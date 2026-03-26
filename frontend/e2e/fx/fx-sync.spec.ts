@@ -11,7 +11,7 @@
 import {expect, test} from '@playwright/test';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {goToFxPage, goToFxDetailPage} from './fx-helpers';
+import {goToFxDetailPage, goToFxPage} from './fx-helpers';
 
 test.describe('FX Sync', () => {
     test.beforeEach(async ({page}) => {

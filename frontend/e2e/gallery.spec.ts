@@ -14,7 +14,7 @@
 import {expect, Page, test} from '@playwright/test';
 import {login, navigateTo, setLanguage} from './fixtures/auth-helpers';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN} from './fixtures/test-users';
-import {goToFxPage, goToFxDetailPage, openAddPairModal} from './fx/fx-helpers';
+import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import {fileURLToPath} from 'url';

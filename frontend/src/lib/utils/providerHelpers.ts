@@ -10,6 +10,7 @@
 
 import {getCachedFxProviders} from '$lib/stores/currencyGraphStore';
 import {zodiosApi} from '$lib/api';
+import {writable} from 'svelte/store';
 
 // =========================================================================
 // 1. SHARED — colours, chain parsing
@@ -71,6 +72,12 @@ let assetProvidersFetched = false;
 let assetProvidersFetchPromise: Promise<void> | null = null;
 
 /**
+ * Reactive version counter — incremented when asset providers are cached.
+ * Subscribe in Svelte components to trigger re-evaluation when provider icons load.
+ */
+export const assetProvidersVersion = writable(0);
+
+/**
  * Ensure asset provider info is cached (lazy, one-shot).
  * Safe to call multiple times — deduplicates concurrent calls.
  */
@@ -88,6 +95,7 @@ export async function ensureAssetProvidersCached(): Promise<void> {
         } finally {
             assetProvidersFetched = true;
             assetProvidersFetchPromise = null;
+            assetProvidersVersion.update(v => v + 1);
         }
     })();
     return assetProvidersFetchPromise;

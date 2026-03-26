@@ -10,7 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {Trash2, ArrowLeftRight, Info, RotateCw, ExternalLink} from 'lucide-svelte';
+    import {ArrowLeftRight, ExternalLink, Info, RotateCw, Trash2} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -19,13 +19,7 @@
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {
-        type SignalConfig,
-        type SignalStyle,
-        getRegisteredSignalTypes,
-        createSignal,
-        type SignalTypeInfo,
-    } from '$lib/charts/signals';
+    import {createSignal, getRegisteredSignalTypes, type SignalConfig, type SignalStyle, type SignalTypeInfo,} from '$lib/charts/signals';
 
     // =========================================================================
     // Props
@@ -190,7 +184,7 @@
         emitChange();
     }
 
-    function resolveDynamicOptions(dynamicKey: string): Array<{value: string; label: string}> {
+    function resolveDynamicOptions(dynamicKey: string): Array<{ value: string; label: string }> {
         if (dynamicKey === 'configuredFxPairs') {
             return availablePairs.map(slug => ({
                 value: slug,
@@ -229,17 +223,19 @@
                 <div>
                     <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">📊 {$t('chartSettings.categories.indicator')}</span>
                     <SimpleSelect
-                        bind:value={indicatorSelect}
-                        options={indicatorOptions}
-                        placeholder={$t('common.select')}
-                        dropdownPosition="auto"
-                        onchange={(v) => { addSignal(v); indicatorSelect = ''; }}
+                            bind:value={indicatorSelect}
+                            options={indicatorOptions}
+                            placeholder={$t('common.select')}
+                            dropdownPosition="auto"
+                            onchange={(v) => { addSignal(v); indicatorSelect = ''; }}
                     >
                         {#snippet item(option)}
                             {#if option.data}
                                 <span class="truncate">
                                     {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as {fullName: string}).fullName}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
+                                    {#if (option.data as
+                                            {fullName: string}).fullName}<span
+                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
                                 </span>
                             {/if}
                         {/snippet}
@@ -250,17 +246,19 @@
                 <div>
                     <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">💱 {$t('chartSettings.categories.comparison')}</span>
                     <SimpleSelect
-                        bind:value={comparisonSelect}
-                        options={comparisonOptions}
-                        placeholder={$t('common.select')}
-                        dropdownPosition="auto"
-                        onchange={(v) => { addSignal(v); comparisonSelect = ''; }}
+                            bind:value={comparisonSelect}
+                            options={comparisonOptions}
+                            placeholder={$t('common.select')}
+                            dropdownPosition="auto"
+                            onchange={(v) => { addSignal(v); comparisonSelect = ''; }}
                     >
                         {#snippet item(option)}
                             {#if option.data}
                                 <span class="truncate">
                                     {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as {fullName: string}).fullName}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
+                                    {#if (option.data as
+                                            {fullName: string}).fullName}<span
+                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
                                 </span>
                             {/if}
                         {/snippet}
@@ -271,17 +269,19 @@
                 <div>
                     <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">📐 {$t('chartSettings.categories.benchmark')}</span>
                     <SimpleSelect
-                        bind:value={benchmarkSelect}
-                        options={benchmarkOptions}
-                        placeholder={$t('common.select')}
-                        dropdownPosition="auto"
-                        onchange={(v) => { addSignal(v); benchmarkSelect = ''; }}
+                            bind:value={benchmarkSelect}
+                            options={benchmarkOptions}
+                            placeholder={$t('common.select')}
+                            dropdownPosition="auto"
+                            onchange={(v) => { addSignal(v); benchmarkSelect = ''; }}
                     >
                         {#snippet item(option)}
                             {#if option.data}
                                 <span class="truncate">
                                     {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as {fullName: string}).fullName}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
+                                    {#if (option.data as
+                                            {fullName: string}).fullName}<span
+                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
                                 </span>
                             {/if}
                         {/snippet}
@@ -297,11 +297,11 @@
         </p>
     {:else}
         <OrderableList
-            items={signals}
-            keyFn={(s) => s.id}
-            onReorder={handleSignalReorder}
+                items={signals}
+                keyFn={(s) => s.id}
+                onReorder={handleSignalReorder}
         >
-            {#snippet children({ item: signal })}
+            {#snippet children({item: signal})}
                 {#if true}
                     {@const typeInfo = getSignalTypeInfo(signal.signalType)}
                     {@const signalName = typeInfo ? getSignalName(typeInfo) : signal.signalType}
@@ -317,17 +317,17 @@
                                     <span class="text-[10px] text-gray-400 dark:text-gray-500 truncate">{signalFullName}</span>
                                 {/if}
                                 {#if typeInfo?.docsPath}
-                                    <DocsLink path={typeInfo.docsPath} label={signalDescText || signalName} math />
+                                    <DocsLink path={typeInfo.docsPath} label={signalDescText || signalName} math/>
                                 {/if}
                             </div>
                             <div class="flex items-center gap-0.5 flex-shrink-0">
                                 <button
-                                    type="button"
-                                    class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
-                                    title={$t('chartSettings.removeSignal')}
-                                    onclick={() => removeSignal(signal.id)}
+                                        type="button"
+                                        class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
+                                        title={$t('chartSettings.removeSignal')}
+                                        onclick={() => removeSignal(signal.id)}
                                 >
-                                    <Trash2 size={14} />
+                                    <Trash2 size={14}/>
                                 </button>
                             </div>
                         </div>
@@ -342,19 +342,19 @@
                                         </span>
                                         {#if desc.tooltip}
                                             <Tooltip text={$t(desc.tooltip)} math position="top">
-                                                <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                                                <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors"/>
                                             </Tooltip>
                                         {/if}
                                         {#if desc.type === 'number'}
                                             <div class="flex items-center gap-1">
                                                 <input
-                                                    type="number"
-                                                    value={getParamNumber(signal, desc.key, desc.default)}
-                                                    min={desc.min}
-                                                    max={desc.max}
-                                                    step={desc.step}
-                                                    class="w-16 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
-                                                    oninput={(e) => updateSignalParam(signal.id, desc.key, Number(e.currentTarget.value))}
+                                                        type="number"
+                                                        value={getParamNumber(signal, desc.key, desc.default)}
+                                                        min={desc.min}
+                                                        max={desc.max}
+                                                        step={desc.step}
+                                                        class="w-16 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                                        oninput={(e) => updateSignalParam(signal.id, desc.key, Number(e.currentTarget.value))}
                                                 />
                                                 {#if desc.suffix}
                                                     <span class="text-[10px] text-gray-400">{desc.suffix}</span>
@@ -366,8 +366,8 @@
                                                 <div class="flex items-center gap-1">
                                                     <div class="w-48">
                                                         <SimpleSelect
-                                                            value={currentPairSlug}
-                                                            options={resolveDynamicOptions('configuredFxPairs').map(o => {
+                                                                value={currentPairSlug}
+                                                                options={resolveDynamicOptions('configuredFxPairs').map(o => {
                                                                 const parts = o.value.split('-');
                                                                 const isCurrent = o.value === currentPairSlug;
                                                                 // When this card's signal is inverted, swap display order for the selected pair
@@ -382,43 +382,43 @@
                                                                 const suffix = isMain ? ' 👑' : isCurrent ? ' ✓' : isUsedElsewhere ? ' 📌' : '';
                                                                 return {value: o.value, label: `${baseFlag} ${base} → ${quoteFlag} ${quote}${suffix}`};
                                                             })}
-                                                            placeholder="— {$t('chartSettings.params.currencyPair')}"
-                                                            dropdownPosition="auto"
-                                                            onchange={(v) => {
+                                                                placeholder="— {$t('chartSettings.params.currencyPair')}"
+                                                                dropdownPosition="auto"
+                                                                onchange={(v) => {
                                                                 updateSignalParam(signal.id, desc.key, v);
                                                                 updateSignalParam(signal.id, '_inverted', false);
                                                             }}
                                                         />
                                                     </div>
                                                     <button
-                                                        type="button"
-                                                        class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors
+                                                            type="button"
+                                                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors
                                                             {signal.params._inverted ? 'text-libre-green' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
-                                                        title={$t('common.swapDirection')}
-                                                        onclick={() => updateSignalParam(signal.id, '_inverted', !signal.params._inverted)}
+                                                            title={$t('common.swapDirection')}
+                                                            onclick={() => updateSignalParam(signal.id, '_inverted', !signal.params._inverted)}
                                                     >
-                                                        <ArrowLeftRight size={12} />
+                                                        <ArrowLeftRight size={12}/>
                                                     </button>
                                                     {#if onsyncpair}
                                                         {@const pairSlug = String(signal.params.pairSlug)}
                                                         <button
-                                                            type="button"
-                                                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-500 transition-colors"
-                                                            title={$t('common.sync')}
-                                                            disabled={syncingPairs.has(pairSlug)}
-                                                            onclick={() => handleSyncPairWithSpin(pairSlug)}
+                                                                type="button"
+                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-500 transition-colors"
+                                                                title={$t('common.sync')}
+                                                                disabled={syncingPairs.has(pairSlug)}
+                                                                onclick={() => handleSyncPairWithSpin(pairSlug)}
                                                         >
-                                                            <RotateCw size={12} class={syncingPairs.has(pairSlug) ? 'animate-spin' : ''} />
+                                                            <RotateCw size={12} class={syncingPairs.has(pairSlug) ? 'animate-spin' : ''}/>
                                                         </button>
                                                     {/if}
                                                     {#if ondetailpair}
                                                         <button
-                                                            type="button"
-                                                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
-                                                            title={$t('common.detail')}
-                                                            onclick={() => ondetailpair?.(String(signal.params.pairSlug))}
+                                                                type="button"
+                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                                                                title={$t('common.detail')}
+                                                                onclick={() => ondetailpair?.(String(signal.params.pairSlug))}
                                                         >
-                                                            <ExternalLink size={12} />
+                                                            <ExternalLink size={12}/>
                                                         </button>
                                                     {/if}
                                                 </div>
@@ -426,19 +426,19 @@
                                                 {@const opts = desc.options ?? []}
                                                 <div class="w-36">
                                                     <SimpleSelect
-                                                        value={getParamString(signal, desc.key)}
-                                                        options={opts}
-                                                        dropdownPosition="auto"
-                                                        onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
+                                                            value={getParamString(signal, desc.key)}
+                                                            options={opts}
+                                                            dropdownPosition="auto"
+                                                            onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
                                                     />
                                                 </div>
                                             {/if}
                                         {:else}
                                             <input
-                                                type="text"
-                                                value={getParamString(signal, desc.key)}
-                                                class="w-24 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
-                                                oninput={(e) => updateSignalParam(signal.id, desc.key, e.currentTarget.value)}
+                                                    type="text"
+                                                    value={getParamString(signal, desc.key)}
+                                                    class="w-24 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                                    oninput={(e) => updateSignalParam(signal.id, desc.key, e.currentTarget.value)}
                                             />
                                         {/if}
                                     </div>
@@ -449,10 +449,10 @@
                         <!-- Style strip (non-MACD) -->
                         {#if signal.signalType !== 'macd'}
                             <div class="pt-1.5 border-t border-gray-100 dark:border-slate-700">
-                            <SignalStyleEditor
-                                style={signal.style}
-                                onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)}
-                            />
+                                <SignalStyleEditor
+                                        style={signal.style}
+                                        onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)}
+                                />
                             </div>
                         {/if}
 
@@ -460,21 +460,23 @@
                         {#if signal.signalType === 'macd'}
                             <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700">
                                 <input
-                                    type="color"
-                                    value={signal.style.color}
-                                    class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
-                                    title={$t('chartSettings.macdLineColor')}
-                                    oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
+                                        type="color"
+                                        value={signal.style.color}
+                                        class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
+                                        title={$t('chartSettings.macdLineColor')}
+                                        oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
                                 />
                                 <span class="text-[10px] text-gray-400 dark:text-gray-500">MACD</span>
                                 <div class="flex gap-1">
                                     {#each LINE_TYPES as lt}
                                         <button type="button" aria-label={lt}
-                                            class="w-8 h-5 flex items-center justify-center rounded border transition-colors
+                                                class="w-8 h-5 flex items-center justify-center rounded border transition-colors
                                                 {signal.style.lineType === lt ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600'}"
-                                            onclick={() => updateSignalStyle(signal.id, 'lineType', lt)}>
-                                            <svg width="24" height="4"><line x1="2" y1="2" x2="22" y2="2" stroke={signal.style.color} stroke-width="1.5"
-                                                stroke-dasharray={lt === 'dashed' ? '4,2' : lt === 'dotted' ? '2,2' : 'none'} /></svg>
+                                                onclick={() => updateSignalStyle(signal.id, 'lineType', lt)}>
+                                            <svg width="24" height="4">
+                                                <line x1="2" y1="2" x2="22" y2="2" stroke={signal.style.color} stroke-width="1.5"
+                                                      stroke-dasharray={lt === 'dashed' ? '4,2' : lt === 'dotted' ? '2,2' : 'none'}/>
+                                            </svg>
                                         </button>
                                     {/each}
                                 </div>

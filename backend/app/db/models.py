@@ -9,10 +9,10 @@ All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
 - Currency fields validated against ISO 4217 + crypto via Currency.validate_code()
 """
 
+import json
 from datetime import date as date_type, datetime
 from decimal import Decimal
 from enum import Enum
-import json
 from typing import Optional, Any
 
 from pydantic import field_validator
@@ -387,8 +387,8 @@ class BrokerUserAccess(SQLModel, table=True):
         CheckConstraint(
             "share_percentage >= 0 AND share_percentage <= 1",
             name="ck_broker_user_access_share_percentage",
-        ),
-    )
+            ),
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
@@ -398,7 +398,7 @@ class BrokerUserAccess(SQLModel, table=True):
         default=Decimal("1"),
         sa_column=Column(Numeric(7, 6), nullable=False, default=1),
         description="Ownership fraction (0.000000 to 1.000000) for portfolio aggregation",
-    )
+        )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -625,7 +625,7 @@ class Transaction(SQLModel, table=True):
         default=None,
         sa_column=Column(Numeric(18, 6), nullable=True),
         description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
-    )
+        )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

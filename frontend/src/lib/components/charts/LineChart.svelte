@@ -19,13 +19,7 @@
     import * as echarts from 'echarts';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {
-        COLORS,
-        buildMainSeries,
-        buildBandSeries,
-        buildBarSeries,
-        updateArrowRotations,
-    } from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations,} from './lineChartHelpers';
 
     // =========================================================================
     // Types
@@ -186,7 +180,8 @@
                     try {
                         chartInstance?.resize();
                         if (chartInstance) updateArrowRotations(chartInstance);
-                    } catch (_) { /* ignore coord errors during resize */ }
+                    } catch (_) { /* ignore coord errors during resize */
+                    }
                 } else if (chartContainer && data.length > 0) {
                     // Chart not yet initialized (e.g. container was zero-size on first attempt).
                     renderChart();
@@ -674,7 +669,7 @@
 
         // Preserve user zoom state across re-renders (adding signals, toggling options).
         // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
-        let savedZoom: {start: number; end: number} | null = null;
+        let savedZoom: { start: number; end: number } | null = null;
         if (chartOptionSet && chartInstance) {
             try {
                 const opt = chartInstance.getOption() as any;
@@ -684,7 +679,8 @@
                         savedZoom = {start: dz.start, end: dz.end};
                     }
                 }
-            } catch (_) { /* ignore */ }
+            } catch (_) { /* ignore */
+            }
         }
 
         chartInstance.setOption(option, true);
@@ -705,8 +701,8 @@
 </script>
 
 <div
-    bind:this={chartContainer}
-    class="w-full"
-    style="height: {height};"
+        bind:this={chartContainer}
+        class="w-full"
+        style="height: {height};"
 ></div>
 

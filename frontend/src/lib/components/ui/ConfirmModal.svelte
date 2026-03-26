@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import {AlertTriangle, ChevronDown, ChevronUp, X, Check, XCircle} from 'lucide-svelte';
+    import {AlertTriangle, Check, ChevronDown, ChevronUp, X, XCircle} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
@@ -42,7 +42,7 @@
         /** Z-index for stacking (default 60 = above first-level modals) */
         zIndex?: number;
         /** Operation results to display after action completes (replaces message+items when present) */
-        results?: {label: string; success: boolean; detail?: string}[];
+        results?: { label: string; success: boolean; detail?: string }[];
     }
 
     let {
@@ -71,10 +71,10 @@
 </script>
 
 <ModalBase
-    {open}
-    {zIndex}
-    maxWidth="max-w-md"
-    onRequestClose={onCancel}
+        maxWidth="max-w-md"
+        onRequestClose={onCancel}
+        {open}
+        {zIndex}
 >
     <!-- Header -->
     <div class="modal-header">
@@ -85,10 +85,10 @@
         {/if}
         <h2 class="modal-title">{title}</h2>
         <button
-                type="button"
+                aria-label="Close"
                 class="close-btn"
                 onclick={onCancel}
-                aria-label="Close"
+                type="button"
         >
             <X size={20}/>
         </button>
@@ -102,9 +102,9 @@
                 {#each results as r}
                     <li class="result-item">
                         {#if r.success}
-                            <Check size={14} class="text-emerald-500 shrink-0" />
+                            <Check size={14} class="text-emerald-500 shrink-0"/>
                         {:else}
-                            <XCircle size={14} class="text-red-500 shrink-0" />
+                            <XCircle size={14} class="text-red-500 shrink-0"/>
                         {/if}
                         <span class="result-label">{r.label}</span>
                         {#if r.detail}

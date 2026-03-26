@@ -19,8 +19,8 @@
     import {Calendar, Info} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
-    import CalendarMonth from './CalendarMonth.svelte';
     import type {CalendarHighlights} from './CalendarMonth.svelte';
+    import CalendarMonth from './CalendarMonth.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';
 
     // =========================================================================
@@ -121,7 +121,7 @@
     // Preset Definitions
     // =========================================================================
 
-    const presets: {key: QuickPreset; label: string; months?: number; weeks?: number; years?: number}[] = [
+    const presets: { key: QuickPreset; label: string; months?: number; weeks?: number; years?: number }[] = [
         {key: '1W', label: '1W', weeks: 1},
         {key: '1M', label: '1M', months: 1},
         {key: '3M', label: '3M', months: 3},
@@ -130,7 +130,7 @@
         {key: '2Y', label: '2Y', years: 2},
     ];
 
-    const granularityOptions: {value: Granularity; labelKey: string; shortKey: string}[] = [
+    const granularityOptions: { value: Granularity; labelKey: string; shortKey: string }[] = [
         {value: 'days', labelKey: 'datePicker.granularity.days', shortKey: 'datePicker.granularity.daysShort'},
         {value: 'weeks', labelKey: 'datePicker.granularity.weeks', shortKey: 'datePicker.granularity.weeksShort'},
         {value: 'months', labelKey: 'datePicker.granularity.months', shortKey: 'datePicker.granularity.monthsShort'},
@@ -139,7 +139,7 @@
 
     // Granularity short options for the compact native select (must be after granularityOptions)
     let granularitySelectOptions = $derived(
-        granularityOptions.map(o => ({ value: o.value, label: $_(o.shortKey).toUpperCase() }))
+        granularityOptions.map(o => ({value: o.value, label: $_(o.shortKey).toUpperCase()}))
     );
 
     // =========================================================================
@@ -153,12 +153,24 @@
     function computeStartDate(preset: QuickPreset): string {
         const d = new Date();
         switch (preset) {
-            case '1W': d.setDate(d.getDate() - 7); break;
-            case '1M': d.setMonth(d.getMonth() - 1); break;
-            case '3M': d.setMonth(d.getMonth() - 3); break;
-            case '6M': d.setMonth(d.getMonth() - 6); break;
-            case '1Y': d.setFullYear(d.getFullYear() - 1); break;
-            case '2Y': d.setFullYear(d.getFullYear() - 2); break;
+            case '1W':
+                d.setDate(d.getDate() - 7);
+                break;
+            case '1M':
+                d.setMonth(d.getMonth() - 1);
+                break;
+            case '3M':
+                d.setMonth(d.getMonth() - 3);
+                break;
+            case '6M':
+                d.setMonth(d.getMonth() - 6);
+                break;
+            case '1Y':
+                d.setFullYear(d.getFullYear() - 1);
+                break;
+            case '2Y':
+                d.setFullYear(d.getFullYear() - 2);
+                break;
         }
         return d.toISOString().slice(0, 10);
     }
@@ -166,10 +178,18 @@
     function computeCustomStart(amount: number, granularity: Granularity): string {
         const d = new Date();
         switch (granularity) {
-            case 'days': d.setDate(d.getDate() - amount); break;
-            case 'weeks': d.setDate(d.getDate() - amount * 7); break;
-            case 'months': d.setMonth(d.getMonth() - amount); break;
-            case 'years': d.setFullYear(d.getFullYear() - amount); break;
+            case 'days':
+                d.setDate(d.getDate() - amount);
+                break;
+            case 'weeks':
+                d.setDate(d.getDate() - amount * 7);
+                break;
+            case 'months':
+                d.setMonth(d.getMonth() - amount);
+                break;
+            case 'years':
+                d.setFullYear(d.getFullYear() - amount);
+                break;
         }
         return d.toISOString().slice(0, 10);
     }
@@ -183,13 +203,21 @@
     // =========================================================================
 
     function leftPrevMonth() {
-        if (calLeftMonth === 0) { calLeftMonth = 11; calLeftYear--; }
-        else { calLeftMonth--; }
+        if (calLeftMonth === 0) {
+            calLeftMonth = 11;
+            calLeftYear--;
+        } else {
+            calLeftMonth--;
+        }
     }
 
     function leftNextMonth() {
-        if (calLeftMonth === 11) { calLeftMonth = 0; calLeftYear++; }
-        else { calLeftMonth++; }
+        if (calLeftMonth === 11) {
+            calLeftMonth = 0;
+            calLeftYear++;
+        } else {
+            calLeftMonth++;
+        }
         if (monthOrder(calLeftYear, calLeftMonth) > monthOrder(calRightYear, calRightMonth)) {
             [calLeftYear, calRightYear] = [calRightYear, calLeftYear];
             [calLeftMonth, calRightMonth] = [calRightMonth, calLeftMonth];
@@ -197,8 +225,12 @@
     }
 
     function rightPrevMonth() {
-        if (calRightMonth === 0) { calRightMonth = 11; calRightYear--; }
-        else { calRightMonth--; }
+        if (calRightMonth === 0) {
+            calRightMonth = 11;
+            calRightYear--;
+        } else {
+            calRightMonth--;
+        }
         if (monthOrder(calRightYear, calRightMonth) < monthOrder(calLeftYear, calLeftMonth)) {
             [calLeftYear, calRightYear] = [calRightYear, calLeftYear];
             [calLeftMonth, calRightMonth] = [calRightMonth, calLeftMonth];
@@ -206,8 +238,12 @@
     }
 
     function rightNextMonth() {
-        if (calRightMonth === 11) { calRightMonth = 0; calRightYear++; }
-        else { calRightMonth++; }
+        if (calRightMonth === 11) {
+            calRightMonth = 0;
+            calRightYear++;
+        } else {
+            calRightMonth++;
+        }
     }
 
     function setLeftMonth(m: number) {
@@ -435,18 +471,18 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
+<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown}/>
 
 <div class="flex flex-col gap-1.5 items-center">
     {#if showPresets}
         <div class="flex items-center gap-1 flex-wrap justify-center">
             {#each presets as preset}
                 <button type="button"
-                    class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                        class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                         {activePreset === preset.key
                             ? 'bg-libre-green text-white shadow-sm'
                             : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                    onclick={() => handlePresetClick(preset.key)}
+                        onclick={() => handlePresetClick(preset.key)}
                 >{preset.label}</button>
             {/each}
             {#if showCustomWindow}
@@ -458,102 +494,102 @@
                          onclick={(e) => e.stopPropagation()}
                          onkeydown={(e) => { if (e.key === 'Escape') customEditing = false; }}>
                         <input type="number" bind:value={customAmount} min="1" max="999"
-                            class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                               class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
                         <SimpleSelect
-                            value={customGranularity}
-                            options={granularitySelectOptions}
-                            onchange={(v) => { customGranularity = v as Granularity; }}
-                            class="inline-block w-auto"
-                            dropdownPosition="auto"
-                            compact
-                            showChevron={false}
+                                value={customGranularity}
+                                options={granularitySelectOptions}
+                                onchange={(v) => { customGranularity = v as Granularity; }}
+                                class="inline-block w-auto"
+                                dropdownPosition="auto"
+                                compact
+                                showChevron={false}
                         />
                     </div>
                 {:else}
                     <button type="button"
-                        class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                             {activePreset === 'custom'
                                 ? 'bg-amber-500 text-white shadow-sm'
                                 : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                        onclick={(e) => toggleCustomEdit(e)}
+                            onclick={(e) => toggleCustomEdit(e)}
                     >{activePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find(o => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button>
                 {/if}
             {/if}
             <!-- Info tooltip -->
             <Tooltip text={$_('datePicker.info')} position="bottom" maxWidth="280px">
-                <Info size={14} class="text-gray-400 dark:text-gray-500 hover:text-libre-green transition-colors" />
+                <Info size={14} class="text-gray-400 dark:text-gray-500 hover:text-libre-green transition-colors"/>
             </Tooltip>
         </div>
     {/if}
 
     {#if showDateFields}
-    <div class="relative drp-trigger w-full">
-        <button
-            bind:this={triggerEl}
-            type="button"
-            class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
-            onclick={openCalendar}
-        >
-            <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
-                <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0" />
-                <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
-                <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(start)}</span>
-            </div>
-            {#if stacked}
-                <div class="w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
-            {:else}
-                <div class="w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
-            {/if}
-            <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
-                <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0" />
-                <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
-                <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(end)}</span>
-            </div>
-        </button>
-
-        {#if calendarOpen}
-            <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
-                <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
-                    <!-- Left month (semi-independent) -->
-                    <CalendarMonth
-                        year={calLeftYear}
-                        month={calLeftMonth}
-                        {weekdayLabels}
-                        {monthLabels}
-                        onDayClick={handleDayClick}
-                        onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
-                        onPrevMonth={leftPrevMonth}
-                        onNextMonth={leftNextMonth}
-                        onSetMonth={setLeftMonth}
-                        onSetYear={setLeftYear}
-                        onGoToToday={goToTodayLeft}
-                        highlights={calHighlights}
-                    />
-                    <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
-                    <!-- Right month (semi-independent) -->
-                    <CalendarMonth
-                        year={calRightYear}
-                        month={calRightMonth}
-                        {weekdayLabels}
-                        {monthLabels}
-                        onDayClick={handleDayClick}
-                        onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
-                        onPrevMonth={rightPrevMonth}
-                        onNextMonth={rightNextMonth}
-                        onSetMonth={setRightMonth}
-                        onSetYear={setRightYear}
-                        onGoToToday={goToTodayRight}
-                        highlights={calHighlights}
-                    />
+        <div class="relative drp-trigger w-full">
+            <button
+                    bind:this={triggerEl}
+                    type="button"
+                    class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
+                    onclick={openCalendar}
+            >
+                <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
+                    <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0"/>
+                    <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
+                    <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(start)}</span>
                 </div>
-                {#if pendingDate}
-                    <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
-                        {$_('datePicker.selectSecondDate')}
-                    </div>
+                {#if stacked}
+                    <div class="w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
+                {:else}
+                    <div class="w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
                 {/if}
-            </div>
-        {/if}
-    </div>
+                <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
+                    <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0"/>
+                    <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
+                    <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(end)}</span>
+                </div>
+            </button>
+
+            {#if calendarOpen}
+                <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+                    <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
+                        <!-- Left month (semi-independent) -->
+                        <CalendarMonth
+                                year={calLeftYear}
+                                month={calLeftMonth}
+                                {weekdayLabels}
+                                {monthLabels}
+                                onDayClick={handleDayClick}
+                                onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
+                                onPrevMonth={leftPrevMonth}
+                                onNextMonth={leftNextMonth}
+                                onSetMonth={setLeftMonth}
+                                onSetYear={setLeftYear}
+                                onGoToToday={goToTodayLeft}
+                                highlights={calHighlights}
+                        />
+                        <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
+                        <!-- Right month (semi-independent) -->
+                        <CalendarMonth
+                                year={calRightYear}
+                                month={calRightMonth}
+                                {weekdayLabels}
+                                {monthLabels}
+                                onDayClick={handleDayClick}
+                                onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
+                                onPrevMonth={rightPrevMonth}
+                                onNextMonth={rightNextMonth}
+                                onSetMonth={setRightMonth}
+                                onSetYear={setRightYear}
+                                onGoToToday={goToTodayRight}
+                                highlights={calHighlights}
+                        />
+                    </div>
+                    {#if pendingDate}
+                        <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+                            {$_('datePicker.selectSecondDate')}
+                        </div>
+                    {/if}
+                </div>
+            {/if}
+        </div>
     {/if}
 </div>
 

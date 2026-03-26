@@ -11,21 +11,17 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {X, Settings} from 'lucide-svelte';
+    import {Settings, X} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
+    import type {LineDataPoint} from './LineChart.svelte';
     import LineChart from './LineChart.svelte';
     import ChartAestheticsSection from './ChartAestheticsSection.svelte';
     import ChartSignalsSection from './ChartSignalsSection.svelte';
-    import type {LineDataPoint} from './LineChart.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {
-        type SignalConfig,
-        type RenderedSignal,
-        signalFromConfig,
-    } from '$lib/charts/signals';
+    import {type RenderedSignal, type SignalConfig, signalFromConfig,} from '$lib/charts/signals';
     import {SineSignal} from '$lib/charts/signals/SineSignal';
 
     // =========================================================================
@@ -219,26 +215,26 @@
 </script>
 
 <ModalBase
-    bind:open
-    maxWidth="3xl"
-    onRequestClose={handleClose}
-    testId="chart-settings-modal"
+        bind:open
+        maxWidth="3xl"
+        onRequestClose={handleClose}
+        testId="chart-settings-modal"
 >
     <div class="flex flex-col max-h-[85vh]">
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
             <div class="flex items-center gap-2">
-                <Settings size={20} class="text-libre-green" />
+                <Settings class="text-libre-green" size={20}/>
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
                     {mode === 'global' ? $t('chartSettings.title') : $t('chartSettings.titleLocal')}
                 </h2>
             </div>
             <button
-                type="button"
-                class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                onclick={handleClose}
+                    class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                    onclick={handleClose}
+                    type="button"
             >
-                <X size={18} />
+                <X size={18}/>
             </button>
         </div>
 
@@ -253,13 +249,13 @@
 
             <!-- Aesthetics Section (extracted component) -->
             <ChartAestheticsSection
-                bind:colorByBaseline
-                bind:areaFill
-                bind:gridLines
-                bind:staleGradient
-                bind:yAxisMode
-                bind:yAxisMin
-                bind:yAxisMax
+                    bind:areaFill
+                    bind:colorByBaseline
+                    bind:gridLines
+                    bind:staleGradient
+                    bind:yAxisMax
+                    bind:yAxisMin
+                    bind:yAxisMode
             />
 
             <!-- Preview Chart -->
@@ -268,33 +264,35 @@
                     <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{$t('chartSettings.preview')}</h3>
                     <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                         <button
-                            type="button"
-                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            onclick={() => previewViewMode = 'absolute'}
-                        >Abs</button>
+                                class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                onclick={() => previewViewMode = 'absolute'}
+                                type="button"
+                        >Abs
+                        </button>
                         <button
-                            type="button"
-                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            onclick={() => previewViewMode = 'percentage'}
-                        >%</button>
+                                class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                onclick={() => previewViewMode = 'percentage'}
+                                type="button"
+                        >%
+                        </button>
                     </div>
                 </div>
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden bg-gray-50 dark:bg-slate-800/50">
                     <LineChart
-                        data={previewData}
-                        currency={mode === 'pair' && pairData && pairData.length > 0 ? '' : 'Preview'}
-                        height="140px"
-                        areaFill={areaFill}
-                        compact={false}
-                        showMiniAxis={false}
-                        showGradient={staleGradient}
-                        colorByBaseline={colorByBaseline}
-                        showGridLines={gridLines}
-                        viewMode={previewViewMode}
-                        yAxisMode={yAxisMode}
-                        yAxisMin={yAxisMin}
-                        yAxisMax={yAxisMax}
-                        overlaySignals={previewSignals}
+                            areaFill={areaFill}
+                            colorByBaseline={colorByBaseline}
+                            compact={false}
+                            currency={mode === 'pair' && pairData && pairData.length > 0 ? '' : 'Preview'}
+                            data={previewData}
+                            height="140px"
+                            overlaySignals={previewSignals}
+                            showGradient={staleGradient}
+                            showGridLines={gridLines}
+                            showMiniAxis={false}
+                            viewMode={previewViewMode}
+                            yAxisMax={yAxisMax}
+                            yAxisMin={yAxisMin}
+                            yAxisMode={yAxisMode}
                     />
                 </div>
                 <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 italic">
@@ -304,24 +302,24 @@
 
             <!-- Signals Section (extracted component) -->
             <ChartSignalsSection
-                bind:signals
-                {availablePairs}
+                    {availablePairs}
+                    bind:signals
             />
         </div>
 
         <!-- Footer -->
         <div class="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
             <button
-                type="button"
-                class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                onclick={handleClose}
+                    class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                    onclick={handleClose}
+                    type="button"
             >
                 {$t('common.cancel')}
             </button>
             <button
-                type="button"
-                class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors"
-                onclick={handleSave}
+                    class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors"
+                    onclick={handleSave}
+                    type="button"
             >
                 {$t('chartSettings.apply')}
             </button>
@@ -331,13 +329,13 @@
 
 <!-- Confirm discard changes -->
 <ConfirmModal
-    open={confirmCloseOpen}
-    title={$t('chartSettings.discardTitle')}
-    message={$t('chartSettings.discardMessage')}
-    confirmText={$t('chartSettings.discard')}
-    danger={false}
-    warning={true}
-    onConfirm={confirmDiscardAndClose}
-    onCancel={() => { confirmCloseOpen = false; }}
-    zIndex={70}
+        confirmText={$t('chartSettings.discard')}
+        danger={false}
+        message={$t('chartSettings.discardMessage')}
+        onCancel={() => { confirmCloseOpen = false; }}
+        onConfirm={confirmDiscardAndClose}
+        open={confirmCloseOpen}
+        title={$t('chartSettings.discardTitle')}
+        warning={true}
+        zIndex={70}
 />

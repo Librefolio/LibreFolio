@@ -76,13 +76,6 @@ export class EditBuffer<T extends TimeSeriesPoint> {
         return () => this.listeners.delete(callback);
     }
 
-    private notify(): void {
-        const all = this.getAll();
-        for (const listener of this.listeners) {
-            listener(all);
-        }
-    }
-
     /**
      * Add a new pending edit.
      * If an edit for the same date already exists, it is replaced.
@@ -251,6 +244,13 @@ export class EditBuffer<T extends TimeSeriesPoint> {
         this.dateIndex.clear();
         this.nextCsvLine = 1;
         this.notify();
+    }
+
+    private notify(): void {
+        const all = this.getAll();
+        for (const listener of this.listeners) {
+            listener(all);
+        }
     }
 }
 
