@@ -365,6 +365,8 @@
     "deletePair": "Eliminar par",
     "deletePairTitle": "Eliminar Par FX",
     "deletePairMessage": "¿Estás seguro de que quieres eliminar {pair}? Esto eliminará la configuración de proveedores y todos los tipos de cambio históricos.",
+    "deletePairQuestion": "¿Eliminar {pair}?",
+    "deletePairWarning": "Esto eliminará la configuración de proveedores y todos los tipos de cambio históricos. ⚠️",
     "delete": {
       "toastOk": "{pair} eliminado ({count} tasas eliminadas)",
       "toastFailed": "Error al eliminar {pair}",

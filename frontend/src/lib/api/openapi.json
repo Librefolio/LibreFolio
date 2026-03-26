@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.8-13-g87338b5-dirty"
+    "version": "v0.5.8-15-g384c685-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -6464,6 +6464,18 @@
             "type": "boolean",
             "title": "Has Provider",
             "default": false
+          },
+          "provider_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Code",
+            "description": "Provider code if assigned (e.g. 'yfinance')"
           }
         },
         "additionalProperties": false,
@@ -8234,6 +8246,18 @@
             "type": "boolean",
             "title": "Has Provider",
             "description": "Whether asset has a provider assigned"
+          },
+          "provider_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Code",
+            "description": "Provider code if assigned (e.g. 'yfinance')"
           },
           "has_metadata": {
             "type": "boolean",

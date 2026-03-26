@@ -365,6 +365,8 @@
     "deletePair": "Delete pair",
     "deletePairTitle": "Delete FX Pair",
     "deletePairMessage": "Are you sure you want to delete {pair}? This will remove the provider configuration and all historical exchange rates.",
+    "deletePairQuestion": "Delete {pair}?",
+    "deletePairWarning": "This will remove the provider configuration and all historical exchange rates. ⚠️",
     "delete": {
       "toastOk": "{pair} deleted ({count} rates removed)",
       "toastFailed": "Failed to delete {pair}",

@@ -269,11 +269,22 @@ G8 (TODO_FUTURI nota)
 - [x] `svelte-check` — 0 errors, 0 warnings ✅
 - [x] `./dev.py test all` — **10/10** ✅ (confermato dall'utente)
 - [x] Asset sync bulk (7 asset) — 5 OK, 2 PARTIAL (crypto = current value only) ✅
-- [ ] FX sync — funziona come prima
-- [ ] Delete singola asset con transazioni — toast con nome tradotto
-- [ ] Delete bulk asset mix successo/fallimento — modale mostra dettaglio per-item
-- [ ] FX delete singola — toast con count rate
-- [ ] FX delete bulk — modale mostra dettaglio per-coppia
+- [x] FX sync — funziona come prima ✅
+- [x] Delete singola asset con transazioni — toast con nome tradotto ✅
+- [x] Delete bulk asset mix successo/fallimento — modale mostra dettaglio per-item ✅
+- [x] FX delete singola — toast con count rate ✅
+- [x] FX delete bulk — modale mostra dettaglio per-coppia ✅
 - [x] Test asset-source-refresh: 7/7 passati (da 1 smoke → 7 test robusti) ✅
 - [x] Provider icon nella sync modal — ora carica icone asset provider ✅
 - [x] Currency fallback — usa `asset.currency` invece di USD hardcoded ✅
+
+### Fix post-review (Round 2)
+
+| Fix | Descrizione |
+|-----|-------------|
+| **providerHelpers separation** | `getProviderIconUrl` (FX only) e `getAssetProviderIconUrl` (asset only) — registri separati per evitare collisioni |
+| **FX delete accapo** | `deletePairQuestion` + `deletePairWarning` (come fatto per asset) — sia single che bulk |
+| **Provider icon in tabella** | `provider_code` aggiunto a `FAinfoResponse` + `FAAssetMetadataResponse` backend; tabella usa `assetProviderBadgeHtml()` per icona/testo |
+| **db populate** | 2 asset senza transazioni (NVIDIA, Amundi MSCI World) per testare delete success |
+| **Crypto PARTIAL** | Confermato come test futuro — necessita pagina dettaglio asset (Phase 6 Step 4) |
+

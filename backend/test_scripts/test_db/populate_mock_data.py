@@ -552,6 +552,38 @@ def populate_assets(session: Session):
                     }
                 ),
             },
+        # Assets WITHOUT transactions — for testing delete success flow
+        {
+            "display_name": "NVIDIA Corporation",
+            "currency": "USD",
+            "asset_type": AssetType.STOCK,
+            "classification_params": json.dumps(
+                {
+                    "short_description": "GPU and AI computing leader",
+                    "geographic_area": {"USA": 1.0},
+                    "sector": "Technology",
+                    }
+                ),
+            },
+        {
+            "display_name": "Amundi MSCI World UCITS ETF",
+            "currency": "EUR",
+            "asset_type": AssetType.ETF,
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Global developed markets ETF",
+                    "geographic_area": {
+                        "USA": 0.65,
+                        "DEU": 0.08,
+                        "GBR": 0.08,
+                        "JPN": 0.07,
+                        "FRA": 0.06,
+                        "CHN": 0.06,
+                        },
+                    "sector": "Diversified",
+                    }
+                ),
+            },
         ]
 
     for asset_data in assets:
@@ -576,6 +608,9 @@ def populate_asset_provider_assignments(session: Session):
         ("iShares Core S&P 500 UCITS ETF", "yfinance", "SXR8.DE", IdentifierType.TICKER, None),
         ("Bitcoin", "yfinance", "BTC-USD", IdentifierType.TICKER, None),
         ("Ethereum", "yfinance", "ETH-USD", IdentifierType.TICKER, None),
+        # Assets without transactions (for testing delete success flow)
+        ("NVIDIA Corporation", "yfinance", "NVDA", IdentifierType.TICKER, None),
+        ("Amundi MSCI World UCITS ETF", "yfinance", "MWRD.DE", IdentifierType.TICKER, None),
         ]
 
     for display_name, provider_code, identifier, id_type, params in provider_configs:

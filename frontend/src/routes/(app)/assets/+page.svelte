@@ -46,6 +46,7 @@
         icon_url?: string | null;
         asset_type?: string | null;
         has_provider: boolean;
+        provider_code?: string | null;
         active: boolean;
     }
 
@@ -186,6 +187,7 @@
         icon_url: a.icon_url,
         asset_type: a.asset_type,
         has_provider: a.has_provider,
+        provider_code: a.provider_code,
         active: a.active,
         lastPrice: a.lastPrice,
         deltaAbs: a.deltaAbs,
@@ -284,6 +286,7 @@
                 icon_url: item.icon_url ?? null,
                 asset_type: item.asset_type ?? null,
                 has_provider: item.has_provider ?? false,
+                provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
                 lastPrice: null,
                 deltaAbs: null,
