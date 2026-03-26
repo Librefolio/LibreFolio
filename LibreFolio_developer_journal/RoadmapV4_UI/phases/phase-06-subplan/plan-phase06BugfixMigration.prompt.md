@@ -9,7 +9,7 @@ con Step 3 (AssetModal). Questo piano di rientro corregge tutto in ordine di dip
 **Durata stimata**: ~0.5 giorni
 **Dipendenze**: Phase 06 Step 1 + Step 2 completati
 
-**Stato**: ✅ Step 1-15 completati | ✅ Feature F1-F5 completate | ✅ Step 2c (B1-B9) completati | ✅ Step 2d (C1-C12) completati | ⬜ Step 2e (D1-D12) in attesa
+**Stato**: ✅ Step 1-15 completati | ✅ Feature F1-F5 completate | ✅ Step 2c (B1-B9) completati | ✅ Step 2d (C1-C12) completati | ✅ Step 2e (D1-D12) completati (D4 rimandato a Step 3 Assets)
 
 ---
 
@@ -3129,16 +3129,16 @@ D5 (icone filtro enum) ──────── dopo D6 (usa stesse icon map)
 
 ### Checklist Pre-Implementazione Step 2e
 
-- [ ] D1: Centrare bottone ColumnVisibilityToggle — `justify-center`
-- [ ] D2: Provider chain ricca con bandiere + icone favicon (FxTable + FxSyncModal)
-- [ ] D3: Fix bulk sync undefined — mappare `string[]` a `FxRow[]` in `onSelectionChange`
-- [ ] D4: Assets integrazione ChartSettingsModal (global + per-card)
-- [ ] D5: AssetTable filtro tipo con icone PNG — estendere `EnumOption`
-- [ ] D6: i18n tipi asset (8 tipi × 4 lingue) + icona PNG nel badge card
-- [ ] D7: AssetCard icona asset + pallino active (come tabella)
-- [ ] D8: Rimuovere `filterable` da colonne type e currency in AssetTable
-- [ ] D9: Filtro tipo globale multi-checkbox con pannello
-- [ ] D10: Filtro valuta multi-select — **Proposta A** (badge rimuovibili + CurrencySearchSelect) — Proposta C in TODO_FUTURI
-- [ ] D11: Layout responsive filter bar Assets — **Proposta D** + **Opzione γ** (badge nell'header, CurrencySearchSelect puro nel 2×2)
-- [ ] D12: Provider chain fallback iniziali (incluso in D2)
+- [x] D1: Centrare bottone ColumnVisibilityToggle — risolto con label
+- [x] D2: Provider chain ricca con bandiere + icone favicon (FxTable + FxSyncModal) — completato + estratto in `$lib/utils/fxSync.ts`
+- [x] D3: Fix bulk sync undefined — risolto durante H12/H13 (part3b)
+- [ ] D4: Assets integrazione ChartSettingsModal (global + per-card) — **rimandato a Step 3 Assets** (modale creata, da applicare)
+- [x] D5: AssetTable filtro tipo con icone PNG — estendere `EnumOption`
+- [x] D6: i18n tipi asset (8 tipi × 4 lingue) + icona PNG nel badge card
+- [x] D7: AssetCard icona asset + pallino active (come tabella)
+- [x] D8: Rimuovere `filterable` da colonne type e currency in AssetTable — completato in H8 (part3b)
+- [x] D9: Filtro tipo globale multi-checkbox con pannello + conteggio asset per tipo
+- [x] D10: Filtro valuta multi-select — badge rimuovibili con emoji bandiera nel titolo
+- [x] D11: Layout responsive filter bar Assets — completato in H2/H3 (part3b)
+- [x] D12: Provider chain fallback iniziali — incluso in `providerBadgeHtml()` (`fxSync.ts`): icona se disponibile, 2-char initials + sfondo colorato come fallback
 
