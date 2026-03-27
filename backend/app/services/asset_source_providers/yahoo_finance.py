@@ -88,6 +88,10 @@ class YahooFinanceProvider(AssetSourceProvider):
         """Return provider icon URL (hardcoded)"""
         return "https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png"  # Yahoo Finance logo
 
+    def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
+        """Generate URL to Yahoo Finance page for this asset."""
+        return f"https://finance.yahoo.com/quote/{identifier}"
+
     @property
     def test_cases(self) -> list[dict]:
         """Test cases with identifier and provider_params."""
@@ -465,12 +469,27 @@ class YahooFinanceProvider(AssetSourceProvider):
             # Extract currency from info
             currency = info.get("currency") or info.get("financialCurrency")
 
+            # Extract identifiers
+            symbol = info.get("symbol")
+            identifier_ticker = symbol if symbol else None
+
+            # Try to get ISIN (yfinance property — may not be available for all markets)
+            identifier_isin = None
+            try:
+                isin_val = ticker.isin
+                if isin_val and isin_val != "-" and len(isin_val) == 12:
+                    identifier_isin = isin_val
+            except Exception:
+                pass  # ISIN not available for this asset
+
             # Build FAAssetPatchItem (asset_id will be filled by caller)
             patch_item = FAAssetPatchItem(
                 asset_id=0,  # Placeholder, will be set by caller
                 asset_type=asset_type,
                 currency=currency,
                 classification_params=classification,
+                identifier_ticker=identifier_ticker,
+                identifier_isin=identifier_isin,
                 )
 
             logger.info(

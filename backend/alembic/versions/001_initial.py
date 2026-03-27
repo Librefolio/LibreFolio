@@ -246,6 +246,7 @@ def upgrade() -> None:
                    provider_params TEXT,
                    last_fetch_at   DATETIME,
                    fetch_interval  INTEGER,
+                   user_url        VARCHAR     DEFAULT NULL,
                    created_at      DATETIME    NOT NULL,
                    updated_at      DATETIME    NOT NULL,
                    FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,

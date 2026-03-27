@@ -2106,10 +2106,6 @@ type FAPriceQueryResult = {
 };
 type FAProviderAssignmentItem = {
   /**
-   * Asset ID
-   */
-  asset_id: number;
-  /**
    * Provider code (yfinance, cssscraper, scheduled_investment, etc.)
    */
   provider_code: string;
@@ -2124,12 +2120,22 @@ type FAProviderAssignmentItem = {
      */
     (({} | null) | Array<{} | null>)
     | undefined;
+  /**
+   * Asset ID
+   */
+  asset_id: number;
   fetch_interval?: /**
    * Refresh frequency in minutes (default: 1440 = 24h)
    *
    * @default 1440
    */
   number | undefined;
+  user_url?:
+    | /**
+     * User-defined URL for this asset (notes, external dashboard, etc.)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
 };
 type IdentifierType =
   /**
@@ -2214,6 +2220,18 @@ type FAProviderAssignmentReadItem = {
      */
     ((string | null) | Array<string | null>)
     | undefined;
+  user_url?:
+    | /**
+     * User-defined URL
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  provider_url?:
+    | /**
+     * Auto-generated URL to provider page
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
 };
 type FAProviderInfo = {
   /**
@@ -2275,6 +2293,160 @@ type FAProviderParamField = {
     ((unknown | null) | Array<unknown | null>)
     | undefined;
 };
+type FAProviderProbeRequest = {
+  /**
+   * Provider code (yfinance, cssscraper, scheduled_investment, etc.)
+   */
+  provider_code: string;
+  /**
+   * Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)
+   */
+  identifier: string;
+  identifier_type: IdentifierType;
+  provider_params?:
+    | /**
+     * Provider-specific configuration (JSON)
+     */
+    (({} | null) | Array<{} | null>)
+    | undefined;
+  /**
+   * Operations to execute: current_price, history, metadata
+   */
+  operations: Array<ProbeOperation>;
+};
+type ProbeOperation =
+  /**
+   * Operations available for provider probe endpoint.
+   *
+   * @enum current_price, history, metadata
+   */
+  "current_price" | "history" | "metadata";
+type FAProviderProbeResponse = {
+  provider_code: string;
+  identifier: string;
+  /**
+   * Total backend execution time
+   */
+  total_execution_time_ms: number;
+  provider_url?:
+    | /**
+     * URL to asset page on provider site
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  current_price?:
+    | /**
+     * Present only if current_price was requested
+     */
+    ((ProbeCurrentPriceResult | null) | Array<ProbeCurrentPriceResult | null>)
+    | undefined;
+  history?:
+    | /**
+     * Present only if history was requested
+     */
+    ((ProbeHistoryResult | null) | Array<ProbeHistoryResult | null>)
+    | undefined;
+  metadata?:
+    | /**
+     * Present only if metadata was requested
+     */
+    ((ProbeMetadataResult | null) | Array<ProbeMetadataResult | null>)
+    | undefined;
+};
+type ProbeCurrentPriceResult = {
+  /**
+   * Whether the operation succeeded
+   */
+  success: boolean;
+  error?:
+    | /**
+     * Error message if failed
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  /**
+   * Backend execution time in milliseconds
+   */
+  execution_time_ms: number;
+  value?:
+    | /**
+     * Current price value
+     */
+    (| /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            string | null
+          >
+      )
+    | undefined;
+  currency?:
+    | /**
+     * Price currency
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  as_of_date?:
+    | /**
+     * Date of the price (ISO format)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+};
+type ProbeHistoryResult = {
+  /**
+   * Whether the operation succeeded
+   */
+  success: boolean;
+  error?:
+    | /**
+     * Error message if failed
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  /**
+   * Backend execution time in milliseconds
+   */
+  execution_time_ms: number;
+  points_count?:
+    | /**
+     * Number of price points found
+     */
+    ((number | null) | Array<number | null>)
+    | undefined;
+  date_range?:
+    | /**
+     * Date range of found data (start → end)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+};
+type ProbeMetadataResult = {
+  /**
+   * Whether the operation succeeded
+   */
+  success: boolean;
+  error?:
+    | /**
+     * Error message if failed
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  /**
+   * Backend execution time in milliseconds
+   */
+  execution_time_ms: number;
+  patch_data?:
+    | /**
+     * Asset metadata patch (identifiers, asset_type, classification, etc.)
+     */
+    (({} | null) | Array<{} | null>)
+    | undefined;
+};
 type FAProviderSearchResponse = {
   /**
    * Original search query
@@ -2320,6 +2492,12 @@ type FAProviderSearchResultItem = {
   asset_type?:
     | /**
      * Asset type (ETF, stock, bond, etc.)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  provider_url?:
+    | /**
+     * URL to asset page on provider site
      */
     ((string | null) | Array<string | null>)
     | undefined;
@@ -4660,7 +4838,6 @@ const FAProviderInfo: z.ZodType<FAProviderInfo> = z.object({
     .optional(),
 });
 const FAProviderAssignmentItem: z.ZodType<FAProviderAssignmentItem> = z.object({
-  asset_id: z.number().int().describe("Asset ID"),
   provider_code: z
     .string()
     .describe(
@@ -4720,12 +4897,19 @@ Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_
     .union([z.object({}).partial().passthrough(), z.null()])
     .describe("Provider-specific configuration (JSON)")
     .optional(),
+  asset_id: z.number().int().describe("Asset ID"),
   fetch_interval: z
     .number()
     .int()
     .describe("Refresh frequency in minutes (default: 1440 = 24h)")
     .optional()
     .default(1440),
+  user_url: z
+    .union([z.string(), z.null()])
+    .describe(
+      "User-defined URL for this asset (notes, external dashboard, etc.)"
+    )
+    .optional(),
 });
 const FAProviderRefreshFieldsDetail: z.ZodType<FAProviderRefreshFieldsDetail> =
   z.object({
@@ -4852,6 +5036,10 @@ Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_
       .union([z.string(), z.null()])
       .describe("Asset type (ETF, stock, bond, etc.)")
       .optional(),
+    provider_url: z
+      .union([z.string(), z.null()])
+      .describe("URL to asset page on provider site")
+      .optional(),
   });
 const FAProviderSearchResponse: z.ZodType<FAProviderSearchResponse> = z.object({
   query: z.string().describe("Original search query"),
@@ -4866,6 +5054,155 @@ const FAProviderSearchResponse: z.ZodType<FAProviderSearchResponse> = z.object({
   providers_with_errors: z
     .array(z.string())
     .describe("Providers that returned errors")
+    .optional(),
+});
+const ProbeOperation = z.enum(["current_price", "history", "metadata"]);
+const FAProviderProbeRequest: z.ZodType<FAProviderProbeRequest> = z.object({
+  provider_code: z
+    .string()
+    .describe(
+      "Provider code (yfinance, cssscraper, scheduled_investment, etc.)"
+    ),
+  identifier: z
+    .string()
+    .describe(
+      "Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
+    ),
+  identifier_type: IdentifierType.describe(`Asset identifier type.
+
+Usage: Specify which type of identifier is stored in the 'identifier' field.
+
+- ISIN: International Securities Identification Number (e.g., US0378331005 for Apple)
+- TICKER: Stock ticker symbol (e.g., AAPL, MSFT)
+- CUSIP: Committee on Uniform Securities Identification Procedures (US/Canada)
+- SEDOL: Stock Exchange Daily Official List (UK)
+- FIGI: Financial Instrument Global Identifier (Bloomberg standard)
+- UUID: Universal Unique Identifier (for custom/synthetic assets)
+- OTHER: Any other identifier type not listed above
+
+Impact: Used for data validation and plugin selection. Some plugins may only
+work with specific identifier types (e.g., Yahoo Finance prefers TICKER).
+
+⚠️  DEPENDENT SCHEMAS - If you add/remove values, update these files:
+
+1. DATABASE SCHEMA:
+   - backend/alembic/versions/001_initial.py
+     → Add column: identifier_{value.lower()} in assets table
+     → Add index if frequently searched (ISIN, TICKER have indexes)
+
+2. SQLMODEL (this file):
+   - Asset class below
+     → Add field: identifier_{value.lower()}: Optional[str]
+     → Add validator if needed (e.g., ISIN requires 12 chars)
+
+3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):
+   - FAAssetCreateItem: Add identifier_{value.lower()} field
+   - FAAssetPatchItem: Add identifier_{value.lower()} field
+   - FAinfoResponse: Add identifier_{value.lower()} field
+   - FAAinfoFiltersRequest: Add filter field (exact or partial match)
+
+4. SERVICE LAYER (backend/app/services/asset_source.py):
+   - list_assets(): Add condition for new filter
+   - create_assets_bulk(): Pass new field to Asset()
+
+5. BRIM PROVIDER (backend/app/services/brim_provider.py):
+   - search_asset_candidates(): Add search priority if relevant
+
+6. TESTS:
+   - test_identifier_columns_match_enum() will FAIL automatically
+     if Asset.identifier_{value.lower()} is missing
+
+Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_columns_match_enum -v`),
+  provider_params: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .describe("Provider-specific configuration (JSON)")
+    .optional(),
+  operations: z
+    .array(ProbeOperation)
+    .min(1)
+    .describe("Operations to execute: current_price, history, metadata"),
+});
+const ProbeCurrentPriceResult: z.ZodType<ProbeCurrentPriceResult> = z.object({
+  success: z.boolean().describe("Whether the operation succeeded"),
+  error: z
+    .union([z.string(), z.null()])
+    .describe("Error message if failed")
+    .optional(),
+  execution_time_ms: z
+    .number()
+    .int()
+    .describe("Backend execution time in milliseconds"),
+  value: z
+    .union([z.string(), z.null()])
+    .describe("Current price value")
+    .optional(),
+  currency: z
+    .union([z.string(), z.null()])
+    .describe("Price currency")
+    .optional(),
+  as_of_date: z
+    .union([z.string(), z.null()])
+    .describe("Date of the price (ISO format)")
+    .optional(),
+});
+const ProbeHistoryResult: z.ZodType<ProbeHistoryResult> = z.object({
+  success: z.boolean().describe("Whether the operation succeeded"),
+  error: z
+    .union([z.string(), z.null()])
+    .describe("Error message if failed")
+    .optional(),
+  execution_time_ms: z
+    .number()
+    .int()
+    .describe("Backend execution time in milliseconds"),
+  points_count: z
+    .union([z.number(), z.null()])
+    .describe("Number of price points found")
+    .optional(),
+  date_range: z
+    .union([z.string(), z.null()])
+    .describe("Date range of found data (start → end)")
+    .optional(),
+});
+const ProbeMetadataResult: z.ZodType<ProbeMetadataResult> = z.object({
+  success: z.boolean().describe("Whether the operation succeeded"),
+  error: z
+    .union([z.string(), z.null()])
+    .describe("Error message if failed")
+    .optional(),
+  execution_time_ms: z
+    .number()
+    .int()
+    .describe("Backend execution time in milliseconds"),
+  patch_data: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .describe(
+      "Asset metadata patch (identifiers, asset_type, classification, etc.)"
+    )
+    .optional(),
+});
+const FAProviderProbeResponse: z.ZodType<FAProviderProbeResponse> = z.object({
+  provider_code: z.string(),
+  identifier: z.string(),
+  total_execution_time_ms: z
+    .number()
+    .int()
+    .describe("Total backend execution time"),
+  provider_url: z
+    .union([z.string(), z.null()])
+    .describe("URL to asset page on provider site")
+    .optional(),
+  current_price: z
+    .union([ProbeCurrentPriceResult, z.null()])
+    .describe("Present only if current_price was requested")
+    .optional(),
+  history: z
+    .union([ProbeHistoryResult, z.null()])
+    .describe("Present only if history was requested")
+    .optional(),
+  metadata: z
+    .union([ProbeMetadataResult, z.null()])
+    .describe("Present only if metadata was requested")
     .optional(),
 });
 const FAProviderAssignmentReadItem: z.ZodType<FAProviderAssignmentReadItem> =
@@ -4929,6 +5266,14 @@ Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_
     last_fetch_at: z
       .union([z.string(), z.null()])
       .describe("Last fetch timestamp (ISO format)")
+      .optional(),
+    user_url: z
+      .union([z.string(), z.null()])
+      .describe("User-defined URL")
+      .optional(),
+    provider_url: z
+      .union([z.string(), z.null()])
+      .describe("Auto-generated URL to provider page")
       .optional(),
   });
 const FAMetadataRefreshResult: z.ZodType<FAMetadataRefreshResult> = z.object({
@@ -6196,6 +6541,12 @@ export const schemas = {
   providers__3,
   FAProviderSearchResultItem,
   FAProviderSearchResponse,
+  ProbeOperation,
+  FAProviderProbeRequest,
+  ProbeCurrentPriceResult,
+  ProbeHistoryResult,
+  ProbeMetadataResult,
+  FAProviderProbeResponse,
   FAProviderAssignmentReadItem,
   FAMetadataRefreshResult,
   FABulkMetadataRefreshResponse,
@@ -6757,6 +7108,41 @@ GET /api/v1/assets/provider/assignments?asset_ids&#x3D;1&amp;asset_ids&#x3D;2&am
       },
     ],
     response: z.array(FAProviderAssignmentReadItem),
+    errors: [
+      {
+        status: 422,
+        description: `Validation Error`,
+        schema: HTTPValidationError,
+      },
+    ],
+  },
+  {
+    method: "post",
+    path: "/api/v1/assets/provider/probe",
+    alias: "probe_provider_config_api_v1_assets_provider_probe_post",
+    description: `Probe a provider configuration without persisting anything (dry-run).
+
+Executes selected operations against the provider and returns results
+with per-operation execution time. Nothing is stored in the database.
+
+Operations:
+- current_price: Fetch latest price
+- history: Fetch last 7 days of price history
+- metadata: Fetch asset metadata (identifiers, type, classification)
+
+Use cases:
+- Test provider configuration before assigning
+- &quot;Ask Provider&quot; button to fetch identifiers
+- Verify provider is working correctly`,
+    requestFormat: "json",
+    parameters: [
+      {
+        name: "body",
+        type: "Body",
+        schema: FAProviderProbeRequest,
+      },
+    ],
+    response: FAProviderProbeResponse,
     errors: [
       {
         status: 422,

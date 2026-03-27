@@ -601,19 +601,19 @@ def populate_asset_provider_assignments(session: Session):
 
     # Map assets to their provider configs
     provider_configs = [
-        ("Apple Inc.", "yfinance", "AAPL", IdentifierType.TICKER, None),
-        ("Microsoft Corporation", "yfinance", "MSFT", IdentifierType.TICKER, None),
-        ("Tesla, Inc.", "yfinance", "TSLA", IdentifierType.TICKER, None),
-        ("Vanguard FTSE All-World UCITS ETF", "yfinance", "VWCE.DE", IdentifierType.TICKER, None),
-        ("iShares Core S&P 500 UCITS ETF", "yfinance", "SXR8.DE", IdentifierType.TICKER, None),
-        ("Bitcoin", "yfinance", "BTC-USD", IdentifierType.TICKER, None),
-        ("Ethereum", "yfinance", "ETH-USD", IdentifierType.TICKER, None),
+        ("Apple Inc.", "yfinance", "AAPL", IdentifierType.TICKER, None, "https://investor.apple.com"),
+        ("Microsoft Corporation", "yfinance", "MSFT", IdentifierType.TICKER, None, "https://www.microsoft.com/en-us/investor"),
+        ("Tesla, Inc.", "yfinance", "TSLA", IdentifierType.TICKER, None, None),
+        ("Vanguard FTSE All-World UCITS ETF", "yfinance", "VWCE.DE", IdentifierType.TICKER, None, None),
+        ("iShares Core S&P 500 UCITS ETF", "yfinance", "SXR8.DE", IdentifierType.TICKER, None, None),
+        ("Bitcoin", "yfinance", "BTC-USD", IdentifierType.TICKER, None, None),
+        ("Ethereum", "yfinance", "ETH-USD", IdentifierType.TICKER, None, None),
         # Assets without transactions (for testing delete success flow)
-        ("NVIDIA Corporation", "yfinance", "NVDA", IdentifierType.TICKER, None),
-        ("Amundi MSCI World UCITS ETF", "yfinance", "MWRD.DE", IdentifierType.TICKER, None),
+        ("NVIDIA Corporation", "yfinance", "NVDA", IdentifierType.TICKER, None, None),
+        ("Amundi MSCI World UCITS ETF", "yfinance", "MWRD.DE", IdentifierType.TICKER, None, None),
         ]
 
-    for display_name, provider_code, identifier, id_type, params in provider_configs:
+    for display_name, provider_code, identifier, id_type, params, user_url in provider_configs:
         asset = session.exec(select(Asset).where(Asset.display_name == display_name)).first()
 
         if asset:
@@ -624,6 +624,7 @@ def populate_asset_provider_assignments(session: Session):
                 identifier_type=id_type,
                 provider_params=json.dumps(params) if params else None,
                 fetch_interval=1440,  # 24 hours
+                user_url=user_url,
                 )
             session.add(assignment)
             print(f"  ✅ {display_name} → {provider_code} ({identifier})")

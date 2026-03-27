@@ -26,6 +26,8 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 
 from __future__ import annotations
 
+from decimal import Decimal
+from enum import Enum
 from typing import List, Optional, Any
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
@@ -75,10 +77,7 @@ class FAProviderInfo(BaseModel):
     description: str = Field(..., description="Provider description")
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
     supports_search: bool = Field(..., description="Whether provider supports asset search")
-    params_schema: List[FAProviderParamField] = Field(
-        default_factory=list,
-        description="Form field definitions for provider_params"
-        )
+    params_schema: List[FAProviderParamField] = Field(default_factory=list, description="Form field definitions for provider_params")
 
 
 # ============================================================================
@@ -101,12 +100,55 @@ class FXProviderInfo(BaseModel):
 
 
 # ============================================================================
+# FA PROVIDER CONFIG BASE
+# ============================================================================
+
+
+class FAProviderConfigBase(BaseModel):
+    """Base provider configuration — minimal set for probe/test operations.
+
+    Contains only the fields needed to identify and configure a provider,
+    without persistence-related fields (asset_id, fetch_interval, etc.).
+
+    Used as input for probe/test-config endpoint.
+    Child classes extend this for assignment (FAProviderAssignmentItem)
+    and probe requests (FAProviderProbeRequest).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)")
+    identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
+    identifier_type: IdentifierType = Field(..., description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)")
+    provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
+
+    @model_validator(mode="after")
+    def validate_provider_params_with_plugin(self):
+        """Validate provider_params using the plugin's validate_params method."""
+        from backend.app.services.provider_registry import AssetProviderRegistry
+        from backend.app.services.asset_source import AssetSourceError
+
+        provider = AssetProviderRegistry.get_provider_instance(self.provider_code)
+        if not provider:
+            raise ValueError(f"Unknown provider code: {self.provider_code}")
+
+        try:
+            provider.validate_params(self.provider_params)
+        except AssetSourceError as e:
+            raise ValueError(f"Invalid provider_params for {self.provider_code}: {e.message}")
+        except Exception as e:
+            raise ValueError(f"Provider validation error for {self.provider_code}: {str(e)}")
+
+        return self
+
+
+# ============================================================================
 # FA PROVIDER ASSIGNMENT
 # ============================================================================
 
 
-class FAProviderAssignmentItem(BaseModel):
-    """Single FA provider assignment configuration.
+class FAProviderAssignmentItem(FAProviderConfigBase):
+    """FA provider assignment — extends config base with persistence fields.
 
     Links an asset to a pricing provider with identifier and parameters.
 
@@ -116,24 +158,9 @@ class FAProviderAssignmentItem(BaseModel):
     - provider_params: Provider-specific configuration (e.g., FAScheduledInvestmentSchedule for scheduled_investment)
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     asset_id: int = Field(..., description="Asset ID")
-    provider_code: str = Field(
-        ..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)"
-        )
-    identifier: str = Field(
-        ..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
-        )
-    identifier_type: IdentifierType = Field(
-        ..., description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
-        )
-    provider_params: Optional[dict[str, Any]] = Field(
-        None, description="Provider-specific configuration (JSON)"
-        )
-    fetch_interval: int = Field(
-        1440, description="Refresh frequency in minutes (default: 1440 = 24h)"
-        )
+    fetch_interval: int = Field(1440, description="Refresh frequency in minutes (default: 1440 = 24h)")
+    user_url: Optional[str] = Field(None, description="User-defined URL for this asset (notes, external dashboard, etc.)")
 
     @field_validator("fetch_interval", mode="before")
     @classmethod
@@ -142,28 +169,6 @@ class FAProviderAssignmentItem(BaseModel):
         if v is None or v == "":
             return 1440
         return v
-
-    @model_validator(mode="after")
-    def validate_provider_params_with_plugin(self):
-        """Validate provider_params using the plugin's validate_params method."""
-        # Lazy import to avoid circular dependency
-        from backend.app.services.provider_registry import AssetProviderRegistry
-        from backend.app.services.asset_source import AssetSourceError
-
-        # Get provider instance
-        provider = AssetProviderRegistry.get_provider_instance(self.provider_code)
-        if not provider:
-            raise ValueError(f"Unknown provider code: {self.provider_code}")
-
-        # Validate params using plugin's validate_params method
-        try:
-            provider.validate_params(self.provider_params)
-        except AssetSourceError as e:
-            raise ValueError(f"Invalid provider_params for {self.provider_code}: {e.message}")
-        except Exception as e:
-            raise ValueError(f"Provider validation error for {self.provider_code}: {str(e)}")
-
-        return self
 
 
 class FAProviderAssignmentReadItem(BaseModel):
@@ -181,6 +186,8 @@ class FAProviderAssignmentReadItem(BaseModel):
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider configuration")
     fetch_interval: Optional[int] = Field(None, description="Refresh frequency in minutes")
     last_fetch_at: Optional[str] = Field(None, description="Last fetch timestamp (ISO format)")
+    user_url: Optional[str] = Field(None, description="User-defined URL")
+    provider_url: Optional[str] = Field(None, description="Auto-generated URL to provider page")
 
 
 class FAProviderRefreshFieldsDetail(BaseModel):
@@ -215,9 +222,7 @@ class FAProviderAssignmentResult(BaseModel):
     asset_id: int
     success: bool
     message: str
-    fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(
-        None, description="Field-level refresh details (for refresh operations)"
-        )
+    fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(None, description="Field-level refresh details (for refresh operations)")
 
 
 class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):
@@ -250,6 +255,83 @@ class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
 
 
 # ============================================================================
+# FA PROVIDER PROBE (DRY-RUN)
+# ============================================================================
+
+
+class ProbeOperation(str, Enum):
+    """Operations available for provider probe endpoint."""
+    CURRENT_PRICE = "current_price"
+    HISTORY = "history"
+    METADATA = "metadata"
+
+
+class FAProviderProbeRequest(FAProviderConfigBase):
+    """Probe request — extends config base with operation selection.
+
+    Inherits provider_code, identifier, identifier_type, provider_params
+    from FAProviderConfigBase. Adds operations list to select which
+    probe operations to execute.
+    """
+    operations: List[ProbeOperation] = Field(..., min_length=1, description="Operations to execute: current_price, history, metadata")
+
+
+class BaseProbeOperationResult(BaseModel):
+    """Base class for all probe operation results.
+
+    Shared fields for every probe sub-operation (current_price, history, metadata).
+    Child classes add operation-specific fields only.
+
+    Design follows the same inheritance pattern as BaseDeleteResult in common.py.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool = Field(..., description="Whether the operation succeeded")
+    error: Optional[str] = Field(None, description="Error message if failed")
+    execution_time_ms: int = Field(..., description="Backend execution time in milliseconds")
+
+
+class ProbeCurrentPriceResult(BaseProbeOperationResult):
+    """Result of current_price probe operation."""
+
+    value: Optional[Decimal] = Field(None, description="Current price value")
+    currency: Optional[str] = Field(None, description="Price currency")
+    as_of_date: Optional[str] = Field(None, description="Date of the price (ISO format)")
+
+
+class ProbeHistoryResult(BaseProbeOperationResult):
+    """Result of history probe operation."""
+
+    points_count: Optional[int] = Field(None, description="Number of price points found")
+    date_range: Optional[str] = Field(None, description="Date range of found data (start → end)")
+
+
+class ProbeMetadataResult(BaseProbeOperationResult):
+    """Result of metadata probe operation."""
+
+    patch_data: Optional[dict] = Field(None, description="Asset metadata patch (identifiers, asset_type, classification, etc.)")
+
+
+class FAProviderProbeResponse(BaseModel):
+    """Response for provider probe endpoint.
+
+    Contains results for each requested operation, with per-operation
+    execution time and a total execution time.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    provider_code: str = Field(...)
+    identifier: str = Field(...)
+    total_execution_time_ms: int = Field(..., description="Total backend execution time")
+    provider_url: Optional[str] = Field(None, description="URL to asset page on provider site")
+
+    current_price: Optional[ProbeCurrentPriceResult] = Field(None, description="Present only if current_price was requested")
+    history: Optional[ProbeHistoryResult] = Field(None, description="Present only if history was requested")
+    metadata: Optional[ProbeMetadataResult] = Field(None, description="Present only if metadata was requested")
+
+
+# ============================================================================
 # FA PROVIDER SEARCH
 # ============================================================================
 
@@ -272,6 +354,7 @@ class FAProviderSearchResultItem(BaseModel):
     provider_code: str = Field(..., description="Provider that returned this result")
     currency: Optional[str] = Field(None, description="Asset currency if known")
     asset_type: Optional[str] = Field(None, description="Asset type (ETF, stock, bond, etc.)")
+    provider_url: Optional[str] = Field(None, description="URL to asset page on provider site")
 
 
 class FAProviderSearchResponse(BaseModel):

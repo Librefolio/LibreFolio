@@ -263,12 +263,9 @@
       "toastFailed": "Sync failed for {name}",
       "modalTitle": "Sync Asset Prices",
       "modalDescription": "Synchronize prices from configured providers for the selected date range.",
-      "assetsCount": "assets",
-      "noProvider": "No provider assigned",
-      "currentValueOnly": "Current value only (no history)"
+      "assetsCount": "assets"
     },
     "delete": {
-      "confirmMessage": "Delete \"{name}\"? Provider assignments and price history will be removed.",
       "confirmQuestion": "Delete \"{name}\"?",
       "confirmWarning": "Provider assignments and price history will be removed. ⚠️",
       "toastOk": "{name} deleted",
@@ -289,6 +286,61 @@
       "HOLD": "Hold",
       "CROWDFUND_LOAN": "Crowdfund",
       "OTHER": "Other"
+    },
+    "type": "Type",
+    "modal": {
+      "title": "Add Asset",
+      "titleEdit": "Edit Asset",
+      "searchOnline": "Search Online",
+      "assetDetails": "Asset Details",
+      "identifiers": "Identifiers",
+      "createAsset": "Create Asset",
+      "saveChanges": "Save Changes",
+      "autoAssignInfo": "Provider \"{provider}\" will be auto-assigned on create",
+      "duplicateName": "An asset with this name already exists",
+      "createSuccess": "\"{name}\" created successfully",
+      "saveSuccess": "\"{name}\" updated successfully"
+    },
+    "provider": {
+      "assignment": "Provider Assignment",
+      "noProvider": "No Provider",
+      "testConfig": "Test Configuration",
+      "testing": "Testing...",
+      "userUrl": "User URL",
+      "providerUrl": "Provider URL",
+      "selectProvider": "Provider",
+      "identifier": "Identifier",
+      "identifierType": "Identifier Type"
+    },
+    "probe": {
+      "currentPrice": "Current Price",
+      "history": "History",
+      "metadata": "Metadata",
+      "notTested": "Not tested",
+      "passed": "Passed",
+      "failed": "Failed",
+      "executionTime": "Execution time",
+      "totalTime": "Total"
+    },
+    "identifiers": {
+      "askProvider": "Ask Provider",
+      "askProviderHint": "Fetch identifiers from the assigned provider",
+      "autoFilled": "Auto-filled from provider",
+      "conflictWarning": "Provider suggests a different value"
+    },
+    "confirm": {
+      "saveWithoutTest": "Save Without Testing?",
+      "saveWithoutTestMessage": "You are about to save the asset without verifying the provider configuration. This may cause errors when fetching price data.",
+      "saveAnyway": "Save Anyway",
+      "identifierChanged": "Confirm Asset Change",
+      "identifierChangedMessage": "You are about to change the provider identifier. Are you sure you want to associate this asset with a different financial instrument?",
+      "confirmChange": "Confirm Change"
+    },
+    "search": {
+      "placeholder": "Search by name, ticker, ISIN...",
+      "providers": "Providers",
+      "noResults": "No results found",
+      "searching": "Searching..."
     }
   },
   "transactions": {
@@ -364,7 +416,6 @@
     "providers": "Providers",
     "deletePair": "Delete pair",
     "deletePairTitle": "Delete FX Pair",
-    "deletePairMessage": "Are you sure you want to delete {pair}? This will remove the provider configuration and all historical exchange rates.",
     "deletePairQuestion": "Delete {pair}?",
     "deletePairWarning": "This will remove the provider configuration and all historical exchange rates. ⚠️",
     "delete": {

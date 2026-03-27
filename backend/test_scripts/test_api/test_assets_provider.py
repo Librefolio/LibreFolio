@@ -1072,3 +1072,257 @@ async def test_css_scraper_current_price(test_server):
         # Cleanup
         await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         print_info("  Cleanup completed")
+
+
+# ============================================================
+# Test: POST /assets/provider/probe — current_price only
+# ============================================================
+@pytest.mark.asyncio
+async def test_probe_current_price(test_server):
+    """Test probe with current_price operation using yfinance."""
+    print_section("Test: POST /assets/provider/probe — current_price")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        probe_resp = await client.post(
+            f"{API_BASE}/assets/provider/probe",
+            json={
+                "provider_code": "yfinance",
+                "identifier": "AAPL",
+                "identifier_type": "TICKER",
+                "operations": ["current_price"],
+                },
+            timeout=SEARCH_TIMEOUT,
+            )
+        assert probe_resp.status_code == 200, f"Probe failed: {probe_resp.text}"
+        data = probe_resp.json()
+
+        assert data["provider_code"] == "yfinance"
+        assert data["identifier"] == "AAPL"
+        assert data["total_execution_time_ms"] > 0
+        assert data["provider_url"] == "https://finance.yahoo.com/quote/AAPL"
+
+        # current_price should be present and successful
+        cp = data["current_price"]
+        assert cp is not None, "current_price should be present"
+        assert cp["success"] is True, f"current_price failed: {cp.get('error')}"
+        assert float(cp["value"]) > 0, "Price should be positive"
+        assert cp["execution_time_ms"] > 0
+
+        # history and metadata should be absent (not requested)
+        assert data["history"] is None
+        assert data["metadata"] is None
+
+        print_success(f"✓ Probe current_price: {cp['value']} {cp['currency']} ({cp['execution_time_ms']}ms)")
+
+
+# ============================================================
+# Test: POST /assets/provider/probe — bulk all operations
+# ============================================================
+@pytest.mark.asyncio
+async def test_probe_bulk_operations(test_server):
+    """Test probe with all operations (current_price, history, metadata)."""
+    print_section("Test: POST /assets/provider/probe — bulk all operations")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        probe_resp = await client.post(
+            f"{API_BASE}/assets/provider/probe",
+            json={
+                "provider_code": "yfinance",
+                "identifier": "AAPL",
+                "identifier_type": "TICKER",
+                "operations": ["current_price", "history", "metadata"],
+                },
+            timeout=SEARCH_TIMEOUT,
+            )
+        assert probe_resp.status_code == 200, f"Probe failed: {probe_resp.text}"
+        data = probe_resp.json()
+
+        # All three results should be present
+        assert data["current_price"] is not None
+        assert data["history"] is not None
+        assert data["metadata"] is not None
+
+        # Check current_price
+        assert data["current_price"]["success"] is True
+
+        # Check history
+        hist = data["history"]
+        assert hist["success"] is True
+        assert hist["points_count"] > 0
+        print_info(f"  History: {hist['points_count']} points, range: {hist['date_range']}")
+
+        # Check metadata
+        meta = data["metadata"]
+        assert meta["success"] is True
+        assert meta["patch_data"] is not None
+        patch = meta["patch_data"]
+        assert patch.get("identifier_ticker") is not None, "identifier_ticker should be populated"
+        print_info(f"  Metadata ticker: {patch.get('identifier_ticker')}, ISIN: {patch.get('identifier_isin')}")
+
+        # Total time should be coherent
+        assert data["total_execution_time_ms"] > 0
+        print_success(f"✓ Probe bulk: total {data['total_execution_time_ms']}ms")
+
+
+# ============================================================
+# Test: POST /assets/provider/probe — invalid identifier
+# ============================================================
+@pytest.mark.asyncio
+async def test_probe_invalid_identifier(test_server):
+    """Test probe with invalid identifier returns failure."""
+    print_section("Test: POST /assets/provider/probe — invalid identifier")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        probe_resp = await client.post(
+            f"{API_BASE}/assets/provider/probe",
+            json={
+                "provider_code": "yfinance",
+                "identifier": "XYZNONEXISTENT999",
+                "identifier_type": "TICKER",
+                "operations": ["current_price"],
+                },
+            timeout=SEARCH_TIMEOUT,
+            )
+        assert probe_resp.status_code == 200, f"Probe should return 200 even for failures: {probe_resp.text}"
+        data = probe_resp.json()
+
+        cp = data["current_price"]
+        assert cp is not None
+        assert cp["success"] is False, "Should fail for invalid identifier"
+        assert cp["error"] is not None
+        assert cp["execution_time_ms"] > 0
+        print_success(f"✓ Probe invalid: error={cp['error'][:60]}...")
+
+
+# ============================================================
+# Test: POST /assets/provider/probe — mockprov
+# ============================================================
+@pytest.mark.asyncio
+async def test_probe_mockprov(test_server):
+    """Test probe with mock provider."""
+    print_section("Test: POST /assets/provider/probe — mockprov")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        probe_resp = await client.post(
+            f"{API_BASE}/assets/provider/probe",
+            json={
+                "provider_code": "mockprov",
+                "identifier": "MOCK1",
+                "identifier_type": "UUID",
+                "operations": ["current_price"],
+                },
+            timeout=TIMEOUT,
+            )
+        assert probe_resp.status_code == 200, f"Probe failed: {probe_resp.text}"
+        data = probe_resp.json()
+        assert data["provider_code"] == "mockprov"
+        cp = data["current_price"]
+        assert cp is not None
+        assert cp["execution_time_ms"] >= 0
+        print_success(f"✓ Probe mockprov: success={cp['success']}")
+
+
+# ============================================================
+# Test: POST /assets/provider/probe — metadata identifiers
+# ============================================================
+@pytest.mark.asyncio
+async def test_probe_metadata_identifiers(test_server):
+    """Test probe metadata operation returns identifiers."""
+    print_section("Test: POST /assets/provider/probe — metadata identifiers")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        probe_resp = await client.post(
+            f"{API_BASE}/assets/provider/probe",
+            json={
+                "provider_code": "yfinance",
+                "identifier": "AAPL",
+                "identifier_type": "TICKER",
+                "operations": ["metadata"],
+                },
+            timeout=SEARCH_TIMEOUT,
+            )
+        assert probe_resp.status_code == 200
+        data = probe_resp.json()
+
+        meta = data["metadata"]
+        assert meta is not None
+        assert meta["success"] is True
+        patch = meta["patch_data"]
+        assert patch is not None
+        assert patch.get("identifier_ticker") == "AAPL"
+        print_info(f"  identifier_ticker: {patch.get('identifier_ticker')}")
+        print_info(f"  identifier_isin: {patch.get('identifier_isin')}")
+        print_success("✓ Probe metadata: identifiers populated")
+
+
+# ============================================================
+# Test: user_url round-trip + provider_url calculated
+# ============================================================
+@pytest.mark.asyncio
+async def test_user_url_round_trip(test_server):
+    """Test user_url is persisted and provider_url is calculated."""
+    print_section("Test: user_url round-trip + provider_url")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Create asset
+        asset_item = FAAssetCreateItem(
+            display_name=f"UserUrl Test {unique_id('URL')}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert create_resp.status_code == 201
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+
+        # Assign provider with user_url
+        assignment = FAProviderAssignmentItem(
+            asset_id=asset_id,
+            provider_code="yfinance",
+            identifier="AAPL",
+            identifier_type=IdentifierType.TICKER,
+            provider_params=None,
+            user_url="https://investor.apple.com",
+            )
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment.model_dump(mode="json")],
+            timeout=TIMEOUT,
+            )
+        assert assign_resp.status_code == 200
+
+        # Get assignments and verify user_url + provider_url
+        assignments_resp = await client.get(
+            f"{API_BASE}/assets/provider/assignments",
+            params={"asset_ids": [asset_id]},
+            timeout=TIMEOUT,
+            )
+        assert assignments_resp.status_code == 200
+        assignments = assignments_resp.json()
+        assert len(assignments) == 1
+
+        assignment_data = assignments[0]
+        assert assignment_data["user_url"] == "https://investor.apple.com", \
+            f"user_url not persisted: {assignment_data.get('user_url')}"
+        assert assignment_data["provider_url"] == "https://finance.yahoo.com/quote/AAPL", \
+            f"provider_url not calculated: {assignment_data.get('provider_url')}"
+
+        print_success("✓ user_url persisted, provider_url calculated")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+

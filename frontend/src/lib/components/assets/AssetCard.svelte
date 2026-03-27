@@ -151,7 +151,7 @@
                 <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)} {asset.currency}</span>
                 {#if deltaDisplayMode === 'absolute' && deltaAbs !== null}
                     <span class="text-sm font-medium {deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                        {deltaAbs >= 0 ? '▲' : '▼'} {deltaAbs >= 0 ? '+' : ''}{Number(deltaAbs).toFixed(2)}
+                        {deltaAbs >= 0 ? '▲' : '▼'} {deltaAbs >= 0 ? '+' : ''}{Number(deltaAbs).toFixed(2)} {asset.currency}
                     </span>
                 {:else if deltaPercent !== null}
                     <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">

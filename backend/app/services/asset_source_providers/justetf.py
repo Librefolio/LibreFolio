@@ -106,6 +106,10 @@ class JustETFProvider(AssetSourceProvider):
         """Return provider icon URL (hardcoded)."""
         return "https://www.justetf.com/android-chrome-144x144.png?v2"
 
+    def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
+        """Generate URL to JustETF ETF profile page."""
+        return f"https://www.justetf.com/en/etf-profile.html?isin={identifier}"
+
     @property
     def test_cases(self) -> list[dict]:
         """Test cases with identifier and provider_params."""
@@ -398,6 +402,9 @@ class JustETFProvider(AssetSourceProvider):
             # Extract currency from overview
             fund_currency = overview.get("fund_currency")
 
+            # Extract ticker from overview (best-effort)
+            ticker_val = overview.get("ticker") if "ticker" in overview else None
+
             return FAAssetPatchItem(
                 asset_id=0,  # Placeholder, will be set by caller
                 display_name=None,
@@ -406,6 +413,8 @@ class JustETFProvider(AssetSourceProvider):
                 icon_url=None,
                 classification_params=classification,
                 active=None,
+                identifier_isin=identifier,  # ISIN is the search key for JustETF
+                identifier_ticker=ticker_val if ticker_val else None,
                 )
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier} from JustETF: {e}")
