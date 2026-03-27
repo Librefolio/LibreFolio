@@ -1,9 +1,9 @@
 # Plan: Phase 06 — Asset Management (Grafico & Analisi Tecnica)
 
 **Data creazione**: 23 Marzo 2026  
-**Ultimo aggiornamento**: 23 Marzo 2026  
-**Status**: 📋 PIANIFICATO  
-**Durata stimata**: ~7 giorni  
+**Ultimo aggiornamento**: 27 Marzo 2026  
+**Status**: 🚧 IN CORSO (Step 1–2c completati, Step 3 in pianificazione)  
+**Durata stimata**: ~8 giorni  
 **Dipendenze**: Phase 5 (PriceChartFull, Signal Library, DataEditor), Phase 4 (DataTable, ModalBase, component library), Phase 4.8 (user_role)
 
 ---
@@ -498,82 +498,63 @@ Migliorare `handleBulkDeleteAssets`:
 
 ---
 
-### Step 3 — `AssetModal.svelte` + `AssetSearchAutocomplete.svelte` (~1.5 giorni)
+### Step 3 — `AssetModal` + `AssetSearchAutocomplete` + Provider Probe (~2.5 giorni)
 
-Creare `src/lib/components/assets/AssetModal.svelte` con `ModalBase`.
-Creare `src/lib/components/assets/AssetSearchAutocomplete.svelte`.
+> **📋 Piano dettagliato**: [`plan-phase06Step3AssetModal.prompt.md`](plan-phase06Step3AssetModal.prompt.md)
+>
+> Il piano dettagliato contiene 10 sotto-step con ASCII art complete, schema code, dependency graph,
+> e note implementative. Questo file riporta solo la sintesi.
 
-#### Layout AssetModal
+#### Obiettivi
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  ✕                    Add Asset                          │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  ── Search Online ──────────────────────────────────     │
-│  🔍 Search by name, ticker, ISIN...                      │
-│  Providers: ☑ Yahoo Finance  ☑ JustETF  ☐ CSS Scraper   │
-│                                                          │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │ 🍎 Apple Inc.           AAPL · USD · STOCK        │← │
-│  │    via Yahoo Finance                               │  │
-│  │ 🍎 Apple Inc.           AAPL · USD · STOCK        │  │
-│  │    via JustETF                                     │  │
-│  └────────────────────────────────────────────────────┘  │
-│           ↓ (seleziona → auto-fill form sotto)           │
-│                                                          │
-│  ── Asset Details ──────────────────────────────────     │
-│  Display Name *  [ Apple Inc.              ]             │
-│  Asset Type *    [ STOCK           ▾]                    │
-│  Currency *      [ 🇺🇸 USD          ▾]                   │
-│  Icon            [📎 Choose image...       ]             │
-│                                                          │
-│  ▸ Identifiers (click to expand)                         │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │ ISIN   [                ] Ticker [AAPL           ] │  │
-│  │ CUSIP  [                ] SEDOL  [               ] │  │
-│  │ FIGI   [                ]                          │  │
-│  └────────────────────────────────────────────────────┘  │
-│                                                          │
-│  ⓘ Provider "yfinance" will be auto-assigned on create   │
-│                                                          │
-│                          [Cancel]  [Create Asset]        │
-└──────────────────────────────────────────────────────────┘
-```
+1. **AssetModal.svelte** — modale Create/Edit con search online, form asset, identifiers, provider assignment
+2. **AssetSearchAutocomplete.svelte** — ricerca debounced multi-provider con dropdown risultati e `provider_url`
+3. **ProviderAssignmentSection.svelte** — sezione provider riusabile (modal + futuro detail page) con form dinamico da `params_schema`, test configuration, user/provider URL
+4. **`POST /assets/provider/probe`** — endpoint bulk modulare (operazioni selezionabili: `current_price`, `history`, `metadata`) con `execution_time_ms` per operazione, nessuna persistenza DB
+5. **Schema inheritance** — `FAProviderConfigBase` come base minimale, esteso da `FAProviderAssignmentItem` (+ `asset_id`, `fetch_interval`, `user_url`) e `FAProviderProbeRequest` (+ `operations`). Le funzioni service accettano il base, i figli passano senza travasi
+6. **`user_url`** — nuovo campo persistito su `AssetProviderAssignment` (modifica `001_initial.py`, no migrazione Alembic)
+7. **`provider_url`** — calcolato dal backend via `get_asset_url()` nei provider (yfinance, justetf, cssscraper). Esposto sia in `FAProviderSearchResultItem` che in `FAProviderAssignmentReadItem`
+8. **`fetch_asset_metadata` potenziato** — yfinance estrae `identifier_ticker` + `identifier_isin`. JustETF best-effort con ISIN + ticker dal DataFrame
+9. **Workflow auto-test** — dopo selezione search result → auto-trigger probe `["current_price", "history"]` con feedback ⏳→✅/❌ + timing
+10. **Pulsante "Ask Provider"** — nella sezione identifiers, chiama probe `["metadata"]`, compila campi vuoti (✔️), segnala conflitti con pre-esistenti (⚠️)
+11. **Confirmation modals** — save without test (ConfirmModal warning), change identifier in edit mode (ConfirmModal warning)
+12. **E3**: Toggle Abs/% per AssetCard con suffisso valuta in Abs mode
 
-#### Flussi
+#### Componenti Backend (nuovi/modificati)
 
-**Search → Create** (flusso primario, come `test_search_to_prices.py` steps 1→2→3):
-1. Utente digita query (debounced 300ms)
-2. `GET /assets/provider/search?q=...&providers=...` in parallelo su provider selezionati
-3. Risultati in dropdown con `identifier`, `identifier_type`, `display_name`, `currency`, `asset_type`, `provider_code`
-4. Selezione → auto-fill form + memorizza internamente `{identifier, identifier_type, provider_code}`
-5. Submit → `POST /assets` (crea asset) → se search result: `POST /assets/provider` (assegna provider)
-6. Banner info: "Provider X will be auto-assigned on create"
+| File | Modifica |
+|------|----------|
+| `schemas/provider.py` | `FAProviderConfigBase`, `FAProviderProbeRequest`, `ProbeOperation`, response schemas |
+| `db/models.py` | `AssetProviderAssignment.user_url` |
+| `alembic/001_initial.py` | colonna `user_url` |
+| `services/asset_source.py` | `get_asset_url()`, `probe_provider_config()` |
+| `asset_source_providers/yahoo_finance.py` | `get_asset_url()`, `fetch_asset_metadata` con identifiers |
+| `asset_source_providers/justetf.py` | `get_asset_url()`, `fetch_asset_metadata` (nuovo) |
+| `asset_source_providers/css_scraper.py` | `get_asset_url()` |
+| `api/v1/assets.py` | `POST /assets/provider/probe`, `provider_url` nelle risposte |
 
-**Create Manuale** (flusso secondario):
-1. Utente compila form direttamente (senza search)
-2. Submit → solo `POST /assets`, nessun provider
-3. Provider assegnabile poi dalla pagina dettaglio
+#### Componenti Frontend (nuovi)
 
-**Edit Mode**:
-1. Pre-popola con dati asset esistente
-2. Sezione search nascosta
-3. Submit → `PATCH /assets`
+| Componente | Descrizione |
+|-----------|-------------|
+| `AssetSearchAutocomplete.svelte` | Ricerca debounced, provider checkboxes, dropdown con `provider_url` |
+| `ProviderAssignmentSection.svelte` | Form dinamico provider, test config con timing, user/provider URL |
+| `AssetModal.svelte` | Modale completa Create/Edit con auto-fill, auto-test, ask-provider, confirm modals |
 
-#### Tasks
+#### Task riassuntivi
 
-- [ ] Creare `AssetSearchAutocomplete.svelte` (debounced search, provider checkboxes, dropdown risultati)
-- [ ] Creare `AssetModal.svelte` con `ModalBase` (create + edit mode)
-- [ ] Auto-fill form da search result
-- [ ] Auto-assign provider on create (2-step: POST /assets → POST /assets/provider)
-- [ ] `ImagePickerWrapper` per icon_url
-- [ ] `CurrencySearchSelect` per currency
-- [ ] `SimpleSelect` per asset_type (STOCK, ETF, BOND, CRYPTO, FUND, HOLD, CROWDFUND_LOAN, OTHER)
-- [ ] Collapsible identifiers section (ISIN, Ticker, CUSIP, SEDOL, FIGI)
-- [ ] Validazione: display_name obbligatorio, unicità (feedback da backend)
-- [ ] user_role: VIEWER non può aprire il modal in create/edit mode
-- [ ] **E3**: Toggle Abs/% per AssetCard — aggiungere suffisso valuta in Abs mode (es. `+1.23 EUR`), collegare segnali visivi PriceChartCompact
+- [ ] Backend: schema inheritance `FAProviderConfigBase` → figli
+- [ ] Backend: `user_url` su model + DB + schemi + populate
+- [ ] Backend: `get_asset_url()` in 3 provider + `provider_url` in search/read
+- [ ] Backend: `fetch_asset_metadata` potenziato (yfinance identifiers, justetf best-effort)
+- [ ] Backend: `POST /assets/provider/probe` con 3 operazioni + `execution_time_ms`
+- [ ] Backend: test probe + user_url + API sync
+- [ ] Frontend: `AssetSearchAutocomplete.svelte`
+- [ ] Frontend: `ProviderAssignmentSection.svelte` (riusabile)
+- [ ] Frontend: `AssetModal.svelte` (create + edit + auto-test + ask-provider + confirm modals)
+- [ ] Frontend: E3 toggle Abs/% su AssetCard
+- [ ] Frontend: i18n ~40 chiavi (EN/IT/FR/ES)
+- [ ] Frontend: integrazione modale nella pagina lista
 
 ---
 
@@ -970,14 +951,16 @@ src/routes/(app)/fx/+page.svelte                                   # aggiunta to
 
 ---
 
-## 5. Stima Totale: ~7 giorni
+## 5. Stima Totale: ~8 giorni
 
 | Step | Giorni | Contenuto |
 |------|--------|-----------|
 | 1 | 0.5 | Backend: params_schema, fix perf, pre-warm async |
 | 2 | 1 | Asset list dual view + FX table view + ViewModeToggle |
-| 3 | 1.5 | AssetModal + AssetSearchAutocomplete |
-| 4 | 2 | Asset detail page + chart + data editor + provider |
+| 2b | 0.5 | Bugfix, migrazione, UX refinement |
+| 2c | 0.5 | Modali Sync-All e Multi-Delete |
+| 3 | 2.5 | AssetModal + Search + Probe + Provider Section ([dettaglio](plan-phase06Step3AssetModal.prompt.md)) |
+| 4 | 2 | Asset detail page + chart + data editor + provider + currency conversion |
 | 5 | 1 | AssetMatchingWizard (condiviso Phase 7) |
 | 6 | 1 | i18n, E2E test, docs, gallery |
 
@@ -993,14 +976,18 @@ Phase 4.8 (user_role, BrokerSharingModal)
 Phase 5 (PriceChartFull, Signal Library, DataEditor, FxCard)
      │
      ▼
-Phase 6 — Step 1 (Backend: params_schema, fix perf)
+Phase 6 — Step 1 (Backend: params_schema, fix perf) ✅
      │
-     ├── Step 2 (Asset List + FX Table)
+     ├── Step 2 (Asset List + FX Table) ✅
      │
-     ├── Step 3 (AssetModal + Search)
+     ├── Step 2b (Bugfix, Migration, UX Refinement) ✅
+     │
+     ├── Step 2c (Sync-All + Multi-Delete modals) ✅
+     │
+     ├── Step 3 (AssetModal + Search + Probe) ← dettaglio in plan-phase06Step3AssetModal.prompt.md
      │      │
      │      ▼
-     ├── Step 4 (Asset Detail Page) ← dipende da Step 3 per edit modal
+     ├── Step 4 (Asset Detail Page) ← dipende da Step 3 per edit modal + ProviderAssignmentSection
      │
      ├── Step 5 (AssetMatchingWizard) ← riusa logica Step 3
      │      │
