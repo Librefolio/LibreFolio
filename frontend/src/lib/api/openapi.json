@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.8-19-ga79795f-dirty"
+    "version": "v0.5.9-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -2071,6 +2071,49 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FAProviderSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assets/provider/probe": {
+      "post": {
+        "tags": [
+          "FA (Financial Assets)",
+          "FA Provider"
+        ],
+        "summary": "Probe Provider Config",
+        "description": "Probe a provider configuration without persisting anything (dry-run).\n\nExecutes selected operations against the provider and returns results\nwith per-operation execution time. Nothing is stored in the database.\n\nOperations:\n- current_price: Fetch latest price\n- history: Fetch last 7 days of price history\n- metadata: Fetch asset metadata (identifiers, type, classification)\n\nUse cases:\n- Test provider configuration before assigning\n- \"Ask Provider\" button to fetch identifiers\n- Verify provider is working correctly",
+        "operationId": "probe_provider_config_api_v1_assets_provider_probe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FAProviderProbeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FAProviderProbeResponse"
                 }
               }
             }
@@ -7532,11 +7575,6 @@
       },
       "FAProviderAssignmentItem": {
         "properties": {
-          "asset_id": {
-            "type": "integer",
-            "title": "Asset Id",
-            "description": "Asset ID"
-          },
           "provider_code": {
             "type": "string",
             "title": "Provider Code",
@@ -7564,23 +7602,40 @@
             "title": "Provider Params",
             "description": "Provider-specific configuration (JSON)"
           },
+          "asset_id": {
+            "type": "integer",
+            "title": "Asset Id",
+            "description": "Asset ID"
+          },
           "fetch_interval": {
             "type": "integer",
             "title": "Fetch Interval",
             "description": "Refresh frequency in minutes (default: 1440 = 24h)",
             "default": 1440
+          },
+          "user_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Url",
+            "description": "User-defined URL for this asset (notes, external dashboard, etc.)"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "asset_id",
           "provider_code",
           "identifier",
-          "identifier_type"
+          "identifier_type",
+          "asset_id"
         ],
         "title": "FAProviderAssignmentItem",
-        "description": "Single FA provider assignment configuration.\n\nLinks an asset to a pricing provider with identifier and parameters.\n\nFields:\n- identifier: How the provider identifies this asset (ticker, ISIN, UUID, URL, etc.)\n- identifier_type: Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)\n- provider_params: Provider-specific configuration (e.g., FAScheduledInvestmentSchedule for scheduled_investment)"
+        "description": "FA provider assignment \u2014 extends config base with persistence fields.\n\nLinks an asset to a pricing provider with identifier and parameters.\n\nFields:\n- identifier: How the provider identifies this asset (ticker, ISIN, UUID, URL, etc.)\n- identifier_type: Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)\n- provider_params: Provider-specific configuration (e.g., FAScheduledInvestmentSchedule for scheduled_investment)"
       },
       "FAProviderAssignmentReadItem": {
         "properties": {
@@ -7639,6 +7694,30 @@
             ],
             "title": "Last Fetch At",
             "description": "Last fetch timestamp (ISO format)"
+          },
+          "user_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Url",
+            "description": "User-defined URL"
+          },
+          "provider_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Url",
+            "description": "Auto-generated URL to provider page"
           }
         },
         "additionalProperties": false,
@@ -7800,6 +7879,127 @@
         ],
         "title": "FAProviderParamField",
         "description": "Single field definition for provider_params form.\n\nUsed by the frontend to generate dynamic forms for provider configuration."
+      },
+      "FAProviderProbeRequest": {
+        "properties": {
+          "provider_code": {
+            "type": "string",
+            "title": "Provider Code",
+            "description": "Provider code (yfinance, cssscraper, scheduled_investment, etc.)"
+          },
+          "identifier": {
+            "type": "string",
+            "title": "Identifier",
+            "description": "Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
+          },
+          "identifier_type": {
+            "$ref": "#/components/schemas/IdentifierType",
+            "description": "Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
+          },
+          "provider_params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Params",
+            "description": "Provider-specific configuration (JSON)"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/ProbeOperation"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Operations",
+            "description": "Operations to execute: current_price, history, metadata"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider_code",
+          "identifier",
+          "identifier_type",
+          "operations"
+        ],
+        "title": "FAProviderProbeRequest",
+        "description": "Probe request \u2014 extends config base with operation selection.\n\nInherits provider_code, identifier, identifier_type, provider_params\nfrom FAProviderConfigBase. Adds operations list to select which\nprobe operations to execute."
+      },
+      "FAProviderProbeResponse": {
+        "properties": {
+          "provider_code": {
+            "type": "string",
+            "title": "Provider Code"
+          },
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "total_execution_time_ms": {
+            "type": "integer",
+            "title": "Total Execution Time Ms",
+            "description": "Total backend execution time"
+          },
+          "provider_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Url",
+            "description": "URL to asset page on provider site"
+          },
+          "current_price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProbeCurrentPriceResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present only if current_price was requested"
+          },
+          "history": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProbeHistoryResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present only if history was requested"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProbeMetadataResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present only if metadata was requested"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider_code",
+          "identifier",
+          "total_execution_time_ms"
+        ],
+        "title": "FAProviderProbeResponse",
+        "description": "Response for provider probe endpoint.\n\nContains results for each requested operation, with per-operation\nexecution time and a total execution time."
       },
       "FAProviderRefreshFieldsDetail": {
         "properties": {
@@ -7971,6 +8171,18 @@
             ],
             "title": "Asset Type",
             "description": "Asset type (ETF, stock, bond, etc.)"
+          },
+          "provider_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Url",
+            "description": "URL to asset page on provider site"
           }
         },
         "additionalProperties": false,
@@ -9555,6 +9767,192 @@
           "new"
         ],
         "title": "OldNew[Union[str, NoneType]]"
+      },
+      "ProbeCurrentPriceResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Whether the operation succeeded"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message if failed"
+          },
+          "execution_time_ms": {
+            "type": "integer",
+            "title": "Execution Time Ms",
+            "description": "Backend execution time in milliseconds"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value",
+            "description": "Current price value"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency",
+            "description": "Price currency"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date",
+            "description": "Date of the price (ISO format)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "success",
+          "execution_time_ms"
+        ],
+        "title": "ProbeCurrentPriceResult",
+        "description": "Result of current_price probe operation."
+      },
+      "ProbeHistoryResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Whether the operation succeeded"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message if failed"
+          },
+          "execution_time_ms": {
+            "type": "integer",
+            "title": "Execution Time Ms",
+            "description": "Backend execution time in milliseconds"
+          },
+          "points_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points Count",
+            "description": "Number of price points found"
+          },
+          "date_range": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Range",
+            "description": "Date range of found data (start \u2192 end)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "success",
+          "execution_time_ms"
+        ],
+        "title": "ProbeHistoryResult",
+        "description": "Result of history probe operation."
+      },
+      "ProbeMetadataResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Whether the operation succeeded"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message if failed"
+          },
+          "execution_time_ms": {
+            "type": "integer",
+            "title": "Execution Time Ms",
+            "description": "Backend execution time in milliseconds"
+          },
+          "patch_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patch Data",
+            "description": "Asset metadata patch (identifiers, asset_type, classification, etc.)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "success",
+          "execution_time_ms"
+        ],
+        "title": "ProbeMetadataResult",
+        "description": "Result of metadata probe operation."
+      },
+      "ProbeOperation": {
+        "type": "string",
+        "enum": [
+          "current_price",
+          "history",
+          "metadata"
+        ],
+        "title": "ProbeOperation",
+        "description": "Operations available for provider probe endpoint."
       },
       "RestoreRequest": {
         "properties": {

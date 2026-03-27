@@ -21,6 +21,7 @@
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
+    import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
@@ -94,6 +95,11 @@
     // Sync modal
     let syncModalOpen = $state(false);
     let syncModalAssets = $state<AssetInfo[]>([]);
+
+    // Asset modal (create/edit)
+    let assetModalOpen = $state(false);
+    let assetModalEditMode = $state(false);
+    let assetModalEditData = $state<any>(null);
 
     // Filters
     let searchText = $state('');
@@ -388,8 +394,23 @@
     // =========================================================================
 
     function handleAddAsset() {
-        // Placeholder — Step 3 will add modal
-        console.log('Add Asset clicked (placeholder)');
+        assetModalEditMode = false;
+        assetModalEditData = null;
+        assetModalOpen = true;
+    }
+
+    function handleEditAsset(asset: any) {
+        assetModalEditMode = true;
+        assetModalEditData = {
+            id: asset.id,
+            display_name: asset.display_name,
+            currency: asset.currency,
+            asset_type: asset.asset_type ?? 'STOCK',
+            icon_url: asset.icon_url,
+            active: asset.active,
+            provider_code: asset.provider_code,
+        };
+        assetModalOpen = true;
     }
 
     async function handleSyncAsset(asset: any) {
@@ -948,5 +969,15 @@
         {dateStart}
         onclose={() => { syncModalOpen = false; }}
         onsynced={() => fetchAllPriceData()}
+/>
+
+<!-- Asset Create/Edit Modal -->
+<AssetModal
+        bind:open={assetModalOpen}
+        editMode={assetModalEditMode}
+        editData={assetModalEditData}
+        oncreated={() => loadAssets()}
+        onupdated={() => loadAssets()}
+        onclose={() => { assetModalOpen = false; }}
 />
 

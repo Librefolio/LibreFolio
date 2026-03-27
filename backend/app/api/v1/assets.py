@@ -45,6 +45,8 @@ from backend.app.schemas.provider import (
     FABulkRemoveResponse,
     FAProviderAssignmentReadItem,
     FAProviderSearchResponse,
+    FAProviderProbeRequest,
+    FAProviderProbeResponse,
     )
 from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
 from backend.app.services.asset_source import (
@@ -415,6 +417,37 @@ async def search_assets_via_providers(
     return await AssetSearchService.search(q, provider_codes)
 
 
+@provider_router.post("/probe", response_model=FAProviderProbeResponse)
+async def probe_provider_config(
+    request: FAProviderProbeRequest,
+    _current_user: User = Depends(get_current_user),
+    ):
+    """
+    Probe a provider configuration without persisting anything (dry-run).
+
+    Executes selected operations against the provider and returns results
+    with per-operation execution time. Nothing is stored in the database.
+
+    Operations:
+    - current_price: Fetch latest price
+    - history: Fetch last 7 days of price history
+    - metadata: Fetch asset metadata (identifiers, type, classification)
+
+    Use cases:
+    - Test provider configuration before assigning
+    - "Ask Provider" button to fetch identifiers
+    - Verify provider is working correctly
+    """
+    from backend.app.services.asset_source import AssetSourceError
+    try:
+        result = await AssetSourceManager.probe_provider_config(config=request,operations=request.operations,)
+        return result
+    except AssetSourceError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @provider_router.post("", response_model=FABulkAssignResponse)
 async def assign_providers_bulk(
     assignments: List[FAProviderAssignmentItem],
@@ -488,6 +521,15 @@ async def get_provider_assignments(
         items = []
         for a in assignments:
             params = json.loads(a.provider_params) if a.provider_params else None
+
+            # Compute provider_url from provider instance
+            provider_url = None
+            provider_instance = AssetProviderRegistry.get_provider_instance(a.provider_code)
+            if provider_instance:
+                provider_url = provider_instance.get_asset_url(
+                    a.identifier, a.identifier_type, params
+                    )
+
             items.append(
                 FAProviderAssignmentReadItem(
                     asset_id=a.asset_id,
@@ -497,6 +539,8 @@ async def get_provider_assignments(
                     provider_params=params,
                     fetch_interval=a.fetch_interval,
                     last_fetch_at=a.last_fetch_at.isoformat() if a.last_fetch_at else None,
+                    user_url=a.user_url,
+                    provider_url=provider_url,
                     )
                 )
 

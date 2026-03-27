@@ -848,41 +848,14 @@ class AssetProviderAssignment(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    asset_id: int = Field(
-        foreign_key="assets.id",
-        nullable=False,
-        unique=True,
-        description="Asset ID (1-to-1 relationship)",
-        )
-
-    provider_code: str = Field(
-        max_length=50,
-        nullable=False,
-        description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)",
-        )
-
-    identifier: str = Field(
-        nullable=False,
-        description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)",
-        )
-
-    identifier_type: IdentifierType = Field(
-        nullable=False, description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
-        )
-
-    provider_params: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text),
-        description="JSON configuration for provider (validated by plugin)",
-        )
-
-    last_fetch_at: Optional[datetime] = Field(
-        default=None, description="Last fetch attempt timestamp (NULL = never fetched)"
-        )
-
-    fetch_interval: Optional[int] = Field(
-        default=None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)"
-        )
+    asset_id: int = Field(foreign_key="assets.id",nullable=False,unique=True,description="Asset ID (1-to-1 relationship)",)
+    provider_code: str = Field(max_length=50,nullable=False,description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)",)
+    identifier: str = Field(nullable=False,description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)",)
+    identifier_type: IdentifierType = Field(nullable=False, description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)")
+    provider_params: Optional[str] = Field(default=None,sa_column=Column(Text),description="JSON configuration for provider (validated by plugin)",)
+    last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
+    fetch_interval: Optional[int] = Field(default=None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)")
+    user_url: Optional[str] = Field(default=None, description="User-defined URL (notes, external dashboard, etc.)")
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

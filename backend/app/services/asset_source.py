@@ -81,6 +81,12 @@ from backend.app.schemas.provider import (
     FAProviderRefreshFieldsDetail,
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
+    FAProviderConfigBase,
+    ProbeOperation,
+    ProbeCurrentPriceResult,
+    ProbeHistoryResult,
+    ProbeMetadataResult,
+    FAProviderProbeResponse,
     )
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
@@ -505,6 +511,28 @@ class AssetSourceProvider(ABC):
         """
         return None  # Default: metadata not supported
 
+    def get_asset_url(
+        self,
+        identifier: str,
+        identifier_type: IdentifierType,
+        provider_params: dict | None = None,
+        ) -> str | None:
+        """
+        Generate URL to the provider's page for this specific asset.
+
+        Used by the frontend to show a "Go to Provider Page" link.
+        Override in subclasses that have public web pages.
+
+        Args:
+            identifier: Asset identifier
+            identifier_type: Type of identifier
+            provider_params: Provider-specific params
+
+        Returns:
+            URL string or None if provider has no web page for assets
+        """
+        return None
+
 
 # ============================================================================
 # ASSET SOURCE MANAGER
@@ -575,6 +603,7 @@ class AssetSourceManager:
                     identifier_type=a.identifier_type,
                     provider_params=params_to_store,
                     fetch_interval=a.fetch_interval,  # Already has default from Pydantic
+                    user_url=a.user_url,
                     last_fetch_at=None,  # Never fetched yet
                     )
                 )
@@ -1091,6 +1120,142 @@ class AssetSourceManager:
 
         return FABulkDeleteResponse(
             results=results, success_count=len(results), total_deleted=deleted_count, errors=[]
+            )
+
+    # ========================================================================
+    # PROVIDER PROBE (DRY-RUN)
+    # ========================================================================
+
+    @staticmethod
+    async def probe_provider_config(
+        config: FAProviderConfigBase,
+        operations: list[ProbeOperation],
+        ) -> FAProviderProbeResponse:
+        """
+        Probe a provider configuration without persisting anything.
+
+        Executes requested operations in **parallel** via asyncio.gather
+        and returns results with per-operation execution time.
+
+        Accepts FAProviderConfigBase — child objects (FAProviderAssignmentItem,
+        FAProviderProbeRequest) pass directly without field copying.
+        """
+        provider = AssetProviderRegistry.get_provider_instance(config.provider_code)
+        if not provider:
+            raise AssetSourceError(f"Unknown provider: {config.provider_code}", "UNKNOWN_PROVIDER")
+
+        params = AssetSourceManager._parse_provider_params(config.provider_params)
+        total_start = time.monotonic_ns()
+
+        # Provider URL (always computed, synchronous)
+        provider_url = provider.get_asset_url(config.identifier, config.identifier_type, params)
+
+        # --- Build async tasks for each requested operation ---
+
+        async def _probe_current_price() -> ProbeCurrentPriceResult:
+            op_start = time.monotonic_ns()
+            try:
+                value = await asyncio.wait_for(
+                    provider.get_current_value(config.identifier, config.identifier_type, params),
+                    timeout=15.0,
+                    )
+                return ProbeCurrentPriceResult(
+                    success=True, value=value.value, currency=value.currency,
+                    as_of_date=str(value.as_of_date),
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+            except asyncio.TimeoutError:
+                return ProbeCurrentPriceResult(
+                    success=False, error="Timeout after 15s",
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+            except Exception as e:
+                return ProbeCurrentPriceResult(
+                    success=False, error=str(e),
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+
+        async def _probe_history() -> ProbeHistoryResult:
+            op_start = time.monotonic_ns()
+            try:
+                end_date = date_type.today()
+                start_date = end_date - timedelta(days=7)
+                hist = await asyncio.wait_for(
+                    provider.get_history_value(
+                        config.identifier, config.identifier_type, params,
+                        start_date, end_date,
+                        ),
+                    timeout=15.0,
+                    )
+                points = hist.prices if hist else []
+                date_range_str = None
+                if points:
+                    dates = [p.date for p in points]
+                    date_range_str = f"{min(dates)} → {max(dates)}"
+                return ProbeHistoryResult(
+                    success=True, points_count=len(points), date_range=date_range_str,
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+            except asyncio.TimeoutError:
+                return ProbeHistoryResult(
+                    success=False, error="Timeout after 15s",
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+            except Exception as e:
+                return ProbeHistoryResult(
+                    success=False, error=str(e),
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+
+        async def _probe_metadata() -> ProbeMetadataResult:
+            op_start = time.monotonic_ns()
+            try:
+                patch = await asyncio.wait_for(
+                    provider.fetch_asset_metadata(
+                        config.identifier, config.identifier_type, params,
+                        ),
+                    timeout=15.0,
+                    )
+                return ProbeMetadataResult(
+                    success=patch is not None,
+                    patch_data=patch.model_dump(mode="json") if patch else None,
+                    error=None if patch else "Provider returned no metadata",
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+            except asyncio.TimeoutError:
+                return ProbeMetadataResult(
+                    success=False, error="Timeout after 15s",
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+            except Exception as e:
+                return ProbeMetadataResult(
+                    success=False, error=str(e),
+                    execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
+                    )
+
+        # --- Schedule requested operations in parallel ---
+        tasks: dict[str, asyncio.Task] = {}
+        if ProbeOperation.CURRENT_PRICE in operations:
+            tasks["current_price"] = asyncio.ensure_future(_probe_current_price())
+        if ProbeOperation.HISTORY in operations:
+            tasks["history"] = asyncio.ensure_future(_probe_history())
+        if ProbeOperation.METADATA in operations:
+            tasks["metadata"] = asyncio.ensure_future(_probe_metadata())
+
+        # Await all tasks in parallel
+        if tasks:
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+        total_ms = (time.monotonic_ns() - total_start) // 1_000_000
+
+        return FAProviderProbeResponse(
+            provider_code=config.provider_code,
+            identifier=config.identifier,
+            total_execution_time_ms=total_ms,
+            provider_url=provider_url,
+            current_price=tasks["current_price"].result() if "current_price" in tasks else None,
+            history=tasks["history"].result() if "history" in tasks else None,
+            metadata=tasks["metadata"].result() if "metadata" in tasks else None,
             )
 
     # ========================================================================
@@ -2440,6 +2605,15 @@ class AssetSearchService:
 
             # Convert provider results to response schema
             for item in items:
+                # Compute provider_url from provider instance
+                provider_instance = AssetProviderRegistry.get_provider_instance(code)
+                item_provider_url = None
+                if provider_instance:
+                    item_provider_url = provider_instance.get_asset_url(
+                        item.get("identifier", ""),
+                        item.get("identifier_type"),
+                        )
+
                 results.append(
                     FAProviderSearchResultItem(
                         identifier=item.get("identifier", ""),
@@ -2448,6 +2622,7 @@ class AssetSearchService:
                         provider_code=code,
                         currency=item.get("currency"),
                         asset_type=item.get("type"),
+                        provider_url=item_provider_url,
                         )
                     )
 

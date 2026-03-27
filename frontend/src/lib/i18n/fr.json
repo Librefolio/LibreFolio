@@ -263,12 +263,9 @@
       "toastFailed": "Échec de la synchronisation pour {name}",
       "modalTitle": "Synchroniser les Prix",
       "modalDescription": "Synchronisez les prix des fournisseurs configurés pour la plage de dates sélectionnée.",
-      "assetsCount": "actifs",
-      "noProvider": "Aucun fournisseur assigné",
-      "currentValueOnly": "Valeur actuelle uniquement (pas historique)"
+      "assetsCount": "actifs"
     },
     "delete": {
-      "confirmMessage": "Supprimer \"{name}\" ? Les assignations et l'historique seront supprimés.",
       "confirmQuestion": "Supprimer \"{name}\" ?",
       "confirmWarning": "Les assignations de fournisseurs et l'historique des prix seront supprimés. ⚠️",
       "toastOk": "{name} supprimé",
@@ -289,6 +286,61 @@
       "HOLD": "Liquidité",
       "CROWDFUND_LOAN": "Crowdfunding",
       "OTHER": "Autre"
+    },
+    "type": "Type",
+    "modal": {
+      "title": "Ajouter un Actif",
+      "titleEdit": "Modifier l'Actif",
+      "searchOnline": "Rechercher en Ligne",
+      "assetDetails": "Détails de l'Actif",
+      "identifiers": "Identifiants",
+      "createAsset": "Créer l'Actif",
+      "saveChanges": "Enregistrer",
+      "autoAssignInfo": "Le fournisseur \"{provider}\" sera attribué automatiquement à la création",
+      "duplicateName": "Un actif avec ce nom existe déjà",
+      "createSuccess": "\"{name}\" créé avec succès",
+      "saveSuccess": "\"{name}\" mis à jour avec succès"
+    },
+    "provider": {
+      "assignment": "Attribution du Fournisseur",
+      "noProvider": "Pas de Fournisseur",
+      "testConfig": "Tester la Configuration",
+      "testing": "Test en cours...",
+      "userUrl": "URL Utilisateur",
+      "providerUrl": "URL Fournisseur",
+      "selectProvider": "Fournisseur",
+      "identifier": "Identifiant",
+      "identifierType": "Type d'Identifiant"
+    },
+    "probe": {
+      "currentPrice": "Prix Actuel",
+      "history": "Historique",
+      "metadata": "Métadonnées",
+      "notTested": "Non testé",
+      "passed": "Réussi",
+      "failed": "Échoué",
+      "executionTime": "Temps d'exécution",
+      "totalTime": "Total"
+    },
+    "identifiers": {
+      "askProvider": "Demander au Fournisseur",
+      "askProviderHint": "Récupérer les identifiants du fournisseur attribué",
+      "autoFilled": "Rempli automatiquement par le fournisseur",
+      "conflictWarning": "Le fournisseur suggère une valeur différente"
+    },
+    "confirm": {
+      "saveWithoutTest": "Enregistrer sans test ?",
+      "saveWithoutTestMessage": "Vous êtes sur le point d'enregistrer l'actif sans vérifier la configuration du fournisseur. Cela peut causer des erreurs lors de la récupération des données de prix.",
+      "saveAnyway": "Enregistrer quand même",
+      "identifierChanged": "Confirmer le Changement",
+      "identifierChangedMessage": "Vous êtes sur le point de changer l'identifiant du fournisseur. Êtes-vous sûr de vouloir associer cet actif à un instrument financier différent ?",
+      "confirmChange": "Confirmer le Changement"
+    },
+    "search": {
+      "placeholder": "Rechercher par nom, ticker, ISIN...",
+      "providers": "Fournisseurs",
+      "noResults": "Aucun résultat trouvé",
+      "searching": "Recherche en cours..."
     }
   },
   "transactions": {
@@ -364,7 +416,6 @@
     "providers": "Fournisseurs",
     "deletePair": "Supprimer la paire",
     "deletePairTitle": "Supprimer la Paire FX",
-    "deletePairMessage": "Êtes-vous sûr de vouloir supprimer {pair} ? Cela supprimera la configuration des fournisseurs et tous les taux de change historiques.",
     "deletePairQuestion": "Supprimer {pair} ?",
     "deletePairWarning": "Cela supprimera la configuration des fournisseurs et tous les taux de change historiques. ⚠️",
     "delete": {

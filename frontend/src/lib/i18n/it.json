@@ -263,12 +263,9 @@
       "toastFailed": "Sincronizzazione fallita per {name}",
       "modalTitle": "Sincronizza Prezzi",
       "modalDescription": "Sincronizza i prezzi dai provider configurati per l'intervallo di date selezionato.",
-      "assetsCount": "asset",
-      "noProvider": "Nessun provider assegnato",
-      "currentValueOnly": "Solo valore corrente (senza storico)"
+      "assetsCount": "asset"
     },
     "delete": {
-      "confirmMessage": "Eliminare \"{name}\"? Assegnazioni provider e storico prezzi verranno rimossi.",
       "confirmQuestion": "Eliminare \"{name}\"?",
       "confirmWarning": "Assegnazioni provider e storico prezzi verranno rimossi. ⚠️",
       "toastOk": "{name} eliminato",
@@ -289,6 +286,61 @@
       "HOLD": "Liquidità",
       "CROWDFUND_LOAN": "Crowdfunding",
       "OTHER": "Altro"
+    },
+    "type": "Tipo",
+    "modal": {
+      "title": "Aggiungi Asset",
+      "titleEdit": "Modifica Asset",
+      "searchOnline": "Cerca Online",
+      "assetDetails": "Dettagli Asset",
+      "identifiers": "Identificativi",
+      "createAsset": "Crea Asset",
+      "saveChanges": "Salva Modifiche",
+      "autoAssignInfo": "Il provider \"{provider}\" verrà assegnato automaticamente alla creazione",
+      "duplicateName": "Esiste già un asset con questo nome",
+      "createSuccess": "\"{name}\" creato con successo",
+      "saveSuccess": "\"{name}\" aggiornato con successo"
+    },
+    "provider": {
+      "assignment": "Assegnazione Provider",
+      "noProvider": "Nessun Provider",
+      "testConfig": "Testa Configurazione",
+      "testing": "Test in corso...",
+      "userUrl": "URL Utente",
+      "providerUrl": "URL Provider",
+      "selectProvider": "Provider",
+      "identifier": "Identificativo",
+      "identifierType": "Tipo Identificativo"
+    },
+    "probe": {
+      "currentPrice": "Prezzo Attuale",
+      "history": "Storico",
+      "metadata": "Metadati",
+      "notTested": "Non testato",
+      "passed": "Superato",
+      "failed": "Fallito",
+      "executionTime": "Tempo di esecuzione",
+      "totalTime": "Totale"
+    },
+    "identifiers": {
+      "askProvider": "Chiedi al Provider",
+      "askProviderHint": "Recupera identificativi dal provider assegnato",
+      "autoFilled": "Compilato automaticamente dal provider",
+      "conflictWarning": "Il provider suggerisce un valore diverso"
+    },
+    "confirm": {
+      "saveWithoutTest": "Salvare senza test?",
+      "saveWithoutTestMessage": "Stai per salvare l'asset senza verificare la configurazione del provider. Questo potrebbe causare errori nel recupero dei dati di prezzo.",
+      "saveAnyway": "Salva comunque",
+      "identifierChanged": "Conferma Cambio Asset",
+      "identifierChangedMessage": "Stai per cambiare l'identificativo del provider. Sei sicuro di voler associare questo asset a uno strumento finanziario diverso?",
+      "confirmChange": "Conferma Cambio"
+    },
+    "search": {
+      "placeholder": "Cerca per nome, ticker, ISIN...",
+      "providers": "Provider",
+      "noResults": "Nessun risultato trovato",
+      "searching": "Ricerca in corso..."
     }
   },
   "transactions": {
@@ -364,7 +416,6 @@
     "providers": "Provider",
     "deletePair": "Elimina coppia",
     "deletePairTitle": "Elimina Coppia FX",
-    "deletePairMessage": "Sei sicuro di voler eliminare {pair}? Questo rimuoverà la configurazione dei provider e tutti i tassi di cambio storici.",
     "deletePairQuestion": "Eliminare {pair}?",
     "deletePairWarning": "Questo rimuoverà la configurazione dei provider e tutti i tassi di cambio storici. ⚠️",
     "delete": {
