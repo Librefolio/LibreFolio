@@ -9,26 +9,40 @@
      * - Auto-positions to avoid viewport overflow
      * - Closes on click outside
      * - Supports plain text, raw HTML, and inline LaTeX ($...$) via KaTeX
+     *
+     * Svelte 5 runes.
      */
-    import {onDestroy, onMount} from 'svelte';
+    import type {Snippet} from 'svelte';
     import katex from 'katex';
     import 'katex/dist/katex.min.css';
 
-    export let text: string = '';
-    /** If provided, renders raw HTML instead of plain text */
-    export let html: string = '';
-    /** When true, processes $...$ inline LaTeX in text/html content via KaTeX */
-    export let math: boolean = false;
-    export let position: 'top' | 'bottom' | 'left' | 'right' = 'top';
-    export let maxWidth: string = '400px';
+    interface Props {
+        text?: string;
+        /** If provided, renders raw HTML instead of plain text */
+        html?: string;
+        /** When true, processes $...$ inline LaTeX in text/html content via KaTeX */
+        math?: boolean;
+        position?: 'top' | 'bottom' | 'left' | 'right';
+        maxWidth?: string;
+        children?: Snippet;
+    }
 
-    let visible = false;
-    let tooltipElement: HTMLDivElement;
-    let triggerElement: HTMLDivElement;
+    let {
+        text = '',
+        html = '',
+        math = false,
+        position = 'top',
+        maxWidth = '400px',
+        children,
+    }: Props = $props();
+
+    let visible = $state(false);
+    let tooltipElement = $state<HTMLDivElement | undefined>(undefined);
+    let triggerElement = $state<HTMLDivElement | undefined>(undefined);
 
     // Fixed position coordinates (viewport-relative)
-    let fixedTop = 0;
-    let fixedLeft = 0;
+    let fixedTop = $state(0);
+    let fixedLeft = $state(0);
 
     function show() {
         visible = true;
@@ -141,18 +155,6 @@
         });
     }
 
-    /**
-     * Compute the final tooltip content as HTML string.
-     * Priority: html prop > text prop. If math=true, process LaTeX.
-     */
-    function getRenderedContent(): string {
-        let content = html || escapeHtml(text);
-        if (math) {
-            content = renderMathInline(content);
-        }
-        return content;
-    }
-
     /** Escape HTML entities for safe rendering when using plain text */
     function escapeHtml(str: string): string {
         return str
@@ -162,28 +164,41 @@
             .replace(/"/g, '&quot;');
     }
 
-    $: renderedContent = getRenderedContent();
-
-    onMount(() => {
-        document.addEventListener('click', handleClickOutside);
+    /**
+     * Compute the final tooltip content as HTML string.
+     * Priority: html prop > text prop. If math=true, process LaTeX.
+     */
+    let renderedContent = $derived.by(() => {
+        let content = html || escapeHtml(text);
+        if (math) {
+            content = renderMathInline(content);
+        }
+        return content;
     });
 
-    onDestroy(() => {
-        document.removeEventListener('click', handleClickOutside);
+    // Register/unregister click-outside listener
+    $effect(() => {
+        if (visible) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
     });
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
         bind:this={triggerElement}
         class="tooltip-wrapper"
-        on:click={toggle}
-        on:keydown={handleKeydown}
-        on:mouseenter={show}
-        on:mouseleave={hide}
+        onclick={toggle}
+        onkeydown={handleKeydown}
+        onmouseenter={show}
+        onmouseleave={hide}
         role="button"
         tabindex="0"
 >
-    <slot/>
+    {#if children}
+        {@render children()}
+    {/if}
 </div>
 
 {#if visible}

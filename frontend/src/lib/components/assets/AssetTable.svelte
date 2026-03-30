@@ -14,6 +14,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached,} from '$lib/utils/providerHelpers';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -63,15 +64,9 @@
     // Helpers
     // =========================================================================
 
-    // Asset type → icon PNG filename mapping
-    const ASSET_TYPE_ICON_MAP: Record<string, string> = {
-        STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
-        FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
-    };
-
     function assetIconHtml(row: AssetRow): string {
         const iconSrc = row.icon_url
-            || (row.asset_type ? `/icons/asset-types/${ASSET_TYPE_ICON_MAP[row.asset_type] ?? 'other'}.png` : null);
+            || (row.asset_type ? getAssetTypeIconUrl(row.asset_type) : null);
         if (iconSrc) {
             return `<img src="${iconSrc}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`;
         }
@@ -94,8 +89,7 @@
 
     function typeBadgeHtml(type: string | null | undefined): string {
         if (!type) return '<span class="text-gray-400">—</span>';
-        const imgFile = ASSET_TYPE_ICON_MAP[type] ?? 'other';
-        const imgSrc = `/icons/asset-types/${imgFile}.png`;
+        const imgSrc = getAssetTypeIconUrl(type);
         const colors: Record<string, string> = {
             STOCK: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
             ETF: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
@@ -104,6 +98,7 @@
             FUND: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400',
             HOLD: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400',
             CROWDFUND_LOAN: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+            INDEX: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
         };
         const cls = colors[type] ?? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
         const label = $t(`assets.types.${type}`) || type;

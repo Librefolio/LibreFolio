@@ -9,6 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, User
@@ -47,6 +48,7 @@ from backend.app.schemas.provider import (
     FAProviderSearchResponse,
     FAProviderProbeRequest,
     FAProviderProbeResponse,
+    ProbeOperation,
     )
 from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
 from backend.app.services.asset_source import (
@@ -417,6 +419,41 @@ async def search_assets_via_providers(
     return await AssetSearchService.search(q, provider_codes)
 
 
+@provider_router.get("/search/stream")
+async def search_assets_stream(
+    q: str = Query(..., min_length=1, description="Search query"),
+    providers: Optional[str] = Query(
+        None, description="Comma-separated provider codes (default: all)"
+        ),
+    _current_user: User = Depends(get_current_user),
+    ):
+    """
+    Stream search results via Server-Sent Events (SSE).
+
+    Each provider returns results as soon as it completes, without waiting
+    for slower providers. Events:
+    - `provider_results`: results from one provider
+    - `provider_error`: a provider failed
+    - `done`: all providers finished
+
+    Use `fetch()` + `ReadableStream` on the frontend.
+    """
+
+    provider_codes: list[str] | None = None
+    if providers:
+        provider_codes = [p.strip() for p in providers.split(",") if p.strip()]
+
+    return StreamingResponse(
+        AssetSearchService.search_stream(q, provider_codes),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+            },
+        )
+
+
 @provider_router.post("/probe", response_model=FAProviderProbeResponse)
 async def probe_provider_config(
     request: FAProviderProbeRequest,
@@ -428,16 +465,14 @@ async def probe_provider_config(
     Executes selected operations against the provider and returns results
     with per-operation execution time. Nothing is stored in the database.
 
-    Operations:
-    - current_price: Fetch latest price
-    - history: Fetch last 7 days of price history
-    - metadata: Fetch asset metadata (identifiers, type, classification)
+    **Allowed operations** (from `ProbeOperation` enum):
+    {ops_list}
 
     Use cases:
-    - Test provider configuration before assigning
-    - "Ask Provider" button to fetch identifiers
+    - Test provider configuration before assigning (`current_price`, `history`)
+    - "Ask Provider" button to fetch identifiers and metadata (`metadata`)
     - Verify provider is working correctly
-    """
+    """.format(ops_list="\n    ".join(f"- `{op.value}`" for op in ProbeOperation))
     from backend.app.services.asset_source import AssetSourceError
     try:
         result = await AssetSourceManager.probe_provider_config(config=request,operations=request.operations,)

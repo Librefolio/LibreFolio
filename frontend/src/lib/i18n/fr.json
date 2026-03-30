@@ -56,7 +56,9 @@
     "gigabytes": "Go",
     "min": "Min",
     "icon": "Icône",
-    "custom": "Personnalisé"
+    "custom": "Personnalisé",
+    "name": "Nom",
+    "currency": "Devise"
   },
   "table": {
     "columns": "Colonnes",
@@ -285,7 +287,8 @@
       "FUND": "Fonds",
       "HOLD": "Liquidité",
       "CROWDFUND_LOAN": "Crowdfunding",
-      "OTHER": "Autre"
+      "OTHER": "Autre",
+      "INDEX": "Indice"
     },
     "type": "Type",
     "modal": {
@@ -299,7 +302,12 @@
       "autoAssignInfo": "Le fournisseur \"{provider}\" sera attribué automatiquement à la création",
       "duplicateName": "Un actif avec ce nom existe déjà",
       "createSuccess": "\"{name}\" créé avec succès",
-      "saveSuccess": "\"{name}\" mis à jour avec succès"
+      "saveSuccess": "\"{name}\" mis à jour avec succès",
+      "moreInfo": "Plus d'infos",
+      "classification": "Classification",
+      "sectorDistribution": "Distribution Sectorielle",
+      "geographicDistribution": "Distribution Géographique",
+      "createSuccessProviderFailed": "Actif \"{name}\" créé, mais attribution du fournisseur échouée. Assignez-le manuellement."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -310,7 +318,10 @@
       "providerUrl": "URL Fournisseur",
       "selectProvider": "Fournisseur",
       "identifier": "Identifiant",
-      "identifierType": "Type d'Identifiant"
+      "identifierType": "Type d'Identifiant",
+      "fetchInterval": "Intervalle de mise a jour (min)",
+      "lastFetch": "Derniere mise a jour",
+      "neverFetched": "Jamais execute"
     },
     "probe": {
       "currentPrice": "Prix Actuel",
@@ -320,13 +331,15 @@
       "passed": "Réussi",
       "failed": "Échoué",
       "executionTime": "Temps d'exécution",
-      "totalTime": "Total"
+      "totalTime": "Total",
+      "cacheInfo": "Les donnees de prix peuvent avoir un retard de 15 minutes."
     },
     "identifiers": {
       "askProvider": "Demander au Fournisseur",
       "askProviderHint": "Récupérer les identifiants du fournisseur attribué",
       "autoFilled": "Rempli automatiquement par le fournisseur",
-      "conflictWarning": "Le fournisseur suggère une valeur différente"
+      "conflictWarning": "Le fournisseur suggère une valeur différente",
+      "addIdentifier": "Ajouter identifiant"
     },
     "confirm": {
       "saveWithoutTest": "Enregistrer sans test ?",
@@ -341,6 +354,23 @@
       "providers": "Fournisseurs",
       "noResults": "Aucun résultat trouvé",
       "searching": "Recherche en cours..."
+    },
+    "comparison": {
+      "title": "Comparaison des donnees du fournisseur",
+      "description": "Le fournisseur a renvoye des valeurs differentes. Examinez et choisissez lesquelles accepter.",
+      "currentValue": "Valeur actuelle",
+      "providerValue": "Valeur du fournisseur",
+      "selectAll": "Tout selectionner",
+      "deselectAll": "Tout deselectionner",
+      "applySelected": "Appliquer la selection ({count}/{total})",
+      "allMatch": "Toutes les donnees correspondent au fournisseur"
+    },
+    "distribution": {
+      "total": "Total",
+      "excess": "exces",
+      "missing": "manquant",
+      "addSector": "Ajouter un secteur",
+      "addCountry": "Ajouter un pays"
     }
   },
   "transactions": {
@@ -797,5 +827,19 @@
     "syncAll": "Sync. Tout",
     "refreshAll": "Recharger Tout",
     "settings": "Paramètres"
+  },
+  "sectors": {
+    "Industrials": "🏭 Industriels",
+    "Technology": "💻 Technologie",
+    "Financials": "🏦 Financiers",
+    "ConsumerDiscretionary": "🛍️ Consommation discrétionnaire",
+    "HealthCare": "🏥 Santé",
+    "RealEstate": "🏠 Immobilier",
+    "BasicMaterials": "⛏️ Matériaux de base",
+    "Energy": "⚡ Énergie",
+    "ConsumerStaples": "🛒 Consommation de base",
+    "Telecommunication": "📡 Télécommunication",
+    "Utilities": "💡 Services publics",
+    "Other": "📦 Autre"
   }
 }

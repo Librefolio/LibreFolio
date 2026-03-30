@@ -14,6 +14,8 @@
     import {zodiosApi} from '$lib/api';
     import {ExternalLink, Loader2, Search} from 'lucide-svelte';
     import AssetIcon from './AssetIcon.svelte';
+    import {ensureAssetProvidersCached, getAssetProviderIconUrl} from '$lib/utils/providerHelpers';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -60,6 +62,8 @@
     let providersLoaded = $state(false);
     let showResults = $state(false);
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    /** Monotonic search ID to ignore stale responses */
+    let searchId = 0;
 
     // =========================================================================
     // Derived
@@ -75,13 +79,15 @@
     $effect(() => {
         if (!providersLoaded) {
             loadProviders();
+            ensureAssetProvidersCached();
         }
     });
 
     async function loadProviders() {
         try {
             const response = await zodiosApi.list_providers_api_v1_assets_provider_get() as any;
-            const items: ProviderInfo[] = Array.isArray(response) ? response : [];
+            const items: ProviderInfo[] = (Array.isArray(response) ? response : [])
+                .filter((p: ProviderInfo) => p.code !== 'mockprov');
             providers = items;
             // Select all searchable providers by default
             selectedProviders = new Set(items.filter(p => p.supports_search).map(p => p.code));
@@ -107,31 +113,105 @@
         debounceTimer = setTimeout(() => executeSearch(val), 300);
     }
 
+    /** Track per-provider status for streaming search */
+    let providersDone = $state(0);
+    let providersTotal = $state(0);
+
     async function executeSearch(q: string) {
         if (q.trim().length === 0 || selectedProviders.size === 0) return;
+
+        // Increment search ID and capture it for this request
+        const mySearchId = ++searchId;
+
         loading = true;
         error = null;
         showResults = true;
+        results = [];
+        providersDone = 0;
+        providersTotal = selectedProviders.size;
+
+        const providerCodes = [...selectedProviders].join(',');
+
         try {
-            const providerCodes = [...selectedProviders].join(',');
-            const response = await zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get({
-                queries: {q, providers: providerCodes},
-            }) as any;
-            results = (response?.results ?? []).map((r: any) => ({
-                identifier: r.identifier,
-                identifier_type: r.identifier_type,
-                display_name: r.display_name,
-                provider_code: r.provider_code,
-                currency: r.currency,
-                asset_type: r.asset_type,
-                provider_url: r.provider_url,
-            }));
-        } catch (e: any) {
-            console.error('Search failed:', e);
-            error = e?.message || 'Search failed';
-            results = [];
-        } finally {
-            loading = false;
+            // Try SSE streaming first
+            const response = await fetch(`/api/v1/assets/provider/search/stream?q=${encodeURIComponent(q)}&providers=${encodeURIComponent(providerCodes)}`);
+
+            if (!response.ok || !response.body) {
+                throw new Error('SSE not available');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                if (mySearchId !== searchId) { reader.cancel(); return; }
+
+                buffer += decoder.decode(value, {stream: true});
+
+                // Parse SSE events from buffer
+                const lines = buffer.split('\n');
+                buffer = lines.pop() ?? ''; // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const event = JSON.parse(line.slice(6));
+                        if (event.event === 'provider_results') {
+                            providersDone++;
+                            const newItems: SearchResult[] = (event.results ?? []).map((r: any) => ({
+                                identifier: r.identifier,
+                                identifier_type: r.identifier_type,
+                                display_name: r.display_name,
+                                provider_code: r.provider_code,
+                                currency: r.currency,
+                                asset_type: r.asset_type,
+                                provider_url: r.provider_url,
+                            }));
+                            results = [...results, ...newItems];
+                        } else if (event.event === 'provider_error') {
+                            providersDone++;
+                        } else if (event.event === 'done') {
+                            // Final event
+                        }
+                    } catch { /* skip malformed SSE lines */ }
+                }
+            }
+
+            if (mySearchId === searchId) {
+                loading = false;
+            }
+        } catch {
+            // Fallback to REST endpoint
+            if (mySearchId !== searchId) return;
+            try {
+                const response = await zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get({
+                    queries: {q, providers: providerCodes},
+                }) as any;
+
+                if (mySearchId !== searchId) return;
+
+                results = (response?.results ?? []).map((r: any) => ({
+                    identifier: r.identifier,
+                    identifier_type: r.identifier_type,
+                    display_name: r.display_name,
+                    provider_code: r.provider_code,
+                    currency: r.currency,
+                    asset_type: r.asset_type,
+                    provider_url: r.provider_url,
+                }));
+            } catch (e: any) {
+                if (mySearchId !== searchId) return;
+                console.error('Search failed:', e);
+                error = e?.message || 'Search failed';
+                results = [];
+            } finally {
+                if (mySearchId === searchId) {
+                    loading = false;
+                }
+            }
         }
     }
 
@@ -205,23 +285,24 @@
         />
     </div>
 
-    <!-- Provider checkboxes -->
+    <!-- Provider badge toggles -->
     {#if searchableProviders.length > 0}
-        <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-            <span>{$t('assets.search.providers')}:</span>
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('assets.search.providers')}:</span>
             {#each searchableProviders as prov}
-                <label class="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                            type="checkbox"
-                            checked={selectedProviders.has(prov.code)}
-                            onchange={() => toggleProvider(prov.code)}
-                            class="w-3.5 h-3.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
-                    />
+                <button
+                        type="button"
+                        onclick={() => toggleProvider(prov.code)}
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all
+                               {selectedProviders.has(prov.code)
+                                   ? 'bg-libre-green/15 dark:bg-libre-green/25 border-libre-green/40 text-libre-green dark:text-green-400'
+                                   : 'bg-gray-100/50 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-gray-500 opacity-60'}"
+                >
                     {#if prov.icon_url}
-                        <img src={prov.icon_url} alt="" class="w-4 h-4 rounded-sm object-contain"/>
+                        <img src={prov.icon_url} alt="" class="w-3.5 h-3.5 rounded-sm object-contain {selectedProviders.has(prov.code) ? '' : 'grayscale opacity-50'}"/>
                     {/if}
                     <span>{prov.name}</span>
-                </label>
+                </button>
             {/each}
         </div>
     {/if}
@@ -230,20 +311,27 @@
     {#if showResults}
         <div class="border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800
                     shadow-lg max-h-60 overflow-y-auto">
-            {#if loading}
+            {#if loading && results.length === 0}
                 <div class="flex items-center justify-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
                     <Loader2 size={16} class="animate-spin"/>
-                    <span>{$t('assets.search.searching')}</span>
+                    <span>{$t('assets.search.searching')}{providersDone > 0 && providersTotal > 0 ? ` (${providersDone}/${providersTotal})` : ''}</span>
                 </div>
             {:else if error}
                 <div class="py-4 px-4 text-sm text-red-500 dark:text-red-400 text-center">
                     {error}
                 </div>
-            {:else if !hasResults}
+            {:else if !hasResults && !loading}
                 <div class="py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
                     {$t('assets.search.noResults')}
                 </div>
             {:else}
+                <!-- Loading banner (streaming partial results) -->
+                {#if loading}
+                    <div class="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700">
+                        <Loader2 size={12} class="animate-spin"/>
+                        <span>{$t('assets.search.searching')} ({providersDone}/{providersTotal})</span>
+                    </div>
+                {/if}
                 {#each results as result}
                     <button
                             type="button"
@@ -260,21 +348,31 @@
 
                         <!-- Info -->
                         <div class="flex-1 min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                                {result.display_name}
+                            <div class="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 min-w-0">
+                                <span class="truncate">{result.display_name}</span>
                             </div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                            <div class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                                 <span class="font-mono">{result.identifier}</span>
                                 {#if result.currency}
-                                    <span class="mx-1">·</span>
+                                    <span class="mx-0.5">·</span>
                                     <span>{result.currency}</span>
                                 {/if}
                                 {#if result.asset_type}
-                                    <span class="mx-1">·</span>
-                                    <span class="uppercase">{result.asset_type}</span>
+                                    <span class="mx-0.5">·</span>
+                                    <span class="inline-flex items-center gap-0.5">
+                                        <img src={getAssetTypeIconUrl(result.asset_type)} alt="" class="w-3 h-3 object-contain"/>
+                                        <span>{$t('assets.types.' + (result.asset_type ?? 'OTHER').toUpperCase())}</span>
+                                    </span>
                                 {/if}
-                                <span class="mx-1">·</span>
-                                <span class="text-gray-400">via {result.provider_code}</span>
+                                {#if getAssetProviderIconUrl(result.provider_code)}
+                                    <span class="mx-0.5">·</span>
+                                    <span class="inline-flex items-center gap-1 shrink-0">
+                                        <img src={getAssetProviderIconUrl(result.provider_code)} alt={result.provider_code}
+                                             class="w-3.5 h-3.5 rounded-sm object-contain"
+                                             title={result.provider_code}/>
+                                        <span class="text-gray-400 dark:text-gray-500">{result.provider_code}</span>
+                                    </span>
+                                {/if}
                             </div>
                         </div>
 

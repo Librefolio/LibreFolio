@@ -1057,6 +1057,30 @@
                                             }}
                                                 onclick={(e) => e.stopPropagation()}
                                         />
+                                    {:else if cellContent.type === 'editable-text'}
+                                        <input
+                                                type="text"
+                                                class="cell-editable-text"
+                                                value={cellContent.value}
+                                                placeholder={cellContent.placeholder ?? ''}
+                                                maxlength={cellContent.maxLength}
+                                                onblur={(e) => cellContent.onchange(e.currentTarget.value)}
+                                                onkeydown={(e) => {
+                                                if (e.key === 'Enter') e.currentTarget.blur();
+                                            }}
+                                                onclick={(e) => e.stopPropagation()}
+                                        />
+                                    {:else if cellContent.type === 'editable-select'}
+                                        <select
+                                                class="cell-editable-select"
+                                                value={cellContent.value}
+                                                onchange={(e) => cellContent.onchange(e.currentTarget.value)}
+                                                onclick={(e) => e.stopPropagation()}
+                                        >
+                                            {#each cellContent.options as opt}
+                                                <option value={opt.value} selected={opt.value === cellContent.value}>{opt.label}</option>
+                                            {/each}
+                                        </select>
                                     {:else if cellContent.type === 'html'}
                                         {@html cellContent.html}
                                     {/if}
@@ -1795,6 +1819,65 @@
     }
 
     :global(.dark) .cell-editable-number:focus {
+        border-color: #4ade80;
+        box-shadow: 0 0 0 1px #4ade8040;
+    }
+
+    /* Editable text cell */
+    .cell-editable-text {
+        width: 100%;
+        padding: 0.25rem 0.375rem;
+        font-size: 0.8125rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        background: white;
+        color: #1e293b;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+
+    .cell-editable-text:focus {
+        border-color: #1a4031;
+        box-shadow: 0 0 0 1px #1a403140;
+    }
+
+    :global(.dark) .cell-editable-text {
+        background: #0f172a;
+        border-color: #475569;
+        color: #e2e8f0;
+    }
+
+    :global(.dark) .cell-editable-text:focus {
+        border-color: #4ade80;
+        box-shadow: 0 0 0 1px #4ade8040;
+    }
+
+    /* Editable select cell */
+    .cell-editable-select {
+        width: 100%;
+        padding: 0.25rem 0.375rem;
+        font-size: 0.8125rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        background: white;
+        color: #1e293b;
+        outline: none;
+        transition: border-color 0.15s;
+        cursor: pointer;
+    }
+
+    .cell-editable-select:focus {
+        border-color: #1a4031;
+        box-shadow: 0 0 0 1px #1a403140;
+    }
+
+    :global(.dark) .cell-editable-select {
+        background: #0f172a;
+        border-color: #475569;
+        color: #e2e8f0;
+    }
+
+    :global(.dark) .cell-editable-select:focus {
         border-color: #4ade80;
         box-shadow: 0 0 0 1px #4ade8040;
     }

@@ -14,6 +14,7 @@ export {default as SearchSelect} from './SearchSelect.svelte';
 export {default as ImportPluginSelect} from './ImportPluginSelect.svelte';
 export {default as BrokerSearchSelect} from './BrokerSearchSelect.svelte';
 export {default as CurrencySearchSelect} from './CurrencySearchSelect.svelte';
+export {default as CountrySearchSelect} from './CountrySearchSelect.svelte';
 export {default as FxProviderSelect} from './FxProviderSelect.svelte';
 
 export * from './types';

@@ -188,9 +188,9 @@
     }
 
     // Avatar change handler (from ImagePickerWrapper)
-    async function handleAvatarChange(event: CustomEvent<{ url: string }>) {
+    async function handleAvatarChange(url: string) {
         showAvatarPicker = false;
-        editedAvatarUrl = event.detail.url;
+        editedAvatarUrl = url;
         await saveAvatarField();
     }
 
@@ -752,8 +752,8 @@
         circularPreview={true}
         filterImages={true}
         initialUrl={editedAvatarUrl || ''}
-        on:cancel={() => showAvatarPicker = false}
-        on:change={handleAvatarChange}
+        oncancel={() => showAvatarPicker = false}
+        onchange={handleAvatarChange}
         open={showAvatarPicker}
         preset="avatar"
         title={$_('settings.selectAvatar') || 'Select Avatar'}

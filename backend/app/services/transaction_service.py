@@ -24,7 +24,7 @@ from sqlalchemy import or_, and_
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Transaction, TransactionType, Broker, BrokerUserAccess, UserRole
+from backend.app.db.models import Transaction, TransactionType, Broker, BrokerUserAccess, UserRole, Asset, AssetType
 from backend.app.schemas.transactions import (
     TXCreateItem,
     TXReadItem,
@@ -165,6 +165,16 @@ class TransactionService:
                                 error=f"Access denied: EDITOR role required for broker {broker_id}",
                                 )
                             )
+                        continue
+
+                # Reject transactions for INDEX assets (benchmarks, not tradeable)
+                if item.asset_id is not None:
+                    asset_result = await self.session.execute(
+                        select(Asset.asset_type).where(Asset.id == item.asset_id)
+                        )
+                    asset_type_val = asset_result.scalar_one_or_none()
+                    if asset_type_val == AssetType.INDEX:
+                        results.append(TXCreateResultItem(success=False,error="Cannot create transactions for INDEX assets",))
                         continue
 
                 tx = Transaction(

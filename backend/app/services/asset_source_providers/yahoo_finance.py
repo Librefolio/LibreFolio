@@ -337,6 +337,18 @@ class YahooFinanceProvider(AssetSourceProvider):
             results = []
             quotes = getattr(search_result, "quotes", []) or []
 
+            # Same mapping as fetch_asset_metadata, for normalizing search results
+            search_type_map = {
+                "equity": "STOCK",
+                "etf": "ETF",
+                "mutualfund": "FUND",
+                "cryptocurrency": "CRYPTO",
+                "currency": "OTHER",
+                "future": "OTHER",
+                "option": "OTHER",
+                "index": "INDEX",
+            }
+
             for quote in quotes[:20]:  # Limit to top 20 results
                 # Skip non-Yahoo Finance results
                 if not quote.get("isYahooFinance", True):
@@ -346,17 +358,19 @@ class YahooFinanceProvider(AssetSourceProvider):
                 # Fetch currency for this symbol (cached)
                 currency = self._fetch_currency(symbol) if symbol else None
 
+                # Normalize quoteType using the same map as fetch_asset_metadata
+                raw_type = (quote.get("quoteType", "Unknown") or "").lower()
+                normalized_type = search_type_map.get(raw_type, "OTHER")
+
                 results.append(
                     {
                         "identifier": symbol,
                         "identifier_type": IdentifierType.TICKER,  # YFinance uses ticker symbols
                         "display_name": quote.get("longname", quote.get("shortname", symbol)),
                         "currency": currency,
-                        "type": quote.get(
-                            "quoteType", "Unknown"
-                            ),  # EQUITY, ETF, CRYPTOCURRENCY, etc.
-                        }
-                    )
+                        "type": normalized_type,
+                    }
+                )
 
             # Cache result (TTLCache handles expiration)
             self._search_cache[cache_key] = results
@@ -435,6 +449,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "currency": "OTHER",
                 "future": "OTHER",
                 "option": "OTHER",
+                "index": "INDEX",
                 }
             asset_type = asset_type_map.get(quote_type, "OTHER")
 

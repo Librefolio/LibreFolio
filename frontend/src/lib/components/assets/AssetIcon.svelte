@@ -9,6 +9,7 @@
 -->
 <script lang="ts">
     import {BarChart3} from 'lucide-svelte';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     interface Props {
         /** Custom icon URL (highest priority) */
@@ -29,21 +30,11 @@
         lg: {container: 'w-16 h-16', icon: 28, imgClass: 'w-12 h-12'},
     };
 
-    // Map asset_type to PNG filename (same icons used in AssetTable)
-    const ASSET_TYPE_PNG_MAP: Record<string, string> = {
-        STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
-        FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
-    };
-
     let imgFailed = $state(false);
     let pngFailed = $state(false);
 
     let showImg = $derived(!!iconUrl && !imgFailed);
-    let pngSrc = $derived(
-        assetType && ASSET_TYPE_PNG_MAP[assetType]
-            ? `/icons/asset-types/${ASSET_TYPE_PNG_MAP[assetType]}.png`
-            : null
-    );
+    let pngSrc = $derived(assetType ? getAssetTypeIconUrl(assetType) : null);
     let showPng = $derived(!showImg && !!pngSrc && !pngFailed);
 
     // Reset imgFailed when iconUrl changes

@@ -28,6 +28,7 @@ mkdocs = ">=1.6,<2"
 mkdocs-material = "*"
 websockets = "*"
 uvicorn = "*"
+starlette = "*"
 mergedeep = "*"
 websocket-client = "*"
 justetf-scraping = {git = "https://github.com/Alfystar/justetf-scraping.git", ref = "main"}

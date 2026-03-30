@@ -584,6 +584,39 @@ def populate_assets(session: Session):
                     }
                 ),
             },
+        # INDEX assets — benchmarks, no transactions allowed
+        {
+            "display_name": "S&P 500",
+            "currency": "USD",
+            "asset_type": AssetType.INDEX,
+            "identifier_ticker": "^GSPC",
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Standard & Poor's 500 — US large-cap benchmark index",
+                    "geographic_area": {"USA": 1.0},
+                    "sector": "Diversified",
+                    }
+                ),
+            },
+        {
+            "display_name": "MSCI World Index",
+            "currency": "USD",
+            "asset_type": AssetType.INDEX,
+            "identifier_ticker": "URTH",
+            "classification_params": json.dumps(
+                {
+                    "short_description": "MSCI World Index — global developed markets benchmark",
+                    "geographic_area": {
+                        "USA": 0.70,
+                        "JPN": 0.06,
+                        "GBR": 0.04,
+                        "FRA": 0.03,
+                        "DEU": 0.03,
+                        },
+                    "sector": "Diversified",
+                    }
+                ),
+            },
         ]
 
     for asset_data in assets:
@@ -611,6 +644,9 @@ def populate_asset_provider_assignments(session: Session):
         # Assets without transactions (for testing delete success flow)
         ("NVIDIA Corporation", "yfinance", "NVDA", IdentifierType.TICKER, None, None),
         ("Amundi MSCI World UCITS ETF", "yfinance", "MWRD.DE", IdentifierType.TICKER, None, None),
+        # INDEX benchmarks (price tracking only, no transactions)
+        ("S&P 500", "yfinance", "^GSPC", IdentifierType.TICKER, None, None),
+        ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None, None),
         ]
 
     for display_name, provider_code, identifier, id_type, params, user_url in provider_configs:
@@ -1434,6 +1470,12 @@ def main():
             print(f"     Size: {db_path.stat().st_size} bytes")
             print(f"\n🗑️  --force flag detected: Deleting database file...")
             db_path.unlink()
+            # Also remove SQLite WAL/SHM journal files to avoid disk I/O errors
+            for suffix in ("-shm", "-wal"):
+                journal = db_path.with_name(db_path.name + suffix)
+                if journal.exists():
+                    journal.unlink()
+                    print(f"  🗑️  Removed journal file: {journal.name}")
             print(f"  ✅ Database deleted\n")
         else:
             print(f"❌ Error: Database file already exists!")

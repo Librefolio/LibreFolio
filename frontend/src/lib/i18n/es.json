@@ -56,7 +56,9 @@
     "gigabytes": "GB",
     "min": "Mín",
     "icon": "Icono",
-    "custom": "Personalizado"
+    "custom": "Personalizado",
+    "name": "Nombre",
+    "currency": "Divisa"
   },
   "table": {
     "columns": "Columnas",
@@ -285,7 +287,8 @@
       "FUND": "Fondo",
       "HOLD": "Liquidez",
       "CROWDFUND_LOAN": "Crowdfunding",
-      "OTHER": "Otro"
+      "OTHER": "Otro",
+      "INDEX": "Índice"
     },
     "type": "Tipo",
     "modal": {
@@ -299,7 +302,12 @@
       "autoAssignInfo": "El proveedor \"{provider}\" se asignará automáticamente al crear",
       "duplicateName": "Ya existe un activo con este nombre",
       "createSuccess": "\"{name}\" creado exitosamente",
-      "saveSuccess": "\"{name}\" actualizado exitosamente"
+      "saveSuccess": "\"{name}\" actualizado exitosamente",
+      "moreInfo": "Más información",
+      "classification": "Clasificación",
+      "sectorDistribution": "Distribución Sectorial",
+      "geographicDistribution": "Distribución Geográfica",
+      "createSuccessProviderFailed": "Activo \"{name}\" creado, pero la asignación del proveedor falló. Asígnelo manualmente."
     },
     "provider": {
       "assignment": "Asignación de Proveedor",
@@ -310,7 +318,10 @@
       "providerUrl": "URL del Proveedor",
       "selectProvider": "Proveedor",
       "identifier": "Identificador",
-      "identifierType": "Tipo de Identificador"
+      "identifierType": "Tipo de Identificador",
+      "fetchInterval": "Intervalo de actualizacion (min)",
+      "lastFetch": "Ultima actualizacion",
+      "neverFetched": "Nunca ejecutado"
     },
     "probe": {
       "currentPrice": "Precio Actual",
@@ -320,13 +331,15 @@
       "passed": "Aprobado",
       "failed": "Fallido",
       "executionTime": "Tiempo de ejecución",
-      "totalTime": "Total"
+      "totalTime": "Total",
+      "cacheInfo": "Los datos de precio pueden tener un retraso de hasta 15 minutos."
     },
     "identifiers": {
       "askProvider": "Consultar Proveedor",
       "askProviderHint": "Obtener identificadores del proveedor asignado",
       "autoFilled": "Completado automáticamente por el proveedor",
-      "conflictWarning": "El proveedor sugiere un valor diferente"
+      "conflictWarning": "El proveedor sugiere un valor diferente",
+      "addIdentifier": "Añadir identificador"
     },
     "confirm": {
       "saveWithoutTest": "¿Guardar sin probar?",
@@ -341,6 +354,23 @@
       "providers": "Proveedores",
       "noResults": "No se encontraron resultados",
       "searching": "Buscando..."
+    },
+    "comparison": {
+      "title": "Comparacion de datos del proveedor",
+      "description": "El proveedor devolvio valores diferentes. Revise y elija cuales aceptar.",
+      "currentValue": "Valor actual",
+      "providerValue": "Valor del proveedor",
+      "selectAll": "Seleccionar todo",
+      "deselectAll": "Deseleccionar todo",
+      "applySelected": "Aplicar seleccionados ({count}/{total})",
+      "allMatch": "Todos los datos coinciden con el proveedor"
+    },
+    "distribution": {
+      "total": "Total",
+      "excess": "exceso",
+      "missing": "faltante",
+      "addSector": "Agregar sector",
+      "addCountry": "Agregar pais"
     }
   },
   "transactions": {
@@ -797,5 +827,19 @@
     "syncAll": "Sinc. Todo",
     "refreshAll": "Recargar Todo",
     "settings": "Ajustes"
+  },
+  "sectors": {
+    "Industrials": "🏭 Industriales",
+    "Technology": "💻 Tecnología",
+    "Financials": "🏦 Financieros",
+    "ConsumerDiscretionary": "🛍️ Consumo discrecional",
+    "HealthCare": "🏥 Salud",
+    "RealEstate": "🏠 Inmobiliario",
+    "BasicMaterials": "⛏️ Materiales básicos",
+    "Energy": "⚡ Energía",
+    "ConsumerStaples": "🛒 Consumo básico",
+    "Telecommunication": "📡 Telecomunicaciones",
+    "Utilities": "💡 Servicios públicos",
+    "Other": "📦 Otro"
   }
 }

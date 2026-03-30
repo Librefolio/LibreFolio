@@ -128,12 +128,14 @@ class AssetType(str, Enum):
     - FUND: Mutual funds or investment funds
     - HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)
     - CROWDFUND_LOAN: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)
+    - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
     - OTHER: Any other asset type not listed above
 
     Impact:
     - Affects default valuation_model:
       - CROWDFUND_LOAN -> SCHEDULED_YIELD
       - HOLD -> MANUAL
+      - INDEX -> MARKET_PRICE (read-only benchmark, no transactions)
       - Others -> MARKET_PRICE
     - Used for portfolio breakdown and allocation analysis
     - May influence available data plugins (e.g., crypto uses different sources)
@@ -146,6 +148,7 @@ class AssetType(str, Enum):
     FUND = "FUND"
     CROWDFUND_LOAN = "CROWDFUND_LOAN"
     HOLD = "HOLD"
+    INDEX = "INDEX"
     OTHER = "OTHER"
 
 
@@ -456,27 +459,13 @@ class Asset(SQLModel, table=True):
 
     # Identifier columns - one per IdentifierType enum value
     # Allows direct search without JOIN to asset_provider_assignments
-    identifier_isin: Optional[str] = Field(
-        default=None, max_length=12, description="ISIN code (12 chars)"
-        )
-    identifier_ticker: Optional[str] = Field(
-        default=None, max_length=20, description="Ticker symbol"
-        )
-    identifier_cusip: Optional[str] = Field(
-        default=None, max_length=9, description="CUSIP code (9 chars)"
-        )
-    identifier_sedol: Optional[str] = Field(
-        default=None, max_length=7, description="SEDOL code (7 chars)"
-        )
-    identifier_figi: Optional[str] = Field(
-        default=None, max_length=12, description="FIGI code (12 chars)"
-        )
-    identifier_uuid: Optional[str] = Field(
-        default=None, max_length=36, description="UUID for custom assets"
-        )
-    identifier_other: Optional[str] = Field(
-        default=None, max_length=100, description="Other identifier"
-        )
+    identifier_isin: Optional[str] = Field(default=None, max_length=12, description="ISIN code (12 chars)")
+    identifier_ticker: Optional[str] = Field(default=None, max_length=20, description="Ticker symbol")
+    identifier_cusip: Optional[str] = Field(default=None, max_length=9, description="CUSIP code (9 chars)")
+    identifier_sedol: Optional[str] = Field(default=None, max_length=7, description="SEDOL code (7 chars)")
+    identifier_figi: Optional[str] = Field(default=None, max_length=12, description="FIGI code (12 chars)")
+    identifier_uuid: Optional[str] = Field(default=None, max_length=36, description="UUID for custom assets")
+    identifier_other: Optional[str] = Field(default=None, max_length=100, description="Other identifier")
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -848,11 +837,11 @@ class AssetProviderAssignment(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    asset_id: int = Field(foreign_key="assets.id",nullable=False,unique=True,description="Asset ID (1-to-1 relationship)",)
-    provider_code: str = Field(max_length=50,nullable=False,description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)",)
-    identifier: str = Field(nullable=False,description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)",)
+    asset_id: int = Field(foreign_key="assets.id", nullable=False, unique=True, description="Asset ID (1-to-1 relationship)", )
+    provider_code: str = Field(max_length=50, nullable=False, description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)", )
+    identifier: str = Field(nullable=False, description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)", )
     identifier_type: IdentifierType = Field(nullable=False, description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)")
-    provider_params: Optional[str] = Field(default=None,sa_column=Column(Text),description="JSON configuration for provider (validated by plugin)",)
+    provider_params: Optional[str] = Field(default=None, sa_column=Column(Text), description="JSON configuration for provider (validated by plugin)", )
     last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
     fetch_interval: Optional[int] = Field(default=None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)")
     user_url: Optional[str] = Field(default=None, description="User-defined URL (notes, external dashboard, etc.)")

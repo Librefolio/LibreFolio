@@ -111,12 +111,42 @@ export interface EditableNumberCell {
 }
 
 /**
+ * Editable text cell — renders an inline <input type="text">.
+ * Used for identifier values, names, etc.
+ */
+export interface EditableTextCell {
+    type: 'editable-text';
+    /** Current value */
+    value: string;
+    /** Placeholder text when value is empty */
+    placeholder?: string;
+    /** Max length */
+    maxLength?: number;
+    /** Callback when value changes (blur or Enter) */
+    onchange: (newValue: string) => void;
+}
+
+/**
  * HTML snippet cell — renders raw HTML content.
  * Used for colored values (pos/neg formatting), inline badges, etc.
  */
 export interface HtmlCell {
     type: 'html';
     html: string;
+}
+
+/**
+ * Editable select cell — renders an inline <select> dropdown.
+ * Used for identifier type, sector/country selection in distribution editors, etc.
+ */
+export interface EditableSelectCell {
+    type: 'editable-select';
+    /** Current selected value */
+    value: string;
+    /** Available options */
+    options: Array<{ value: string; label: string }>;
+    /** Callback when selection changes */
+    onchange: (newValue: string) => void;
 }
 
 /**
@@ -132,7 +162,9 @@ export type CellContent =
     | CustomCell
     | ImageCell
     | EditableNumberCell
-    | HtmlCell;
+    | EditableTextCell
+    | HtmlCell
+    | EditableSelectCell;
 
 // ============ Column Definition Types ============
 
