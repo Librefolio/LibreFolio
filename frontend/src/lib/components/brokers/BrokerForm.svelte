@@ -128,8 +128,8 @@
     // Image picker state (uses ImagePickerWrapper)
     let showImagePicker = false;
 
-    function handleImagePickerChange(event: CustomEvent<{ url: string }>) {
-        iconUrl = event.detail.url;
+    function handleImagePickerChange(url: string) {
+        iconUrl = url;
         showImagePicker = false;
     }
 
@@ -453,8 +453,8 @@
         circularPreview={true}
         filterImages={true}
         initialUrl={iconUrl}
-        on:cancel={() => showImagePicker = false}
-        on:change={handleImagePickerChange}
+        oncancel={() => showImagePicker = false}
+        onchange={handleImagePickerChange}
         open={showImagePicker}
         preset="broker-icon"
         title={$_('uploads.selectIcon') || 'Select Icon'}

@@ -1179,17 +1179,19 @@ Usage: Categorize assets by their nature for reporting and analysis.
 - FUND: Mutual funds or investment funds
 - HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)
 - CROWDFUND_LOAN: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)
+- INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
 - OTHER: Any other asset type not listed above
 
 Impact:
 - Affects default valuation_model:
   - CROWDFUND_LOAN -> SCHEDULED_YIELD
   - HOLD -> MANUAL
+  - INDEX -> MARKET_PRICE (read-only benchmark, no transactions)
   - Others -> MARKET_PRICE
 - Used for portfolio breakdown and allocation analysis
 - May influence available data plugins (e.g., crypto uses different sources)
  *
- * @enum STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND_LOAN, HOLD, OTHER
+ * @enum STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND_LOAN, HOLD, INDEX, OTHER
  */
   | "STOCK"
   | "ETF"
@@ -1198,6 +1200,7 @@ Impact:
   | "FUND"
   | "CROWDFUND_LOAN"
   | "HOLD"
+  | "INDEX"
   | "OTHER";
 type FAClassificationParams_Input = Partial<{
   short_description: (string | null) | Array<string | null>;
@@ -2310,7 +2313,7 @@ type FAProviderProbeRequest = {
     (({} | null) | Array<{} | null>)
     | undefined;
   /**
-   * Operations to execute: current_price, history, metadata
+   * Operations to execute. Allowed values: 'current_price', 'history', 'metadata'
    */
   operations: Array<ProbeOperation>;
 };
@@ -4231,6 +4234,7 @@ const AssetType = z.enum([
   "FUND",
   "CROWDFUND_LOAN",
   "HOLD",
+  "INDEX",
   "OTHER",
 ]);
 const FAGeographicArea_Input: z.ZodType<FAGeographicArea_Input> = z.object({
@@ -5120,7 +5124,9 @@ Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_
   operations: z
     .array(ProbeOperation)
     .min(1)
-    .describe("Operations to execute: current_price, history, metadata"),
+    .describe(
+      "Operations to execute. Allowed values: 'current_price', 'history', 'metadata'"
+    ),
 });
 const ProbeCurrentPriceResult: z.ZodType<ProbeCurrentPriceResult> = z.object({
   success: z.boolean().describe("Whether the operation succeeded"),
@@ -7120,20 +7126,6 @@ GET /api/v1/assets/provider/assignments?asset_ids&#x3D;1&amp;asset_ids&#x3D;2&am
     method: "post",
     path: "/api/v1/assets/provider/probe",
     alias: "probe_provider_config_api_v1_assets_provider_probe_post",
-    description: `Probe a provider configuration without persisting anything (dry-run).
-
-Executes selected operations against the provider and returns results
-with per-operation execution time. Nothing is stored in the database.
-
-Operations:
-- current_price: Fetch latest price
-- history: Fetch last 7 days of price history
-- metadata: Fetch asset metadata (identifiers, type, classification)
-
-Use cases:
-- Test provider configuration before assigning
-- &quot;Ask Provider&quot; button to fetch identifiers
-- Verify provider is working correctly`,
     requestFormat: "json",
     parameters: [
       {
@@ -7287,6 +7279,41 @@ GET /api/v1/assets/provider/search?q&#x3D;AAPL&amp;providers&#x3D;yfinance,juste
       },
     ],
     response: FAProviderSearchResponse,
+    errors: [
+      {
+        status: 422,
+        description: `Validation Error`,
+        schema: HTTPValidationError,
+      },
+    ],
+  },
+  {
+    method: "get",
+    path: "/api/v1/assets/provider/search/stream",
+    alias: "search_assets_stream_api_v1_assets_provider_search_stream_get",
+    description: `Stream search results via Server-Sent Events (SSE).
+
+Each provider returns results as soon as it completes, without waiting
+for slower providers. Events:
+- &#x60;provider_results&#x60;: results from one provider
+- &#x60;provider_error&#x60;: a provider failed
+- &#x60;done&#x60;: all providers finished
+
+Use &#x60;fetch()&#x60; + &#x60;ReadableStream&#x60; on the frontend.`,
+    requestFormat: "json",
+    parameters: [
+      {
+        name: "q",
+        type: "Query",
+        schema: z.string().min(1).describe("Search query"),
+      },
+      {
+        name: "providers",
+        type: "Query",
+        schema: providers__3,
+      },
+    ],
+    response: z.unknown(),
     errors: [
       {
         status: 422,

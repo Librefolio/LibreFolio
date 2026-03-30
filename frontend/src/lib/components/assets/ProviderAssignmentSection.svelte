@@ -12,15 +12,17 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
+    import {SimpleSelect} from '$lib/components/ui/select';
+    import type {SelectOption} from '$lib/components/ui/select';
     import {
         AlertCircle,
         CheckCircle2,
         Circle,
         ExternalLink,
         Loader2,
-        Minus,
         Play,
     } from 'lucide-svelte';
+    import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -91,6 +93,11 @@
     }: Props = $props();
 
     // =========================================================================
+    // Constants — IDENTIFIER_TYPES imported from $lib/utils/assetTypes
+    // =========================================================================
+
+
+    // =========================================================================
     // State
     // =========================================================================
 
@@ -107,6 +114,23 @@
 
     let selectedProvider = $derived(providers.find(p => p.code === providerCode));
     let paramsSchema = $derived(selectedProvider?.params_schema ?? []);
+
+    /** Provider options for SimpleSelect (excluding mockprov) */
+    let providerOptions = $derived<SelectOption[]>([
+        {value: '', label: '—'},
+        ...providers
+            .filter(p => p.code !== 'mockprov')
+            .map(p => ({
+                value: p.code,
+                label: p.name,
+                icon: p.icon_url ?? undefined,
+            })),
+    ]);
+
+    /** Identifier type options for SimpleSelect */
+    let idTypeOptions = $derived<SelectOption[]>(
+        IDENTIFIER_TYPES.map(t => ({value: t, label: t}))
+    );
 
     // =========================================================================
     // Lifecycle
@@ -240,75 +264,65 @@
         }
         emitChange();
     }
-
-    // IDENTIFIER_TYPE options
-    const ID_TYPES = ['TICKER', 'ISIN', 'CUSIP', 'SEDOL', 'FIGI', 'UUID', 'OTHER'];
 </script>
 
 <div class="space-y-3">
-    <!-- No Provider checkbox -->
-    <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-        <input
-                type="checkbox"
-                checked={noProvider}
-                onchange={handleNoProviderToggle}
-                disabled={disabled || readonly}
-                class="w-4 h-4 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
-        />
-        <Minus size={14} class="text-gray-400"/>
-        <span class="text-gray-600 dark:text-gray-300">{$t('assets.provider.noProvider')}</span>
-    </label>
 
     {#if !noProvider}
         <!-- Provider select -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     {$t('assets.provider.selectProvider')}
-                </label>
-                <select
+                </span>
+                <SimpleSelect
                         value={providerCode}
-                        onchange={(e) => handleProviderChange((e.target as HTMLSelectElement).value)}
+                        options={providerOptions}
                         disabled={disabled || readonly}
-                        class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green
-                               disabled:opacity-50"
+                        dropdownPosition="auto"
+                        onchange={(v) => handleProviderChange(v)}
                 >
-                    <option value="">—</option>
-                    {#each providers as prov}
-                        <option value={prov.code}>{prov.name}</option>
-                    {/each}
-                </select>
+                    {#snippet item(opt)}
+                        <div class="flex items-center gap-2">
+                            {#if opt.icon}
+                                <img src={opt.icon} alt="" class="w-4 h-4 rounded-sm object-contain"/>
+                            {/if}
+                            <span>{opt.label}</span>
+                        </div>
+                    {/snippet}
+                    {#snippet selectedItem(opt)}
+                        <div class="flex items-center gap-2">
+                            {#if opt.icon}
+                                <img src={opt.icon} alt="" class="w-4 h-4 rounded-sm object-contain"/>
+                            {/if}
+                            <span>{opt.label}</span>
+                        </div>
+                    {/snippet}
+                </SimpleSelect>
             </div>
 
             <!-- Identifier Type -->
             <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     {$t('assets.provider.identifierType')}
-                </label>
-                <select
+                </span>
+                <SimpleSelect
                         bind:value={identifierType}
-                        onchange={() => emitChange()}
+                        options={idTypeOptions}
                         disabled={disabled || readonly}
-                        class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green
-                               disabled:opacity-50"
-                >
-                    {#each ID_TYPES as idType}
-                        <option value={idType}>{idType}</option>
-                    {/each}
-                </select>
+                        dropdownPosition="auto"
+                        onchange={() => emitChange()}
+                />
             </div>
         </div>
 
         <!-- Identifier -->
         <div>
-            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label for="provider-identifier" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 {$t('assets.provider.identifier')}
             </label>
             <input
+                    id="provider-identifier"
                     type="text"
                     bind:value={identifier}
                     oninput={() => { testStatus = 'not_tested'; emitChange(); }}
@@ -325,14 +339,15 @@
         <!-- Dynamic params from params_schema -->
         {#if paramsSchema.length > 0}
             <div class="space-y-2 pl-3 border-l-2 border-gray-200 dark:border-slate-600">
-                {#each paramsSchema as field}
+                {#each paramsSchema as field, idx}
                     <div>
-                        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        <label for="param-{field.key}" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {field.description || field.key}
                             {#if field.required}<span class="text-red-500">*</span>{/if}
                         </label>
                         {#if field.type === 'select' && field.options}
                             <select
+                                    id="param-{field.key}"
                                     value={paramsValues[field.key] ?? field.default ?? ''}
                                     onchange={(e) => handleParamChange(field.key, (e.target as HTMLSelectElement).value)}
                                     disabled={disabled || readonly}
@@ -376,11 +391,12 @@
         <!-- User URL + Provider URL -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <label for="provider-user-url" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     {$t('assets.provider.userUrl')}
                 </label>
                 <div class="flex gap-1.5">
                     <input
+                            id="provider-user-url"
                             type="text"
                             bind:value={userUrl}
                             oninput={() => emitChange()}
@@ -401,11 +417,12 @@
                 </div>
             </div>
             <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <label for="provider-url-readonly" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     {$t('assets.provider.providerUrl')}
                 </label>
                 <div class="flex gap-1.5">
                     <input
+                            id="provider-url-readonly"
                             type="text"
                             value={providerUrl ?? ''}
                             disabled
@@ -450,14 +467,15 @@
         {#if testResults.length > 0 || testStatus === 'testing'}
             <div class="space-y-1.5 pl-3 border-l-2 {testStatus === 'passed' ? 'border-green-400' : testStatus === 'failed' ? 'border-red-400' : 'border-gray-300 dark:border-slate-600'}">
                 {#each testResults as result}
-                    <div class="flex items-center gap-2 text-sm">
+                    <div class="flex items-center gap-2 text-sm" title={result.detail ?? ''}>
                         {#if result.success}
                             <CheckCircle2 size={14} class="text-green-500 shrink-0"/>
                         {:else}
                             <AlertCircle size={14} class="text-red-500 shrink-0"/>
                         {/if}
                         <span class="text-gray-600 dark:text-gray-300">{result.label}:</span>
-                        <span class="{result.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} truncate">
+                        <span class="{result.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} truncate"
+                              title={result.detail ?? ''}>
                             {result.detail ?? '—'}
                         </span>
                         <span class="text-xs text-gray-400 shrink-0">

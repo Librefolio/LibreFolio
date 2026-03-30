@@ -13,14 +13,20 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {ChevronDown, ChevronRight, Info, Loader2, RefreshCw, X} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, Loader2, Minus, Plus, RefreshCw, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import {CurrencySearchSelect} from '$lib/components/ui/select';
+    import {CurrencySearchSelect, SimpleSelect} from '$lib/components/ui/select';
     import AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
     import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
+    import ProviderComparisonModal from './ProviderComparisonModal.svelte';
+    import type {DiffItem} from './ProviderComparisonModal.svelte';
+    import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import {toasts} from '$lib/stores/toastStore.svelte';
+    import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -33,6 +39,11 @@
         asset_type: string;
         icon_url?: string | null;
         active?: boolean;
+        classification_params?: {
+            short_description?: string | null;
+            sector_area?: { distribution: Record<string, number> } | null;
+            geographic_area?: { distribution: Record<string, number> } | null;
+        } | null;
         // Identifiers
         identifier_isin?: string | null;
         identifier_ticker?: string | null;
@@ -73,6 +84,12 @@
     }: Props = $props();
 
     // =========================================================================
+    // Constants
+    // =========================================================================
+
+    // Asset types and icon mapping are imported from $lib/utils/assetTypes
+
+    // =========================================================================
     // State — Form fields
     // =========================================================================
 
@@ -81,14 +98,19 @@
     let assetType = $state('STOCK');
     let iconUrl = $state<string | null>(null);
 
-    // Identifiers
-    let identifierIsin = $state('');
-    let identifierTicker = $state('');
-    let identifierCusip = $state('');
-    let identifierSedol = $state('');
-    let identifierFigi = $state('');
-    let identifierUuid = $state('');
-    let identifierOther = $state('');
+    // Identifiers — dynamic rows instead of fixed fields
+    interface IdentifierRow {
+        id: string;
+        type: string;
+        value: string;
+        autoFilled?: boolean;
+    }
+    let identifierRows = $state<IdentifierRow[]>([]);
+
+    // Classification
+    let shortDescription = $state('');
+    let sectorDistribution = $state<Record<string, number>>({});
+    let geographicDistribution = $state<Record<string, number>>({});
 
     // Provider
     let providerCode = $state('');
@@ -101,7 +123,7 @@
     let providerTestStatus = $state<'not_tested' | 'testing' | 'passed' | 'failed'>('not_tested');
 
     // UI state
-    let identifiersExpanded = $state(false);
+    let moreInfoExpanded = $state(false);
     let providerExpanded = $state(false);
     let saving = $state(false);
     let formError = $state<string | null>(null);
@@ -112,10 +134,19 @@
     // Confirmation modals
     let showSaveWithoutTestConfirm = $state(false);
     let showIdentifierChangeConfirm = $state(false);
+    let showDiscardConfirm = $state(false);
     let pendingSearchResult = $state<any>(null);
+
+    // Provider comparison modal
+    let showComparisonModal = $state(false);
+    let comparisonDifferences = $state<DiffItem[]>([]);
 
     // Track if search result was selected (for auto-assign banner)
     let searchResultSelected = $state(false);
+
+    // Dirty tracking — snapshot of initial form to detect unsaved changes
+    let initialSnapshot = $state('');
+
 
     // =========================================================================
     // Derived
@@ -124,6 +155,108 @@
     let isValid = $derived(displayName.trim().length > 0);
     let hasProvider = $derived(!providerNoProvider && providerCode !== '' && providerIdentifier !== '');
     let title = $derived(editMode ? $t('assets.modal.titleEdit') : $t('assets.modal.title'));
+
+    /** Asset type options for SimpleSelect (with PNG icons) */
+    let assetTypeOptions = $derived(buildAssetTypeOptions($t));
+
+    /** Current form fingerprint for dirty detection */
+    let currentSnapshot = $derived(
+        JSON.stringify([displayName, currency, assetType, JSON.stringify(identifierRows.map(r => [r.type, r.value])), providerCode, providerIdentifier, providerIdentifierType, providerNoProvider])
+    );
+    let isDirty = $derived(initialSnapshot !== '' && currentSnapshot !== initialSnapshot);
+
+    // =========================================================================
+    // Helpers — Identifier rows ↔ DB columns conversion
+    // =========================================================================
+
+    function columnsToIdentifierRows(data: AssetData): IdentifierRow[] {
+        const rows: IdentifierRow[] = [];
+        for (const idType of IDENTIFIER_TYPES) {
+            const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
+            const value = (data[key] as string) ?? '';
+            if (value) rows.push({id: crypto.randomUUID(), type: idType, value});
+        }
+        return rows;
+    }
+
+    function identifierRowsToColumns(rows: IdentifierRow[]): Record<string, string | undefined> {
+        const result: Record<string, string | undefined> = {};
+        for (const idType of IDENTIFIER_TYPES) {
+            result[`identifier_${idType.toLowerCase()}`] = undefined;
+        }
+        for (const row of rows) {
+            if (!row.value.trim()) continue;
+            result[`identifier_${row.type.toLowerCase()}`] = row.value.trim();
+        }
+        return result;
+    }
+
+    function addIdentifierRow() {
+        // Find first unused type
+        const usedTypes = new Set(identifierRows.map(r => r.type));
+        const availableType = IDENTIFIER_TYPES.find(t => !usedTypes.has(t)) ?? 'TICKER';
+        identifierRows = [...identifierRows, {id: crypto.randomUUID(), type: availableType, value: ''}];
+    }
+
+    function updateIdentifierRow(id: string, field: 'type' | 'value', val: string) {
+        identifierRows = identifierRows.map(r => r.id === id ? {...r, [field]: val} : r);
+    }
+
+    function removeIdentifierRow(id: string) {
+        identifierRows = identifierRows.filter(r => r.id !== id);
+    }
+
+    /** Get identifier value by type from rows */
+    function getIdentifierByType(type: string): string {
+        return identifierRows.find(r => r.type === type)?.value ?? '';
+    }
+
+    // =========================================================================
+    // Identifier DataTable columns
+    // =========================================================================
+
+    let idTypeOptions = $derived(IDENTIFIER_TYPES.map(t => ({value: t, label: t})));
+
+    let identifierColumns = $derived.by<DTColumnDef<IdentifierRow>[]>(() => [
+        {
+            id: 'type',
+            header: () => $t('assets.provider.identifierType'),
+            type: 'custom' as const,
+            cell: (row: IdentifierRow) => ({
+                type: 'editable-select' as const,
+                value: row.type,
+                options: idTypeOptions,
+                onchange: (newVal: string) => updateIdentifierRow(row.id, 'type', newVal),
+            }),
+            sortable: false,
+            filterable: false,
+            width: 110,
+        },
+        {
+            id: 'value',
+            header: () => $t('assets.provider.identifier'),
+            type: 'custom' as const,
+            cell: (row: IdentifierRow) => ({
+                type: 'editable-text' as const,
+                value: row.value,
+                placeholder: 'US0378331005, AAPL, ...',
+                onchange: (newVal: string) => updateIdentifierRow(row.id, 'value', newVal),
+            }),
+            sortable: false,
+            filterable: false,
+            width: 250,
+        },
+    ]);
+
+    let identifierRowActions = $derived<DTRowAction<IdentifierRow>[]>([
+        {
+            id: 'delete',
+            icon: X,
+            label: 'Remove',
+            variant: 'danger',
+            onClick: (row) => removeIdentifierRow(row.id),
+        },
+    ]);
 
     // =========================================================================
     // Lifecycle — Populate in edit mode
@@ -144,13 +277,13 @@
         currency = data.currency;
         assetType = data.asset_type ?? 'STOCK';
         iconUrl = data.icon_url ?? null;
-        identifierIsin = data.identifier_isin ?? '';
-        identifierTicker = data.identifier_ticker ?? '';
-        identifierCusip = data.identifier_cusip ?? '';
-        identifierSedol = data.identifier_sedol ?? '';
-        identifierFigi = data.identifier_figi ?? '';
-        identifierUuid = data.identifier_uuid ?? '';
-        identifierOther = data.identifier_other ?? '';
+        identifierRows = columnsToIdentifierRows(data);
+        // Classification
+        const cp = data.classification_params;
+        shortDescription = cp?.short_description ?? '';
+        sectorDistribution = cp?.sector_area?.distribution ?? {};
+        geographicDistribution = cp?.geographic_area?.distribution ?? {};
+        // Provider
         providerCode = data.provider_code ?? '';
         providerIdentifier = data.provider_identifier ?? '';
         providerIdentifierType = data.provider_identifier_type ?? 'TICKER';
@@ -158,13 +291,18 @@
         providerUserUrl = data.provider_user_url ?? '';
         providerUrl = data.provider_url ?? null;
         providerNoProvider = !data.provider_code;
-        identifiersExpanded = !!(data.identifier_isin || data.identifier_ticker);
+        moreInfoExpanded = identifierRows.length > 0;
         providerExpanded = !!data.provider_code;
         searchResultSelected = false;
         autoFilledFields = new Set();
         conflictFields = new Map();
         formError = null;
         providerTestStatus = 'not_tested';
+        showComparisonModal = false;
+        comparisonDifferences = [];
+        setTimeout(() => {
+            initialSnapshot = JSON.stringify([displayName, currency, assetType, JSON.stringify(identifierRows.map(r => [r.type, r.value])), providerCode, providerIdentifier, providerIdentifierType, providerNoProvider, shortDescription]);
+        }, 0);
     }
 
     function resetForm() {
@@ -172,13 +310,10 @@
         currency = 'USD';
         assetType = 'STOCK';
         iconUrl = null;
-        identifierIsin = '';
-        identifierTicker = '';
-        identifierCusip = '';
-        identifierSedol = '';
-        identifierFigi = '';
-        identifierUuid = '';
-        identifierOther = '';
+        identifierRows = [];
+        shortDescription = '';
+        sectorDistribution = {};
+        geographicDistribution = {};
         providerCode = '';
         providerIdentifier = '';
         providerIdentifierType = 'TICKER';
@@ -186,7 +321,7 @@
         providerUserUrl = '';
         providerUrl = null;
         providerNoProvider = false;
-        identifiersExpanded = false;
+        moreInfoExpanded = false;
         providerExpanded = false;
         searchResultSelected = false;
         autoFilledFields = new Set();
@@ -194,6 +329,11 @@
         formError = null;
         saving = false;
         providerTestStatus = 'not_tested';
+        showComparisonModal = false;
+        comparisonDifferences = [];
+        setTimeout(() => {
+            initialSnapshot = JSON.stringify([displayName, currency, assetType, JSON.stringify(identifierRows.map(r => [r.type, r.value])), providerCode, providerIdentifier, providerIdentifierType, providerNoProvider, shortDescription]);
+        }, 0);
     }
 
     // =========================================================================
@@ -213,13 +353,20 @@
     function applySearchResult(result: any) {
         // Auto-fill form
         displayName = result.display_name || displayName;
-        if (result.asset_type) assetType = result.asset_type.toUpperCase();
+        if (result.asset_type) assetType = (ASSET_TYPES as readonly string[]).includes(result.asset_type.toUpperCase()) ? result.asset_type.toUpperCase() : 'OTHER';
         if (result.currency) currency = result.currency;
 
         // Auto-fill identifier based on identifier_type
         const idType = (result.identifier_type ?? '').toUpperCase();
-        if (idType === 'TICKER') identifierTicker = result.identifier;
-        else if (idType === 'ISIN') identifierIsin = result.identifier;
+        if (idType && result.identifier) {
+            // Add or update the identifier row
+            const existing = identifierRows.find(r => r.type === idType);
+            if (existing) {
+                identifierRows = identifierRows.map(r => r.type === idType ? {...r, value: result.identifier} : r);
+            } else {
+                identifierRows = [...identifierRows, {id: crypto.randomUUID(), type: idType, value: result.identifier}];
+            }
+        }
 
         // Auto-fill provider
         providerCode = result.provider_code;
@@ -230,7 +377,7 @@
         providerParams = null;
 
         // Expand sections
-        identifiersExpanded = true;
+        moreInfoExpanded = true;
         providerExpanded = true;
         searchResultSelected = true;
         formError = null;
@@ -265,8 +412,23 @@
     }
 
     // =========================================================================
-    // Ask Provider (metadata) — fill identifiers
+    // Ask Provider (metadata) — fill all fields + comparison modal
     // =========================================================================
+
+    /** Helper: field name like 'identifier_ticker' → type 'TICKER' */
+    function fieldToIdType(field: string): string {
+        return field.replace('identifier_', '').toUpperCase();
+    }
+
+    /** Set or update an identifier row by type */
+    function setIdentifierByType(type: string, val: string) {
+        const existing = identifierRows.find(r => r.type === type);
+        if (existing) {
+            identifierRows = identifierRows.map(r => r.type === type ? {...r, value: val, autoFilled: true} : r);
+        } else {
+            identifierRows = [...identifierRows, {id: crypto.randomUUID(), type, value: val, autoFilled: true}];
+        }
+    }
 
     async function handleAskProvider() {
         if (!providerCode || !providerIdentifier) return;
@@ -286,13 +448,75 @@
             const meta = response.metadata;
             if (meta?.success && meta.patch_data) {
                 const pd = meta.patch_data;
-                fillIdentifier('identifier_ticker', pd.identifier_ticker);
-                fillIdentifier('identifier_isin', pd.identifier_isin);
-                fillIdentifier('identifier_cusip', pd.identifier_cusip);
-                fillIdentifier('identifier_sedol', pd.identifier_sedol);
-                fillIdentifier('identifier_figi', pd.identifier_figi);
-                fillIdentifier('identifier_uuid', pd.identifier_uuid);
-                fillIdentifier('identifier_other', pd.identifier_other);
+                const differences: DiffItem[] = [];
+
+                // String fields comparison helper
+                function compareField(field: string, label: string, currentVal: string, providerVal: string | null | undefined) {
+                    if (!providerVal) return;
+                    if (!currentVal) {
+                        setFieldValue(field, providerVal);
+                        autoFilledFields = new Set([...autoFilledFields, field]);
+                    } else if (currentVal === providerVal) {
+                        autoFilledFields = new Set([...autoFilledFields, field]);
+                    } else {
+                        differences.push({field, label, type: 'string', currentValue: currentVal, providerValue: providerVal, selected: true});
+                    }
+                }
+
+                // Compare identifier fields
+                for (const idType of IDENTIFIER_TYPES) {
+                    const dbKey = `identifier_${idType.toLowerCase()}`;
+                    const provVal = pd[dbKey];
+                    if (provVal) {
+                        const currentVal = getIdentifierByType(idType);
+                        compareField(dbKey, idType, currentVal, provVal);
+                    }
+                }
+
+                // Compare display_name, asset_type and currency
+                if (pd.display_name) compareField('display_name', $t('common.name'), displayName, pd.display_name);
+                if (pd.asset_type) compareField('asset_type', $t('assets.type'), assetType, pd.asset_type);
+                if (pd.currency) compareField('currency', $t('common.currency'), currency, pd.currency);
+
+                // Compare short_description
+                const cpData = pd.classification_params;
+                if (cpData?.short_description) {
+                    compareField('short_description', 'Description', shortDescription, cpData.short_description);
+                }
+
+                // Compare distributions (block accept/reject)
+                if (cpData?.sector_area) {
+                    const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
+                    const hasCurrent = Object.keys(sectorDistribution).length > 0;
+                    if (!hasCurrent) {
+                        sectorDistribution = provDist;
+                        autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
+                    } else if (JSON.stringify(sectorDistribution) !== JSON.stringify(provDist)) {
+                        differences.push({field: 'sector_area', label: $t('assets.modal.sectorDistribution'), type: 'distribution', currentValue: sectorDistribution, providerValue: provDist, selected: true});
+                    } else {
+                        autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
+                    }
+                }
+
+                if (cpData?.geographic_area) {
+                    const provDist = cpData.geographic_area.distribution ?? cpData.geographic_area;
+                    const hasCurrent = Object.keys(geographicDistribution).length > 0;
+                    if (!hasCurrent) {
+                        geographicDistribution = provDist;
+                        autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
+                    } else if (JSON.stringify(geographicDistribution) !== JSON.stringify(provDist)) {
+                        differences.push({field: 'geographic_area', label: $t('assets.modal.geographicDistribution'), type: 'distribution', currentValue: geographicDistribution, providerValue: provDist, selected: true});
+                    } else {
+                        autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
+                    }
+                }
+
+                if (differences.length > 0) {
+                    comparisonDifferences = differences;
+                    showComparisonModal = true;
+                } else {
+                    toasts.success($t('assets.comparison.allMatch'));
+                }
             }
         } catch (e: any) {
             console.error('Ask Provider failed:', e);
@@ -301,40 +525,95 @@
         }
     }
 
-    function fillIdentifier(field: string, value: string | null | undefined) {
-        if (!value) return;
-        const currentVal = getIdentifierValue(field);
-        if (!currentVal) {
-            setIdentifierValue(field, value);
-            autoFilledFields = new Set([...autoFilledFields, field]);
-        } else if (currentVal !== value) {
-            conflictFields = new Map([...conflictFields, [field, value]]);
+    /** Per-section Ask Provider — calls same probe, applies only section-specific fields */
+    async function handleAskProviderSection(section: 'identifiers' | 'sector' | 'geographic') {
+        if (!providerCode || !providerIdentifier) return;
+        askingProvider = true;
+
+        try {
+            const response = await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
+                provider_code: providerCode,
+                identifier: providerIdentifier,
+                identifier_type: providerIdentifierType as any,
+                provider_params: providerParams,
+                operations: ['metadata'],
+            }) as any;
+
+            const meta = response.metadata;
+            if (!meta?.success || !meta.patch_data) return;
+            const pd = meta.patch_data;
+
+            if (section === 'identifiers') {
+                const idFields = IDENTIFIER_TYPES.map(t => t.toLowerCase());
+                let filled = 0;
+                for (const f of idFields) {
+                    const provVal = pd[`identifier_${f}`];
+                    if (provVal) {
+                        setIdentifierByType(f.toUpperCase(), provVal);
+                        filled++;
+                    }
+                }
+                if (filled > 0) {
+                    toasts.success(`Identifiers updated (${filled} fields)`);
+                } else {
+                    toasts.info($t('assets.identifiers.askProviderHint') + ' — no data from provider');
+                }
+            } else if (section === 'sector') {
+                const cpData = pd.classification_params;
+                if (cpData?.sector_area) {
+                    sectorDistribution = cpData.sector_area.distribution ?? cpData.sector_area;
+                    toasts.success($t('assets.modal.sectorDistribution') + ' ✔');
+                } else {
+                    toasts.info($t('assets.modal.sectorDistribution') + ' — no data from provider');
+                }
+            } else if (section === 'geographic') {
+                const cpData = pd.classification_params;
+                if (cpData?.geographic_area) {
+                    geographicDistribution = cpData.geographic_area.distribution ?? cpData.geographic_area;
+                    toasts.success($t('assets.modal.geographicDistribution') + ' ✔');
+                } else {
+                    toasts.info($t('assets.modal.geographicDistribution') + ' — no data from provider');
+                }
+            }
+        } catch (e: any) {
+            console.error(`Ask Provider (${section}) failed:`, e);
+        } finally {
+            askingProvider = false;
         }
     }
 
-    function getIdentifierValue(field: string): string {
-        switch (field) {
-            case 'identifier_isin': return identifierIsin;
-            case 'identifier_ticker': return identifierTicker;
-            case 'identifier_cusip': return identifierCusip;
-            case 'identifier_sedol': return identifierSedol;
-            case 'identifier_figi': return identifierFigi;
-            case 'identifier_uuid': return identifierUuid;
-            case 'identifier_other': return identifierOther;
-            default: return '';
+    /** Generic setter used by comparison logic */
+    function setFieldValue(field: string, value: string) {
+        if (field.startsWith('identifier_')) {
+            const idType = fieldToIdType(field);
+            setIdentifierByType(idType, value);
+        } else {
+            switch (field) {
+                case 'display_name': displayName = value; break;
+                case 'asset_type': assetType = value; break;
+                case 'currency': currency = value; break;
+                case 'short_description': shortDescription = value; break;
+            }
         }
     }
 
-    function setIdentifierValue(field: string, value: string) {
-        switch (field) {
-            case 'identifier_isin': identifierIsin = value; break;
-            case 'identifier_ticker': identifierTicker = value; break;
-            case 'identifier_cusip': identifierCusip = value; break;
-            case 'identifier_sedol': identifierSedol = value; break;
-            case 'identifier_figi': identifierFigi = value; break;
-            case 'identifier_uuid': identifierUuid = value; break;
-            case 'identifier_other': identifierOther = value; break;
+    /** Apply selected fields from ProviderComparisonModal */
+    function handleComparisonApply(selectedFields: string[]) {
+        for (const diff of comparisonDifferences) {
+            if (selectedFields.includes(diff.field)) {
+                if (diff.type === 'string') {
+                    setFieldValue(diff.field, diff.providerValue);
+                } else if (diff.type === 'distribution') {
+                    if (diff.field === 'sector_area') {
+                        sectorDistribution = diff.providerValue?.distribution ?? diff.providerValue;
+                    } else if (diff.field === 'geographic_area') {
+                        geographicDistribution = diff.providerValue?.distribution ?? diff.providerValue;
+                    }
+                }
+                autoFilledFields = new Set([...autoFilledFields, diff.field]);
+            }
         }
+        showComparisonModal = false;
     }
 
     // =========================================================================
@@ -363,30 +642,36 @@
                 await saveCreate();
             }
         } catch (e: any) {
+            console.error('Save failed:', e);
             if (e?.response?.status === 409) {
                 formError = $t('assets.modal.duplicateName');
             } else {
                 formError = e?.message || 'Save failed';
             }
+            // Scroll error into view
+            setTimeout(() => {
+                document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+            }, 50);
         } finally {
             saving = false;
         }
     }
 
     async function saveCreate() {
+        // Build classification_params if any fields are set
+        const classificationParams: any = {};
+        if (shortDescription) classificationParams.short_description = shortDescription;
+        if (Object.keys(sectorDistribution).length > 0) classificationParams.sector_area = {distribution: sectorDistribution};
+        if (Object.keys(geographicDistribution).length > 0) classificationParams.geographic_area = {distribution: geographicDistribution};
+
         // Step 1: Create asset
         const createPayload = [{
             display_name: displayName.trim(),
             currency: currency,
             asset_type: assetType,
             icon_url: iconUrl || undefined,
-            identifier_isin: identifierIsin || undefined,
-            identifier_ticker: identifierTicker || undefined,
-            identifier_cusip: identifierCusip || undefined,
-            identifier_sedol: identifierSedol || undefined,
-            identifier_figi: identifierFigi || undefined,
-            identifier_uuid: identifierUuid || undefined,
-            identifier_other: identifierOther || undefined,
+            classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : undefined,
+            ...identifierRowsToColumns(identifierRows),
         }];
 
         const createResp = await zodiosApi.create_assets_bulk_api_v1_assets_post(createPayload as any) as any;
@@ -396,18 +681,26 @@
         }
         const assetId = result.asset_id;
 
-        // Step 2: Assign provider if configured
+        // Step 2: Assign provider (separate try/catch — asset already created)
         if (hasProvider) {
-            const assignPayload = [{
-                asset_id: assetId,
-                provider_code: providerCode,
-                identifier: providerIdentifier,
-                identifier_type: providerIdentifierType,
-                provider_params: providerParams,
-                fetch_interval: 1440,
-                user_url: providerUserUrl || undefined,
-            }];
-            await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
+            try {
+                const assignPayload = [{
+                    asset_id: assetId,
+                    provider_code: providerCode,
+                    identifier: providerIdentifier,
+                    identifier_type: providerIdentifierType,
+                    provider_params: providerParams,
+                    fetch_interval: 1440,
+                    user_url: providerUserUrl || undefined,
+                }];
+                await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
+            } catch (assignErr: any) {
+                console.error('Provider assignment failed after asset creation:', assignErr);
+                toasts.warning($t('assets.modal.createSuccessProviderFailed', {values: {name: displayName}}));
+                open = false;
+                oncreated?.();
+                return;
+            }
         }
 
         toasts.success($t('assets.modal.createSuccess', {values: {name: displayName}}));
@@ -416,20 +709,28 @@
     }
 
     async function saveEdit(assetId: number) {
+        // Build classification_params
+        const classificationParams: any = {};
+        if (shortDescription) classificationParams.short_description = shortDescription;
+        if (Object.keys(sectorDistribution).length > 0) classificationParams.sector_area = {distribution: sectorDistribution};
+        if (Object.keys(geographicDistribution).length > 0) classificationParams.geographic_area = {distribution: geographicDistribution};
+
         // Step 1: Patch asset
+        const idCols = identifierRowsToColumns(identifierRows);
         const patchPayload = [{
             asset_id: assetId,
             display_name: displayName.trim(),
             currency: currency,
             asset_type: assetType,
             icon_url: iconUrl,
-            identifier_isin: identifierIsin || null,
-            identifier_ticker: identifierTicker || null,
-            identifier_cusip: identifierCusip || null,
-            identifier_sedol: identifierSedol || null,
-            identifier_figi: identifierFigi || null,
-            identifier_uuid: identifierUuid || null,
-            identifier_other: identifierOther || null,
+            classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
+            identifier_isin: idCols.identifier_isin || null,
+            identifier_ticker: idCols.identifier_ticker || null,
+            identifier_cusip: idCols.identifier_cusip || null,
+            identifier_sedol: idCols.identifier_sedol || null,
+            identifier_figi: idCols.identifier_figi || null,
+            identifier_uuid: idCols.identifier_uuid || null,
+            identifier_other: idCols.identifier_other || null,
         }];
 
         await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
@@ -463,12 +764,18 @@
     // =========================================================================
 
     function handleClose() {
+        if (isDirty) {
+            showDiscardConfirm = true;
+            return;
+        }
+        doClose();
+    }
+
+    function doClose() {
+        showDiscardConfirm = false;
         open = false;
         onclose?.();
     }
-
-    // Asset types
-    const ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'];
 </script>
 
 <ModalBase
@@ -493,16 +800,37 @@
 
         <!-- Asset Details -->
         <div class="space-y-3">
-            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {$t('assets.modal.assetDetails')}
+            <div class="flex items-center justify-between">
+                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    {$t('assets.modal.assetDetails')}
+                </div>
+                <!-- Ask Provider global button -->
+                <button
+                        type="button"
+                        onclick={handleAskProvider}
+                        disabled={!hasProvider || askingProvider}
+                        class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md
+                               bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
+                               text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600
+                               disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title={!hasProvider ? $t('assets.identifiers.askProviderHint') : ''}
+                >
+                    {#if askingProvider}
+                        <Loader2 size={12} class="animate-spin"/>
+                    {:else}
+                        <RefreshCw size={12}/>
+                    {/if}
+                    <span>{$t('assets.identifiers.askProvider')}</span>
+                </button>
             </div>
 
             <!-- Display Name -->
             <div>
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <label for="asset-display-name" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     {$t('common.name')} *
                 </label>
                 <input
+                        id="asset-display-name"
                         type="text"
                         bind:value={displayName}
                         placeholder="Apple Inc."
@@ -516,26 +844,34 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <!-- Asset Type -->
                 <div>
-                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                         {$t('assets.type')} *
-                    </label>
-                    <select
+                    </span>
+                    <SimpleSelect
                             bind:value={assetType}
-                            class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                   bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                            options={assetTypeOptions}
+                            dropdownPosition="auto"
                     >
-                        {#each ASSET_TYPES as at}
-                            <option value={at}>{$t(`assets.types.${at}`) || at}</option>
-                        {/each}
-                    </select>
+                        {#snippet item(opt)}
+                            <div class="flex items-center gap-2">
+                                <img src={opt.icon} alt="" class="w-4 h-4 object-contain"/>
+                                <span>{opt.label}</span>
+                            </div>
+                        {/snippet}
+                        {#snippet selectedItem(opt)}
+                            <div class="flex items-center gap-2">
+                                <img src={opt.icon} alt="" class="w-4 h-4 object-contain"/>
+                                <span>{opt.label}</span>
+                            </div>
+                        {/snippet}
+                    </SimpleSelect>
                 </div>
 
                 <!-- Currency -->
                 <div>
-                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                         {$t('common.currency')} *
-                    </label>
+                    </span>
                     <CurrencySearchSelect
                             value={currency}
                             onchange={(v) => { if (v) currency = v; }}
@@ -545,119 +881,170 @@
             </div>
         </div>
 
-        <!-- Identifiers (collapsible) -->
-        <div class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button
-                    type="button"
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                    onclick={() => { identifiersExpanded = !identifiersExpanded; }}
+        <!-- Description (short, always visible) -->
+        <div>
+            <label for="asset-description" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                {$t('brokers.description')}
+            </label>
+            <textarea
+                    id="asset-description"
+                    bind:value={shortDescription}
+                    rows={2}
+                    placeholder="Brief description of the asset…"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                           placeholder-gray-400 dark:placeholder-gray-500
+                           focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green resize-none"
+            ></textarea>
+        </div>
+
+        <!-- More Info (collapsible — Identifiers + Classification) -->
+        <div class="border border-gray-200 dark:border-slate-700 rounded-lg">
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer select-none"
+                    role="button"
+                    tabindex="0"
+                    onclick={() => { moreInfoExpanded = !moreInfoExpanded; }}
+                    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); moreInfoExpanded = !moreInfoExpanded; } }}
             >
                 <div class="flex items-center gap-2">
-                    {#if identifiersExpanded}
+                    {#if moreInfoExpanded}
                         <ChevronDown size={16}/>
                     {:else}
                         <ChevronRight size={16}/>
                     {/if}
-                    <span>{$t('assets.modal.identifiers')}</span>
+                    <span>{$t('assets.modal.moreInfo')}</span>
                 </div>
-                <!-- Ask Provider button -->
-                {#if hasProvider}
-                    <button
-                            type="button"
-                            onclick={(e) => { e.stopPropagation(); handleAskProvider(); }}
-                            disabled={askingProvider}
-                            class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md
-                                   bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
-                                   text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600
-                                   disabled:opacity-50 transition-colors"
-                    >
-                        {#if askingProvider}
-                            <Loader2 size={12} class="animate-spin"/>
-                        {:else}
-                            <RefreshCw size={12}/>
-                        {/if}
-                        <span>{$t('assets.identifiers.askProvider')}</span>
-                    </button>
-                {/if}
-            </button>
+            </div>
 
-            {#if identifiersExpanded}
-                <div class="px-4 py-3 space-y-2 border-t border-gray-200 dark:border-slate-700">
-                    <div class="grid grid-cols-2 gap-3">
-                        <!-- ISIN -->
-                        <div>
-                            <label class="block text-[10px] font-medium text-gray-400 uppercase mb-0.5">ISIN</label>
-                            <div class="relative">
-                                <input type="text" bind:value={identifierIsin}
-                                       class="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-libre-green/50 {autoFilledFields.has('identifier_isin') ? 'border-green-400' : ''} {conflictFields.has('identifier_isin') ? 'border-amber-400' : ''}"/>
-                                {#if autoFilledFields.has('identifier_isin')}
-                                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-green-500 text-xs">✔</span>
-                                {/if}
-                                {#if conflictFields.has('identifier_isin')}
-                                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-xs" title="Provider suggests: {conflictFields.get('identifier_isin')}">⚠</span>
-                                {/if}
+            {#if moreInfoExpanded}
+                <div class="px-4 py-3 space-y-4 border-t border-gray-200 dark:border-slate-700">
+                    <!-- Sub-section: Identifiers -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                                {$t('assets.modal.identifiers')}
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" onclick={addIdentifierRow}
+                                        class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                        title={$t('assets.identifiers.addIdentifier')}>
+                                    <Plus size={10}/> {$t('assets.identifiers.addIdentifier')}
+                                </button>
+                                <button type="button" onclick={() => handleAskProviderSection('identifiers')}
+                                        disabled={!hasProvider || askingProvider}
+                                        class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        title={$t('assets.identifiers.askProvider')}>
+                                    {#if askingProvider}<Loader2 size={10} class="animate-spin"/>{:else}<RefreshCw size={10}/>{/if}
+                                    <span>{$t('assets.identifiers.askProvider')}</span>
+                                </button>
                             </div>
                         </div>
-                        <!-- Ticker -->
-                        <div>
-                            <label class="block text-[10px] font-medium text-gray-400 uppercase mb-0.5">Ticker</label>
-                            <div class="relative">
-                                <input type="text" bind:value={identifierTicker}
-                                       class="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-libre-green/50 {autoFilledFields.has('identifier_ticker') ? 'border-green-400' : ''} {conflictFields.has('identifier_ticker') ? 'border-amber-400' : ''}"/>
-                                {#if autoFilledFields.has('identifier_ticker')}
-                                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-green-500 text-xs">✔</span>
-                                {/if}
-                                {#if conflictFields.has('identifier_ticker')}
-                                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-xs" title="Provider suggests: {conflictFields.get('identifier_ticker')}">⚠</span>
-                                {/if}
-                            </div>
+                        {#if identifierRows.length > 0}
+                            <DataTable
+                                    data={identifierRows}
+                                    columns={identifierColumns}
+                                    getRowId={(r) => r.id}
+                                    storageKey="asset-modal-identifiers"
+                                    enableSelection={false}
+                                    enablePagination={false}
+                                    enableColumnFilters={false}
+                                    enableSorting={false}
+                                    enableColumnResize={false}
+                                    enableColumnVisibility={false}
+                                    enableActions={true}
+                                    actionsColumnWidth="40px"
+                                    rowActions={identifierRowActions}
+                                    tableLayout="auto"
+                            />
+                        {:else}
+                            <div class="text-xs text-gray-400 italic py-1">{$t('assets.identifiers.askProviderHint')}</div>
+                        {/if}
+                    </div>
+
+                    <!-- Sub-section: Classification -->
+                    <div class="space-y-3">
+                        <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                            {$t('assets.modal.classification')}
                         </div>
-                        <!-- CUSIP -->
-                        <div>
-                            <label class="block text-[10px] font-medium text-gray-400 uppercase mb-0.5">CUSIP</label>
-                            <input type="text" bind:value={identifierCusip}
-                                   class="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-libre-green/50"/>
-                        </div>
-                        <!-- SEDOL -->
-                        <div>
-                            <label class="block text-[10px] font-medium text-gray-400 uppercase mb-0.5">SEDOL</label>
-                            <input type="text" bind:value={identifierSedol}
-                                   class="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-libre-green/50"/>
-                        </div>
-                        <!-- FIGI -->
-                        <div>
-                            <label class="block text-[10px] font-medium text-gray-400 uppercase mb-0.5">FIGI</label>
-                            <input type="text" bind:value={identifierFigi}
-                                   class="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-libre-green/50"/>
-                        </div>
+
+                        <!-- Sector Distribution -->
+                        <DistributionEditor
+                                kind="sector"
+                                bind:value={sectorDistribution}
+                                {hasProvider}
+                                {askingProvider}
+                                onAskProvider={() => handleAskProviderSection('sector')}
+                        />
+
+                        <!-- Geographic Distribution -->
+                        <DistributionEditor
+                                kind="geographic"
+                                bind:value={geographicDistribution}
+                                {hasProvider}
+                                {askingProvider}
+                                onAskProvider={() => handleAskProviderSection('geographic')}
+                        />
                     </div>
                 </div>
             {/if}
         </div>
 
         <!-- Provider Assignment (collapsible) -->
-        <div class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button
-                    type="button"
-                    class="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                    onclick={() => { providerExpanded = !providerExpanded; }}
+        <div class="border border-gray-200 dark:border-slate-700 rounded-lg">
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 transition-colors select-none {providerNoProvider ? '' : 'hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer'}"
+                    role="button"
+                    tabindex="0"
+                    onclick={() => { if (!providerNoProvider) providerExpanded = !providerExpanded; }}
+                    onkeydown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !providerNoProvider) { e.preventDefault(); providerExpanded = !providerExpanded; } }}
             >
-                {#if providerExpanded}
-                    <ChevronDown size={16}/>
-                {:else}
-                    <ChevronRight size={16}/>
-                {/if}
-                <span>{$t('assets.provider.assignment')}</span>
-                {#if providerTestStatus === 'passed'}
-                    <span class="text-green-500 text-xs ml-1">✅</span>
-                {:else if providerTestStatus === 'failed'}
-                    <span class="text-red-500 text-xs ml-1">❌</span>
-                {:else if providerTestStatus === 'testing'}
-                    <Loader2 size={12} class="animate-spin text-gray-400 ml-1"/>
-                {/if}
-            </button>
+                <div class="flex items-center gap-2">
+                    {#if !providerNoProvider}
+                        {#if providerExpanded}
+                            <ChevronDown size={16}/>
+                        {:else}
+                            <ChevronRight size={16}/>
+                        {/if}
+                    {:else}
+                        <Minus size={16} class="text-gray-400"/>
+                    {/if}
+                    <span>{$t('assets.provider.assignment')}</span>
+                    {#if providerTestStatus === 'passed'}
+                        <span class="text-green-500 text-xs ml-1">✅</span>
+                    {:else if providerTestStatus === 'failed'}
+                        <span class="text-red-500 text-xs ml-1">❌</span>
+                    {:else if providerTestStatus === 'testing'}
+                        <Loader2 size={12} class="animate-spin text-gray-400 ml-1"/>
+                    {/if}
+                </div>
+                <!-- No Provider checkbox in header -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                        class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer"
+                        onclick={(e) => e.stopPropagation()}
+                        onkeydown={(e) => e.stopPropagation()}
+                >
+                    <input
+                            type="checkbox"
+                            id="no-provider-checkbox"
+                            checked={providerNoProvider}
+                            onchange={() => {
+                                providerNoProvider = !providerNoProvider;
+                                if (providerNoProvider) {
+                                    providerExpanded = false;
+                                    providerTestStatus = 'not_tested';
+                                }
+                            }}
+                            class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
+                    />
+                    <label for="no-provider-checkbox">{$t('assets.provider.noProvider')}</label>
+                </div>
+            </div>
 
-            {#if providerExpanded}
+            {#if providerExpanded && !providerNoProvider}
                 <div class="px-4 py-3 border-t border-gray-200 dark:border-slate-700">
                     <ProviderAssignmentSection
                             bind:providerCode
@@ -678,14 +1065,13 @@
         <!-- Auto-assign info banner -->
         {#if searchResultSelected && hasProvider && !editMode}
             <InfoBanner variant="info">
-                <Info size={14} class="shrink-0"/>
                 <span>{$t('assets.modal.autoAssignInfo', {values: {provider: providerCode}})}</span>
             </InfoBanner>
         {/if}
 
         <!-- Error -->
         {#if formError}
-            <div class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+            <div data-form-error class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
                 {formError}
             </div>
         {/if}
@@ -740,5 +1126,26 @@
         }}
         onCancel={() => { showIdentifierChangeConfirm = false; pendingSearchResult = null; }}
         zIndex={70}
+/>
+
+<!-- Confirmation: Discard unsaved changes -->
+<ConfirmModal
+        open={showDiscardConfirm}
+        title={$t('common.discardChanges')}
+        message={$t('common.discardChangesMessage')}
+        confirmText={$t('common.discardAndClose')}
+        cancelText={$t('common.continueEditing')}
+        warning={true}
+        onConfirm={() => doClose()}
+        onCancel={() => { showDiscardConfirm = false; }}
+        zIndex={70}
+/>
+
+<!-- Provider Comparison Modal -->
+<ProviderComparisonModal
+        bind:open={showComparisonModal}
+        differences={comparisonDifferences}
+        onapply={handleComparisonApply}
+        oncancel={() => { showComparisonModal = false; }}
 />
 

@@ -6,53 +6,63 @@
   Deduplicates the pattern used identically in BrokerForm (icon)
   and ProfileTab (avatar), and any future image picker needs.
 
+  Svelte 5 runes.
+
   Usage:
     <ImagePickerWrapper
         preset="avatar"
         title={$_('settings.selectAvatar')}
         initialUrl={avatarUrl}
         circularPreview={true}
-        on:change={(e) => avatarUrl = e.detail.url}
-        on:cancel={() => {}}
+        onchange={(url) => avatarUrl = url}
+        oncancel={() => {}}
     />
 -->
 <script lang="ts">
-    import {createEventDispatcher} from 'svelte';
     import AssetPickerModal from './AssetPickerModal.svelte';
     import ImageEditModal from './ImageEditModal.svelte';
     import type {PresetName} from '$lib/utils/imageCrop';
 
-    // Props
-    /** Whether the picker modal is open */
-    export let open: boolean = false;
-    /** Title for the AssetPickerModal */
-    export let title: string = '';
-    /** Preset for ImageEditModal (avatar, broker-icon, custom) */
-    export let preset: PresetName = 'custom';
-    /** Pre-populate URL input with existing value */
-    export let initialUrl: string = '';
-    /** Show circular preview overlay */
-    export let circularPreview: boolean = false;
-    /** Filter to only show images in the existing tab */
-    export let filterImages: boolean = true;
+    interface Props {
+        /** Whether the picker modal is open */
+        open?: boolean;
+        /** Title for the AssetPickerModal */
+        title?: string;
+        /** Preset for ImageEditModal (avatar, broker-icon, asset-icon, custom) */
+        preset?: PresetName;
+        /** Pre-populate URL input with existing value */
+        initialUrl?: string;
+        /** Show circular preview overlay */
+        circularPreview?: boolean;
+        /** Filter to only show images in the existing tab */
+        filterImages?: boolean;
+        /** Callback when a URL is selected */
+        onchange?: (url: string) => void;
+        /** Callback when the picker is cancelled */
+        oncancel?: () => void;
+    }
 
-    const dispatch = createEventDispatcher<{
-        /** Emitted when a URL is selected (from URL tab, existing tab, or after upload+crop) */
-        change: { url: string };
-        /** Emitted when the picker is cancelled */
-        cancel: void;
-    }>();
+    let {
+        open = $bindable(false),
+        title = '',
+        preset = 'custom',
+        initialUrl = '',
+        circularPreview = false,
+        filterImages = true,
+        onchange,
+        oncancel,
+    }: Props = $props();
 
     // Internal state
-    let showImageEditor = false;
-    let imageEditorFile: File | null = null;
+    let showImageEditor = $state(false);
+    let imageEditorFile = $state<File | null>(null);
 
     // Handle asset picker selection (URL or existing file)
     function handlePickerSelect(event: CustomEvent<{ url: string }>) {
         const url = event.detail.url;
         if (!url || url === '__upload__') return;
         open = false;
-        dispatch('change', {url});
+        onchange?.(url);
     }
 
     // Handle asset picker upload request
@@ -66,7 +76,7 @@
     // Handle picker cancel
     function handlePickerCancel() {
         open = false;
-        dispatch('cancel');
+        oncancel?.();
     }
 
     // Handle image editor complete (upload done, got URL)
@@ -74,7 +84,7 @@
         showImageEditor = false;
         imageEditorFile = null;
         if (event.detail.url) {
-            dispatch('change', {url: event.detail.url});
+            onchange?.(event.detail.url);
         }
     }
 
@@ -113,4 +123,3 @@
         open={showImageEditor}
         {preset}
 />
-

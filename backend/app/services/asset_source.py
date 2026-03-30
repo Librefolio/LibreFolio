@@ -28,7 +28,7 @@ import json
 import time
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, AsyncGenerator
 
 import structlog
 from sqlalchemy import select, delete, and_, or_, func
@@ -1396,7 +1396,7 @@ class AssetSourceManager:
         Fetches all prices in one query and partitions the result by asset_id.
         Each asset then gets its own backward-filled series.
 
-        This method reads ONLY from DB — it does NOT delegate to providers.
+        This method reads ONLY from DB — it does not delegate to providers.
         Provider fetch is a separate operation (POST /assets/prices/sync).
         """
         from backend.app.schemas.prices import FAPriceQueryResult
@@ -2614,6 +2614,15 @@ class AssetSearchService:
                         item.get("identifier_type"),
                         )
 
+                # Validate asset_type: fallback to OTHER if unknown
+                raw_asset_type = item.get("type")
+                if raw_asset_type and raw_asset_type not in AssetType.__members__:
+                    logger.warning(
+                        f"Unknown asset_type '{raw_asset_type}' from provider '{code}', "
+                        f"falling back to OTHER"
+                        )
+                    raw_asset_type = "OTHER"
+
                 results.append(
                     FAProviderSearchResultItem(
                         identifier=item.get("identifier", ""),
@@ -2621,7 +2630,7 @@ class AssetSearchService:
                         display_name=item.get("display_name", item.get("name", "")),
                         provider_code=code,
                         currency=item.get("currency"),
-                        asset_type=item.get("type"),
+                        asset_type=raw_asset_type,
                         provider_url=item_provider_url,
                         )
                     )
@@ -2633,3 +2642,113 @@ class AssetSearchService:
             providers_queried=providers_queried,
             providers_with_errors=providers_with_errors,
             )
+
+    @staticmethod
+    async def search_stream(
+        query: str, provider_codes: Optional[list[str]] = None
+        ) -> AsyncGenerator[str, None]:
+        """
+        Stream search results as SSE events, one event per provider completion.
+
+        Each provider runs concurrently; as each completes, its results are
+        yielded immediately as an SSE event.
+
+        SSE events:
+        - provider_results: {provider_code, results: [...]}
+        - done: {total_results, providers_queried, providers_with_errors}
+
+        Args:
+            query: Search query string
+            provider_codes: Optional list of provider codes to query.
+
+        Yields:
+            SSE-formatted strings: "data: {...}\\n\\n"
+        """
+        # Resolve providers
+        if not provider_codes:
+            all_providers = AssetProviderRegistry.list_providers()
+            provider_codes = [p["code"] for p in all_providers]
+
+        valid_providers: list[tuple[str, object]] = []
+        for code in provider_codes:
+            instance = AssetProviderRegistry.get_provider_instance(code)
+            if instance:
+                valid_providers.append((code, instance))
+
+        if not valid_providers:
+            yield f'data: {json.dumps({"event": "done", "total_results": 0, "providers_queried": [], "providers_with_errors": []})}\n\n'
+            return
+
+        queue: asyncio.Queue = asyncio.Queue()
+        total_results = 0
+        providers_queried: list[str] = []
+        providers_with_errors: list[str] = []
+
+        async def _search_one(code: str, provider: object):
+            """Run one provider search and put results on the queue."""
+            try:
+                items = await provider.search(query)
+                await queue.put((code, items, None))
+            except Exception as e:
+                logger.warning(f"Search stream: provider '{code}' error: {e}")
+                await queue.put((code, [], str(e)))
+
+        # Launch all providers concurrently
+        tasks = [
+            asyncio.create_task(_search_one(code, prov))
+            for code, prov in valid_providers
+            ]
+
+        # Yield results as they complete
+        completed = 0
+        while completed < len(tasks):
+            code, items, error = await queue.get()
+            completed += 1
+            providers_queried.append(code)
+
+            if error:
+                providers_with_errors.append(code)
+                yield f'data: {json.dumps({"event": "provider_error", "provider_code": code, "error": error})}\n\n'
+                continue
+
+            # Convert items to serializable dicts
+            result_items = []
+            for item in items:
+                # Compute provider_url
+                provider_instance = AssetProviderRegistry.get_provider_instance(code)
+                item_provider_url = None
+                if provider_instance:
+                    item_provider_url = provider_instance.get_asset_url(
+                        item.get("identifier", ""),
+                        item.get("identifier_type"),
+                        )
+
+                # Validate asset_type
+                raw_asset_type = item.get("type")
+                if raw_asset_type and raw_asset_type not in AssetType.__members__:
+                    raw_asset_type = "OTHER"
+
+                # Extract enum .value to avoid "IdentifierType.TICKER" serialization
+                raw_id_type = item.get("identifier_type", "")
+                id_type_str = raw_id_type.value if hasattr(raw_id_type, "value") else str(raw_id_type)
+
+                result_items.append({
+                    "identifier": item.get("identifier", ""),
+                    "identifier_type": id_type_str,
+                    "display_name": item.get("display_name", item.get("name", "")),
+                    "provider_code": code,
+                    "currency": item.get("currency"),
+                    "asset_type": raw_asset_type,
+                    "provider_url": item_provider_url,
+                    })
+
+            total_results += len(result_items)
+
+            yield f'data: {json.dumps({"event": "provider_results", "provider_code": code, "results": result_items})}\n\n'
+
+        # Final event
+        yield f'data: {json.dumps({"event": "done", "total_results": total_results, "providers_queried": providers_queried, "providers_with_errors": providers_with_errors})}\n\n'
+
+        # Ensure all tasks are awaited
+        await asyncio.gather(*tasks, return_exceptions=True)
+

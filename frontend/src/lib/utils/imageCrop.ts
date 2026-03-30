@@ -44,7 +44,7 @@ export interface ImagePreset {
     titleKey: string;         // i18n key for modal title
 }
 
-export type PresetName = 'avatar' | 'broker-icon' | 'custom';
+export type PresetName = 'avatar' | 'broker-icon' | 'asset-icon' | 'custom';
 
 // =============================================================================
 // PRESETS
@@ -63,6 +63,14 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
         aspectRatio: 1,           // 1:1 square
         outputWidth: 64,
         outputHeight: 64,
+        outputFormat: 'png',
+        outputQuality: 0.9,
+        titleKey: 'uploads.editIcon',
+    },
+    'asset-icon': {
+        aspectRatio: 1,           // 1:1 square
+        outputWidth: 256,
+        outputHeight: 256,
         outputFormat: 'png',
         outputQuality: 0.9,
         titleKey: 'uploads.editIcon',

@@ -266,6 +266,10 @@ class ProbeOperation(str, Enum):
     METADATA = "metadata"
 
 
+# Build field description dynamically from enum values
+_PROBE_OPS_ALLOWED = ", ".join(f"'{op.value}'" for op in ProbeOperation)
+
+
 class FAProviderProbeRequest(FAProviderConfigBase):
     """Probe request — extends config base with operation selection.
 
@@ -273,7 +277,11 @@ class FAProviderProbeRequest(FAProviderConfigBase):
     from FAProviderConfigBase. Adds operations list to select which
     probe operations to execute.
     """
-    operations: List[ProbeOperation] = Field(..., min_length=1, description="Operations to execute: current_price, history, metadata")
+    operations: List[ProbeOperation] = Field(
+        ...,
+        min_length=1,
+        description=f"Operations to execute. Allowed values: {_PROBE_OPS_ALLOWED}",
+    )
 
 
 class BaseProbeOperationResult(BaseModel):

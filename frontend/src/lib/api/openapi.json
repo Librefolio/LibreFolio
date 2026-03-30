@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.9-dirty"
+    "version": "v0.5.9-1-gbe0e124-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -2088,6 +2088,69 @@
         }
       }
     },
+    "/api/v1/assets/provider/search/stream": {
+      "get": {
+        "tags": [
+          "FA (Financial Assets)",
+          "FA Provider"
+        ],
+        "summary": "Search Assets Stream",
+        "description": "Stream search results via Server-Sent Events (SSE).\n\nEach provider returns results as soon as it completes, without waiting\nfor slower providers. Events:\n- `provider_results`: results from one provider\n- `provider_error`: a provider failed\n- `done`: all providers finished\n\nUse `fetch()` + `ReadableStream` on the frontend.",
+        "operationId": "search_assets_stream_api_v1_assets_provider_search_stream_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Search query",
+              "title": "Q"
+            },
+            "description": "Search query"
+          },
+          {
+            "name": "providers",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated provider codes (default: all)",
+              "title": "Providers"
+            },
+            "description": "Comma-separated provider codes (default: all)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assets/provider/probe": {
       "post": {
         "tags": [
@@ -2095,7 +2158,6 @@
           "FA Provider"
         ],
         "summary": "Probe Provider Config",
-        "description": "Probe a provider configuration without persisting anything (dry-run).\n\nExecutes selected operations against the provider and returns results\nwith per-operation execution time. Nothing is stored in the database.\n\nOperations:\n- current_price: Fetch latest price\n- history: Fetch last 7 days of price history\n- metadata: Fetch asset metadata (identifiers, type, classification)\n\nUse cases:\n- Test provider configuration before assigning\n- \"Ask Provider\" button to fetch identifiers\n- Verify provider is working correctly",
         "operationId": "probe_provider_config_api_v1_assets_provider_probe_post",
         "requestBody": {
           "content": {
@@ -3989,10 +4051,11 @@
           "FUND",
           "CROWDFUND_LOAN",
           "HOLD",
+          "INDEX",
           "OTHER"
         ],
         "title": "AssetType",
-        "description": "Asset type classification.\n\nUsage: Categorize assets by their nature for reporting and analysis.\n\n- STOCK: Individual company shares (e.g., Apple, Microsoft)\n- ETF: Exchange Traded Fund (e.g., VWCE, SPY)\n- BOND: Fixed income securities (government or corporate bonds)\n- CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)\n- FUND: Mutual funds or investment funds\n- HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)\n- CROWDFUND_LOAN: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)\n- OTHER: Any other asset type not listed above\n\nImpact:\n- Affects default valuation_model:\n  - CROWDFUND_LOAN -> SCHEDULED_YIELD\n  - HOLD -> MANUAL\n  - Others -> MARKET_PRICE\n- Used for portfolio breakdown and allocation analysis\n- May influence available data plugins (e.g., crypto uses different sources)"
+        "description": "Asset type classification.\n\nUsage: Categorize assets by their nature for reporting and analysis.\n\n- STOCK: Individual company shares (e.g., Apple, Microsoft)\n- ETF: Exchange Traded Fund (e.g., VWCE, SPY)\n- BOND: Fixed income securities (government or corporate bonds)\n- CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)\n- FUND: Mutual funds or investment funds\n- HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)\n- CROWDFUND_LOAN: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)\n- INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) \u2014 no transactions allowed\n- OTHER: Any other asset type not listed above\n\nImpact:\n- Affects default valuation_model:\n  - CROWDFUND_LOAN -> SCHEDULED_YIELD\n  - HOLD -> MANUAL\n  - INDEX -> MARKET_PRICE (read-only benchmark, no transactions)\n  - Others -> MARKET_PRICE\n- Used for portfolio breakdown and allocation analysis\n- May influence available data plugins (e.g., crypto uses different sources)"
       },
       "AuthLoginRequest": {
         "properties": {
@@ -7916,7 +7979,7 @@
             "type": "array",
             "minItems": 1,
             "title": "Operations",
-            "description": "Operations to execute: current_price, history, metadata"
+            "description": "Operations to execute. Allowed values: 'current_price', 'history', 'metadata'"
           }
         },
         "additionalProperties": false,
