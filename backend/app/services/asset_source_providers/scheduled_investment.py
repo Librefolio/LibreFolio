@@ -53,6 +53,7 @@ from backend.app.db.models import (
     TransactionType,
     AssetProviderAssignment,
     IdentifierType,
+    ProviderInputType,
     )
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
@@ -95,7 +96,6 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
     @property
     def accepted_identifier_types(self) -> list:
-        from backend.app.db.models import ProviderInputType
         return [ProviderInputType.AUTO_GENERATED]
 
     @property

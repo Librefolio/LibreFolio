@@ -840,12 +840,12 @@ class AssetProviderAssignment(SQLModel, table=True):
 
     2. cssscraper (Custom CSS-based web scraper):
        - identifier: Full URL to scrape
-       - identifier_type: OTHER
+       - identifier_type: URL
        - provider_params: {"selector": ".price", "currency": "EUR"}
 
     3. scheduled_investment (Synthetic yield calculator):
-       - identifier: Asset ID as string or UUID
-       - identifier_type: UUID
+       - identifier: Auto-generated UUID
+       - identifier_type: AUTO_GENERATED
        - provider_params: FAScheduledInvestmentSchedule JSON
 
     Notes:
@@ -865,7 +865,7 @@ class AssetProviderAssignment(SQLModel, table=True):
     asset_id: int = Field(foreign_key="assets.id", nullable=False, unique=True, description="Asset ID (1-to-1 relationship)", )
     provider_code: str = Field(max_length=50, nullable=False, description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)", )
     identifier: str = Field(nullable=False, description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)", )
-    identifier_type: IdentifierType = Field(nullable=False, description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)")
+    identifier_type: ProviderInputType = Field(nullable=False, description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED)")
     provider_params: Optional[str] = Field(default=None, sa_column=Column(Text), description="JSON configuration for provider (validated by plugin)", )
     last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
     fetch_interval: Optional[int] = Field(default=None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)")
