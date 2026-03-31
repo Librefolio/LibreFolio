@@ -475,11 +475,15 @@ def normalize_country_keys(data: dict[str, Any]) -> dict[str, Decimal]:
     normalized: dict[str, Decimal] = {}
 
     for country_input, weight_value in data.items():
-        # Normalize country code
-        try:
-            iso3_code = normalize_country_to_iso3(country_input)
-        except ValueError as e:
-            raise ValueError(f"Invalid country '{country_input}': {e}")
+        # "Other" is a special catch-all key — pass through without normalization
+        if country_input.strip().lower() == "other":
+            iso3_code = "Other"
+        else:
+            # Normalize country code
+            try:
+                iso3_code = normalize_country_to_iso3(country_input)
+            except ValueError as e:
+                raise ValueError(f"Invalid country '{country_input}': {e}")
 
         # Check for duplicates (after normalization)
         if iso3_code in normalized:

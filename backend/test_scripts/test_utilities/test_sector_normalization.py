@@ -97,6 +97,7 @@ class TestFinancialSectorFromString:
             ("healthcare", FinancialSector.HEALTH_CARE),  # No space
             ("materials", FinancialSector.BASIC_MATERIALS),  # Short form
             ("telecom", FinancialSector.TELECOMMUNICATION),  # Short form
+            ("HealthCare", FinancialSector.HEALTH_CARE),
             ],
         )
     def test_aliases(self, input_val, expected):

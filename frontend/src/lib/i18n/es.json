@@ -58,7 +58,9 @@
     "icon": "Icono",
     "custom": "Personalizado",
     "name": "Nombre",
-    "currency": "Divisa"
+    "currency": "Divisa",
+    "other": "Otro",
+    "date": "Fecha"
   },
   "table": {
     "columns": "Columnas",
@@ -339,7 +341,9 @@
       "askProviderHint": "Obtener identificadores del proveedor asignado",
       "autoFilled": "Completado automáticamente por el proveedor",
       "conflictWarning": "El proveedor sugiere un valor diferente",
-      "addIdentifier": "Añadir identificador"
+      "addIdentifier": "Añadir identificador",
+      "deleteSelected": "Eliminar identificadores seleccionados",
+      "deleteConfirmMessage": "¿Eliminar {count} identificadores?"
     },
     "confirm": {
       "saveWithoutTest": "¿Guardar sin probar?",
@@ -363,14 +367,20 @@
       "selectAll": "Seleccionar todo",
       "deselectAll": "Deseleccionar todo",
       "applySelected": "Aplicar seleccionados ({count}/{total})",
-      "allMatch": "Todos los datos coinciden con el proveedor"
+      "allMatch": "Todos los datos coinciden con el proveedor",
+      "noDistributionData": "El proveedor no tiene datos para: {fields}"
     },
     "distribution": {
       "total": "Total",
       "excess": "exceso",
       "missing": "faltante",
       "addSector": "Agregar sector",
-      "addCountry": "Agregar pais"
+      "addCountry": "Agregar pais",
+      "emptyHint": "Sin datos — usa +Agregar o Preguntar al Proveedor",
+      "balanceRow": "Equilibrar al 100%",
+      "balanceSelected": "Equilibrar filas seleccionadas",
+      "deleteSelected": "Eliminar filas seleccionadas",
+      "deleteConfirmMessage": "¿Eliminar {count} entradas de esta distribución?"
     }
   },
   "transactions": {
@@ -624,7 +634,8 @@
     "imageUrl": "URL de la Imagen",
     "useSelected": "Usar Seleccionado",
     "selectIcon": "Seleccionar Icono",
-    "urlHint": "Introduce una URL remota o una ruta local desde Archivos"
+    "urlHint": "Introduce una URL remota o una ruta local desde Archivos",
+    "removeImage": "Eliminar imagen"
   },
   "datePicker": {
     "from": "Desde",

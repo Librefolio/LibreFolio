@@ -26,6 +26,7 @@ from backend.app.schemas.assets import (
 from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.sector_fin_utils import validate_sector
 
 try:
     import justetf_scraping
@@ -387,6 +388,16 @@ class JustETFProvider(AssetSourceProvider):
                     sector_distribution = {
                         k: v / sector_total for k, v in sector_distribution.items()
                         }
+                    # Log warning for unknown sectors before normalization
+                    for sector_name in sector_distribution:
+                        if not validate_sector(sector_name):
+                            logger.warning(
+                                "Unknown sector from provider, mapped to Other",
+                                provider_code="justetf",
+                                identifier=identifier,
+                                original_sector=sector_name,
+                                mapped_to="Other",
+                                )
                     try:
                         # FASectorArea will normalize sector names using FinancialSector enum
                         sector_area = FASectorArea(distribution=sector_distribution)

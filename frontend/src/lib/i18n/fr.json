@@ -58,7 +58,9 @@
     "icon": "Icône",
     "custom": "Personnalisé",
     "name": "Nom",
-    "currency": "Devise"
+    "currency": "Devise",
+    "other": "Autre",
+    "date": "Date"
   },
   "table": {
     "columns": "Colonnes",
@@ -339,7 +341,9 @@
       "askProviderHint": "Récupérer les identifiants du fournisseur attribué",
       "autoFilled": "Rempli automatiquement par le fournisseur",
       "conflictWarning": "Le fournisseur suggère une valeur différente",
-      "addIdentifier": "Ajouter identifiant"
+      "addIdentifier": "Ajouter identifiant",
+      "deleteSelected": "Supprimer les identifiants sélectionnés",
+      "deleteConfirmMessage": "Supprimer {count} identifiants ?"
     },
     "confirm": {
       "saveWithoutTest": "Enregistrer sans test ?",
@@ -363,14 +367,20 @@
       "selectAll": "Tout selectionner",
       "deselectAll": "Tout deselectionner",
       "applySelected": "Appliquer la selection ({count}/{total})",
-      "allMatch": "Toutes les donnees correspondent au fournisseur"
+      "allMatch": "Toutes les donnees correspondent au fournisseur",
+      "noDistributionData": "Le fournisseur n'a pas de données pour : {fields}"
     },
     "distribution": {
       "total": "Total",
       "excess": "exces",
       "missing": "manquant",
       "addSector": "Ajouter un secteur",
-      "addCountry": "Ajouter un pays"
+      "addCountry": "Ajouter un pays",
+      "emptyHint": "Aucune donnée — utilisez +Ajouter ou Demander au Fournisseur",
+      "balanceRow": "Équilibrer à 100%",
+      "balanceSelected": "Équilibrer les lignes sélectionnées",
+      "deleteSelected": "Supprimer les lignes sélectionnées",
+      "deleteConfirmMessage": "Supprimer {count} entrées de cette distribution ?"
     }
   },
   "transactions": {
@@ -624,7 +634,8 @@
     "imageUrl": "URL de l'Image",
     "useSelected": "Utiliser la Sélection",
     "selectIcon": "Sélectionner une Icône",
-    "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers"
+    "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers",
+    "removeImage": "Supprimer l'image"
   },
   "datePicker": {
     "from": "Du",

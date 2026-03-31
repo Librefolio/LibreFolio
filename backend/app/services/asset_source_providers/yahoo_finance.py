@@ -36,6 +36,7 @@ from backend.app.schemas.assets import (
     FAClassificationParams,
     FASectorArea,
     )
+from backend.app.utils.sector_fin_utils import validate_sector
 
 logger = get_logger(__name__)
 
@@ -474,6 +475,15 @@ class YahooFinanceProvider(AssetSourceProvider):
             # Build FAClassificationParams
             classification_data = {"short_description": short_description}
             if sector:
+                # Log warning if sector is not in standard classification
+                if not validate_sector(sector):
+                    logger.warning(
+                        "Unknown sector from provider, mapped to Other",
+                        provider_code="yfinance",
+                        identifier=identifier,
+                        original_sector=sector,
+                        mapped_to="Other",
+                        )
                 # Convert single sector string to FASectorArea distribution
                 classification_data["sector_area"] = FASectorArea(
                     distribution={sector: Decimal("1.0")}

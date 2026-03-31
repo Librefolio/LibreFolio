@@ -3,20 +3,18 @@
  *
  * Replaces duplicated ASSET_TYPE_PNG_MAP in AssetIcon, AssetModal, AssetTable, ProviderAssignmentSection.
  * Single source of truth for asset type enums, identifier types, and their UI representation.
+ * Enum values are derived from Zod schemas in generated.ts (auto-generated from backend).
  *
  * @module utils/assetTypes
  */
 
+import {schemas} from '$lib/api/generated';
+
 // =============================================================================
-// ASSET TYPES
+// ASSET TYPES — derived from backend enum via Zod schema
 // =============================================================================
 
-export const ASSET_TYPES = [
-    'STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND',
-    'HOLD', 'CROWDFUND_LOAN', 'INDEX', 'OTHER',
-] as const;
-
-export type AssetTypeCode = typeof ASSET_TYPES[number];
+export const ASSET_TYPES = schemas.AssetType.options;
 
 /** Map asset type code → PNG filename in /icons/asset-types/ */
 const PNG_MAP: Record<string, string> = {
@@ -57,12 +55,54 @@ export function buildAssetTypeOptions(t: (key: string) => string): Array<{
 }
 
 // =============================================================================
-// IDENTIFIER TYPES
+// IDENTIFIER TYPES — derived from backend enum via Zod schema
 // =============================================================================
 
-export const IDENTIFIER_TYPES = [
-    'TICKER', 'ISIN', 'CUSIP', 'SEDOL', 'FIGI', 'UUID', 'OTHER',
-] as const;
+export const IDENTIFIER_TYPES = schemas.IdentifierType.options;
 
-export type IdentifierTypeCode = typeof IDENTIFIER_TYPES[number];
+// =============================================================================
+// SECTOR KEYS — loaded from backend via GET /utilities/sectors
+// =============================================================================
+
+import {getSectorKeys} from '$lib/stores/sectorStore';
+
+/**
+ * Static fallback used before sectorStore is loaded.
+ * Matches the backend FinancialSector enum — kept in sync manually
+ * as a safety net for the brief window before the API call completes.
+ */
+const SECTOR_KEYS_FALLBACK: readonly string[] = [
+    'Industrials', 'Technology', 'Financials', 'Consumer Discretionary',
+    'Health Care', 'Real Estate', 'Basic Materials', 'Energy',
+    'Consumer Staples', 'Telecommunication', 'Utilities', 'Other',
+];
+
+/**
+ * Get the standard financial sector keys.
+ *
+ * Returns data from the sectorStore (loaded from backend API) when available,
+ * otherwise falls back to a static list. Components using sector selects
+ * should call `ensureSectorsLoaded()` early to populate the store.
+ */
+export function getSectorKeysList(): readonly string[] {
+    const keys = getSectorKeys();
+    return keys.length > 0 ? keys : SECTOR_KEYS_FALLBACK;
+}
+
+/**
+ * @deprecated Use `getSectorKeysList()` for dynamic sector keys from backend.
+ * Kept as alias for backward compatibility during migration.
+ */
+export const SECTOR_KEYS = SECTOR_KEYS_FALLBACK;
+
+/**
+ * Convert a backend sector key (e.g. "Consumer Discretionary") to
+ * the corresponding i18n key (e.g. "ConsumerDiscretionary").
+ *
+ * Convention: strip spaces → PascalCase.
+ * Single-word keys like "Technology" pass through unchanged.
+ */
+export function sectorI18nKey(backendKey: string): string {
+    return backendKey.replaceAll(' ', '');
+}
 
