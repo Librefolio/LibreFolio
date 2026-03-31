@@ -60,9 +60,10 @@
     // Handle asset picker selection (URL or existing file)
     function handlePickerSelect(event: CustomEvent<{ url: string }>) {
         const url = event.detail.url;
-        if (!url || url === '__upload__') return;
+        if (url === '__upload__') return;
         open = false;
-        onchange?.(url);
+        // Empty string means "remove image" — pass it through to parent
+        onchange?.(url ?? '');
     }
 
     // Handle asset picker upload request

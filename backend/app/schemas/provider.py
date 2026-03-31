@@ -281,7 +281,7 @@ class FAProviderProbeRequest(FAProviderConfigBase):
         ...,
         min_length=1,
         description=f"Operations to execute. Allowed values: {_PROBE_OPS_ALLOWED}",
-    )
+        )
 
 
 class BaseProbeOperationResult(BaseModel):
@@ -313,6 +313,7 @@ class ProbeHistoryResult(BaseProbeOperationResult):
 
     points_count: Optional[int] = Field(None, description="Number of price points found")
     date_range: Optional[str] = Field(None, description="Date range of found data (start → end)")
+    sample_prices: Optional[list[dict]] = Field(None, description="Sample price points [{date: str, close: float}], max 10")
 
 
 class ProbeMetadataResult(BaseProbeOperationResult):

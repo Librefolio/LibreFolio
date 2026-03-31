@@ -1189,11 +1189,17 @@ class AssetSourceManager:
                     )
                 points = hist.prices if hist else []
                 date_range_str = None
+                sample = None
                 if points:
                     dates = [p.date for p in points]
                     date_range_str = f"{min(dates)} → {max(dates)}"
+                    sample = [
+                        {"date": str(p.date), "close": round(float(p.close), 2)}
+                        for p in points[:10]
+                    ]
                 return ProbeHistoryResult(
                     success=True, points_count=len(points), date_range=date_range_str,
+                    sample_prices=sample,
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                     )
             except asyncio.TimeoutError:

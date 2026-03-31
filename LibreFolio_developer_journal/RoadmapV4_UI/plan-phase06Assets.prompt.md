@@ -500,7 +500,7 @@ Migliorare `handleBulkDeleteAssets`:
 
 ### Step 3 — `AssetModal` + `AssetSearchAutocomplete` + Provider Probe (~2.5 giorni)
 
-> **📋 Piano dettagliato**: [`plan-phase06Step3AssetModal.prompt.md`](plan-phase06Step3AssetModal.prompt.md)
+> **📋 Piano dettagliato**: [`plan-phase06Step3AssetModal.prompt.md`](phases/phase-06-subplan/plan-phase06Step3AssetModal.prompt.md)
 >
 > Il piano dettagliato contiene 10 sotto-step con ASCII art complete, schema code, dependency graph,
 > e note implementative. Questo file riporta solo la sintesi.
@@ -959,7 +959,7 @@ src/routes/(app)/fx/+page.svelte                                   # aggiunta to
 | 2 | 1 | Asset list dual view + FX table view + ViewModeToggle |
 | 2b | 0.5 | Bugfix, migrazione, UX refinement |
 | 2c | 0.5 | Modali Sync-All e Multi-Delete |
-| 3 | 2.5 | AssetModal + Search + Probe + Provider Section ([dettaglio](plan-phase06Step3AssetModal.prompt.md)) |
+| 3 | 2.5 | AssetModal + Search + Probe + Provider Section ([dettaglio](phases/phase-06-subplan/plan-phase06Step3AssetModal.prompt.md)) |
 | 4 | 2 | Asset detail page + chart + data editor + provider + currency conversion |
 | 5 | 1 | AssetMatchingWizard (condiviso Phase 7) |
 | 6 | 1 | i18n, E2E test, docs, gallery |
@@ -984,7 +984,7 @@ Phase 6 — Step 1 (Backend: params_schema, fix perf) ✅
      │
      ├── Step 2c (Sync-All + Multi-Delete modals) ✅
      │
-     ├── Step 3 (AssetModal + Search + Probe) ← dettaglio in plan-phase06Step3AssetModal.prompt.md
+     ├── Step 3 (AssetModal + Search + Probe) ← dettaglio in phases/phase-06-subplan/plan-phase06Step3AssetModal.prompt.md
      │      │
      │      ▼
      ├── Step 4 (Asset Detail Page) ← dipende da Step 3 per edit modal + ProviderAssignmentSection

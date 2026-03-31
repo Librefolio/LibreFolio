@@ -120,9 +120,15 @@
     }
 
     function confirmSelection() {
-        if (activeTab === 'url' && urlValid) {
-            dispatch('select', {url: urlInput});
-            close();
+        if (activeTab === 'url') {
+            if (urlValid) {
+                dispatch('select', {url: urlInput});
+                close();
+            } else if (!urlInput && initialUrl) {
+                // User cleared the URL → dispatch empty to remove image
+                dispatch('select', {url: ''});
+                close();
+            }
         } else if (activeTab === 'existing' && selectedFile) {
             dispatch('select', {url: selectedFile.url});
             close();
@@ -215,12 +221,6 @@
         selectedFile = row;
         confirmSelection();
     }
-
-    /** Clear the URL and dispatch empty string to remove the icon */
-    function handleClearUrl() {
-        dispatch('select', {url: ''});
-        close();
-    }
 </script>
 
 <ModalBase
@@ -278,14 +278,6 @@
                         {/if}
                     </div>
                     <p class="url-hint">{$_('uploads.urlHint') || 'Enter a remote URL or a local path from Files'}</p>
-                    {#if initialUrl && !urlInput}
-                        <!-- Show remove button when user has cleared the URL -->
-                        <button type="button" class="btn btn-secondary" style="width:100%; margin-top:0.5rem; color:#dc2626; border-color:#fca5a5;"
-                                on:click={handleClearUrl}>
-                            <X size={14}/>
-                            <span style="margin-left:0.25rem;">{$_('uploads.removeImage') || 'Remove Image'}</span>
-                        </button>
-                    {/if}
                     {#if urlInput && urlValid}
                         <div class="url-preview" class:circular={circularPreview}>
                             <div class="url-preview-img-wrapper">
@@ -383,7 +375,7 @@
             <button class="btn btn-secondary" on:click={close} type="button">
                 {$_('common.cancel') || 'Cancel'}
             </button>
-            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid) || (activeTab === 'existing' && !selectedFile)}
+            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile)}
                     on:click={confirmSelection}
                     type="button">
                 {$_('uploads.useSelected') || 'Use Selected'}
