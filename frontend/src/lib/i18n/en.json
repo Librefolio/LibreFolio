@@ -303,6 +303,8 @@
       "saveChanges": "Save Changes",
       "autoAssignInfo": "Provider \"{provider}\" will be auto-assigned on create",
       "duplicateName": "An asset with this name already exists",
+      "duplicateNameWarning": "An asset named \"{name}\" already exists",
+      "duplicateNameTooltip": "An asset with this exact name already exists. You may want to edit the existing one instead of creating a new one.",
       "createSuccess": "\"{name}\" created successfully",
       "saveSuccess": "\"{name}\" updated successfully",
       "moreInfo": "More Info",
@@ -321,7 +323,7 @@
       "selectProvider": "Provider",
       "identifier": "Identifier",
       "identifierType": "Identifier Type",
-      "fetchInterval": "Fetch Interval (min)",
+      "fetchInterval": "Fetch Interval",
       "lastFetch": "Last Fetch",
       "neverFetched": "Never fetched"
     },

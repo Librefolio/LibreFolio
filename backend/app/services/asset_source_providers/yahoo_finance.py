@@ -85,6 +85,11 @@ class YahooFinanceProvider(AssetSourceProvider):
         return "Yahoo Finance"
 
     @property
+    def accepted_identifier_types(self) -> list:
+        from backend.app.db.models import ProviderInputType
+        return [ProviderInputType.TICKER, ProviderInputType.ISIN]
+
+    @property
     def get_icon(self) -> str:
         """Return provider icon URL (hardcoded)"""
         return "https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png"  # Yahoo Finance logo

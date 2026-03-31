@@ -303,6 +303,8 @@
       "saveChanges": "Enregistrer",
       "autoAssignInfo": "Le fournisseur \"{provider}\" sera attribué automatiquement à la création",
       "duplicateName": "Un actif avec ce nom existe déjà",
+      "duplicateNameWarning": "Un actif nommé \"{name}\" existe déjà",
+      "duplicateNameTooltip": "Un actif portant ce nom existe déjà. Vous pouvez modifier l'actif existant au lieu d'en créer un nouveau.",
       "createSuccess": "\"{name}\" créé avec succès",
       "saveSuccess": "\"{name}\" mis à jour avec succès",
       "moreInfo": "Plus d'infos",
@@ -321,7 +323,7 @@
       "selectProvider": "Fournisseur",
       "identifier": "Identifiant",
       "identifierType": "Type d'Identifiant",
-      "fetchInterval": "Intervalle de mise a jour (min)",
+      "fetchInterval": "Intervalle de mise a jour",
       "lastFetch": "Derniere mise a jour",
       "neverFetched": "Jamais execute"
     },

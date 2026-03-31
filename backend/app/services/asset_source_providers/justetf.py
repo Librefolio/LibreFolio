@@ -104,6 +104,11 @@ class JustETFProvider(AssetSourceProvider):
         return "JustETF"
 
     @property
+    def accepted_identifier_types(self) -> list:
+        from backend.app.db.models import ProviderInputType
+        return [ProviderInputType.ISIN]
+
+    @property
     def get_icon(self) -> str:
         """Return provider icon URL (hardcoded)."""
         return "https://www.justetf.com/android-chrome-144x144.png?v2"

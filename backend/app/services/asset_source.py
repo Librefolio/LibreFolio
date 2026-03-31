@@ -40,6 +40,7 @@ from backend.app.db.models import (
     PriceHistory,
     IdentifierType,
     AssetType,
+    ProviderInputType,
     )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import (
@@ -462,6 +463,38 @@ class AssetSourceProvider(ABC):
         """
         return []
 
+    @property
+    def accepted_identifier_types(self) -> list[ProviderInputType]:
+        """
+        Input types accepted by this provider (for frontend identifier type dropdown).
+        Uses ProviderInputType (TICKER, ISIN, URL, AUTO_GENERATED), NOT IdentifierType.
+        Default: [TICKER, ISIN].
+        """
+        return [ProviderInputType.TICKER, ProviderInputType.ISIN]
+
+    @staticmethod
+    def map_input_type_to_identifier_type(input_type: str) -> IdentifierType:
+        """
+        Map a ProviderInputType value to the corresponding IdentifierType for DB storage.
+
+        ProviderInputType is what the frontend shows (URL, AUTO_GENERATED, etc.).
+        IdentifierType is what's stored in the asset_provider_assignments table.
+        """
+        mapping = {
+            ProviderInputType.TICKER.value: IdentifierType.TICKER,
+            ProviderInputType.ISIN.value: IdentifierType.ISIN,
+            ProviderInputType.URL.value: IdentifierType.OTHER,
+            ProviderInputType.AUTO_GENERATED.value: IdentifierType.UUID,
+        }
+        if input_type in mapping:
+            return mapping[input_type]
+        # Fallback: try direct match (e.g., TICKER → TICKER)
+        try:
+            return IdentifierType(input_type)
+        except ValueError:
+            return IdentifierType.OTHER
+
+
     async def fetch_asset_metadata(
         self,
         identifier: str,
@@ -600,7 +633,7 @@ class AssetSourceManager:
                     asset_id=a.asset_id,
                     provider_code=a.provider_code,
                     identifier=a.identifier,
-                    identifier_type=a.identifier_type,
+                    identifier_type=AssetSourceProvider.map_input_type_to_identifier_type(a.identifier_type),
                     provider_params=params_to_store,
                     fetch_interval=a.fetch_interval,  # Already has default from Pydantic
                     user_url=a.user_url,
@@ -1147,8 +1180,11 @@ class AssetSourceManager:
         params = AssetSourceManager._parse_provider_params(config.provider_params)
         total_start = time.monotonic_ns()
 
+        # Map ProviderInputType (from frontend) to IdentifierType (for provider methods)
+        mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(config.identifier_type)
+
         # Provider URL (always computed, synchronous)
-        provider_url = provider.get_asset_url(config.identifier, config.identifier_type, params)
+        provider_url = provider.get_asset_url(config.identifier, mapped_id_type, params)
 
         # --- Build async tasks for each requested operation ---
 
@@ -1156,7 +1192,7 @@ class AssetSourceManager:
             op_start = time.monotonic_ns()
             try:
                 value = await asyncio.wait_for(
-                    provider.get_current_value(config.identifier, config.identifier_type, params),
+                    provider.get_current_value(config.identifier, mapped_id_type, params),
                     timeout=15.0,
                     )
                 return ProbeCurrentPriceResult(
@@ -1181,10 +1217,7 @@ class AssetSourceManager:
                 end_date = date_type.today()
                 start_date = end_date - timedelta(days=7)
                 hist = await asyncio.wait_for(
-                    provider.get_history_value(
-                        config.identifier, config.identifier_type, params,
-                        start_date, end_date,
-                        ),
+                    provider.get_history_value(config.identifier, mapped_id_type, params,start_date, end_date,),
                     timeout=15.0,
                     )
                 points = hist.prices if hist else []
@@ -1217,9 +1250,7 @@ class AssetSourceManager:
             op_start = time.monotonic_ns()
             try:
                 patch = await asyncio.wait_for(
-                    provider.fetch_asset_metadata(
-                        config.identifier, config.identifier_type, params,
-                        ),
+                    provider.fetch_asset_metadata(config.identifier, mapped_id_type, params,),
                     timeout=15.0,
                     )
                 return ProbeMetadataResult(

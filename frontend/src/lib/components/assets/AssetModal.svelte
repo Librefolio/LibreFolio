@@ -28,6 +28,7 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
 
@@ -158,6 +159,9 @@
 
     // Dirty tracking — snapshot of initial form to detect unsaved changes
     let initialSnapshot = $state('');
+
+    // Duplicate name detection
+    let duplicateAssetName = $state<string | null>(null);
 
 
     // =========================================================================
@@ -344,6 +348,7 @@
         providerTestStatus = 'not_tested';
         showComparisonModal = false;
         comparisonDifferences = [];
+        duplicateAssetName = null;
         setTimeout(() => {
             initialSnapshot = buildFormSnapshot();
         }, 0);
@@ -376,10 +381,39 @@
         providerTestStatus = 'not_tested';
         showComparisonModal = false;
         comparisonDifferences = [];
+        duplicateAssetName = null;
         setTimeout(() => {
             initialSnapshot = buildFormSnapshot();
         }, 0);
     }
+
+    // =========================================================================
+    // Duplicate name detection (debounced)
+    // =========================================================================
+
+    $effect(() => {
+        const name = displayName.trim();
+        if (name.length < 2) {
+            duplicateAssetName = null;
+            return;
+        }
+        const timer = setTimeout(async () => {
+            try {
+                const response = await zodiosApi.list_assets_api_v1_assets_query_get({
+                    queries: {},
+                });
+                const items = response as any[];
+                const match = items.find((a: any) => {
+                    if (editMode && editData?.id === a.id) return false;
+                    return a.display_name.toLowerCase() === name.toLowerCase();
+                });
+                duplicateAssetName = match ? match.display_name : null;
+            } catch {
+                duplicateAssetName = null;
+            }
+        }, 400);
+        return () => clearTimeout(timer);
+    });
 
     // =========================================================================
     // Search result selection — auto-fill + auto-test
@@ -859,7 +893,7 @@
             </div>
 
             <!-- Grid: Icon on left, form fields on right -->
-            <div class="grid grid-cols-[auto_1fr] gap-4 items-start">
+            <div class="grid grid-cols-[auto_1fr] gap-4 items-center">
                 <!-- Left: Icon (clickable) -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -890,6 +924,17 @@
                                        placeholder-gray-400 dark:placeholder-gray-500
                                        focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
                         />
+                        {#if duplicateAssetName}
+                            <Tooltip
+                                text={$t('assets.modal.duplicateNameTooltip', {values: {name: duplicateAssetName}})}
+                                position="bottom"
+                                maxWidth="300px"
+                            >
+                                <span class="inline-flex items-center gap-1 mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                    ⚠️ {$t('assets.modal.duplicateNameWarning', {values: {name: duplicateAssetName}})}
+                                </span>
+                            </Tooltip>
+                        {/if}
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

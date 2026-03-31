@@ -44,6 +44,7 @@
         supports_search: boolean;
         params_schema: ParamField[];
         icon_url?: string | null;
+        accepted_identifier_types?: string[];
     }
 
     type TestStatus = 'not_tested' | 'testing' | 'passed' | 'failed';
@@ -124,6 +125,14 @@
     let selectedProvider = $derived(providers.find(p => p.code === providerCode));
     let paramsSchema = $derived(selectedProvider?.params_schema ?? []);
 
+    /** Custom UI component name extracted from params_schema (type: "ui_component") */
+    let uiComponent = $derived.by(() => {
+        const meta = paramsSchema.find(f => f.type === 'ui_component');
+        return (meta?.default as string) ?? undefined;
+    });
+    /** Generic fields for the params form loop (excluding meta-fields like ui_component) */
+    let genericFields = $derived(paramsSchema.filter(f => f.type !== 'ui_component'));
+
     /** Provider options for SimpleSelect (excluding mockprov) */
     let providerOptions = $derived<SelectOption[]>([
         {value: '', label: '—'},
@@ -136,9 +145,18 @@
             })),
     ]);
 
-    /** Identifier type options for SimpleSelect */
-    let idTypeOptions = $derived<SelectOption[]>(
-        IDENTIFIER_TYPES.map(t => ({value: t, label: t}))
+    /** Identifier type options for SimpleSelect — filtered by provider's accepted types */
+    let idTypeOptions = $derived.by<SelectOption[]>(() => {
+        const accepted = selectedProvider?.accepted_identifier_types;
+        const types = (accepted && accepted.length > 0)
+            ? IDENTIFIER_TYPES.filter(t => accepted.includes(t))
+            : IDENTIFIER_TYPES;
+        return types.map(t => ({value: t, label: t}));
+    });
+
+    /** True when provider accepts exactly 1 identifier type (auto-set, hide dropdown) */
+    let idTypeAutoSet = $derived(
+        (selectedProvider?.accepted_identifier_types?.length ?? 0) === 1
     );
 
     // =========================================================================
@@ -153,6 +171,15 @@
     $effect(() => {
         if (providerParams && typeof providerParams === 'object') {
             paramsValues = {...providerParams};
+        }
+    });
+
+    // Auto-set identifier type when provider has exactly 1 accepted type
+    $effect(() => {
+        const accepted = selectedProvider?.accepted_identifier_types;
+        if (accepted && accepted.length === 1 && identifierType !== accepted[0]) {
+            identifierType = accepted[0];
+            emitChange();
         }
     });
 
@@ -260,6 +287,12 @@
                 });
             }
 
+            // Propagate currency from current_price to history (for tooltip display)
+            const cpCurrency = items.find(r => r.priceCurrency)?.priceCurrency ?? '';
+            for (const item of items) {
+                if (item.samplePrices && !item.priceCurrency) item.priceCurrency = cpCurrency;
+            }
+
             testResults = items;
             totalExecutionMs = response.total_execution_time_ms ?? 0;
             testStatus = items.every(r => r.success) ? 'passed' : 'failed';
@@ -305,7 +338,7 @@
         // History tooltip — multi-row table with sample prices
         if (result.samplePrices && result.samplePrices.length > 0) {
             let html = '<table style="font-size:12px;border-collapse:collapse;">';
-            html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 Close</th></tr>`;
+            html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 Close${result.priceCurrency ? ` (${result.priceCurrency})` : ''}</th></tr>`;
             for (const p of result.samplePrices) {
                 html += `<tr><td style="${tdStyle}">${p.date}</td><td style="${tdRight}">${Number(p.close).toFixed(2)}</td></tr>`;
             }
@@ -357,13 +390,20 @@
                 <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     {$t('assets.provider.identifierType')}
                 </span>
-                <SimpleSelect
-                        bind:value={identifierType}
-                        options={idTypeOptions}
-                        disabled={disabled || readonly}
-                        dropdownPosition="auto"
-                        onchange={() => emitChange()}
-                />
+                {#if idTypeAutoSet}
+                    <div class="px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg
+                                bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400">
+                        {identifierType.replace('_', ' ')}
+                    </div>
+                {:else}
+                    <SimpleSelect
+                            bind:value={identifierType}
+                            options={idTypeOptions}
+                            disabled={disabled || readonly}
+                            dropdownPosition="auto"
+                            onchange={() => emitChange()}
+                    />
+                {/if}
             </div>
         </div>
 
@@ -387,10 +427,15 @@
             />
         </div>
 
-        <!-- Dynamic params from params_schema -->
-        {#if paramsSchema.length > 0}
+        <!-- Dynamic params: custom UI component or generic form loop -->
+        {#if uiComponent === 'scheduled_investment'}
+            <!-- TODO F9: <ScheduledInvestmentEditor value={providerParams} onchange={...} /> -->
+            <div class="p-3 border border-dashed border-gray-300 dark:border-slate-600 rounded-lg text-center text-xs text-gray-400">
+                ScheduledInvestmentEditor (coming in F9)
+            </div>
+        {:else if genericFields.length > 0}
             <div class="space-y-2 pl-3 border-l-2 border-gray-200 dark:border-slate-600">
-                {#each paramsSchema as field, idx}
+                {#each genericFields as field}
                     <div>
                         <label for="param-{field.key}" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {field.description || field.key}
@@ -408,7 +453,7 @@
                             <input
                                     type="number"
                                     value={paramsValues[field.key] ?? field.default ?? ''}
-                                    oninput={(e) => handleParamChange(field.key, Number((e.target as HTMLInputElement).value))}
+                                    oninput={(e) => { const el = e.currentTarget; handleParamChange(field.key, Number(el.value)); }}
                                     disabled={disabled || readonly}
                                     class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
@@ -419,7 +464,7 @@
                             <input
                                     type="text"
                                     value={paramsValues[field.key] ?? field.default ?? ''}
-                                    oninput={(e) => handleParamChange(field.key, (e.target as HTMLInputElement).value)}
+                                    oninput={(e) => { const el = e.currentTarget; handleParamChange(field.key, el.value); }}
                                     disabled={disabled || readonly}
                                     class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
@@ -432,26 +477,38 @@
             </div>
         {/if}
 
-        <!-- Fetch Interval -->
+        <!-- Fetch Interval (single HH:MM input → stored as minutes) -->
         <div>
-            <label for="provider-fetch-interval" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 {$t('assets.provider.fetchInterval')} *
-            </label>
+            </span>
             <input
-                    id="provider-fetch-interval"
-                    type="number"
-                    bind:value={fetchInterval}
-                    oninput={() => emitChange()}
-                    min={1}
-                    step={1}
+                    type="text"
+                    value={String(Math.floor(fetchInterval / 60)).padStart(2, '0') + ':' + String(fetchInterval % 60).padStart(2, '0')}
+                    placeholder="24:00"
+                    onblur={(e) => {
+                        const raw = e.currentTarget.value.trim();
+                        const match = raw.match(/^(\d{1,3}):(\d{1,2})$/);
+                        if (match) {
+                            const h = Math.max(0, Number(match[1]));
+                            const m = Math.min(59, Math.max(0, Number(match[2])));
+                            fetchInterval = h * 60 + m;
+                            e.currentTarget.value = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+                        } else {
+                            // Reset to current value if invalid
+                            e.currentTarget.value = String(Math.floor(fetchInterval / 60)).padStart(2, '0') + ':' + String(fetchInterval % 60).padStart(2, '0');
+                        }
+                        emitChange();
+                    }}
                     disabled={disabled || readonly}
-                    class="w-full max-w-xs px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                    class="w-24 px-3 py-2 text-sm text-center font-mono border border-gray-200 dark:border-slate-600 rounded-lg
                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                           placeholder-gray-400 dark:placeholder-gray-500
                            focus:outline-none focus:ring-2 focus:ring-libre-green/50
                            disabled:opacity-50"
             />
             <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">
-                ⓘ How often the auto-sync job refreshes prices (minutes). Common: 1440 (24h), 60 (1h), 10080 (weekly)
+                ⓘ 24:00 = daily, 01:00 = hourly, 168:00 = weekly
             </p>
         </div>
 

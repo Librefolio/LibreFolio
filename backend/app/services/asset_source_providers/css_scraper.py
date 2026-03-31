@@ -44,6 +44,11 @@ class CSSScraperProvider(AssetSourceProvider):
     def provider_name(self) -> str:
         return "CSS Web Scraper"
 
+    @property
+    def accepted_identifier_types(self) -> list:
+        from backend.app.db.models import ProviderInputType
+        return [ProviderInputType.URL]
+
     def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
         """The identifier IS the URL for CSS scraper."""
         return identifier if identifier.startswith("http") else None

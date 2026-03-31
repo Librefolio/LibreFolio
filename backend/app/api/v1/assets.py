@@ -352,6 +352,7 @@ async def list_providers(
                     icon_url=instance.get_icon,
                     supports_search=supports_search,
                     params_schema=schema_fields,
+                    accepted_identifier_types=[t.value for t in instance.accepted_identifier_types],
                     )
                 )
 
