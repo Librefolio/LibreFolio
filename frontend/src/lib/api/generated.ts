@@ -2427,6 +2427,12 @@ type ProbeHistoryResult = {
      */
     ((string | null) | Array<string | null>)
     | undefined;
+  sample_prices?:
+    | /**
+     * Sample price points [{date: str, close: float}], max 10
+     */
+    ((Array<{}> | null) | Array<Array<{}> | null>)
+    | undefined;
 };
 type ProbeMetadataResult = {
   /**
@@ -5168,6 +5174,10 @@ const ProbeHistoryResult: z.ZodType<ProbeHistoryResult> = z.object({
   date_range: z
     .union([z.string(), z.null()])
     .describe("Date range of found data (start → end)")
+    .optional(),
+  sample_prices: z
+    .union([z.array(z.object({}).partial().passthrough()), z.null()])
+    .describe("Sample price points [{date: str, close: float}], max 10")
     .optional(),
 });
 const ProbeMetadataResult: z.ZodType<ProbeMetadataResult> = z.object({

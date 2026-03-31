@@ -56,11 +56,12 @@ def _country_name_to_iso3(country_name: str) -> Optional[str]:
     """
     Convert country name to ISO 3166-1 alpha-3 code.
     Uses pycountry via geo_normalization utility.
-    Returns None if not found or for "Other" category.
+    Returns "Other" for the "other" category (truthy, so it's preserved in distribution).
+    Returns None if not found.
     """
-    # Skip "Other" category
+    # Preserve "Other" category — normalize_country_keys handles it downstream
     if country_name.lower() == "other":
-        return None
+        return "Other"
 
     try:
         from backend.app.utils.geo_utils import normalize_country_to_iso3
@@ -351,7 +352,7 @@ class JustETFProvider(AssetSourceProvider):
                     percentage = country.get("percentage")
                     if country_name and percentage is not None:
                         iso3 = _country_name_to_iso3(country_name)
-                        if iso3:  # Skip "Other" and unknown countries
+                        if iso3:  # Skip unknown countries (None), keep "Other"
                             weight = Decimal(str(percentage)) / Decimal("100")
                             distribution[iso3] = weight
                             total += weight

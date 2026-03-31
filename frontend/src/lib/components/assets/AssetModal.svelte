@@ -29,7 +29,7 @@
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
-    import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -124,6 +124,7 @@
     let providerUrl = $state<string | null>(null);
     let providerNoProvider = $state(false);
     let providerTestStatus = $state<'not_tested' | 'testing' | 'passed' | 'failed'>('not_tested');
+    let fetchInterval = $state(1440);
 
     // UI state
     let moreInfoExpanded = $state(false);
@@ -170,10 +171,21 @@
     /** Asset type options for SimpleSelect (with PNG icons) */
     let assetTypeOptions = $derived(buildAssetTypeOptions($t));
 
+    /** Build form snapshot for dirty tracking — single source of truth */
+    function buildFormSnapshot(): string {
+        return JSON.stringify([
+            displayName, currency, assetType, iconUrl,
+            JSON.stringify(identifierRows.map(r => [r.type, r.value])),
+            shortDescription,
+            JSON.stringify(sectorDistribution),
+            JSON.stringify(geographicDistribution),
+            providerCode, providerIdentifier, providerIdentifierType,
+            providerNoProvider, fetchInterval,
+        ]);
+    }
+
     /** Current form fingerprint for dirty detection */
-    let currentSnapshot = $derived(
-        JSON.stringify([displayName, currency, assetType, JSON.stringify(identifierRows.map(r => [r.type, r.value])), providerCode, providerIdentifier, providerIdentifierType, providerNoProvider])
-    );
+    let currentSnapshot = $derived(buildFormSnapshot());
     let isDirty = $derived(initialSnapshot !== '' && currentSnapshot !== initialSnapshot);
 
     // =========================================================================
@@ -322,6 +334,7 @@
         providerUserUrl = data.provider_user_url ?? '';
         providerUrl = data.provider_url ?? null;
         providerNoProvider = !data.provider_code;
+        fetchInterval = (data as any).fetch_interval ?? 1440;
         moreInfoExpanded = identifierRows.length > 0;
         providerExpanded = !!data.provider_code;
         searchResultSelected = false;
@@ -332,7 +345,7 @@
         showComparisonModal = false;
         comparisonDifferences = [];
         setTimeout(() => {
-            initialSnapshot = JSON.stringify([displayName, currency, assetType, JSON.stringify(identifierRows.map(r => [r.type, r.value])), providerCode, providerIdentifier, providerIdentifierType, providerNoProvider, shortDescription]);
+            initialSnapshot = buildFormSnapshot();
         }, 0);
     }
 
@@ -352,6 +365,7 @@
         providerUserUrl = '';
         providerUrl = null;
         providerNoProvider = false;
+        fetchInterval = 1440;
         moreInfoExpanded = false;
         providerExpanded = false;
         searchResultSelected = false;
@@ -363,7 +377,7 @@
         showComparisonModal = false;
         comparisonDifferences = [];
         setTimeout(() => {
-            initialSnapshot = JSON.stringify([displayName, currency, assetType, JSON.stringify(identifierRows.map(r => [r.type, r.value])), providerCode, providerIdentifier, providerIdentifierType, providerNoProvider, shortDescription]);
+            initialSnapshot = buildFormSnapshot();
         }, 0);
     }
 
@@ -413,9 +427,9 @@
         searchResultSelected = true;
         formError = null;
 
-        // Auto-trigger test + metadata fetch
+        // Auto-trigger test + metadata fetch (global ask provider)
         autoTriggerProbe();
-        autoFetchMetadata();
+        handleAskProvider();
     }
 
     async function autoTriggerProbe() {
@@ -443,78 +457,8 @@
         }
     }
 
-    /**
-     * Silent metadata fetch after search selection.
-     * Populates all empty fields (identifiers, description, distributions)
-     * without showing comparison modal — only fills blank fields.
-     */
-    async function autoFetchMetadata() {
-        if (!providerCode || !providerIdentifier) return;
-        try {
-            const response = await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
-                provider_code: providerCode,
-                identifier: providerIdentifier,
-                identifier_type: providerIdentifierType as any,
-                provider_params: providerParams,
-                operations: ['metadata'],
-            }) as any;
-
-            const meta = response.metadata;
-            if (!meta?.success || !meta.patch_data) return;
-            const pd = meta.patch_data;
-
-            // Auto-fill only empty fields (no comparison modal)
-            for (const idType of IDENTIFIER_TYPES) {
-                const dbKey = `identifier_${idType.toLowerCase()}`;
-                const provVal = pd[dbKey];
-                if (provVal && !getIdentifierByType(idType)) {
-                    setIdentifierByType(idType, provVal);
-                    autoFilledFields = new Set([...autoFilledFields, dbKey]);
-                }
-            }
-            if (pd.display_name && !displayName) {
-                displayName = pd.display_name;
-                autoFilledFields = new Set([...autoFilledFields, 'display_name']);
-            }
-            if (pd.asset_type && assetType === 'STOCK') {
-                const at = pd.asset_type.toUpperCase();
-                if ((ASSET_TYPES as readonly string[]).includes(at)) {
-                    assetType = at;
-                    autoFilledFields = new Set([...autoFilledFields, 'asset_type']);
-                }
-            }
-            if (pd.currency && !currency) {
-                currency = pd.currency;
-                autoFilledFields = new Set([...autoFilledFields, 'currency']);
-            }
-
-            const cpData = pd.classification_params;
-            if (cpData?.short_description && !shortDescription) {
-                shortDescription = cpData.short_description;
-                autoFilledFields = new Set([...autoFilledFields, 'short_description']);
-            }
-            if (cpData?.sector_area) {
-                const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
-                if (Object.keys(sectorDistribution).length === 0) {
-                    sectorDistribution = provDist;
-                    autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
-                }
-            }
-            if (cpData?.geographic_area) {
-                const provDist = cpData.geographic_area.distribution ?? cpData.geographic_area;
-                if (Object.keys(geographicDistribution).length === 0) {
-                    geographicDistribution = provDist;
-                    autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
-                }
-            }
-        } catch (e) {
-            // Silent — metadata is best-effort on search selection
-            console.debug('Auto-fetch metadata failed (non-blocking):', e);
-        }
-    }
-
     // =========================================================================
-    // Ask Provider (metadata) — fill all fields + comparison modal
+    // Ask Provider (metadata) — unified fetch + compare logic (C1+C2 refactoring)
     // =========================================================================
 
     /** Helper: field name like 'identifier_ticker' → type 'TICKER' */
@@ -532,115 +476,19 @@
         }
     }
 
-    async function handleAskProvider() {
+    /**
+     * Unified metadata fetch + comparison logic.
+     * Used by: handleAskProvider() [global], handleAskProviderSection() [per-section],
+     *          and applySearchResult() [auto after search].
+     *
+     * @param scope Which fields to compare. 'all' = everything, others = section-specific.
+     */
+    async function fetchAndCompareMetadata(
+        scope: 'all' | 'identifiers' | 'sector' | 'geographic'
+    ) {
         if (!providerCode || !providerIdentifier) return;
         askingProvider = true;
         autoFilledFields = new Set();
-        conflictFields = new Map();
-
-        try {
-            const response = await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
-                provider_code: providerCode,
-                identifier: providerIdentifier,
-                identifier_type: providerIdentifierType as any,
-                provider_params: providerParams,
-                operations: ['metadata'],
-            }) as any;
-
-            const meta = response.metadata;
-            if (meta?.success && meta.patch_data) {
-                const pd = meta.patch_data;
-                const differences: DiffItem[] = [];
-
-                // String fields comparison helper
-                function compareField(field: string, label: string, currentVal: string, providerVal: string | null | undefined) {
-                    if (!providerVal) return;
-                    if (!currentVal) {
-                        setFieldValue(field, providerVal);
-                        autoFilledFields = new Set([...autoFilledFields, field]);
-                    } else if (currentVal === providerVal) {
-                        autoFilledFields = new Set([...autoFilledFields, field]);
-                    } else {
-                        differences.push({field, label, type: 'string', currentValue: currentVal, providerValue: providerVal, selected: true});
-                    }
-                }
-
-                // Compare identifier fields
-                for (const idType of IDENTIFIER_TYPES) {
-                    const dbKey = `identifier_${idType.toLowerCase()}`;
-                    const provVal = pd[dbKey];
-                    if (provVal) {
-                        const currentVal = getIdentifierByType(idType);
-                        compareField(dbKey, idType, currentVal, provVal);
-                    }
-                }
-
-                // Compare display_name, asset_type and currency
-                if (pd.display_name) compareField('display_name', $t('common.name'), displayName, pd.display_name);
-                if (pd.asset_type) compareField('asset_type', $t('assets.type'), assetType, pd.asset_type);
-                if (pd.currency) compareField('currency', $t('common.currency'), currency, pd.currency);
-
-                // Compare short_description
-                const cpData = pd.classification_params;
-                if (cpData?.short_description) {
-                    compareField('short_description', 'Description', shortDescription, cpData.short_description);
-                }
-
-                // Compare distributions (block accept/reject)
-                const missingDistributions: string[] = [];
-                if (cpData?.sector_area) {
-                    const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
-                    const hasCurrent = Object.keys(sectorDistribution).length > 0;
-                    if (!hasCurrent) {
-                        sectorDistribution = provDist;
-                        autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
-                    } else if (JSON.stringify(sectorDistribution) !== JSON.stringify(provDist)) {
-                        differences.push({field: 'sector_area', label: $t('assets.modal.sectorDistribution'), type: 'distribution', currentValue: sectorDistribution, providerValue: provDist, selected: true});
-                    } else {
-                        autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
-                    }
-                } else {
-                    missingDistributions.push($t('assets.modal.sectorDistribution'));
-                }
-
-                if (cpData?.geographic_area) {
-                    const provDist = cpData.geographic_area.distribution ?? cpData.geographic_area;
-                    const hasCurrent = Object.keys(geographicDistribution).length > 0;
-                    if (!hasCurrent) {
-                        geographicDistribution = provDist;
-                        autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
-                    } else if (JSON.stringify(geographicDistribution) !== JSON.stringify(provDist)) {
-                        differences.push({field: 'geographic_area', label: $t('assets.modal.geographicDistribution'), type: 'distribution', currentValue: geographicDistribution, providerValue: provDist, selected: true});
-                    } else {
-                        autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
-                    }
-                } else {
-                    missingDistributions.push($t('assets.modal.geographicDistribution'));
-                }
-
-                // Notify about missing distributions
-                if (missingDistributions.length > 0) {
-                    toasts.info($t('assets.comparison.noDistributionData', {values: {fields: missingDistributions.join(', ')}}));
-                }
-
-                if (differences.length > 0) {
-                    comparisonDifferences = differences;
-                    showComparisonModal = true;
-                } else {
-                    toasts.success($t('assets.comparison.allMatch'));
-                }
-            }
-        } catch (e: any) {
-            console.error('Ask Provider failed:', e);
-        } finally {
-            askingProvider = false;
-        }
-    }
-
-    /** Per-section Ask Provider — calls same probe, shows diff modal for section-specific fields */
-    async function handleAskProviderSection(section: 'identifiers' | 'sector' | 'geographic') {
-        if (!providerCode || !providerIdentifier) return;
-        askingProvider = true;
 
         try {
             const response = await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
@@ -658,69 +506,114 @@
             }
             const pd = meta.patch_data;
             const differences: DiffItem[] = [];
+            const missingFields: string[] = [];
 
-            if (section === 'identifiers') {
+            // --- Helper: compare a string field — auto-fill if empty, diff if different ---
+            function compareStringField(
+                field: string, label: string, currentVal: string, providerVal: string | null | undefined
+            ) {
+                if (!providerVal) return;
+                if (!currentVal) {
+                    setFieldValue(field, providerVal);
+                    autoFilledFields = new Set([...autoFilledFields, field]);
+                } else if (currentVal === providerVal) {
+                    autoFilledFields = new Set([...autoFilledFields, field]);
+                } else {
+                    differences.push({field, label, type: 'string', currentValue: currentVal, providerValue: providerVal, selected: true});
+                }
+            }
+
+            // --- Helper: compare a distribution — auto-fill if empty, diff if different ---
+            function compareDistribution(
+                field: string, label: string,
+                currentDist: Record<string, number>, providerDist: Record<string, number>
+            ) {
+                const hasCurrent = Object.keys(currentDist).length > 0;
+                if (!hasCurrent) {
+                    if (field === 'sector_area') sectorDistribution = providerDist;
+                    else geographicDistribution = providerDist;
+                    autoFilledFields = new Set([...autoFilledFields, field]);
+                } else if (JSON.stringify(currentDist) !== JSON.stringify(providerDist)) {
+                    differences.push({field, label, type: 'distribution', currentValue: currentDist, providerValue: providerDist, selected: true});
+                } else {
+                    autoFilledFields = new Set([...autoFilledFields, field]);
+                }
+            }
+
+            // --- IDENTIFIERS (scope 'all' or 'identifiers') ---
+            if (scope === 'all' || scope === 'identifiers') {
                 for (const idType of IDENTIFIER_TYPES) {
                     const dbKey = `identifier_${idType.toLowerCase()}`;
                     const provVal = pd[dbKey];
                     if (provVal) {
                         const currentVal = getIdentifierByType(idType);
-                        if (!currentVal) {
-                            setFieldValue(dbKey, provVal);
-                            autoFilledFields = new Set([...autoFilledFields, dbKey]);
-                        } else if (currentVal !== provVal) {
-                            differences.push({field: dbKey, label: idType, type: 'string', currentValue: currentVal, providerValue: provVal, selected: true});
-                        } else {
-                            autoFilledFields = new Set([...autoFilledFields, dbKey]);
-                        }
+                        compareStringField(dbKey, idType, currentVal, provVal);
                     }
-                }
-            } else if (section === 'sector') {
-                const cpData = pd.classification_params;
-                if (cpData?.sector_area) {
-                    const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
-                    const hasCurrent = Object.keys(sectorDistribution).length > 0;
-                    if (!hasCurrent) {
-                        sectorDistribution = provDist;
-                        autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
-                    } else if (JSON.stringify(sectorDistribution) !== JSON.stringify(provDist)) {
-                        differences.push({field: 'sector_area', label: $t('assets.modal.sectorDistribution'), type: 'distribution', currentValue: sectorDistribution, providerValue: provDist, selected: true});
-                    } else {
-                        autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
-                    }
-                } else {
-                    toasts.info($t('assets.modal.sectorDistribution') + ' — no data from provider');
-                }
-            } else if (section === 'geographic') {
-                const cpData = pd.classification_params;
-                if (cpData?.geographic_area) {
-                    const provDist = cpData.geographic_area.distribution ?? cpData.geographic_area;
-                    const hasCurrent = Object.keys(geographicDistribution).length > 0;
-                    if (!hasCurrent) {
-                        geographicDistribution = provDist;
-                        autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
-                    } else if (JSON.stringify(geographicDistribution) !== JSON.stringify(provDist)) {
-                        differences.push({field: 'geographic_area', label: $t('assets.modal.geographicDistribution'), type: 'distribution', currentValue: geographicDistribution, providerValue: provDist, selected: true});
-                    } else {
-                        autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
-                    }
-                } else {
-                    toasts.info($t('assets.modal.geographicDistribution') + ' — no data from provider');
                 }
             }
 
-            // Show diff modal if conflicts exist, otherwise show success toast
+            // --- ASSET DETAILS (scope 'all' only) ---
+            if (scope === 'all') {
+                compareStringField('display_name', $t('common.name'), displayName, pd.display_name);
+                compareStringField('asset_type', $t('assets.type'), assetType, pd.asset_type);
+                compareStringField('currency', $t('common.currency'), currency, pd.currency);
+            }
+
+            // --- CLASSIFICATION: description, sector, geographic ---
+            const cpData = pd.classification_params;
+
+            if (scope === 'all') {
+                if (cpData?.short_description) {
+                    compareStringField('short_description', 'Description', shortDescription, cpData.short_description);
+                }
+            }
+
+            if (scope === 'all' || scope === 'sector') {
+                if (cpData?.sector_area) {
+                    const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
+                    compareDistribution('sector_area', $t('assets.modal.sectorDistribution'), sectorDistribution, provDist);
+                } else {
+                    missingFields.push($t('assets.modal.sectorDistribution'));
+                }
+            }
+
+            if (scope === 'all' || scope === 'geographic') {
+                if (cpData?.geographic_area) {
+                    const provDist = cpData.geographic_area.distribution ?? cpData.geographic_area;
+                    compareDistribution('geographic_area', $t('assets.modal.geographicDistribution'), geographicDistribution, provDist);
+                } else {
+                    missingFields.push($t('assets.modal.geographicDistribution'));
+                }
+            }
+
+            // --- RESULTS: consistent toast logic (Fix 3) ---
+            if (missingFields.length > 0) {
+                toasts.info($t('assets.comparison.noDistributionData', {values: {fields: missingFields.join(', ')}}));
+            }
+
             if (differences.length > 0) {
                 comparisonDifferences = differences;
                 showComparisonModal = true;
-            } else {
+            } else if (missingFields.length === 0) {
+                // Only show success if nothing was missing — never both info + success
                 toasts.success($t('assets.comparison.allMatch'));
             }
+
         } catch (e: any) {
-            console.error(`Ask Provider (${section}) failed:`, e);
+            console.error(`Ask Provider (${scope}) failed:`, e);
         } finally {
             askingProvider = false;
         }
+    }
+
+    /** Global "Ask Provider" — compares all fields */
+    function handleAskProvider() {
+        fetchAndCompareMetadata('all');
+    }
+
+    /** Per-section "Ask Provider" — compares only the given section */
+    function handleAskProviderSection(section: 'identifiers' | 'sector' | 'geographic') {
+        fetchAndCompareMetadata(section);
     }
 
     /** Generic setter used by comparison logic */
@@ -831,7 +724,7 @@
                     identifier: providerIdentifier,
                     identifier_type: providerIdentifierType,
                     provider_params: providerParams,
-                    fetch_interval: 1440,
+                    fetch_interval: fetchInterval,
                     user_url: providerUserUrl || undefined,
                 }];
                 await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
@@ -889,7 +782,7 @@
                 identifier: providerIdentifier,
                 identifier_type: providerIdentifierType,
                 provider_params: providerParams,
-                fetch_interval: 1440,
+                fetch_interval: fetchInterval,
                 user_url: providerUserUrl || undefined,
             }];
             await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
@@ -1230,6 +1123,7 @@
                             bind:userUrl={providerUserUrl}
                             bind:providerUrl
                             bind:noProvider={providerNoProvider}
+                            bind:fetchInterval
                             onchange={(data) => {
                                 providerTestStatus = data.testStatus;
                             }}

@@ -73,6 +73,7 @@
         userUrl?: string;
         providerUrl?: string | null;
         noProvider?: boolean;
+        fetchInterval?: number;
         disabled?: boolean;
         readonly?: boolean;
         onchange?: (data: {
@@ -94,6 +95,7 @@
         userUrl = $bindable(''),
         providerUrl = $bindable(null),
         noProvider = $bindable(false),
+        fetchInterval = $bindable(1440),
         disabled = false,
         readonly = false,
         onchange,
@@ -295,7 +297,7 @@
             let html = '<table style="font-size:12px;border-collapse:collapse;">';
             html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 ${$t('assets.probe.currentPrice')}</th></tr>`;
             html += `<tr><td style="${tdStyle}">${result.priceDate ?? '—'}</td>`;
-            html += `<td style="${tdRight}">${result.priceValue} ${result.priceCurrency ?? ''}</td></tr>`;
+            html += `<td style="${tdRight}">${Number(result.priceValue).toFixed(2)} ${result.priceCurrency ?? ''}</td></tr>`;
             html += '</table>';
             return html;
         }
@@ -305,7 +307,7 @@
             let html = '<table style="font-size:12px;border-collapse:collapse;">';
             html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 Close</th></tr>`;
             for (const p of result.samplePrices) {
-                html += `<tr><td style="${tdStyle}">${p.date}</td><td style="${tdRight}">${p.close}</td></tr>`;
+                html += `<tr><td style="${tdStyle}">${p.date}</td><td style="${tdRight}">${Number(p.close).toFixed(2)}</td></tr>`;
             }
             html += '</table>';
             return html;
@@ -395,20 +397,13 @@
                             {#if field.required}<span class="text-red-500">*</span>{/if}
                         </label>
                         {#if field.type === 'select' && field.options}
-                            <select
-                                    id="param-{field.key}"
+                            <SimpleSelect
                                     value={paramsValues[field.key] ?? field.default ?? ''}
-                                    onchange={(e) => handleParamChange(field.key, (e.target as HTMLSelectElement).value)}
+                                    options={field.options.map(o => ({value: o, label: o}))}
                                     disabled={disabled || readonly}
-                                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                           focus:outline-none focus:ring-2 focus:ring-libre-green/50
-                                           disabled:opacity-50"
-                            >
-                                {#each field.options as opt}
-                                    <option value={opt}>{opt}</option>
-                                {/each}
-                            </select>
+                                    dropdownPosition="auto"
+                                    onchange={(v) => handleParamChange(field.key, v)}
+                            />
                         {:else if field.type === 'number'}
                             <input
                                     type="number"
@@ -436,6 +431,29 @@
                 {/each}
             </div>
         {/if}
+
+        <!-- Fetch Interval -->
+        <div>
+            <label for="provider-fetch-interval" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                {$t('assets.provider.fetchInterval')} *
+            </label>
+            <input
+                    id="provider-fetch-interval"
+                    type="number"
+                    bind:value={fetchInterval}
+                    oninput={() => emitChange()}
+                    min={1}
+                    step={1}
+                    disabled={disabled || readonly}
+                    class="w-full max-w-xs px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                           focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                           disabled:opacity-50"
+            />
+            <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">
+                ⓘ How often the auto-sync job refreshes prices (minutes). Common: 1440 (24h), 60 (1h), 10080 (weekly)
+            </p>
+        </div>
 
         <!-- User URL + Provider URL -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

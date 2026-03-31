@@ -128,9 +128,9 @@
     // =========================================================================
 
     let totalPercent = $derived(entries.reduce((sum, e) => sum + e.weight, 0));
-    let isValid = $derived(Math.abs(totalPercent - 100) < 0.01);
-    let isExcess = $derived(totalPercent > 100.01);
-    let isMissing = $derived(totalPercent < 99.99 && entries.length > 0);
+    let isValid = $derived(Math.abs(totalPercent - 100) < 0.005);
+    let isExcess = $derived(totalPercent > 100.005);
+    let isMissing = $derived(totalPercent < 99.995 && entries.length > 0);
     let maxWeight = $derived(Math.max(...entries.map(e => e.weight), 1));
 
     let validBarClass = $derived(isValid ? 'bg-libre-green' : isExcess ? 'bg-red-400' : 'bg-amber-400');

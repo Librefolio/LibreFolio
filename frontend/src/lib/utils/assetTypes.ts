@@ -89,11 +89,6 @@ export function getSectorKeysList(): readonly string[] {
     return keys.length > 0 ? keys : SECTOR_KEYS_FALLBACK;
 }
 
-/**
- * @deprecated Use `getSectorKeysList()` for dynamic sector keys from backend.
- * Kept as alias for backward compatibility during migration.
- */
-export const SECTOR_KEYS = SECTOR_KEYS_FALLBACK;
 
 /**
  * Convert a backend sector key (e.g. "Consumer Discretionary") to
