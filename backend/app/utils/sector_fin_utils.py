@@ -64,11 +64,11 @@ class FinancialSector(str, Enum):
             "healthcare": cls.HEALTH_CARE,  # Alias
             "real estate": cls.REAL_ESTATE,
             "basic materials": cls.BASIC_MATERIALS,
-            "materials": cls.BASIC_MATERIALS,  # Alias
+            "materials": cls.BASIC_MATERIALS,  # Short alias
             "energy": cls.ENERGY,
             "consumer staples": cls.CONSUMER_STAPLES,
             "telecommunication": cls.TELECOMMUNICATION,
-            "telecom": cls.TELECOMMUNICATION,  # Alias
+            "telecom": cls.TELECOMMUNICATION,  # Short alias
             "utilities": cls.UTILITIES,
             "other": cls.OTHER,
             }

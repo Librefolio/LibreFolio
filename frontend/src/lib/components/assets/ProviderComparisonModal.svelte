@@ -5,10 +5,13 @@
   Allows user to selectively accept/reject provider values.
 
   Features:
-  - String fields: individual checkbox per field
-  - Distribution fields (sector/geographic): block accept/reject
+  - Dynamic section grouping via DIFF_FIELD_SECTIONS config
+  - Uniform card layout for all field types (string + distribution)
+  - Arrow centered between value boxes
   - Select All / Deselect All
   - Apply Selected (count/total)
+
+  Adding a new field: just add it to DIFF_FIELD_SECTIONS array.
 
   Svelte 5 runes.
 -->
@@ -16,6 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {X} from 'lucide-svelte';
+    import {sectorI18nKey} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -29,6 +33,38 @@
         providerValue: any;
         selected: boolean;      // Checkbox state
     }
+
+    // =========================================================================
+    // Section Configuration — drives grouping and order
+    // =========================================================================
+
+    /**
+     * Configuration for field grouping in the comparison modal.
+     * Order matches the AssetModal layout. Each section has an i18n title key
+     * and a list of field names/prefixes. Fields not matching any section
+     * go into an "Other" fallback group.
+     *
+     * To add a new field: just add its name to the appropriate section.
+     */
+    const DIFF_FIELD_SECTIONS: Array<{
+        titleKey: string;
+        fields: string[];
+        matchPrefix?: boolean;
+    }> = [
+        {
+            titleKey: 'assets.modal.identifiers',
+            fields: ['identifier_'],
+            matchPrefix: true,
+        },
+        {
+            titleKey: 'assets.modal.assetDetails',
+            fields: ['display_name', 'asset_type', 'currency'],
+        },
+        {
+            titleKey: 'assets.modal.classification',
+            fields: ['short_description', 'sector_area', 'geographic_area'],
+        },
+    ];
 
     // =========================================================================
     // Props
@@ -67,6 +103,38 @@
 
     let selectedCount = $derived(items.filter(i => i.selected).length);
     let totalCount = $derived(items.length);
+
+    /** Group items by section, preserving config order */
+    let groupedItems = $derived.by(() => {
+        const groups: Array<{title: string; items: Array<{item: DiffItem; index: number}>}> = [];
+        const used = new Set<number>();
+
+        for (const section of DIFF_FIELD_SECTIONS) {
+            const sectionItems: Array<{item: DiffItem; index: number}> = [];
+            items.forEach((item, idx) => {
+                const match = section.matchPrefix
+                    ? section.fields.some(p => item.field.startsWith(p))
+                    : section.fields.includes(item.field);
+                if (match && !used.has(idx)) {
+                    sectionItems.push({item, index: idx});
+                    used.add(idx);
+                }
+            });
+            if (sectionItems.length > 0) {
+                groups.push({title: $t(section.titleKey), items: sectionItems});
+            }
+        }
+
+        // Fallback: any unmatched fields go into "Other"
+        const remaining = items
+            .map((item, idx) => ({item, index: idx}))
+            .filter(({index: idx}) => !used.has(idx));
+        if (remaining.length > 0) {
+            groups.push({title: 'Other', items: remaining});
+        }
+
+        return groups;
+    });
 
     // =========================================================================
     // Actions
@@ -114,6 +182,16 @@
         const s = String(val);
         return s.length > max ? s.slice(0, max) + '…' : s;
     }
+
+    /** Format a distribution key with i18n for sector fields */
+    function formatDistKey(key: string, field: string): string {
+        if (field === 'sector_area') {
+            const i18nKey = `sectors.${sectorI18nKey(key)}`;
+            const localized = $t(i18nKey);
+            return localized !== i18nKey ? localized : key;
+        }
+        return key;
+    }
 </script>
 
 <ModalBase
@@ -134,91 +212,80 @@
     </div>
 
     <!-- Body -->
-    <div class="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+    <div class="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
         <p class="text-sm text-gray-600 dark:text-gray-400">
             {$t('assets.comparison.description')}
         </p>
 
-        <!-- String fields table -->
-        {#each items as item, index}
-            {#if item.type === 'string'}
-                <div class="flex items-start gap-3 py-2 border-b border-gray-100 dark:border-slate-700 last:border-b-0">
-                    <input
+        <!-- Grouped items — uniform card layout for all types -->
+        {#each groupedItems as group}
+            <!-- Section header -->
+            <div class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider pt-2">
+                {group.title}
+            </div>
+
+            {#each group.items as {item, index}}
+                <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3">
+                    <!-- Checkbox + label -->
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
                             type="checkbox"
                             checked={item.selected}
                             onchange={() => toggleItem(index)}
-                            class="mt-1 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
-                    />
-                    <div class="flex-1 min-w-0">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</div>
-                        <div class="grid grid-cols-[1fr_auto_1fr] gap-2 mt-1 items-start">
-                            <div>
-                                <span class="text-[10px] uppercase text-gray-400">{$t('assets.comparison.currentValue')}</span>
-                                <div class="text-xs text-gray-600 dark:text-gray-400 font-mono bg-gray-50 dark:bg-slate-800 px-2 py-1 rounded">
-                                    {truncate(item.currentValue)}
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-center pt-4 text-gray-400 dark:text-gray-500 text-lg font-light">→</div>
-                            <div>
-                                <span class="text-[10px] uppercase text-gray-400">{$t('assets.comparison.providerValue')}</span>
-                                <div class="text-xs text-libre-green dark:text-green-400 font-mono bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
-                                    {truncate(item.providerValue)}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            {/if}
-        {/each}
-
-        <!-- Distribution fields (block accept/reject) -->
-        {#each items as item, index}
-            {#if item.type === 'distribution'}
-                <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input
-                                type="checkbox"
-                                checked={item.selected}
-                                onchange={() => toggleItem(index)}
-                                class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
+                            class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
                         />
                         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
                     </label>
 
-                    <div class="grid grid-cols-[1fr_auto_1fr] gap-3 mt-2">
-                        <!-- Current -->
-                        <div>
-                            <span class="text-[10px] uppercase text-gray-400 block mb-1">{$t('assets.comparison.currentValue')}</span>
-                            <div class="bg-gray-50 dark:bg-slate-800 rounded p-2 text-xs space-y-0.5">
-                                {#each formatDistribution(item.currentValue?.distribution ?? item.currentValue) as entry}
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600 dark:text-gray-400">{entry.key}</span>
-                                        <span class="font-mono text-gray-700 dark:text-gray-300">{entry.pct}</span>
-                                    </div>
-                                {:else}
-                                    <span class="text-gray-400 italic">—</span>
-                                {/each}
-                            </div>
+                    <!-- Values grid: Current → Provider -->
+                    <div class="grid grid-cols-[1fr_auto_1fr] gap-2 mt-2 items-center">
+                        <!-- Current box -->
+                        <div class="bg-gray-50 dark:bg-slate-800 rounded p-2">
+                            <span class="text-[10px] uppercase text-gray-400 block mb-0.5">
+                                {$t('assets.comparison.currentValue')}
+                            </span>
+                            {#if item.type === 'distribution'}
+                                <div class="text-xs space-y-0.5">
+                                    {#each formatDistribution(item.currentValue?.distribution ?? item.currentValue) as entry}
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
+                                            <span class="font-mono text-gray-700 dark:text-gray-300">{entry.pct}</span>
+                                        </div>
+                                    {:else}
+                                        <span class="text-gray-400 italic">—</span>
+                                    {/each}
+                                </div>
+                            {:else}
+                                <div class="text-xs font-mono text-gray-600 dark:text-gray-400">{truncate(item.currentValue)}</div>
+                            {/if}
                         </div>
-                        <!-- Arrow -->
-                        <div class="flex items-center justify-center text-gray-400 dark:text-gray-500 text-lg font-light pt-4">→</div>
-                        <!-- Provider -->
-                        <div>
-                            <span class="text-[10px] uppercase text-gray-400 block mb-1">{$t('assets.comparison.providerValue')}</span>
-                            <div class="bg-green-50 dark:bg-green-900/20 rounded p-2 text-xs space-y-0.5">
-                                {#each formatDistribution(item.providerValue?.distribution ?? item.providerValue) as entry}
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600 dark:text-gray-400">{entry.key}</span>
-                                        <span class="font-mono text-libre-green dark:text-green-400">{entry.pct}</span>
-                                    </div>
-                                {:else}
-                                    <span class="text-gray-400 italic">—</span>
-                                {/each}
-                            </div>
+
+                        <!-- Arrow (perfectly centered between boxes) -->
+                        <div class="text-gray-400 dark:text-gray-500 text-lg font-light">→</div>
+
+                        <!-- Provider box -->
+                        <div class="bg-green-50 dark:bg-green-900/20 rounded p-2">
+                            <span class="text-[10px] uppercase text-gray-400 block mb-0.5">
+                                {$t('assets.comparison.providerValue')}
+                            </span>
+                            {#if item.type === 'distribution'}
+                                <div class="text-xs space-y-0.5">
+                                    {#each formatDistribution(item.providerValue?.distribution ?? item.providerValue) as entry}
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
+                                            <span class="font-mono text-libre-green dark:text-green-400">{entry.pct}</span>
+                                        </div>
+                                    {:else}
+                                        <span class="text-gray-400 italic">—</span>
+                                    {/each}
+                                </div>
+                            {:else}
+                                <div class="text-xs font-mono text-libre-green dark:text-green-400">{truncate(item.providerValue)}</div>
+                            {/if}
                         </div>
                     </div>
                 </div>
-            {/if}
+            {/each}
         {/each}
 
         <!-- Select All / Deselect All -->

@@ -14,6 +14,7 @@
     import {zodiosApi} from '$lib/api';
     import {SimpleSelect} from '$lib/components/ui/select';
     import type {SelectOption} from '$lib/components/ui/select';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {
         AlertCircle,
         CheckCircle2,
@@ -52,6 +53,12 @@
         label: string;
         detail?: string;
         execution_time_ms: number;
+        /** Sample price points for history results (tooltip display) */
+        samplePrices?: Array<{date: string; close: number}>;
+        /** Current price info (tooltip display) */
+        priceValue?: number;
+        priceCurrency?: string;
+        priceDate?: string;
     }
 
     // =========================================================================
@@ -222,26 +229,32 @@
             // Current price
             if (response.current_price) {
                 const cp = response.current_price;
+                const detail = cp.success
+                    ? `${cp.value} ${cp.currency ?? ''}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}`
+                    : cp.error;
                 items.push({
                     success: cp.success,
                     label: $t('assets.probe.currentPrice'),
-                    detail: cp.success
-                        ? `${cp.value} ${cp.currency ?? ''}`
-                        : cp.error,
+                    detail,
                     execution_time_ms: cp.execution_time_ms,
+                    priceValue: cp.success ? cp.value : undefined,
+                    priceCurrency: cp.success ? cp.currency : undefined,
+                    priceDate: cp.success ? cp.as_of_date : undefined,
                 });
             }
 
             // History
             if (response.history) {
                 const h = response.history;
+                const detail = h.success
+                    ? `${h.points_count} points${h.date_range ? ` — ${h.date_range}` : ''}`
+                    : h.error;
                 items.push({
                     success: h.success,
                     label: $t('assets.probe.history'),
-                    detail: h.success
-                        ? `${h.points_count} points`
-                        : h.error,
+                    detail,
                     execution_time_ms: h.execution_time_ms,
+                    samplePrices: h.success && h.sample_prices ? h.sample_prices : undefined,
                 });
             }
 
@@ -263,6 +276,42 @@
             testStatus = 'failed';
         }
         emitChange();
+    }
+
+    // =========================================================================
+    // Tooltip Helpers
+    // =========================================================================
+
+    /** Build rich HTML tooltip for a test result — uses table format for both price types */
+    function buildTooltipHtml(result: TestResult): string {
+        if (!result.success) return result.detail ?? 'Error';
+
+        const thStyle = 'text-align:left;padding:2px 8px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.2);';
+        const tdStyle = 'padding:2px 8px;';
+        const tdRight = 'padding:2px 8px;text-align:right;font-variant-numeric:tabular-nums;';
+
+        // Current Price tooltip — single-row table
+        if (result.priceValue !== undefined) {
+            let html = '<table style="font-size:12px;border-collapse:collapse;">';
+            html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 ${$t('assets.probe.currentPrice')}</th></tr>`;
+            html += `<tr><td style="${tdStyle}">${result.priceDate ?? '—'}</td>`;
+            html += `<td style="${tdRight}">${result.priceValue} ${result.priceCurrency ?? ''}</td></tr>`;
+            html += '</table>';
+            return html;
+        }
+
+        // History tooltip — multi-row table with sample prices
+        if (result.samplePrices && result.samplePrices.length > 0) {
+            let html = '<table style="font-size:12px;border-collapse:collapse;">';
+            html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 Close</th></tr>`;
+            for (const p of result.samplePrices) {
+                html += `<tr><td style="${tdStyle}">${p.date}</td><td style="${tdRight}">${p.close}</td></tr>`;
+            }
+            html += '</table>';
+            return html;
+        }
+
+        return result.detail ?? '—';
     }
 </script>
 
@@ -467,21 +516,22 @@
         {#if testResults.length > 0 || testStatus === 'testing'}
             <div class="space-y-1.5 pl-3 border-l-2 {testStatus === 'passed' ? 'border-green-400' : testStatus === 'failed' ? 'border-red-400' : 'border-gray-300 dark:border-slate-600'}">
                 {#each testResults as result}
-                    <div class="flex items-center gap-2 text-sm" title={result.detail ?? ''}>
-                        {#if result.success}
-                            <CheckCircle2 size={14} class="text-green-500 shrink-0"/>
-                        {:else}
-                            <AlertCircle size={14} class="text-red-500 shrink-0"/>
-                        {/if}
-                        <span class="text-gray-600 dark:text-gray-300">{result.label}:</span>
-                        <span class="{result.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} truncate"
-                              title={result.detail ?? ''}>
-                            {result.detail ?? '—'}
-                        </span>
-                        <span class="text-xs text-gray-400 shrink-0">
-                            ({(result.execution_time_ms / 1000).toFixed(2)}s)
-                        </span>
-                    </div>
+                    <Tooltip html={buildTooltipHtml(result)} position="top">
+                        <div class="flex items-center gap-2 text-sm">
+                            {#if result.success}
+                                <CheckCircle2 size={14} class="text-green-500 shrink-0"/>
+                            {:else}
+                                <AlertCircle size={14} class="text-red-500 shrink-0"/>
+                            {/if}
+                            <span class="text-gray-600 dark:text-gray-300">{result.label}:</span>
+                            <span class="{result.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} truncate">
+                                {result.detail ?? '—'}
+                            </span>
+                            <span class="text-xs text-gray-400 shrink-0">
+                                ({(result.execution_time_ms / 1000).toFixed(2)}s)
+                            </span>
+                        </div>
+                    </Tooltip>
                 {/each}
                 {#if testStatus === 'testing'}
                     <div class="flex items-center gap-2 text-sm text-gray-500">

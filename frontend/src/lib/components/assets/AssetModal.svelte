@@ -13,18 +13,21 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {ChevronDown, ChevronRight, Loader2, Minus, Plus, RefreshCw, X} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, Loader2, Minus, Plus, RefreshCw, Trash2, Upload, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {CurrencySearchSelect, SimpleSelect} from '$lib/components/ui/select';
     import AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
+    import AssetIcon from './AssetIcon.svelte';
     import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
     import ProviderComparisonModal from './ProviderComparisonModal.svelte';
     import type {DiffItem} from './ProviderComparisonModal.svelte';
     import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
+    import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
@@ -141,6 +144,14 @@
     let showComparisonModal = $state(false);
     let comparisonDifferences = $state<DiffItem[]>([]);
 
+    // Image picker
+    let showImagePicker = $state(false);
+
+    // Identifier selection + bulk delete
+    let identifierSelectedIds = $state<string[]>([]);
+    let showIdentifierDeleteConfirm = $state(false);
+    let pendingIdentifierDeleteIds = $state<string[]>([]);
+
     // Track if search result was selected (for auto-assign banner)
     let searchResultSelected = $state(false);
 
@@ -204,6 +215,26 @@
 
     function removeIdentifierRow(id: string) {
         identifierRows = identifierRows.filter(r => r.id !== id);
+    }
+
+    /** Handle image picker change — empty string means remove */
+    function handleImagePickerChange(url: string) {
+        iconUrl = url || null;
+        showImagePicker = false;
+    }
+
+    /** Bulk delete identifiers with confirmation */
+    function handleIdentifierBulkDelete() {
+        pendingIdentifierDeleteIds = [...identifierSelectedIds];
+        showIdentifierDeleteConfirm = true;
+    }
+
+    function confirmIdentifierBulkDelete() {
+        const deleteSet = new Set(pendingIdentifierDeleteIds);
+        identifierRows = identifierRows.filter(r => !deleteSet.has(r.id));
+        identifierSelectedIds = [];
+        pendingIdentifierDeleteIds = [];
+        showIdentifierDeleteConfirm = false;
     }
 
     /** Get identifier value by type from rows */
@@ -382,8 +413,9 @@
         searchResultSelected = true;
         formError = null;
 
-        // Auto-trigger test
+        // Auto-trigger test + metadata fetch
         autoTriggerProbe();
+        autoFetchMetadata();
     }
 
     async function autoTriggerProbe() {
@@ -408,6 +440,76 @@
             if (response.provider_url) providerUrl = response.provider_url;
         } catch {
             providerTestStatus = 'failed';
+        }
+    }
+
+    /**
+     * Silent metadata fetch after search selection.
+     * Populates all empty fields (identifiers, description, distributions)
+     * without showing comparison modal — only fills blank fields.
+     */
+    async function autoFetchMetadata() {
+        if (!providerCode || !providerIdentifier) return;
+        try {
+            const response = await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
+                provider_code: providerCode,
+                identifier: providerIdentifier,
+                identifier_type: providerIdentifierType as any,
+                provider_params: providerParams,
+                operations: ['metadata'],
+            }) as any;
+
+            const meta = response.metadata;
+            if (!meta?.success || !meta.patch_data) return;
+            const pd = meta.patch_data;
+
+            // Auto-fill only empty fields (no comparison modal)
+            for (const idType of IDENTIFIER_TYPES) {
+                const dbKey = `identifier_${idType.toLowerCase()}`;
+                const provVal = pd[dbKey];
+                if (provVal && !getIdentifierByType(idType)) {
+                    setIdentifierByType(idType, provVal);
+                    autoFilledFields = new Set([...autoFilledFields, dbKey]);
+                }
+            }
+            if (pd.display_name && !displayName) {
+                displayName = pd.display_name;
+                autoFilledFields = new Set([...autoFilledFields, 'display_name']);
+            }
+            if (pd.asset_type && assetType === 'STOCK') {
+                const at = pd.asset_type.toUpperCase();
+                if ((ASSET_TYPES as readonly string[]).includes(at)) {
+                    assetType = at;
+                    autoFilledFields = new Set([...autoFilledFields, 'asset_type']);
+                }
+            }
+            if (pd.currency && !currency) {
+                currency = pd.currency;
+                autoFilledFields = new Set([...autoFilledFields, 'currency']);
+            }
+
+            const cpData = pd.classification_params;
+            if (cpData?.short_description && !shortDescription) {
+                shortDescription = cpData.short_description;
+                autoFilledFields = new Set([...autoFilledFields, 'short_description']);
+            }
+            if (cpData?.sector_area) {
+                const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
+                if (Object.keys(sectorDistribution).length === 0) {
+                    sectorDistribution = provDist;
+                    autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
+                }
+            }
+            if (cpData?.geographic_area) {
+                const provDist = cpData.geographic_area.distribution ?? cpData.geographic_area;
+                if (Object.keys(geographicDistribution).length === 0) {
+                    geographicDistribution = provDist;
+                    autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
+                }
+            }
+        } catch (e) {
+            // Silent — metadata is best-effort on search selection
+            console.debug('Auto-fetch metadata failed (non-blocking):', e);
         }
     }
 
@@ -485,6 +587,7 @@
                 }
 
                 // Compare distributions (block accept/reject)
+                const missingDistributions: string[] = [];
                 if (cpData?.sector_area) {
                     const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
                     const hasCurrent = Object.keys(sectorDistribution).length > 0;
@@ -496,6 +599,8 @@
                     } else {
                         autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
                     }
+                } else {
+                    missingDistributions.push($t('assets.modal.sectorDistribution'));
                 }
 
                 if (cpData?.geographic_area) {
@@ -509,6 +614,13 @@
                     } else {
                         autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
                     }
+                } else {
+                    missingDistributions.push($t('assets.modal.geographicDistribution'));
+                }
+
+                // Notify about missing distributions
+                if (missingDistributions.length > 0) {
+                    toasts.info($t('assets.comparison.noDistributionData', {values: {fields: missingDistributions.join(', ')}}));
                 }
 
                 if (differences.length > 0) {
@@ -525,7 +637,7 @@
         }
     }
 
-    /** Per-section Ask Provider — calls same probe, applies only section-specific fields */
+    /** Per-section Ask Provider — calls same probe, shows diff modal for section-specific fields */
     async function handleAskProviderSection(section: 'identifiers' | 'sector' | 'geographic') {
         if (!providerCode || !providerIdentifier) return;
         askingProvider = true;
@@ -540,40 +652,69 @@
             }) as any;
 
             const meta = response.metadata;
-            if (!meta?.success || !meta.patch_data) return;
+            if (!meta?.success || !meta.patch_data) {
+                toasts.info($t('assets.identifiers.askProviderHint') + ' — no data from provider');
+                return;
+            }
             const pd = meta.patch_data;
+            const differences: DiffItem[] = [];
 
             if (section === 'identifiers') {
-                const idFields = IDENTIFIER_TYPES.map(t => t.toLowerCase());
-                let filled = 0;
-                for (const f of idFields) {
-                    const provVal = pd[`identifier_${f}`];
+                for (const idType of IDENTIFIER_TYPES) {
+                    const dbKey = `identifier_${idType.toLowerCase()}`;
+                    const provVal = pd[dbKey];
                     if (provVal) {
-                        setIdentifierByType(f.toUpperCase(), provVal);
-                        filled++;
+                        const currentVal = getIdentifierByType(idType);
+                        if (!currentVal) {
+                            setFieldValue(dbKey, provVal);
+                            autoFilledFields = new Set([...autoFilledFields, dbKey]);
+                        } else if (currentVal !== provVal) {
+                            differences.push({field: dbKey, label: idType, type: 'string', currentValue: currentVal, providerValue: provVal, selected: true});
+                        } else {
+                            autoFilledFields = new Set([...autoFilledFields, dbKey]);
+                        }
                     }
-                }
-                if (filled > 0) {
-                    toasts.success(`Identifiers updated (${filled} fields)`);
-                } else {
-                    toasts.info($t('assets.identifiers.askProviderHint') + ' — no data from provider');
                 }
             } else if (section === 'sector') {
                 const cpData = pd.classification_params;
                 if (cpData?.sector_area) {
-                    sectorDistribution = cpData.sector_area.distribution ?? cpData.sector_area;
-                    toasts.success($t('assets.modal.sectorDistribution') + ' ✔');
+                    const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
+                    const hasCurrent = Object.keys(sectorDistribution).length > 0;
+                    if (!hasCurrent) {
+                        sectorDistribution = provDist;
+                        autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
+                    } else if (JSON.stringify(sectorDistribution) !== JSON.stringify(provDist)) {
+                        differences.push({field: 'sector_area', label: $t('assets.modal.sectorDistribution'), type: 'distribution', currentValue: sectorDistribution, providerValue: provDist, selected: true});
+                    } else {
+                        autoFilledFields = new Set([...autoFilledFields, 'sector_area']);
+                    }
                 } else {
                     toasts.info($t('assets.modal.sectorDistribution') + ' — no data from provider');
                 }
             } else if (section === 'geographic') {
                 const cpData = pd.classification_params;
                 if (cpData?.geographic_area) {
-                    geographicDistribution = cpData.geographic_area.distribution ?? cpData.geographic_area;
-                    toasts.success($t('assets.modal.geographicDistribution') + ' ✔');
+                    const provDist = cpData.geographic_area.distribution ?? cpData.geographic_area;
+                    const hasCurrent = Object.keys(geographicDistribution).length > 0;
+                    if (!hasCurrent) {
+                        geographicDistribution = provDist;
+                        autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
+                    } else if (JSON.stringify(geographicDistribution) !== JSON.stringify(provDist)) {
+                        differences.push({field: 'geographic_area', label: $t('assets.modal.geographicDistribution'), type: 'distribution', currentValue: geographicDistribution, providerValue: provDist, selected: true});
+                    } else {
+                        autoFilledFields = new Set([...autoFilledFields, 'geographic_area']);
+                    }
                 } else {
                     toasts.info($t('assets.modal.geographicDistribution') + ' — no data from provider');
                 }
+            }
+
+            // Show diff modal if conflicts exist, otherwise show success toast
+            if (differences.length > 0) {
+                comparisonDifferences = differences;
+                showComparisonModal = true;
+            } else {
+                toasts.success($t('assets.comparison.allMatch'));
             }
         } catch (e: any) {
             console.error(`Ask Provider (${section}) failed:`, e);
@@ -820,63 +961,82 @@
                     {:else}
                         <RefreshCw size={12}/>
                     {/if}
-                    <span>{$t('assets.identifiers.askProvider')}</span>
+                    <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
                 </button>
             </div>
 
-            <!-- Display Name -->
-            <div>
-                <label for="asset-display-name" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    {$t('common.name')} *
-                </label>
-                <input
-                        id="asset-display-name"
-                        type="text"
-                        bind:value={displayName}
-                        placeholder="Apple Inc."
-                        class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                               placeholder-gray-400 dark:placeholder-gray-500
-                               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
-                />
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <!-- Asset Type -->
-                <div>
-                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        {$t('assets.type')} *
-                    </span>
-                    <SimpleSelect
-                            bind:value={assetType}
-                            options={assetTypeOptions}
-                            dropdownPosition="auto"
-                    >
-                        {#snippet item(opt)}
-                            <div class="flex items-center gap-2">
-                                <img src={opt.icon} alt="" class="w-4 h-4 object-contain"/>
-                                <span>{opt.label}</span>
-                            </div>
-                        {/snippet}
-                        {#snippet selectedItem(opt)}
-                            <div class="flex items-center gap-2">
-                                <img src={opt.icon} alt="" class="w-4 h-4 object-contain"/>
-                                <span>{opt.label}</span>
-                            </div>
-                        {/snippet}
-                    </SimpleSelect>
+            <!-- Grid: Icon on left, form fields on right -->
+            <div class="grid grid-cols-[auto_1fr] gap-4 items-start">
+                <!-- Left: Icon (clickable) -->
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="group relative cursor-pointer"
+                     onclick={() => showImagePicker = true}
+                     title={$t('uploads.selectIcon')}>
+                    <AssetIcon iconUrl={iconUrl} assetType={assetType} size="lg" />
+                    <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100
+                                flex items-center justify-center transition-opacity">
+                        <Upload class="text-white" size={16}/>
+                    </div>
                 </div>
 
-                <!-- Currency -->
-                <div>
-                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        {$t('common.currency')} *
-                    </span>
-                    <CurrencySearchSelect
-                            value={currency}
-                            onchange={(v) => { if (v) currency = v; }}
-                            maxVisibleItems={6}
-                    />
+                <!-- Right: Name, Type+Currency -->
+                <div class="space-y-3">
+                    <!-- Display Name -->
+                    <div>
+                        <label for="asset-display-name" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {$t('common.name')} *
+                        </label>
+                        <input
+                                id="asset-display-name"
+                                type="text"
+                                bind:value={displayName}
+                                placeholder="Apple Inc."
+                                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                       placeholder-gray-400 dark:placeholder-gray-500
+                                       focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                        />
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Asset Type -->
+                        <div>
+                            <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                                {$t('assets.type')} *
+                            </span>
+                            <SimpleSelect
+                                    bind:value={assetType}
+                                    options={assetTypeOptions}
+                                    dropdownPosition="auto"
+                            >
+                                {#snippet item(opt)}
+                                    <div class="flex items-center gap-2">
+                                        <img src={opt.icon} alt="" class="w-4 h-4 object-contain"/>
+                                        <span>{opt.label}</span>
+                                    </div>
+                                {/snippet}
+                                {#snippet selectedItem(opt)}
+                                    <div class="flex items-center gap-2">
+                                        <img src={opt.icon} alt="" class="w-4 h-4 object-contain"/>
+                                        <span>{opt.label}</span>
+                                    </div>
+                                {/snippet}
+                            </SimpleSelect>
+                        </div>
+
+                        <!-- Currency -->
+                        <div>
+                            <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                                {$t('common.currency')} *
+                            </span>
+                            <CurrencySearchSelect
+                                    value={currency}
+                                    onchange={(v) => { if (v) currency = v; }}
+                                    maxVisibleItems={6}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -927,17 +1087,32 @@
                                 {$t('assets.modal.identifiers')}
                             </div>
                             <div class="flex items-center gap-1.5">
+                                {#if identifierSelectedIds.length > 0}
+                                    <DataTableToolbar
+                                        selectedCount={identifierSelectedIds.length}
+                                        bulkActions={[
+                                            {
+                                                id: 'delete',
+                                                icon: Trash2,
+                                                label: () => $t('assets.identifiers.deleteSelected'),
+                                                variant: 'danger',
+                                                onClick: handleIdentifierBulkDelete,
+                                            },
+                                        ]}
+                                        onClearSelection={() => { identifierSelectedIds = []; }}
+                                    />
+                                {/if}
                                 <button type="button" onclick={addIdentifierRow}
                                         class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                                         title={$t('assets.identifiers.addIdentifier')}>
-                                    <Plus size={10}/> {$t('assets.identifiers.addIdentifier')}
+                                    <Plus size={10}/> <span class="hidden sm:inline">{$t('assets.identifiers.addIdentifier')}</span>
                                 </button>
                                 <button type="button" onclick={() => handleAskProviderSection('identifiers')}
                                         disabled={!hasProvider || askingProvider}
                                         class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                         title={$t('assets.identifiers.askProvider')}>
                                     {#if askingProvider}<Loader2 size={10} class="animate-spin"/>{:else}<RefreshCw size={10}/>{/if}
-                                    <span>{$t('assets.identifiers.askProvider')}</span>
+                                    <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
                                 </button>
                             </div>
                         </div>
@@ -947,7 +1122,8 @@
                                     columns={identifierColumns}
                                     getRowId={(r) => r.id}
                                     storageKey="asset-modal-identifiers"
-                                    enableSelection={false}
+                                    enableSelection={true}
+                                    onSelectionChange={(ids) => { identifierSelectedIds = ids; }}
                                     enablePagination={false}
                                     enableColumnFilters={false}
                                     enableSorting={false}
@@ -1147,5 +1323,29 @@
         differences={comparisonDifferences}
         onapply={handleComparisonApply}
         oncancel={() => { showComparisonModal = false; }}
+/>
+
+<!-- Image Picker for asset icon -->
+<ImagePickerWrapper
+    open={showImagePicker}
+    preset="asset-icon"
+    title={$t('uploads.selectIcon')}
+    initialUrl={iconUrl ?? ''}
+    circularPreview={false}
+    filterImages={true}
+    onchange={handleImagePickerChange}
+    oncancel={() => showImagePicker = false}
+/>
+
+<!-- Confirmation: Bulk delete identifiers -->
+<ConfirmModal
+    open={showIdentifierDeleteConfirm}
+    title={$t('assets.identifiers.deleteSelected')}
+    message={$t('assets.identifiers.deleteConfirmMessage', {values: {count: pendingIdentifierDeleteIds.length}})}
+    confirmText={$t('common.delete')}
+    warning={true}
+    onConfirm={confirmIdentifierBulkDelete}
+    onCancel={() => { showIdentifierDeleteConfirm = false; pendingIdentifierDeleteIds = []; }}
+    zIndex={80}
 />
 

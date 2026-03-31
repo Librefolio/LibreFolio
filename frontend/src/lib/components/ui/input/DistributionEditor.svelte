@@ -24,12 +24,16 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {RefreshCw, Loader2, X as XIcon, Plus} from 'lucide-svelte';
+    import {RefreshCw, Loader2, X as XIcon, Plus, Scale, Trash2} from 'lucide-svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import {currentLanguage} from '$lib/stores/language';
     import type {CountryInfo} from '$lib/stores/countryStore';
     import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/countryStore';
+    import {getSectorKeysList, sectorI18nKey} from '$lib/utils/assetTypes';
+    import {ensureSectorsLoaded} from '$lib/stores/sectorStore';
 
     // =========================================================================
     // Types
@@ -41,12 +45,6 @@
         weight: number; // 0-100 display range
     }
 
-    /** Predefined sector keys (matching i18n `sectors.*` keys) */
-    const SECTOR_KEYS = [
-        'Industrials', 'Technology', 'Financials', 'ConsumerDiscretionary',
-        'HealthCare', 'RealEstate', 'BasicMaterials', 'Energy',
-        'ConsumerStaples', 'Telecommunication', 'Utilities', 'Other',
-    ] as const;
 
     // =========================================================================
     // Props
@@ -81,9 +79,17 @@
 
     let entries = $state<DistEntry[]>([]);
     let countries = $state<CountryInfo[]>([]);
+    let skipNextSync = false;
+    let selectedIds = $state<string[]>([]);
+    let showDeleteConfirm = $state(false);
+    let pendingDeleteIds = $state<string[]>([]);
 
-    // Sync from prop value → internal entries
+    // Sync from prop value → internal entries (only on external changes)
     $effect(() => {
+        if (skipNextSync) {
+            skipNextSync = false;
+            return;
+        }
         if (value) {
             entries = Object.entries(value)
                 .map(([key, w]) => ({id: crypto.randomUUID(), key, weight: Number(w) * 100}))
@@ -101,6 +107,13 @@
         }
     });
 
+    // Load sectors from backend for sector mode
+    $effect(() => {
+        if (kind === 'sector') {
+            ensureSectorsLoaded();
+        }
+    });
+
     async function loadCountries(language: string) {
         try {
             await ensureCountriesLoaded(language);
@@ -115,21 +128,23 @@
     // =========================================================================
 
     let totalPercent = $derived(entries.reduce((sum, e) => sum + e.weight, 0));
-    let isValid = $derived(Math.abs(totalPercent - 100) < 0.05);
-    let isExcess = $derived(totalPercent > 100.05);
-    let isMissing = $derived(totalPercent < 99.95 && entries.length > 0);
+    let isValid = $derived(Math.abs(totalPercent - 100) < 0.01);
+    let isExcess = $derived(totalPercent > 100.01);
+    let isMissing = $derived(totalPercent < 99.99 && entries.length > 0);
     let maxWeight = $derived(Math.max(...entries.map(e => e.weight), 1));
 
     let validBarClass = $derived(isValid ? 'bg-libre-green' : isExcess ? 'bg-red-400' : 'bg-amber-400');
 
     /** Sector select options (all keys, with i18n labels) */
     let allSectorOptions = $derived(
-        SECTOR_KEYS.map(k => ({value: k, label: $t(`sectors.${k}`) || k}))
+        getSectorKeysList().map(k => ({value: k, label: $t(`sectors.${sectorI18nKey(k)}`) || k}))
     );
 
-    /** Country select options (all countries, with flag + name) */
-    let allCountryOptions = $derived(
-        countries.map(c => ({value: c.iso3, label: `${c.flag_emoji || ''} ${c.iso3} — ${c.name}`.trim()}))
+    /** Country select options (all countries + 'Other' catch-all, with flag + name) */
+    let allCountryOptions = $derived([
+        ...countries.map(c => ({value: c.iso3, label: `${c.flag_emoji || ''} ${c.iso3} — ${c.name}`.trim()})),
+        {value: 'Other', label: `🏳️ Other — ${$t('common.other')}`},
+    ]
     );
 
     /** Already-used keys for exclusion in "Add" logic */
@@ -144,6 +159,7 @@
         for (const e of entries) {
             result[e.key] = Number((e.weight / 100).toFixed(4));
         }
+        skipNextSync = true;
         value = result;
         onchange?.(result);
     }
@@ -166,7 +182,7 @@
     function addEntry() {
         let defaultKey = '';
         if (kind === 'sector') {
-            defaultKey = SECTOR_KEYS.find(k => !usedKeys.has(k)) ?? '';
+            defaultKey = getSectorKeysList().find(k => !usedKeys.has(k)) ?? '';
         } else {
             const firstUnused = countries.find(c => !usedKeys.has(c.iso3));
             defaultKey = firstUnused?.iso3 ?? '';
@@ -175,12 +191,62 @@
         emitChange();
     }
 
+    /** Balance a single entry: assign all deficit/excess to this row */
+    function balanceEntry(id: string) {
+        const delta = 100 - totalPercent;
+        entries = entries.map(e =>
+            e.id === id ? {...e, weight: Math.max(0, Math.min(100, e.weight + delta))} : e
+        );
+        emitChange();
+    }
+
+    /** Weighted balance on selected rows: distribute delta proportionally to pre-existing weights */
+    function balanceSelected() {
+        const delta = 100 - totalPercent;
+        if (Math.abs(delta) < 0.005) return;
+        const selectedSet = new Set(selectedIds);
+        const selectedEntries = entries.filter(e => selectedSet.has(e.id));
+        if (selectedEntries.length === 0) return;
+
+        const totalSelectedWeight = selectedEntries.reduce((s, e) => s + e.weight, 0);
+
+        entries = entries.map(e => {
+            if (!selectedSet.has(e.id)) return e;
+            let share: number;
+            if (totalSelectedWeight > 0) {
+                share = delta * (e.weight / totalSelectedWeight);
+            } else {
+                // All selected have weight 0: distribute equally
+                share = delta / selectedEntries.length;
+            }
+            return {...e, weight: Math.max(0, Math.min(100, Number((e.weight + share).toFixed(2))))};
+        });
+        emitChange();
+    }
+
+    /** Bulk delete with confirmation */
+    function handleBulkDelete() {
+        pendingDeleteIds = [...selectedIds];
+        showDeleteConfirm = true;
+    }
+
+    function confirmBulkDelete() {
+        const deleteSet = new Set(pendingDeleteIds);
+        entries = entries.filter(e => !deleteSet.has(e.id));
+        selectedIds = [];
+        pendingDeleteIds = [];
+        showDeleteConfirm = false;
+        emitChange();
+    }
+
     function formatLabel(key: string): string {
         if (kind === 'sector') {
-            const localized = $t(`sectors.${key}`);
-            return localized !== `sectors.${key}` ? localized : key;
+            const i18nKey = `sectors.${sectorI18nKey(key)}`;
+            const localized = $t(i18nKey);
+            return localized !== i18nKey ? localized : key;
         }
-        // Geographic: show flag + name
+        // Geographic: handle 'Other' specially, otherwise show flag + iso3
+        if (key === 'Other') return `🏳️ Other`;
         const c = countries.find(c => c.iso3 === key);
         if (c) return `${c.flag_emoji || ''} ${c.iso3}`.trim();
         return key;
@@ -259,6 +325,13 @@
     let rowActions = $derived<RowAction<DistEntry>[]>(
         isReadonly || disabled ? [] : [
             {
+                id: 'balance',
+                icon: Scale,
+                label: () => $t('assets.distribution.balanceRow'),
+                onClick: (row) => balanceEntry(row.id),
+                disabled: () => isValid,
+            },
+            {
                 id: 'delete',
                 icon: XIcon,
                 label: 'Remove',
@@ -270,18 +343,40 @@
 </script>
 
 <div class="space-y-1">
-    <!-- Section header with +Add and Ask Provider buttons -->
+    <!-- Section header with +Add, bulk toolbar, and Ask Provider buttons -->
     <div class="flex items-center justify-between mb-1">
         <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
             {kind === 'sector' ? $t('assets.modal.sectorDistribution') : $t('assets.modal.geographicDistribution')}
         </div>
         <div class="flex items-center gap-1.5">
+            {#if !isReadonly && !disabled && selectedIds.length > 0}
+                <DataTableToolbar
+                    selectedCount={selectedIds.length}
+                    bulkActions={[
+                        {
+                            id: 'balance',
+                            icon: Scale,
+                            label: () => $t('assets.distribution.balanceSelected'),
+                            onClick: balanceSelected,
+                            disabled: isValid,
+                        },
+                        {
+                            id: 'delete',
+                            icon: Trash2,
+                            label: () => $t('assets.distribution.deleteSelected'),
+                            variant: 'danger',
+                            onClick: handleBulkDelete,
+                        },
+                    ]}
+                    onClearSelection={() => { selectedIds = []; }}
+                />
+            {/if}
             {#if !isReadonly && !disabled}
                 <button type="button" onclick={addEntry}
                         class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                         title={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}>
                     <Plus size={10}/>
-                    {kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}
+                    <span class="hidden sm:inline">{kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}</span>
                 </button>
             {/if}
             {#if !isReadonly && !disabled && onAskProvider}
@@ -299,7 +394,7 @@
                     {:else}
                         <RefreshCw size={10}/>
                     {/if}
-                    <span>{$t('assets.identifiers.askProvider')}</span>
+                    <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
                 </button>
             {/if}
         </div>
@@ -312,14 +407,17 @@
                 columns={dtColumns}
                 getRowId={(r) => r.id}
                 storageKey="dist-editor-{kind}"
-                enableSelection={false}
-                enablePagination={false}
+                enableSelection={!isReadonly && !disabled}
+                onSelectionChange={(ids) => { selectedIds = ids; }}
+                enablePagination={true}
+                defaultPageSize={5}
+                pageSizeOptions={[5, 10, 25]}
                 enableColumnFilters={false}
                 enableSorting={true}
                 enableColumnResize={false}
                 enableColumnVisibility={false}
                 enableActions={!isReadonly && !disabled}
-                actionsColumnWidth="40px"
+                actionsColumnWidth="70px"
                 rowActions={rowActions}
                 tableLayout="auto"
         />
@@ -340,6 +438,19 @@
         </div>
     {:else if isReadonly || disabled}
         <div class="text-xs text-gray-400 italic py-2">—</div>
+    {:else}
+        <div class="text-xs text-gray-400 italic py-2">{$t('assets.distribution.emptyHint')}</div>
     {/if}
 </div>
+
+<ConfirmModal
+    open={showDeleteConfirm}
+    title={$t('assets.distribution.deleteSelected')}
+    message={$t('assets.distribution.deleteConfirmMessage', {values: {count: pendingDeleteIds.length}})}
+    confirmText={$t('common.delete')}
+    warning={true}
+    onConfirm={confirmBulkDelete}
+    onCancel={() => { showDeleteConfirm = false; pendingDeleteIds = []; }}
+    zIndex={80}
+/>
 

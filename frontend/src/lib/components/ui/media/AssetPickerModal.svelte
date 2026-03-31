@@ -215,6 +215,12 @@
         selectedFile = row;
         confirmSelection();
     }
+
+    /** Clear the URL and dispatch empty string to remove the icon */
+    function handleClearUrl() {
+        dispatch('select', {url: ''});
+        close();
+    }
 </script>
 
 <ModalBase
@@ -262,9 +268,24 @@
                 <!-- URL Input -->
                 <div class="url-section">
                     <label class="url-label" for="asset-url-input">{$_('uploads.imageUrl') || 'Image URL'}</label>
-                    <input type="url" id="asset-url-input" class="url-input" bind:value={urlInput}
-                           placeholder="https://example.com/image.png"/>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="url" id="asset-url-input" class="url-input" style="flex:1;" bind:value={urlInput}
+                               placeholder="https://example.com/image.png"/>
+                        {#if urlInput}
+                            <button type="button" class="btn btn-secondary" style="white-space:nowrap; padding:0.375rem 0.75rem; font-size:0.8125rem; color:#dc2626;" on:click={() => { urlInput = ''; }}>
+                                <X size={14}/>
+                            </button>
+                        {/if}
+                    </div>
                     <p class="url-hint">{$_('uploads.urlHint') || 'Enter a remote URL or a local path from Files'}</p>
+                    {#if initialUrl && !urlInput}
+                        <!-- Show remove button when user has cleared the URL -->
+                        <button type="button" class="btn btn-secondary" style="width:100%; margin-top:0.5rem; color:#dc2626; border-color:#fca5a5;"
+                                on:click={handleClearUrl}>
+                            <X size={14}/>
+                            <span style="margin-left:0.25rem;">{$_('uploads.removeImage') || 'Remove Image'}</span>
+                        </button>
+                    {/if}
                     {#if urlInput && urlValid}
                         <div class="url-preview" class:circular={circularPreview}>
                             <div class="url-preview-img-wrapper">

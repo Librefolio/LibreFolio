@@ -58,7 +58,9 @@
     "icon": "Icona",
     "custom": "Personalizzato",
     "name": "Nome",
-    "currency": "Valuta"
+    "currency": "Valuta",
+    "other": "Altro",
+    "date": "Data"
   },
   "table": {
     "columns": "Colonne",
@@ -339,7 +341,9 @@
       "askProviderHint": "Recupera identificativi dal provider assegnato",
       "autoFilled": "Compilato automaticamente dal provider",
       "conflictWarning": "Il provider suggerisce un valore diverso",
-      "addIdentifier": "Aggiungi identificativo"
+      "addIdentifier": "Aggiungi identificativo",
+      "deleteSelected": "Elimina identificatori selezionati",
+      "deleteConfirmMessage": "Eliminare {count} identificatori?"
     },
     "confirm": {
       "saveWithoutTest": "Salvare senza test?",
@@ -363,14 +367,20 @@
       "selectAll": "Seleziona Tutto",
       "deselectAll": "Deseleziona Tutto",
       "applySelected": "Applica Selezionati ({count}/{total})",
-      "allMatch": "Tutti i dati corrispondono al provider"
+      "allMatch": "Tutti i dati corrispondono al provider",
+      "noDistributionData": "Il provider non ha dati per: {fields}"
     },
     "distribution": {
       "total": "Totale",
       "excess": "eccesso",
       "missing": "mancante",
       "addSector": "Aggiungi settore",
-      "addCountry": "Aggiungi paese"
+      "addCountry": "Aggiungi paese",
+      "emptyHint": "Nessun dato — usa +Aggiungi o Chiedi al Provider",
+      "balanceRow": "Bilancia al 100%",
+      "balanceSelected": "Bilancia righe selezionate",
+      "deleteSelected": "Elimina righe selezionate",
+      "deleteConfirmMessage": "Eliminare {count} voci da questa distribuzione?"
     }
   },
   "transactions": {
@@ -624,7 +634,8 @@
     "imageUrl": "URL Immagine",
     "useSelected": "Usa Selezionato",
     "selectIcon": "Seleziona Icona",
-    "urlHint": "Inserisci un URL remoto o un percorso locale da File"
+    "urlHint": "Inserisci un URL remoto o un percorso locale da File",
+    "removeImage": "Rimuovi immagine"
   },
   "datePicker": {
     "from": "Dal",

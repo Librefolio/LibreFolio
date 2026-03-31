@@ -20,6 +20,7 @@
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
 
     interface Props {
@@ -336,6 +337,15 @@
                 return cell.bytes;
             case 'link':
                 return cell.text;
+            case 'editable-number':
+                return cell.value;
+            case 'editable-text':
+                return cell.value;
+            case 'editable-select':
+                return cell.value;
+            case 'html':
+                // Strip HTML tags for sorting
+                return cell.html.replace(/<[^>]*>/g, '');
             default:
                 return String(cell);
         }
@@ -1071,16 +1081,18 @@
                                                 onclick={(e) => e.stopPropagation()}
                                         />
                                     {:else if cellContent.type === 'editable-select'}
-                                        <select
-                                                class="cell-editable-select"
-                                                value={cellContent.value}
-                                                onchange={(e) => cellContent.onchange(e.currentTarget.value)}
-                                                onclick={(e) => e.stopPropagation()}
-                                        >
-                                            {#each cellContent.options as opt}
-                                                <option value={opt.value} selected={opt.value === cellContent.value}>{opt.label}</option>
-                                            {/each}
-                                        </select>
+                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                        <div class="cell-editable-select-wrapper" onclick={(e) => e.stopPropagation()}>
+                                            <SimpleSelect
+                                                    value={cellContent.value}
+                                                    options={cellContent.options}
+                                                    compact
+                                                    showChevron={false}
+                                                    dropdownPosition="auto"
+                                                    onchange={(v) => cellContent.onchange(v)}
+                                            />
+                                        </div>
                                     {:else if cellContent.type === 'html'}
                                         {@html cellContent.html}
                                     {/if}
@@ -1447,6 +1459,22 @@
 
     .td-data {
         word-break: break-word;
+    }
+
+    /* Allow SimpleSelect dropdown to overflow outside td */
+    td:has(.cell-editable-select-wrapper) {
+        overflow: visible;
+    }
+
+    /* Ensure table rows with open SimpleSelect dropdown are on top */
+    tbody tr:has(.cell-editable-select-wrapper) {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* When dropdown is actually open (focus-within), bump z-index above sibling rows */
+    tbody tr:focus-within {
+        z-index: 10;
     }
 
     .td-fixed {
@@ -1852,34 +1880,16 @@
         box-shadow: 0 0 0 1px #4ade8040;
     }
 
-    /* Editable select cell */
-    .cell-editable-select {
+    /* Editable select cell (SimpleSelect wrapper) */
+    .cell-editable-select-wrapper {
         width: 100%;
-        padding: 0.25rem 0.375rem;
-        font-size: 0.8125rem;
-        border: 1px solid #e2e8f0;
-        border-radius: 4px;
-        background: white;
-        color: #1e293b;
-        outline: none;
-        transition: border-color 0.15s;
-        cursor: pointer;
+        position: relative;
+        z-index: 1;
     }
 
-    .cell-editable-select:focus {
-        border-color: #1a4031;
-        box-shadow: 0 0 0 1px #1a403140;
-    }
-
-    :global(.dark) .cell-editable-select {
-        background: #0f172a;
-        border-color: #475569;
-        color: #e2e8f0;
-    }
-
-    :global(.dark) .cell-editable-select:focus {
-        border-color: #4ade80;
-        box-shadow: 0 0 0 1px #4ade8040;
+    /* Ensure dropdown from SimpleSelect inside table cells is visible above other rows */
+    .cell-editable-select-wrapper :global(.relative) {
+        z-index: 50;
     }
 
     /* Row status classes (used via getRowClass prop) */

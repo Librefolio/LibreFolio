@@ -58,7 +58,9 @@
     "icon": "Icon",
     "custom": "Custom",
     "name": "Name",
-    "currency": "Currency"
+    "currency": "Currency",
+    "other": "Other",
+    "date": "Date"
   },
   "table": {
     "columns": "Columns",
@@ -339,7 +341,9 @@
       "askProviderHint": "Fetch identifiers from the assigned provider",
       "autoFilled": "Auto-filled from provider",
       "conflictWarning": "Provider suggests a different value",
-      "addIdentifier": "Add identifier"
+      "addIdentifier": "Add identifier",
+      "deleteSelected": "Delete selected identifiers",
+      "deleteConfirmMessage": "Delete {count} identifiers?"
     },
     "confirm": {
       "saveWithoutTest": "Save Without Testing?",
@@ -363,14 +367,20 @@
       "selectAll": "Select All",
       "deselectAll": "Deselect All",
       "applySelected": "Apply Selected ({count}/{total})",
-      "allMatch": "All data matches provider"
+      "allMatch": "All data matches provider",
+      "noDistributionData": "Provider has no data for: {fields}"
     },
     "distribution": {
       "total": "Total",
       "excess": "excess",
       "missing": "missing",
       "addSector": "Add sector",
-      "addCountry": "Add country"
+      "addCountry": "Add country",
+      "emptyHint": "No data — use +Add or Ask Provider",
+      "balanceRow": "Balance to 100%",
+      "balanceSelected": "Balance selected rows",
+      "deleteSelected": "Delete selected rows",
+      "deleteConfirmMessage": "Delete {count} entries from this distribution?"
     }
   },
   "transactions": {
@@ -624,7 +634,8 @@
     "imageUrl": "Image URL",
     "useSelected": "Use Selected",
     "selectIcon": "Select Icon",
-    "urlHint": "Enter a remote URL or a local path from Files"
+    "urlHint": "Enter a remote URL or a local path from Files",
+    "removeImage": "Remove Image"
   },
   "datePicker": {
     "from": "From",
