@@ -2107,6 +2107,72 @@ type FAPriceQueryResult = {
    */
   Array<FAPricePoint_Output> | undefined;
 };
+type FAProviderAssignmentReadItem = {
+  /**
+   * Asset ID
+   */
+  asset_id: number;
+  /**
+   * Provider code
+   */
+  provider_code: string;
+  /**
+   * Asset identifier for provider
+   */
+  identifier: string;
+  identifier_type: ProviderInputType;
+  provider_params?:
+    | /**
+     * Provider configuration
+     */
+    (({} | null) | Array<{} | null>)
+    | undefined;
+  fetch_interval?:
+    | /**
+     * Refresh frequency in minutes
+     */
+    ((number | null) | Array<number | null>)
+    | undefined;
+  last_fetch_at?:
+    | /**
+     * Last fetch timestamp (ISO format)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  user_url?:
+    | /**
+     * User-defined URL
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  provider_url?:
+    | /**
+     * Auto-generated URL to provider page
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+};
+type ProviderInputType =
+  /**
+ * Describes the kind of identifier input a provider expects.
+
+This is NOT the same as IdentifierType (which describes asset record columns).
+ProviderInputType tells the frontend what the provider needs as input:
+
+- TICKER: A stock ticker symbol (e.g., AAPL)
+- ISIN: An ISIN code (e.g., IE00B4L5Y983)
+- URL: A full URL to scrape (e.g., https://example.com/price)
+- AUTO_GENERATED: No user input needed — identifier is auto-generated (e.g., UUID)
+
+Mapping to stored IdentifierType:
+- TICKER → IdentifierType.TICKER
+- ISIN → IdentifierType.ISIN
+- URL → IdentifierType.OTHER
+- AUTO_GENERATED → IdentifierType.UUID
+ *
+ * @enum TICKER, ISIN, URL, AUTO_GENERATED
+ */
+  "TICKER" | "ISIN" | "URL" | "AUTO_GENERATED";
 type FAProviderInfo = {
   /**
    * Provider code (e.g., yfinance, cssscraper)
@@ -5074,34 +5140,49 @@ const FAProviderProbeResponse: z.ZodType<FAProviderProbeResponse> = z.object({
     .describe("Present only if metadata was requested")
     .optional(),
 });
-const FAProviderAssignmentReadItem = z.object({
-  asset_id: z.number().int().describe("Asset ID"),
-  provider_code: z.string().describe("Provider code"),
-  identifier: z.string().describe("Asset identifier for provider"),
-  identifier_type: z
-    .string()
-    .describe("Provider input type (TICKER, ISIN, URL, AUTO_GENERATED)"),
-  provider_params: z
-    .union([z.object({}).partial().passthrough(), z.null()])
-    .describe("Provider configuration")
-    .optional(),
-  fetch_interval: z
-    .union([z.number(), z.null()])
-    .describe("Refresh frequency in minutes")
-    .optional(),
-  last_fetch_at: z
-    .union([z.string(), z.null()])
-    .describe("Last fetch timestamp (ISO format)")
-    .optional(),
-  user_url: z
-    .union([z.string(), z.null()])
-    .describe("User-defined URL")
-    .optional(),
-  provider_url: z
-    .union([z.string(), z.null()])
-    .describe("Auto-generated URL to provider page")
-    .optional(),
-});
+const ProviderInputType = z.enum(["TICKER", "ISIN", "URL", "AUTO_GENERATED"]);
+const FAProviderAssignmentReadItem: z.ZodType<FAProviderAssignmentReadItem> =
+  z.object({
+    asset_id: z.number().int().describe("Asset ID"),
+    provider_code: z.string().describe("Provider code"),
+    identifier: z.string().describe("Asset identifier for provider"),
+    identifier_type:
+      ProviderInputType.describe(`Describes the kind of identifier input a provider expects.
+
+This is NOT the same as IdentifierType (which describes asset record columns).
+ProviderInputType tells the frontend what the provider needs as input:
+
+- TICKER: A stock ticker symbol (e.g., AAPL)
+- ISIN: An ISIN code (e.g., IE00B4L5Y983)
+- URL: A full URL to scrape (e.g., https://example.com/price)
+- AUTO_GENERATED: No user input needed — identifier is auto-generated (e.g., UUID)
+
+Mapping to stored IdentifierType:
+- TICKER → IdentifierType.TICKER
+- ISIN → IdentifierType.ISIN
+- URL → IdentifierType.OTHER
+- AUTO_GENERATED → IdentifierType.UUID`),
+    provider_params: z
+      .union([z.object({}).partial().passthrough(), z.null()])
+      .describe("Provider configuration")
+      .optional(),
+    fetch_interval: z
+      .union([z.number(), z.null()])
+      .describe("Refresh frequency in minutes")
+      .optional(),
+    last_fetch_at: z
+      .union([z.string(), z.null()])
+      .describe("Last fetch timestamp (ISO format)")
+      .optional(),
+    user_url: z
+      .union([z.string(), z.null()])
+      .describe("User-defined URL")
+      .optional(),
+    provider_url: z
+      .union([z.string(), z.null()])
+      .describe("Auto-generated URL to provider page")
+      .optional(),
+  });
 const FAMetadataRefreshResult: z.ZodType<FAMetadataRefreshResult> = z.object({
   asset_id: z.number().int(),
   success: z.boolean(),
@@ -6373,6 +6454,7 @@ export const schemas = {
   ProbeHistoryResult,
   ProbeMetadataResult,
   FAProviderProbeResponse,
+  ProviderInputType,
   FAProviderAssignmentReadItem,
   FAMetadataRefreshResult,
   FABulkMetadataRefreshResponse,

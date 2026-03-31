@@ -419,6 +419,18 @@
         return typeof col.headerTooltip === 'function' ? col.headerTooltip() : col.headerTooltip;
     }
 
+    function getColumnTooltipUrl(col: ColumnDef<T>): string | null {
+        if (!col.headerTooltipUrl) return null;
+        return typeof col.headerTooltipUrl === 'function' ? col.headerTooltipUrl() : col.headerTooltipUrl;
+    }
+
+    /** Handle image load error — hide image and show fallback */
+    function handleImageError(e: Event) {
+        const img = e.currentTarget as HTMLImageElement;
+        img.style.display = 'none';
+        img.nextElementSibling?.classList.remove('hidden');
+    }
+
     // ============ Actions ============
 
     function toggleSort(columnId: string) {
@@ -839,7 +851,7 @@
                     <th
                             class="th-data"
                             class:sortable={column.sortable !== false && enableSorting}
-                            style="width: {columnWidths[column.id] || column.width || 150}px;"
+                            style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;"
                     >
                         <div class="header-content">
                             <button
@@ -865,10 +877,19 @@
                             <!-- Header tooltip (info icon) -->
                             {#if getColumnTooltip(column)}
                                 {@const tooltipText = getColumnTooltip(column) ?? ''}
+                                {@const tooltipUrl = getColumnTooltipUrl(column)}
                                 <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
-                                    <span class="header-tooltip-icon">
-                                        <Info size={12}/>
-                                    </span>
+                                    {#if tooltipUrl}
+                                        <a href={tooltipUrl} target="_blank" rel="noopener noreferrer"
+                                           class="header-tooltip-icon header-tooltip-link"
+                                           onclick={(e) => e.stopPropagation()}>
+                                            <Info size={12}/>
+                                        </a>
+                                    {:else}
+                                        <span class="header-tooltip-icon">
+                                            <Info size={12}/>
+                                        </span>
+                                    {/if}
                                 </Tooltip>
                             {/if}
 
@@ -1016,7 +1037,7 @@
                                                         width={cellContent.size || 32}
                                                         height={cellContent.size || 32}
                                                         loading="lazy"
-                                                        onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                                        onerror={handleImageError}
                                                 />
                                                 <span class="image-fallback hidden">
                                                     {#if cellContent.fallbackIcon}
@@ -1303,6 +1324,19 @@
 
     :global(.dark) .header-tooltip-icon {
         color: #64748b;
+    }
+
+    .header-tooltip-link {
+        text-decoration: none;
+        transition: color 0.15s;
+    }
+
+    .header-tooltip-link:hover {
+        color: #1a4031;
+    }
+
+    :global(.dark) .header-tooltip-link:hover {
+        color: #4ade80;
     }
 
     .filter-btn {

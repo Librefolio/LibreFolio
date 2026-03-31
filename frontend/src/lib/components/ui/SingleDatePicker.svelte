@@ -46,6 +46,8 @@
         onchange: (date: string) => void;
         /** Set of dates that cannot be selected */
         disabledDates?: Set<string>;
+        /** Allow selecting future dates (default: false) */
+        allowFuture?: boolean;
     }
 
     let {
@@ -54,6 +56,7 @@
         compact = false,
         onchange,
         disabledDates,
+        allowFuture = false,
     }: Props = $props();
 
     // =========================================================================
@@ -197,6 +200,7 @@
                     onGoToToday={goToToday}
                     highlights={{ selected: value }}
                     {disabledDates}
+                    {allowFuture}
             />
         </div>
     {/if}

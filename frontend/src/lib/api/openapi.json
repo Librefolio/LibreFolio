@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.9-6-ge6913e4-dirty"
+    "version": "v0.5.9-7-g2443ef6-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -7719,8 +7719,7 @@
             "description": "Asset identifier for provider"
           },
           "identifier_type": {
-            "type": "string",
-            "title": "Identifier Type",
+            "$ref": "#/components/schemas/ProviderInputType",
             "description": "Provider input type (TICKER, ISIN, URL, AUTO_GENERATED)"
           },
           "provider_params": {
@@ -10043,6 +10042,17 @@
         ],
         "title": "ProbeOperation",
         "description": "Operations available for provider probe endpoint."
+      },
+      "ProviderInputType": {
+        "type": "string",
+        "enum": [
+          "TICKER",
+          "ISIN",
+          "URL",
+          "AUTO_GENERATED"
+        ],
+        "title": "ProviderInputType",
+        "description": "Describes the kind of identifier input a provider expects.\n\nThis is NOT the same as IdentifierType (which describes asset record columns).\nProviderInputType tells the frontend what the provider needs as input:\n\n- TICKER: A stock ticker symbol (e.g., AAPL)\n- ISIN: An ISIN code (e.g., IE00B4L5Y983)\n- URL: A full URL to scrape (e.g., https://example.com/price)\n- AUTO_GENERATED: No user input needed \u2014 identifier is auto-generated (e.g., UUID)\n\nMapping to stored IdentifierType:\n- TICKER \u2192 IdentifierType.TICKER\n- ISIN \u2192 IdentifierType.ISIN\n- URL \u2192 IdentifierType.OTHER\n- AUTO_GENERATED \u2192 IdentifierType.UUID"
       },
       "RestoreRequest": {
         "properties": {

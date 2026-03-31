@@ -134,7 +134,7 @@
                         <span class="ellipsis">…</span>
                     {:else if page === currentPage}
                         <input type="text" class="page-input" bind:value={pageInputValue} onkeydown={handlePageInputKeydown} onblur={handlePageInputBlur}
-                               onclick={(e) => (e.target as HTMLInputElement).select()}/>
+                               onclick={(e) => {const el = e.target; if (el instanceof HTMLInputElement) el.select();}}/>
                     {:else}
                         <button type="button" class="page-btn" onclick={() => goToPage(page)}>{page}</button>
                     {/if}

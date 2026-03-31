@@ -47,6 +47,10 @@
         compact?: boolean;
         /** Show From/To stacked vertically instead of side by side */
         stacked?: boolean;
+        /** Portal calendar popover to document.body (fixes z-index inside tables with overflow) */
+        usePortal?: boolean;
+        /** Allow selecting future dates (default: false) */
+        allowFuture?: boolean;
         /** Called when dates change */
         onchange?: (start: string, end: string) => void;
     }
@@ -60,6 +64,8 @@
         showDateFields = true,
         compact = false,
         stacked = false,
+        usePortal = false,
+        allowFuture = false,
         onchange,
     }: Props = $props();
 
@@ -341,7 +347,7 @@
             left = Math.max(MARGIN, vw - popW - MARGIN);
         }
 
-        popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; width: ${popW}px; z-index: 9999;`;
+        popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; width: ${popW}px; z-index: 99999;`;
     }
 
     function openCalendar() {
@@ -457,6 +463,7 @@
 
     function displayDate(iso: string): string {
         if (!iso) return '—';
+        if (compact) return iso; // YYYY-MM-DD — fits narrow cells
         const d = new Date(iso + 'T00:00:00');
         return d.toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'});
     }
@@ -468,6 +475,16 @@
         pending: pendingDate ?? undefined,
         hovered: hoveredDate ?? undefined,
     });
+
+    /** Svelte action: portal — moves node to document.body (escapes stacking contexts) */
+    function portalAction(node: HTMLElement) {
+        document.body.appendChild(node);
+        return {
+            destroy() {
+                if (node.parentElement === document.body) node.remove();
+            },
+        };
+    }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -530,64 +547,112 @@
                     class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
                     onclick={openCalendar}
             >
-                <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
-                    <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0"/>
-                    <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
-                    <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(start)}</span>
+                <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
+                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0"/>
+                    <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
+                    <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(start)}</span>
                 </div>
                 {#if stacked}
                     <div class="w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
                 {:else}
                     <div class="w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
                 {/if}
-                <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1.5 whitespace-nowrap {compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}">
-                    <Calendar size={compact ? 12 : 14} class="text-libre-green flex-shrink-0"/>
-                    <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
-                    <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(end)}</span>
+                <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
+                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0"/>
+                    <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
+                    <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(end)}</span>
                 </div>
             </button>
 
             {#if calendarOpen}
-                <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
-                    <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
-                        <!-- Left month (semi-independent) -->
-                        <CalendarMonth
-                                year={calLeftYear}
-                                month={calLeftMonth}
-                                {weekdayLabels}
-                                {monthLabels}
-                                onDayClick={handleDayClick}
-                                onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
-                                onPrevMonth={leftPrevMonth}
-                                onNextMonth={leftNextMonth}
-                                onSetMonth={setLeftMonth}
-                                onSetYear={setLeftYear}
-                                onGoToToday={goToTodayLeft}
-                                highlights={calHighlights}
-                        />
-                        <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
-                        <!-- Right month (semi-independent) -->
-                        <CalendarMonth
-                                year={calRightYear}
-                                month={calRightMonth}
-                                {weekdayLabels}
-                                {monthLabels}
-                                onDayClick={handleDayClick}
-                                onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
-                                onPrevMonth={rightPrevMonth}
-                                onNextMonth={rightNextMonth}
-                                onSetMonth={setRightMonth}
-                                onSetYear={setRightYear}
-                                onGoToToday={goToTodayRight}
-                                highlights={calHighlights}
-                        />
-                    </div>
-                    {#if pendingDate}
-                        <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
-                            {$_('datePicker.selectSecondDate')}
+                {#if usePortal}
+                    <!-- svelte-ignore a11y_click_events_have_key_events -->
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <div use:portalAction>
+                        <div class="fixed inset-0" style="z-index:99998;" onclick={closeCalendar}></div>
+                        <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+                            <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
+                                <CalendarMonth
+                                        year={calLeftYear}
+                                        month={calLeftMonth}
+                                        {weekdayLabels}
+                                        {monthLabels}
+                                        onDayClick={handleDayClick}
+                                        onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
+                                        onPrevMonth={leftPrevMonth}
+                                        onNextMonth={leftNextMonth}
+                                        onSetMonth={setLeftMonth}
+                                        onSetYear={setLeftYear}
+                                        onGoToToday={goToTodayLeft}
+                                        highlights={calHighlights}
+                                        {allowFuture}
+                                />
+                                <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
+                                <CalendarMonth
+                                        year={calRightYear}
+                                        month={calRightMonth}
+                                        {weekdayLabels}
+                                        {monthLabels}
+                                        onDayClick={handleDayClick}
+                                        onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
+                                        onPrevMonth={rightPrevMonth}
+                                        onNextMonth={rightNextMonth}
+                                        onSetMonth={setRightMonth}
+                                        onSetYear={setRightYear}
+                                        onGoToToday={goToTodayRight}
+                                        highlights={calHighlights}
+                                        {allowFuture}
+                                />
+                            </div>
+                            {#if pendingDate}
+                                <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+                                    {$_('datePicker.selectSecondDate')}
+                                </div>
+                            {/if}
                         </div>
-                    {/if}
-                </div>
+                    </div>
+                {:else}
+                    <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+                        <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
+                            <CalendarMonth
+                                    year={calLeftYear}
+                                    month={calLeftMonth}
+                                    {weekdayLabels}
+                                    {monthLabels}
+                                    onDayClick={handleDayClick}
+                                    onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
+                                    onPrevMonth={leftPrevMonth}
+                                    onNextMonth={leftNextMonth}
+                                    onSetMonth={setLeftMonth}
+                                    onSetYear={setLeftYear}
+                                    onGoToToday={goToTodayLeft}
+                                    highlights={calHighlights}
+                                        {allowFuture}
+                            />
+                            <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
+                            <CalendarMonth
+                                    year={calRightYear}
+                                    month={calRightMonth}
+                                    {weekdayLabels}
+                                    {monthLabels}
+                                    onDayClick={handleDayClick}
+                                    onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
+                                    onPrevMonth={rightPrevMonth}
+                                    onNextMonth={rightNextMonth}
+                                    onSetMonth={setRightMonth}
+                                    onSetYear={setRightYear}
+                                    onGoToToday={goToTodayRight}
+                                    highlights={calHighlights}
+                                        {allowFuture}
+                            />
+                        </div>
+                        {#if pendingDate}
+                            <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+                                {$_('datePicker.selectSecondDate')}
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
             {/if}
         </div>
     {/if}

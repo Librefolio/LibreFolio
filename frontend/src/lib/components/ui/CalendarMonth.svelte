@@ -42,6 +42,8 @@
         onGoToToday?: () => void;
         highlights?: CalendarHighlights;
         disabledDates?: Set<string>;
+        /** Allow selecting future dates (default: false — future dates are greyed out) */
+        allowFuture?: boolean;
     }
 
     let {
@@ -58,6 +60,7 @@
         onGoToToday,
         highlights = {},
         disabledDates,
+        allowFuture = false,
     }: Props = $props();
 
     // =========================================================================
@@ -73,6 +76,7 @@
     }
 
     function isFuture(iso: string): boolean {
+        if (allowFuture) return false;
         return iso > todayISO();
     }
 
