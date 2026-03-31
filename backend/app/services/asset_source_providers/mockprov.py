@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Dict
 
 from backend.app.db import IdentifierType
+from backend.app.db.models import ProviderInputType
 from backend.app.schemas.assets import (
     FACurrentValue,
     FAHistoricalData,
@@ -44,7 +45,6 @@ class MockProvider(AssetSourceProvider):
 
     @property
     def accepted_identifier_types(self) -> list:
-        from backend.app.db.models import ProviderInputType
         return [ProviderInputType.TICKER, ProviderInputType.AUTO_GENERATED]
 
     @property

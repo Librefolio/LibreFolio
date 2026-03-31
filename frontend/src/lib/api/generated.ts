@@ -2107,102 +2107,6 @@ type FAPriceQueryResult = {
    */
   Array<FAPricePoint_Output> | undefined;
 };
-type FAProviderAssignmentReadItem = {
-  /**
-   * Asset ID
-   */
-  asset_id: number;
-  /**
-   * Provider code
-   */
-  provider_code: string;
-  /**
-   * Asset identifier for provider
-   */
-  identifier: string;
-  identifier_type: IdentifierType;
-  provider_params?:
-    | /**
-     * Provider configuration
-     */
-    (({} | null) | Array<{} | null>)
-    | undefined;
-  fetch_interval?:
-    | /**
-     * Refresh frequency in minutes
-     */
-    ((number | null) | Array<number | null>)
-    | undefined;
-  last_fetch_at?:
-    | /**
-     * Last fetch timestamp (ISO format)
-     */
-    ((string | null) | Array<string | null>)
-    | undefined;
-  user_url?:
-    | /**
-     * User-defined URL
-     */
-    ((string | null) | Array<string | null>)
-    | undefined;
-  provider_url?:
-    | /**
-     * Auto-generated URL to provider page
-     */
-    ((string | null) | Array<string | null>)
-    | undefined;
-};
-type IdentifierType =
-  /**
- * Asset identifier type.
-
-Usage: Specify which type of identifier is stored in the 'identifier' field.
-
-- ISIN: International Securities Identification Number (e.g., US0378331005 for Apple)
-- TICKER: Stock ticker symbol (e.g., AAPL, MSFT)
-- CUSIP: Committee on Uniform Securities Identification Procedures (US/Canada)
-- SEDOL: Stock Exchange Daily Official List (UK)
-- FIGI: Financial Instrument Global Identifier (Bloomberg standard)
-- UUID: Universal Unique Identifier (for custom/synthetic assets)
-- OTHER: Any other identifier type not listed above
-
-Impact: Used for data validation and plugin selection. Some plugins may only
-work with specific identifier types (e.g., Yahoo Finance prefers TICKER).
-
-⚠️  DEPENDENT SCHEMAS - If you add/remove values, update these files:
-
-1. DATABASE SCHEMA:
-   - backend/alembic/versions/001_initial.py
-     → Add column: identifier_{value.lower()} in assets table
-     → Add index if frequently searched (ISIN, TICKER have indexes)
-
-2. SQLMODEL (this file):
-   - Asset class below
-     → Add field: identifier_{value.lower()}: Optional[str]
-     → Add validator if needed (e.g., ISIN requires 12 chars)
-
-3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):
-   - FAAssetCreateItem: Add identifier_{value.lower()} field
-   - FAAssetPatchItem: Add identifier_{value.lower()} field
-   - FAinfoResponse: Add identifier_{value.lower()} field
-   - FAAinfoFiltersRequest: Add filter field (exact or partial match)
-
-4. SERVICE LAYER (backend/app/services/asset_source.py):
-   - list_assets(): Add condition for new filter
-   - create_assets_bulk(): Pass new field to Asset()
-
-5. BRIM PROVIDER (backend/app/services/brim_provider.py):
-   - search_asset_candidates(): Add search priority if relevant
-
-6. TESTS:
-   - test_identifier_columns_match_enum() will FAIL automatically
-     if Asset.identifier_{value.lower()} is missing
-
-Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_columns_match_enum -v
- *
- * @enum ISIN, TICKER, CUSIP, SEDOL, FIGI, UUID, OTHER
- */
-  "ISIN" | "TICKER" | "CUSIP" | "SEDOL" | "FIGI" | "UUID" | "OTHER";
 type FAProviderInfo = {
   /**
    * Provider code (e.g., yfinance, cssscraper)
@@ -2485,6 +2389,57 @@ type FAProviderSearchResultItem = {
     ((string | null) | Array<string | null>)
     | undefined;
 };
+type IdentifierType =
+  /**
+ * Asset identifier type.
+
+Usage: Specify which type of identifier is stored in the 'identifier' field.
+
+- ISIN: International Securities Identification Number (e.g., US0378331005 for Apple)
+- TICKER: Stock ticker symbol (e.g., AAPL, MSFT)
+- CUSIP: Committee on Uniform Securities Identification Procedures (US/Canada)
+- SEDOL: Stock Exchange Daily Official List (UK)
+- FIGI: Financial Instrument Global Identifier (Bloomberg standard)
+- UUID: Universal Unique Identifier (for custom/synthetic assets)
+- OTHER: Any other identifier type not listed above
+
+Impact: Used for data validation and plugin selection. Some plugins may only
+work with specific identifier types (e.g., Yahoo Finance prefers TICKER).
+
+⚠️  DEPENDENT SCHEMAS - If you add/remove values, update these files:
+
+1. DATABASE SCHEMA:
+   - backend/alembic/versions/001_initial.py
+     → Add column: identifier_{value.lower()} in assets table
+     → Add index if frequently searched (ISIN, TICKER have indexes)
+
+2. SQLMODEL (this file):
+   - Asset class below
+     → Add field: identifier_{value.lower()}: Optional[str]
+     → Add validator if needed (e.g., ISIN requires 12 chars)
+
+3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):
+   - FAAssetCreateItem: Add identifier_{value.lower()} field
+   - FAAssetPatchItem: Add identifier_{value.lower()} field
+   - FAinfoResponse: Add identifier_{value.lower()} field
+   - FAAinfoFiltersRequest: Add filter field (exact or partial match)
+
+4. SERVICE LAYER (backend/app/services/asset_source.py):
+   - list_assets(): Add condition for new filter
+   - create_assets_bulk(): Pass new field to Asset()
+
+5. BRIM PROVIDER (backend/app/services/brim_provider.py):
+   - search_asset_candidates(): Add search priority if relevant
+
+6. TESTS:
+   - test_identifier_columns_match_enum() will FAIL automatically
+     if Asset.identifier_{value.lower()} is missing
+
+Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_columns_match_enum -v
+ *
+ * @enum ISIN, TICKER, CUSIP, SEDOL, FIGI, UUID, OTHER
+ */
+  "ISIN" | "TICKER" | "CUSIP" | "SEDOL" | "FIGI" | "UUID" | "OTHER";
 type FARefreshItem = {
   /**
    * Asset ID
@@ -5119,77 +5074,34 @@ const FAProviderProbeResponse: z.ZodType<FAProviderProbeResponse> = z.object({
     .describe("Present only if metadata was requested")
     .optional(),
 });
-const FAProviderAssignmentReadItem: z.ZodType<FAProviderAssignmentReadItem> =
-  z.object({
-    asset_id: z.number().int().describe("Asset ID"),
-    provider_code: z.string().describe("Provider code"),
-    identifier: z.string().describe("Asset identifier for provider"),
-    identifier_type: IdentifierType.describe(`Asset identifier type.
-
-Usage: Specify which type of identifier is stored in the 'identifier' field.
-
-- ISIN: International Securities Identification Number (e.g., US0378331005 for Apple)
-- TICKER: Stock ticker symbol (e.g., AAPL, MSFT)
-- CUSIP: Committee on Uniform Securities Identification Procedures (US/Canada)
-- SEDOL: Stock Exchange Daily Official List (UK)
-- FIGI: Financial Instrument Global Identifier (Bloomberg standard)
-- UUID: Universal Unique Identifier (for custom/synthetic assets)
-- OTHER: Any other identifier type not listed above
-
-Impact: Used for data validation and plugin selection. Some plugins may only
-work with specific identifier types (e.g., Yahoo Finance prefers TICKER).
-
-⚠️  DEPENDENT SCHEMAS - If you add/remove values, update these files:
-
-1. DATABASE SCHEMA:
-   - backend/alembic/versions/001_initial.py
-     → Add column: identifier_{value.lower()} in assets table
-     → Add index if frequently searched (ISIN, TICKER have indexes)
-
-2. SQLMODEL (this file):
-   - Asset class below
-     → Add field: identifier_{value.lower()}: Optional[str]
-     → Add validator if needed (e.g., ISIN requires 12 chars)
-
-3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):
-   - FAAssetCreateItem: Add identifier_{value.lower()} field
-   - FAAssetPatchItem: Add identifier_{value.lower()} field
-   - FAinfoResponse: Add identifier_{value.lower()} field
-   - FAAinfoFiltersRequest: Add filter field (exact or partial match)
-
-4. SERVICE LAYER (backend/app/services/asset_source.py):
-   - list_assets(): Add condition for new filter
-   - create_assets_bulk(): Pass new field to Asset()
-
-5. BRIM PROVIDER (backend/app/services/brim_provider.py):
-   - search_asset_candidates(): Add search priority if relevant
-
-6. TESTS:
-   - test_identifier_columns_match_enum() will FAIL automatically
-     if Asset.identifier_{value.lower()} is missing
-
-Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_columns_match_enum -v`),
-    provider_params: z
-      .union([z.object({}).partial().passthrough(), z.null()])
-      .describe("Provider configuration")
-      .optional(),
-    fetch_interval: z
-      .union([z.number(), z.null()])
-      .describe("Refresh frequency in minutes")
-      .optional(),
-    last_fetch_at: z
-      .union([z.string(), z.null()])
-      .describe("Last fetch timestamp (ISO format)")
-      .optional(),
-    user_url: z
-      .union([z.string(), z.null()])
-      .describe("User-defined URL")
-      .optional(),
-    provider_url: z
-      .union([z.string(), z.null()])
-      .describe("Auto-generated URL to provider page")
-      .optional(),
-  });
+const FAProviderAssignmentReadItem = z.object({
+  asset_id: z.number().int().describe("Asset ID"),
+  provider_code: z.string().describe("Provider code"),
+  identifier: z.string().describe("Asset identifier for provider"),
+  identifier_type: z
+    .string()
+    .describe("Provider input type (TICKER, ISIN, URL, AUTO_GENERATED)"),
+  provider_params: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .describe("Provider configuration")
+    .optional(),
+  fetch_interval: z
+    .union([z.number(), z.null()])
+    .describe("Refresh frequency in minutes")
+    .optional(),
+  last_fetch_at: z
+    .union([z.string(), z.null()])
+    .describe("Last fetch timestamp (ISO format)")
+    .optional(),
+  user_url: z
+    .union([z.string(), z.null()])
+    .describe("User-defined URL")
+    .optional(),
+  provider_url: z
+    .union([z.string(), z.null()])
+    .describe("Auto-generated URL to provider page")
+    .optional(),
+});
 const FAMetadataRefreshResult: z.ZodType<FAMetadataRefreshResult> = z.object({
   asset_id: z.number().int(),
   success: z.boolean(),

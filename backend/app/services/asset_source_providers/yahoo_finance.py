@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Dict
 
 from backend.app.db import IdentifierType
+from backend.app.db.models import ProviderInputType
 from backend.app.logging_config import get_logger
 from backend.app.utils.cache_utils import get_ttl_cache
 
@@ -86,7 +87,6 @@ class YahooFinanceProvider(AssetSourceProvider):
 
     @property
     def accepted_identifier_types(self) -> list:
-        from backend.app.db.models import ProviderInputType
         return [ProviderInputType.TICKER, ProviderInputType.ISIN]
 
     @property
