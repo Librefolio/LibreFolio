@@ -235,6 +235,9 @@ export interface ColumnDef<T> {
 
     /** Optional tooltip text shown on hover over the header (info icon) */
     headerTooltip?: string | (() => string);
+
+    /** Optional URL — clicking the info icon navigates to this documentation page */
+    headerTooltipUrl?: string | (() => string);
 }
 
 // ============ Action Types ============
