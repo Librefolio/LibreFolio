@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 
 from backend.app.db import IdentifierType
-from backend.app.db.models import AssetType
+from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
     FACurrentValue,
@@ -105,7 +105,6 @@ class JustETFProvider(AssetSourceProvider):
 
     @property
     def accepted_identifier_types(self) -> list:
-        from backend.app.db.models import ProviderInputType
         return [ProviderInputType.ISIN]
 
     @property

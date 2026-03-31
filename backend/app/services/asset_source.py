@@ -475,10 +475,11 @@ class AssetSourceProvider(ABC):
     @staticmethod
     def map_input_type_to_identifier_type(input_type: str) -> IdentifierType:
         """
-        Map a ProviderInputType value to the corresponding IdentifierType for DB storage.
+        Map a ProviderInputType value to the corresponding IdentifierType.
 
-        ProviderInputType is what the frontend shows (URL, AUTO_GENERATED, etc.).
-        IdentifierType is what's stored in the asset_provider_assignments table.
+        Used internally when provider plugin methods require IdentifierType
+        (e.g., get_current_value, get_history_value) but the stored/incoming
+        value is a ProviderInputType string.
         """
         mapping = {
             ProviderInputType.TICKER.value: IdentifierType.TICKER,
@@ -493,6 +494,23 @@ class AssetSourceProvider(ABC):
             return IdentifierType(input_type)
         except ValueError:
             return IdentifierType.OTHER
+
+    @staticmethod
+    def map_identifier_type_to_input_type(id_type: str) -> ProviderInputType | None:
+        """
+        Reverse mapping: IdentifierType → ProviderInputType.
+
+        Used when auto-populating asset identifier columns from provider data.
+        Returns None if no matching ProviderInputType exists (e.g., CUSIP, SEDOL, FIGI
+        have no provider equivalent — they are asset-record-only identifiers).
+        """
+        mapping = {
+            IdentifierType.TICKER.value: ProviderInputType.TICKER,
+            IdentifierType.ISIN.value: ProviderInputType.ISIN,
+            IdentifierType.OTHER.value: ProviderInputType.URL,
+            IdentifierType.UUID.value: ProviderInputType.AUTO_GENERATED,
+        }
+        return mapping.get(id_type)
 
 
     async def fetch_asset_metadata(
@@ -633,11 +651,11 @@ class AssetSourceManager:
                     asset_id=a.asset_id,
                     provider_code=a.provider_code,
                     identifier=a.identifier,
-                    identifier_type=AssetSourceProvider.map_input_type_to_identifier_type(a.identifier_type),
+                    identifier_type=a.identifier_type,
                     provider_params=params_to_store,
-                    fetch_interval=a.fetch_interval,  # Already has default from Pydantic
+                    fetch_interval=a.fetch_interval,
                     user_url=a.user_url,
-                    last_fetch_at=None,  # Never fetched yet
+                    last_fetch_at=None,
                     )
                 )
 
@@ -670,7 +688,7 @@ class AssetSourceManager:
                         try:
                             patch_item = await provider.fetch_asset_metadata(
                                 assignment.identifier,
-                                assignment.identifier_type,
+                                AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type),
                                 assignment.provider_params,
                                 )
 
@@ -860,7 +878,9 @@ class AssetSourceManager:
 
                 try:
                     patch_item = await provider.fetch_asset_metadata(
-                        assignment.identifier, assignment.identifier_type, provider_params
+                        assignment.identifier,
+                        AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type),
+                        provider_params
                         )
                 except Exception as e:
                     results.append(
@@ -1617,7 +1637,8 @@ class AssetSourceManager:
             """Fetch prices from provider for a single asset (no DB access)."""
             prov = prep["prov"]
             identifier = prep["identifier"]
-            identifier_type = prep["identifier_type"]
+            # Map ProviderInputType (stored in DB) to IdentifierType (expected by plugin methods)
+            identifier_type = AssetSourceProvider.map_input_type_to_identifier_type(prep["identifier_type"])
             provider_params = prep["provider_params"]
             provider_code = prep["provider_code"]
             start = prep["start"]

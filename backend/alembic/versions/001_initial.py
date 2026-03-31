@@ -242,7 +242,7 @@ def upgrade() -> None:
                    asset_id        INTEGER     NOT NULL UNIQUE,
                    provider_code   VARCHAR(50) NOT NULL,
                    identifier      VARCHAR     NOT NULL,
-                   identifier_type VARCHAR(6)  NOT NULL,
+                   identifier_type VARCHAR(20) NOT NULL,
                    provider_params TEXT,
                    last_fetch_at   DATETIME,
                    fetch_interval  INTEGER,

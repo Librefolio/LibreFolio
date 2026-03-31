@@ -27,7 +27,7 @@ Le sezioni F1–F8 di Round 6 restano invariate e autoritative.
 
 | # | Item | Stato | Note |
 |---|------|-------|------|
-| F1 | SimpleSelect dropdown `position:fixed` | ✅ DONE | Dropdown non più troncato da overflow parent |
+| F1 | SimpleSelect dropdown `position:fixed` | ✅ DONE | Dropdown non più troncato da overflow parent + z-index pagination fix |
 | F2 | "Other" in fondo alle distribuzioni | ✅ DONE | Sort secondario `key === 'Other'` → always last |
 | F3 | Paginazione ∞ nelle distribuzioni | ✅ DONE | `pageSizeOptions={[5, 10, 25, 0]}` |
 | F4 | Tooltip history: mostrare valuta | ✅ DONE | Propaga `priceCurrency` dal current_price alla history |
@@ -37,7 +37,10 @@ Le sezioni F1–F8 di Round 6 restano invariate e autoritative.
 | §2 | Duplicate name detection | ✅ DONE | $effect debounced + warning con Tooltip + i18n 4 lingue |
 | F8 | `accepted_identifier_types` per provider | ✅ DONE | Backend (base+5 provider+schema+endpoint) + Frontend (filtered select + auto-set) |
 | F8b | Ristruttura `ui_component` dentro `params_schema` | ✅ DONE | Rimosso da FAProviderInfo, usa tipo speciale in params_schema |
-| F7 | Fetch Interval HH:MM | ✅ DONE | |
+| F8c | `ProviderInputType` enum + DB migration | ✅ DONE | Nuovo enum (TICKER,ISIN,URL,AUTO_GENERATED). `AssetProviderAssignment.identifier_type` usa `ProviderInputType`. Mappatura bidirezionale con `IdentifierType` |
+| F8d | Import top-level nei provider | ✅ DONE | Rimossi import lazy dentro funzioni, spostati in cima |
+| F7 | Fetch Interval HH:MM + spinner | ✅ DONE | Input singolo HH:MM con frecce su/giù, i18n senza "(min)" |
+| F8e | Identifier label dinamico per provider | 🔲 TODO (F5) | CSS→title "URL", scheduled→campo assente. Da implementare in F5 layout refactor |
 | F5 | Layout B Two-Panel + wrap | 🔲 TODO | |
 | F9 | ScheduledInvestmentEditor | 🔲 TODO | Piano dettagliato in Round 7 |
 | §3 | Edit mode chiarimento | 🔲 N/A | Solo specifica, implementato con F9 |
@@ -138,14 +141,35 @@ altrimenti genero form generico. I campi `ui_component` sono filtrati dal loop g
 
 | # | Item | Effort |
 |---|------|--------|
-| 1 | F5 — Layout B Two-Panel + wrap | 35 min |
+| 1 | F5 — Layout B Two-Panel + wrap (incl. §7 identifier label) | 35 min |
 | 2 | F9 — ScheduledInvestmentEditor (incl. §3, §5 bulk delete) | 150 min |
+
+---
+
+## §7 — Identifier label dinamico per provider (da fare in F5)
+
+### Problema
+
+Il campo "Identifier" ha un titolo generico. Ogni `ProviderInputType` dovrebbe mostrare
+un titolo e placeholder diversi:
+
+| `ProviderInputType` | Label campo | Placeholder | Campo visibile? |
+|---------------------|-------------|-------------|-----------------|
+| `TICKER` | "Ticker" | "AAPL, MSFT…" | ✅ Sì |
+| `ISIN` | "ISIN" | "IE00B4L5Y983…" | ✅ Sì |
+| `URL` | "URL" | "https://example.com/price" | ✅ Sì |
+| `AUTO_GENERATED` | — | — | ❌ No (nascosto, auto-generato) |
+
+### Implementazione (in ProviderAssignmentSection.svelte, durante F5 refactor)
+
+Derivato `identifierLabel` basato su `identifierType` + `idTypeAutoSet`.
+Per `AUTO_GENERATED`, nascondere il campo e generare UUID lato backend.
 
 ---
 
 ## Validation Checklist (Round 8)
 
-- [x] F1: SimpleSelect dropdown non troncato
+- [x] F1: SimpleSelect dropdown non troncato + z-index pagination fix
 - [x] F2: Distribution "Other" sempre in fondo
 - [x] F3: Paginazione distribution ha opzione ∞
 - [x] F4: Tooltip history mostra valuta
@@ -153,9 +177,11 @@ altrimenti genero form generico. I campi `ui_component` sono filtrati dal loop g
 - [x] F6.1: Fix IDE error ProviderAssignmentSection
 - [x] §1: Icona centrata verticalmente
 - [x] §2: Duplicate name detection + Tooltip + i18n
-- [x] F8: `accepted_identifier_types` backend + frontend filtering + auto-set
-- [x] §6: `ui_component` dentro params_schema, rimosso da FAProviderInfo
-- [x] F7: Fetch Interval HH:MM
+- [x] F8: `accepted_identifier_types` + `ProviderInputType` enum + DB + mappatura bidirezionale
+- [x] F8b: `ui_component` dentro params_schema
+- [x] F8c: Import top-level nei provider
+- [x] F7: Fetch Interval HH:MM singolo input + frecce su/giù
+- [ ] §7: Identifier label dinamico (CSS→"URL", scheduled→nascosto) — parte di F5
 - [ ] F5: Layout B Two-Panel
 - [ ] F9: ScheduledInvestmentEditor completo
 - [ ] §5: Bulk delete multi-gap (parte di F9)

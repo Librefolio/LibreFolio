@@ -32,7 +32,7 @@ from typing import List, Optional, Any
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
-from backend.app.db.models import IdentifierType
+from backend.app.db.models import IdentifierType, ProviderInputType
 from backend.app.schemas.common import BaseDeleteResult, BaseBulkResponse, OldNew
 
 
@@ -183,7 +183,7 @@ class FAProviderAssignmentReadItem(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     provider_code: str = Field(..., description="Provider code")
     identifier: str = Field(..., description="Asset identifier for provider")
-    identifier_type: IdentifierType = Field(..., description="Type of identifier")
+    identifier_type: ProviderInputType = Field(..., description=f"Provider input type ({", ".join([a.value for a in ProviderInputType ])})")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider configuration")
     fetch_interval: Optional[int] = Field(None, description="Refresh frequency in minutes")
     last_fetch_at: Optional[str] = Field(None, description="Last fetch timestamp (ISO format)")

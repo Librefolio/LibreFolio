@@ -13,6 +13,7 @@ from typing import Dict
 from mergedeep import merge
 
 from backend.app.db import IdentifierType
+from backend.app.db.models import ProviderInputType
 from backend.app.logging_config import get_logger
 
 try:
@@ -46,7 +47,6 @@ class CSSScraperProvider(AssetSourceProvider):
 
     @property
     def accepted_identifier_types(self) -> list:
-        from backend.app.db.models import ProviderInputType
         return [ProviderInputType.URL]
 
     def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
