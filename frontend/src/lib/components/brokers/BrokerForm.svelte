@@ -287,13 +287,6 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400">{$_('brokers.iconUrlHint')}</p>
                 {#if iconUrl}
                     <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={iconUrl}>{iconUrl}</p>
-                    <button
-                            type="button"
-                            class="mt-1 text-xs text-red-600 dark:text-red-400 hover:underline"
-                            on:click={() => iconUrl = ''}
-                    >
-                        {$_('common.remove')}
-                    </button>
                 {/if}
             </div>
         </div>

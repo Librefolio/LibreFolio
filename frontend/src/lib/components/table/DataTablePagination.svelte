@@ -155,7 +155,7 @@
         justify-content: center;
         padding: 0.5rem 0;
         pointer-events: none;
-        z-index: 20;
+        z-index: 5;
     }
 
     .pagination-balloon {
@@ -239,7 +239,7 @@
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         overflow: hidden;
-        z-index: 50;
+        z-index: 10;
     }
 
     :global(.dark) .page-size-dropdown {

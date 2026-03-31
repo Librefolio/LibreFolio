@@ -43,6 +43,11 @@ class MockProvider(AssetSourceProvider):
         return "Mock Provider (TESTING ONLY)"
 
     @property
+    def accepted_identifier_types(self) -> list:
+        from backend.app.db.models import ProviderInputType
+        return [ProviderInputType.TICKER, ProviderInputType.AUTO_GENERATED]
+
+    @property
     def test_cases(self) -> list[dict]:
         """Test cases with identifier and provider_params."""
         return [

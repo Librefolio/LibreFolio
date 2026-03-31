@@ -78,6 +78,7 @@ class FAProviderInfo(BaseModel):
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
     supports_search: bool = Field(..., description="Whether provider supports asset search")
     params_schema: List[FAProviderParamField] = Field(default_factory=list, description="Form field definitions for provider_params")
+    accepted_identifier_types: List[str] = Field(default_factory=list, description="Identifier types accepted by this provider")
 
 
 # ============================================================================
@@ -119,7 +120,7 @@ class FAProviderConfigBase(BaseModel):
 
     provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)")
     identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
-    identifier_type: IdentifierType = Field(..., description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)")
+    identifier_type: str = Field(..., description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED) — mapped to IdentifierType on save")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
 
     @model_validator(mode="after")

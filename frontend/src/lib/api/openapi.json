@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.9-3-g2600833-dirty"
+    "version": "v0.5.9-5-gedc7140-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -7649,8 +7649,9 @@
             "description": "Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
           },
           "identifier_type": {
-            "$ref": "#/components/schemas/IdentifierType",
-            "description": "Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
+            "type": "string",
+            "title": "Identifier Type",
+            "description": "Provider input type (TICKER, ISIN, URL, AUTO_GENERATED) \u2014 mapped to IdentifierType on save"
           },
           "provider_params": {
             "anyOf": [
@@ -7871,6 +7872,14 @@
             "type": "array",
             "title": "Params Schema",
             "description": "Form field definitions for provider_params"
+          },
+          "accepted_identifier_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Accepted Identifier Types",
+            "description": "Identifier types accepted by this provider"
           }
         },
         "additionalProperties": false,
@@ -7956,8 +7965,9 @@
             "description": "Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
           },
           "identifier_type": {
-            "$ref": "#/components/schemas/IdentifierType",
-            "description": "Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
+            "type": "string",
+            "title": "Identifier Type",
+            "description": "Provider input type (TICKER, ISIN, URL, AUTO_GENERATED) \u2014 mapped to IdentifierType on save"
           },
           "provider_params": {
             "anyOf": [
