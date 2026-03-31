@@ -94,17 +94,21 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         return "Scheduled Investment Calculator"
 
     @property
+    def accepted_identifier_types(self) -> list:
+        from backend.app.db.models import ProviderInputType
+        return [ProviderInputType.AUTO_GENERATED]
+
+    @property
     def params_schema(self) -> list[dict]:
         return [
             {
-                "key": "schedule", "type": "json", "required": True,
-                "description": "List of interest rate periods (FAInterestRatePeriod[])"
-                },
-            {
-                "key": "late_interest", "type": "json", "required": False,
-                "description": "Late interest configuration applied after maturity"
-                },
-            ]
+                "key": "_ui_component",
+                "type": "ui_component",
+                "required": False,
+                "description": "Custom editor: ScheduledInvestmentEditor",
+                "default": "scheduled_investment"
+            },
+        ]
 
     @property
     def test_cases(self) -> list[dict]:

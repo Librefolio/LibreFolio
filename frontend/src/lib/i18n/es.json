@@ -303,6 +303,8 @@
       "saveChanges": "Guardar Cambios",
       "autoAssignInfo": "El proveedor \"{provider}\" se asignará automáticamente al crear",
       "duplicateName": "Ya existe un activo con este nombre",
+      "duplicateNameWarning": "Ya existe un activo llamado \"{name}\"",
+      "duplicateNameTooltip": "Ya existe un activo con este nombre exacto. Es posible que desee editar el existente en lugar de crear uno nuevo.",
       "createSuccess": "\"{name}\" creado exitosamente",
       "saveSuccess": "\"{name}\" actualizado exitosamente",
       "moreInfo": "Más información",
@@ -321,7 +323,7 @@
       "selectProvider": "Proveedor",
       "identifier": "Identificador",
       "identifierType": "Tipo de Identificador",
-      "fetchInterval": "Intervalo de actualizacion (min)",
+      "fetchInterval": "Intervalo de actualizacion",
       "lastFetch": "Ultima actualizacion",
       "neverFetched": "Nunca ejecutado"
     },

@@ -225,22 +225,6 @@
         }
     }
 
-    // Confirm remove avatar state
-    let showRemoveAvatarConfirm = false;
-
-    function requestRemoveAvatar() {
-        showRemoveAvatarConfirm = true;
-    }
-
-    async function confirmRemoveAvatar() {
-        showRemoveAvatarConfirm = false;
-        editedAvatarUrl = null;
-        await saveAvatarField();
-    }
-
-    function cancelRemoveAvatar() {
-        showRemoveAvatarConfirm = false;
-    }
 
     async function handleDeleteAccount() {
         if (!canDelete) return;
@@ -372,16 +356,6 @@
         <div class="flex-1">
             <h4 class="font-medium text-gray-900 dark:text-white">{$_('common.avatar')}</h4>
             <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.avatarHint')}</p>
-            {#if !isLocked && editedAvatarUrl}
-                <button
-                        type="button"
-                        class="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline"
-                        on:click={requestRemoveAvatar}
-                        data-testid="avatar-remove-btn"
-                >
-                    {$_('common.remove')}
-                </button>
-            {/if}
         </div>
     </div>
 
@@ -712,40 +686,6 @@
     </div>
 {/if}
 
-<!-- Confirm Remove Avatar Modal -->
-{#if showRemoveAvatarConfirm}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" on:click|self={cancelRemoveAvatar}>
-        <div class="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
-            <div class="flex items-center gap-3 mb-4">
-                <span class="text-2xl">⚠️</span>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {$_('settings.removeAvatarTitle') || 'Remove avatar?'}
-                </h3>
-            </div>
-            <p class="text-gray-600 dark:text-gray-300 mb-6">
-                {$_('settings.removeAvatarMessage') || 'Are you sure you want to remove your avatar?'}
-            </p>
-            <div class="flex justify-end gap-3">
-                <button
-                        type="button"
-                        class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-                        on:click={cancelRemoveAvatar}
-                >
-                    {$_('common.cancel')}
-                </button>
-                <button
-                        type="button"
-                        class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                        on:click={confirmRemoveAvatar}
-                >
-                    {$_('common.remove')}
-                </button>
-            </div>
-        </div>
-    </div>
-{/if}
 
 <!-- Avatar Image Picker (AssetPicker + ImageEditModal combined) -->
 <ImagePickerWrapper

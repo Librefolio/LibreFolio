@@ -93,7 +93,11 @@
         if (value) {
             entries = Object.entries(value)
                 .map(([key, w]) => ({id: crypto.randomUUID(), key, weight: Number(w) * 100}))
-                .sort((a, b) => b.weight - a.weight);
+                .sort((a, b) => {
+                    if (a.key === 'Other' && b.key !== 'Other') return 1;
+                    if (b.key === 'Other' && a.key !== 'Other') return -1;
+                    return b.weight - a.weight;
+                });
         } else {
             entries = [];
         }
@@ -411,7 +415,7 @@
                 onSelectionChange={(ids) => { selectedIds = ids; }}
                 enablePagination={true}
                 defaultPageSize={5}
-                pageSizeOptions={[5, 10, 25]}
+                pageSizeOptions={[5, 10, 25, 0]}
                 enableColumnFilters={false}
                 enableSorting={true}
                 enableColumnResize={false}

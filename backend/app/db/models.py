@@ -57,6 +57,31 @@ def _validate_currency_field(v: Any) -> Optional[str]:
 # ============================================================================
 
 
+class ProviderInputType(str, Enum):
+    """
+    Describes the kind of identifier input a provider expects.
+
+    This is NOT the same as IdentifierType (which describes asset record columns).
+    ProviderInputType tells the frontend what the provider needs as input:
+
+    - TICKER: A stock ticker symbol (e.g., AAPL)
+    - ISIN: An ISIN code (e.g., IE00B4L5Y983)
+    - URL: A full URL to scrape (e.g., https://example.com/price)
+    - AUTO_GENERATED: No user input needed — identifier is auto-generated (e.g., UUID)
+
+    Mapping to stored IdentifierType:
+    - TICKER → IdentifierType.TICKER
+    - ISIN → IdentifierType.ISIN
+    - URL → IdentifierType.OTHER
+    - AUTO_GENERATED → IdentifierType.UUID
+    """
+
+    TICKER = "TICKER"
+    ISIN = "ISIN"
+    URL = "URL"
+    AUTO_GENERATED = "AUTO_GENERATED"
+
+
 class IdentifierType(str, Enum):
     """
     Asset identifier type.

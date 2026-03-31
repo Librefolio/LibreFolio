@@ -3,6 +3,7 @@
 
   Simple dropdown select without search functionality.
   Supports keyboard navigation and custom item rendering via snippets.
+  Uses position:fixed for dropdown to avoid clipping by overflow:hidden/auto parents.
 -->
 <script lang="ts">
     import type {Snippet} from 'svelte';
@@ -62,40 +63,64 @@
     let computedPosition = $state<'top' | 'bottom'>('bottom');
     let dropdownMaxHeight = $state<string>('15rem');
 
+    // Fixed positioning state (viewport-relative coordinates)
+    let fixedTop = $state(0);
+    let fixedLeft = $state(0);
+    let fixedWidth = $state(0);
+
     // Derived state
     let selectedOption = $derived(options.find(o => o.value === value));
 
     // Compute dropdown position when opening
     function updateDropdownPosition() {
-        if (dropdownPosition !== 'auto' || !containerRef) {
+        if (!containerRef) {
             computedPosition = dropdownPosition === 'top' ? 'top' : 'bottom';
             dropdownMaxHeight = '15rem';
             return;
         }
+
         const rect = containerRef.getBoundingClientRect();
         const padding = 20;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
 
-        // Walk up to find the closest scrollable parent
-        let scrollParent = containerRef.parentElement;
-        let parentBottom = window.innerHeight;
-        let parentTop = 0;
-        while (scrollParent) {
-            const style = getComputedStyle(scrollParent);
-            if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-                const pRect = scrollParent.getBoundingClientRect();
-                parentBottom = pRect.bottom;
-                parentTop = pRect.top;
-                break;
-            }
-            scrollParent = scrollParent.parentElement;
+        // Fixed positioning: always use viewport bounds
+        const spaceBelow = vh - rect.bottom - padding;
+        const spaceAbove = rect.top - padding;
+
+        if (dropdownPosition === 'top') {
+            computedPosition = 'top';
+        } else if (dropdownPosition === 'bottom') {
+            computedPosition = 'bottom';
+        } else {
+            // auto
+            computedPosition = (spaceBelow < 200 && spaceAbove > spaceBelow) ? 'top' : 'bottom';
         }
 
-        const spaceBelow = parentBottom - rect.bottom - padding;
-        const spaceAbove = rect.top - parentTop - padding;
-        computedPosition = (spaceBelow < 200 && spaceAbove > spaceBelow) ? 'top' : 'bottom';
-        // Limit dropdown height to actual available space (min 120px, max 240px)
         const available = computedPosition === 'top' ? spaceAbove : spaceBelow;
         dropdownMaxHeight = `${Math.max(120, Math.min(240, available))}px`;
+
+        // Calculate fixed coordinates
+        fixedWidth = Math.max(rect.width, 0);
+        fixedLeft = Math.max(padding, Math.min(rect.left, vw - fixedWidth - padding));
+        if (computedPosition === 'top') {
+            // Will be positioned above the trigger — defer to after render for actual dropdown height
+            fixedTop = rect.top;
+        } else {
+            fixedTop = rect.bottom + 4;
+        }
+    }
+
+    /**
+     * Svelte action: after the dropdown is mounted, re-measure and adjust for 'top' positioning.
+     */
+    function adjustFixedPositionAction(dropdownEl: HTMLDivElement) {
+        if (!containerRef) return;
+        const rect = containerRef.getBoundingClientRect();
+        const dropdownRect = dropdownEl.getBoundingClientRect();
+        if (computedPosition === 'top') {
+            fixedTop = rect.top - dropdownRect.height - 4;
+        }
     }
 
     // Reset highlight when options change
@@ -111,6 +136,9 @@
 
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef && !containerRef.contains(event.target as Node)) {
+                // Also check if click is inside the fixed dropdown portal
+                const dropdown = document.querySelector(`[data-simpleselect-dropdown="${_dropdownId}"]`);
+                if (dropdown && dropdown.contains(event.target as Node)) return;
                 closeDropdown();
             }
         };
@@ -118,6 +146,23 @@
         document.addEventListener('mousedown', handleClickOutside, true);
         return () => document.removeEventListener('mousedown', handleClickOutside, true);
     });
+
+    // Re-position dropdown on scroll/resize while open
+    $effect(() => {
+        if (!isOpen) return;
+        const handleReposition = () => {
+            updateDropdownPosition();
+        };
+        window.addEventListener('scroll', handleReposition, true);
+        window.addEventListener('resize', handleReposition);
+        return () => {
+            window.removeEventListener('scroll', handleReposition, true);
+            window.removeEventListener('resize', handleReposition);
+        };
+    });
+
+    // Unique ID for dropdown portal matching in click-outside handler
+    const _dropdownId = `ss-${Math.random().toString(36).slice(2, 8)}`;
 
     function openDropdown() {
         if (disabled || loading) return;
@@ -213,16 +258,17 @@
         {/if}
     </button>
 
-    <!-- Dropdown Menu -->
+    <!-- Dropdown Menu — fixed position to escape overflow clipping -->
     {#if isOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-                class="absolute z-50 w-max min-w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
-                   rounded-lg shadow-lg max-h-60 overflow-y-auto
-                   {computedPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}"
-                style:max-height={dropdownMaxHeight}
+                data-simpleselect-dropdown={_dropdownId}
+                class="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                   rounded-lg shadow-lg overflow-y-auto"
+                style="top: {fixedTop}px; left: {fixedLeft}px; min-width: {fixedWidth}px; width: max-content; max-height: {dropdownMaxHeight};"
                 onwheel={(e) => e.stopPropagation()}
                 ontouchmove={(e) => e.stopPropagation()}
+                use:adjustFixedPositionAction
         >
             {#if loading}
                 <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
