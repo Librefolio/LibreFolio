@@ -99,6 +99,15 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         return [ProviderInputType.AUTO_GENERATED]
 
     @property
+    def get_icon(self) -> str:
+        """Return provider icon URL from local static assets."""
+        return self.generate_static_url("scheduled_investment.png")
+
+    @property
+    def provider_help_url(self) -> str:
+        return "/mkdocs/user/assets/providers/scheduled-investment/"
+
+    @property
     def params_schema(self) -> list[dict]:
         return [
             {

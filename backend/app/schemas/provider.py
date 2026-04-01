@@ -57,6 +57,8 @@ class FAProviderParamField(BaseModel):
     description: str = Field("", description="Human-readable description")
     options: Optional[List[str]] = Field(None, description="Options for 'select' type")
     default: Optional[Any] = Field(None, description="Default value")
+    placeholder: Optional[str] = Field(None, description="Placeholder text for the input field")
+    help_url: Optional[str] = Field(None, description="URL to documentation or help page for this field")
 
 
 # ============================================================================
@@ -79,6 +81,7 @@ class FAProviderInfo(BaseModel):
     supports_search: bool = Field(..., description="Whether provider supports asset search")
     params_schema: List[FAProviderParamField] = Field(default_factory=list, description="Form field definitions for provider_params")
     accepted_identifier_types: List[str] = Field(default_factory=list, description="Identifier types accepted by this provider")
+    provider_help_url: Optional[str] = Field(None, description="URL to provider documentation")
 
 
 # ============================================================================

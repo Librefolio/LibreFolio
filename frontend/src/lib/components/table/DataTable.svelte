@@ -59,6 +59,8 @@
         getRowStyle?: (row: T) => string;
         /** Table layout mode: 'fixed' (default) or 'auto' (columns expand to fill space) */
         tableLayout?: 'fixed' | 'auto';
+        /** Optional predicate: if returns false, row checkbox is hidden and row is excluded from bulk select */
+        isRowSelectable?: (row: T) => boolean;
     }
 
     let {
@@ -92,6 +94,7 @@
         getRowClass,
         getRowStyle,
         tableLayout = 'fixed',
+        isRowSelectable,
     }: Props = $props();
 
     // Derived: effective selection mode
@@ -450,15 +453,18 @@
     }
 
     function toggleAllPageRows() {
+        const selectableRows = isRowSelectable
+            ? paginatedData.filter(row => isRowSelectable!(row))
+            : paginatedData;
         if (isAllPageSelected) {
             // Deselect all on current page
             const newSelection = {...rowSelection};
-            paginatedData.forEach(row => delete newSelection[getRowId(row)]);
+            selectableRows.forEach(row => delete newSelection[getRowId(row)]);
             rowSelection = newSelection;
         } else {
             // Select all on current page (clear previous selection)
             const newSelection: SelectionState = {};
-            paginatedData.forEach(row => newSelection[getRowId(row)] = true);
+            selectableRows.forEach(row => newSelection[getRowId(row)] = true);
             rowSelection = newSelection;
         }
         onSelectionChange?.(Object.keys(rowSelection).filter(id => rowSelection[id]));
@@ -968,12 +974,13 @@
                     {@const isSelected = rowSelection[rowId]}
                     <tr class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
                         style={getRowStyle?.(row) ?? ''}
-                        onclick={() => { highlightedRowId = null; handleRowClick(row); }}
-                        ondblclick={() => handleRowDoubleClick(row)}
+                        onclick={() => { if (isRowSelectable && !isRowSelectable(row)) return; highlightedRowId = null; handleRowClick(row); }}
+                        ondblclick={() => { if (isRowSelectable && !isRowSelectable(row)) return; handleRowDoubleClick(row); }}
                     >
                         <!-- Selection cell (multi mode only - shows checkboxes) -->
                         {#if effectiveSelectionMode === 'multi'}
                             <td class="td-fixed td-select">
+                                {#if !isRowSelectable || isRowSelectable(row)}
                                 <button
                                         type="button"
                                         class="checkbox-btn"
@@ -985,6 +992,9 @@
                                         <span class="check-box"></span>
                                     {/if}
                                 </button>
+                                {:else}
+                                <div style="width:28px"></div>
+                                {/if}
                             </td>
                         {/if}
 
@@ -1918,13 +1928,12 @@
     .cell-editable-select-wrapper {
         width: 100%;
         position: relative;
-        z-index: 1;
+        /* No z-index here: avoids creating a stacking context that would
+           trap the fixed-positioned dropdown below the sticky actions column */
     }
 
-    /* Ensure dropdown from SimpleSelect inside table cells is visible above other rows */
-    .cell-editable-select-wrapper :global(.relative) {
-        z-index: 50;
-    }
+    /* When the dropdown is actually open (focus-within on the row),
+       the row z-index bump in tbody tr:focus-within handles visibility */
 
     /* Row status classes (used via getRowClass prop) */
     :global(tr.row-deleted) td {

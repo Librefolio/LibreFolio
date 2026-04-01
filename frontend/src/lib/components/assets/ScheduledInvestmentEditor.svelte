@@ -136,7 +136,21 @@
     let boundaryModalMax = $state('');
     let boundaryModalDefault = $state('');
     let pendingActionIndex = $state(-1);
-    let pendingBulkDeleteIndices = $state<number[]>([]);
+    /** Multi-gap modal state */
+    interface PendingGap {
+        minDate: string;
+        maxDate: string;
+        defaultDate: string;
+        label?: string;
+    }
+    let pendingBulkGaps = $state<PendingGap[]>([]);
+    /** Full pending bulk delete info (indices + auto-resolved head/tail) */
+    let pendingBulkDeleteData = $state<{
+        indices: number[];
+        headIndices: number[];
+        tailIndices: number[];
+        middleGroups: { indices: number[]; prevIdx: number; nextIdx: number }[];
+    } | null>(null);
 
     // =========================================================================
     // Derived
@@ -398,7 +412,8 @@
         if (hasPrev && hasNext) {
             // Middle: open boundary modal
             pendingActionIndex = rowIndex;
-            pendingBulkDeleteIndices = [];
+            pendingBulkGaps = [];
+            pendingBulkDeleteData = null;
             boundaryModalMode = 'delete';
             boundaryModalMin = toDelete.start_date;
             boundaryModalMax = toDelete.end_date;
@@ -424,7 +439,8 @@
         if (days <= 1) return;
 
         pendingActionIndex = rowIndex;
-        pendingBulkDeleteIndices = [];
+        pendingBulkGaps = [];
+        pendingBulkDeleteData = null;
         boundaryModalMode = 'split';
         boundaryModalMin = addDays(period.start_date, 1);
         boundaryModalMax = addDays(period.end_date, -1);
@@ -434,15 +450,15 @@
 
     function handleBoundaryConfirm(boundaryDate: string): void {
         if (boundaryModalMode === 'delete') {
-            if (pendingBulkDeleteIndices.length > 0) {
-                // Bulk delete
-                confirmBulkDelete(boundaryDate);
-            } else {
-                confirmDelete(boundaryDate);
-            }
+            confirmDelete(boundaryDate);
         } else {
             confirmSplit(boundaryDate);
         }
+    }
+
+    /** Multi-gap confirm from BoundaryDateModal */
+    function handleBoundaryConfirmMulti(boundaryDates: string[]): void {
+        confirmBulkDeleteMulti(boundaryDates);
     }
 
     function confirmDelete(boundaryDate: string): void {
@@ -495,6 +511,20 @@
         rebuildAndEmit(periods);
     }
 
+    /** Group sorted indices into contiguous blocks */
+    function groupContiguousIndices(indices: number[]): number[][] {
+        if (indices.length === 0) return [];
+        const groups: number[][] = [[indices[0]]];
+        for (let i = 1; i < indices.length; i++) {
+            if (indices[i] === indices[i - 1] + 1) {
+                groups[groups.length - 1].push(indices[i]);
+            } else {
+                groups.push([indices[i]]);
+            }
+        }
+        return groups;
+    }
+
     function handleBulkDelete(): void {
         if (selectedNormalRows.length === 0) return;
         const periods = [...normalRows];
@@ -505,62 +535,150 @@
 
         if (indices.length === 0) return;
 
-        // If all rows selected → empty state
+        // If all rows selected → empty state, no modal needed
         if (indices.length === periods.length) {
             selectedIds = [];
             rebuildAndEmit([]);
             return;
         }
 
-        const firstIdx = indices[0];
-        const lastIdx = indices[indices.length - 1];
-        const blockStart = periods[firstIdx].start_date;
-        const blockEnd = periods[lastIdx].end_date;
-        const hasPrev = firstIdx > 0;
-        const hasNext = lastIdx < periods.length - 1;
+        // Group into contiguous blocks
+        const groups = groupContiguousIndices(indices);
 
-        if (hasPrev && hasNext) {
-            // Middle block → boundary modal
-            pendingActionIndex = -1;
-            pendingBulkDeleteIndices = indices;
-            boundaryModalMode = 'delete';
-            boundaryModalMin = blockStart;
-            boundaryModalMax = blockEnd;
-            boundaryModalDefault = midpointDate(blockStart, blockEnd);
-            showBoundaryModal = true;
+        // Classify each group: HEAD (no prev), TAIL (no next), MIDDLE (both)
+        const headIndices: number[] = [];
+        const tailIndices: number[] = [];
+        const middleGroups: { indices: number[]; prevIdx: number; nextIdx: number }[] = [];
+
+        for (const group of groups) {
+            const first = group[0];
+            const last = group[group.length - 1];
+            const hasPrev = first > 0;
+            const hasNext = last < periods.length - 1;
+
+            if (hasPrev && hasNext) {
+                middleGroups.push({
+                    indices: group,
+                    prevIdx: first - 1,
+                    nextIdx: last + 1,
+                });
+            } else if (!hasPrev) {
+                headIndices.push(...group);
+            } else {
+                tailIndices.push(...group);
+            }
+        }
+
+        // If no middle groups → auto-resolve everything without modal
+        if (middleGroups.length === 0) {
+            // HEAD: expand next survivor backward
+            if (headIndices.length > 0) {
+                const lastHead = headIndices[headIndices.length - 1];
+                const headStart = periods[headIndices[0]].start_date;
+                // Find first non-deleted index after the head block
+                const nextSurvivor = lastHead + 1;
+                if (nextSurvivor < periods.length && !indices.includes(nextSurvivor)) {
+                    periods[nextSurvivor].start_date = headStart;
+                }
+            }
+            // TAIL: expand prev survivor forward
+            if (tailIndices.length > 0) {
+                const firstTail = tailIndices[0];
+                const tailEnd = periods[tailIndices[tailIndices.length - 1]].end_date;
+                const prevSurvivor = firstTail - 1;
+                if (prevSurvivor >= 0 && !indices.includes(prevSurvivor)) {
+                    periods[prevSurvivor].end_date = tailEnd;
+                }
+            }
+
+            // Remove all selected (reverse order)
+            for (let i = indices.length - 1; i >= 0; i--) {
+                periods.splice(indices[i], 1);
+            }
+            selectedIds = [];
+            rebuildAndEmit(periods);
             return;
         }
 
-        if (hasPrev) {
-            periods[firstIdx - 1].end_date = blockEnd;
-        } else if (hasNext) {
-            periods[lastIdx + 1].start_date = blockStart;
+        // Build gaps for the modal (one per middle group)
+        const gaps: PendingGap[] = middleGroups.map((mg, i) => {
+            const blockStart = periods[mg.indices[0]].start_date;
+            const blockEnd = periods[mg.indices[mg.indices.length - 1]].end_date;
+            return {
+                minDate: blockStart,
+                maxDate: blockEnd,
+                defaultDate: midpointDate(blockStart, blockEnd),
+                label: middleGroups.length > 1
+                    ? `Gap ${i + 1}: ${blockStart} → ${blockEnd}`
+                    : undefined,
+            };
+        });
+
+        // Store data for confirm
+        pendingBulkDeleteData = { indices, headIndices, tailIndices, middleGroups };
+        pendingBulkGaps = gaps;
+        pendingActionIndex = -1;
+        boundaryModalMode = 'delete';
+
+        // If single middle group → use single-gap mode for simplicity
+        if (gaps.length === 1) {
+            boundaryModalMin = gaps[0].minDate;
+            boundaryModalMax = gaps[0].maxDate;
+            boundaryModalDefault = gaps[0].defaultDate;
+            pendingBulkGaps = []; // use single-gap mode
         }
 
-        for (let i = indices.length - 1; i >= 0; i--) {
-            periods.splice(indices[i], 1);
-        }
-
-        selectedIds = [];
-        rebuildAndEmit(periods);
+        showBoundaryModal = true;
     }
 
-    function confirmBulkDelete(boundaryDate: string): void {
+    /** Confirm bulk delete with a single boundary (single middle group) */
+    function confirmBulkDeleteSingle(boundaryDate: string): void {
+        if (!pendingBulkDeleteData) return;
+        confirmBulkDeleteMulti([boundaryDate]);
+    }
+
+    /** Confirm bulk delete with multiple boundary dates (one per middle group) */
+    function confirmBulkDeleteMulti(boundaryDates: string[]): void {
+        if (!pendingBulkDeleteData) return;
+        const { indices, headIndices, tailIndices, middleGroups } = pendingBulkDeleteData;
         const periods = [...normalRows];
-        const indices = pendingBulkDeleteIndices;
-        if (indices.length === 0) return;
 
-        const firstIdx = indices[0];
-        const lastIdx = indices[indices.length - 1];
+        // Apply HEAD auto-expansion
+        if (headIndices.length > 0) {
+            const lastHead = headIndices[headIndices.length - 1];
+            const headStart = periods[headIndices[0]].start_date;
+            const nextSurvivor = lastHead + 1;
+            if (nextSurvivor < periods.length && !indices.includes(nextSurvivor)) {
+                periods[nextSurvivor].start_date = headStart;
+            }
+        }
 
-        periods[firstIdx - 1].end_date = boundaryDate;
-        periods[lastIdx + 1].start_date = addDays(boundaryDate, 1);
+        // Apply TAIL auto-expansion
+        if (tailIndices.length > 0) {
+            const firstTail = tailIndices[0];
+            const tailEnd = periods[tailIndices[tailIndices.length - 1]].end_date;
+            const prevSurvivor = firstTail - 1;
+            if (prevSurvivor >= 0 && !indices.includes(prevSurvivor)) {
+                periods[prevSurvivor].end_date = tailEnd;
+            }
+        }
 
+        // Apply MIDDLE boundary dates
+        for (let i = 0; i < middleGroups.length; i++) {
+            const mg = middleGroups[i];
+            const boundary = boundaryDates[i];
+            periods[mg.prevIdx].end_date = boundary;
+            periods[mg.nextIdx].start_date = addDays(boundary, 1);
+        }
+
+        // Remove all selected (reverse order to preserve indices)
         for (let i = indices.length - 1; i >= 0; i--) {
             periods.splice(indices[i], 1);
         }
 
         selectedIds = [];
+        pendingBulkDeleteData = null;
+        pendingBulkGaps = [];
         rebuildAndEmit(periods);
     }
 
@@ -615,7 +733,7 @@
                 props: {
                     start: row.start_date,
                     end: row.end_date,
-                    disabled: disabled || readonly || (row.isLate && true),
+                    disabled: disabled || readonly,
                     isLateInterest: row.isLate,
                     graceDays: row.grace_period_days,
                     onchange: (s: string, e: string) => {
@@ -776,9 +894,12 @@
             </span>
         </div>
 
-        <!-- Inline bulk toolbar (shown when rows selected) -->
+        <!-- Spacer pushes everything after this to the right -->
+        <div class="flex-1"></div>
+
+        <!-- Inline bulk toolbar (shown when rows selected) — right-aligned -->
         {#if selectedIds.length > 0}
-            <div class="flex items-center gap-1.5 ml-2 pl-2 border-l border-gray-200 dark:border-slate-600">
+            <div class="flex items-center gap-1.5 pr-2 border-r border-gray-200 dark:border-slate-600">
                 <button
                     type="button"
                     class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md
@@ -812,9 +933,8 @@
             </div>
         {/if}
 
-        <!-- Spacer + Add Period (pushed right) -->
+        <!-- Add Period (right-most) -->
         {#if !readonly && !disabled}
-            <div class="flex-1"></div>
             <button
                 type="button"
                 onclick={handleAddPeriod}
@@ -871,6 +991,7 @@
             enablePagination={false}
             getRowClass={getRowClass}
             tableLayout="auto"
+            isRowSelectable={(row) => !row.isLate}
         />
     {/if}
 
@@ -907,8 +1028,16 @@
     minDate={boundaryModalMin}
     maxDate={boundaryModalMax}
     defaultDate={boundaryModalDefault}
-    onconfirm={handleBoundaryConfirm}
-    oncancel={() => { showBoundaryModal = false; }}
+    gaps={pendingBulkGaps}
+    onconfirm={(bd) => {
+        if (pendingBulkDeleteData) {
+            confirmBulkDeleteSingle(bd);
+        } else {
+            handleBoundaryConfirm(bd);
+        }
+    }}
+    onconfirmMulti={handleBoundaryConfirmMulti}
+    oncancel={() => { showBoundaryModal = false; pendingBulkDeleteData = null; pendingBulkGaps = []; }}
 />
 
 <style>

@@ -94,6 +94,10 @@ class YahooFinanceProvider(AssetSourceProvider):
         """Return provider icon URL (hardcoded)"""
         return "https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png"  # Yahoo Finance logo
 
+    @property
+    def provider_help_url(self) -> str:
+        return "/mkdocs/user/assets/providers/yahoo-finance/"
+
     def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
         """Generate URL to Yahoo Finance page for this asset."""
         return f"https://finance.yahoo.com/quote/{identifier}"

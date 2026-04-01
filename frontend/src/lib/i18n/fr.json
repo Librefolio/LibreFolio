@@ -325,7 +325,8 @@
       "identifierType": "Type d'Identifiant",
       "fetchInterval": "Intervalle de mise a jour",
       "lastFetch": "Derniere mise a jour",
-      "neverFetched": "Jamais execute"
+      "neverFetched": "Jamais execute",
+      "documentation": "Documentation"
     },
     "schedule": {
       "title": "Calendrier d'intérêts",
@@ -334,11 +335,11 @@
       "compounding": "Capitalisation",
       "compFreq": "Fréq. Comp.",
       "dayCount": "Décompte Jours",
-      "periodHint": "Date de début et de fin de cette période d'intérêt",
-      "rateHint": "Taux d'intérêt annuel en pourcentage (ex. 5.00 = 5%)",
-      "compoundingHint": "Simple : intérêt sur le capital. Composé : intérêt sur intérêt.",
-      "freqHint": "Fréquence de calcul des intérêts composés (uniquement si capitalisation COMPOSÉ)",
-      "dayCountHint": "Convention de calcul des jours dans la période d'intérêt",
+      "periodHint": "Date de début et de fin de cette période d'intérêt.\nLes deux dates sont inclusives (la date de fin est le dernier jour de la période).",
+      "rateHint": "Taux d'intérêt annuel en pourcentage.\nExemple : 5.00 = 5% par an.",
+      "compoundingHint": "Simple : intérêt sur le capital uniquement.\nComposé : les intérêts s'accumulent aussi sur les intérêts.",
+      "freqHint": "Fréquence de calcul des intérêts composés.\nS'applique uniquement si la capitalisation est Composée.",
+      "dayCountHint": "Convention de calcul des jours dans la période.\nACT/365 et ACT/360 sont les plus courantes.",
       "addPeriod": "Ajouter une période",
       "addFirstPeriod": "Ajouter la première période",
       "split": "Diviser",
