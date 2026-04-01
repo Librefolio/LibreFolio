@@ -289,6 +289,36 @@ def upgrade() -> None:
         )
     print("  ✓ Index created")
 
+    # Asset events table
+    print("📦 Creating table: asset_events...")
+    conn.execute(
+        sa.text(
+            """CREATE TABLE asset_events
+               (
+                   id                INTEGER PRIMARY KEY,
+                   asset_id          INTEGER        NOT NULL,
+                   date              DATE           NOT NULL,
+                   type              VARCHAR        NOT NULL,
+                   value             NUMERIC(18, 6) NOT NULL,
+                   currency          VARCHAR        NOT NULL,
+                   source_plugin_key VARCHAR,
+                   notes             TEXT,
+                   created_at        DATETIME       NOT NULL,
+                   updated_at        DATETIME       NOT NULL,
+                   FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
+                   CONSTRAINT uq_asset_event_asset_date_type UNIQUE (asset_id, date, type)
+               )"""
+            )
+        )
+    print("  ✓ Table created")
+    conn.execute(
+        sa.text("CREATE INDEX idx_asset_event_asset_date ON asset_events (asset_id, date)")
+        )
+    conn.execute(
+        sa.text("CREATE INDEX idx_asset_event_asset_type_date ON asset_events (asset_id, type, date)")
+        )
+    print("  ✓ 2 Indexes created")
+
     # Unified Transactions table (REFACTORED)
     # NOTE: related_transaction_id uses DEFERRABLE INITIALLY DEFERRED FK
     # This allows bidirectional linking (A->B and B->A) within the same transaction.
@@ -335,9 +365,9 @@ def upgrade() -> None:
     print("  ✓ 6 Indexes created")
 
     print("=" * 60)
-    print("✅ Migration 001_initial (v2) completed successfully!")
-    print("📊 Created 11 tables with all indexes and constraints")
-    print("🆕 New: users, user_settings, global_settings, broker_user_access")
+    print("✅ Migration 001_initial completed successfully!")
+    print("📊 Created 12 tables with all indexes and constraints")
+    print("🆕 New: users, user_settings, global_settings, broker_user_access, asset_events")
     print("🔄 Updated: brokers (flags), transactions (unified)")
     print("🗑️  Removed: cash_accounts, cash_movements")
 
@@ -347,6 +377,7 @@ def downgrade() -> None:
     conn = op.get_bind()
     for table in [
         "transactions",
+        "asset_events",
         "price_history",
         "asset_provider_assignments",
         "fx_conversion_routes",

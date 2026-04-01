@@ -3,6 +3,9 @@ CSS Web Scraper provider for asset pricing.
 
 Uses HTTP + BeautifulSoup to extract prices from web pages using CSS selectors.
 Supports both US (1,234.56) and EU (1.234,56) number formats.
+
+NOTE [AssetEvent]: CSS Scraper doesn't support history, so no events either.
+If history support is added in the future, events=[] should be included.
 """
 
 import re

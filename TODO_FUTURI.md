@@ -439,5 +439,27 @@ Quando un asset non può essere eliminato perché ha transazioni esistenti (`err
 - Nel frontend, renderizzare un link cliccabile nella ConfirmModal results e nei toast
 - Implementare il filtro `?asset_id=` nella pagina transazioni
 
+---
 
+## 📊 AssetEvent: Dividendi/Eventi da Provider Esterni
 
+**Data aggiunta**: 1 Aprile 2026
+**Status**: 📋 PIANIFICATO
+**Priorità**: Media (post Phase 7)
+
+### Contesto
+
+La tabella `AssetEvent` e il campo `supports_events` nella classe base `AssetSourceProvider`
+sono stati introdotti come infrastruttura cross-provider. Attualmente solo `scheduled_investment`
+genera eventi. I provider market dovranno essere estesi per catturare:
+
+- **Yahoo Finance**: dividendi e split (disponibili via `yfinance` Ticker.dividends/.splits)
+- **justETF**: distribuzioni ETF (disponibili sulla pagina profilo)
+
+### Azione Futura
+
+1. Yahoo Finance: parsare `.dividends` e `.splits` in `get_history_value`, ritornare come `FAAssetEventPoint`
+2. justETF: scraping pagina profilo per date e importi distribuzioni
+3. Override `supports_events = True` nei provider aggiornati
+4. Il sync layer già gestisce l'upsert — basta ritornare gli eventi nel `FAHistoricalData.events`
+5. Il frontend (pagina Asset Detail, Phase 8) dovrà mostrare gli eventi sul grafico come marker
