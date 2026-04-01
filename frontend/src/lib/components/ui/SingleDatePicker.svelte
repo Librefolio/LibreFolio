@@ -110,13 +110,8 @@
         calendarOpen = false;
     }
 
-    // Close popover on scroll (position: fixed doesn't follow the trigger)
-    $effect(() => {
-        if (!calendarOpen) return;
-        const handleScroll = () => closeCalendar();
-        window.addEventListener('scroll', handleScroll, true);
-        return () => window.removeEventListener('scroll', handleScroll, true);
-    });
+    // Note: No scroll listener needed — popover uses position:fixed,
+    // so page scroll doesn't cause misalignment.
 
     function handleDayClick(iso: string) {
         value = iso;

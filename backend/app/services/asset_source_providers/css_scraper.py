@@ -49,6 +49,15 @@ class CSSScraperProvider(AssetSourceProvider):
     def accepted_identifier_types(self) -> list:
         return [ProviderInputType.URL]
 
+    @property
+    def get_icon(self) -> str:
+        """Return provider icon URL from local static assets."""
+        return self.generate_static_url("cssscraper.png")
+
+    @property
+    def provider_help_url(self) -> str:
+        return "/mkdocs/user/assets/providers/css-scraper/"
+
     def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
         """The identifier IS the URL for CSS scraper."""
         return identifier if identifier.startswith("http") else None
@@ -58,11 +67,13 @@ class CSSScraperProvider(AssetSourceProvider):
         return [
             {
                 "key": "current_css_selector", "type": "string", "required": True,
-                "description": "CSS selector for the price element on the web page"
+                "description": "CSS selector for the price element on the web page",
+                "placeholder": ".price-value strong",
                 },
             {
                 "key": "currency", "type": "string", "required": True,
-                "description": "Currency code (ISO 4217, e.g. EUR, USD)"
+                "description": "Currency code (ISO 4217, e.g. EUR, USD)",
+                "placeholder": "EUR",
                 },
             {
                 "key": "decimal_format", "type": "select", "required": False,
@@ -71,11 +82,13 @@ class CSSScraperProvider(AssetSourceProvider):
                 },
             {
                 "key": "timeout", "type": "number", "required": False, "default": 30,
-                "description": "HTTP request timeout in seconds"
+                "description": "HTTP request timeout in seconds",
+                "placeholder": "30",
                 },
             {
                 "key": "user_agent", "type": "string", "required": False,
-                "default": "LibreFolio/1.0", "description": "Custom User-Agent header"
+                "default": "LibreFolio/1.0", "description": "Custom User-Agent header",
+                "placeholder": "LibreFolio/1.0",
                 },
             ]
 

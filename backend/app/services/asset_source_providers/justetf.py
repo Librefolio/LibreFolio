@@ -112,6 +112,10 @@ class JustETFProvider(AssetSourceProvider):
         """Return provider icon URL (hardcoded)."""
         return "https://www.justetf.com/android-chrome-144x144.png?v2"
 
+    @property
+    def provider_help_url(self) -> str:
+        return "/mkdocs/user/assets/providers/justetf/"
+
     def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
         """Generate URL to JustETF ETF profile page."""
         return f"https://www.justetf.com/en/etf-profile.html?isin={identifier}"

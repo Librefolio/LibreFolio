@@ -42,19 +42,32 @@
     let anchorEl: HTMLElement | undefined = $state();
     let gracePopoverStyle = $state('');
     let localGraceDays = $state(0);
+    let localY = $state(0);
+    let localM = $state(0);
+    let localD = $state(0);
+
+    function daysToYMD(total: number) {
+        const y = Math.floor(total / 365);
+        const rem = total % 365;
+        const m = Math.floor(rem / 30);
+        const d = rem % 30;
+        return {y, m, d};
+    }
+
+    function ymdToDays(y: number, m: number, d: number) {
+        return y * 365 + m * 30 + d;
+    }
 
     // Sync graceDays from parent
     $effect(() => {
         localGraceDays = graceDays;
+        const ymd = daysToYMD(graceDays);
+        localY = ymd.y;
+        localM = ymd.m;
+        localD = ymd.d;
     });
 
-    // Close grace popover on scroll
-    $effect(() => {
-        if (!showGracePopover) return;
-        const onScroll = () => { showGracePopover = false; };
-        window.addEventListener('scroll', onScroll, {capture: true, passive: true});
-        return () => window.removeEventListener('scroll', onScroll, {capture: true});
-    });
+    // Note: No scroll listener needed — grace popover uses position:fixed.
 
     /** Svelte action: portal — moves the node to document.body */
     function portal(node: HTMLElement) {
@@ -83,7 +96,21 @@
     function handleGraceDaysBlur() {
         const clamped = Math.max(0, Math.round(localGraceDays));
         localGraceDays = clamped;
+        const ymd = daysToYMD(clamped);
+        localY = ymd.y;
+        localM = ymd.m;
+        localD = ymd.d;
         onGraceDaysChange?.(clamped);
+    }
+
+    function handleYMDBlur() {
+        const y = Math.max(0, Math.round(localY || 0));
+        const m = Math.max(0, Math.round(localM || 0));
+        const d = Math.max(0, Math.round(localD || 0));
+        localY = y; localM = m; localD = d;
+        const total = ymdToDays(y, m, d);
+        localGraceDays = total;
+        onGraceDaysChange?.(total);
     }
 
     function handleKeydown(e: KeyboardEvent) {
@@ -115,24 +142,59 @@
             <div class="fixed inset-0" style="z-index:99998;" onclick={() => { showGracePopover = false; }}></div>
             <div style={gracePopoverStyle}>
                 <div class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600
-                            rounded-xl shadow-xl p-3 space-y-3" style="min-width:200px;">
+                            rounded-xl shadow-xl p-3 space-y-3" style="min-width:260px;">
                     <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
                         ⚡ Late Interest — Grace Period
                     </div>
+                    <!-- Y / M / D inputs -->
+                    <div class="flex items-center gap-1.5">
+                        <input
+                            type="number"
+                            bind:value={localY}
+                            oninput={handleYMDBlur}
+                            min="0"
+                            class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                   bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
+                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50"
+                        />
+                        <span class="text-xs text-gray-500">y</span>
+                        <input
+                            type="number"
+                            bind:value={localM}
+                            oninput={handleYMDBlur}
+                            min="0"
+                            class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                   bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
+                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50"
+                        />
+                        <span class="text-xs text-gray-500">m</span>
+                        <input
+                            type="number"
+                            bind:value={localD}
+                            oninput={handleYMDBlur}
+                            min="0"
+                            class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                   bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
+                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50"
+                        />
+                        <span class="text-xs text-gray-500">d</span>
+                    </div>
+                    <!-- Total days (also editable for convenience) -->
                     <div class="flex items-center gap-2">
-                        <label for="grace-days" class="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                            Grace Days:
+                        <label for="grace-days" class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                            = Total:
                         </label>
                         <input
                             id="grace-days"
                             type="number"
                             bind:value={localGraceDays}
-                            onblur={handleGraceDaysBlur}
+                            oninput={handleGraceDaysBlur}
                             min="0"
-                            class="w-20 px-2 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                            class="w-20 px-2 py-1 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                    bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
                                    focus:outline-none focus:ring-2 focus:ring-libre-green/50"
                         />
+                        <span class="text-xs text-gray-400">days</span>
                     </div>
                     <button
                         type="button"

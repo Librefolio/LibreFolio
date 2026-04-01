@@ -325,7 +325,8 @@
       "identifierType": "Tipo de Identificador",
       "fetchInterval": "Intervalo de actualizacion",
       "lastFetch": "Ultima actualizacion",
-      "neverFetched": "Nunca ejecutado"
+      "neverFetched": "Nunca ejecutado",
+      "documentation": "Documentación"
     },
     "schedule": {
       "title": "Calendario de intereses",
@@ -334,11 +335,11 @@
       "compounding": "Capitalización",
       "compFreq": "Frec. Comp.",
       "dayCount": "Cómputo Días",
-      "periodHint": "Fecha de inicio y fin de este período de interés",
-      "rateHint": "Tasa de interés anual en porcentaje (ej. 5.00 = 5%)",
-      "compoundingHint": "Simple: interés sobre el capital. Compuesto: interés sobre interés.",
-      "freqHint": "Frecuencia de cálculo del interés compuesto (solo cuando capitalización es COMPUESTO)",
-      "dayCountHint": "Convención para contar días en el período de interés",
+      "periodHint": "Fecha de inicio y fin de este período de interés.\nAmbas fechas son inclusivas (la fecha final es el último día del período).",
+      "rateHint": "Tasa de interés anual en porcentaje.\nEjemplo: 5.00 = 5% anual.",
+      "compoundingHint": "Simple: interés solo sobre el capital.\nCompuesto: los intereses se acumulan también sobre los intereses.",
+      "freqHint": "Frecuencia de cálculo del interés compuesto.\nSolo aplica cuando la capitalización es Compuesta.",
+      "dayCountHint": "Convención para contar días en el período.\nACT/365 y ACT/360 son las más comunes.",
       "addPeriod": "Añadir Período",
       "addFirstPeriod": "Añadir Primer Período",
       "split": "Dividir",

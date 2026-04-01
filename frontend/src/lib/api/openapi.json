@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.9-7-g2443ef6-dirty"
+    "version": "v0.5.9-8-g54afeb8-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -7880,6 +7880,18 @@
             "type": "array",
             "title": "Accepted Identifier Types",
             "description": "Identifier types accepted by this provider"
+          },
+          "provider_help_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Help Url",
+            "description": "URL to provider documentation"
           }
         },
         "additionalProperties": false,
@@ -7940,6 +7952,30 @@
             ],
             "title": "Default",
             "description": "Default value"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder",
+            "description": "Placeholder text for the input field"
+          },
+          "help_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Url",
+            "description": "URL to documentation or help page for this field"
           }
         },
         "additionalProperties": false,

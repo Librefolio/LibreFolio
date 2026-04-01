@@ -2204,6 +2204,12 @@ type FAProviderInfo = {
    * Identifier types accepted by this provider
    */
   Array<string> | undefined;
+  provider_help_url?:
+    | /**
+     * URL to provider documentation
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
 };
 type FAProviderParamField = {
   /**
@@ -2235,6 +2241,18 @@ type FAProviderParamField = {
      * Default value
      */
     ((unknown | null) | Array<unknown | null>)
+    | undefined;
+  placeholder?:
+    | /**
+     * Placeholder text for the input field
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  help_url?:
+    | /**
+     * URL to documentation or help page for this field
+     */
+    ((string | null) | Array<string | null>)
     | undefined;
 };
 type FAProviderProbeRequest = {
@@ -4825,6 +4843,14 @@ const FAProviderParamField: z.ZodType<FAProviderParamField> = z.object({
     .union([z.unknown(), z.null()])
     .describe("Default value")
     .optional(),
+  placeholder: z
+    .union([z.string(), z.null()])
+    .describe("Placeholder text for the input field")
+    .optional(),
+  help_url: z
+    .union([z.string(), z.null()])
+    .describe("URL to documentation or help page for this field")
+    .optional(),
 });
 const FAProviderInfo: z.ZodType<FAProviderInfo> = z.object({
   code: z.string().describe("Provider code (e.g., yfinance, cssscraper)"),
@@ -4844,6 +4870,10 @@ const FAProviderInfo: z.ZodType<FAProviderInfo> = z.object({
   accepted_identifier_types: z
     .array(z.string())
     .describe("Identifier types accepted by this provider")
+    .optional(),
+  provider_help_url: z
+    .union([z.string(), z.null()])
+    .describe("URL to provider documentation")
     .optional(),
 });
 const FAProviderAssignmentItem = z.object({

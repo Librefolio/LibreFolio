@@ -260,8 +260,8 @@
         }
     }
 
-    function setLeftYear(y: number) {
-        calLeftYear = y;
+    function setLeftYear(newYear: number) {
+        calLeftYear = newYear;
         if (monthOrder(calLeftYear, calLeftMonth) > monthOrder(calRightYear, calRightMonth)) {
             [calLeftYear, calRightYear] = [calRightYear, calLeftYear];
             [calLeftMonth, calRightMonth] = [calRightMonth, calLeftMonth];
@@ -276,8 +276,8 @@
         }
     }
 
-    function setRightYear(y: number) {
-        calRightYear = y;
+    function setRightYear(newYear: number) {
+        calRightYear = newYear;
         if (monthOrder(calRightYear, calRightMonth) < monthOrder(calLeftYear, calLeftMonth)) {
             [calLeftYear, calRightYear] = [calRightYear, calLeftYear];
             [calLeftMonth, calRightMonth] = [calRightMonth, calLeftMonth];
@@ -353,18 +353,18 @@
     function openCalendar() {
         // ...existing code for setting calLeft/calRight from start/end...
         if (start) {
-            const [y, m] = start.split('-').map(Number);
-            calLeftYear = y;
-            calLeftMonth = m - 1;
+            const [sy, sm] = start.split('-').map(Number);
+            calLeftYear = sy;
+            calLeftMonth = sm - 1;
         } else {
             const now = new Date();
             calLeftYear = now.getFullYear();
             calLeftMonth = Math.max(0, now.getMonth() - 1);
         }
         if (end) {
-            const [y, m] = end.split('-').map(Number);
-            calRightYear = y;
-            calRightMonth = m - 1;
+            const [ey, em] = end.split('-').map(Number);
+            calRightYear = ey;
+            calRightMonth = em - 1;
         } else {
             calRightYear = calLeftYear;
             calRightMonth = calLeftMonth < 11 ? calLeftMonth + 1 : 0;
@@ -386,13 +386,8 @@
         hoveredDate = null;
     }
 
-    // Close popover on scroll (position: fixed doesn't follow the trigger)
-    $effect(() => {
-        if (!calendarOpen) return;
-        const handleScroll = () => closeCalendar();
-        window.addEventListener('scroll', handleScroll, true);
-        return () => window.removeEventListener('scroll', handleScroll, true);
-    });
+    // Note: No scroll listener needed — popover uses position:fixed,
+    // so page scroll doesn't cause misalignment.
 
     // Ref for the custom edit container to detect click-outside reliably
     let customEditRef = $state<HTMLDivElement | null>(null);
@@ -461,6 +456,10 @@
         }
     });
 
+    function handleGranularityChange(v: string) {
+        customGranularity = v as Granularity;
+    }
+
     function displayDate(iso: string): string {
         if (!iso) return '—';
         if (compact) return iso; // YYYY-MM-DD — fits narrow cells
@@ -515,7 +514,7 @@
                         <SimpleSelect
                                 value={customGranularity}
                                 options={granularitySelectOptions}
-                                onchange={(v) => { customGranularity = v as Granularity; }}
+                                onchange={handleGranularityChange}
                                 class="inline-block w-auto"
                                 dropdownPosition="auto"
                                 compact
@@ -547,21 +546,21 @@
                     class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
                     onclick={openCalendar}
             >
-                <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
+                <span class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
                     <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0"/>
                     <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
                     <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(start)}</span>
-                </div>
+                </span>
                 {#if stacked}
-                    <div class="w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
+                    <span class="block w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
                 {:else}
-                    <div class="w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></div>
+                    <span class="block w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
                 {/if}
-                <div class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
+                <span class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
                     <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0"/>
                     <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
                     <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(end)}</span>
-                </div>
+                </span>
             </button>
 
             {#if calendarOpen}

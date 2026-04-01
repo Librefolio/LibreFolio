@@ -89,6 +89,12 @@ plugins:
             Data Editor: Editor Dati
             Provider Config: Configurazione Provider
             Chart Settings: Impostazioni Grafico
+            Assets: Asset
+            Providers: Provider
+            Yahoo Finance: Yahoo Finance
+            justETF: justETF
+            CSS Scraper: CSS Scraper
+            Scheduled Investment: Investimento Programmato
             Misc: Varie
             Image Crop: Ritaglio Immagine
             Admin Manual: Manuale Admin
@@ -134,6 +140,12 @@ plugins:
             Data Editor: Éditeur de Données
             Provider Config: Configuration du Fournisseur
             Chart Settings: Paramètres du Graphique
+            Assets: Actifs
+            Providers: Fournisseurs
+            Yahoo Finance: Yahoo Finance
+            justETF: justETF
+            CSS Scraper: CSS Scraper
+            Scheduled Investment: Investissement Programmé
             Misc: Divers
             Image Crop: Recadrage d'Image
             Admin Manual: Manuel Admin
@@ -179,6 +191,12 @@ plugins:
             Data Editor: Editor de Datos
             Provider Config: Configuración del Proveedor
             Chart Settings: Ajustes del Gráfico
+            Assets: Activos
+            Providers: Proveedores
+            Yahoo Finance: Yahoo Finance
+            justETF: justETF
+            CSS Scraper: CSS Scraper
+            Scheduled Investment: Inversión Programada
             Misc: Varios
             Image Crop: Recorte de Imagen
             Admin Manual: Manual de Admin
@@ -240,6 +258,14 @@ nav:
               - Data Editor: user/fx/detail/data-editor.md
               - Provider Config: user/fx/detail/provider.md
           - Chart Settings: user/fx/chart-settings.md
+      - Assets:
+          - Overview: user/assets/index.md
+          - Providers:
+              - Overview: user/assets/providers/index.md
+              - Yahoo Finance: user/assets/providers/yahoo-finance.md
+              - justETF: user/assets/providers/justetf.md
+              - CSS Scraper: user/assets/providers/css-scraper.md
+              - Scheduled Investment: user/assets/providers/scheduled-investment.md
       - Misc:
           - Image Crop: user/misc/image-crop.md
   - Admin Manual:

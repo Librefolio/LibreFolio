@@ -1,18 +1,20 @@
 <!--
-  BoundaryDateModal — Reusable modal for choosing a boundary date.
+  BoundaryDateModal — Reusable modal for choosing boundary date(s).
 
   Used by ScheduledInvestmentEditor for:
   - Delete period (middle): redistribute range between neighbors
   - Split period: choose where to split into two
+  - Bulk delete (multi-gap): choose N boundary dates, one per gap
 
-  Uses SingleDatePicker with disabledDates to restrict selection to the valid range.
+  Supports single-gap mode (minDate/maxDate) and multi-gap mode (gaps array).
 
   Props:
   - open: boolean (bindable)
   - mode: 'delete' | 'split'
-  - minDate / maxDate: ISO YYYY-MM-DD range constraints
-  - defaultDate: initial boundary date
-  - onconfirm: (boundaryDate: string) => void
+  - minDate / maxDate / defaultDate: for single-gap mode
+  - gaps: array of {minDate, maxDate, defaultDate, label} for multi-gap mode
+  - onconfirm: (boundaryDate: string) => void — single-gap
+  - onconfirmMulti: (boundaryDates: string[]) => void — multi-gap
   - oncancel: () => void
 -->
 <script lang="ts">
@@ -20,23 +22,56 @@
     import {Scissors, Trash2} from 'lucide-svelte';
     import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
 
-    interface Props {
-        open: boolean;
-        mode: 'delete' | 'split';
+    interface GapInfo {
         minDate: string;
         maxDate: string;
         defaultDate: string;
-        onconfirm: (boundaryDate: string) => void;
+        label?: string;
+    }
+
+    interface Props {
+        open: boolean;
+        mode: 'delete' | 'split';
+        /** Single-gap mode */
+        minDate?: string;
+        maxDate?: string;
+        defaultDate?: string;
+        /** Multi-gap mode */
+        gaps?: GapInfo[];
+        onconfirm?: (boundaryDate: string) => void;
+        onconfirmMulti?: (boundaryDates: string[]) => void;
         oncancel: () => void;
     }
 
-    let {open = $bindable(false), mode, minDate, maxDate, defaultDate, onconfirm, oncancel}: Props = $props();
+    let {
+        open = $bindable(false),
+        mode,
+        minDate = '',
+        maxDate = '',
+        defaultDate = '',
+        gaps = [],
+        onconfirm,
+        onconfirmMulti,
+        oncancel,
+    }: Props = $props();
 
+    // Single-gap state
     let boundaryDate = $state('');
 
-    // Reset date when modal opens
+    // Multi-gap state
+    let boundaryDates = $state<string[]>([]);
+
+    let isMultiGap = $derived(gaps.length > 0);
+
+    // Reset dates when modal opens
     $effect(() => {
-        if (open) boundaryDate = defaultDate;
+        if (open) {
+            if (gaps.length > 0) {
+                boundaryDates = gaps.map(g => g.defaultDate);
+            } else {
+                boundaryDate = defaultDate;
+            }
+        }
     });
 
     /** Format a Date to ISO YYYY-MM-DD using local timezone (not UTC) */
@@ -44,41 +79,62 @@
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
 
-    /** Build a Set of disabled dates (everything outside minDate..maxDate range) */
-    let disabledDates = $derived.by(() => {
+    /** Build a Set of disabled dates (everything outside min..max range) */
+    function buildDisabledDates(min: string, max: string): Set<string> {
         const disabled = new Set<string>();
-        if (!minDate || !maxDate) return disabled;
+        if (!min || !max) return disabled;
 
-        const min = new Date(minDate + 'T00:00:00');
-        const max = new Date(maxDate + 'T00:00:00');
+        const minD = new Date(min + 'T00:00:00');
+        const maxD = new Date(max + 'T00:00:00');
 
-        // Generate dates from 60 days before min to 60 days after max
-        // to cover the visible calendar range
-        const rangeStart = new Date(min);
+        const rangeStart = new Date(minD);
         rangeStart.setDate(rangeStart.getDate() - 60);
-        const rangeEnd = new Date(max);
+        const rangeEnd = new Date(maxD);
         rangeEnd.setDate(rangeEnd.getDate() + 60);
 
         const cursor = new Date(rangeStart);
         while (cursor <= rangeEnd) {
             const iso = toLocalISO(cursor);
-            if (iso < minDate || iso > maxDate) {
+            if (iso < min || iso > max) {
                 disabled.add(iso);
             }
             cursor.setDate(cursor.getDate() + 1);
         }
         return disabled;
-    });
+    }
+
+    /** Single-gap disabled dates */
+    let disabledDates = $derived.by(() => buildDisabledDates(minDate, maxDate));
+
+    /** Multi-gap disabled dates (one set per gap) */
+    let multiDisabledDates = $derived.by(() => gaps.map(g => buildDisabledDates(g.minDate, g.maxDate)));
 
     function handleDateSelected(date: string) {
         boundaryDate = date;
     }
 
-    function handleConfirm() {
-        if (boundaryDate >= minDate && boundaryDate <= maxDate) {
-            onconfirm(boundaryDate);
-            open = false;
+    function handleMultiDateSelected(index: number, date: string) {
+        boundaryDates = boundaryDates.map((d, i) => i === index ? date : d);
+    }
+
+    let isValid = $derived.by(() => {
+        if (isMultiGap) {
+            return boundaryDates.every((d, i) => {
+                const g = gaps[i];
+                return d && d >= g.minDate && d <= g.maxDate;
+            });
         }
+        return boundaryDate >= minDate && boundaryDate <= maxDate;
+    });
+
+    function handleConfirm() {
+        if (!isValid) return;
+        if (isMultiGap) {
+            onconfirmMulti?.(boundaryDates);
+        } else {
+            onconfirm?.(boundaryDate);
+        }
+        open = false;
     }
 
     function handleCancel() {
@@ -102,7 +158,8 @@
         onkeydown={handleKeydown}
         onclick={(e) => { if (e.target === e.currentTarget) handleCancel(); }}
     >
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4 space-y-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4 space-y-4
+                     {isMultiGap ? 'max-w-md' : 'max-w-sm'} max-h-[90vh] overflow-y-auto">
             <!-- Header -->
             <div class="flex items-center gap-3">
                 {#if mode === 'delete'}
@@ -131,25 +188,51 @@
                 {/if}
             </p>
 
-            <!-- Date picker using SingleDatePicker -->
-            <div class="space-y-2">
-                <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                    {$t('assets.schedule.boundaryDate')}
+            {#if isMultiGap}
+                <!-- Multi-gap mode: N boundary date pickers -->
+                <div class="space-y-4">
+                    {#each gaps as gap, i}
+                        <div class="space-y-2 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg border border-gray-100 dark:border-slate-600">
+                            <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                {gap.label || `${$t('assets.schedule.boundaryDate')} ${i + 1}`}
+                            </div>
+                            <div class="flex justify-center">
+                                <SingleDatePicker
+                                    value={boundaryDates[i] ?? gap.defaultDate}
+                                    label={gap.label || $t('assets.schedule.boundaryDate')}
+                                    compact={true}
+                                    onchange={(d) => handleMultiDateSelected(i, d)}
+                                    disabledDates={multiDisabledDates[i]}
+                                    allowFuture={true}
+                                />
+                            </div>
+                            <p class="text-center text-[10px] text-gray-400">
+                                {gap.minDate} → {gap.maxDate}
+                            </p>
+                        </div>
+                    {/each}
                 </div>
-                <div class="flex justify-center">
-                    <SingleDatePicker
-                        value={boundaryDate}
-                        label={$t('assets.schedule.boundaryDate')}
-                        compact={true}
-                        onchange={handleDateSelected}
-                        {disabledDates}
-                        allowFuture={true}
-                    />
+            {:else}
+                <!-- Single-gap mode: one DatePicker -->
+                <div class="space-y-2">
+                    <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        {$t('assets.schedule.boundaryDate')}
+                    </div>
+                    <div class="flex justify-center">
+                        <SingleDatePicker
+                            value={boundaryDate}
+                            label={$t('assets.schedule.boundaryDate')}
+                            compact={true}
+                            onchange={handleDateSelected}
+                            {disabledDates}
+                            allowFuture={true}
+                        />
+                    </div>
+                    <p class="text-center text-[10px] text-gray-400">
+                        {minDate} → {maxDate}
+                    </p>
                 </div>
-                <p class="text-center text-[10px] text-gray-400">
-                    {minDate} → {maxDate}
-                </p>
-            </div>
+            {/if}
 
             <!-- Actions -->
             <div class="flex justify-end gap-2 pt-2">
@@ -164,7 +247,7 @@
                 <button
                     type="button"
                     onclick={handleConfirm}
-                    disabled={!boundaryDate || boundaryDate < minDate || boundaryDate > maxDate}
+                    disabled={!isValid}
                     class="px-4 py-2 text-sm rounded-lg font-medium transition-colors disabled:opacity-50
                            {mode === 'delete'
                                ? 'bg-red-500 hover:bg-red-600 text-white'

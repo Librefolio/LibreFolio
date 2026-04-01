@@ -202,6 +202,7 @@
 </div>
 
 {#if visible}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
             bind:this={tooltipElement}
             class="tooltip-fixed"
@@ -230,16 +231,24 @@
         padding: 0.5rem 0.75rem;
         font-size: 0.8125rem;
         line-height: 1.25rem;
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: normal;
         color: white;
         background-color: #1f2937;
         border-radius: 0.375rem;
         box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        white-space: normal;
+        white-space: pre-line;
         word-wrap: break-word;
-        pointer-events: none;
+        pointer-events: auto;
         min-width: 120px;
         width: max-content;
+        max-height: 50vh;
+        overflow-y: auto;
+        cursor: default;
+        user-select: text;
     }
+
 
     /* Dark mode tooltip */
     :global(html.dark) .tooltip-fixed {
