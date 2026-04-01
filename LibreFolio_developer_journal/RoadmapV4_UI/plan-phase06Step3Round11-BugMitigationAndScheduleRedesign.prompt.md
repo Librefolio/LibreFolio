@@ -205,13 +205,20 @@ ondblclick={() => { if (isRowSelectable && !isRowSelectable(row)) return; handle
 | §A7 | Docs merge EN↔IT + emoji on all 7 asset doc pages | 15 min | ✅ DONE |
 | §A8 | Remove bg-white p-0.5 from provider icons | 2 min | ✅ DONE |
 | §A9 | Late interest row: hide from table when toggle is off | 5 min | ✅ DONE |
-| **Totale** | | **~87 min** | ✅ |
+| §A10 | DateRangePicker/SingleDatePicker: reposition on scroll (follows parent popover) | 10 min | ✅ DONE |
+| §A11 | CSS Scraper: currency param type `"currency"` → CurrencySearchSelect | 10 min | ✅ DONE |
+| **Totale** | | **~107 min** | ✅ |
 
 #### Post-testing Notes (commit 2)
 
 - **§A1b**: Il fix §A1 (rimozione scroll listener) non copriva `DataTableColumnFilter.svelte` usato nella pagina Files/. Lo scroll handler è stato cambiato: ora riposiziona il popover sullo scroll, e chiude solo se l'anchor esce dal viewport.
 - **§A2b**: I risultati test erano inline per via del `display: inline-flex` di `Tooltip.svelte`. Cambiato container a `flex flex-col gap-1.5` per forzare layout verticale.
 - **§A9**: La riga late interest disabilitata era ancora visibile e cliccabile (apriva grace modal). Ora la riga è completamente nascosta quando il toggle è off. Rimosso CSS `late-row-disabled` non più necessario.
+
+#### Post-testing Notes (commit 3)
+
+- **§A10**: I popover calendario (DateRangePicker/SingleDatePicker) non seguivano il parent popover durante lo scroll. Aggiunto `$effect` con scroll listener `capture:true` che riposiziona il calendario, e chiude solo se il trigger esce dal viewport. Applicato a entrambi i componenti.
+- **§A11**: Il campo `currency` del CSS Scraper era un semplice input testuale. Backend: tipo cambiato da `"string"` a `"currency"` in `params_schema`. Frontend: aggiunto ramo `field.type === 'currency'` nel loop parametri generici di `ProviderAssignmentSection.svelte` che renderizza `CurrencySearchSelect` con ricerca, bandiere e simboli valuta.
 
 ---
 
