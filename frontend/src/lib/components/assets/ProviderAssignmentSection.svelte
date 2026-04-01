@@ -13,6 +13,7 @@
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {SimpleSelect} from '$lib/components/ui/select';
+    import {CurrencySearchSelect} from '$lib/components/ui/select';
     import type {SelectOption} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {
@@ -569,6 +570,14 @@
                                     options={field.options.map(o => ({value: o, label: o}))}
                                     disabled={disabled || readonly}
                                     dropdownPosition="auto"
+                                    onchange={(v) => handleParamChange(field.key, v)}
+                            />
+                        {:else if field.type === 'currency'}
+                            <CurrencySearchSelect
+                                    value={paramsValues[field.key] ?? field.default ?? ''}
+                                    disabled={disabled || readonly}
+                                    dropdownPosition="auto"
+                                    placeholder={field.placeholder ?? ''}
                                     onchange={(v) => handleParamChange(field.key, v)}
                             />
                         {:else if field.type === 'number'}

@@ -110,8 +110,21 @@
         calendarOpen = false;
     }
 
-    // Note: No scroll listener needed — popover uses position:fixed,
-    // so page scroll doesn't cause misalignment.
+    // Reposition on scroll (needed when embedded inside another fixed popover).
+    // Close if trigger exits viewport.
+    $effect(() => {
+        if (!calendarOpen || !triggerEl) return;
+        const handleScroll = () => {
+            const rect = triggerEl!.getBoundingClientRect();
+            if (rect.bottom < 0 || rect.top > window.innerHeight) {
+                closeCalendar();
+            } else {
+                updatePopoverPosition();
+            }
+        };
+        window.addEventListener('scroll', handleScroll, true);
+        return () => window.removeEventListener('scroll', handleScroll, true);
+    });
 
     function handleDayClick(iso: string) {
         value = iso;

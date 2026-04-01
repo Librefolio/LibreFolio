@@ -71,7 +71,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 "placeholder": ".price-value strong",
                 },
             {
-                "key": "currency", "type": "string", "required": True,
+                "key": "currency", "type": "currency", "required": True,
                 "description": "Currency code (ISO 4217, e.g. EUR, USD)",
                 "placeholder": "EUR",
                 },
