@@ -201,6 +201,16 @@ class AssetSourceProvider(ABC):
         """
         return None
 
+    @property
+    def provider_help_url(self) -> str | None:
+        """
+        URL to the provider documentation page served by the running instance.
+
+        Returns:
+            URL string (e.g., "/mkdocs/user/assets/providers/yahoo-finance/"), or None
+        """
+        return None
+
     @classmethod
     def generate_static_url(cls, relative_path: str) -> str:
         """
@@ -2062,7 +2072,10 @@ class AssetCRUDService:
                     identifier_other=asset.identifier_other,
                     # Legacy fields from provider assignment
                     identifier=provider_identifier,
-                    identifier_type=provider_identifier_type,
+                    identifier_type=(
+                        AssetSourceProvider.map_input_type_to_identifier_type(provider_identifier_type)
+                        if provider_identifier_type else None
+                    ),
                     )
                 )
 

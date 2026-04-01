@@ -848,7 +848,7 @@
 
 <ModalBase
         {open}
-        maxWidth="5xl"
+        maxWidth="4xl"
         allowOverflow={true}
         onRequestClose={handleClose}
 >

@@ -325,7 +325,8 @@
       "identifierType": "Tipo Identificativo",
       "fetchInterval": "Intervallo Fetch",
       "lastFetch": "Ultimo Fetch",
-      "neverFetched": "Mai eseguito"
+      "neverFetched": "Mai eseguito",
+      "documentation": "Documentazione"
     },
     "schedule": {
       "title": "Piano Interessi",
@@ -334,11 +335,11 @@
       "compounding": "Capitalizzazione",
       "compFreq": "Freq. Comp.",
       "dayCount": "Conteggio Giorni",
-      "periodHint": "Data inizio e fine di questo periodo di interesse",
-      "rateHint": "Tasso di interesse annuo in percentuale (es. 5.00 = 5%)",
-      "compoundingHint": "Semplice: interesse solo sul capitale. Composto: interesse su interesse.",
-      "freqHint": "Frequenza di calcolo dell'interesse composto (solo quando capitalizzazione è COMPOSTO)",
-      "dayCountHint": "Convenzione per il conteggio dei giorni nel periodo di interesse",
+      "periodHint": "Data inizio e fine di questo periodo di interesse.\nEntrambe le date sono inclusive (la data finale è l'ultimo giorno del periodo).",
+      "rateHint": "Tasso di interesse annuo in percentuale.\nEsempio: 5.00 = 5% annuo.",
+      "compoundingHint": "Semplice: interesse solo sul capitale.\nComposto: l'interesse matura anche sugli interessi accumulati.",
+      "freqHint": "Frequenza di calcolo dell'interesse composto.\nSi applica solo quando la capitalizzazione è Composta.",
+      "dayCountHint": "Convenzione per il conteggio dei giorni nel periodo.\nACT/365 e ACT/360 sono le più comuni.",
       "addPeriod": "Aggiungi Periodo",
       "addFirstPeriod": "Aggiungi Primo Periodo",
       "split": "Dividi",

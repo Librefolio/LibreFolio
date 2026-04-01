@@ -325,7 +325,8 @@
       "identifierType": "Identifier Type",
       "fetchInterval": "Fetch Interval",
       "lastFetch": "Last Fetch",
-      "neverFetched": "Never fetched"
+      "neverFetched": "Never fetched",
+      "documentation": "Documentation"
     },
     "schedule": {
       "title": "Interest Schedule",
@@ -334,11 +335,11 @@
       "compounding": "Compounding",
       "compFreq": "Comp. Freq.",
       "dayCount": "Day Count",
-      "periodHint": "Start and end date of this interest period",
-      "rateHint": "Annual interest rate as percentage (e.g. 5.00 = 5%)",
-      "compoundingHint": "Simple: interest on principal only. Compound: interest on interest.",
-      "freqHint": "How often compound interest is calculated (only when compounding is COMPOUND)",
-      "dayCountHint": "Convention for counting days in the interest period",
+      "periodHint": "Start and end date of this interest period.\nBoth dates are inclusive (the end date is the last day of the period).",
+      "rateHint": "Annual interest rate as percentage.\nExample: 5.00 = 5% per year.",
+      "compoundingHint": "Simple: interest on principal only.\nCompound: interest accrues on accumulated interest too.",
+      "freqHint": "How often compound interest is calculated.\nOnly applies when compounding is set to Compound.",
+      "dayCountHint": "Convention for counting days in the interest period.\nACT/365 and ACT/360 are the most common.",
       "addPeriod": "Add Period",
       "addFirstPeriod": "Add First Period",
       "split": "Split",

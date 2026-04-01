@@ -353,6 +353,7 @@ async def list_providers(
                     supports_search=supports_search,
                     params_schema=schema_fields,
                     accepted_identifier_types=[t.value for t in instance.accepted_identifier_types],
+                    provider_help_url=instance.provider_help_url,
                     )
                 )
 
