@@ -381,7 +381,14 @@
             requestAnimationFrame(updatePosition);
             // Close on scroll (parent containers + window)
             const scrollParent = anchorElement!.closest('.table-wrapper');
-            const handleScroll = () => onClose();
+            const handleScroll = () => {
+                const rect = anchorElement!.getBoundingClientRect();
+                if (rect.bottom < 0 || rect.top > window.innerHeight) {
+                    onClose();
+                } else {
+                    updatePosition();
+                }
+            };
             scrollParent?.addEventListener('scroll', handleScroll);
             window.addEventListener('scroll', handleScroll, true);
             window.addEventListener('resize', updatePosition);

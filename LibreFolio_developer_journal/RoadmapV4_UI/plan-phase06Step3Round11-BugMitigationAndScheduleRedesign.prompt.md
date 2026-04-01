@@ -194,15 +194,24 @@ ondblclick={() => { if (isRowSelectable && !isRowSelectable(row)) return; handle
 
 | § | Item | Effort | Stato |
 |---|------|--------|-------|
-| §A1 | Scroll listener removal | 5 min | ✅ DONE |
+| §A1 | Scroll listener removal (DateRangePicker, SingleDatePicker, CellDateRange) | 5 min | ✅ DONE |
+| §A1b | DataTableColumnFilter: scroll reposition instead of close (Files page regression) | 5 min | ✅ DONE |
 | §A2 | Test results wrap | 5 min | ✅ DONE |
+| §A2b | Test results: force vertical list layout (flex-col, not inline) | 5 min | ✅ DONE |
 | §A3 | Copy error button + cleanup Tooltip | 15 min | ✅ DONE |
 | §A4 | Block click on non-selectable rows | 5 min | ✅ DONE |
 | §A5 | Grace period live sync | 5 min | ✅ DONE |
-| §A6 | Provider help icon ❓ | 20 min | ✅ DONE |
-| §A7 | Docs merge + emoji | 15 min | ✅ DONE |
-| §A8 | Remove bg-white p-0.5 | 2 min | ✅ DONE |
-| **Totale** | | **~72 min** | ✅ |
+| §A6 | Provider help icon ❓ (backend endpoint + CircleHelp inline) | 20 min | ✅ DONE |
+| §A7 | Docs merge EN↔IT + emoji on all 7 asset doc pages | 15 min | ✅ DONE |
+| §A8 | Remove bg-white p-0.5 from provider icons | 2 min | ✅ DONE |
+| §A9 | Late interest row: hide from table when toggle is off | 5 min | ✅ DONE |
+| **Totale** | | **~87 min** | ✅ |
+
+#### Post-testing Notes (commit 2)
+
+- **§A1b**: Il fix §A1 (rimozione scroll listener) non copriva `DataTableColumnFilter.svelte` usato nella pagina Files/. Lo scroll handler è stato cambiato: ora riposiziona il popover sullo scroll, e chiude solo se l'anchor esce dal viewport.
+- **§A2b**: I risultati test erano inline per via del `display: inline-flex` di `Tooltip.svelte`. Cambiato container a `flex flex-col gap-1.5` per forzare layout verticale.
+- **§A9**: La riga late interest disabilitata era ancora visibile e cliccabile (apriva grace modal). Ora la riga è completamente nascosta quando il toggle è off. Rimosso CSS `late-row-disabled` non più necessario.
 
 ---
 

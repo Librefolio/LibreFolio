@@ -627,7 +627,7 @@
 
             <!-- Test results -->
             {#if testResults.length > 0 || testStatus === 'testing'}
-                <div class="space-y-1.5 pl-3 border-l-2 {testStatus === 'passed' ? (testResults.some(r => r.status === 'warning') ? 'border-amber-400' : 'border-green-400') : testStatus === 'failed' ? 'border-red-400' : 'border-gray-300 dark:border-slate-600'}">
+                <div class="flex flex-col gap-1.5 pl-3 border-l-2 {testStatus === 'passed' ? (testResults.some(r => r.status === 'warning') ? 'border-amber-400' : 'border-green-400') : testStatus === 'failed' ? 'border-red-400' : 'border-gray-300 dark:border-slate-600'}">
                     {#each testResults as result}
                         <Tooltip html={buildTooltipHtml(result)} position="top">
                             <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">

@@ -159,10 +159,10 @@
     let normalRows = $derived(rows.filter(r => !r.isLate));
     let lateRow = $derived(rows.find(r => r.isLate));
 
-    /** All rows for DataTable: normal periods + late interest */
+    /** All rows for DataTable: normal periods + late interest (only when enabled) */
     let tableData = $derived.by(() => {
         const result: ScheduleRow[] = [...normalRows];
-        if (lateRow) result.push(lateRow);
+        if (lateRow?.enabled) result.push(lateRow);
         return result;
     });
 
@@ -873,7 +873,6 @@
     }
 
     function getRowClass(row: ScheduleRow): string {
-        if (row.isLate && !row.enabled) return 'late-row-disabled';
         if (row.isLate) return 'late-row';
         return '';
     }
@@ -1041,14 +1040,6 @@
 />
 
 <style>
-    :global(.late-row-disabled) {
-        opacity: 0.4;
-        background-color: rgb(249 250 251) !important;
-    }
-
-    :global(.dark .late-row-disabled) {
-        background-color: rgb(15 23 42 / 0.5) !important;
-    }
 
     :global(.late-row) {
         border-top: 2px dashed rgb(209 213 219);
