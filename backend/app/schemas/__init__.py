@@ -30,6 +30,7 @@ from backend.app.schemas.assets import (
     FACurrentValue,
     FAPricePoint,
     FAHistoricalData,
+    FAAssetEventPoint,
     FAAssetProviderAssignment,
     FAAssetPatchItem,
     # Distribution models
@@ -226,6 +227,7 @@ __all__ = [
     "FACurrentValue",
     "FAPricePoint",
     "FAHistoricalData",
+    "FAAssetEventPoint",
     "FAAssetProviderAssignment",
     "FAAssetPatchItem",
     # Assets: Distribution models

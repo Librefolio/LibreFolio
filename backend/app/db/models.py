@@ -177,6 +177,22 @@ class AssetType(str, Enum):
     OTHER = "OTHER"
 
 
+class AssetEventType(str, Enum):
+    """
+    Types of asset-level events that affect price or generate distributions.
+
+    These events live in the asset domain (not portfolio/transaction domain):
+    - DIVIDEND: Cash distribution from equity/ETF (ex-date price drop)
+    - INTEREST: Interest payment from debt/loan (ex-date price drop)
+    - PRICE_ADJUSTMENT: Non-cash value change (write-down, haircut, re-rating)
+    - SPLIT: Stock/unit split (changes quantity, not total value)
+    """
+    DIVIDEND = "DIVIDEND"
+    INTEREST = "INTEREST"
+    PRICE_ADJUSTMENT = "PRICE_ADJUSTMENT"
+    SPLIT = "SPLIT"
+
+
 class TransactionType(str, Enum):
     """
     Unified transaction types for all asset and cash operations.
@@ -694,6 +710,43 @@ class PriceHistory(SQLModel, table=True):
     @classmethod
     def validate_currency(cls, v: Any) -> str:
         """Validate currency against ISO 4217 + crypto."""
+        return _validate_currency_field(v)
+
+
+class AssetEvent(SQLModel, table=True):
+    """
+    Asset-level events that affect pricing or generate distributions.
+
+    Source of truth: provider configuration (provider_params) or external API.
+    Persisted in DB by sync layer for efficient querying.
+
+    Events are NOT transactions — they describe what happens to the asset globally,
+    not what happens in a user's portfolio. The portfolio reads these events
+    for display, smart assistant suggestions, and ex-date price adjustments.
+
+    UniqueConstraint: one event per (asset_id, date, type) for dedup.
+    """
+    __tablename__ = "asset_events"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "date", "type", name="uq_asset_event_asset_date_type"),
+        Index("idx_asset_event_asset_date", "asset_id", "date"),
+        Index("idx_asset_event_asset_type_date", "asset_id", "type", "date"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    asset_id: int = Field(foreign_key="assets.id", nullable=False)
+    date: date_type = Field(nullable=False)
+    type: AssetEventType = Field(nullable=False)
+    value: Decimal = Field(sa_column=Column(Numeric(18, 6), nullable=False))
+    currency: str = Field(nullable=False)
+    source_plugin_key: Optional[str] = Field(default=None)
+    notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Any) -> str:
         return _validate_currency_field(v)
 
 

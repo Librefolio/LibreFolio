@@ -259,7 +259,10 @@ class JustETFProvider(AssetSourceProvider):
                         )
                     )
 
-            return FAHistoricalData(prices=prices, currency=currency, source=self.provider_name)
+            # TODO [AssetEvent]: Scrape distribution events from justETF profile page
+            # justETF shows dividend dates and amounts on the ETF profile
+            # Parse and return as FAAssetEventPoint(type=DIVIDEND)
+            return FAHistoricalData(prices=prices, events=[], currency=currency, source=self.provider_name)
         except Exception as e:
             raise AssetSourceError(
                 f"Failed to fetch history for {identifier} from JustETF: {e}",

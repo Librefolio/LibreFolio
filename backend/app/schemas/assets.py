@@ -49,7 +49,7 @@ from backend.app.schemas.common import (
     OldNew,
     Currency,
     )
-from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
+from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData, FAAssetEventPoint
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.geo_utils import normalize_country_keys
 from backend.app.utils.sector_fin_utils import normalize_sector
@@ -307,8 +307,26 @@ class FAScheduledInvestmentSchedule(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    initial_value: Decimal = Field(..., description="Initial capital / face value (required, > 0)")
+    currency: str = Field(..., description="Currency code (ISO 4217)")
+    asset_events: List[FAAssetEventPoint] = Field(default_factory=list, description="Planned asset events (interest payouts, price adjustments)")
     schedule: List[FAInterestRatePeriod]
     late_interest: Optional[FALateInterestConfig] = None
+
+    @field_validator("initial_value", mode="before")
+    @classmethod
+    def parse_initial_value(cls, v):
+        """Convert to Decimal and validate > 0."""
+        val = Decimal(str(v))
+        if val <= 0:
+            raise ValueError("initial_value must be greater than 0")
+        return val
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency_code(cls, v: str) -> str:
+        """Validate currency against ISO 4217 + crypto."""
+        return Currency.validate_code(v)
 
     @field_validator("schedule")
     @classmethod
@@ -964,6 +982,7 @@ __all__ = [
     "FAInterestRatePeriod",
     "FALateInterestConfig",
     "FAScheduledInvestmentSchedule",
+    "FAAssetEventPoint",
     # Distribution base models
     "BaseDistribution",
     # Metadata & classification

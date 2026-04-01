@@ -7,6 +7,7 @@ from backend.app.db.base import (
     # Enums
     IdentifierType,
     AssetType,
+    AssetEventType,
     TransactionType,
     UserRole,
     # Models
@@ -17,6 +18,7 @@ from backend.app.db.base import (
     Asset,
     Transaction,
     PriceHistory,
+    AssetEvent,
     FxRate,
     FxConversionRoute,
     AssetProviderAssignment,
@@ -31,6 +33,7 @@ __all__ = [
     # Enums
     "IdentifierType",
     "AssetType",
+    "AssetEventType",
     "TransactionType",
     "UserRole",
     # Models
@@ -41,6 +44,7 @@ __all__ = [
     "Asset",
     "Transaction",
     "PriceHistory",
+    "AssetEvent",
     "FxRate",
     "FxConversionRoute",
     "AssetProviderAssignment",

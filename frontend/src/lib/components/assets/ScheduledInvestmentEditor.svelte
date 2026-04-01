@@ -28,6 +28,24 @@
     // Types
     // =========================================================================
 
+    interface AssetEventRow {
+        id: string;
+        date: string;
+        type: 'INTEREST' | 'PRICE_ADJUSTMENT';
+        value: number;
+        currency: string;
+        notes: string;
+    }
+
+    const EVENT_TYPE_OPTIONS = [
+        {value: 'INTEREST', label: 'Interest'},
+        {value: 'PRICE_ADJUSTMENT', label: 'Price Adjustment'},
+    ];
+
+    // =========================================================================
+    // Types
+    // =========================================================================
+
     interface ScheduleRow {
         id: string;
         start_date: string;
@@ -118,6 +136,11 @@
     let selectedIds = $state<string[]>([]);
     let internalUpdate = false;
 
+    // Initial Value + Currency + Asset Events state
+    let initialValue = $state<number>(10000);
+    let currencyValue = $state<string>('EUR');
+    let assetEvents = $state<AssetEventRow[]>([]);
+
     // Sync from prop (only on external changes)
     $effect(() => {
         // Read value to track reactivity
@@ -126,7 +149,10 @@
             internalUpdate = false;
             return;
         }
-        rows = deserialize(v);
+        rows = deserializeRows(v);
+        initialValue = v?.initial_value != null ? Number(v.initial_value) : 10000;
+        currencyValue = v?.currency ?? 'EUR';
+        assetEvents = deserializeEvents(v?.asset_events ?? []);
     });
 
     // Modal state
@@ -214,7 +240,7 @@
     // Serialization
     // =========================================================================
 
-    function deserialize(val: Record<string, any>): ScheduleRow[] {
+    function deserializeRows(val: Record<string, any>): ScheduleRow[] {
         const result: ScheduleRow[] = [];
         const schedule = val?.schedule ?? [];
 
@@ -251,6 +277,17 @@
         return result;
     }
 
+    function deserializeEvents(events: any[]): AssetEventRow[] {
+        return events.map((e: any) => ({
+            id: crypto.randomUUID(),
+            date: e.date ?? todayISO(),
+            type: e.type ?? 'INTEREST',
+            value: Number(e.value ?? 0),
+            currency: e.currency ?? '',
+            notes: e.notes ?? '',
+        }));
+    }
+
     function serialize(allRows: ScheduleRow[]): Record<string, any> {
         const schedule = allRows
             .filter(r => !r.isLate)
@@ -272,7 +309,21 @@
             day_count: lr.day_count,
         } : null;
 
-        return {schedule, late_interest};
+        const serializedEvents = assetEvents.map(e => ({
+            date: e.date,
+            type: e.type,
+            value: e.value.toString(),
+            currency: e.currency || undefined,
+            notes: e.notes || undefined,
+        }));
+
+        return {
+            initial_value: initialValue.toString(),
+            currency: currencyValue,
+            schedule,
+            late_interest,
+            asset_events: serializedEvents,
+        };
     }
 
     function emitChange() {
@@ -884,6 +935,54 @@
 </script>
 
 <div class="space-y-3">
+    <!-- Initial Value + Currency (inline row) -->
+    <div class="flex items-end gap-4">
+        <div class="flex-1 max-w-xs">
+            <label for="initial-value" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                💰 Initial Value
+            </label>
+            <input
+                id="initial-value"
+                type="number"
+                min="0.01"
+                step="100"
+                value={initialValue}
+                oninput={(e) => {
+                    const el = e.currentTarget as HTMLInputElement;
+                    initialValue = Number(el.value) || 0;
+                    emitChange();
+                }}
+                disabled={disabled || readonly}
+                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                       focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                       disabled:opacity-50"
+            />
+        </div>
+        <div class="w-32">
+            <label for="currency-select" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                💱 Currency
+            </label>
+            <input
+                id="currency-select"
+                type="text"
+                value={currencyValue}
+                maxlength={3}
+                oninput={(e) => {
+                    const el = e.currentTarget as HTMLInputElement;
+                    currencyValue = el.value.toUpperCase();
+                    emitChange();
+                }}
+                disabled={disabled || readonly}
+                placeholder="EUR"
+                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                       focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                       disabled:opacity-50 uppercase"
+            />
+        </div>
+    </div>
+
     <!-- Header: title + bulk toolbar + Add button (all inline) -->
     <div class="flex items-center gap-2 flex-wrap">
         <div class="flex items-center gap-2">
@@ -993,6 +1092,99 @@
             isRowSelectable={(row) => !row.isLate}
         />
     {/if}
+
+    <!-- Asset Events Section -->
+    <div class="space-y-2">
+        <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">📋 Asset Events</span>
+            {#if !readonly && !disabled}
+                <button
+                    type="button"
+                    onclick={handleAddEvent}
+                    class="flex items-center gap-1 px-2 py-1 text-xs rounded-md
+                           border border-gray-200 dark:border-slate-600
+                           text-gray-600 dark:text-gray-300 bg-white dark:bg-slate-800
+                           hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                    <Plus size={12}/>
+                    <span>Add Event</span>
+                </button>
+            {/if}
+        </div>
+        {#if assetEvents.length > 0}
+            <div class="border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                <table class="w-full text-xs">
+                    <thead class="bg-gray-50 dark:bg-slate-800">
+                        <tr>
+                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Date</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Type</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Value</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Notes</th>
+                            <th class="px-2 py-1.5 w-8"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#each assetEvents as evt, idx}
+                            <tr class="border-t border-gray-100 dark:border-slate-700">
+                                <td class="px-2 py-1">
+                                    <input type="date" value={evt.date}
+                                        oninput={(e) => handleEventFieldChange(idx, 'date', (e.currentTarget as HTMLInputElement).value)}
+                                        disabled={disabled || readonly}
+                                        class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
+                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                               disabled:opacity-50"
+                                    />
+                                </td>
+                                <td class="px-2 py-1">
+                                    <select value={evt.type}
+                                        onchange={(e) => handleEventFieldChange(idx, 'type', (e.currentTarget as HTMLSelectElement).value)}
+                                        disabled={disabled || readonly}
+                                        class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
+                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                               disabled:opacity-50"
+                                    >
+                                        {#each EVENT_TYPE_OPTIONS as opt}
+                                            <option value={opt.value}>{opt.label}</option>
+                                        {/each}
+                                    </select>
+                                </td>
+                                <td class="px-2 py-1">
+                                    <input type="number" value={evt.value} step="0.01"
+                                        oninput={(e) => handleEventFieldChange(idx, 'value', Number((e.currentTarget as HTMLInputElement).value))}
+                                        disabled={disabled || readonly}
+                                        class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
+                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                               disabled:opacity-50"
+                                    />
+                                </td>
+                                <td class="px-2 py-1">
+                                    <input type="text" value={evt.notes} placeholder="optional"
+                                        oninput={(e) => handleEventFieldChange(idx, 'notes', (e.currentTarget as HTMLInputElement).value)}
+                                        disabled={disabled || readonly}
+                                        class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
+                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                               disabled:opacity-50"
+                                    />
+                                </td>
+                                <td class="px-2 py-1">
+                                    {#if !readonly && !disabled}
+                                        <button type="button" onclick={() => handleDeleteEvent(idx)}
+                                            class="text-red-400 hover:text-red-600 transition-colors">
+                                            <X size={14}/>
+                                        </button>
+                                    {/if}
+                                </td>
+                            </tr>
+                        {/each}
+                    </tbody>
+                </table>
+            </div>
+        {:else}
+            <div class="text-xs text-gray-400 dark:text-gray-500 italic pl-1">
+                No asset events configured
+            </div>
+        {/if}
+    </div>
 
     <!-- Late interest toggle (always visible if lateRow exists and there are normal periods) -->
     {#if lateRow && normalRows.length > 0}

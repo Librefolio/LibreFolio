@@ -233,6 +233,7 @@ class TestScheduledInvestmentSchedule:
     def test_valid_single_period_schedule(self):
         """Test valid schedule with single period."""
         schedule = FAScheduledInvestmentSchedule(
+            initial_value=Decimal("10000"), currency="EUR",
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
@@ -246,6 +247,7 @@ class TestScheduledInvestmentSchedule:
     def test_valid_multiple_periods_contiguous(self):
         """Test valid schedule with contiguous periods."""
         schedule = FAScheduledInvestmentSchedule(
+            initial_value=Decimal("10000"), currency="EUR",
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
@@ -264,12 +266,13 @@ class TestScheduledInvestmentSchedule:
     def test_empty_schedule_rejected(self):
         """Test that empty schedule is rejected."""
         with pytest.raises(ValidationError, match="at least one period"):
-            FAScheduledInvestmentSchedule(schedule=[])
+            FAScheduledInvestmentSchedule(initial_value=Decimal("10000"), currency="EUR", schedule=[])
 
     def test_overlapping_periods_rejected(self):
         """Test that overlapping periods are rejected."""
         with pytest.raises(ValidationError, match="Overlapping periods"):
             FAScheduledInvestmentSchedule(
+            initial_value=Decimal("10000"), currency="EUR",
                 schedule=[
                     FAInterestRatePeriod(
                         start_date=date(2025, 1, 1),
@@ -288,6 +291,7 @@ class TestScheduledInvestmentSchedule:
         """Test that gaps between periods are rejected."""
         with pytest.raises(ValidationError, match="Gap detected"):
             FAScheduledInvestmentSchedule(
+            initial_value=Decimal("10000"), currency="EUR",
                 schedule=[
                     FAInterestRatePeriod(
                         start_date=date(2025, 1, 1),
@@ -305,6 +309,7 @@ class TestScheduledInvestmentSchedule:
     def test_unsorted_periods_are_sorted(self):
         """Test that unsorted periods are automatically sorted."""
         schedule = FAScheduledInvestmentSchedule(
+            initial_value=Decimal("10000"), currency="EUR",
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 7, 1),
@@ -324,6 +329,7 @@ class TestScheduledInvestmentSchedule:
     def test_with_late_interest(self):
         """Test schedule with late interest configuration."""
         schedule = FAScheduledInvestmentSchedule(
+            initial_value=Decimal("10000"), currency="EUR",
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
@@ -342,6 +348,7 @@ class TestScheduledInvestmentSchedule:
     def test_three_periods_mixed_compounding(self):
         """Test schedule with multiple periods using different compounding."""
         schedule = FAScheduledInvestmentSchedule(
+            initial_value=Decimal("10000"), currency="EUR",
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
@@ -366,6 +373,137 @@ class TestScheduledInvestmentSchedule:
             )
         assert len(schedule.schedule) == 3
         assert schedule.schedule[1].compounding == CompoundingType.COMPOUND
+
+    def test_initial_value_required(self):
+        """Test that initial_value is required."""
+        with pytest.raises(ValidationError):
+            FAScheduledInvestmentSchedule(
+                currency="EUR",
+                schedule=[
+                    FAInterestRatePeriod(
+                        start_date=date(2025, 1, 1),
+                        end_date=date(2025, 12, 31),
+                        annual_rate=Decimal("0.05"),
+                        )
+                    ]
+                )
+
+    def test_initial_value_zero_rejected(self):
+        """Test that initial_value <= 0 is rejected."""
+        with pytest.raises(ValidationError, match="greater than 0"):
+            FAScheduledInvestmentSchedule(
+                initial_value=Decimal("0"),
+                currency="EUR",
+                schedule=[
+                    FAInterestRatePeriod(
+                        start_date=date(2025, 1, 1),
+                        end_date=date(2025, 12, 31),
+                        annual_rate=Decimal("0.05"),
+                        )
+                    ]
+                )
+
+    def test_initial_value_negative_rejected(self):
+        """Test that negative initial_value is rejected."""
+        with pytest.raises(ValidationError, match="greater than 0"):
+            FAScheduledInvestmentSchedule(
+                initial_value=Decimal("-1000"),
+                currency="EUR",
+                schedule=[
+                    FAInterestRatePeriod(
+                        start_date=date(2025, 1, 1),
+                        end_date=date(2025, 12, 31),
+                        annual_rate=Decimal("0.05"),
+                        )
+                    ]
+                )
+
+    def test_currency_required(self):
+        """Test that currency is required."""
+        with pytest.raises(ValidationError):
+            FAScheduledInvestmentSchedule(
+                initial_value=Decimal("10000"),
+                schedule=[
+                    FAInterestRatePeriod(
+                        start_date=date(2025, 1, 1),
+                        end_date=date(2025, 12, 31),
+                        annual_rate=Decimal("0.05"),
+                        )
+                    ]
+                )
+
+    def test_with_asset_events(self):
+        """Test schedule with asset events."""
+        from backend.app.schemas.prices import FAAssetEventPoint
+        schedule = FAScheduledInvestmentSchedule(
+            initial_value=Decimal("10000"),
+            currency="EUR",
+            schedule=[
+                FAInterestRatePeriod(
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 12, 31),
+                    annual_rate=Decimal("0.05"),
+                    )
+                ],
+            asset_events=[
+                FAAssetEventPoint(
+                    date=date(2025, 7, 1),
+                    type="INTEREST",
+                    value=Decimal("250"),
+                    currency="EUR",
+                    ),
+                ],
+            )
+        assert len(schedule.asset_events) == 1
+        assert schedule.asset_events[0].type == "INTEREST"
+
+
+# ============================================================================
+# TESTS: FAAssetEventPoint
+# ============================================================================
+
+
+class TestFAAssetEventPoint:
+    """Test FAAssetEventPoint schema validation."""
+
+    def test_valid_event(self):
+        """Test creating a valid asset event point."""
+        from backend.app.schemas.prices import FAAssetEventPoint
+        event = FAAssetEventPoint(
+            date=date(2025, 7, 1),
+            type="INTEREST",
+            value=Decimal("250.50"),
+            currency="EUR",
+            notes="H1 interest payout",
+            )
+        assert event.value == Decimal("250.50")
+        assert event.currency == "EUR"
+
+    def test_optional_currency(self):
+        """Test that currency is optional."""
+        from backend.app.schemas.prices import FAAssetEventPoint
+        event = FAAssetEventPoint(
+            date=date(2025, 7, 1),
+            type="PRICE_ADJUSTMENT",
+            value=Decimal("-1000"),
+            )
+        assert event.currency is None
+
+    def test_json_roundtrip(self):
+        """Test JSON serialization/deserialization roundtrip."""
+        from backend.app.schemas.prices import FAAssetEventPoint
+        event = FAAssetEventPoint(
+            date=date(2025, 7, 1),
+            type="INTEREST",
+            value=Decimal("250"),
+            currency="EUR",
+            notes="test",
+            )
+        data = event.model_dump(mode="json")
+        event2 = FAAssetEventPoint(**data)
+        assert event2.date == event.date
+        assert event2.type == event.type
+        assert event2.value == event.value
 
 
 # ============================================================================

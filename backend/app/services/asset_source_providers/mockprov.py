@@ -114,7 +114,7 @@ class MockProvider(AssetSourceProvider):
                 )
             current += timedelta(days=1)
 
-        return FAHistoricalData(prices=prices, currency="USD", source=self.provider_name)
+        return FAHistoricalData(prices=prices, events=[], currency="USD", source=self.provider_name)
 
     @property
     def test_search_query(self) -> str | None:

@@ -53,6 +53,8 @@ from backend.app.db import (
     AssetProviderAssignment,
     Transaction,
     PriceHistory,
+    AssetEvent,
+    AssetEventType,
     FxRate,
     FxConversionRoute,
     AssetType,
@@ -82,6 +84,7 @@ def cleanup_all_tables(session: Session):
         # This respects foreign key constraints
         tables_to_clean = [
             Transaction,
+            AssetEvent,
             PriceHistory,
             AssetProviderAssignment,
             BrokerUserAccess,  # Must be before Broker
@@ -1531,6 +1534,7 @@ def main():
                 "broker_user_access": len(session.exec(select(BrokerUserAccess)).all()),
                 "assets": len(session.exec(select(Asset)).all()),
                 "asset_providers": len(session.exec(select(AssetProviderAssignment)).all()),
+                "asset_events": len(session.exec(select(AssetEvent)).all()),
                 "transactions": len(session.exec(select(Transaction)).all()),
                 "price_history": len(session.exec(select(PriceHistory)).all()),
                 "fx_rates": len(session.exec(select(FxRate)).all()),
