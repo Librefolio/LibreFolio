@@ -38,6 +38,8 @@ from backend.app.db.models import (
     Asset,
     AssetProviderAssignment,
     PriceHistory,
+    AssetEvent,
+    AssetEventType,
     IdentifierType,
     AssetType,
     ProviderInputType,
@@ -314,6 +316,12 @@ class AssetSourceProvider(ABC):
         Default: True (most providers support history)
         """
         return True
+
+    @property
+    def supports_events(self) -> bool:
+        """Whether this provider can produce asset events (dividends, interest, etc.).
+        Default: False. Override to True in providers that generate events."""
+        return False
 
     @abstractmethod
     async def get_history_value(
@@ -1095,6 +1103,69 @@ class AssetSourceManager:
         return {"inserted_count": total_inserted, "updated_count": 0, "results": results}
 
     @staticmethod
+    async def _upsert_asset_events(
+        session: AsyncSession,
+        asset_id: int,
+        events: list[dict],
+        source_plugin_key: str,
+        default_currency: str,
+        ) -> int:
+        """Upsert asset events into the AssetEvent table.
+
+        Uses DELETE + INSERT strategy (same as prices) for dedup on (asset_id, date, type).
+
+        Args:
+            session: Database session
+            asset_id: Asset ID
+            events: List of event dicts (from FAAssetEventPoint.model_dump())
+            source_plugin_key: Provider code
+            default_currency: Fallback currency
+
+        Returns:
+            Number of events upserted
+        """
+        from datetime import date as _date_type
+        if not events:
+            return 0
+
+        event_objects = []
+        keys_to_delete = []
+
+        for evt in events:
+            evt_date = evt["date"]
+            if isinstance(evt_date, str):
+                evt_date = _date_type.fromisoformat(evt_date)
+            evt_type = evt["type"]
+            keys_to_delete.append((evt_date, evt_type))
+
+            event_objects.append(AssetEvent(
+                asset_id=asset_id,
+                date=evt_date,
+                type=evt_type,
+                value=evt["value"],
+                currency=evt.get("currency") or default_currency,
+                source_plugin_key=source_plugin_key,
+                notes=evt.get("notes"),
+                ))
+
+        # Delete existing events for these (date, type) pairs
+        for evt_date, evt_type in keys_to_delete:
+            del_stmt = delete(AssetEvent).where(
+                and_(
+                    AssetEvent.asset_id == asset_id,
+                    AssetEvent.date == evt_date,
+                    AssetEvent.type == evt_type,
+                    )
+                )
+            await session.execute(del_stmt)
+
+        # Insert new events
+        session.add_all(event_objects)
+        await session.commit()
+
+        return len(event_objects)
+
+    @staticmethod
     async def bulk_delete_prices(
         data: List[FAAssetDelete], session: AsyncSession
         ) -> FABulkDeleteResponse:
@@ -1506,12 +1577,46 @@ class AssetSourceManager:
 
         # Build backward-filled series per asset (preserving request order)
         results = []
+        
+        # Check if any request wants events
+        event_requests = {req.asset_id for req in requests if getattr(req, 'include_events', False)}
+        
+        # Query events if needed
+        from backend.app.schemas.prices import FAAssetEventPoint
+        event_maps: dict[int, list[FAAssetEventPoint]] = {}
+        if event_requests:
+            evt_stmt = (
+                select(AssetEvent)
+                .where(
+                    and_(
+                        AssetEvent.asset_id.in_(list(event_requests)),
+                        AssetEvent.date >= global_start,
+                        AssetEvent.date <= global_end,
+                        )
+                    )
+                .order_by(AssetEvent.asset_id, AssetEvent.date)
+            )
+            evt_result = await session.execute(evt_stmt)
+            for evt in evt_result.scalars().all():
+                if evt.asset_id not in event_maps:
+                    event_maps[evt.asset_id] = []
+                event_maps[evt.asset_id].append(
+                    FAAssetEventPoint(
+                        date=evt.date,
+                        type=evt.type,
+                        value=evt.value,
+                        currency=evt.currency,
+                        notes=evt.notes,
+                        )
+                    )
+        
         for req in requests:
             aid = req.asset_id
             start, end = asset_ranges[aid]
             price_map = price_maps.get(aid, {})
             series = AssetSourceManager._build_backward_filled_series(price_map, start, end)
-            results.append(FAPriceQueryResult(asset_id=aid, prices=series))
+            events = event_maps.get(aid, []) if aid in event_requests else []
+            results.append(FAPriceQueryResult(asset_id=aid, prices=series, events=events))
 
         return results
 
@@ -1658,6 +1763,7 @@ class AssetSourceManager:
                 async with asyncio.timeout(semaphore_timeout):
                     async with sem:
                         prices_data = []
+                        events_data = []
                         today = date_type.today()
 
                         # 1. Fetch historical data
@@ -1669,6 +1775,9 @@ class AssetSourceManager:
                                     if hist_data and hist_data.prices:
                                         prices_data = [p.model_dump() for p in hist_data.prices]
                                         logger.debug(f"Fetched {len(prices_data)} historical prices for asset {asset_id}")
+                                    if hist_data and hist_data.events:
+                                        events_data = [e.model_dump() for e in hist_data.events]
+                                        logger.debug(f"Fetched {len(events_data)} events for asset {asset_id}")
                             except Exception as hist_e:
                                 logger.warning(f"History fetch failed for asset {asset_id}: {hist_e}")
 
@@ -1692,7 +1801,7 @@ class AssetSourceManager:
                             fetch_errors[asset_id] = "No price data available from provider"
                             return
 
-                        fetch_results[asset_id] = {"prices": prices_data, "source": provider_code}
+                        fetch_results[asset_id] = {"prices": prices_data, "source": provider_code, "events": events_data}
 
             except Exception as e:
                 fetch_errors[asset_id] = str(e)
@@ -1776,6 +1885,17 @@ class AssetSourceManager:
                         inserted_count = upsert_res.get("inserted_count", 0)
                     except Exception as e:
                         errors.append(f"DB upsert failed: {str(e)}")
+
+                    # Upsert asset events (if any)
+                    events_list = remote_data.get("events", [])
+                    if events_list:
+                        try:
+                            await AssetSourceManager._upsert_asset_events(
+                                persist_session, asset_id, events_list, provider_code,
+                                prep["asset"].currency,
+                                )
+                        except Exception as e:
+                            errors.append(f"Event upsert failed: {str(e)}")
 
                     # Update last_fetch_at on assignment
                     try:

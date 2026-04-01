@@ -569,32 +569,32 @@ Già coperto in §3.6.
 ## Validation Checklist (Round 12)
 
 ### DB & Schema
-- [ ] Tabella `asset_events` esiste con colonne e vincoli corretti
-- [ ] `./dev.py db create-clean` completa senza errori
-- [ ] `FAScheduledInvestmentSchedule` richiede `initial_value` e `currency`
-- [ ] `FAScheduledInvestmentSchedule` senza `initial_value` → `ValidationError`
-- [ ] `FAAssetEventPoint` serializza/deserializza correttamente
-- [ ] `FAHistoricalData` ha campo `events` (default `[]`)
+- [x] Tabella `asset_events` esiste con colonne e vincoli corretti
+- [x] `./dev.py db create-clean` completa senza errori
+- [x] `FAScheduledInvestmentSchedule` richiede `initial_value` e `currency`
+- [x] `FAScheduledInvestmentSchedule` senza `initial_value` → `ValidationError`
+- [x] `FAAssetEventPoint` serializza/deserializza correttamente
+- [x] `FAHistoricalData` ha campo `events` (default `[]`)
 
 ### Provider scheduled_investment
-- [ ] `get_current_value` funziona senza accesso DB (provider puro)
-- [ ] `get_history_value` funziona senza accesso DB (provider puro)
-- [ ] Nessun import di `Transaction`, `get_session_generator`, `_transaction_override`
-- [ ] `_calculate_value_for_date`: interesse calcolato su `initial_value`
-- [ ] `_calculate_value_for_date`: INTEREST event riduce il prezzo
-- [ ] `_calculate_value_for_date`: PRICE_ADJUSTMENT event modifica il prezzo
-- [ ] `test_cases` usa solo `provider_params` con `initial_value`
+- [x] `get_current_value` funziona senza accesso DB (provider puro)
+- [x] `get_history_value` funziona senza accesso DB (provider puro)
+- [x] Nessun import di `Transaction`, `get_session_generator`, `_transaction_override`
+- [x] `_calculate_value_for_date`: interesse calcolato su `initial_value`
+- [x] `_calculate_value_for_date`: INTEREST event riduce il prezzo
+- [x] `_calculate_value_for_date`: PRICE_ADJUSTMENT event modifica il prezzo
+- [x] `test_cases` usa solo `provider_params` con `initial_value`
 
 ### Altri provider
-- [ ] Yahoo Finance: `get_history_value` ritorna `events=[]`
-- [ ] justETF: `get_history_value` ritorna `events=[]`
-- [ ] mockprov: `get_history_value` ritorna `events=[]`
-- [ ] TODO comments presenti in ogni provider file
+- [x] Yahoo Finance: `get_history_value` ritorna `events=[]`
+- [x] justETF: `get_history_value` ritorna `events=[]`
+- [x] mockprov: `get_history_value` ritorna `events=[]`
+- [x] TODO comments presenti in ogni provider file
 
 ### Service Layer
-- [ ] `bulk_refresh_prices` salva eventi in `AssetEvent` quando presenti
-- [ ] `get_prices_bulk` con `include_events=true` → ritorna eventi dal DB
-- [ ] `get_prices_bulk` con `include_events=false` → `events=[]` (no query)
+- [x] `bulk_refresh_prices` salva eventi in `AssetEvent` quando presenti
+- [x] `get_prices_bulk` con `include_events=true` → ritorna eventi dal DB
+- [x] `get_prices_bulk` con `include_events=false` → `events=[]` (no query)
 
 ### API
 - [ ] `POST /assets/prices/query` con `include_events=true` → risposta con eventi
@@ -602,22 +602,22 @@ Già coperto in §3.6.
 - [ ] Probe ritorna current price + history calcolati da `initial_value`
 
 ### Test Suite
-- [ ] `./dev.py test db populate` completa con `AssetEvent` mock data
-- [ ] `./dev.py test db validate` passa con nuova tabella
-- [ ] `./dev.py test schemas all` passa (nuovo schema validato)
-- [ ] `./dev.py test services synthetic-yield` passa (nessun `_transaction_override`)
+- [x] `./dev.py test db populate` completa con `AssetEvent` mock data
+- [x] `./dev.py test db validate` passa con nuova tabella
+- [x] `./dev.py test schemas all` passa (nuovo schema validato)
+- [x] `./dev.py test services synthetic-yield` passa (nessun `_transaction_override`)
 - [ ] `./dev.py test api prices` passa (include_events testato)
 - [ ] `./dev.py test api provider` passa (probe scheduled_investment)
 
 ### Frontend
-- [ ] ScheduledInvestmentEditor mostra campo Initial Value + Currency
-- [ ] ScheduledInvestmentEditor mostra sezione Asset Events
-- [ ] Asset Events: add/delete row funziona
-- [ ] Serializzazione JSON include `initial_value`, `currency`, `asset_events`
-- [ ] Bottone "Test Configuration" visibile per `scheduled_investment`
+- [x] ScheduledInvestmentEditor mostra campo Initial Value + Currency
+- [x] ScheduledInvestmentEditor mostra sezione Asset Events
+- [x] Asset Events: add/delete row funziona
+- [x] Serializzazione JSON include `initial_value`, `currency`, `asset_events`
+- [x] Bottone "Test Configuration" visibile per `scheduled_investment`
 - [ ] Test Configuration funziona: risultati Current Price e History
 
 ### Documentazione
-- [ ] `scheduled-investment.en.md` aggiornato (no transazioni, sì initial_value)
-- [ ] `TODO_FUTURI.md` ha sezione AssetEvent per provider esterni
+- [x] `scheduled-investment.en.md` aggiornato (no transazioni, sì initial_value)
+- [x] `TODO_FUTURI.md` ha sezione AssetEvent per provider esterni
 

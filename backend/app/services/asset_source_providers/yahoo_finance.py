@@ -289,7 +289,10 @@ class YahooFinanceProvider(AssetSourceProvider):
                         )
                     )
 
-            return FAHistoricalData(prices=prices, currency=currency, source=self.provider_name)
+            # TODO [AssetEvent]: Fetch dividend events from Yahoo Finance API
+            # yfinance provides .dividends and .splits on Ticker objects
+            # Parse and return as FAAssetEventPoint(type=DIVIDEND/SPLIT)
+            return FAHistoricalData(prices=prices, events=[], currency=currency, source=self.provider_name)
 
         except AssetSourceError:
             raise
