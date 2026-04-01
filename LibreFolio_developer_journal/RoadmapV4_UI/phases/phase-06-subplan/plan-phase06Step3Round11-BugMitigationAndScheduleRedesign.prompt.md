@@ -224,9 +224,9 @@ ondblclick={() => { if (isRowSelectable && !isRowSelectable(row)) return; handle
 
 ## Piano B — Riprogettazione `scheduled_investment` Provider
 
-> ⚠️ **Da pianificare in dettaglio in un sub-plan dedicato.** Questo è il design di alto livello.
-> Raccomandazione: completare Piano A adesso, poi Piano B come primo step del Round 12, prima di Phase 7.
-> Piano B è **prerequisito** per le transazioni (Phase 7).
+> ✅ **ESTRATTO in piano dedicato**: `plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md`
+> Il design di alto livello qui sotto è stato raffinato con l'utente e formalizzato in un piano completo
+> con 8 blocchi (DB → Schema → Provider → Service → Test → Frontend → Docs), ~6h stimate.
 
 ### Problema architetturale
 
