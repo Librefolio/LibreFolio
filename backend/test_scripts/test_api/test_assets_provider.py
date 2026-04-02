@@ -9,6 +9,7 @@ Tests for asset provider assignment and management:
 
 import httpx
 import pytest
+from datetime import date, timedelta
 
 from backend.app.config import get_settings
 from backend.app.schemas.assets import (
@@ -22,6 +23,7 @@ from backend.app.schemas.provider import (
     FABulkAssignResponse,
     FAProviderSearchResponse,
     IdentifierType,
+    ProviderInputType,
     )
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
@@ -152,7 +154,7 @@ async def test_update_provider_params(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             identifier="MOCK1",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params={"key": "value1"},
             )
         await client.post(
@@ -167,7 +169,7 @@ async def test_update_provider_params(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             identifier="MOCK1",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params={"key": "value2"},
             )
         update_resp = await client.post(
@@ -204,7 +206,7 @@ async def test_remove_provider(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             identifier="MOCK",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params=None,
             )
         await client.post(
@@ -255,7 +257,7 @@ async def test_refresh_metadata(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             identifier="MOCK_REFRESH",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params=None,
             )
         await client.post(
@@ -305,7 +307,7 @@ async def test_bulk_assign_providers(test_server):
                 asset_id=aid,
                 provider_code="mockprov",
                 identifier=f"MOCK{aid}",
-                identifier_type=IdentifierType.UUID,
+                identifier_type=ProviderInputType.AUTO_GENERATED,
                 provider_params=None,
                 )
             for aid in asset_ids
@@ -769,7 +771,6 @@ async def test_search_to_asset_e2e(test_server):
 
         # Step 6: Test price refresh (uses get_current_value for today)
         print_info("\nStep 6: Testing price refresh (get_current_value for today)...")
-        from datetime import date, timedelta
 
         today = date.today()
         yesterday = today - timedelta(days=7)  # Get a week of history
@@ -860,7 +861,6 @@ async def test_price_refresh_uses_current_value(test_server):
     """Test 14: Verify price refresh uses get_current_value for today's date."""
     print_section("Test 14: Price Refresh - get_current_value for Today")
 
-    from datetime import date
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -969,7 +969,6 @@ async def test_css_scraper_current_price(test_server):
     """Test 15: Verify CSS Scraper (without history support) can get current price."""
     print_section("Test 15: CSS Scraper - Current Price Only")
 
-    from datetime import date
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)

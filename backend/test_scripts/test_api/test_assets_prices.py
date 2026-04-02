@@ -15,7 +15,7 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.db.models import IdentifierType
+from backend.app.db.models import IdentifierType, ProviderInputType
 from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
@@ -292,7 +292,7 @@ async def test_refresh_prices_from_provider(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             identifier="MOCK_REFRESH",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params={"symbol": "MOCKREFRESH"},
             )
         await client.post(

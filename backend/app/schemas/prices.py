@@ -227,6 +227,8 @@ class FAAssetEventPoint(BaseModel):
     """
     Single asset event data point — shared shape between DB, provider output, and frontend editor.
 
+    Uses Currency class for value (amount + currency code in one object).
+
     Used in:
     - FAHistoricalData.events (provider output)
     - FAPriceQueryResult.events (API response)
@@ -236,21 +238,8 @@ class FAAssetEventPoint(BaseModel):
 
     date: date_type = Field(..., description="Event date")
     type: str = Field(..., description="Event type (DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT)")
-    value: Decimal = Field(..., description="Event value (amount distributed or price adjustment)")
-    currency: Optional[str] = Field(None, description="Currency (if different from asset currency)")
+    value: Currency = Field(..., description="Event value with currency (amount + code)")
     notes: Optional[str] = Field(None, description="Optional notes")
-
-    @field_validator("value", mode="before")
-    @classmethod
-    def parse_decimal(cls, v):
-        return Decimal(str(v))
-
-    @field_validator("currency")
-    @classmethod
-    def currency_validate(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return None
-        return Currency.validate_code(v)
 
 
 # ============================================================================
@@ -269,6 +258,7 @@ class FAPriceQueryItem(BaseModel):
 
     asset_id: int = Field(..., description="Asset ID to query")
     date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
+    include_price: bool = Field(True, description="Include price history in response")
     include_events: bool = Field(False, description="Include asset events in response")
 
 

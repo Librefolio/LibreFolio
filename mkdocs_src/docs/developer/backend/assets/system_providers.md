@@ -38,26 +38,33 @@ This is a synthetic provider that calculates the value of an asset based on a pr
 
 ### ⚙️ How it Works
 
-1. **Configuration**: The asset's value is determined by its `interest_schedule` stored in the `provider_params`. This schedule defines:
-    - Interest rate periods (start date, end date, annual rate).
+1. **Configuration**: The asset's value is determined entirely by `provider_params`, which include:
+    - `initial_value`: The principal / face value of the asset (required, > 0).
+    - `currency`: The asset's currency (ISO 4217).
+    - `schedule`: Interest rate periods (start date, end date, annual rate).
     - **Compounding Type**: `SIMPLE` or `COMPOUND`.
     - **Day Count Convention**: `ACT/365`, `ACT/360`, `30/360`, etc.
     - **Late Interest**: A separate rate to apply after the scheduled maturity date.
+    - `asset_events`: Planned events (INTEREST payouts, PRICE_ADJUSTMENT write-downs).
 
-2. **Calculation**:
-    - The provider first calculates the current **principal** by summing up all `BUY` and `SELL` transactions for the asset.
-    - It then calculates the **accrued interest** up to the requested date by applying the interest schedule to the principal.
-    - The final value is `principal + accrued_interest`.
+2. **Calculation** (pure deterministic — no DB access, no transaction dependency):
+    - Starts with `initial_value` as the base principal.
+    - Calculates **accrued interest** up to the requested date using the schedule periods.
+    - Applies **asset events**: INTEREST events subtract from price (ex-date drop), PRICE_ADJUSTMENT events modify value algebraically.
+    - `price(d) = initial_value + accrued_interest - Σ(INTEREST events) + Σ(PRICE_ADJUSTMENT events)`
+    - Interest is always calculated on `initial_value`, not the running value.
+
+3. **Events**: This provider sets `supports_events = True` and returns events filtered to the requested date range via `FAHistoricalData.events`.
 
 ### 📋 Use Cases
 
-- **P2P/Crowdfunding Loans**: Model a loan with a fixed interest rate.
-- **Fixed-Rate Bonds**: Calculate the value of a bond including accrued interest.
+- **P2P/Crowdfunding Loans**: Model a loan with a fixed interest rate and periodic interest payouts.
+- **Fixed-Rate Bonds**: Calculate the value of a bond including accrued interest and coupon payments.
 - **Any asset with predictable cash flows**.
 
 ### 📐 Example
 
-If you have a P2P loan of €1,000 with a 10% simple annual interest rate, the provider will calculate its value as:
+If you have a P2P loan of €10,000 with a 5% simple annual interest rate and an INTEREST event of €250 on July 1:
 
-- After 6 months: €1,000 (principal) + €50 (accrued interest) = €1,050.
-- After 1 year: €1,000 (principal) + €100 (accrued interest) = €1,100.
+- Before July 1: value = €10,000 + accrued interest (e.g., after 6 months: €10,250)
+- After July 1 (ex-date): value drops by €250 (interest paid out) → continues accruing from €10,000 base

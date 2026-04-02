@@ -60,7 +60,9 @@
     "name": "Nom",
     "currency": "Devise",
     "other": "Autre",
-    "date": "Date"
+    "date": "Date",
+    "value": "Valeur",
+    "notes": "Notes"
   },
   "table": {
     "columns": "Colonnes",
@@ -358,7 +360,16 @@
       "emptyHint": "Ajoutez au moins une période pour configurer le calendrier d'investissement.",
       "periods": "périodes",
       "contiguous": "contiguës",
-      "days": "jours"
+      "days": "jours",
+      "initialValue": "Valeur Initiale",
+      "currency": "Devise",
+      "assetEvents": "Événements de l'Actif",
+      "addEvent": "Ajouter un Événement",
+      "noEvents": "Aucun événement d'actif configuré",
+      "eventType": {
+        "INTEREST": "Intérêt",
+        "PRICE_ADJUSTMENT": "Ajustement de Prix"
+      }
     },
     "probe": {
       "currentPrice": "Prix Actuel",

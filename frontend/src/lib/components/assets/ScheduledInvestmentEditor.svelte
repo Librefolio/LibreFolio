@@ -2,12 +2,13 @@
   ScheduledInvestmentEditor — DataTable-based editor for interest schedules.
 
   Features:
-  - Editable DataTable with Period, Rate %, Compounding, Comp. Freq., Day Count
+  - Editable DataTable with Period, Rate %, Maturation Frequency, Day Count
   - Late Interest as permanent special row with toggle on/off
   - Automatic contiguity propagation (no overlaps/gaps by design)
   - CRUD: Add, Delete (with boundary modal), Split, Merge
   - Bulk delete with multi-gap support
   - JSON ↔ form bidirectional serialization
+  - Asset Events table (INTEREST payouts, PRICE_ADJUSTMENT write-downs)
 
   Props:
   - value: Record<string, any> (provider_params JSON, bindable)
@@ -37,9 +38,12 @@
         notes: string;
     }
 
+    // These event types are embedded in provider_params JSON and not exposed as
+    // top-level OpenAPI schemas, so they cannot be auto-generated via api-sync.
+    // Source of truth: backend/app/schemas/prices.py → FAAssetEventPoint.type
     const EVENT_TYPE_OPTIONS = [
-        {value: 'INTEREST', label: 'Interest'},
-        {value: 'PRICE_ADJUSTMENT', label: 'Price Adjustment'},
+        {value: 'INTEREST', labelKey: 'assets.schedule.eventType.INTEREST'},
+        {value: 'PRICE_ADJUSTMENT', labelKey: 'assets.schedule.eventType.PRICE_ADJUSTMENT'},
     ];
 
     // =========================================================================
@@ -51,9 +55,7 @@
         start_date: string;
         end_date: string;
         annual_rate: number;
-        compounding: 'SIMPLE' | 'COMPOUND';
-        compound_frequency: string | null;
-        day_count: string;
+        maturation_frequency: string;
         isLate: boolean;
         grace_period_days: number;
         enabled: boolean;
@@ -76,25 +78,28 @@
     // Constants
     // =========================================================================
 
-    const COMPOUNDING_OPTIONS = [
-        {value: 'SIMPLE', label: 'Simple'},
-        {value: 'COMPOUND', label: 'Compound'},
+    // Source of truth: backend/app/schemas/assets.py → InterestType enum
+    const INTEREST_TYPE_OPTIONS = [
+        {value: 'SIMPLE', label: '📊 Simple'},
+        {value: 'COMPOUND', label: '📈 Compound'},
     ];
 
-    const COMPOUND_FREQ_OPTIONS = [
-        {value: 'DAILY', label: 'Daily'},
-        {value: 'MONTHLY', label: 'Monthly'},
-        {value: 'QUARTERLY', label: 'Quarterly'},
-        {value: 'SEMIANNUAL', label: 'Semiannual'},
-        {value: 'ANNUAL', label: 'Annual'},
-        {value: 'CONTINUOUS', label: 'Continuous'},
-    ];
-
+    // Source of truth: backend/app/schemas/assets.py → DayCountConvention enum
     const DAY_COUNT_OPTIONS = [
         {value: 'ACT/365', label: 'ACT/365'},
         {value: 'ACT/360', label: 'ACT/360'},
         {value: 'ACT/ACT', label: 'ACT/ACT'},
         {value: '30/360', label: '30/360'},
+    ];
+
+    // Source of truth: backend/app/schemas/assets.py → MaturationFrequency enum
+    const MATURATION_FREQ_OPTIONS = [
+        {value: 'DAILY', label: 'Daily'},
+        {value: 'WEEKLY', label: 'Weekly'},
+        {value: 'MONTHLY', label: 'Monthly'},
+        {value: 'QUARTERLY', label: 'Quarterly'},
+        {value: 'SEMIANNUAL', label: 'Semiannual'},
+        {value: 'ANNUAL', label: 'Annual'},
     ];
 
     // =========================================================================
@@ -141,6 +146,10 @@
     let currencyValue = $state<string>('EUR');
     let assetEvents = $state<AssetEventRow[]>([]);
 
+    // Global schedule properties (apply to ALL periods)
+    let interestType = $state<string>('SIMPLE');
+    let dayCount = $state<string>('ACT/365');
+
     // Sync from prop (only on external changes)
     $effect(() => {
         // Read value to track reactivity
@@ -150,8 +159,17 @@
             return;
         }
         rows = deserializeRows(v);
-        initialValue = v?.initial_value != null ? Number(v.initial_value) : 10000;
-        currencyValue = v?.currency ?? 'EUR';
+        // initial_value is now a Currency object: {code: string, amount: string|number}
+        if (v?.initial_value && typeof v.initial_value === 'object') {
+            initialValue = Number(v.initial_value.amount ?? 10000);
+            currencyValue = v.initial_value.code ?? 'EUR';
+        } else {
+            initialValue = v?.initial_value != null ? Number(v.initial_value) : 10000;
+            currencyValue = v?.currency ?? 'EUR';
+        }
+        // Global properties
+        interestType = v?.interest_type ?? 'SIMPLE';
+        dayCount = v?.day_count ?? 'ACT/365';
         assetEvents = deserializeEvents(v?.asset_events ?? []);
     });
 
@@ -215,12 +233,12 @@
         if (normalRows.length === 0) return false;
         for (const p of normalRows) {
             if (p.annual_rate < 0) return false;
-            if (p.compounding === 'COMPOUND' && !p.compound_frequency) return false;
+            if (false /* always simple */) return false;
         }
         if (lateRow?.enabled) {
             if (lateRow.annual_rate < 0) return false;
             if (lateRow.grace_period_days < 0) return false;
-            if (lateRow.compounding === 'COMPOUND' && !lateRow.compound_frequency) return false;
+            if (false /* always simple */) return false;
         }
         return true;
     });
@@ -250,9 +268,7 @@
                 start_date: p.start_date,
                 end_date: p.end_date,
                 annual_rate: Number(p.annual_rate) * 100,
-                compounding: p.compounding ?? 'SIMPLE',
-                compound_frequency: p.compound_frequency ?? null,
-                day_count: p.day_count ?? 'ACT/365',
+                maturation_frequency: p.maturation_frequency ?? 'DAILY',
                 isLate: false,
                 grace_period_days: 0,
                 enabled: true,
@@ -266,9 +282,7 @@
             start_date: result.length > 0 ? addDays(result[result.length - 1].end_date, 1) : '',
             end_date: '',
             annual_rate: li ? Number(li.annual_rate) * 100 : 12,
-            compounding: li?.compounding ?? 'SIMPLE',
-            compound_frequency: li?.compound_frequency ?? null,
-            day_count: li?.day_count ?? 'ACT/365',
+            maturation_frequency: li?.maturation_frequency ?? 'DAILY',
             isLate: true,
             grace_period_days: li?.grace_period_days ?? 0,
             enabled: !!li,
@@ -282,8 +296,8 @@
             id: crypto.randomUUID(),
             date: e.date ?? todayISO(),
             type: e.type ?? 'INTEREST',
-            value: Number(e.value ?? 0),
-            currency: e.currency ?? '',
+            value: Number(e.value?.amount ?? e.value ?? 0),
+            currency: e.value?.code ?? e.currency ?? '',
             notes: e.notes ?? '',
         }));
     }
@@ -295,31 +309,26 @@
                 start_date: r.start_date,
                 end_date: r.end_date,
                 annual_rate: (r.annual_rate / 100).toFixed(4),
-                compounding: r.compounding,
-                compound_frequency: r.compounding === 'COMPOUND' ? r.compound_frequency : undefined,
-                day_count: r.day_count,
+                maturation_frequency: r.maturation_frequency,
             }));
 
         const lr = allRows.find(r => r.isLate && r.enabled);
         const late_interest = lr ? {
             annual_rate: (lr.annual_rate / 100).toFixed(4),
             grace_period_days: lr.grace_period_days,
-            compounding: lr.compounding,
-            compound_frequency: lr.compounding === 'COMPOUND' ? lr.compound_frequency : undefined,
-            day_count: lr.day_count,
         } : null;
 
         const serializedEvents = assetEvents.map(e => ({
             date: e.date,
             type: e.type,
-            value: e.value.toString(),
-            currency: e.currency || undefined,
+            value: {code: e.currency || currencyValue, amount: e.value.toString()},
             notes: e.notes || undefined,
         }));
 
         return {
-            initial_value: initialValue.toString(),
-            currency: currencyValue,
+            initial_value: {code: currencyValue, amount: initialValue.toString()},
+            interest_type: interestType,
+            day_count: dayCount,
             schedule,
             late_interest,
             asset_events: serializedEvents,
@@ -433,9 +442,7 @@
             start_date: newStart,
             end_date: newEnd,
             annual_rate: lastPeriod?.annual_rate ?? 5.00,
-            compounding: lastPeriod?.compounding ?? 'SIMPLE',
-            compound_frequency: lastPeriod?.compound_frequency ?? null,
-            day_count: lastPeriod?.day_count ?? 'ACT/365',
+            maturation_frequency: lastPeriod?.maturation_frequency ?? 'DAILY',
             isLate: false,
             grace_period_days: 0,
             enabled: true,
@@ -747,10 +754,6 @@
         rows = rows.map(r => {
             if (r.id !== id) return r;
             const updated = {...r, [field]: val};
-            // Clear compound_frequency when switching to SIMPLE
-            if (field === 'compounding' && val === 'SIMPLE') {
-                updated.compound_frequency = null;
-            }
             return updated;
         });
         emitChange();
@@ -818,9 +821,9 @@
             }),
         },
         {
-            id: 'compounding',
-            header: () => $t('assets.schedule.compounding'),
-            headerTooltip: () => $t('assets.schedule.compoundingHint'),
+            id: 'maturation_frequency',
+            header: () => $t('assets.schedule.maturationFrequency'),
+            headerTooltip: () => $t('assets.schedule.maturationFrequencyHint'),
             headerTooltipUrl: '/mkdocs/financial-theory/synthetic-benchmarks/#compound-growth',
             type: 'custom',
             sortable: false,
@@ -829,48 +832,9 @@
             minWidth: 100,
             cell: (row: ScheduleRow): CellContent => ({
                 type: 'editable-select',
-                value: row.compounding,
-                options: COMPOUNDING_OPTIONS,
-                onchange: (v: string) => updateRow(row.id, 'compounding', v),
-            }),
-        },
-        {
-            id: 'compound_frequency',
-            header: () => $t('assets.schedule.compFreq'),
-            headerTooltip: () => $t('assets.schedule.freqHint'),
-            headerTooltipUrl: '/mkdocs/financial-theory/synthetic-benchmarks/#compound-growth',
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            width: 130,
-            minWidth: 100,
-            cell: (row: ScheduleRow): CellContent => {
-                if (row.compounding === 'SIMPLE') {
-                    return '—';
-                }
-                return {
-                    type: 'editable-select',
-                    value: row.compound_frequency ?? '',
-                    options: COMPOUND_FREQ_OPTIONS,
-                    onchange: (v: string) => updateRow(row.id, 'compound_frequency', v || null),
-                };
-            },
-        },
-        {
-            id: 'day_count',
-            header: () => $t('assets.schedule.dayCount'),
-            headerTooltip: () => $t('assets.schedule.dayCountHint'),
-            headerTooltipUrl: '/mkdocs/financial-theory/day-count/',
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            width: 100,
-            minWidth: 80,
-            cell: (row: ScheduleRow): CellContent => ({
-                type: 'editable-select',
-                value: row.day_count,
-                options: DAY_COUNT_OPTIONS,
-                onchange: (v: string) => updateRow(row.id, 'day_count', v),
+                value: row.maturation_frequency,
+                options: MATURATION_FREQ_OPTIONS,
+                onchange: (v: string) => updateRow(row.id, 'maturation_frequency', v),
             }),
         },
     ]);
@@ -932,14 +896,43 @@
         // Exclude late interest from selection
         selectedIds = ids.filter(id => id !== 'late-interest');
     }
+
+    // =========================================================================
+    // Asset Events CRUD
+    // =========================================================================
+
+    function handleAddEvent(): void {
+        assetEvents = [...assetEvents, {
+            id: crypto.randomUUID(),
+            date: todayISO(),
+            type: 'INTEREST',
+            value: 0,
+            currency: currencyValue,
+            notes: '',
+        }];
+        emitChange();
+    }
+
+    function handleDeleteEvent(index: number): void {
+        assetEvents = assetEvents.filter((_, i) => i !== index);
+        emitChange();
+    }
+
+    function handleEventFieldChange(index: number, field: keyof AssetEventRow, val: any): void {
+        assetEvents = assetEvents.map((e, i) => {
+            if (i !== index) return e;
+            return {...e, [field]: val};
+        });
+        emitChange();
+    }
 </script>
 
 <div class="space-y-3">
-    <!-- Initial Value + Currency (inline row) -->
-    <div class="flex items-end gap-4">
+    <!-- Initial Value + Currency + Global settings (inline rows) -->
+    <div class="flex items-end gap-4 flex-wrap">
         <div class="flex-1 max-w-xs">
             <label for="initial-value" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                💰 Initial Value
+                💰 {$t('assets.schedule.initialValue')}
             </label>
             <input
                 id="initial-value"
@@ -961,7 +954,7 @@
         </div>
         <div class="w-32">
             <label for="currency-select" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                💱 Currency
+                💱 {$t('assets.schedule.currency')}
             </label>
             <input
                 id="currency-select"
@@ -980,6 +973,50 @@
                        focus:outline-none focus:ring-2 focus:ring-libre-green/50
                        disabled:opacity-50 uppercase"
             />
+        </div>
+        <div class="w-40">
+            <label for="interest-type-select" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                📐 {$t('assets.schedule.interestType') || 'Interest Type'}
+            </label>
+            <select
+                id="interest-type-select"
+                value={interestType}
+                onchange={(e) => {
+                    interestType = (e.currentTarget as HTMLSelectElement).value;
+                    emitChange();
+                }}
+                disabled={disabled || readonly}
+                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                       focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                       disabled:opacity-50"
+            >
+                {#each INTEREST_TYPE_OPTIONS as opt}
+                    <option value={opt.value}>{opt.label}</option>
+                {/each}
+            </select>
+        </div>
+        <div class="w-36">
+            <label for="day-count-select" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                📆 {$t('assets.schedule.dayCount') || 'Day Count'}
+            </label>
+            <select
+                id="day-count-select"
+                value={dayCount}
+                onchange={(e) => {
+                    dayCount = (e.currentTarget as HTMLSelectElement).value;
+                    emitChange();
+                }}
+                disabled={disabled || readonly}
+                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                       focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                       disabled:opacity-50"
+            >
+                {#each DAY_COUNT_OPTIONS as opt}
+                    <option value={opt.value}>{opt.label || opt.value}</option>
+                {/each}
+            </select>
         </div>
     </div>
 
@@ -1096,7 +1133,7 @@
     <!-- Asset Events Section -->
     <div class="space-y-2">
         <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">📋 Asset Events</span>
+            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">📋 {$t('assets.schedule.assetEvents')}</span>
             {#if !readonly && !disabled}
                 <button
                     type="button"
@@ -1107,7 +1144,7 @@
                            hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
                 >
                     <Plus size={12}/>
-                    <span>Add Event</span>
+                    <span>{$t('assets.schedule.addEvent')}</span>
                 </button>
             {/if}
         </div>
@@ -1116,10 +1153,10 @@
                 <table class="w-full text-xs">
                     <thead class="bg-gray-50 dark:bg-slate-800">
                         <tr>
-                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Date</th>
-                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Type</th>
-                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Value</th>
-                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Notes</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{$t('common.date')}</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{$t('common.type')}</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{$t('common.value')}</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{$t('common.notes')}</th>
                             <th class="px-2 py-1.5 w-8"></th>
                         </tr>
                     </thead>
@@ -1144,7 +1181,7 @@
                                                disabled:opacity-50"
                                     >
                                         {#each EVENT_TYPE_OPTIONS as opt}
-                                            <option value={opt.value}>{opt.label}</option>
+                                            <option value={opt.value}>{$t(opt.labelKey)}</option>
                                         {/each}
                                     </select>
                                 </td>
@@ -1181,7 +1218,7 @@
             </div>
         {:else}
             <div class="text-xs text-gray-400 dark:text-gray-500 italic pl-1">
-                No asset events configured
+                {$t('assets.schedule.noEvents')}
             </div>
         {/if}
     </div>

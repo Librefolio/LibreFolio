@@ -79,7 +79,8 @@ from backend.app.schemas.assets import (
     FAAssetPatchResult,
     FAMetadataChangeDetail,
     )
-from backend.app.schemas.common import OldNew
+from backend.app.schemas.common import OldNew, Currency
+from backend.app.schemas.prices import FAPriceQueryResult, FAAssetEventPoint
 from backend.app.schemas.provider import (
     FAProviderRefreshFieldsDetail,
     FAProviderSearchResponse,
@@ -318,10 +319,17 @@ class AssetSourceProvider(ABC):
         return True
 
     @property
-    def supports_events(self) -> bool:
-        """Whether this provider can produce asset events (dividends, interest, etc.).
-        Default: False. Override to True in providers that generate events."""
-        return False
+    def supports_search(self) -> bool:
+        """
+        Whether this provider supports asset search functionality.
+
+        Override to return False for providers that cannot search for assets
+        (e.g., scheduled investments, CSS scrapers).
+
+        Default: True if test_search_query is not None, False otherwise.
+        This heuristic works for most providers. Override explicitly when needed.
+        """
+        return self.test_search_query is not None
 
     @abstractmethod
     async def get_history_value(
@@ -664,12 +672,22 @@ class AssetSourceManager:
             else:
                 params_to_store = raw_params
 
+            # Map identifier_type to valid ProviderInputType before storing
+            # Handles both ProviderInputType values ("TICKER","URL","AUTO_GENERATED")
+            # and IdentifierType values ("OTHER"→URL, "UUID"→AUTO_GENERATED)
+            mapped_type = a.identifier_type
+            try:
+                ProviderInputType(mapped_type)
+            except ValueError:
+                pit = AssetSourceProvider.map_identifier_type_to_input_type(mapped_type)
+                mapped_type = pit.value if pit else ProviderInputType.URL.value
+
             new_assignments.append(
                 AssetProviderAssignment(
                     asset_id=a.asset_id,
                     provider_code=a.provider_code,
                     identifier=a.identifier,
-                    identifier_type=a.identifier_type,
+                    identifier_type=mapped_type,
                     provider_params=params_to_store,
                     fetch_interval=a.fetch_interval,
                     user_url=a.user_url,
@@ -1106,7 +1124,7 @@ class AssetSourceManager:
     async def _upsert_asset_events(
         session: AsyncSession,
         asset_id: int,
-        events: list[dict],
+        events: list[dict | FAAssetEventPoint],
         source_plugin_key: str,
         default_currency: str,
         ) -> int:
@@ -1117,35 +1135,42 @@ class AssetSourceManager:
         Args:
             session: Database session
             asset_id: Asset ID
-            events: List of event dicts (from FAAssetEventPoint.model_dump())
+            events: List of FAAssetEventPoint or dicts (parsed via Pydantic)
             source_plugin_key: Provider code
             default_currency: Fallback currency
 
         Returns:
             Number of events upserted
         """
-        from datetime import date as _date_type
         if not events:
             return 0
 
         event_objects = []
         keys_to_delete = []
 
-        for evt in events:
-            evt_date = evt["date"]
-            if isinstance(evt_date, str):
-                evt_date = _date_type.fromisoformat(evt_date)
-            evt_type = evt["type"]
+        for raw_evt in events:
+            # Parse through Pydantic if raw dict; if already FAAssetEventPoint, use directly
+            evt: FAAssetEventPoint = (
+                raw_evt if isinstance(raw_evt, FAAssetEventPoint)
+                else FAAssetEventPoint(**raw_evt)
+            )
+
+            evt_date = evt.date
+            evt_type = evt.type
             keys_to_delete.append((evt_date, evt_type))
+
+            # Extract amount and currency from Currency value object
+            amount = evt.value.amount
+            currency = evt.value.code or default_currency
 
             event_objects.append(AssetEvent(
                 asset_id=asset_id,
                 date=evt_date,
                 type=evt_type,
-                value=evt["value"],
-                currency=evt.get("currency") or default_currency,
+                value=amount,
+                currency=currency,
                 source_plugin_key=source_plugin_key,
-                notes=evt.get("notes"),
+                notes=evt.notes,
                 ))
 
         # Delete existing events for these (date, type) pairs
@@ -1537,8 +1562,6 @@ class AssetSourceManager:
         This method reads ONLY from DB — it does not delegate to providers.
         Provider fetch is a separate operation (POST /assets/prices/sync).
         """
-        from backend.app.schemas.prices import FAPriceQueryResult
-
         if not requests:
             return []
 
@@ -1582,7 +1605,6 @@ class AssetSourceManager:
         event_requests = {req.asset_id for req in requests if getattr(req, 'include_events', False)}
         
         # Query events if needed
-        from backend.app.schemas.prices import FAAssetEventPoint
         event_maps: dict[int, list[FAAssetEventPoint]] = {}
         if event_requests:
             evt_stmt = (
@@ -1604,8 +1626,7 @@ class AssetSourceManager:
                     FAAssetEventPoint(
                         date=evt.date,
                         type=evt.type,
-                        value=evt.value,
-                        currency=evt.currency,
+                        value=Currency(code=evt.currency, amount=evt.value),
                         notes=evt.notes,
                         )
                     )
@@ -2734,12 +2755,15 @@ class AssetSearchService:
             all_providers = AssetProviderRegistry.list_providers()
             provider_codes = [p["code"] for p in all_providers]
 
-        # Filter to valid providers only
-        valid_providers: list[tuple[str, object]] = []
+        # Filter to valid providers that support search
+        valid_providers: list[tuple[str, AssetSourceProvider]] = []
         for code in provider_codes:
             provider_instance = AssetProviderRegistry.get_provider_instance(code)
             if provider_instance:
-                valid_providers.append((code, provider_instance))
+                if provider_instance.supports_search:
+                    valid_providers.append((code, provider_instance))
+                else:
+                    logger.debug(f"Provider '{code}' does not support search, skipping")
             else:
                 logger.warning(f"Provider '{code}' not found, skipping")
 
@@ -2860,10 +2884,10 @@ class AssetSearchService:
             all_providers = AssetProviderRegistry.list_providers()
             provider_codes = [p["code"] for p in all_providers]
 
-        valid_providers: list[tuple[str, object]] = []
+        valid_providers: list[tuple[str, AssetSourceProvider]] = []
         for code in provider_codes:
             instance = AssetProviderRegistry.get_provider_instance(code)
-            if instance:
+            if instance and instance.supports_search:
                 valid_providers.append((code, instance))
 
         if not valid_providers:

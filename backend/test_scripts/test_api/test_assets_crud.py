@@ -9,7 +9,7 @@ import pytest
 
 from backend.app.config import get_settings
 from backend.app.db import AssetType
-from backend.app.db.models import IdentifierType
+from backend.app.db.models import IdentifierType, ProviderInputType
 from backend.app.schemas import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
@@ -21,6 +21,7 @@ from backend.app.schemas import (
     FASectorArea,
     )
 from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.schemas.assets import FAAssetPatchItem
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
@@ -403,7 +404,6 @@ async def test_list_active_filter(test_server):
             )
 
         # Step 2: Deactivate second asset via PATCH
-        from backend.app.schemas.assets import FAAssetPatchItem
 
         patch_item = FAAssetPatchItem(asset_id=asset2_id, active=False)
         patch_resp = await client.patch(
@@ -696,7 +696,7 @@ async def test_bulk_remove_providers(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             identifier="MOCK_TEST",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params=None,
             )
         assign_resp = await client.post(
@@ -785,7 +785,7 @@ async def test_bulk_refresh_prices(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             identifier="MOCK_REFRESH",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params={"symbol": "MOCK"},
             )
         assign_resp = await client.post(

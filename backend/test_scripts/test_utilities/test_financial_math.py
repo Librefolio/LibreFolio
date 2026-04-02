@@ -11,8 +11,7 @@ import pytest
 from backend.app.schemas.assets import (
     FAInterestRatePeriod,
     FALateInterestConfig,
-    CompoundingType,
-    CompoundFrequency,
+    MaturationFrequency,
     DayCountConvention,
     )
 from backend.app.utils.financial_math import find_active_period, calculate_day_count_fraction
@@ -76,8 +75,7 @@ def test_find_active_period_within_schedule():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
@@ -87,7 +85,7 @@ def test_find_active_period_within_schedule():
 
     assert period is not None
     assert period.annual_rate == Decimal("0.05")
-    assert period.compounding == CompoundingType.SIMPLE
+    assert period.maturation_frequency == MaturationFrequency.DAILY
 
 
 def test_find_active_period_multiple_periods():
@@ -97,15 +95,13 @@ def test_find_active_period_multiple_periods():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 6, 30),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             ),
         FAInterestRatePeriod(
             start_date=date(2025, 7, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.06"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             ),
         ]
     maturity = date(2025, 12, 31)
@@ -128,16 +124,13 @@ def test_find_active_period_within_grace():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
     late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
-        compounding=CompoundingType.SIMPLE,
-        day_count=DayCountConvention.ACT_365,
         )
 
     # Within grace period (15 days after maturity)
@@ -155,16 +148,13 @@ def test_find_active_period_after_grace():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
     late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
-        compounding=CompoundingType.SIMPLE,
-        day_count=DayCountConvention.ACT_365,
         )
 
     # After grace period (45 days after maturity)
@@ -182,8 +172,7 @@ def test_find_active_period_no_late_interest():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
@@ -202,8 +191,7 @@ def test_find_active_period_before_schedule():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
@@ -227,15 +215,13 @@ def test_find_active_period_within_schedule():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 6, 30),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             ),
         FAInterestRatePeriod(
             start_date=date(2025, 7, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.06"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             ),
         ]
     maturity = date(2025, 12, 31)
@@ -244,8 +230,7 @@ def test_find_active_period_within_schedule():
     period = find_active_period(schedule, date(2025, 3, 15), maturity)
     assert period is not None
     assert period.annual_rate == Decimal("0.05")
-    assert period.compounding == CompoundingType.SIMPLE
-    assert period.day_count == DayCountConvention.ACT_365
+    assert period.maturation_frequency == MaturationFrequency.DAILY
 
     # Test date in second period
     period = find_active_period(schedule, date(2025, 9, 15), maturity)
@@ -260,16 +245,13 @@ def test_find_active_period_within_grace():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
     late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
-        compounding=CompoundingType.SIMPLE,
-        day_count=DayCountConvention.ACT_365,
         )
 
     # Date within grace period (15 days after maturity)
@@ -285,24 +267,19 @@ def test_find_active_period_after_grace():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
     late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
-        compounding=CompoundingType.SIMPLE,
-        day_count=DayCountConvention.ACT_365,
         )
 
     # Date 45 days after maturity (past grace period)
     period = find_active_period(schedule, date(2026, 2, 14), maturity, late_interest)
     assert period is not None
     assert period.annual_rate == Decimal("0.12")  # Uses late interest rate
-    assert period.compounding == CompoundingType.SIMPLE
-    assert period.day_count == DayCountConvention.ACT_365
 
 
 def test_find_active_period_no_late_interest():
@@ -312,8 +289,7 @@ def test_find_active_period_no_late_interest():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
@@ -330,8 +306,7 @@ def test_find_active_period_before_schedule():
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         ]
     maturity = date(2025, 12, 31)
@@ -341,24 +316,20 @@ def test_find_active_period_before_schedule():
     assert period is None
 
 
-def test_find_active_period_with_compound_monthly():
-    """Test that period preserves compound frequency."""
+def test_find_active_period_with_quarterly_maturation():
+    """Test that period preserves maturation frequency."""
     schedule = [
         FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.COMPOUND,
-            compound_frequency=CompoundFrequency.MONTHLY,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.QUARTERLY,
             )
         ]
     maturity = date(2025, 12, 31)
-    print("ciao")
     period = find_active_period(schedule, date(2025, 6, 15), maturity)
     assert period is not None
-    assert period.compounding == CompoundingType.COMPOUND
-    assert period.compound_frequency == CompoundFrequency.MONTHLY
+    assert period.maturation_frequency == MaturationFrequency.QUARTERLY
 
 
 if __name__ == "__main__":

@@ -12,8 +12,11 @@ from typing import Optional
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.db.session import get_async_engine
+from backend.app.services import user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
 
@@ -150,9 +153,6 @@ _admin_credentials: Optional[tuple[str, str, str]] = None
 
 async def promote_user_to_admin(username: str) -> bool:
     """Promote a user to admin using the backend service directly. Returns True if successful."""
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from backend.app.db.session import get_async_engine
-    from backend.app.services import user_service
 
     try:
         engine = get_async_engine()

@@ -7,7 +7,7 @@ This page lists the asset pricing providers currently available in LibreFolio.
 | **Yahoo Finance**        | `yfinance`             | History, Search, Metadata | Beta       | Uses `yfinance` library. Supports Stocks, ETFs, Crypto.                          |
 | **JustETF**              | `justetf`              | History, Search, Metadata | Beta       | Scrapes JustETF.com. Excellent for European ETFs.                                |
 | **CSS Scraper**          | `cssscraper`           | Current Value             | Beta       | Scrapes any URL using CSS selectors. No history.                                 |
-| **Scheduled Investment** | `scheduled_investment` | History (Calc)            | Beta       | Synthetic provider for bonds/loans. Calculates value based on interest schedule. |
+| **Scheduled Investment** | `scheduled_investment` | History (Calc), Events    | Beta       | Pure deterministic provider for bonds/loans. No DB access, uses `initial_value` + schedule. |
 | **Mock Provider**        | `mock_provider`        | History, Search           | Alpha      | For testing purposes only.                                                       |
 
 ---
@@ -18,3 +18,4 @@ This page lists the asset pricing providers currently available in LibreFolio.
 - 🔎 **Search**: Supports searching for assets by name/ticker.
 - 📋 **Metadata**: Can fetch asset details (sector, description, etc.).
 - 💰 **Current Value**: Can fetch the latest real-time price.
+- 📊 **Events**: Can produce asset events (dividends, interest payouts, price adjustments) via `supports_events = True`.

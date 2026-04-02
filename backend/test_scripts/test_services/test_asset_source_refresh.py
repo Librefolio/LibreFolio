@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.session import get_async_engine
 from backend.app.services.asset_source import AssetSourceManager
-from backend.app.db.models import Asset, AssetType, PriceHistory, IdentifierType
+from backend.app.db.models import Asset, AssetType, PriceHistory, IdentifierType, ProviderInputType
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.refresh import FARefreshItem, SyncStatus
@@ -37,7 +37,7 @@ async def _create_asset_with_provider(
                 asset_id=asset.id,
                 provider_code=provider_code,
                 identifier=identifier,
-                identifier_type=IdentifierType.UUID,
+                identifier_type=ProviderInputType.AUTO_GENERATED,
                 provider_params={},
                 )
             ],
@@ -261,7 +261,7 @@ async def test_refresh_currency_fallback_uses_asset_currency():
             [
                 FAProviderAssignmentItem(
                     asset_id=asset.id, provider_code="mockprov",
-                    identifier="EUR_TEST", identifier_type=IdentifierType.UUID,
+                    identifier="EUR_TEST", identifier_type=ProviderInputType.AUTO_GENERATED,
                     provider_params={},
                     )
                 ],

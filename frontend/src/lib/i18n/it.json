@@ -60,7 +60,9 @@
     "name": "Nome",
     "currency": "Valuta",
     "other": "Altro",
-    "date": "Data"
+    "date": "Data",
+    "value": "Valore",
+    "notes": "Note"
   },
   "table": {
     "columns": "Colonne",
@@ -358,7 +360,16 @@
       "emptyHint": "Aggiungi almeno un periodo per configurare il piano di investimento.",
       "periods": "periodi",
       "contiguous": "contigui",
-      "days": "giorni"
+      "days": "giorni",
+      "initialValue": "Valore Iniziale",
+      "currency": "Valuta",
+      "assetEvents": "Eventi Asset",
+      "addEvent": "Aggiungi Evento",
+      "noEvents": "Nessun evento asset configurato",
+      "eventType": {
+        "INTEREST": "Interesse",
+        "PRICE_ADJUSTMENT": "Aggiustamento Prezzo"
+      }
     },
     "probe": {
       "currentPrice": "Prezzo Attuale",
