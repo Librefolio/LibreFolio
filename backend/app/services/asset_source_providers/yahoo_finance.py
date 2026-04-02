@@ -63,18 +63,18 @@ class YahooFinanceProvider(AssetSourceProvider):
         Returns:
             Currency code (e.g., 'USD', 'EUR') or None if not available
         """
-        cached = self._currency_cache.get(symbol)
-        if cached is not None:
+        cached, ok = self._currency_cache.get(symbol)
+        if ok:
             return cached
 
         try:
             ticker = yf.Ticker(symbol)
             currency = ticker.fast_info.get("currency")
-            self._currency_cache[symbol] = currency
+            self._currency_cache.set(symbol, currency)
             return currency
         except Exception as e:
             logger.debug(f"Could not fetch currency for {symbol}: {e}")
-            self._currency_cache[symbol] = None
+            self._currency_cache.set(symbol, None)
             return None
 
     @property
@@ -336,10 +336,10 @@ class YahooFinanceProvider(AssetSourceProvider):
         if len(query) < self._MIN_SEARCH_CHARS:
             return []
 
-        # Check cache (TTLCache handles expiration automatically)
+        # Check cache (theine handles expiration automatically)
         cache_key = query.lower()
-        cached_results = self._search_cache.get(cache_key)
-        if cached_results is not None:
+        cached_results, ok = self._search_cache.get(cache_key)
+        if ok:
             logger.debug(f"Cache hit for '{query}'")
             return cached_results
 
@@ -385,15 +385,15 @@ class YahooFinanceProvider(AssetSourceProvider):
                     }
                 )
 
-            # Cache result (TTLCache handles expiration)
-            self._search_cache[cache_key] = results
+            # Cache result (theine handles expiration)
+            self._search_cache.set(cache_key, results)
             logger.info(f"Search for '{query}': found {len(results)} results")
             return results
 
         except Exception as e:
             logger.warning(f"Search failed for '{query}': {e}")
             # Cache empty result to avoid repeated failures
-            self._search_cache[cache_key] = []
+            self._search_cache.set(cache_key, [])
             return []
 
     def validate_params(self, params: Dict | None) -> None:

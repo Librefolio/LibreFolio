@@ -369,7 +369,18 @@
       "eventType": {
         "INTEREST": "Interesse",
         "PRICE_ADJUSTMENT": "Aggiustamento Prezzo"
-      }
+      },
+      "interestType": "Tipo di Interesse",
+      "interestTypeSimple": "Semplice",
+      "interestTypeCompound": "Composto",
+      "maturationFrequency": "Frequenza",
+      "maturationFrequencyHint": "Frequenza di maturazione dell'interesse nel periodo.",
+      "matFreqDaily": "Giornaliera",
+      "matFreqWeekly": "Settimanale",
+      "matFreqMonthly": "Mensile",
+      "matFreqQuarterly": "Trimestrale",
+      "matFreqSemiannual": "Semestrale",
+      "matFreqAnnual": "Annuale"
     },
     "probe": {
       "currentPrice": "Prezzo Attuale",

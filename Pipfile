@@ -34,7 +34,7 @@ websocket-client = "*"
 justetf-scraping = {git = "https://github.com/Alfystar/justetf-scraping.git", ref = "main"}
 python-multipart = "*"
 babel = "*"
-cachetools = "*"
+theine = "*"
 bcrypt = "*"
 email-validator = "*"
 python-magic = "*"
@@ -54,7 +54,7 @@ coverage = {extras = ["toml"], version = "*"}
 gevent = "*"
 tabulate = "*"
 openpyxl = "*"
-"aphra " = {git = "https://github.com/DavidLMS/aphra.git"}
+aphra = {git = "https://github.com/DavidLMS/aphra.git"}
 
 [requires]
 python_version = "3.13"

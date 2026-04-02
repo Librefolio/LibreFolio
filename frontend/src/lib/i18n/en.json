@@ -369,7 +369,18 @@
       "eventType": {
         "INTEREST": "Interest",
         "PRICE_ADJUSTMENT": "Price Adjustment"
-      }
+      },
+      "interestType": "Interest Type",
+      "interestTypeSimple": "Simple",
+      "interestTypeCompound": "Compound",
+      "maturationFrequency": "Frequency",
+      "maturationFrequencyHint": "How often interest matures within the period.",
+      "matFreqDaily": "Daily",
+      "matFreqWeekly": "Weekly",
+      "matFreqMonthly": "Monthly",
+      "matFreqQuarterly": "Quarterly",
+      "matFreqSemiannual": "Semiannual",
+      "matFreqAnnual": "Annual"
     },
     "probe": {
       "currentPrice": "Current Price",

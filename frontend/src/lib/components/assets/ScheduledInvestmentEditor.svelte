@@ -24,6 +24,8 @@
     import type {ColumnDef, RowAction, CellContent} from '$lib/components/table/types';
     import CellDateRange from './CellDateRange.svelte';
     import BoundaryDateModal from './BoundaryDateModal.svelte';
+    import {SimpleSelect} from '$lib/components/ui/select';
+    import {CurrencySearchSelect} from '$lib/components/ui/select';
 
     // =========================================================================
     // Types
@@ -79,10 +81,10 @@
     // =========================================================================
 
     // Source of truth: backend/app/schemas/assets.py → InterestType enum
-    const INTEREST_TYPE_OPTIONS = [
-        {value: 'SIMPLE', label: '📊 Simple'},
-        {value: 'COMPOUND', label: '📈 Compound'},
-    ];
+    let INTEREST_TYPE_OPTIONS = $derived([
+        {value: 'SIMPLE', label: `📊 ${$t('assets.schedule.interestTypeSimple')}`},
+        {value: 'COMPOUND', label: `📈 ${$t('assets.schedule.interestTypeCompound')}`},
+    ]);
 
     // Source of truth: backend/app/schemas/assets.py → DayCountConvention enum
     const DAY_COUNT_OPTIONS = [
@@ -93,14 +95,14 @@
     ];
 
     // Source of truth: backend/app/schemas/assets.py → MaturationFrequency enum
-    const MATURATION_FREQ_OPTIONS = [
-        {value: 'DAILY', label: 'Daily'},
-        {value: 'WEEKLY', label: 'Weekly'},
-        {value: 'MONTHLY', label: 'Monthly'},
-        {value: 'QUARTERLY', label: 'Quarterly'},
-        {value: 'SEMIANNUAL', label: 'Semiannual'},
-        {value: 'ANNUAL', label: 'Annual'},
-    ];
+    let MATURATION_FREQ_OPTIONS = $derived([
+        {value: 'DAILY', label: $t('assets.schedule.matFreqDaily')},
+        {value: 'WEEKLY', label: $t('assets.schedule.matFreqWeekly')},
+        {value: 'MONTHLY', label: $t('assets.schedule.matFreqMonthly')},
+        {value: 'QUARTERLY', label: $t('assets.schedule.matFreqQuarterly')},
+        {value: 'SEMIANNUAL', label: $t('assets.schedule.matFreqSemiannual')},
+        {value: 'ANNUAL', label: $t('assets.schedule.matFreqAnnual')},
+    ]);
 
     // =========================================================================
     // Date Helpers
@@ -233,12 +235,10 @@
         if (normalRows.length === 0) return false;
         for (const p of normalRows) {
             if (p.annual_rate < 0) return false;
-            if (false /* always simple */) return false;
         }
         if (lateRow?.enabled) {
             if (lateRow.annual_rate < 0) return false;
             if (lateRow.grace_period_days < 0) return false;
-            if (false /* always simple */) return false;
         }
         return true;
     });
@@ -753,8 +753,7 @@
     function updateRow(id: string, field: keyof ScheduleRow, val: any): void {
         rows = rows.map(r => {
             if (r.id !== id) return r;
-            const updated = {...r, [field]: val};
-            return updated;
+            return {...r, [field]: val};
         });
         emitChange();
     }
@@ -779,8 +778,8 @@
             type: 'custom',
             sortable: false,
             filterable: false,
-            width: 220,
-            minWidth: 180,
+            width: 180,
+            minWidth: 160,
             cell: (row: ScheduleRow): CellContent => ({
                 type: 'custom',
                 component: CellDateRange,
@@ -824,12 +823,11 @@
             id: 'maturation_frequency',
             header: () => $t('assets.schedule.maturationFrequency'),
             headerTooltip: () => $t('assets.schedule.maturationFrequencyHint'),
-            headerTooltipUrl: '/mkdocs/financial-theory/synthetic-benchmarks/#compound-growth',
             type: 'custom',
             sortable: false,
             filterable: false,
-            width: 120,
-            minWidth: 100,
+            width: 140,
+            minWidth: 120,
             cell: (row: ScheduleRow): CellContent => ({
                 type: 'editable-select',
                 value: row.maturation_frequency,
@@ -928,95 +926,66 @@
 </script>
 
 <div class="space-y-3">
-    <!-- Initial Value + Currency + Global settings (inline rows) -->
-    <div class="flex items-end gap-4 flex-wrap">
-        <div class="flex-1 max-w-xs">
-            <label for="initial-value" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                💰 {$t('assets.schedule.initialValue')}
-            </label>
-            <input
-                id="initial-value"
-                type="number"
-                min="0.01"
-                step="100"
-                value={initialValue}
-                oninput={(e) => {
-                    const el = e.currentTarget as HTMLInputElement;
-                    initialValue = Number(el.value) || 0;
-                    emitChange();
-                }}
-                disabled={disabled || readonly}
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                       focus:outline-none focus:ring-2 focus:ring-libre-green/50
-                       disabled:opacity-50"
-            />
+    <!-- Initial Value + Currency + Global settings (responsive 2×2 grid) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Row 1: Initial Value + Currency -->
+        <div class="flex items-end gap-2">
+            <div class="flex-1 min-w-0">
+                <label for="initial-value" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    💰 {$t('assets.schedule.initialValue')}
+                </label>
+                <input
+                    id="initial-value"
+                    type="number"
+                    min="0.01"
+                    step="100"
+                    value={initialValue}
+                    oninput={(e) => {
+                        initialValue = Number(e.currentTarget.value) || 0;
+                        emitChange();
+                    }}
+                    disabled={disabled || readonly}
+                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                           focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                           disabled:opacity-50"
+                />
+            </div>
+            <div class="w-44 shrink-0">
+                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    💱 {$t('assets.schedule.currency')}
+                </span>
+                <CurrencySearchSelect
+                    bind:value={currencyValue}
+                    disabled={disabled || readonly}
+                    onchange={(v) => { currencyValue = v; emitChange(); }}
+                />
+            </div>
         </div>
-        <div class="w-32">
-            <label for="currency-select" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                💱 {$t('assets.schedule.currency')}
-            </label>
-            <input
-                id="currency-select"
-                type="text"
-                value={currencyValue}
-                maxlength={3}
-                oninput={(e) => {
-                    const el = e.currentTarget as HTMLInputElement;
-                    currencyValue = el.value.toUpperCase();
-                    emitChange();
-                }}
-                disabled={disabled || readonly}
-                placeholder="EUR"
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                       focus:outline-none focus:ring-2 focus:ring-libre-green/50
-                       disabled:opacity-50 uppercase"
-            />
-        </div>
-        <div class="w-40">
-            <label for="interest-type-select" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                📐 {$t('assets.schedule.interestType') || 'Interest Type'}
-            </label>
-            <select
-                id="interest-type-select"
-                value={interestType}
-                onchange={(e) => {
-                    interestType = (e.currentTarget as HTMLSelectElement).value;
-                    emitChange();
-                }}
-                disabled={disabled || readonly}
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                       focus:outline-none focus:ring-2 focus:ring-libre-green/50
-                       disabled:opacity-50"
-            >
-                {#each INTEREST_TYPE_OPTIONS as opt}
-                    <option value={opt.value}>{opt.label}</option>
-                {/each}
-            </select>
-        </div>
-        <div class="w-36">
-            <label for="day-count-select" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                📆 {$t('assets.schedule.dayCount') || 'Day Count'}
-            </label>
-            <select
-                id="day-count-select"
-                value={dayCount}
-                onchange={(e) => {
-                    dayCount = (e.currentTarget as HTMLSelectElement).value;
-                    emitChange();
-                }}
-                disabled={disabled || readonly}
-                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                       focus:outline-none focus:ring-2 focus:ring-libre-green/50
-                       disabled:opacity-50"
-            >
-                {#each DAY_COUNT_OPTIONS as opt}
-                    <option value={opt.value}>{opt.label || opt.value}</option>
-                {/each}
-            </select>
+        <!-- Row 2: Interest Type + Day Count -->
+        <div class="flex items-end gap-2">
+            <div class="flex-1 min-w-0">
+                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    📐 {$t('assets.schedule.interestType')}
+                </span>
+                <SimpleSelect
+                    bind:value={interestType}
+                    options={INTEREST_TYPE_OPTIONS}
+                    disabled={disabled || readonly}
+                    onchange={(v) => { interestType = v; emitChange(); }}
+                />
+            </div>
+            <div class="flex-1 min-w-0">
+                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    📆 {$t('assets.schedule.dayCount')}
+                </span>
+                <SimpleSelect
+                    bind:value={dayCount}
+                    options={DAY_COUNT_OPTIONS}
+                    disabled={disabled || readonly}
+                    onchange={(v) => { dayCount = v; emitChange(); }}
+                />
+            </div>
         </div>
     </div>
 
@@ -1165,7 +1134,7 @@
                             <tr class="border-t border-gray-100 dark:border-slate-700">
                                 <td class="px-2 py-1">
                                     <input type="date" value={evt.date}
-                                        oninput={(e) => handleEventFieldChange(idx, 'date', (e.currentTarget as HTMLInputElement).value)}
+                                        oninput={(e) => handleEventFieldChange(idx, 'date', e.currentTarget.value)}
                                         disabled={disabled || readonly}
                                         class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
                                                bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
@@ -1174,7 +1143,7 @@
                                 </td>
                                 <td class="px-2 py-1">
                                     <select value={evt.type}
-                                        onchange={(e) => handleEventFieldChange(idx, 'type', (e.currentTarget as HTMLSelectElement).value)}
+                                        onchange={(e) => handleEventFieldChange(idx, 'type', e.currentTarget.value)}
                                         disabled={disabled || readonly}
                                         class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
                                                bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
@@ -1187,7 +1156,7 @@
                                 </td>
                                 <td class="px-2 py-1">
                                     <input type="number" value={evt.value} step="0.01"
-                                        oninput={(e) => handleEventFieldChange(idx, 'value', Number((e.currentTarget as HTMLInputElement).value))}
+                                        oninput={(e) => handleEventFieldChange(idx, 'value', Number(e.currentTarget.value))}
                                         disabled={disabled || readonly}
                                         class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
                                                bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
@@ -1196,7 +1165,7 @@
                                 </td>
                                 <td class="px-2 py-1">
                                     <input type="text" value={evt.notes} placeholder="optional"
-                                        oninput={(e) => handleEventFieldChange(idx, 'notes', (e.currentTarget as HTMLInputElement).value)}
+                                        oninput={(e) => handleEventFieldChange(idx, 'notes', e.currentTarget.value)}
                                         disabled={disabled || readonly}
                                         class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
                                                bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
