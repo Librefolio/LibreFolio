@@ -21,10 +21,11 @@ price points, asset metadata, and scheduled investment calculations.
 - All numeric fields use Decimal for precision
 - Pydantic v2 with strict validation (extra="forbid")
 - Scheduled investment uses Pydantic models (not dict configs)
-- Enums for compounding types, frequencies, and day count conventions
+- Enums for maturation frequencies and day count conventions
+- Interest is always simple: I = P * r * t (on initial_value)
 
 **Structure**:
-- Enums: Financial calculation types (compounding, frequencies, day counts)
+- Enums: Financial calculation types (maturation frequencies, day counts)
 - Base models: FAPricePoint, FACurrentValue, FAHistoricalData
 - Provider: FAAssetProviderAssignment
 - Scheduled Investment: FAInterestRatePeriod, FALateInterestConfig, FAScheduledInvestmentSchedule
@@ -53,7 +54,6 @@ from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistorica
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.geo_utils import normalize_country_keys
 from backend.app.utils.sector_fin_utils import normalize_sector
-from backend.app.utils.validation_utils import validate_compound_frequency
 
 
 # ============================================================================
@@ -61,36 +61,27 @@ from backend.app.utils.validation_utils import validate_compound_frequency
 # ============================================================================
 
 
-class CompoundingType(str, Enum):
+class MaturationFrequency(str, Enum):
     """
-    Interest compounding type.
+    Frequency at which interest matures/accrues.
 
-    - SIMPLE: Interest calculated on principal only (I = P * r * t)
-    - COMPOUND: Interest calculated on principal + accumulated interest (A = P * (1 + r/n)^(nt))
-    """
+    Determines how often accrued interest is "crystallized" into the price.
+    Interest is always simple: I = P * r * t (calculated on initial_value).
 
-    SIMPLE = "SIMPLE"
-    COMPOUND = "COMPOUND"
-
-
-class CompoundFrequency(str, Enum):
-    """
-    Frequency of interest compounding (for COMPOUND interest).
-
-    - DAILY: Compounds every day (n=365)
-    - MONTHLY: Compounds every month (n=12)
-    - QUARTERLY: Compounds every quarter (n=4)
-    - SEMIANNUAL: Compounds twice a year (n=2)
-    - ANNUAL: Compounds once a year (n=1)
-    - CONTINUOUS: Continuous compounding (A = P * e^(rt))
+    - DAILY: Interest matures every day
+    - WEEKLY: Interest matures every week
+    - MONTHLY: Interest matures every month
+    - QUARTERLY: Interest matures every quarter
+    - SEMIANNUAL: Interest matures twice a year
+    - ANNUAL: Interest matures once a year
     """
 
     DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
     MONTHLY = "MONTHLY"
     QUARTERLY = "QUARTERLY"
     SEMIANNUAL = "SEMIANNUAL"
     ANNUAL = "ANNUAL"
-    CONTINUOUS = "CONTINUOUS"
 
 
 class DayCountConvention(str, Enum):
@@ -107,6 +98,23 @@ class DayCountConvention(str, Enum):
     ACT_360 = "ACT/360"
     ACT_ACT = "ACT/ACT"
     THIRTY_360 = "30/360"
+
+
+class InterestType(str, Enum):
+    """
+    Interest calculation method for the entire scheduled investment.
+
+    - SIMPLE: Interest always calculated on the initial principal.
+              I = P₀ * r * Δt  (P₀ is constant throughout)
+    - COMPOUND: Interest calculated on the running accumulated value.
+                Each day's interest adds to the base for the next day.
+                I_day = V_{t-1} * r * Δt  (V grows over time)
+
+    This is a global property of the asset — all periods use the same method.
+    """
+
+    SIMPLE = "SIMPLE"
+    COMPOUND = "COMPOUND"
 
 
 # ============================================================================
@@ -130,34 +138,22 @@ class FAInterestRatePeriod(BaseModel):
     """
     Interest rate period for scheduled investments.
 
-    Represents a time period with specific interest calculation parameters.
-    Used in interest_schedule arrays.
+    Represents a time period with a specific interest rate.
+    Interest type (simple/compound) and day count convention are
+    global properties defined at the FAScheduledInvestmentSchedule level.
 
     Attributes:
         start_date: Period start date (inclusive)
         end_date: Period end date (inclusive)
         annual_rate: Annual interest rate as decimal (e.g., 0.05 for 5%)
-        compounding: Interest compounding type (SIMPLE or COMPOUND)
-        compound_frequency: Compounding frequency (for COMPOUND type only)
-        day_count: Day count convention for time fraction calculation
+        maturation_frequency: How often interest matures (DAILY, WEEKLY, MONTHLY, etc.)
 
-    Example (Simple interest):
+    Example:
         {
             "start_date": "2025-01-01",
             "end_date": "2025-12-31",
             "annual_rate": 0.05,
-            "compounding": "SIMPLE",
-            "day_count": "ACT/365"
-        }
-
-    Example (Compound interest):
-        {
-            "start_date": "2025-01-01",
-            "end_date": "2025-12-31",
-            "annual_rate": 0.05,
-            "compounding": "COMPOUND",
-            "compound_frequency": "MONTHLY",
-            "day_count": "ACT/365"
+            "maturation_frequency": "MONTHLY"
         }
     """
 
@@ -166,9 +162,7 @@ class FAInterestRatePeriod(BaseModel):
     start_date: date
     end_date: date
     annual_rate: Decimal
-    compounding: CompoundingType = CompoundingType.SIMPLE
-    compound_frequency: Optional[CompoundFrequency] = None
-    day_count: DayCountConvention = DayCountConvention.ACT_365
+    maturation_frequency: MaturationFrequency = MaturationFrequency.DAILY
 
     @field_validator("annual_rate", mode="before")
     @classmethod
@@ -187,49 +181,24 @@ class FAInterestRatePeriod(BaseModel):
             raise ValueError("end_date must be on or after start_date")
         return v
 
-    @field_validator("compound_frequency")
-    @classmethod
-    def validate_compound_frequency_field(cls, v, info):
-        """Ensure compound_frequency is consistent with compounding type."""
-        if "compounding" in info.data:
-            validate_compound_frequency(
-                compounding=info.data["compounding"].value,
-                compound_frequency=v.value if v else None,
-                field_name="compound_frequency",
-                )
-        return v
-
 
 class FALateInterestConfig(BaseModel):
     """
     Late interest configuration for scheduled investments.
 
     Defines the penalty interest rate and grace period applied
-    after the asset's maturity date.
+    after the asset's maturity date. Interest type and day count
+    are inherited from the parent FAScheduledInvestmentSchedule.
 
     Attributes:
         annual_rate: Annual late interest rate as decimal (e.g., 0.12 for 12%)
         grace_period_days: Number of days after maturity before late interest applies
-        compounding: Interest compounding type (default: SIMPLE)
-        compound_frequency: Compounding frequency (for COMPOUND type only)
-        day_count: Day count convention (default: ACT/365)
-
-    Example:
-        {
-            "annual_rate": 0.12,
-            "grace_period_days": 30,
-            "compounding": "SIMPLE",
-            "day_count": "ACT/365"
-        }
     """
 
     model_config = ConfigDict(extra="forbid")
 
     annual_rate: Decimal
     grace_period_days: int = 0
-    compounding: CompoundingType = CompoundingType.SIMPLE
-    compound_frequency: Optional[CompoundFrequency] = None
-    day_count: DayCountConvention = DayCountConvention.ACT_365
 
     @field_validator("annual_rate", mode="before")
     @classmethod
@@ -248,27 +217,30 @@ class FALateInterestConfig(BaseModel):
             raise ValueError("Grace period must be non-negative")
         return v
 
-    @field_validator("compound_frequency")
-    @classmethod
-    def validate_compound_frequency_field(cls, v, info):
-        """Ensure compound_frequency is consistent with compounding type."""
-        if "compounding" in info.data:
-            validate_compound_frequency(
-                compounding=info.data["compounding"].value,
-                compound_frequency=v.value if v else None,
-                field_name="compound_frequency",
-                )
-        return v
-
 
 class FAScheduledInvestmentSchedule(BaseModel):
     """
     Complete interest schedule configuration for scheduled investments.
 
-    This is the comprehensive schema that should be stored in Asset.interest_schedule JSON field.
-    It includes all periods and late interest configuration with full validation.
+    This is the comprehensive schema stored in Asset.interest_schedule JSON field.
+    It includes all periods, late interest configuration, and planned asset events.
+
+    Global properties (apply to ALL periods uniformly):
+        - interest_type: SIMPLE or COMPOUND (default: SIMPLE)
+        - day_count: Day count convention (default: ACT/365)
+
+    SIMPLE interest: I = P₀ * r * Δt (always on initial principal)
+    COMPOUND interest: I_day = V_{t-1} * r * Δt (on running accumulated value)
+
+    Note: day_count is constant for the entire asset. In the rare case where
+    a financial instrument changes convention mid-life, the user can compute
+    an equivalent rate for the new convention. This is a theoretical edge case.
 
     Attributes:
+        initial_value: Currency object with code (e.g. 'EUR') and amount (e.g. 10000)
+        interest_type: SIMPLE or COMPOUND interest calculation method
+        day_count: Day count convention for time fraction calculation
+        asset_events: Planned asset events (interest payouts, price adjustments)
         schedule: List of interest rate periods (must be non-overlapping and contiguous)
         late_interest: Optional late interest configuration applied after maturity
 
@@ -276,57 +248,50 @@ class FAScheduledInvestmentSchedule(BaseModel):
         - Periods must not overlap
         - Periods must not have gaps (contiguous dates)
         - Periods must be ordered by start_date
-        - Each period's end_date must be before the next period's start_date (or exactly 1 day before)
 
     Example:
         {
+            "initial_value": {"code": "EUR", "amount": "10000"},
+            "interest_type": "SIMPLE",
+            "day_count": "ACT/365",
             "schedule": [
                 {
                     "start_date": "2025-01-01",
                     "end_date": "2025-06-30",
-                    "annual_rate": 0.05,
-                    "compounding": "SIMPLE",
-                    "day_count": "ACT/365"
+                    "annual_rate": "0.05",
+                    "maturation_frequency": "DAILY"
                 },
                 {
                     "start_date": "2025-07-01",
                     "end_date": "2025-12-31",
-                    "annual_rate": 0.06,
-                    "compounding": "SIMPLE",
-                    "day_count": "ACT/365"
+                    "annual_rate": "0.06",
+                    "maturation_frequency": "MONTHLY"
                 }
             ],
             "late_interest": {
-                "annual_rate": 0.12,
-                "grace_period_days": 30,
-                "compounding": "SIMPLE",
-                "day_count": "ACT/365"
-            }
+                "annual_rate": "0.12",
+                "grace_period_days": 30
+            },
+            "asset_events": [
+                {
+                    "date": "2025-07-01",
+                    "type": "INTEREST",
+                    "value": {"code": "EUR", "amount": "250"},
+                    "notes": "H1 interest payout"
+                }
+            ]
         }
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    initial_value: Decimal = Field(..., description="Initial capital / face value (required, > 0)")
-    currency: str = Field(..., description="Currency code (ISO 4217)")
+    initial_value: Currency = Field(..., description="Initial capital / face value with currency (e.g., {code: 'EUR', amount: 10000})")
+    interest_type: InterestType = Field(default=InterestType.SIMPLE, description="Interest calculation method: SIMPLE (on initial principal) or COMPOUND (on running value)")
+    day_count: DayCountConvention = Field(default=DayCountConvention.ACT_365, description="Day count convention for time fraction calculation (global for all periods)")
     asset_events: List[FAAssetEventPoint] = Field(default_factory=list, description="Planned asset events (interest payouts, price adjustments)")
     schedule: List[FAInterestRatePeriod]
     late_interest: Optional[FALateInterestConfig] = None
 
-    @field_validator("initial_value", mode="before")
-    @classmethod
-    def parse_initial_value(cls, v):
-        """Convert to Decimal and validate > 0."""
-        val = Decimal(str(v))
-        if val <= 0:
-            raise ValueError("initial_value must be greater than 0")
-        return val
-
-    @field_validator("currency")
-    @classmethod
-    def validate_currency_code(cls, v: str) -> str:
-        """Validate currency against ISO 4217 + crypto."""
-        return Currency.validate_code(v)
 
     @field_validator("schedule")
     @classmethod
@@ -969,9 +934,9 @@ class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
 # Export convenience
 __all__ = [
     # Enums
-    "CompoundingType",
-    "CompoundFrequency",
+    "MaturationFrequency",
     "DayCountConvention",
+    "InterestType",
     # Basic models
     "BackwardFillInfo",
     "FACurrentValue",

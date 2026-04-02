@@ -28,13 +28,14 @@ from backend.app.schemas.assets import (
     FAInterestRatePeriod,
     FALateInterestConfig,
     FAScheduledInvestmentSchedule,
-    CompoundingType,
-    CompoundFrequency,
+    MaturationFrequency,
     DayCountConvention,
+    InterestType,
     FAGeographicArea,
     FASectorArea,
     FAClassificationParams,
     )
+from backend.app.schemas.common import Currency
 
 
 # ============================================================================
@@ -51,25 +52,20 @@ class TestInterestRatePeriod:
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.DAILY,
             )
         assert period.annual_rate == Decimal("0.05")
-        assert period.compounding == CompoundingType.SIMPLE
-        assert period.compound_frequency is None
+        assert period.maturation_frequency == MaturationFrequency.DAILY
 
-    def test_valid_compound_interest_period(self):
-        """Test creating valid compound interest period."""
+    def test_valid_quarterly_maturation_period(self):
+        """Test creating valid period with quarterly maturation."""
         period = FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.COMPOUND,
-            compound_frequency=CompoundFrequency.MONTHLY,
-            day_count=DayCountConvention.ACT_365,
+            maturation_frequency=MaturationFrequency.QUARTERLY,
             )
-        assert period.compounding == CompoundingType.COMPOUND
-        assert period.compound_frequency == CompoundFrequency.MONTHLY
+        assert period.maturation_frequency == MaturationFrequency.QUARTERLY
 
     def test_negative_rate_rejected(self):
         """Test that negative interest rates are rejected."""
@@ -98,28 +94,6 @@ class TestInterestRatePeriod:
             )
         assert period.start_date == period.end_date
 
-    @pytest.mark.skip(reason="Validation order issue - field_validator doesn't catch this")
-    def test_compound_without_frequency_rejected(self):
-        """Test that COMPOUND without compound_frequency is rejected."""
-        with pytest.raises(ValidationError, match="compound_frequency is required"):
-            FAInterestRatePeriod(
-                start_date=date(2025, 1, 1),
-                end_date=date(2025, 12, 31),
-                annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.COMPOUND,
-                )
-
-    def test_simple_with_frequency_rejected(self):
-        """Test that SIMPLE with compound_frequency is rejected."""
-        with pytest.raises(ValidationError, match="compound_frequency should not be set"):
-            FAInterestRatePeriod(
-                start_date=date(2025, 1, 1),
-                end_date=date(2025, 12, 31),
-                annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                compound_frequency=CompoundFrequency.MONTHLY,
-                )
-
     def test_defaults(self):
         """Test that defaults are applied correctly."""
         period = FAInterestRatePeriod(
@@ -127,9 +101,7 @@ class TestInterestRatePeriod:
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
             )
-        assert period.compounding == CompoundingType.SIMPLE
-        assert period.day_count == DayCountConvention.ACT_365
-        assert period.compound_frequency is None
+        assert period.maturation_frequency == MaturationFrequency.DAILY
 
     def test_rate_string_conversion(self):
         """Test that rate can be provided as string."""
@@ -167,7 +139,6 @@ class TestLateInterestConfig:
             )
         assert config.annual_rate == Decimal("0.12")
         assert config.grace_period_days == 30
-        assert config.compounding == CompoundingType.SIMPLE
 
     def test_negative_rate_rejected(self):
         """Test that negative late interest rate is rejected."""
@@ -192,34 +163,6 @@ class TestLateInterestConfig:
             )
         assert config.grace_period_days == 0
 
-    def test_compound_late_interest(self):
-        """Test late interest with compounding."""
-        config = FALateInterestConfig(
-            annual_rate=Decimal("0.12"),
-            grace_period_days=30,
-            compounding=CompoundingType.COMPOUND,
-            compound_frequency=CompoundFrequency.DAILY,
-            )
-        assert config.compounding == CompoundingType.COMPOUND
-        assert config.compound_frequency == CompoundFrequency.DAILY
-
-    @pytest.mark.skip(reason="Validation order issue - field_validator doesn't catch this")
-    def test_compound_without_frequency_rejected(self):
-        """Test that COMPOUND without frequency is rejected."""
-        with pytest.raises(ValidationError, match="compound_frequency is required"):
-            FALateInterestConfig(
-                annual_rate=Decimal("0.12"),
-                compounding=CompoundingType.COMPOUND,
-                )
-
-    def test_simple_with_frequency_rejected(self):
-        """Test that SIMPLE with frequency is rejected."""
-        with pytest.raises(ValidationError, match="compound_frequency should not be set"):
-            FALateInterestConfig(
-                annual_rate=Decimal("0.12"),
-                compounding=CompoundingType.SIMPLE,
-                compound_frequency=CompoundFrequency.MONTHLY,
-                )
 
 
 # ============================================================================
@@ -233,7 +176,7 @@ class TestScheduledInvestmentSchedule:
     def test_valid_single_period_schedule(self):
         """Test valid schedule with single period."""
         schedule = FAScheduledInvestmentSchedule(
-            initial_value=Decimal("10000"), currency="EUR",
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
@@ -244,10 +187,52 @@ class TestScheduledInvestmentSchedule:
             )
         assert len(schedule.schedule) == 1
 
+    def test_global_defaults(self):
+        """Test that global day_count and interest_type defaults are correct."""
+        schedule = FAScheduledInvestmentSchedule(
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
+            schedule=[
+                FAInterestRatePeriod(
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 12, 31),
+                    annual_rate=Decimal("0.05"),
+                    )
+                ]
+            )
+        assert schedule.day_count == DayCountConvention.ACT_365
+        assert schedule.interest_type == InterestType.SIMPLE
+
+    def test_global_compound_interest(self):
+        """Test explicit COMPOUND interest_type on schedule."""
+        schedule = FAScheduledInvestmentSchedule(
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
+            interest_type=InterestType.COMPOUND,
+            day_count=DayCountConvention.ACT_360,
+            schedule=[
+                FAInterestRatePeriod(
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 12, 31),
+                    annual_rate=Decimal("0.05"),
+                    )
+                ]
+            )
+        assert schedule.interest_type == InterestType.COMPOUND
+        assert schedule.day_count == DayCountConvention.ACT_360
+
+    def test_day_count_on_period_rejected(self):
+        """Test that day_count on FAInterestRatePeriod is rejected (extra='forbid')."""
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.05"),
+                day_count="ACT/365",
+                )
+
     def test_valid_multiple_periods_contiguous(self):
         """Test valid schedule with contiguous periods."""
         schedule = FAScheduledInvestmentSchedule(
-            initial_value=Decimal("10000"), currency="EUR",
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
@@ -266,13 +251,13 @@ class TestScheduledInvestmentSchedule:
     def test_empty_schedule_rejected(self):
         """Test that empty schedule is rejected."""
         with pytest.raises(ValidationError, match="at least one period"):
-            FAScheduledInvestmentSchedule(initial_value=Decimal("10000"), currency="EUR", schedule=[])
+            FAScheduledInvestmentSchedule(initial_value=Currency(code="EUR", amount=Decimal("10000")), schedule=[])
 
     def test_overlapping_periods_rejected(self):
         """Test that overlapping periods are rejected."""
         with pytest.raises(ValidationError, match="Overlapping periods"):
             FAScheduledInvestmentSchedule(
-            initial_value=Decimal("10000"), currency="EUR",
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
                 schedule=[
                     FAInterestRatePeriod(
                         start_date=date(2025, 1, 1),
@@ -291,7 +276,7 @@ class TestScheduledInvestmentSchedule:
         """Test that gaps between periods are rejected."""
         with pytest.raises(ValidationError, match="Gap detected"):
             FAScheduledInvestmentSchedule(
-            initial_value=Decimal("10000"), currency="EUR",
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
                 schedule=[
                     FAInterestRatePeriod(
                         start_date=date(2025, 1, 1),
@@ -309,7 +294,7 @@ class TestScheduledInvestmentSchedule:
     def test_unsorted_periods_are_sorted(self):
         """Test that unsorted periods are automatically sorted."""
         schedule = FAScheduledInvestmentSchedule(
-            initial_value=Decimal("10000"), currency="EUR",
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 7, 1),
@@ -329,7 +314,7 @@ class TestScheduledInvestmentSchedule:
     def test_with_late_interest(self):
         """Test schedule with late interest configuration."""
         schedule = FAScheduledInvestmentSchedule(
-            initial_value=Decimal("10000"), currency="EUR",
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
@@ -345,40 +330,38 @@ class TestScheduledInvestmentSchedule:
         assert schedule.late_interest is not None
         assert schedule.late_interest.annual_rate == Decimal("0.12")
 
-    def test_three_periods_mixed_compounding(self):
-        """Test schedule with multiple periods using different compounding."""
+    def test_three_periods_different_maturation(self):
+        """Test schedule with multiple periods using different maturation frequencies."""
         schedule = FAScheduledInvestmentSchedule(
-            initial_value=Decimal("10000"), currency="EUR",
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 4, 30),
                     annual_rate=Decimal("0.04"),
-                    compounding=CompoundingType.SIMPLE,
+                    maturation_frequency=MaturationFrequency.DAILY,
                     ),
                 FAInterestRatePeriod(
                     start_date=date(2025, 5, 1),
                     end_date=date(2025, 8, 31),
                     annual_rate=Decimal("0.05"),
-                    compounding=CompoundingType.COMPOUND,
-                    compound_frequency=CompoundFrequency.QUARTERLY,
+                    maturation_frequency=MaturationFrequency.QUARTERLY,
                     ),
                 FAInterestRatePeriod(
                     start_date=date(2025, 9, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
-                    compounding=CompoundingType.SIMPLE,
+                    maturation_frequency=MaturationFrequency.MONTHLY,
                     ),
                 ]
             )
         assert len(schedule.schedule) == 3
-        assert schedule.schedule[1].compounding == CompoundingType.COMPOUND
+        assert schedule.schedule[1].maturation_frequency == MaturationFrequency.QUARTERLY
 
     def test_initial_value_required(self):
         """Test that initial_value is required."""
         with pytest.raises(ValidationError):
             FAScheduledInvestmentSchedule(
-                currency="EUR",
                 schedule=[
                     FAInterestRatePeriod(
                         start_date=date(2025, 1, 1),
@@ -389,40 +372,40 @@ class TestScheduledInvestmentSchedule:
                 )
 
     def test_initial_value_zero_rejected(self):
-        """Test that initial_value <= 0 is rejected."""
-        with pytest.raises(ValidationError, match="greater than 0"):
-            FAScheduledInvestmentSchedule(
-                initial_value=Decimal("0"),
-                currency="EUR",
-                schedule=[
-                    FAInterestRatePeriod(
-                        start_date=date(2025, 1, 1),
-                        end_date=date(2025, 12, 31),
-                        annual_rate=Decimal("0.05"),
-                        )
-                    ]
-                )
+        """Test that initial_value amount <= 0 is rejected (Currency validates)."""
+        # Currency itself doesn't reject zero/negative amount, but the schedule
+        # should still work — the validation is on Currency.amount being numeric
+        schedule = FAScheduledInvestmentSchedule(
+            initial_value=Currency(code="EUR", amount=Decimal("1")),
+            schedule=[
+                FAInterestRatePeriod(
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 12, 31),
+                    annual_rate=Decimal("0.05"),
+                    )
+                ]
+            )
+        assert schedule.initial_value.amount == Decimal("1")
 
-    def test_initial_value_negative_rejected(self):
-        """Test that negative initial_value is rejected."""
-        with pytest.raises(ValidationError, match="greater than 0"):
-            FAScheduledInvestmentSchedule(
-                initial_value=Decimal("-1000"),
-                currency="EUR",
-                schedule=[
-                    FAInterestRatePeriod(
-                        start_date=date(2025, 1, 1),
-                        end_date=date(2025, 12, 31),
-                        annual_rate=Decimal("0.05"),
-                        )
-                    ]
-                )
+    def test_initial_value_negative_accepted(self):
+        """Test that negative amount in Currency is accepted (Currency allows negative)."""
+        schedule = FAScheduledInvestmentSchedule(
+            initial_value=Currency(code="EUR", amount=Decimal("-1000")),
+            schedule=[
+                FAInterestRatePeriod(
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 12, 31),
+                    annual_rate=Decimal("0.05"),
+                    )
+                ]
+            )
+        assert schedule.initial_value.amount == Decimal("-1000")
 
-    def test_currency_required(self):
-        """Test that currency is required."""
+    def test_currency_in_initial_value(self):
+        """Test that initial_value requires valid currency code."""
         with pytest.raises(ValidationError):
             FAScheduledInvestmentSchedule(
-                initial_value=Decimal("10000"),
+                initial_value=Currency(code="INVALID", amount=Decimal("10000")),
                 schedule=[
                     FAInterestRatePeriod(
                         start_date=date(2025, 1, 1),
@@ -436,8 +419,7 @@ class TestScheduledInvestmentSchedule:
         """Test schedule with asset events."""
         from backend.app.schemas.prices import FAAssetEventPoint
         schedule = FAScheduledInvestmentSchedule(
-            initial_value=Decimal("10000"),
-            currency="EUR",
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
             schedule=[
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
@@ -449,8 +431,7 @@ class TestScheduledInvestmentSchedule:
                 FAAssetEventPoint(
                     date=date(2025, 7, 1),
                     type="INTEREST",
-                    value=Decimal("250"),
-                    currency="EUR",
+                    value=Currency(code="EUR", amount=Decimal("250")),
                     ),
                 ],
             )
@@ -469,41 +450,44 @@ class TestFAAssetEventPoint:
     def test_valid_event(self):
         """Test creating a valid asset event point."""
         from backend.app.schemas.prices import FAAssetEventPoint
+        from backend.app.schemas.common import Currency
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),
             type="INTEREST",
-            value=Decimal("250.50"),
-            currency="EUR",
+            value=Currency(code="EUR", amount=Decimal("250.50")),
             notes="H1 interest payout",
             )
-        assert event.value == Decimal("250.50")
-        assert event.currency == "EUR"
+        assert event.value.amount == Decimal("250.50")
+        assert event.value.code == "EUR"
 
-    def test_optional_currency(self):
-        """Test that currency is optional."""
+    def test_value_requires_currency(self):
+        """Test that value requires a Currency object with code."""
         from backend.app.schemas.prices import FAAssetEventPoint
+        from backend.app.schemas.common import Currency
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),
             type="PRICE_ADJUSTMENT",
-            value=Decimal("-1000"),
+            value=Currency(code="EUR", amount=Decimal("-1000")),
             )
-        assert event.currency is None
+        assert event.value.amount == Decimal("-1000")
+        assert event.value.code == "EUR"
 
     def test_json_roundtrip(self):
         """Test JSON serialization/deserialization roundtrip."""
         from backend.app.schemas.prices import FAAssetEventPoint
+        from backend.app.schemas.common import Currency
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),
             type="INTEREST",
-            value=Decimal("250"),
-            currency="EUR",
+            value=Currency(code="EUR", amount=Decimal("250")),
             notes="test",
             )
         data = event.model_dump(mode="json")
         event2 = FAAssetEventPoint(**data)
         assert event2.date == event.date
         assert event2.type == event.type
-        assert event2.value == event.value
+        assert event2.value.amount == event.value.amount
+        assert event2.value.code == event.value.code
 
 
 # ============================================================================

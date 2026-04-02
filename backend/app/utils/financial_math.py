@@ -27,7 +27,7 @@ from backend.app.schemas.assets import (
     FAInterestRatePeriod,
     FALateInterestConfig,
     DayCountConvention,
-    CompoundFrequency,
+    MaturationFrequency,
     )
 
 
@@ -171,37 +171,34 @@ def _calculate_30_360(start_date: date_type, end_date: date_type) -> Decimal:
 # ============================================================================
 
 
-def get_compounding_periods_per_year(frequency: CompoundFrequency) -> int:
+def get_compounding_periods_per_year(frequency: MaturationFrequency) -> int:
     """
-    Get the number of compounding periods per year for a given frequency.
+    Get the number of maturation periods per year for a given frequency.
 
     Args:
-        frequency: Compounding frequency
+        frequency: Maturation frequency
 
     Returns:
-        Number of compounding periods per year
-
-    Raises:
-        ValueError: If frequency is CONTINUOUS (handled separately)
+        Number of periods per year
     """
-    if frequency == CompoundFrequency.DAILY:
+    if frequency == MaturationFrequency.DAILY:
         return 365
-    elif frequency == CompoundFrequency.MONTHLY:
+    elif frequency == MaturationFrequency.WEEKLY:
+        return 52
+    elif frequency == MaturationFrequency.MONTHLY:
         return 12
-    elif frequency == CompoundFrequency.QUARTERLY:
+    elif frequency == MaturationFrequency.QUARTERLY:
         return 4
-    elif frequency == CompoundFrequency.SEMIANNUAL:
+    elif frequency == MaturationFrequency.SEMIANNUAL:
         return 2
-    elif frequency == CompoundFrequency.ANNUAL:
+    elif frequency == MaturationFrequency.ANNUAL:
         return 1
-    elif frequency == CompoundFrequency.CONTINUOUS:
-        raise ValueError("CONTINUOUS compounding should be handled separately")
     else:
-        raise ValueError(f"Unsupported compound frequency: {frequency}")
+        raise ValueError(f"Unsupported maturation frequency: {frequency}")
 
 
 def calculate_compound_interest(
-    principal: Decimal, annual_rate: Decimal, time_fraction: Decimal, frequency: CompoundFrequency
+    principal: Decimal, annual_rate: Decimal, time_fraction: Decimal, frequency: MaturationFrequency
     ) -> Decimal:
     """
     Calculate compound interest for a given period.
@@ -230,25 +227,19 @@ def calculate_compound_interest(
         >>> principal = Decimal("10000")
         >>> rate = Decimal("0.05")
         >>> time = Decimal("1")  # 1 year
-        >>> interest = calculate_compound_interest(principal, rate, time, CompoundFrequency.MONTHLY)
+        >>> interest = calculate_compound_interest(principal, rate, time, MaturationFrequency.MONTHLY)
         >>> # Returns approximately €511.62
     """
-    if frequency == CompoundFrequency.CONTINUOUS:
-        # Continuous compounding: A = P * e^(r*t)
-        exponent = float(annual_rate * time_fraction)
-        multiplier = Decimal(str(math.exp(exponent)))
-        final_amount = principal * multiplier
-    else:
-        # Periodic compounding: A = P * (1 + r/n)^(n*t)
-        n = Decimal(get_compounding_periods_per_year(frequency))
-        rate_per_period = annual_rate / n
-        num_periods = n * time_fraction
+    # Periodic compounding: A = P * (1 + r/n)^(n*t)
+    n = Decimal(get_compounding_periods_per_year(frequency))
+    rate_per_period = annual_rate / n
+    num_periods = n * time_fraction
 
-        # (1 + r/n)^(n*t)
-        base = Decimal("1") + rate_per_period
-        exponent = float(num_periods)
-        multiplier = Decimal(str(pow(float(base), exponent)))
-        final_amount = principal * multiplier
+    # (1 + r/n)^(n*t)
+    base = Decimal("1") + rate_per_period
+    exponent = float(num_periods)
+    multiplier = Decimal(str(pow(float(base), exponent)))
+    final_amount = principal * multiplier
 
     # Return only the interest portion (A - P)
     return final_amount - principal
@@ -301,8 +292,11 @@ def find_active_period(
     """
     Find the active interest rate period for a given date.
 
-    Returns the full FAInterestRatePeriod object (with compounding, day_count, etc.)
+    Returns the full FAInterestRatePeriod object (with maturation_frequency, etc.)
     or constructs a late interest period if applicable.
+
+    Note: day_count is a global property on FAScheduledInvestmentSchedule,
+    NOT on individual periods. This function returns rate/frequency info only.
 
     Logic:
     1. Search schedule for period covering target_date
@@ -322,7 +316,7 @@ def find_active_period(
     Example:
         >>> period = find_active_period(schedule, date(2025, 6, 15), date(2025, 12, 31))
         >>> if period:
-        ...     print(f"Rate: {period.annual_rate}, Compounding: {period.compounding}")
+        ...     print(f"Rate: {period.annual_rate}, Frequency: {period.maturation_frequency}")
     """
     # Step 1: Check if target_date falls within any scheduled period
     for period in schedule:
@@ -339,15 +333,11 @@ def find_active_period(
                 if schedule:
                     return schedule[-1]
             else:
-                # Past grace period: construct a late interest period
-                # Use late_interest config to create a synthetic period
+                # Past grace period: construct a synthetic period from late_interest config
                 return FAInterestRatePeriod(
                     start_date=grace_end + timedelta(days=1),
-                    end_date=target_date,  # Extend to current date
+                    end_date=target_date,
                     annual_rate=late_interest.annual_rate,
-                    compounding=late_interest.compounding,
-                    compound_frequency=late_interest.compound_frequency,
-                    day_count=late_interest.day_count,
                     )
 
     # Step 3: No applicable period found

@@ -620,4 +620,69 @@ Già coperto in §3.6.
 ### Documentazione
 - [x] `scheduled-investment.en.md` aggiornato (no transazioni, sì initial_value)
 - [x] `TODO_FUTURI.md` ha sezione AssetEvent per provider esterni
+- [x] Developer docs: `system_providers.md` aggiornato (pure engine, no transactions)
+- [x] Developer docs: `architecture.md` aggiornato (AssetEvent table + event sync)
+- [x] Developer docs: `providers_list.md` aggiornato (Events feature)
+- [x] i18n: chiavi per Initial Value, Currency, Asset Events, event types
+
+### Miglioramenti aggiuntivi (post-review)
+- [x] `FAAssetEventPoint.value` usa `Currency` class (code + amount) invece di value + currency separati
+- [x] `FAPriceQueryItem` ha sia `include_price` (default True) che `include_events` (default False)
+- [x] `get_history_value` ottimizzato: accumulazione incrementale (non ricalcola da zero per ogni giorno)
+- [x] `_find_active_period` helper per lookup O(1) del periodo attivo
+- [x] Frontend: i18n per tutte le stringhe hardcoded (labels, column headers, empty states)
+- [x] Frontend: event type labels usano chiavi i18n con enum come key
+
+### Round 12.1 — Semplificazione & Cache (2026-04-02)
+
+#### Schema
+- [x] `initial_value` + `currency` unificati in `Currency` object (`{code, amount}`) in `FAScheduledInvestmentSchedule`
+- [x] Rimosso `CompoundingType` (SIMPLE/COMPOUND) — interesse sempre semplice su initial_value
+- [x] Rimosso `CompoundFrequency` → sostituito con `MaturationFrequency` (DAILY, WEEKLY, MONTHLY, QUARTERLY, SEMIANNUAL, ANNUAL)
+- [x] Rimosso `CONTINUOUS` da frequenze (non serve per interesse semplice)
+- [x] `FAInterestRatePeriod`: campo `compounding` + `compound_frequency` → `maturation_frequency: MaturationFrequency`
+- [x] `FALateInterestConfig`: stessa semplificazione
+
+#### Motore di Calcolo
+- [x] Rimossa `_calculate_value_for_date` (calcolo per-giorno)
+- [x] Creata `_generate_schedule_values()` — genera TUTTI i valori per l'intero schedule range
+- [x] Cache con `get_ttl_cache('scheduled_investment', maxsize=256, ttl=172800)` (48h TTL)
+- [x] Hash MD5 dei params canonici come chiave cache
+- [x] `get_current_value` e `get_history_value` usano la funzione cached
+- [x] Late interest calcolato on-demand da ultimo valore cached + grace period
+- [x] `test_cases` usa `model_dump()` invece di `model_dump(mode="json")`
+
+#### Pulizia
+- [x] Rimossa proprietà `supports_events` da base class e tutti i provider
+- [x] Rimossa `validate_compound_frequency` import da assets.py
+- [x] `financial_math.py`: aggiornato per usare `MaturationFrequency`, rimosso CONTINUOUS
+
+#### Bug Fix
+- [x] Fix `ProviderInputType` mapping in `bulk_assign_providers` — mappa `IdentifierType.OTHER` → `ProviderInputType.URL`
+
+#### Test (tutti passati)
+- [x] `test_synthetic_yield.py` — 8/8 passed (riscritto per nuovo modello)
+- [x] `test_synthetic_yield_integration.py` — 3/3 passed (riscritto)
+- [x] `test_asset_schemas.py` — 60/60 passed (aggiornato per Currency, MaturationFrequency)
+- [x] `test_utilities/` — 140/140 passed (compound interest, financial math aggiornati)
+- [x] `test_services/` — 139/139 passed (rimosso test_find_active_period)
+
+#### Frontend
+- [x] `ScheduledInvestmentEditor.svelte`: Currency per initial_value, rimosso compounding/compound_frequency
+- [x] Nuova colonna "Maturation Frequency" al posto di "Compounding" + "Comp. Freq."
+- [x] `serialize()`: emette `initial_value: {code, amount}` invece di campi separati
+- [x] Deserializzazione compatibile con nuovo formato Currency
+- [x] `svelte-check`: 0 errors, 0 warnings
+- [x] `npm run build`: ✔ done
+
+#### TODO rimanenti
+- [ ] `POST /assets/prices/query` con `include_events=true` → risposta con eventi
+- [ ] `POST /assets/provider/probe` per `scheduled_investment` → funziona senza hack
+- [ ] Probe ritorna current price + history calcolati da `initial_value`
+- [ ] `./dev.py test api prices` passa (include_events testato)
+- [ ] `./dev.py test api provider` passa (probe scheduled_investment + CSS scraper fix)
+- [ ] Fix `metadata_updated` field on `FAProviderAssignmentResult` (warning in CSS scraper test)
+- [ ] Test Configuration frontend: risultati Current Price e History
+- [ ] `./dev.py api sync` → aggiornare tipi TypeScript generati con nuovi enum
+
 

@@ -34,12 +34,12 @@ from backend.app.db.models import (
     Asset,
     AssetType,
     IdentifierType,
+    ProviderInputType,
     )
 from backend.app.services.asset_source import AssetSourceManager
 
 from backend.app.utils.financial_math import (
     calculate_day_count_fraction,
-    find_active_period,
     )
 from backend.test_scripts.test_utils import (
     print_info,
@@ -52,7 +52,7 @@ from sqlalchemy import select
 from backend.app.schemas.assets import (
     FAInterestRatePeriod,
     FALateInterestConfig,
-    CompoundingType,
+    MaturationFrequency,
     DayCountConvention,
     )
 from backend.app.schemas.provider import FAProviderAssignmentItem
@@ -174,64 +174,6 @@ def test_act365_calculation():
         print_success(f"✓ ACT/365 OK for {start} to {end} -> {result}")
 
 
-def test_find_active_period():
-    """Test find_active_period() for synthetic yield using Pydantic periods.
-
-    Covers:
-      - Mid first period
-      - Mid second period
-      - Maturity date (still in schedule)
-      - Grace period (uses last scheduled rate)
-      - Late interest period (after grace)
-    """
-    print_section("Test 4: Find Active Period (Synthetic Yield)")
-
-    schedule = [
-        FAInterestRatePeriod(
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 12, 31),
-            annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
-            ),
-        FAInterestRatePeriod(
-            start_date=date(2026, 1, 1),
-            end_date=date(2026, 12, 31),
-            annual_rate=Decimal("0.06"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
-            ),
-        ]
-
-    maturity = date(2026, 12, 31)
-    late_interest = FALateInterestConfig(
-        annual_rate=Decimal("0.12"),
-        grace_period_days=30,
-        compounding=CompoundingType.SIMPLE,
-        day_count=DayCountConvention.ACT_365,
-        )
-
-    test_cases = [
-        (date(2025, 6, 15), Decimal("0.05"), "Mid-2025 (first period)"),
-        (date(2026, 6, 15), Decimal("0.06"), "Mid-2026 (second period)"),
-        (date(2026, 12, 31), Decimal("0.06"), "Maturity date"),
-        (date(2027, 1, 15), Decimal("0.06"), "15 days after maturity (grace period)"),
-        (date(2027, 2, 15), Decimal("0.12"), "45 days after maturity (late interest)"),
-        ]
-
-    for target, expected_rate, desc in test_cases:
-        period = find_active_period(schedule, target, maturity, late_interest)
-        if desc.startswith("45 days"):
-            assert period is not None, f"Late interest period not found for {target}"
-        if period is None:
-            raise AssertionError(f"No period found for {desc} ({target})")
-
-        actual_rate = period.annual_rate
-        print_info(f"Case: {desc} | expected={expected_rate} | actual={actual_rate}")
-        assert (
-            actual_rate == expected_rate
-        ), f"Mismatch for {desc}: {actual_rate} != {expected_rate}"
-        print_success(f"✓ {desc} -> {actual_rate}")
 
 
 # ============================================================================
@@ -268,7 +210,6 @@ async def test_bulk_assign_providers():
             await session.refresh(asset)
 
         # Bulk assign providers
-        from backend.app.db.models import IdentifierType
 
         assignments = [
             FAProviderAssignmentItem(
@@ -289,7 +230,7 @@ async def test_bulk_assign_providers():
                 asset_id=test_assets[2].id,
                 provider_code="mockprov",
                 identifier="MOCK1",
-                identifier_type=IdentifierType.UUID,
+                identifier_type=ProviderInputType.AUTO_GENERATED,
                 provider_params=None,
                 ),
             ]
@@ -343,7 +284,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
             asset_id=test_asset.id,
             provider_code="mockprov",
             identifier="MOCK_META_TEST",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params={"mock_param": "test"},
             )
 
@@ -701,7 +642,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             asset_id=test_asset_id,
             provider_code=invalid_provider,
             identifier="INVALID_TEST",
-            identifier_type=IdentifierType.UUID,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params=None,
             fetch_interval=1440,
             )

@@ -10,7 +10,7 @@ Tests verify that operations are correctly allowed/denied based on role.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 import httpx
@@ -252,7 +252,6 @@ class TestMultiUserRoles:
         print_section("MULTI-007: Editor can create transactions")
 
         async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client:
-            from datetime import date
 
             await create_user_and_login(owner_client)
             broker_id = await create_broker(owner_client)
@@ -283,7 +282,6 @@ class TestMultiUserRoles:
         print_section("MULTI-008: Viewer cannot create transactions")
 
         async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
-            from datetime import date
 
             await create_user_and_login(owner_client)
             broker_id = await create_broker(owner_client)

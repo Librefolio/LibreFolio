@@ -2,195 +2,134 @@
 End-to-End integration tests for ScheduledInvestmentProvider synthetic yield valuation.
 
 Scenarios covered:
-1. P2P Loan with two periods + late interest (grace + penalty) SIMPLE interest.
-2. Bond with quarterly COMPOUND interest (coupon-like accrual) single period.
-3. Multi-period scheduled rate changes with mixed SIMPLE/COMPOUND segments.
+1. P2P Loan with two periods + late interest (grace + penalty).
+2. Single period with different maturation frequencies.
+3. Multi-period scheduled rate changes.
 
-All tests use _transaction_override to avoid DB dependency except where DB integration explicit.
-
-Assertions use exact Decimal equality where deterministic.
+All tests are pure — the provider is deterministic with initial_value, no DB needed.
+Interest is always simple (on initial_value.amount).
 """
 
-import json
+import os
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from backend.app.db import TransactionType
+# Force test mode BEFORE any other imports
+os.environ["LIBREFOLIO_TEST_MODE"] = "1"
+
 from backend.app.schemas.assets import (
     FAInterestRatePeriod,
     FALateInterestConfig,
     FAScheduledInvestmentSchedule,
-    CompoundingType,
-    CompoundFrequency,
     DayCountConvention,
+    MaturationFrequency,
+    InterestType,
     )
+from backend.app.schemas.common import Currency
+from backend.app.db.models import IdentifierType
 from backend.app.services.asset_source_providers.scheduled_investment import (
     ScheduledInvestmentProvider,
     )
 
 
-# Helper to run provider current value with override
-async def _current_value(params: dict) -> Decimal:
-    from backend.app.db.models import IdentifierType
-
-    provider = ScheduledInvestmentProvider()
-    result = await provider.get_current_value("1", IdentifierType.OTHER, params)
-    return result.value
-
-
-# Helper to run provider history with override
 async def _history_values(params: dict, start: date, end: date):
-    from backend.app.db.models import IdentifierType
-
     provider = ScheduledInvestmentProvider()
     result = await provider.get_history_value("1", IdentifierType.OTHER, params, start, end)
     return [p.close for p in result.prices]
 
 
-# =============================================================================
-# Scenario 1: P2P Loan - Two periods + late interest (SIMPLE interest)
-# =============================================================================
+# Scenario 1: P2P Loan - Two periods + late interest
 @pytest.mark.asyncio
 async def test_e2e_p2p_loan_two_periods_late_interest():
     schedule_model = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
-                start_date=date(2025, 1, 1),
-                end_date=date(2025, 6, 30),
-                annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                start_date=date(2025, 1, 1), end_date=date(2025, 6, 30),
+                annual_rate=Decimal("0.05"), maturation_frequency=MaturationFrequency.DAILY,
                 ),
             FAInterestRatePeriod(
-                start_date=date(2025, 7, 1),
-                end_date=date(2025, 12, 31),
-                annual_rate=Decimal("0.06"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                start_date=date(2025, 7, 1), end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.06"), maturation_frequency=MaturationFrequency.DAILY,
                 ),
             ],
         late_interest=FALateInterestConfig(
-            annual_rate=Decimal("0.12"),
-            grace_period_days=30,
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
+            annual_rate=Decimal("0.12"), grace_period_days=30,
             ),
+        asset_events=[],
         )
+    params = schedule_model.model_dump()
 
-    params = json.loads(schedule_model.model_dump_json())
-    params["_transaction_override"] = [
-        {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
-        ]
-
-    # Helper to get single-day value
     async def value_on(d: date) -> Decimal:
         return (await _history_values(params, d, d))[0]
 
-    # Value mid first period (fixed date instead of today)
-    mid_first_date = date(2025, 3, 15)
-    mid_first_value = await value_on(mid_first_date)
+    mid_first = await value_on(date(2025, 3, 15))
+    assert mid_first > Decimal("10000")
 
-    # Sanity: value should be > principal
-    assert mid_first_value > Decimal("10000")
+    maturity = await value_on(date(2025, 12, 31))
+    assert maturity > mid_first
 
-    # Value at maturity
-    maturity_value = await value_on(date(2025, 12, 31))
-    assert maturity_value > mid_first_value
+    grace = await value_on(date(2026, 1, 15))
+    assert grace > maturity
 
-    # Value within grace (15 days after maturity)
-    grace_value = await value_on(date(2026, 1, 15))
-    assert grace_value > maturity_value
-
-    # Value after grace (late interest applies) - 36 days after maturity
-    late_value = await value_on(date(2026, 2, 5))
-    assert (
-        late_value > grace_value
-    ), f"Late interest not applied: late={late_value} grace={grace_value} maturity={maturity_value} mid_first={mid_first_value}"
+    late = await value_on(date(2026, 2, 5))
+    assert late > grace, f"Late interest not applied: late={late} grace={grace}"
 
 
-# =============================================================================
-# Scenario 2: Bond - Quarterly compounding
-# =============================================================================
+# Scenario 2: Different maturation frequencies (result is same for simple interest)
 @pytest.mark.asyncio
-async def test_e2e_bond_quarterly_compound():
-    schedule_model = FAScheduledInvestmentSchedule(
-        schedule=[
-            FAInterestRatePeriod(
-                start_date=date(2025, 1, 1),
-                end_date=date(2025, 12, 31),
-                annual_rate=Decimal("0.04"),
-                compounding=CompoundingType.COMPOUND,
-                compound_frequency=CompoundFrequency.QUARTERLY,
-                day_count=DayCountConvention.ACT_365,
-                )
-            ]
+async def test_e2e_maturation_frequencies():
+    base = dict(
+        start_date=date(2025, 1, 1), end_date=date(2025, 12, 31),
+        annual_rate=Decimal("0.04"),
         )
 
-    params = json.loads(schedule_model.model_dump_json())
-    params["_transaction_override"] = [
-        {"type": TransactionType.BUY, "quantity": 1, "price": "20000", "trade_date": "2025-01-01"}
-        ]
-
-    # Value end of Q1 vs start
-    hist_q1 = await _history_values(params, date(2025, 1, 1), date(2025, 3, 31))
-    assert hist_q1[0] == Decimal("20000")
-    assert hist_q1[-1] > hist_q1[0]
-
-    # Check mid-year vs year-end growth
-    mid_year = (await _history_values(params, date(2025, 6, 1), date(2025, 6, 1)))[0]
-    year_end = (await _history_values(params, date(2025, 12, 31), date(2025, 12, 31)))[0]
-    assert year_end > mid_year > hist_q1[-1]
+    for freq in [MaturationFrequency.DAILY, MaturationFrequency.MONTHLY, MaturationFrequency.ANNUAL]:
+        schedule = FAScheduledInvestmentSchedule(
+            initial_value=Currency(code="EUR", amount=Decimal("20000")),
+            schedule=[FAInterestRatePeriod(**base, maturation_frequency=freq)],
+            asset_events=[],
+            )
+        params = schedule.model_dump()
+        hist = await _history_values(params, date(2025, 1, 1), date(2025, 3, 31))
+        assert hist[0] == Decimal("20000")
+        assert hist[-1] > hist[0]
 
 
-# =============================================================================
-# Scenario 3: Mixed SIMPLE/COMPOUND multi-period schedule
-# =============================================================================
+# Scenario 3: Multi-period rate changes
 @pytest.mark.asyncio
-async def test_e2e_mixed_schedule_simple_compound():
-    schedule_model = FAScheduledInvestmentSchedule(
+async def test_e2e_multi_period_rate_changes():
+    schedule = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("5000")),
         schedule=[
             FAInterestRatePeriod(
-                start_date=date(2025, 1, 1),
-                end_date=date(2025, 3, 31),
-                annual_rate=Decimal("0.03"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                start_date=date(2025, 1, 1), end_date=date(2025, 3, 31),
+                annual_rate=Decimal("0.03"), maturation_frequency=MaturationFrequency.DAILY,
                 ),
             FAInterestRatePeriod(
-                start_date=date(2025, 4, 1),
-                end_date=date(2025, 6, 30),
-                annual_rate=Decimal("0.035"),
-                compounding=CompoundingType.COMPOUND,
-                compound_frequency=CompoundFrequency.MONTHLY,
-                day_count=DayCountConvention.ACT_365,
+                start_date=date(2025, 4, 1), end_date=date(2025, 6, 30),
+                annual_rate=Decimal("0.035"), maturation_frequency=MaturationFrequency.MONTHLY,
                 ),
             FAInterestRatePeriod(
-                start_date=date(2025, 7, 1),
-                end_date=date(2025, 12, 31),
-                annual_rate=Decimal("0.04"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                start_date=date(2025, 7, 1), end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.04"), maturation_frequency=MaturationFrequency.DAILY,
                 ),
-            ]
+            ],
+        asset_events=[],
         )
+    params = schedule.model_dump()
 
-    params = json.loads(schedule_model.model_dump_json())
-    params["_transaction_override"] = [
-        {"type": TransactionType.BUY, "quantity": 1, "price": "5000", "trade_date": "2025-01-01"}
-        ]
+    q1 = (await _history_values(params, date(2025, 3, 31), date(2025, 3, 31)))[0]
+    q2 = (await _history_values(params, date(2025, 6, 30), date(2025, 6, 30)))[0]
+    q3 = (await _history_values(params, date(2025, 9, 30), date(2025, 9, 30)))[0]
+    q4 = (await _history_values(params, date(2025, 12, 31), date(2025, 12, 31)))[0]
 
-    # Collect quarterly snapshots
-    q1_end = (await _history_values(params, date(2025, 3, 31), date(2025, 3, 31)))[0]
-    q2_end = (await _history_values(params, date(2025, 6, 30), date(2025, 6, 30)))[0]
-    q3_end = (await _history_values(params, date(2025, 9, 30), date(2025, 9, 30)))[0]
-    q4_end = (await _history_values(params, date(2025, 12, 31), date(2025, 12, 31)))[0]
-
-    assert q1_end > Decimal("5000")
-    assert q2_end > q1_end  # higher rate + compounding
-    assert q3_end > q2_end  # next rate
-    assert q4_end > q3_end  # final growth
+    assert q1 > Decimal("5000")
+    assert q2 > q1
+    assert q3 > q2
+    assert q4 > q3
 
 
 if __name__ == "__main__":
