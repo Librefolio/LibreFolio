@@ -1,13 +1,14 @@
 """
 Test suite for synthetic yield calculation using ScheduledInvestmentProvider.
 
-Tests cover:
-- Provider validation (Pydantic schemas with initial_value + currency)
-- Provider calculation methods (get_current_value, get_history_value) — pure, no DB
-- Private calculation method (_calculate_value_for_date)
-- Asset events: INTEREST ex-date drop, PRICE_ADJUSTMENT
-- Late interest (post-maturity)
-- Compound interest
+WHY THIS FILE EXISTS (vs normal plugin tests):
+Normal plugin tests (test_assets_provider.py) verify API contracts — probe returns
+current price + history. These tests verify the FINANCIAL MATH internals:
+- Day count conventions, simple interest, late interest
+- Event processing (INTEREST ex-date drop, PRICE_ADJUSTMENT write-down)
+- Edge cases (before schedule, after maturity, grace period)
+- Cache behavior
+The provider is pure/deterministic, so these tests run without DB or server.
 """
 
 import os
@@ -19,18 +20,23 @@ import pytest
 # Force test mode BEFORE any other imports
 os.environ["LIBREFOLIO_TEST_MODE"] = "1"
 
+from backend.app.db.models import IdentifierType
 from backend.app.services.asset_source_providers.scheduled_investment import (
     ScheduledInvestmentProvider,
+    _generate_schedule_values,
+    _compute_late_interest_value,
     )
 
 from backend.app.schemas.assets import (
     FAScheduledInvestmentSchedule,
     FAInterestRatePeriod,
-    CompoundingType,
     DayCountConvention,
     FALateInterestConfig,
+    MaturationFrequency,
+    InterestType,
     )
 from backend.app.schemas.prices import FAAssetEventPoint
+from backend.app.schemas.common import Currency
 
 
 # ============================================================================
@@ -44,30 +50,27 @@ async def test_provider_validate_params():
     provider = ScheduledInvestmentProvider()
 
     valid_params = {
-        "initial_value": "10000",
-        "currency": "EUR",
+        "initial_value": {"code": "EUR", "amount": "10000"},
+        "day_count": "ACT/365",
         "schedule": [
             {
                 "start_date": "2025-01-01",
                 "end_date": "2025-12-31",
                 "annual_rate": "0.05",
-                "compounding": "SIMPLE",
-                "day_count": "ACT/365",
+                "maturation_frequency": "DAILY",
                 }
             ],
         "late_interest": {
             "annual_rate": "0.12",
             "grace_period_days": 30,
-            "compounding": "SIMPLE",
-            "day_count": "ACT/365",
             },
         "asset_events": [],
         }
 
     validated = provider.validate_params(valid_params)
     assert isinstance(validated, FAScheduledInvestmentSchedule)
-    assert validated.initial_value == Decimal("10000")
-    assert validated.currency == "EUR"
+    assert validated.initial_value.amount == Decimal("10000")
+    assert validated.initial_value.code == "EUR"
     assert len(validated.schedule) == 1
     assert validated.schedule[0].annual_rate == Decimal("0.05")
     assert validated.late_interest is not None
@@ -77,29 +80,24 @@ async def test_provider_validate_params():
 @pytest.mark.asyncio
 async def test_provider_get_current_value():
     """Test provider get_current_value — pure, no DB access."""
-    from backend.app.db.models import IdentifierType
 
     provider = ScheduledInvestmentProvider()
     params = FAScheduledInvestmentSchedule(
-        initial_value=Decimal("10000"),
-        currency="EUR",
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                maturation_frequency=MaturationFrequency.DAILY,
                 )
             ],
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
             ),
         asset_events=[],
-        ).model_dump(mode="json")
+        ).model_dump()
 
     result = await provider.get_current_value("test-1", IdentifierType.OTHER, params)
 
@@ -112,24 +110,21 @@ async def test_provider_get_current_value():
 @pytest.mark.asyncio
 async def test_provider_get_history_value():
     """Test provider get_history_value — pure, no DB access."""
-    from backend.app.db.models import IdentifierType
 
     provider = ScheduledInvestmentProvider()
     params = FAScheduledInvestmentSchedule(
-        initial_value=Decimal("10000"),
-        currency="EUR",
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                maturation_frequency=MaturationFrequency.DAILY,
                 )
             ],
         late_interest=None,
         asset_events=[],
-        ).model_dump(mode="json")
+        ).model_dump()
 
     start = date(2025, 1, 1)
     end = date(2025, 1, 7)
@@ -145,28 +140,25 @@ async def test_provider_get_history_value():
 
 
 @pytest.mark.asyncio
-async def test_provider_private_calculate_value():
-    """Test provider private _calculate_value_for_date method."""
-    provider = ScheduledInvestmentProvider()
+async def test_provider_interest_calculation():
+    """Test simple interest calculation: 10000 * 0.05 * 29/365."""
 
     params = FAScheduledInvestmentSchedule(
-        initial_value=Decimal("10000"),
-        currency="EUR",
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                maturation_frequency=MaturationFrequency.DAILY,
                 )
             ],
         late_interest=None,
         asset_events=[],
         )
 
-    # Calculate value for Jan 30, 2025 (29 days from Jan 1)
-    value = provider._calculate_value_for_date(params, date(2025, 1, 30))
+    cached = _generate_schedule_values(params)
+    value = cached[date(2025, 1, 30)]
 
     # Expected: 10000 + (10000 * 0.05 * 29/365) ≈ 10039.73
     expected_interest = Decimal("10000") * Decimal("0.05") * Decimal("29") / Decimal("365")
@@ -179,18 +171,15 @@ async def test_provider_private_calculate_value():
 @pytest.mark.asyncio
 async def test_provider_with_interest_event():
     """Test that INTEREST event reduces price (ex-date drop)."""
-    provider = ScheduledInvestmentProvider()
 
     params = FAScheduledInvestmentSchedule(
-        initial_value=Decimal("10000"),
-        currency="EUR",
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                maturation_frequency=MaturationFrequency.DAILY,
                 )
             ],
         late_interest=None,
@@ -198,21 +187,17 @@ async def test_provider_with_interest_event():
             FAAssetEventPoint(
                 date=date(2025, 7, 1),
                 type="INTEREST",
-                value=Decimal("250"),
-                currency="EUR",
+                value=Currency(code="EUR", amount=Decimal("250")),
                 notes="H1 interest payout",
                 ),
             ],
         )
 
-    # Before the event: value should not be affected
-    value_before = provider._calculate_value_for_date(params, date(2025, 6, 30))
-    # After the event: value should drop by 250
-    value_after = provider._calculate_value_for_date(params, date(2025, 7, 1))
+    cached = _generate_schedule_values(params)
+    value_before = cached[date(2025, 6, 30)]
+    value_after = cached[date(2025, 7, 1)]
 
-    # The drop should be approximately 250 (plus one day of interest difference)
     drop = value_before - value_after
-    # drop should be close to 250 - 1 day interest ≈ 250 - 1.37 ≈ 248.63
     assert drop > Decimal("248"), f"Expected drop ~250, got {drop}"
     assert drop < Decimal("252"), f"Expected drop ~250, got {drop}"
 
@@ -220,18 +205,15 @@ async def test_provider_with_interest_event():
 @pytest.mark.asyncio
 async def test_provider_with_price_adjustment_event():
     """Test that PRICE_ADJUSTMENT event modifies value algebraically."""
-    provider = ScheduledInvestmentProvider()
 
     params = FAScheduledInvestmentSchedule(
-        initial_value=Decimal("10000"),
-        currency="EUR",
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                maturation_frequency=MaturationFrequency.DAILY,
                 )
             ],
         late_interest=None,
@@ -239,18 +221,16 @@ async def test_provider_with_price_adjustment_event():
             FAAssetEventPoint(
                 date=date(2025, 6, 1),
                 type="PRICE_ADJUSTMENT",
-                value=Decimal("-1000"),
+                value=Currency(code="EUR", amount=Decimal("-1000")),
                 notes="Write-down",
                 ),
             ],
         )
 
-    # Before the event
-    value_before = provider._calculate_value_for_date(params, date(2025, 5, 31))
-    # After the event
-    value_after = provider._calculate_value_for_date(params, date(2025, 6, 1))
+    cached = _generate_schedule_values(params)
+    value_before = cached[date(2025, 5, 31)]
+    value_after = cached[date(2025, 6, 1)]
 
-    # After event, value should be ~1000 less (plus 1 day interest difference)
     drop = value_before - value_after
     assert drop > Decimal("998"), f"Expected drop ~1000, got {drop}"
     assert drop < Decimal("1002"), f"Expected drop ~1000, got {drop}"
@@ -259,28 +239,25 @@ async def test_provider_with_price_adjustment_event():
 @pytest.mark.asyncio
 async def test_provider_history_with_events():
     """Test that get_history_value returns events filtered to range."""
-    from backend.app.db.models import IdentifierType
 
     provider = ScheduledInvestmentProvider()
     params = FAScheduledInvestmentSchedule(
-        initial_value=Decimal("10000"),
-        currency="EUR",
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                maturation_frequency=MaturationFrequency.DAILY,
                 )
             ],
         late_interest=None,
         asset_events=[
-            FAAssetEventPoint(date=date(2025, 3, 15), type="INTEREST", value=Decimal("100")),
-            FAAssetEventPoint(date=date(2025, 6, 15), type="INTEREST", value=Decimal("100")),
-            FAAssetEventPoint(date=date(2025, 9, 15), type="INTEREST", value=Decimal("100")),
+            FAAssetEventPoint(date=date(2025, 3, 15), type="INTEREST", value=Currency(code="EUR", amount=Decimal("100"))),
+            FAAssetEventPoint(date=date(2025, 6, 15), type="INTEREST", value=Currency(code="EUR", amount=Decimal("100"))),
+            FAAssetEventPoint(date=date(2025, 9, 15), type="INTEREST", value=Currency(code="EUR", amount=Decimal("100"))),
             ],
-        ).model_dump(mode="json")
+        ).model_dump()
 
     # Query only March
     result = await provider.get_history_value("test-1", IdentifierType.OTHER, params, date(2025, 3, 1), date(2025, 3, 31))
@@ -292,39 +269,126 @@ async def test_provider_history_with_events():
 @pytest.mark.asyncio
 async def test_provider_late_interest():
     """Test late interest calculation after maturity."""
-    provider = ScheduledInvestmentProvider()
 
     params = FAScheduledInvestmentSchedule(
-        initial_value=Decimal("10000"),
-        currency="EUR",
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 3, 31),
                 annual_rate=Decimal("0.05"),
-                compounding=CompoundingType.SIMPLE,
-                day_count=DayCountConvention.ACT_365,
+                maturation_frequency=MaturationFrequency.DAILY,
                 )
             ],
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365,
             ),
         asset_events=[],
         )
 
-    # At maturity
-    value_maturity = provider._calculate_value_for_date(params, date(2025, 3, 31))
+    cached = _generate_schedule_values(params)
+    maturity_date = date(2025, 3, 31)
+    value_maturity = cached[maturity_date]
 
     # During grace period (uses last scheduled rate 0.05)
-    value_grace = provider._calculate_value_for_date(params, date(2025, 4, 15))
+    value_grace = _compute_late_interest_value(params, date(2025, 4, 15), value_maturity, maturity_date)
     assert value_grace > value_maturity, "Value should increase during grace period"
 
     # After grace period (uses late rate 0.12)
-    value_late = provider._calculate_value_for_date(params, date(2025, 6, 1))
+    value_late = _compute_late_interest_value(params, date(2025, 6, 1), value_maturity, maturity_date)
     assert value_late > value_grace, "Value should increase further with late interest"
+
+
+# ============================================================================
+# COMPOUND INTEREST TESTS
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_compound_vs_simple_interest():
+    """Test that COMPOUND yields more than SIMPLE for the same parameters."""
+    base_args = dict(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.10"),
+                maturation_frequency=MaturationFrequency.DAILY,
+                )
+            ],
+        asset_events=[],
+        )
+
+    simple = FAScheduledInvestmentSchedule(interest_type=InterestType.SIMPLE, **base_args)
+    compound = FAScheduledInvestmentSchedule(interest_type=InterestType.COMPOUND, **base_args)
+
+    simple_values = _generate_schedule_values(simple)
+    compound_values = _generate_schedule_values(compound)
+
+    # At the end of the year, compound must exceed simple
+    end_date = date(2025, 12, 31)
+    assert compound_values[end_date] > simple_values[end_date], (
+        f"COMPOUND ({compound_values[end_date]}) should exceed SIMPLE ({simple_values[end_date]})"
+    )
+
+    # Both must start at the same value on day 1
+    assert simple_values[date(2025, 1, 1)] == compound_values[date(2025, 1, 1)] == Decimal("10000")
+
+
+@pytest.mark.asyncio
+async def test_compound_interest_numeric():
+    """Test compound interest numeric accuracy: 10000 * (1 + 0.05/365)^365 ≈ 10512.67."""
+    params = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        interest_type=InterestType.COMPOUND,
+        day_count=DayCountConvention.ACT_365,
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.05"),
+                )
+            ],
+        asset_events=[],
+        )
+
+    cached = _generate_schedule_values(params)
+    value_end = cached[date(2025, 12, 31)]
+
+    # Expected: 10000 * (1 + 0.05/365)^365 ≈ 10512.67
+    # Simple would be: 10000 + 10000 * 0.05 * 365/365 = 10500
+    assert value_end > Decimal("10500"), f"Compound should exceed simple 10500, got {value_end}"
+    assert value_end < Decimal("10520"), f"Compound should be ~10512.67, got {value_end}"
+
+
+@pytest.mark.asyncio
+async def test_compound_with_different_day_counts():
+    """Test compound interest with ACT/360 vs ACT/365."""
+    base_args = dict(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        interest_type=InterestType.COMPOUND,
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.05"),
+                )
+            ],
+        asset_events=[],
+        )
+
+    act365 = FAScheduledInvestmentSchedule(day_count=DayCountConvention.ACT_365, **base_args)
+    act360 = FAScheduledInvestmentSchedule(day_count=DayCountConvention.ACT_360, **base_args)
+
+    v365 = _generate_schedule_values(act365)
+    v360 = _generate_schedule_values(act360)
+
+    # ACT/360 gives larger fractions per day → higher total interest
+    assert v360[date(2025, 12, 31)] > v365[date(2025, 12, 31)], (
+        f"ACT/360 ({v360[date(2025, 12, 31)]}) should exceed ACT/365 ({v365[date(2025, 12, 31)]})"
+    )
 
 
 if __name__ == "__main__":

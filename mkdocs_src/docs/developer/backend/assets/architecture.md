@@ -10,6 +10,7 @@ This is the central service that coordinates all asset-related operations. It ha
 
 - **Provider Assignment**: Linking an asset to a specific provider (e.g., "AAPL" -> "yfinance").
 - **Price Fetching**: Delegating price requests to the assigned provider.
+- **Event Sync**: Persisting asset events (dividends, interest payouts, price adjustments) from providers into the `asset_events` table.
 - **Backward Filling**: Filling gaps in historical data (e.g., weekends/holidays) with the last known price.
 - **Caching**: Storing fetched prices in the `price_history` table to minimize external API calls.
 
@@ -24,6 +25,17 @@ This service manages the descriptive information about assets.
 ### 3️⃣ `AssetProviderRegistry`
 
 Uses the [Registry Pattern](../../architecture/patterns/registry_pattern.md) to manage available asset providers.
+
+### 4️⃣ `AssetEvent` Table
+
+Stores asset-level events produced by providers. Events are distinct from portfolio transactions:
+
+- **Events** describe what happens to the asset globally (DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT).
+- **Transactions** describe what happens in a user's portfolio (BUY, SELL).
+
+The sync layer persists events from `FAHistoricalData.events` into `AssetEvent` using DELETE+INSERT dedup on `(asset_id, date, type)`.
+
+Providers signal event support via `supports_events = True` property.
 
 ## 🔄 Data Flow: Fetching Prices
 

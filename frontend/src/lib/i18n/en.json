@@ -60,7 +60,9 @@
     "name": "Name",
     "currency": "Currency",
     "other": "Other",
-    "date": "Date"
+    "date": "Date",
+    "value": "Value",
+    "notes": "Notes"
   },
   "table": {
     "columns": "Columns",
@@ -358,7 +360,16 @@
       "emptyHint": "Add at least one period to configure the investment schedule.",
       "periods": "periods",
       "contiguous": "contiguous",
-      "days": "days"
+      "days": "days",
+      "initialValue": "Initial Value",
+      "currency": "Currency",
+      "assetEvents": "Asset Events",
+      "addEvent": "Add Event",
+      "noEvents": "No asset events configured",
+      "eventType": {
+        "INTEREST": "Interest",
+        "PRICE_ADJUSTMENT": "Price Adjustment"
+      }
     },
     "probe": {
       "currentPrice": "Current Price",

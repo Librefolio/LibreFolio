@@ -335,8 +335,8 @@ async def list_providers(
 
         instance = AssetProviderRegistry.get_provider_instance(code)
         if instance:
-            # Check if provider supports search (fast local check, no HTTP call)
-            supports_search = instance.test_search_query is not None
+            # Check if provider supports search (property from base class)
+            supports_search = instance.supports_search
 
             # Build params_schema from provider property
             schema_fields = [

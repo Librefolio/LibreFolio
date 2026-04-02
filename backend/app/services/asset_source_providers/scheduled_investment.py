@@ -1,5 +1,5 @@
 """
-Scheduled Investment Provider — Pure Deterministic Engine.
+Scheduled Investment Provider — Pure Deterministic Engine with Cache.
 
 This provider calculates synthetic values for scheduled-yield assets such as:
 - Crowdfunding loans (P2P lending)
@@ -11,29 +11,30 @@ The provider is PURE and DETERMINISTIC:
 - NO database access
 - NO transaction dependency
 
-How it works:
-1. Receives provider_params with initial_value, currency, schedule, asset_events
-2. Calculates value for any date based on:
-   - initial_value as base principal
-   - Accrued interest from schedule periods
-   - Asset events (INTEREST payments reduce price, PRICE_ADJUSTMENT modifies value)
-3. Returns prices and events for the requested range
+Calculation is cached:
+- Hash of canonical params → TTL cache (48h, reset on access via re-set)
+- Single function generates ALL values for the schedule range
+- Late interest computed on-demand from last scheduled value
 
-Supports:
-- Multiple day count conventions: ACT/365, ACT/360, ACT/ACT, 30/360
-- Interest types: SIMPLE and COMPOUND
-- Multiple compounding frequencies: DAILY, MONTHLY, QUARTERLY, SEMIANNUAL, ANNUAL, CONTINUOUS
-- Asset events: INTEREST (ex-date drop), PRICE_ADJUSTMENT (write-down/write-up)
+How it works:
+1. Receives provider_params with initial_value (Currency), schedule, asset_events
+2. Generates all daily values for the schedule range (first period start → last period end)
+3. Caches the result by params hash
+4. For late interest (post-maturity): computes from last cached value + grace period
+
+Global properties (from FAScheduledInvestmentSchedule):
+- interest_type: SIMPLE (I = P₀ * r * Δt) or COMPOUND (I = V_{t-1} * r * Δt)
+- day_count: Day count convention (ACT/365, ACT/360, etc.) — applies to all periods
 
 For detailed parameter structure documentation, see:
 - backend.app.schemas.assets.FAScheduledInvestmentSchedule
 - backend.app.schemas.assets.FAInterestRatePeriod
-- backend.app.schemas.assets.FALateInterestConfig
 """
 
+import hashlib
+import json
 from datetime import date as date_type, timedelta
 from decimal import Decimal
-from typing import Optional
 
 from backend.app.db.models import (
     IdentifierType,
@@ -45,13 +46,15 @@ from backend.app.schemas.assets import (
     FAHistoricalData,
     FAPricePoint,
     FAScheduledInvestmentSchedule,
-    CompoundingType,
     FAInterestRatePeriod,
     DayCountConvention,
+    InterestType,
+    MaturationFrequency,
     )
-from backend.app.schemas.prices import FAAssetEventPoint
+from backend.app.schemas.common import Currency
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
+from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial_math import (
     calculate_day_count_fraction,
     calculate_simple_interest,
@@ -59,6 +62,186 @@ from backend.app.utils.financial_math import (
     )
 
 logger = get_logger(__name__)
+
+# Cache: hash(params) → dict[date, Decimal] — all scheduled values
+_CACHE = get_ttl_cache("scheduled_investment", maxsize=256, ttl=172800)  # 48h
+
+
+def _cache_key(schedule: FAScheduledInvestmentSchedule) -> str:
+    """Generate deterministic hash from canonical JSON of schedule params."""
+    canonical = json.dumps(schedule.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    return hashlib.md5(canonical.encode()).hexdigest()
+
+
+def _generate_schedule_values(
+    schedule: FAScheduledInvestmentSchedule,
+    ) -> dict[date_type, Decimal]:
+    """
+    Generate ALL daily values for the entire schedule range.
+
+    This is the core calculation: from first period start to last period end,
+    compute the value for each day.
+
+    Interest calculation depends on schedule.interest_type:
+    - SIMPLE: I = P₀ * r * Δt (always on initial principal)
+    - COMPOUND: I = V_{t-1} * r * Δt (on running accumulated value)
+
+    Day count convention is global (schedule.day_count).
+
+    The result is cached by params hash for 48h (reset on access).
+
+    Returns:
+        Dict mapping date → value for every day in the schedule range.
+    """
+    key = _cache_key(schedule)
+
+    # Check cache first — re-set to reset TTL (TTLCache resets timer on __setitem__)
+    if key in _CACHE:
+        cached = _CACHE[key]
+        _CACHE[key] = cached  # reset 48h TTL on access
+        return cached
+
+    principal = schedule.initial_value.amount
+    is_compound = schedule.interest_type == InterestType.COMPOUND
+    convention = schedule.day_count
+
+    if not schedule.schedule:
+        _CACHE[key] = {}
+        return {}
+
+    first_start = schedule.schedule[0].start_date
+    last_end = schedule.schedule[-1].end_date
+
+    # Build period lookup: for each day, which period applies
+    values: dict[date_type, Decimal] = {}
+    total_interest = Decimal("0")
+
+    # Pre-index events by date for O(1) lookup
+    events_by_date: dict[date_type, list] = {}
+    for e in schedule.asset_events:
+        events_by_date.setdefault(e.date, []).append(e)
+
+    # Track event adjustments cumulatively
+    event_adjustment = Decimal("0")
+
+    current_date = first_start
+    current_period_idx = 0
+
+    while current_date <= last_end:
+        # Find active period for this date
+        period = None
+        for i in range(current_period_idx, len(schedule.schedule)):
+            p = schedule.schedule[i]
+            if p.start_date <= current_date <= p.end_date:
+                period = p
+                current_period_idx = i
+                break
+
+        # Calculate daily interest increment
+        if period is not None and current_date > first_start:
+            day_fraction = calculate_day_count_fraction(
+                start_date=current_date - timedelta(days=1),
+                end_date=current_date,
+                convention=convention,
+                )
+            if day_fraction > 0:
+                if is_compound:
+                    # COMPOUND: interest on running value (principal + accumulated interest)
+                    base = principal + total_interest
+                    total_interest += calculate_simple_interest(
+                        principal=base,
+                        annual_rate=period.annual_rate,
+                        time_fraction=day_fraction,
+                        )
+                else:
+                    # SIMPLE: interest always on initial principal
+                    total_interest += calculate_simple_interest(
+                        principal=principal,
+                        annual_rate=period.annual_rate,
+                        time_fraction=day_fraction,
+                        )
+
+        # Apply events on this date
+        if current_date in events_by_date:
+            for evt in events_by_date[current_date]:
+                if evt.type == "INTEREST":
+                    event_adjustment -= evt.value.amount
+                elif evt.type == "PRICE_ADJUSTMENT":
+                    event_adjustment += evt.value.amount
+
+        values[current_date] = principal + total_interest + event_adjustment
+        current_date += timedelta(days=1)
+
+    _CACHE[key] = values
+    return values
+
+
+def _compute_late_interest_value(
+    schedule: FAScheduledInvestmentSchedule,
+    target_date: date_type,
+    last_scheduled_value: Decimal,
+    maturity_date: date_type,
+    ) -> Decimal:
+    """
+    Compute value for a date after schedule ends (grace + late interest).
+
+    Late interest is always computed as simple interest (even if the main
+    schedule uses compound) — it's a penalty rate, not an investment return.
+
+    Args:
+        schedule: Full schedule config (provides day_count, late_interest)
+        target_date: The date to compute
+        last_scheduled_value: Value at maturity_date (from cache)
+        maturity_date: Last day of the schedule
+    """
+    if not schedule.late_interest:
+        return last_scheduled_value
+
+    li = schedule.late_interest
+    principal = schedule.initial_value.amount
+    convention = schedule.day_count
+    grace_end = maturity_date + timedelta(days=li.grace_period_days)
+
+    # During grace period: use last scheduled rate
+    if target_date <= grace_end:
+        last_period = schedule.schedule[-1]
+        grace_fraction = calculate_day_count_fraction(
+            start_date=maturity_date,
+            end_date=target_date,
+            convention=convention,
+            )
+        grace_interest = calculate_simple_interest(
+            principal=principal,
+            annual_rate=last_period.annual_rate,
+            time_fraction=grace_fraction,
+            )
+        return last_scheduled_value + grace_interest
+
+    # After grace: grace interest + late interest
+    last_period = schedule.schedule[-1]
+    grace_fraction = calculate_day_count_fraction(
+        start_date=maturity_date,
+        end_date=grace_end,
+        convention=convention,
+        )
+    grace_interest = calculate_simple_interest(
+        principal=principal,
+        annual_rate=last_period.annual_rate,
+        time_fraction=grace_fraction,
+        )
+
+    late_fraction = calculate_day_count_fraction(
+        start_date=grace_end,
+        end_date=target_date,
+        convention=convention,
+        )
+    late_interest = calculate_simple_interest(
+        principal=principal,
+        annual_rate=li.annual_rate,
+        time_fraction=late_fraction,
+        )
+
+    return last_scheduled_value + grace_interest + late_interest
 
 
 @register_provider(AssetProviderRegistry)
@@ -68,6 +251,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
     Calculates synthetic values based on interest schedules.
     Pure deterministic engine — no external API calls, no DB access.
+    Results are cached with 48h TTL.
     """
 
     @property
@@ -110,20 +294,19 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             {
                 "identifier": "test-scheduled-1",
                 "provider_params": FAScheduledInvestmentSchedule(
-                    initial_value=Decimal("10000"),
-                    currency="EUR",
+                    initial_value=Currency(code="EUR", amount=Decimal("10000")),
+                    day_count=DayCountConvention.ACT_365,
                     schedule=[
                         FAInterestRatePeriod(
                             start_date=date_type(2025, 1, 1),
                             end_date=date_type(2025, 12, 31),
                             annual_rate=Decimal("0.05"),
-                            compounding=CompoundingType.SIMPLE,
-                            day_count=DayCountConvention.ACT_365,
+                            maturation_frequency=MaturationFrequency.DAILY,
                             )
                         ],
                     late_interest=None,
                     asset_events=[],
-                    ).model_dump(mode="json"),
+                    ).model_dump(),
                 }
             ]
 
@@ -137,11 +320,6 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         """This provider supports historical data (calculated)."""
         return True
 
-    @property
-    def supports_events(self) -> bool:
-        """This provider produces asset events."""
-        return True
-
     async def get_current_value(
         self,
         identifier: str,
@@ -151,18 +329,33 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         """
         Calculate current value for scheduled investment.
 
-        Pure deterministic: uses only provider_params, no DB access.
-
-        Formula: value = initial_value + accrued_interest - Σ(INTEREST events) + Σ(PRICE_ADJUSTMENT events)
+        Uses cached schedule values. For post-maturity dates,
+        computes late interest one-shot from last cached value.
         """
         try:
             schedule = self.validate_params(provider_params)
             target_date = date_type.today()
-            value = self._calculate_value_for_date(schedule, target_date)
+
+            # Reference to cached schedule values (not a copy — safe, read-only access)
+            cached = _generate_schedule_values(schedule)
+
+            if target_date in cached:
+                value = cached[target_date]
+            elif cached and target_date > max(cached.keys()):
+                # Post-maturity: compute late interest one-shot
+                maturity_date = max(cached.keys())
+                value = _compute_late_interest_value(
+                    schedule, target_date, cached[maturity_date], maturity_date
+                    )
+            elif cached and target_date < min(cached.keys()):
+                # Before schedule: return initial_value
+                value = schedule.initial_value.amount
+            else:
+                value = schedule.initial_value.amount
 
             return FACurrentValue(
                 value=value,
-                currency=schedule.currency,
+                currency=schedule.initial_value.code,
                 as_of_date=target_date,
                 source=self.provider_name,
                 )
@@ -187,37 +380,39 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         """
         Calculate historical values for scheduled investment.
 
-        Pure deterministic: generates daily values for requested date range.
-        Also returns asset events filtered to the requested range.
+        Uses cached schedule values for the scheduled range.
+        For post-maturity dates, iterates day-by-day applying late interest.
         """
         try:
             schedule = self.validate_params(provider_params)
+            currency = schedule.initial_value.code
+            principal = schedule.initial_value.amount
 
-            # Generate daily prices
+            # Reference to cached schedule values (not a copy — safe, read-only access)
+            cached = _generate_schedule_values(schedule)
+            maturity_date = max(cached.keys()) if cached else None
+
             prices = []
             current_date = start_date
             while current_date <= end_date:
-                value = self._calculate_value_for_date(schedule, current_date)
-                prices.append(FAPricePoint(date=current_date, close=value, currency=schedule.currency))
+                if current_date in cached:
+                    value = cached[current_date]
+                elif maturity_date and current_date > maturity_date:
+                    value = _compute_late_interest_value(schedule, current_date, cached[maturity_date], maturity_date)
+                else:
+                    # Before schedule or empty: initial_value
+                    value = principal
+
+                prices.append(FAPricePoint(date=current_date, close=value, currency=currency))
                 current_date += timedelta(days=1)
 
-            # Build events list from schedule.asset_events filtered to range
-            events = [
-                FAAssetEventPoint(
-                    date=e.date,
-                    type=e.type,
-                    value=e.value,
-                    currency=e.currency,
-                    notes=e.notes,
-                    )
-                for e in schedule.asset_events
-                if start_date <= e.date <= end_date
-                ]
+            # Events filtered to range
+            events = [e for e in schedule.asset_events if start_date <= e.date <= end_date]
 
             return FAHistoricalData(
                 prices=prices,
                 events=events,
-                currency=schedule.currency,
+                currency=currency,
                 source=self.provider_name,
                 )
 
@@ -243,161 +438,18 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             details={"message": "Scheduled investments require manual configuration"},
             )
 
-    def _calculate_value_for_date(
-        self,
-        schedule: FAScheduledInvestmentSchedule,
-        target_date: date_type,
-        ) -> Decimal:
-        """Period-based synthetic value calculation.
-
-        Pure deterministic: given schedule config, produce a price for any date.
-
-        Steps:
-          1. Start with initial_value (face_value).
-          2. Calculate accrued interest from schedule periods up to target_date.
-          3. Handle post-maturity (grace + late interest).
-          4. Apply asset events:
-             - INTEREST: subtract from price (ex-date drop — user received cash)
-             - PRICE_ADJUSTMENT: add algebraically (negative = write-down)
-          5. Return face_value + total_interest - Σ(INTEREST events) + Σ(PRICE_ADJUSTMENT events)
-
-        Interest is ALWAYS calculated on initial_value, not on the current running value.
-        Per-period compounding handles simple/compound within each period.
-        """
-        face_value = schedule.initial_value
-
-        if not schedule.schedule:
-            return face_value
-
-        first_start = schedule.schedule[0].start_date
-        maturity_date = schedule.schedule[-1].end_date
-
-        if target_date < first_start:
-            # Before any schedule starts: apply only events before this date
-            event_adjustment = self._calculate_event_adjustment(schedule, target_date)
-            return face_value + event_adjustment
-
-        periods_to_process: list[FAInterestRatePeriod] = []
-
-        # 1. Real scheduled periods (truncate to target_date)
-        for p in schedule.schedule:
-            if p.start_date > target_date:
-                break
-            eff_start = p.start_date
-            eff_end = p.end_date if p.end_date <= target_date else target_date
-            if eff_end >= eff_start:
-                periods_to_process.append(
-                    FAInterestRatePeriod(
-                        start_date=eff_start,
-                        end_date=eff_end,
-                        annual_rate=p.annual_rate,
-                        compounding=p.compounding,
-                        compound_frequency=p.compound_frequency,
-                        day_count=p.day_count,
-                        )
-                    )
-
-        # 2. Post-maturity synthetic periods
-        if target_date > maturity_date and schedule.late_interest:
-            li = schedule.late_interest
-            grace_end = maturity_date + timedelta(days=li.grace_period_days)
-            last_rate_period = schedule.schedule[-1]
-
-            # Grace segment
-            grace_start = maturity_date + timedelta(days=1)
-            if grace_start <= target_date and li.grace_period_days > 0:
-                grace_segment_end = min(grace_end, target_date)
-                if grace_segment_end >= grace_start:
-                    periods_to_process.append(
-                        FAInterestRatePeriod(
-                            start_date=grace_start,
-                            end_date=grace_segment_end,
-                            annual_rate=last_rate_period.annual_rate,
-                            compounding=last_rate_period.compounding,
-                            compound_frequency=last_rate_period.compound_frequency,
-                            day_count=last_rate_period.day_count,
-                            )
-                        )
-
-            # Late segment (after grace_end)
-            late_start = grace_end + timedelta(days=1)
-            if target_date >= late_start:
-                late_end = target_date
-                if late_end >= late_start:
-                    periods_to_process.append(
-                        FAInterestRatePeriod(
-                            start_date=late_start,
-                            end_date=late_end,
-                            annual_rate=li.annual_rate,
-                            compounding=li.compounding,
-                            compound_frequency=li.compound_frequency,
-                            day_count=li.day_count,
-                            )
-                        )
-
-        # 3. Sum interest per period
-        total_interest = Decimal("0")
-        for period in periods_to_process:
-            time_fraction = calculate_day_count_fraction(
-                start_date=period.start_date,
-                end_date=period.end_date,
-                convention=period.day_count,
-                )
-            if time_fraction <= 0:
-                continue
-            if period.compounding == CompoundingType.SIMPLE:
-                segment_interest = calculate_simple_interest(
-                    principal=face_value,
-                    annual_rate=period.annual_rate,
-                    time_fraction=time_fraction,
-                    )
-            else:
-                if period.compound_frequency is None:
-                    raise ValueError("compound_frequency required for COMPOUND interest")
-                segment_interest = calculate_compound_interest(
-                    principal=face_value,
-                    annual_rate=period.annual_rate,
-                    time_fraction=time_fraction,
-                    frequency=period.compound_frequency,
-                    )
-            total_interest += segment_interest
-
-        # 4. Apply asset events
-        event_adjustment = self._calculate_event_adjustment(schedule, target_date)
-
-        return face_value + total_interest + event_adjustment
-
-    @staticmethod
-    def _calculate_event_adjustment(
-        schedule: FAScheduledInvestmentSchedule,
-        target_date: date_type,
-        ) -> Decimal:
-        """Calculate net adjustment from asset events up to target_date.
-
-        - INTEREST events: subtract from price (ex-date drop, user received cash)
-        - PRICE_ADJUSTMENT events: add algebraically (negative = write-down, positive = write-up)
-        """
-        adjustment = Decimal("0")
-        for event in schedule.asset_events:
-            if event.date <= target_date:
-                if event.type == "INTEREST":
-                    adjustment -= event.value
-                elif event.type == "PRICE_ADJUSTMENT":
-                    adjustment += event.value
-        return adjustment
-
     def validate_params(self, provider_params: dict) -> FAScheduledInvestmentSchedule:
         """
         Validate provider parameters for scheduled investment.
 
         Uses Pydantic FAScheduledInvestmentSchedule model for validation.
-        Requires initial_value, currency, and schedule.
+        Requires initial_value (Currency) and schedule.
         """
         if not provider_params:
             raise AssetSourceError(
                 "Provider params required for scheduled_investment",
                 error_code="MISSING_PARAMS",
-                details={"required": ["initial_value", "currency", "schedule"]},
+                details={"required": ["initial_value", "schedule"]},
                 )
 
         try:

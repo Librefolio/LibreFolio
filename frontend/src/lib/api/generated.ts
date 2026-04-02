@@ -1243,6 +1243,23 @@ type DateRangeModel = {
     ((string | null) | Array<string | null>)
     | undefined;
 };
+type FAAssetEventPoint = {
+  /**
+   * Event date
+   */
+  date: string;
+  /**
+   * Event type (DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT)
+   */
+  type: string;
+  value: Currency_Output;
+  notes?:
+    | /**
+     * Optional notes
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+};
 type FAAssetMetadataResponse = {
   asset_id: number;
   display_name: string;
@@ -2090,6 +2107,18 @@ type FAPriceQueryItem = {
    */
   asset_id: number;
   date_range: DateRangeModel;
+  include_price?: /**
+   * Include price history in response
+   *
+   * @default true
+   */
+  boolean | undefined;
+  include_events?: /**
+   * Include asset events in response
+   *
+   * @default false
+   */
+  boolean | undefined;
 };
 type FAPriceQueryResponse = Partial<{
   /**
@@ -2106,6 +2135,10 @@ type FAPriceQueryResult = {
    * Price history with backward-fill
    */
   Array<FAPricePoint_Output> | undefined;
+  events?: /**
+   * Asset events (if requested)
+   */
+  Array<FAAssetEventPoint> | undefined;
 };
 type FAProviderAssignmentReadItem = {
   /**
@@ -4705,6 +4738,16 @@ Examples:
 
     # Range
     {"start": "2025-11-01", "end": "2025-11-30"}  # Entire November`),
+  include_price: z
+    .boolean()
+    .describe("Include price history in response")
+    .optional()
+    .default(true),
+  include_events: z
+    .boolean()
+    .describe("Include asset events in response")
+    .optional()
+    .default(false),
 });
 const FAPricePoint_Output: z.ZodType<FAPricePoint_Output> = z.object({
   date: z.string().describe("Price date"),
@@ -4722,11 +4765,47 @@ const FAPricePoint_Output: z.ZodType<FAPricePoint_Output> = z.object({
     .describe("Backward-fill info (only in query results)")
     .optional(),
 });
+const FAAssetEventPoint: z.ZodType<FAAssetEventPoint> = z.object({
+  date: z.string().describe("Event date"),
+  type: z
+    .string()
+    .describe("Event type (DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT)"),
+  value:
+    Currency_Output.describe(`Currency amount with validation and arithmetic operations.
+
+Validates currency codes against ISO 4217 (via pycountry) + crypto dict.
+Supports addition/subtraction only between same currencies.
+Amount can be negative.
+
+Attributes:
+    code: ISO 4217 currency code (USD, EUR) or crypto symbol (BTC, ETH)
+    amount: Decimal amount (can be negative)
+
+Examples:
+    >>> usd = Currency(code="USD", amount=Decimal("100.50"))
+    >>> fee = Currency(code="USD", amount=Decimal("2.50"))
+    >>> total = usd + fee  # Currency(code="USD", amount=Decimal("103.00"))
+
+    >>> eur = Currency(code="EUR", amount=Decimal("50"))
+    >>> usd + eur  # ValueError: Cannot add USD and EUR
+
+    >>> btc = Currency(code="BTC", amount=Decimal("0.5"))  # Valid crypto
+
+    >>> negative = -usd  # Currency(code="USD", amount=Decimal("-100.50"))
+
+Raises:
+    ValueError: If currency code is not valid ISO 4217 or supported crypto`),
+  notes: z.union([z.string(), z.null()]).describe("Optional notes").optional(),
+});
 const FAPriceQueryResult: z.ZodType<FAPriceQueryResult> = z.object({
   asset_id: z.number().int().describe("Asset ID queried"),
   prices: z
     .array(FAPricePoint_Output)
     .describe("Price history with backward-fill")
+    .optional(),
+  events: z
+    .array(FAAssetEventPoint)
+    .describe("Asset events (if requested)")
     .optional(),
 });
 const FAPriceQueryResponse: z.ZodType<FAPriceQueryResponse> = z
@@ -6461,6 +6540,7 @@ export const schemas = {
   FABulkDeleteResponse,
   FAPriceQueryItem,
   FAPricePoint_Output,
+  FAAssetEventPoint,
   FAPriceQueryResult,
   FAPriceQueryResponse,
   FARefreshItem,

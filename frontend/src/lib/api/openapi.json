@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.9-10-g9883c7f-dirty"
+    "version": "v0.5.9-13-gfaf216e-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -6520,6 +6520,46 @@
         "title": "FAAssetDeleteResult",
         "description": "Result of single asset deletion in bulk operation."
       },
+      "FAAssetEventPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date",
+            "description": "Event date"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Event type (DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT)"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Currency-Output",
+            "description": "Event value with currency (amount + code)"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Optional notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "type",
+          "value"
+        ],
+        "title": "FAAssetEventPoint",
+        "description": "Single asset event data point \u2014 shared shape between DB, provider output, and frontend editor.\n\nUses Currency class for value (amount + currency code in one object).\n\nUsed in:\n- FAHistoricalData.events (provider output)\n- FAPriceQueryResult.events (API response)\n- FAScheduledInvestmentSchedule.asset_events (provider_params config)"
+      },
       "FAAssetMetadataResponse": {
         "properties": {
           "asset_id": {
@@ -7585,6 +7625,18 @@
           "date_range": {
             "$ref": "#/components/schemas/DateRangeModel",
             "description": "Date range (end defaults to start)"
+          },
+          "include_price": {
+            "type": "boolean",
+            "title": "Include Price",
+            "description": "Include price history in response",
+            "default": true
+          },
+          "include_events": {
+            "type": "boolean",
+            "title": "Include Events",
+            "description": "Include asset events in response",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -7626,6 +7678,14 @@
             "type": "array",
             "title": "Prices",
             "description": "Price history with backward-fill"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/FAAssetEventPoint"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "Asset events (if requested)"
           }
         },
         "additionalProperties": false,
