@@ -79,12 +79,12 @@ class JustETFProvider(AssetSourceProvider):
     @classmethod
     def etf_list(cls) -> "pd.DataFrame":
         """Get cached ETF list."""
-        cached = _etf_list_cache.get("etf_list")
-        if cached is not None:
+        cached, ok = _etf_list_cache.get("etf_list")
+        if ok:
             return cached
 
         df = load_overview()
-        _etf_list_cache["etf_list"] = df
+        _etf_list_cache.set("etf_list", df)
         return df
 
     def _check_availability(self):
@@ -151,9 +151,9 @@ class JustETFProvider(AssetSourceProvider):
         try:
             # Check cache first
             cache_key = f"gettex_{identifier}"
-            cached = _gettex_cache.get(cache_key)
+            cached, ok = _gettex_cache.get(cache_key)
 
-            if cached is None:
+            if not ok:
                 # Fetch from gettex WebSocket
                 quote = await asyncio.to_thread(get_gettex_quote, identifier)
                 if quote is None:
@@ -161,7 +161,7 @@ class JustETFProvider(AssetSourceProvider):
                         f"No gettex quote available for {identifier}",
                         "NOT_FOUND",
                         )
-                _gettex_cache[cache_key] = quote
+                _gettex_cache.set(cache_key, quote)
             else:
                 quote = cached
 
@@ -228,11 +228,11 @@ class JustETFProvider(AssetSourceProvider):
 
             # Check cache
             cache_key = f"chart_{identifier}_{add_current}"
-            cached_df = _chart_cache.get(cache_key)
+            cached_df, ok = _chart_cache.get(cache_key)
 
-            if cached_df is None:
+            if not ok:
                 df = await asyncio.to_thread(load_chart, identifier, "EUR", add_current)
-                _chart_cache[cache_key] = df
+                _chart_cache.set(cache_key, df)
             else:
                 df = cached_df
 
@@ -324,13 +324,13 @@ class JustETFProvider(AssetSourceProvider):
         try:
             # Check cache
             cache_key = f"overview_{identifier}"
-            cached = _overview_cache.get(cache_key)
+            cached, ok = _overview_cache.get(cache_key)
 
-            if cached is None:
+            if not ok:
                 overview = await asyncio.to_thread(
                     get_etf_overview, identifier, include_gettex=False
                     )
-                _overview_cache[cache_key] = overview
+                _overview_cache.set(cache_key, overview)
             else:
                 overview = cached
 

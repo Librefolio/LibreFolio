@@ -186,19 +186,24 @@ class FALateInterestConfig(BaseModel):
     """
     Late interest configuration for scheduled investments.
 
-    Defines the penalty interest rate and grace period applied
-    after the asset's maturity date. Interest type and day count
-    are inherited from the parent FAScheduledInvestmentSchedule.
+    Defines the penalty interest rate, grace period, and interest type
+    applied after the asset's maturity date. Day count is inherited
+    from the parent FAScheduledInvestmentSchedule.
 
     Attributes:
         annual_rate: Annual late interest rate as decimal (e.g., 0.12 for 12%)
         grace_period_days: Number of days after maturity before late interest applies
+        interest_type: SIMPLE or COMPOUND for late interest (default: COMPOUND — penalties grow)
     """
 
     model_config = ConfigDict(extra="forbid")
 
     annual_rate: Decimal
     grace_period_days: int = 0
+    interest_type: InterestType = Field(
+        default=InterestType.COMPOUND,
+        description="Interest type for late interest: SIMPLE (on principal) or COMPOUND (on accumulated value, default)"
+        )
 
     @field_validator("annual_rate", mode="before")
     @classmethod

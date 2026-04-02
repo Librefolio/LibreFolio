@@ -12,7 +12,7 @@ The provider is PURE and DETERMINISTIC:
 - NO transaction dependency
 
 Calculation is cached:
-- Hash of canonical params → TTL cache (48h, reset on access via re-set)
+- Hash of canonical params → TTL cache (48h, theine timer wheel auto-expire)
 - Single function generates ALL values for the schedule range
 - Late interest computed on-demand from last scheduled value
 
@@ -25,6 +25,9 @@ How it works:
 Global properties (from FAScheduledInvestmentSchedule):
 - interest_type: SIMPLE (I = P₀ * r * Δt) or COMPOUND (I = V_{t-1} * r * Δt)
 - day_count: Day count convention (ACT/365, ACT/360, etc.) — applies to all periods
+
+Late interest (from FALateInterestConfig):
+- interest_type: configurable per-event (default: COMPOUND — penalties grow on accumulated value)
 
 For detailed parameter structure documentation, see:
 - backend.app.schemas.assets.FAScheduledInvestmentSchedule
@@ -88,17 +91,16 @@ def _generate_schedule_values(
 
     Day count convention is global (schedule.day_count).
 
-    The result is cached by params hash for 48h (reset on access).
+    The result is cached by params hash for 48h (theine timer wheel auto-expire).
 
     Returns:
         Dict mapping date → value for every day in the schedule range.
     """
     key = _cache_key(schedule)
 
-    # Check cache first — re-set to reset TTL (TTLCache resets timer on __setitem__)
-    if key in _CACHE:
-        cached = _CACHE[key]
-        _CACHE[key] = cached  # reset 48h TTL on access
+    # Check cache first — theine handles TTL expiration via timer wheel
+    cached, ok = _CACHE.get(key)
+    if ok:
         return cached
 
     principal = schedule.initial_value.amount
@@ -106,7 +108,7 @@ def _generate_schedule_values(
     convention = schedule.day_count
 
     if not schedule.schedule:
-        _CACHE[key] = {}
+        _CACHE.set(key, {})
         return {}
 
     first_start = schedule.schedule[0].start_date
@@ -172,7 +174,7 @@ def _generate_schedule_values(
         values[current_date] = principal + total_interest + event_adjustment
         current_date += timedelta(days=1)
 
-    _CACHE[key] = values
+    _CACHE.set(key, values)
     return values
 
 
@@ -185,8 +187,8 @@ def _compute_late_interest_value(
     """
     Compute value for a date after schedule ends (grace + late interest).
 
-    Late interest is always computed as simple interest (even if the main
-    schedule uses compound) — it's a penalty rate, not an investment return.
+    Late interest type is configurable per FALateInterestConfig.interest_type
+    (defaults to COMPOUND — penalties grow on accumulated value).
 
     Args:
         schedule: Full schedule config (provides day_count, late_interest)
@@ -198,6 +200,7 @@ def _compute_late_interest_value(
         return last_scheduled_value
 
     li = schedule.late_interest
+    is_compound = li.interest_type == InterestType.COMPOUND
     principal = schedule.initial_value.amount
     convention = schedule.day_count
     grace_end = maturity_date + timedelta(days=li.grace_period_days)
@@ -205,9 +208,60 @@ def _compute_late_interest_value(
     # During grace period: use last scheduled rate
     if target_date <= grace_end:
         last_period = schedule.schedule[-1]
+        if is_compound:
+            # Day-by-day compound from maturity to target
+            value = last_scheduled_value
+            current = maturity_date + timedelta(days=1)
+            while current <= target_date:
+                frac = calculate_day_count_fraction(
+                    start_date=current - timedelta(days=1),
+                    end_date=current,
+                    convention=convention,
+                    )
+                value += calculate_simple_interest(
+                    principal=value,
+                    annual_rate=last_period.annual_rate,
+                    time_fraction=frac,
+                    )
+                current += timedelta(days=1)
+            return value
+        else:
+            grace_fraction = calculate_day_count_fraction(
+                start_date=maturity_date,
+                end_date=target_date,
+                convention=convention,
+                )
+            grace_interest = calculate_simple_interest(
+                principal=principal,
+                annual_rate=last_period.annual_rate,
+                time_fraction=grace_fraction,
+                )
+            return last_scheduled_value + grace_interest
+
+    # After grace: grace interest + late interest
+    last_period = schedule.schedule[-1]
+    if is_compound:
+        # Day-by-day compound: grace period at last rate, then late rate
+        value = last_scheduled_value
+        current = maturity_date + timedelta(days=1)
+        while current <= target_date:
+            rate = last_period.annual_rate if current <= grace_end else li.annual_rate
+            frac = calculate_day_count_fraction(
+                start_date=current - timedelta(days=1),
+                end_date=current,
+                convention=convention,
+                )
+            value += calculate_simple_interest(
+                principal=value,
+                annual_rate=rate,
+                time_fraction=frac,
+                )
+            current += timedelta(days=1)
+        return value
+    else:
         grace_fraction = calculate_day_count_fraction(
             start_date=maturity_date,
-            end_date=target_date,
+            end_date=grace_end,
             convention=convention,
             )
         grace_interest = calculate_simple_interest(
@@ -215,33 +269,19 @@ def _compute_late_interest_value(
             annual_rate=last_period.annual_rate,
             time_fraction=grace_fraction,
             )
-        return last_scheduled_value + grace_interest
 
-    # After grace: grace interest + late interest
-    last_period = schedule.schedule[-1]
-    grace_fraction = calculate_day_count_fraction(
-        start_date=maturity_date,
-        end_date=grace_end,
-        convention=convention,
-        )
-    grace_interest = calculate_simple_interest(
-        principal=principal,
-        annual_rate=last_period.annual_rate,
-        time_fraction=grace_fraction,
-        )
+        late_fraction = calculate_day_count_fraction(
+            start_date=grace_end,
+            end_date=target_date,
+            convention=convention,
+            )
+        late_interest = calculate_simple_interest(
+            principal=principal,
+            annual_rate=li.annual_rate,
+            time_fraction=late_fraction,
+            )
 
-    late_fraction = calculate_day_count_fraction(
-        start_date=grace_end,
-        end_date=target_date,
-        convention=convention,
-        )
-    late_interest = calculate_simple_interest(
-        principal=principal,
-        annual_rate=li.annual_rate,
-        time_fraction=late_fraction,
-        )
-
-    return last_scheduled_value + grace_interest + late_interest
+        return last_scheduled_value + grace_interest + late_interest
 
 
 @register_provider(AssetProviderRegistry)
