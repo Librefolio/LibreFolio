@@ -80,19 +80,9 @@
         return iso > todayISO();
     }
 
-    function yearOptions(): number[] {
-        const currentYear = new Date().getFullYear();
-        const years: number[] = [];
-        for (let y = currentYear - 10; y <= currentYear + 2; y++) years.push(y);
-        return years;
-    }
-
     // SimpleSelect options (derived)
     let monthSelectOptions = $derived(
         monthLabels.map((label, i) => ({value: String(i), label}))
-    );
-    let yearSelectOptions = $derived(
-        yearOptions().map(y => ({value: String(y), label: String(y)}))
     );
 
     function getMonthGrid(y: number, m: number): Array<Array<{ day: number; iso: string; inMonth: boolean }>> {
@@ -225,14 +215,16 @@
                     showChevron={false}
                     value={String(month)}
             />
-            <SimpleSelect
-                    class="inline-block w-auto"
-                    compact
-                    dropdownPosition="auto"
-                    onchange={(v) => onSetYear(parseInt(v))}
-                    options={yearSelectOptions}
-                    showChevron={false}
-                    value={String(year)}
+            <input
+                    type="number"
+                    value={year}
+                    min="1900"
+                    max="2200"
+                    onchange={(e) => onSetYear(parseInt(e.currentTarget.value) || new Date().getFullYear())}
+                    class="w-14 px-1 py-0.5 text-xs font-semibold text-center bg-transparent border-none outline-none
+                           text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded
+                           focus:ring-1 focus:ring-libre-green/50
+                           [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
         </div>
         <div class="flex items-center gap-0.5">
