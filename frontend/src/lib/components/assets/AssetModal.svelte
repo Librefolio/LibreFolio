@@ -750,7 +750,9 @@
         const assetId = result.asset_id;
 
         // Step 2: Assign provider (separate try/catch — asset already created)
-        if (hasProvider) {
+        // Skip assignment for scheduled_investment if no schedule is configured yet
+        const skipProviderAssignment = providerCode === 'scheduled_investment' && (!providerParams || !providerParams.schedule?.length);
+        if (hasProvider && !skipProviderAssignment) {
             try {
                 const assignPayload = [{
                     asset_id: assetId,

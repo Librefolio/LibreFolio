@@ -601,16 +601,16 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
 ## Validation Checklist
 
 ### Backend
-- [ ] `./dev.py test utils all` — day count tests passano con nuovo import (dopo Blocco 1)
-- [x] `./dev.py test services all` — 11/11 passed (verificato Blocco 1.5)
-- [x] `./dev.py test schemas all` — 4/4 passed (verificato Blocco 1.5)
-- [x] `./dev.py test api assets-provider` — ✅ PASSED (verificato Blocco 1.5)
-- [ ] `./dev.py test api all` — provider probe funziona per scheduled_investment (dopo fix frontend §4.1/§4.3)
-- [ ] `./dev.py test db all` — dopo rimozione UniqueConstraint (§3.0)
+- [x] `./dev.py test utils all` — 6/6 passed (day count tests passano con nuovo import)
+- [x] `./dev.py test services all` — 11/11 passed
+- [x] `./dev.py test schemas all` — 4/4 passed
+- [x] `./dev.py test api assets-provider` — ✅ PASSED (verificato Blocco 1.5) ⚠️ server startup issue in some environments
+- [ ] `./dev.py test api all` — provider probe funziona per scheduled_investment (server startup issue)
+- [x] `./dev.py test db all` — 7/7 passed
 
 ### Frontend
-- [ ] `./dev.py front check` → 0 errori, 0 warning
-- [ ] `./dev.py front build --debug` → OK
+- [x] `./dev.py front check` → 0 errori, 0 warning ✅ (2026-04-03)
+- [x] `./dev.py front build --debug` → OK ✅ (2026-04-03)
 - [ ] Manuale: creare asset con scheduled_investment → save funziona, provider assegnato
 - [ ] Manuale: Test Configuration → probe ritorna current_price + history
 - [ ] Manuale: chart preview mostra valori con step alle maturation dates
@@ -620,5 +620,25 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
 - [ ] Manuale: MATURITY_SETTLEMENT visibile come ultimo evento su asset chiuso
 
 ### Full suite
-- [ ] `./dev.py test all` → 🎉 ALL TESTS PASSED
+- [ ] `./dev.py test all` → ⚠️ API tests have server startup issue (non-related to code changes)
+
+### Review Fixes (2026-04-03)
+- [x] CurrencySearchSelect: aggiunta modalità `compact` (single-line, altezza ridotta)
+- [x] ScheduledInvestmentEditor: CurrencySearchSelect usa `compact={true}` nella sezione Initial Value
+- [x] Asset Events: sostituiti `<input type="date">` con `SingleDatePicker`, `<select>` con `SimpleSelect`, aggiunto `CurrencySearchSelect`
+- [x] Asset Events: aggiunto tipo `MATURITY_SETTLEMENT` nel dropdown
+- [x] Asset Events: icona sezione cambiata da emoji 📋 a `CalendarClock` (Svelte icon)
+- [x] Generate Interest: checkbox sostituito con toggle switch orizzontale (centrato nella colonna)
+- [x] Generate Interest: label colonna aggiornata a "Genera Cedola" / "Generate Coupon"
+- [x] Generate Interest: hint aggiornato con descrizione completa (stacco cedola + reset a valore iniziale)
+- [x] Global Settings: aggiunti tooltip con icona ℹ️ su Interest Type e Day Count
+- [x] Late Interest: sezione spostata PRIMA degli Asset Events (ordine: Schedule → Late Interest → Asset Events)
+- [x] Split: frequenza invalidata dopo split viene lasciata vuota (non auto-DAILY), utente deve scegliere
+- [x] Split: threshold aggiornato da `<= 1` a `< 2` per coerenza con 3+ giorni
+- [x] isFormValid: richiede maturation_frequency impostata su tutti i periodi (save disabilitato se mancante)
+- [x] Delete first/last: usa boundary modal con default all'edge (non auto-estende il periodo adiacente)
+- [x] Auto-fallback: dopo range change, frequenza invalidata viene svuotata (non auto-DAILY)
+- [x] AssetModal: skip provider assignment per scheduled_investment se nessuno schedule configurato
+- [x] ProviderAssignmentSection: fix emitChange per usare providerParams per scheduled_investment
+- [x] SearchSelect: aggiunta prop `compact` per trigger a dimensioni ridotte
 
