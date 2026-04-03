@@ -658,13 +658,17 @@ class AssetSourceManager:
         results = []
         asset_ids = [a.asset_id for a in assignments]
 
-        # Delete existing assignments (upsert pattern)
-        await session.execute(
-            delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids))
-            )
+        # UPSERT pattern: SELECT existing, UPDATE if exists, INSERT if new
+        # This preserves assignment IDs across reconfigurations,
+        # keeping AssetEvent.provider_assignment_id FK valid.
+        existing_stmt = select(AssetProviderAssignment).where(
+            AssetProviderAssignment.asset_id.in_(asset_ids)
+        )
+        existing_result = await session.execute(existing_stmt)
+        existing_map: Dict[int, AssetProviderAssignment] = {
+            row.asset_id: row for row in existing_result.scalars().all()
+        }
 
-        # Bulk insert new assignments
-        new_assignments = []
         for a in assignments:
             raw_params = a.provider_params
             if isinstance(raw_params, dict):
@@ -682,20 +686,36 @@ class AssetSourceManager:
                 pit = AssetSourceProvider.map_identifier_type_to_input_type(mapped_type)
                 mapped_type = pit.value if pit else ProviderInputType.URL.value
 
-            new_assignments.append(
-                AssetProviderAssignment(
+            # Handle identifier: if AUTO_GENERATED and empty/None, leave None
+            identifier_val = a.identifier
+            if mapped_type == ProviderInputType.AUTO_GENERATED.value and not identifier_val:
+                identifier_val = None
+
+            existing = existing_map.get(a.asset_id)
+            if existing:
+                # UPDATE existing assignment (preserves id → FK stays valid)
+                existing.provider_code = a.provider_code
+                existing.identifier = identifier_val
+                existing.identifier_type = mapped_type
+                existing.provider_params = params_to_store
+                existing.fetch_interval = a.fetch_interval
+                existing.user_url = a.user_url
+            else:
+                # INSERT new assignment
+                new_assignment = AssetProviderAssignment(
                     asset_id=a.asset_id,
                     provider_code=a.provider_code,
-                    identifier=a.identifier,
+                    identifier=identifier_val,
                     identifier_type=mapped_type,
                     provider_params=params_to_store,
                     fetch_interval=a.fetch_interval,
                     user_url=a.user_url,
                     last_fetch_at=None,
-                    )
                 )
+                session.add(new_assignment)
 
-        session.add_all(new_assignments)
+        # Remove assignments for asset_ids no longer in the batch
+        # (only relevant when called from full-replace endpoints)
         await session.commit()
 
         # Build results and auto-populate metadata
@@ -1125,7 +1145,7 @@ class AssetSourceManager:
         session: AsyncSession,
         asset_id: int,
         events: list[dict | FAAssetEventPoint],
-        source_plugin_key: str,
+        provider_assignment_id: Optional[int],
         default_currency: str,
         ) -> int:
         """Upsert asset events into the AssetEvent table.
@@ -1136,7 +1156,7 @@ class AssetSourceManager:
             session: Database session
             asset_id: Asset ID
             events: List of FAAssetEventPoint or dicts (parsed via Pydantic)
-            source_plugin_key: Provider code
+            provider_assignment_id: FK to asset_provider_assignments.id (None = manual)
             default_currency: Fallback currency
 
         Returns:
@@ -1169,7 +1189,7 @@ class AssetSourceManager:
                 type=evt_type,
                 value=amount,
                 currency=currency,
-                source_plugin_key=source_plugin_key,
+                provider_assignment_id=provider_assignment_id,
                 notes=evt.notes,
                 ))
 
@@ -1911,8 +1931,9 @@ class AssetSourceManager:
                     events_list = remote_data.get("events", [])
                     if events_list:
                         try:
+                            assignment_id = prep["assignment"].id
                             await AssetSourceManager._upsert_asset_events(
-                                persist_session, asset_id, events_list, provider_code,
+                                persist_session, asset_id, events_list, assignment_id,
                                 prep["asset"].currency,
                                 )
                         except Exception as e:

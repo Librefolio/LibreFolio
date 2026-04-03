@@ -864,6 +864,55 @@ assets.provider.paramsTitle, assets.provider.identifier, assets.provider.identif
 
 Aggiungere via `./dev.py i18n add` in EN/IT/FR/ES.
 
+---
+
+### 📝 Note per Step Documentazione — Verifiche Approfondite Post-Bugfixstep3Round 12
+
+> **ATTENZIONE**: Le seguenti aree sono state modificate significativamente nel Round 12 e
+> richiedono **verifica approfondita** durante lo step di documentazione/QA.
+
+#### Backend: `financial_math.py`
+- **`find_active_period()`**: è **dead code** — non usata da nessun codice di produzione.
+  Usata solo in `test_financial_math.py` (13 test). **Da rimuovere** con i relativi test.
+- **`calculate_simple_interest()`**: wrapper `a * b * c` — mantenuta per chiarezza semantica,
+  ma valutare se inlinare nelle call site.
+- **Varianti `_calculate_act_*`**: `ACT/365` e `ACT/360` sono identiche con denominatore diverso →
+  fattorizzabili in `_calculate_act_fixed(start, end, denominator)`. `ACT/ACT` e `30/360` restano separate.
+- **Nessun test diretto per `calculate_simple_interest`**: testata solo indirettamente via
+  `test_synthetic_yield.py`. Valutare se aggiungere unit test dedicati.
+
+#### Backend: `scheduled_investment.py`
+- **Compound interest nel range**: implementato come iterazione giornaliera di I_semplice sulla
+  base corrente (`V_{t-1}`). Matematicamente equivalente a `P * (1 + r/365)^N`.
+- **Compound interest nel late**: stesso pattern day-by-day, con cambio rate a grace_end.
+- **Simple interest nel late**: calcolo diretto `P * r * Δt` (niente loop), attenzione che la
+  base è sempre `initial_value.amount`, NON `last_scheduled_value`.
+- **Event processing**: `INTEREST` → `event_adjustment -= amount` (drop); `PRICE_ADJUSTMENT` →
+  `event_adjustment += amount` (algebraico, può essere negativo per write-down).
+- **Cache**: `_CACHE` con theine TTL 48h — verificare comportamento in produzione con molti asset.
+
+#### Frontend: `ScheduledInvestmentEditor.svelte`
+- **1268 righe** — componente complesso, verifica completa necessaria (vedi checklist sopra).
+- **Deserializzazione backward-compat**: gestisce sia `initial_value` flat (vecchio) che Currency object (nuovo).
+- **`serialize()` emette sempre formato Currency**: `{code, amount}` — tutti i consumer devono accettarlo.
+- **Global vs per-row**: `interest_type` e `day_count` sono globali (su schedule), `maturation_frequency` è per-riga,
+  `lateInterestType` è per-riga late — verificare che UI rifletta questa separazione.
+- **`interestType` default `SIMPLE`**: se il JSON non lo contiene, default è SIMPLE (riga 175).
+  Verificare che sia coerente col backend (`FAScheduledInvestmentSchedule.interest_type` default).
+
+#### Schemi: `assets.py` + `prices.py`
+- **`InterestType` enum** aggiunto (SIMPLE/COMPOUND) — usato in `FAScheduledInvestmentSchedule` e
+  `FALateInterestConfig`. Verificare che api-sync generi i tipi TS.
+- **`MaturationFrequency` enum** (ex CompoundFrequency) — 6 valori senza CONTINUOUS.
+- **`FAAssetEventPoint`**: campo `value` è `Currency` (non più `Decimal`), campo `type` è string (non enum).
+  Verificare coerenza con `AssetEventType` DB enum.
+- **Nessun campo `day_count` su `FAInterestRatePeriod`** — è globale su `FAScheduledInvestmentSchedule`.
+  Frontend e test devono rispettare questa separazione.
+
+
+
+
+
 #### E2E Test Playwright
 
 - [ ] Asset list: entrambe le view (grid + table) visibili

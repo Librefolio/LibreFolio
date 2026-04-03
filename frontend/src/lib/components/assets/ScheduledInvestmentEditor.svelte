@@ -61,6 +61,8 @@
         isLate: boolean;
         grace_period_days: number;
         enabled: boolean;
+        /** Interest type for late interest row only (SIMPLE/COMPOUND) */
+        lateInterestType: string;
     }
 
     // =========================================================================
@@ -272,6 +274,7 @@
                 isLate: false,
                 grace_period_days: 0,
                 enabled: true,
+                lateInterestType: 'COMPOUND',
             });
         }
 
@@ -286,6 +289,7 @@
             isLate: true,
             grace_period_days: li?.grace_period_days ?? 0,
             enabled: !!li,
+            lateInterestType: li?.interest_type ?? 'COMPOUND',
         });
 
         return result;
@@ -316,6 +320,7 @@
         const late_interest = lr ? {
             annual_rate: (lr.annual_rate / 100).toFixed(4),
             grace_period_days: lr.grace_period_days,
+            interest_type: lr.lateInterestType,
         } : null;
 
         const serializedEvents = assetEvents.map(e => ({
@@ -446,6 +451,7 @@
             isLate: false,
             grace_period_days: 0,
             enabled: true,
+            lateInterestType: 'COMPOUND',
         };
 
         const late = rows.find(r => r.isLate);
@@ -1192,9 +1198,20 @@
         {/if}
     </div>
 
-    <!-- Late interest toggle (always visible if lateRow exists and there are normal periods) -->
+    <!-- Late interest toggle + interest type (always visible if lateRow exists and there are normal periods) -->
     {#if lateRow && normalRows.length > 0}
         <div class="flex items-center justify-end gap-2 text-xs text-gray-500 dark:text-gray-400">
+            {#if lateRow.enabled}
+                <div class="w-36">
+                    <SimpleSelect
+                        value={lateRow.lateInterestType}
+                        options={INTEREST_TYPE_OPTIONS}
+                        disabled={disabled || readonly}
+                        compact={true}
+                        onchange={(v) => updateRow('late-interest', 'lateInterestType', v)}
+                    />
+                </div>
+            {/if}
             <span>⚡ {$t('assets.schedule.lateInterest')}</span>
             <button
                 type="button"
