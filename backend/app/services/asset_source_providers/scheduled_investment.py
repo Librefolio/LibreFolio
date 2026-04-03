@@ -765,10 +765,11 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         Requires initial_value (Currency) and schedule.
         """
         if not provider_params:
-            raise AssetSourceError(
-                "Provider params required for scheduled_investment",
-                error_code="MISSING_PARAMS",
-                details={"required": ["initial_value", "schedule"]},
+            # Return a default schedule with initial_value for probe support
+            # (allows "Test Connection" to work before any periods are configured)
+            return FAScheduledInvestmentSchedule(
+                initial_value=Currency(code="EUR", amount=Decimal("10000")),
+                schedule=[],
                 )
 
         try:

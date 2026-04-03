@@ -368,7 +368,8 @@
       "noEvents": "Nessun evento asset configurato",
       "eventType": {
         "INTEREST": "Interesse",
-        "PRICE_ADJUSTMENT": "Aggiustamento Prezzo"
+        "PRICE_ADJUSTMENT": "Aggiustamento Prezzo",
+        "MATURITY_SETTLEMENT": "Liquidazione a Scadenza"
       },
       "interestType": "Tipo di Interesse",
       "interestTypeSimple": "Semplice",
@@ -381,8 +382,10 @@
       "matFreqQuarterly": "Trimestrale",
       "matFreqSemiannual": "Semestrale",
       "matFreqAnnual": "Annuale",
-      "generateInterest": "Stacco auto",
-      "generateInterestHint": "Genera automaticamente eventi di stacco interesse ad ogni data di maturazione"
+      "generateInterest": "Genera Cedola",
+      "generateInterestHint": "Genera automaticamente eventi di stacco cedola ad ogni data di maturazione. L'interesse maturato viene staccato e l'asset torna al valore iniziale.",
+      "interestTypeTooltip": "Determina come viene calcolato l'interesse. Semplice: solo sul valore iniziale. Composto: l'interesse matura anche sugli interessi accumulati.",
+      "dayCountTooltip": "Convenzione per il conteggio dei giorni nel periodo di interesse. ACT/365 e ACT/360 sono le più comuni. Influenza il calcolo dell'interesse giornaliero."
     },
     "probe": {
       "currentPrice": "Prezzo Attuale",
