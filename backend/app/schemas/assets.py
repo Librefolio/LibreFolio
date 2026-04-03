@@ -147,13 +147,17 @@ class FAInterestRatePeriod(BaseModel):
         end_date: Period end date (inclusive)
         annual_rate: Annual interest rate as decimal (e.g., 0.05 for 5%)
         maturation_frequency: How often interest matures (DAILY, WEEKLY, MONTHLY, etc.)
+        generate_interest: If True, auto-generate INTEREST events at each maturation date.
+            Event value = current_value - initial_value (resets price to initial_value).
+            Only generated when positive (no negative coupons).
 
     Example:
         {
             "start_date": "2025-01-01",
             "end_date": "2025-12-31",
             "annual_rate": 0.05,
-            "maturation_frequency": "MONTHLY"
+            "maturation_frequency": "MONTHLY",
+            "generate_interest": true
         }
     """
 
@@ -163,6 +167,12 @@ class FAInterestRatePeriod(BaseModel):
     end_date: date
     annual_rate: Decimal
     maturation_frequency: MaturationFrequency = MaturationFrequency.DAILY
+    generate_interest: bool = Field(
+        default=False,
+        description="Auto-generate INTEREST events at each maturation date. "
+                    "Event value = asset_value - initial_value (resets price to initial_value). "
+                    "Only generated if positive (no negative coupons)."
+        )
 
     @field_validator("annual_rate", mode="before")
     @classmethod
@@ -186,14 +196,15 @@ class FALateInterestConfig(BaseModel):
     """
     Late interest configuration for scheduled investments.
 
-    Defines the penalty interest rate, grace period, and interest type
-    applied after the asset's maturity date. Day count is inherited
-    from the parent FAScheduledInvestmentSchedule.
+    Defines the penalty interest rate, grace period, interest type, and
+    maturation frequency applied after the asset's maturity date.
+    Day count is inherited from the parent FAScheduledInvestmentSchedule.
 
     Attributes:
         annual_rate: Annual late interest rate as decimal (e.g., 0.12 for 12%)
         grace_period_days: Number of days after maturity before late interest applies
         interest_type: SIMPLE or COMPOUND for late interest (default: COMPOUND — penalties grow)
+        maturation_frequency: How often late interest matures/emits price points (default: DAILY)
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -203,6 +214,16 @@ class FALateInterestConfig(BaseModel):
     interest_type: InterestType = Field(
         default=InterestType.COMPOUND,
         description="Interest type for late interest: SIMPLE (on principal) or COMPOUND (on accumulated value, default)"
+        )
+    maturation_frequency: MaturationFrequency = Field(
+        default=MaturationFrequency.DAILY,
+        description="Maturation frequency for late interest period"
+        )
+    generate_interest: bool = Field(
+        default=False,
+        description="Auto-generate INTEREST events at each late maturation date, "
+                    "plus a MATURITY_SETTLEMENT event at the end. "
+                    "After settlement, the asset produces no further price points."
         )
 
     @field_validator("annual_rate", mode="before")

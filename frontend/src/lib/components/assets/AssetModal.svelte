@@ -169,7 +169,7 @@
     // =========================================================================
 
     let isValid = $derived(displayName.trim().length > 0);
-    let hasProvider = $derived(!providerNoProvider && providerCode !== '' && providerIdentifier !== '');
+    let hasProvider = $derived(!providerNoProvider && providerCode !== '' && (providerIdentifier !== '' || providerIdentifierType === 'AUTO_GENERATED'));
     let title = $derived(editMode ? $t('assets.modal.titleEdit') : $t('assets.modal.title'));
 
     /** Asset type options for SimpleSelect (with PNG icons) */

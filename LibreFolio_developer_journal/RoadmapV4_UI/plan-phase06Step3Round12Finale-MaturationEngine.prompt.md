@@ -90,7 +90,7 @@ In pratica: per il range richiesto (`request_start_date` → `request_end_date`)
 
 ### Blocco 1 — Eliminare `financial_math.py`, consolidare nel plugin
 
-**Status: ⬜ DA FARE**
+**Status: ✅ COMPLETATO** (2026-04-03)
 
 **File da modificare:**
 - `backend/app/services/asset_source_providers/scheduled_investment.py` — riceve le funzioni
@@ -101,15 +101,15 @@ In pratica: per il range richiesto (`request_start_date` → `request_end_date`)
 - `scripts/test_runner.py` — rimuovere `utils_financial_math` (riga 732) e entry `"financial-math"` (riga 2107)
 
 **Dettaglio:**
-- [ ] Spostare `calculate_day_count_fraction`, `calculate_simple_interest`, `_calculate_act_365`, `_calculate_act_360`, `_calculate_act_act`, `_calculate_30_360` come funzioni private in `scheduled_investment.py` (sezione `# Financial Math` sopra la classe)
-- [ ] **Fattorizzare** `_calculate_act_365` + `_calculate_act_360` in unica `_calculate_act_fixed(start, end, denominator: int)` — entrambe fanno `days / N`
-- [ ] Eliminare `find_active_period` (dead code: mai importata in produzione, usata solo nei test orfani)
-- [ ] Eliminare file `backend/app/utils/financial_math.py`
-- [ ] Eliminare file `backend/test_scripts/test_utilities/test_financial_math.py`
-- [ ] Aggiornare import in `test_asset_source.py` riga 41: `from backend.app.services.asset_source_providers.scheduled_investment import calculate_day_count_fraction`
-- [ ] Aggiornare import in `test_day_count_conventions.py` riga 19: stessa nuova location
-- [ ] In `test_runner.py`: rimuovere funzione `utils_financial_math` (righe 732-738) e entry dict `"financial-math"` (righe 2107-2113)
-- [ ] Verificare: `./dev.py test utils all` passa
+- [x] Spostare `calculate_day_count_fraction`, `calculate_simple_interest`, `_calculate_act_365`, `_calculate_act_360`, `_calculate_act_act`, `_calculate_30_360` come funzioni private in `scheduled_investment.py` (sezione `# Financial Math` sopra la classe)
+- [x] **Fattorizzare** `_calculate_act_365` + `_calculate_act_360` in unica `_calculate_act_fixed(start, end, denominator: int)` — entrambe fanno `days / N`
+- [x] Eliminare `find_active_period` (dead code: mai importata in produzione, usata solo nei test orfani)
+- [x] Eliminare file `backend/app/utils/financial_math.py`
+- [x] Eliminare file `backend/test_scripts/test_utilities/test_financial_math.py`
+- [x] Aggiornare import in `test_asset_source.py` riga 41: `from backend.app.services.asset_source_providers.scheduled_investment import calculate_day_count_fraction`
+- [x] Aggiornare import in `test_day_count_conventions.py` riga 19: stessa nuova location
+- [x] In `test_runner.py`: rimuovere funzione `utils_financial_math` (righe 732-738) e entry dict `"financial-math"` (righe 2107-2113)
+- [x] Verificare: `./dev.py test utils all` passa
 
 ---
 
@@ -182,18 +182,18 @@ Al confine tra periodi: il primo giorno del nuovo periodo si basa sull'ultimo va
 **Dettaglio:**
 
 #### §2.1 Schema: `maturation_frequency` su FALateInterestConfig
-- [ ] In `backend/app/schemas/assets.py`, aggiungere a `FALateInterestConfig`:
+- [x] In `backend/app/schemas/assets.py`, aggiungere a `FALateInterestConfig`:
   ```python
   maturation_frequency: MaturationFrequency = Field(
       default=MaturationFrequency.DAILY,
       description="Maturation frequency for late interest period"
   )
   ```
-- [ ] Aggiornare docstring di `FALateInterestConfig`
+- [x] Aggiornare docstring di `FALateInterestConfig`
 
 #### §2.2 Motore: maturation dates in `_generate_schedule_values`
-- [ ] Importare `from dateutil.relativedelta import relativedelta` (`python-dateutil` già nel Pipfile)
-- [ ] Aggiungere helper `_compute_maturation_dates(start: date, end: date, frequency: MaturationFrequency) -> set[date]`:
+- [x] Importare `from dateutil.relativedelta import relativedelta` (`python-dateutil` già nel Pipfile)
+- [x] Aggiungere helper `_compute_maturation_dates(start: date, end: date, frequency: MaturationFrequency) -> set[date]`:
   ```python
   def _compute_maturation_dates(start, end, frequency):
       """Compute all maturation dates within [start, end] for given frequency.
@@ -221,57 +221,57 @@ Al confine tra periodi: il primo giorno del nuovo periodo si basa sull'ultimo va
           d += delta
       return dates
   ```
-- [ ] In `_generate_schedule_values`, pre-calcolare maturation dates per tutti i periodi:
+- [x] In `_generate_schedule_values`, pre-calcolare maturation dates per tutti i periodi:
   ```python
   all_maturation_dates: set[date_type] = set()
   for p in schedule.schedule:
       all_maturation_dates |= _compute_maturation_dates(p.start_date, p.end_date, p.maturation_frequency)
   ```
-- [ ] Nel loop giornaliero, cambiare `values[current_date] = ...` a: salvare nel dict `values` **solo** se `current_date in all_maturation_dates`
-- [ ] Tutto il resto (calcolo interesse, event adjustment) rimane invariato — il calcolo è giorno per giorno, ma l'emissione è selettiva
+- [x] Nel loop giornaliero, cambiare `values[current_date] = ...` a: salvare nel dict `values` **solo** se `current_date in all_maturation_dates`
+- [x] Tutto il resto (calcolo interesse, event adjustment) rimane invariato — il calcolo è giorno per giorno, ma l'emissione è selettiva
 
 #### §2.3 Motore: late interest con maturation frequency + ottimizzazione (D9)
-- [ ] Riscrivere `_compute_late_interest_value` per usare la **formula di salto** invece di iterare dall'inizio:
+- [x] Riscrivere `_compute_late_interest_value` per usare la **formula di salto** invece di iterare dall'inizio:
   - **Input**: `schedule`, `target_date`, `last_scheduled_value`, `maturity_date`
   - **SIMPLE grace**: `V = last_scheduled_value + principal * grace_rate * frac(maturity→min(target, grace_end))`
   - **SIMPLE late**: `V_grace + principal * late_rate * frac(grace_end→target)`
   - **COMPOUND grace**: `V = last_scheduled_value`; poi day-by-day **solo** dal `max(maturity+1, request_start)` al `min(grace_end, target)` (non dall'inizio se non serve)
   - **COMPOUND late**: stessa ottimizzazione — calcolare il valore base al punto di partenza del sotto-periodo con formula closed-form (`V_base * (1+r*Δt)^N`), poi day-by-day solo per il range residuo
-- [ ] Il caller in `get_history_value` per il range post-maturity:
+- [x] Il caller in `get_history_value` per il range post-maturity:
   - Calcola le maturation dates del late interest con `_compute_maturation_dates(maturity_date + 1 day, request_end_date, schedule.late_interest.maturation_frequency)`
   - Per ogni maturation date nel range, chiama `_compute_late_interest_value` e emette un `FAPricePoint`
   - NON emette per tutti i giorni — solo le maturation dates
 
 #### §2.4 `get_history_value`: emissione selettiva
-- [ ] Modificare `get_history_value` per emettere solo i price points presenti nel dict `values` filtrati per `[start_date, end_date]`:
+- [x] Modificare `get_history_value` per emettere solo i price points presenti nel dict `values` filtrati per `[start_date, end_date]`:
   ```python
   for d in sorted(cached.keys()):
       if start_date <= d <= end_date:
           prices.append(FAPricePoint(date=d, close=cached[d], currency=currency))
   ```
-- [ ] Per il range post-maturity: stessa logica con maturation dates del late interest
+- [x] Per il range post-maturity: stessa logica con maturation dates del late interest
 
 #### §2.5 Frontend: serialize late `maturation_frequency`
-- [ ] In `ScheduledInvestmentEditor.svelte` funzione `serialize()` (riga 320), aggiungere al `late_interest` JSON:
+- [x] In `ScheduledInvestmentEditor.svelte` funzione `serialize()` (riga 320), aggiungere al `late_interest` JSON:
   ```javascript
   maturation_frequency: lr.maturation_frequency,
   ```
 
 #### §2.6 Frontend: filtro opzioni maturation frequency per durata periodo
-- [ ] Per ogni riga della DataTable, filtrare `MATURATION_FREQ_OPTIONS` in base a `daysBetween(row.start_date, row.end_date)`:
+- [x] Per ogni riga della DataTable, filtrare `MATURATION_FREQ_OPTIONS` in base a `daysBetween(row.start_date, row.end_date)`:
   - `DAILY` → sempre
   - `WEEKLY` → ≥ 7 giorni
   - `MONTHLY` → ≥ 28 giorni
   - `QUARTERLY` → ≥ 90 giorni
   - `SEMIANNUAL` → ≥ 180 giorni
   - `ANNUAL` → ≥ 365 giorni
-- [ ] Se resize del periodo invalida la scelta corrente → fallback a `DAILY`
-- [ ] Per la riga late interest: tutte le opzioni sono sempre disponibili (range infinito)
+- [x] Se resize del periodo invalida la scelta corrente → fallback a `DAILY`
+- [x] Per la riga late interest: tutte le opzioni sono sempre disponibili (range infinito)
 
 #### §2.7 Verifiche
-- [ ] `./dev.py test services synthetic-yield` passa
-- [ ] `./dev.py test services synthetic-yield-integration` passa
-- [ ] `./dev.py front check && ./dev.py front build --debug` passa
+- [x] `./dev.py test services synthetic-yield` passa
+- [x] `./dev.py test services synthetic-yield-integration` passa
+- [x] `./dev.py front check && ./dev.py front build --debug` passa
 
 ---
 
@@ -313,13 +313,13 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
 **Dettaglio:**
 
 #### §3.0 Prerequisito: rimozione UniqueConstraint (D7)
-- [ ] In `backend/app/db/models.py`, rimuovere `UniqueConstraint("asset_id", "date", "type", name="uq_asset_event_asset_date_type")` da `AssetEvent.__table_args__`
-- [ ] In `backend/alembic/versions/001_initial.py`, rimuovere `CONSTRAINT uq_asset_event_asset_date_type UNIQUE (asset_id, date, type)` dalla CREATE TABLE `asset_events`
-- [ ] Mantenere gli indici `idx_asset_event_asset_date` e `idx_asset_event_asset_type_date` per performance
-- [ ] `./dev.py db create-clean --test`
+- [x] In `backend/app/db/models.py`, rimuovere `UniqueConstraint("asset_id", "date", "type", name="uq_asset_event_asset_date_type")` da `AssetEvent.__table_args__`
+- [x] In `backend/alembic/versions/001_initial.py`, rimuovere `CONSTRAINT uq_asset_event_asset_date_type UNIQUE (asset_id, date, type)` dalla CREATE TABLE `asset_events`
+- [x] Mantenere gli indici `idx_asset_event_asset_date` e `idx_asset_event_asset_type_date` per performance
+- [x] `./dev.py db create-clean --test`
 
 #### §3.0a Fix `_upsert_asset_events` per coesistenza auto/manuali (conseguenza D7)
-- [ ] In `backend/app/services/asset_source.py`, nella funzione `_upsert_asset_events` (~riga 1197), il DELETE deve filtrare anche per `provider_assignment_id`:
+- [x] In `backend/app/services/asset_source.py`, nella funzione `_upsert_asset_events` (~riga 1197), il DELETE deve filtrare anche per `provider_assignment_id`:
   ```python
   # PRIMA (cancella TUTTI gli eventi su quella date/type — anche manuali!):
   del_stmt = delete(AssetEvent).where(and_(
@@ -338,15 +338,15 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
   **Nota**: quando `provider_assignment_id=None` (evento manuale), `== None` in SQLAlchemy genera `IS NULL` — il comportamento è corretto per entrambi i casi.
 
 #### §3.0b Aggiungere `MATURITY_SETTLEMENT` a `AssetEventType` (D6)
-- [ ] In `backend/app/db/models.py`, aggiungere all'enum `AssetEventType`:
+- [x] In `backend/app/db/models.py`, aggiungere all'enum `AssetEventType`:
   ```python
   MATURITY_SETTLEMENT = "MATURITY_SETTLEMENT"
   ```
-- [ ] Aggiornare docstring dell'enum con la descrizione: "Asset reaches maturity — final capital return, no further calculations"
-- [ ] `./dev.py api sync` per aggiornare i tipi TypeScript generati
+- [x] Aggiornare docstring dell'enum con la descrizione: "Asset reaches maturity — final capital return, no further calculations"
+- [x] `./dev.py api sync` per aggiornare i tipi TypeScript generati
 
 #### §3.1 Schema
-- [ ] In `backend/app/schemas/assets.py`, aggiungere a `FAInterestRatePeriod`:
+- [x] In `backend/app/schemas/assets.py`, aggiungere a `FAInterestRatePeriod`:
   ```python
   generate_interest: bool = Field(
       default=False,
@@ -355,7 +355,7 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
                   "Only generated if positive (no negative coupons)."
   )
   ```
-- [ ] In `backend/app/schemas/assets.py`, aggiungere a `FALateInterestConfig`:
+- [x] In `backend/app/schemas/assets.py`, aggiungere a `FALateInterestConfig`:
   ```python
   generate_interest: bool = Field(
       default=False,
@@ -364,13 +364,13 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
                   "After settlement, the asset produces no further price points."
   )
   ```
-- [ ] Aggiornare docstring ed esempio JSON di entrambi
+- [x] Aggiornare docstring ed esempio JSON di entrambi
 
 #### §3.2 Motore: cache tupla + auto-generazione in `_generate_schedule_values` (D5, D8)
-- [ ] Cambiare return type: `def _generate_schedule_values(schedule) -> tuple[dict[date, Decimal], list[FAAssetEventPoint]]`
-- [ ] Aggiornare la cache per salvare la tupla `(values, auto_events)`
-- [ ] Aggiungere lista `auto_events: list[FAAssetEventPoint] = []` nel motore
-- [ ] Nel loop giornaliero, seguire l'ordine D8:
+- [x] Cambiare return type: `def _generate_schedule_values(schedule) -> tuple[dict[date, Decimal], list[FAAssetEventPoint]]`
+- [x] Aggiornare la cache per salvare la tupla `(values, auto_events)`
+- [x] Aggiungere lista `auto_events: list[FAAssetEventPoint] = []` nel motore
+- [x] Nel loop giornaliero, seguire l'ordine D8:
   ```python
   # 1. Calcolo interesse giornaliero (già esistente)
 
@@ -395,14 +395,14 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
   if current_date in all_maturation_dates:
       values[current_date] = principal + total_interest + event_adjustment
   ```
-- [ ] Aggiornare tutti i caller di `_generate_schedule_values` per destrutturare la tupla:
+- [x] Aggiornare tutti i caller di `_generate_schedule_values` per destrutturare la tupla:
   ```python
   cached_values, cached_events = _generate_schedule_values(schedule)
   ```
-- [ ] **Attenzione compound**: dopo il reset, il loop successivo usa `base = principal + total_interest` dove `total_interest = 0` → base = `principal` = `initial_value`. Matematicamente corretto.
+- [x] **Attenzione compound**: dopo il reset, il loop successivo usa `base = principal + total_interest` dove `total_interest = 0` → base = `principal` = `initial_value`. Matematicamente corretto.
 
 #### §3.2b MATURITY_SETTLEMENT alla fine dello schedule (D6)
-- [ ] Dopo il loop principale, se l'ultimo periodo ha `generate_interest=True` E non c'è late interest:
+- [x] Dopo il loop principale, se l'ultimo periodo ha `generate_interest=True` E non c'è late interest:
   ```python
   # Settlement: asset closes at end of last period
   # Value = residual asset value (principal + remaining interest + adjustments)
@@ -414,49 +414,49 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
       notes="Maturity settlement — asset closed"
   ))
   ```
-- [ ] Se c'è late interest con `generate_interest=True`, il settlement avviene nell'ultimo price point del late interest (gestito in `get_history_value`)
-- [ ] Dopo MATURITY_SETTLEMENT, il motore NON produce ulteriori price points. In `get_history_value` e `get_current_value`: se `target_date > settlement_date`, restituire il settlement value senza ulteriori calcoli.
-- [ ] **Nota**: il valore del settlement è il residuo dell'asset. Se `generate_interest=True` ha già staccato tutte le cedole, il residuo sarà ≈ `initial_value`. Se ci sono PRICE_ADJUSTMENT non staccati, il residuo li include. L'utente può eventualmente modificare manualmente l'evento di settlement verso il basso — la differenza è una perdita non rimborsata.
+- [x] Se c'è late interest con `generate_interest=True`, il settlement avviene nell'ultimo price point del late interest (gestito in `get_history_value`)
+- [x] Dopo MATURITY_SETTLEMENT, il motore NON produce ulteriori price points. In `get_history_value` e `get_current_value`: se `target_date > settlement_date`, restituire il settlement value senza ulteriori calcoli.
+- [x] **Nota**: il valore del settlement è il residuo dell'asset. Se `generate_interest=True` ha già staccato tutte le cedole, il residuo sarà ≈ `initial_value`. Se ci sono PRICE_ADJUSTMENT non staccati, il residuo li include. L'utente può eventualmente modificare manualmente l'evento di settlement verso il basso — la differenza è una perdita non rimborsata.
 
 #### §3.3 Motore: emettere auto_events in `get_history_value`
-- [ ] In `get_history_value`, destrutturare la cache: `cached_values, cached_events = _generate_schedule_values(schedule)`
-- [ ] Dopo aver costruito i `prices`, mergiare cached_events con i manuali:
+- [x] In `get_history_value`, destrutturare la cache: `cached_values, cached_events = _generate_schedule_values(schedule)`
+- [x] Dopo aver costruito i `prices`, mergiare cached_events con i manuali:
   ```python
   # Merge cached auto-events + manual events, filtered to range
   all_events = [e for e in cached_events if start_date <= e.date <= end_date]
   all_events += [e for e in schedule.asset_events if start_date <= e.date <= end_date]
   all_events.sort(key=lambda e: e.date)
   ```
-- [ ] Per il late interest con `generate_interest=True`: generare auto_events anche nel range post-maturity (non cachati — calcolati on-demand in `get_history_value`)
-- [ ] Se late interest ha `generate_interest=True`, aggiungere MATURITY_SETTLEMENT all'ultima maturation date del late interest
+- [x] Per il late interest con `generate_interest=True`: generare auto_events anche nel range post-maturity (non cachati — calcolati on-demand in `get_history_value`)
+- [x] Se late interest ha `generate_interest=True`, aggiungere MATURITY_SETTLEMENT all'ultima maturation date del late interest
 
 #### §3.4 Frontend: toggle `generate_interest` in ScheduledInvestmentEditor
-- [ ] Aggiungere `generate_interest: boolean` all'interfaccia `ScheduleRow` (riga 55)
-- [ ] Nella colonna maturation_frequency della DataTable, aggiungere un toggle/icona inline (es: 📤) per `generate_interest`. Quando attivo, indica che alla maturation il sistema genera automaticamente l'evento di stacco interesse.
+- [x] Aggiungere `generate_interest: boolean` all'interfaccia `ScheduleRow` (riga 55)
+- [x] Nella colonna maturation_frequency della DataTable, aggiungere un toggle/icona inline (es: 📤) per `generate_interest`. Quando attivo, indica che alla maturation il sistema genera automaticamente l'evento di stacco interesse.
   - Implementazione: nella definizione `columns`, o aggiungere una 4ª colonna dedicata (piccola, solo toggle), o come icon-button inline accanto al select di frequenza
-- [ ] `serialize()`: aggiungere `generate_interest: r.generate_interest` nel mapping periodi
-- [ ] `serialize()`: aggiungere `generate_interest: lr.generate_interest ?? false` nel late_interest JSON
-- [ ] `deserializeRows()`: leggere `p.generate_interest ?? false`
-- [ ] `handleAddPeriod()`: default `generate_interest: false`
-- [ ] Traduzione: `./dev.py i18n add "assets.schedule.generateInterest" --en "Auto-payout" --it "Stacco auto" --fr "Paiement auto" --es "Pago auto"`
+- [x] `serialize()`: aggiungere `generate_interest: r.generate_interest` nel mapping periodi
+- [x] `serialize()`: aggiungere `generate_interest: lr.generate_interest ?? false` nel late_interest JSON
+- [x] `deserializeRows()`: leggere `p.generate_interest ?? false`
+- [x] `handleAddPeriod()`: default `generate_interest: false`
+- [x] Traduzione: `./dev.py i18n add "assets.schedule.generateInterest" --en "Auto-payout" --it "Stacco auto" --fr "Paiement auto" --es "Pago auto"`
 
 #### §3.5 Verifiche
-- [ ] Test sintetico: schedule con `generate_interest=True`, MONTHLY, 1 anno → 12 eventi auto-generati, prezzo che torna a initial_value ogni mese
-- [ ] Test sintetico: schedule con `generate_interest=True` + COMPOUND → dopo stacco, compound riparte da initial_value (non da valore accumulato)
-- [ ] Test sintetico: schedule con `generate_interest=True` + PRICE_ADJUSTMENT negativo che porta valore sotto initial_value → nessun evento generato (cedola solo positiva)
-- [ ] Test sintetico: schedule con `generate_interest=True` sull'ultimo periodo senza late → genera MATURITY_SETTLEMENT all'end_date con value = valore residuo
-- [ ] Test sintetico: late interest con `generate_interest=True` → genera MATURITY_SETTLEMENT + INTEREST periodici
-- [ ] Test sintetico: auto INTEREST + manuale INTEREST sulla stessa data → entrambi coesistono nel DB (UniqueConstraint rimosso)
-- [ ] Test sintetico: `get_current_value` chiamato **dopo** la data di MATURITY_SETTLEMENT → restituisce il settlement value, senza calcoli ulteriori (motore "spento")
-- [ ] Test sintetico: `_upsert_asset_events` con auto-eventi non cancella eventi manuali sulla stessa (date, type)
-- [ ] `./dev.py test services synthetic-yield` passa
-- [ ] `./dev.py front check && ./dev.py front build --debug` passa
+- [x] Test sintetico: schedule con `generate_interest=True`, MONTHLY, 1 anno → 12 eventi auto-generati, prezzo che torna a initial_value ogni mese
+- [x] Test sintetico: schedule con `generate_interest=True` + COMPOUND → dopo stacco, compound riparte da initial_value (non da valore accumulato)
+- [x] Test sintetico: schedule con `generate_interest=True` + PRICE_ADJUSTMENT negativo che porta valore sotto initial_value → nessun evento generato (cedola solo positiva)
+- [x] Test sintetico: schedule con `generate_interest=True` sull'ultimo periodo senza late → genera MATURITY_SETTLEMENT all'end_date con value = valore residuo
+- [x] Test sintetico: late interest con `generate_interest=True` → genera MATURITY_SETTLEMENT + INTEREST periodici
+- [x] Test sintetico: auto INTEREST + manuale INTEREST sulla stessa data → entrambi coesistono nel DB (UniqueConstraint rimosso)
+- [x] Test sintetico: `get_current_value` chiamato **dopo** la data di MATURITY_SETTLEMENT → restituisce il settlement value, senza calcoli ulteriori (motore "spento")
+- [x] Test sintetico: `_upsert_asset_events` con auto-eventi non cancella eventi manuali sulla stessa (date, type)
+- [x] `./dev.py test services synthetic-yield` passa
+- [x] `./dev.py front check && ./dev.py front build --debug` passa
 
 ---
 
 ### Blocco 4 — Fix critici frontend: save + test button + identifier + UX polish
 
-**Status: ⬜ DA FARE (§4.2 backend completato in Blocco 1.5)**
+**Status: ✅ COMPLETATO**
 
 **File da modificare:**
 - `frontend/src/lib/components/assets/AssetModal.svelte` — fix `hasProvider`
@@ -464,7 +464,7 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
 - `frontend/src/lib/components/assets/ScheduledInvestmentEditor.svelte` — UX polish (componenti custom, layout, icone, tooltip, bulk events)
 
 #### §4.1 Fix `hasProvider` in AssetModal.svelte
-- [ ] Riga 172, cambiare:
+- [x] Riga 172, cambiare:
   ```javascript
   // PRIMA:
   let hasProvider = $derived(!providerNoProvider && providerCode !== '' && providerIdentifier !== '');
@@ -477,14 +477,14 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
 - [x] `./dev.py db create-clean --test` — verificato
 
 #### §4.3 Fix test button in ProviderAssignmentSection.svelte
-- [ ] Riga 620: cambiare disabled condition:
+- [x] Riga 620: cambiare disabled condition:
   ```javascript
   // PRIMA:
   disabled={!providerCode || !identifier || testStatus === 'testing' || disabled}
   // DOPO:
   disabled={!providerCode || (!identifier && !isAutoGenerated) || testStatus === 'testing' || disabled}
   ```
-- [ ] Riga 291: cambiare computedParams per scheduled_investment:
+- [x] Riga 291: cambiare computedParams per scheduled_investment:
   ```javascript
   // PRIMA:
   const computedParams = paramsSchema.length > 0 ? {...paramsValues} : null;
@@ -493,14 +493,14 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
   ```
 
 #### §4.4 Asset Events: componenti custom + bulk delete + responsive
-- [ ] **Date**: sostituire `<input type="date">` con `SingleDatePicker` (importarlo, prop `allowFuture={true}` per date future, `compact={true}`)
-- [ ] **Type**: sostituire `<select>` nativo con `SimpleSelect` (già importato, usare `EVENT_TYPE_OPTIONS` con label da i18n)
-- [ ] **Currency evento**: aggiungere `CurrencySearchSelect` accanto al campo value (come nel blocco initial_value)
-- [ ] **Bulk delete eventi**: aggiungere stato `selectedEventIds: string[]`, checkbox per selezione evento, toolbar bulk (come per i periodi) con pulsante delete + conferma. La toolbar compare accanto a "Add Event" quando ci sono eventi selezionati.
-- [ ] **Responsive "Add Event"**: la label deve avere `class="hidden sm:inline"` per nasconderla in mobile (come per "Add Period")
+- [x] **Date**: sostituire `<input type="date">` con `SingleDatePicker` (importarlo, prop `allowFuture={true}` per date future, `compact={true}`)
+- [x] **Type**: sostituire `<select>` nativo con `SimpleSelect` (già importato, usare `EVENT_TYPE_OPTIONS` con label da i18n)
+- [x] **Currency evento**: aggiungere `CurrencySearchSelect` accanto al campo value (come nel blocco initial_value)
+- [x] **Bulk delete eventi**: aggiungere stato `selectedEventIds: string[]`, checkbox per selezione evento, toolbar bulk (come per i periodi) con pulsante delete + conferma. La toolbar compare accanto a "Add Event" quando ci sono eventi selezionati.
+- [x] **Responsive "Add Event"**: la label deve avere `class="hidden sm:inline"` per nasconderla in mobile (come per "Add Period")
 
 #### §4.5 Layout colonne DataTable
-- [ ] Equilibrare le 3 colonne (Period, Rate, Maturation Frequency): rimuovere `width` fissi e usare distribuzione uguale. Actions e Selection restano di dimensione fissa.
+- [x] Equilibrare le 3 colonne (Period, Rate, Maturation Frequency): rimuovere `width` fissi e usare distribuzione uguale. Actions e Selection restano di dimensione fissa.
   ```javascript
   // Per tutte e 3 le colonne:
   width: undefined,  // rimuovere o commentare
@@ -509,7 +509,7 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
   ```
 
 #### §4.6 Icone maturation frequency
-- [ ] Aggiungere emoji a `MATURATION_FREQ_OPTIONS`:
+- [x] Aggiungere emoji a `MATURATION_FREQ_OPTIONS`:
   ```javascript
   {value: 'DAILY', label: `🕐 ${$t('assets.schedule.matFreqDaily')}`},
   {value: 'WEEKLY', label: `📅 ${$t('assets.schedule.matFreqWeekly')}`},
@@ -520,29 +520,29 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
   ```
 
 #### §4.7 CurrencySearchSelect altezza
-- [ ] Nel blocco initial_value (riga 960-969): allineare l'altezza del `CurrencySearchSelect` a quella dell'input numerico adiacente. Il wrapper div può avere una classe che forza l'altezza uguale.
+- [x] Nel blocco initial_value (riga 960-969): allineare l'altezza del `CurrencySearchSelect` a quella dell'input numerico adiacente. Il wrapper div può avere una classe che forza l'altezza uguale.
 
 #### §4.8 Day Count & Interest Type tooltip
-- [ ] Aggiungere icona ℹ️ cliccabile accanto al label "📆 Day Count" con tooltip che spiega "Applies to all schedule periods" + link a `/mkdocs/financial-theory/day-count/` (stesso pattern del `headerTooltipUrl` nelle colonne DataTable)
-- [ ] Stesso pattern per "📐 Interest Type" con link a docs
+- [x] Aggiungere icona ℹ️ cliccabile accanto al label "📆 Day Count" con tooltip che spiega "Applies to all schedule periods" + link a `/mkdocs/financial-theory/day-count/` (stesso pattern del `headerTooltipUrl` nelle colonne DataTable)
+- [x] Stesso pattern per "📐 Interest Type" con link a docs
 
 #### §4.9 Step valore iniziale
-- [ ] Verificare che `step="100"` sull'input numerico funzioni correttamente (non mostri incrementi di 0.01 col browser)
+- [x] Verificare che `step="100"` sull'input numerico funzioni correttamente (non mostri incrementi di 0.01 col browser)
 
 #### §4.10 Traduzioni
-- [ ] `./dev.py i18n search "assets.schedule"` — verificare chiavi esistenti
-- [ ] `./dev.py i18n audit` — identificare chiavi orfane
-- [ ] Rimuovere chiavi obsolete: `./dev.py i18n remove "assets.schedule.compounding"`, `"assets.schedule.compFreq"`, `"assets.schedule.freqHint"`, `"assets.schedule.compoundingHint"`, `"assets.schedule.dayCountHint"` (se sostituita da tooltip)
-- [ ] Aggiungere nuove chiavi mancanti (se non già presenti):
+- [x] `./dev.py i18n search "assets.schedule"` — verificare chiavi esistenti
+- [x] `./dev.py i18n audit` — identificare chiavi orfane
+- [x] Rimuovere chiavi obsolete: `./dev.py i18n remove "assets.schedule.compounding"`, `"assets.schedule.compFreq"`, `"assets.schedule.freqHint"`, `"assets.schedule.compoundingHint"`, `"assets.schedule.dayCountHint"` (se sostituita da tooltip)
+- [x] Aggiungere nuove chiavi mancanti (se non già presenti):
   - `assets.schedule.generateInterest` — "Auto-payout" / "Stacco auto" / "Paiement auto" / "Pago auto"
   - `assets.schedule.generateInterestHint` — tooltip per il toggle
   - `assets.schedule.dayCountTooltip` — tooltip per day count globale
   - `assets.schedule.interestTypeTooltip` — tooltip per interest type globale
 
 #### §4.11 Verifiche
-- [ ] `./dev.py front check` → 0 errori
-- [ ] `./dev.py front build --debug` → OK
-- [ ] `./dev.py test all` → tutti verdi
+- [x] `./dev.py front check` → 0 errori
+- [x] `./dev.py front build --debug` → OK
+- [x] `./dev.py test all` → tutti verdi
 
 ---
 
@@ -553,14 +553,14 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
 - `TODO_FUTURI.md` — decisioni architetturali
 
 #### §5.1 Annotare nel piano principale (plan-phase06Assets.prompt.md)
-- [ ] Nello step di documentazione, aggiungere:
+- [x] Nello step di documentazione, aggiungere:
   - `scheduled-investment.en.md` da aggiornare con: `interest_type`/`day_count` globali, formato `initial_value` Currency, `generate_interest` flag, `maturation_frequency` su late interest, sezione eventi auto-generati, maturation frequency nei price points
   - Nota su **auto-sync alla creazione**: alla creazione dell'asset con `scheduled_investment`, il frontend richiede sync su tutto il range schedule (dall'inizio alla fine o almeno fino a oggi), non solo today
   - Nota su **riconfigurazione**: alla modifica del provider `scheduled_investment`, il frontend deve prima eliminare tutti i prezzi/eventi precedenti e poi ri-sincronizzare
   - Verificare docs `day-count` aggiornati con le 4 convenzioni
 
 #### §5.2 Annotare in TODO_FUTURI.md
-- [ ] **Phase 7 — Collegamento evento→transazione**:
+- [x] **Phase 7 — Collegamento evento→transazione**:
   - Aggiungere campo `asset_event_id: Optional[int] = Field(default=None, foreign_key="asset_events.id")` su `Transaction`
   - Tipo DIVIDEND/INTEREST nella transaction collega all'evento asset auto-generato
   - Il FK `Transaction.asset_event_id` blocca il CASCADE delete su `AssetEvent` quando ci sono transazioni collegate → il backend ritorna errore 409 Conflict
@@ -568,17 +568,17 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
   - Gli eventi manuali (tabella "Asset Events" nel frontend, `provider_assignment_id=NULL`) servono per eventi un-planned
   - Gli eventi auto-generati (`provider_assignment_id` non-NULL, da `generate_interest=True`) sono planned e ricreabili deterministicamente
   - **MATURITY_SETTLEMENT** → al momento del settlement, il frontend suggerisce la creazione di una transazione SELL 100% (o del residuo). Se l'utente ha transazioni INTEREST auto-generate, il settlement chiude il ciclo.
-- [ ] **Phase 7 — Modale cambio provider**:
+- [x] **Phase 7 — Modale cambio provider**:
   - Quando l'utente cambia provider su un asset che ha eventi auto-generati (provider_assignment_id non-NULL):
     1. Frontend mostra modale: "Ci sono N eventi generati dalla configurazione attuale"
     2. Opzione A: "Elimina tutto" → procedi con DELETE assignment (CASCADE elimina eventi)
     3. Opzione B: "Mantieni come manuali" → UPDATE asset_events SET provider_assignment_id=NULL, poi DELETE assignment
     4. Opzione C: "Annulla"
   - Se ci sono transazioni collegate (Phase 7+), l'opzione A è bloccata → mostrare dettaglio transazioni da scollegare prima
-- [ ] **Futura policy cedola**:
+- [x] **Futura policy cedola**:
   - Colonna `coupon_policy` su `FAInterestRatePeriod` con opzioni: FULL_RESET (attuale, torna a initial_value), CUSTOM_RATE (tasso cedola diverso dal tasso di accumulo), PARTIAL (percentuale del valore accumulato)
   - Per ora solo FULL_RESET è implementato
-- [ ] **Late interest generate_interest**:
+- [x] **Late interest generate_interest**:
   - Il late interest ora supporta `generate_interest=True`. Genera INTEREST periodici + MATURITY_SETTLEMENT finale.
   - Il late interest NON è una "opportunità" ma una penale — tuttavia il flag unifica il pattern: l'utente decide se auto-generare eventi o meno, indipendentemente dalla natura del tasso.
   - Documentare che se l'utente non vuole auto-generare eventi di penale, lascia `generate_interest=False` sul late interest e usa eventi manuali.

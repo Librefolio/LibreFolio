@@ -150,6 +150,18 @@ export interface EditableSelectCell {
 }
 
 /**
+ * Editable checkbox cell — renders an inline checkbox toggle.
+ * Used for boolean flags like generate_interest in schedule editors.
+ */
+export interface EditableCheckboxCell {
+    type: 'editable-checkbox';
+    /** Current checked state */
+    value: boolean;
+    /** Callback when checkbox changes */
+    onchange: (newValue: boolean) => void;
+}
+
+/**
  * All possible cell content types
  */
 export type CellContent =
@@ -164,7 +176,8 @@ export type CellContent =
     | EditableNumberCell
     | EditableTextCell
     | HtmlCell
-    | EditableSelectCell;
+    | EditableSelectCell
+    | EditableCheckboxCell;
 
 // ============ Column Definition Types ============
 

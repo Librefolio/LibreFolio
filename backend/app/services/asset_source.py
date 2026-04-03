@@ -1193,13 +1193,15 @@ class AssetSourceManager:
                 notes=evt.notes,
                 ))
 
-        # Delete existing events for these (date, type) pairs
+        # Delete existing events for these (date, type) pairs — only for the SAME provider
+        # When provider_assignment_id is None, SQLAlchemy generates IS NULL which is correct
         for evt_date, evt_type in keys_to_delete:
             del_stmt = delete(AssetEvent).where(
                 and_(
                     AssetEvent.asset_id == asset_id,
                     AssetEvent.date == evt_date,
                     AssetEvent.type == evt_type,
+                    AssetEvent.provider_assignment_id == provider_assignment_id,
                     )
                 )
             await session.execute(del_stmt)

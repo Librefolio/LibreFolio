@@ -58,6 +58,7 @@ export type {
     LinkCell,
     CustomCell,
     ImageCell,
+    EditableCheckboxCell,
     // Column definition
     ColumnDef,
     ColumnType,

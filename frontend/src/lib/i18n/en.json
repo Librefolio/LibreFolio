@@ -380,7 +380,9 @@
       "matFreqMonthly": "Monthly",
       "matFreqQuarterly": "Quarterly",
       "matFreqSemiannual": "Semiannual",
-      "matFreqAnnual": "Annual"
+      "matFreqAnnual": "Annual",
+      "generateInterest": "Auto-payout",
+      "generateInterestHint": "Auto-generate interest payout events at each maturation date"
     },
     "probe": {
       "currentPrice": "Current Price",

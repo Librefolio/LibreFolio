@@ -868,43 +868,52 @@ Aggiungere via `./dev.py i18n add` in EN/IT/FR/ES.
 
 ### 📝 Note per Step Documentazione — Verifiche Approfondite Post-Bugfixstep3Round 12
 
-> **ATTENZIONE**: Le seguenti aree sono state modificate significativamente nel Round 12 e
+> **ATTENZIONE**: Le seguenti aree sono state modificate significativamente nel Round 12/12-Finale e
 > richiedono **verifica approfondita** durante lo step di documentazione/QA.
 
-#### Backend: `financial_math.py`
-- **`find_active_period()`**: è **dead code** — non usata da nessun codice di produzione.
-  Usata solo in `test_financial_math.py` (13 test). **Da rimuovere** con i relativi test.
-- **`calculate_simple_interest()`**: wrapper `a * b * c` — mantenuta per chiarezza semantica,
-  ma valutare se inlinare nelle call site.
-- **Varianti `_calculate_act_*`**: `ACT/365` e `ACT/360` sono identiche con denominatore diverso →
-  fattorizzabili in `_calculate_act_fixed(start, end, denominator)`. `ACT/ACT` e `30/360` restano separate.
-- **Nessun test diretto per `calculate_simple_interest`**: testata solo indirettamente via
-  `test_synthetic_yield.py`. Valutare se aggiungere unit test dedicati.
+#### Backend: `financial_math.py` — ✅ ELIMINATO (Round 12 Finale, Blocco 1)
+- Funzioni spostate in `scheduled_investment.py` come sezione `# Financial Math`
+- `_calculate_act_365` + `_calculate_act_360` fattorizzate in `_calculate_act_fixed(start, end, denominator)`
+- `find_active_period()` eliminata (dead code)
+- `test_financial_math.py` eliminato (13 test orfani di `find_active_period`)
 
-#### Backend: `scheduled_investment.py`
-- **Compound interest nel range**: implementato come iterazione giornaliera di I_semplice sulla
-  base corrente (`V_{t-1}`). Matematicamente equivalente a `P * (1 + r/365)^N`.
-- **Compound interest nel late**: stesso pattern day-by-day, con cambio rate a grace_end.
-- **Simple interest nel late**: calcolo diretto `P * r * Δt` (niente loop), attenzione che la
-  base è sempre `initial_value.amount`, NON `last_scheduled_value`.
-- **Event processing**: `INTEREST` → `event_adjustment -= amount` (drop); `PRICE_ADJUSTMENT` →
-  `event_adjustment += amount` (algebraico, può essere negativo per write-down).
-- **Cache**: `_CACHE` con theine TTL 48h — verificare comportamento in produzione con molti asset.
+#### Backend: `scheduled_investment.py` — Aggiornato Round 12 Finale
+- **`_generate_schedule_values()` ora ritorna `tuple[dict, list[FAAssetEventPoint]]`** — cache salva la tupla intera (D5)
+- **Emissione selettiva**: price points emessi solo alle maturation dates, non ogni giorno
+- **`generate_interest=True`**: auto-genera eventi INTEREST ad ogni maturation date (D1/D8)
+  - Cedola = `current_value - initial_value` (solo positiva)
+  - Dopo coupon: `total_interest = 0`, `event_adjustment = 0` → value torna a `initial_value`
+- **`MATURITY_SETTLEMENT`**: generato alla fine dello schedule (o del late interest) quando generate_interest=True (D6)
+  - Dopo settlement il motore è "spento" — `get_current_value` ritorna settlement value
+- **Late interest maturation frequency**: emissione selettiva anche post-maturity
+- **Skip formula (D9)**: SIMPLE late interest usa closed-form, COMPOUND day-by-day solo nel sotto-periodo
+
+#### Backend: `_upsert_asset_events()` — Aggiornato Round 12 Finale
+- DELETE filtra anche per `provider_assignment_id` → eventi manuali sopravvivono al refresh (D7)
+
+#### Backend: Schemi aggiornati
+- `FAInterestRatePeriod.generate_interest: bool = False` — flag auto-generazione eventi
+- `FALateInterestConfig.maturation_frequency: MaturationFrequency = DAILY` — emissione selettiva late
+- `FALateInterestConfig.generate_interest: bool = False` — auto-generazione + MATURITY_SETTLEMENT
+- `AssetEventType.MATURITY_SETTLEMENT` — nuovo valore enum (D6)
+- `AssetEvent`: rimossa UniqueConstraint su (asset_id, date, type) → auto + manuali coesistono (D7)
 
 #### Frontend: `ScheduledInvestmentEditor.svelte`
-- **1268 righe** — componente complesso, verifica completa necessaria (vedi checklist sopra).
-- **Deserializzazione backward-compat**: gestisce sia `initial_value` flat (vecchio) che Currency object (nuovo).
-- **`serialize()` emette sempre formato Currency**: `{code, amount}` — tutti i consumer devono accettarlo.
-- **Global vs per-row**: `interest_type` e `day_count` sono globali (su schedule), `maturation_frequency` è per-riga,
-  `lateInterestType` è per-riga late — verificare che UI rifletta questa separazione.
-- **`interestType` default `SIMPLE`**: se il JSON non lo contiene, default è SIMPLE (riga 175).
-  Verificare che sia coerente col backend (`FAScheduledInvestmentSchedule.interest_type` default).
+- **`generate_interest` toggle**: nuova colonna DataTable con checkbox inline
+- **Maturation frequency filtering**: opzioni filtrate per durata periodo, auto-fallback a DAILY
+- **Serialize/deserialize**: `generate_interest` + `maturation_frequency` su late_interest
+- **Emoji icons** sulle opzioni maturation frequency
 
-#### Schemi: `assets.py` + `prices.py`
-- **`InterestType` enum** aggiunto (SIMPLE/COMPOUND) — usato in `FAScheduledInvestmentSchedule` e
-  `FALateInterestConfig`. Verificare che api-sync generi i tipi TS.
-- **`MaturationFrequency` enum** (ex CompoundFrequency) — 6 valori senza CONTINUOUS.
-- **`FAAssetEventPoint`**: campo `value` è `Currency` (non più `Decimal`), campo `type` è string (non enum).
+#### Frontend: Fix critici (Round 12 Finale, Blocco 4 §4.1/§4.3)
+- `hasProvider` in `AssetModal.svelte`: accetta `AUTO_GENERATED` senza identifier
+- Test button in `ProviderAssignmentSection.svelte`: abilitato per AUTO_GENERATED
+- `computedParams`: passa `providerParams` direttamente per `scheduled_investment`
+
+#### Documentazione da aggiornare
+- `scheduled-investment.en.md`: aggiungere `generate_interest` flag, `maturation_frequency` su late, auto-eventi, MATURITY_SETTLEMENT
+- Nota **auto-sync alla creazione**: frontend deve richiedere sync su tutto il range schedule
+- Nota **riconfigurazione**: eliminare prezzi/eventi precedenti prima di ri-sincronizzare
+- Verificare docs `day-count` con le 4 convenzioni
   Verificare coerenza con `AssetEventType` DB enum.
 - **Nessun campo `day_count` su `FAInterestRatePeriod`** — è globale su `FAScheduledInvestmentSchedule`.
   Frontend e test devono rispettare questa separazione.

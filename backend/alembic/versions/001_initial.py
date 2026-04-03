@@ -306,8 +306,7 @@ def upgrade() -> None:
                    created_at             DATETIME       NOT NULL,
                    updated_at             DATETIME       NOT NULL,
                    FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
-                   FOREIGN KEY (provider_assignment_id) REFERENCES asset_provider_assignments (id) ON DELETE CASCADE,
-                   CONSTRAINT uq_asset_event_asset_date_type UNIQUE (asset_id, date, type)
+                   FOREIGN KEY (provider_assignment_id) REFERENCES asset_provider_assignments (id) ON DELETE CASCADE
                )"""
             )
         )
