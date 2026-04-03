@@ -157,7 +157,7 @@ async def test_provider_interest_calculation():
         asset_events=[],
         )
 
-    cached = _generate_schedule_values(params)
+    cached, _ = _generate_schedule_values(params)
     value = cached[date(2025, 1, 30)]
 
     # Expected: 10000 + (10000 * 0.05 * 29/365) ≈ 10039.73
@@ -193,7 +193,7 @@ async def test_provider_with_interest_event():
             ],
         )
 
-    cached = _generate_schedule_values(params)
+    cached, _ = _generate_schedule_values(params)
     value_before = cached[date(2025, 6, 30)]
     value_after = cached[date(2025, 7, 1)]
 
@@ -227,7 +227,7 @@ async def test_provider_with_price_adjustment_event():
             ],
         )
 
-    cached = _generate_schedule_values(params)
+    cached, _ = _generate_schedule_values(params)
     value_before = cached[date(2025, 5, 31)]
     value_after = cached[date(2025, 6, 1)]
 
@@ -287,7 +287,7 @@ async def test_provider_late_interest():
         asset_events=[],
         )
 
-    cached = _generate_schedule_values(params)
+    cached, _ = _generate_schedule_values(params)
     maturity_date = date(2025, 3, 31)
     value_maturity = cached[maturity_date]
 
@@ -324,8 +324,8 @@ async def test_compound_vs_simple_interest():
     simple = FAScheduledInvestmentSchedule(interest_type=InterestType.SIMPLE, **base_args)
     compound = FAScheduledInvestmentSchedule(interest_type=InterestType.COMPOUND, **base_args)
 
-    simple_values = _generate_schedule_values(simple)
-    compound_values = _generate_schedule_values(compound)
+    simple_values, _ = _generate_schedule_values(simple)
+    compound_values, _ = _generate_schedule_values(compound)
 
     # At the end of the year, compound must exceed simple
     end_date = date(2025, 12, 31)
@@ -354,7 +354,7 @@ async def test_compound_interest_numeric():
         asset_events=[],
         )
 
-    cached = _generate_schedule_values(params)
+    cached, _ = _generate_schedule_values(params)
     value_end = cached[date(2025, 12, 31)]
 
     # Expected: 10000 * (1 + 0.05/365)^365 ≈ 10512.67
@@ -382,8 +382,8 @@ async def test_compound_with_different_day_counts():
     act365 = FAScheduledInvestmentSchedule(day_count=DayCountConvention.ACT_365, **base_args)
     act360 = FAScheduledInvestmentSchedule(day_count=DayCountConvention.ACT_360, **base_args)
 
-    v365 = _generate_schedule_values(act365)
-    v360 = _generate_schedule_values(act360)
+    v365, _ = _generate_schedule_values(act365)
+    v360, _ = _generate_schedule_values(act360)
 
     # ACT/360 gives larger fractions per day → higher total interest
     assert v360[date(2025, 12, 31)] > v365[date(2025, 12, 31)], (
@@ -429,8 +429,8 @@ async def test_late_interest_compound_vs_simple():
         **base_args,
         )
 
-    simple_cached = _generate_schedule_values(simple_params)
-    compound_cached = _generate_schedule_values(compound_params)
+    simple_cached, _ = _generate_schedule_values(simple_params)
+    compound_cached, _ = _generate_schedule_values(compound_params)
     maturity = date(2025, 3, 31)
     simple_maturity = simple_cached[maturity]
     compound_maturity = compound_cached[maturity]

@@ -380,7 +380,9 @@
       "matFreqMonthly": "Mensuelle",
       "matFreqQuarterly": "Trimestrielle",
       "matFreqSemiannual": "Semestrielle",
-      "matFreqAnnual": "Annuelle"
+      "matFreqAnnual": "Annuelle",
+      "generateInterest": "Paiement auto",
+      "generateInterestHint": "Générer automatiquement des événements de paiement d'intérêts à chaque date de maturité"
     },
     "probe": {
       "currentPrice": "Prix Actuel",

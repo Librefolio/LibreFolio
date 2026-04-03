@@ -729,19 +729,11 @@ def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Datetime utils tests", verbose=verbose)
 
 
-def utils_financial_math(verbose: bool = False, test_names: list = None) -> bool:
-    """Test financial math utilities."""
-    print_section("Utils: Financial Math")
-    print_info("Testing: backend/app/utils/financial_math.py")
-    print_info("Tests: Day count conventions, Interest calculations, Rate finding")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_financial_math.py", test_names)
-    return run_command(cmd, "Financial math tests", verbose=verbose)
-
 
 def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
     """Test day count conventions."""
     print_section("Utils: Day Count Conventions")
-    print_info("Testing: backend/app/utils/financial_math.py (day count functions)")
+    print_info("Testing: backend/app/services/asset_source_providers/scheduled_investment.py (day count functions)")
     print_info("Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_day_count_conventions.py", test_names)
     return run_command(cmd, "Day count convention tests", verbose=verbose)
@@ -2103,14 +2095,6 @@ These tests verify utility modules and helper functions:
             "desc": "Test datetime utilities",
             "prereq": "None",
             "tests": "utcnow() timezone-aware helper",
-            },
-        "financial-math": {
-            "func": utils_financial_math,
-            "test_names": True,
-            "name": "Financial Math",
-            "desc": "Test financial math utilities",
-            "prereq": "None",
-            "tests": "Day count, interest calculations",
             },
         "day-count": {
             "func": utils_day_count,

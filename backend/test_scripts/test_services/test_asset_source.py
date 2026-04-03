@@ -38,7 +38,7 @@ from backend.app.db.models import (
     )
 from backend.app.services.asset_source import AssetSourceManager
 
-from backend.app.utils.financial_math import (
+from backend.app.services.asset_source_providers.scheduled_investment import (
     calculate_day_count_fraction,
     )
 from backend.test_scripts.test_utils import (

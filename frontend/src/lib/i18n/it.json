@@ -380,7 +380,9 @@
       "matFreqMonthly": "Mensile",
       "matFreqQuarterly": "Trimestrale",
       "matFreqSemiannual": "Semestrale",
-      "matFreqAnnual": "Annuale"
+      "matFreqAnnual": "Annuale",
+      "generateInterest": "Stacco auto",
+      "generateInterestHint": "Genera automaticamente eventi di stacco interesse ad ogni data di maturazione"
     },
     "probe": {
       "currentPrice": "Prezzo Attuale",

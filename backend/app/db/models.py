@@ -186,11 +186,13 @@ class AssetEventType(str, Enum):
     - INTEREST: Interest payment from debt/loan (ex-date price drop)
     - PRICE_ADJUSTMENT: Non-cash value change (write-down, haircut, re-rating)
     - SPLIT: Stock/unit split (changes quantity, not total value)
+    - MATURITY_SETTLEMENT: Asset reaches maturity — final capital return, no further calculations
     """
     DIVIDEND = "DIVIDEND"
     INTEREST = "INTEREST"
     PRICE_ADJUSTMENT = "PRICE_ADJUSTMENT"
     SPLIT = "SPLIT"
+    MATURITY_SETTLEMENT = "MATURITY_SETTLEMENT"
 
 
 class TransactionType(str, Enum):
@@ -724,11 +726,12 @@ class AssetEvent(SQLModel, table=True):
     not what happens in a user's portfolio. The portfolio reads these events
     for display, smart assistant suggestions, and ex-date price adjustments.
 
-    UniqueConstraint: one event per (asset_id, date, type) for dedup.
+    No UniqueConstraint: auto-generated and manual events can coexist on the
+    same (asset_id, date, type). Dedup is managed by provider_assignment_id
+    (NULL = manual, non-NULL = auto-generated).
     """
     __tablename__ = "asset_events"
     __table_args__ = (
-        UniqueConstraint("asset_id", "date", "type", name="uq_asset_event_asset_date_type"),
         Index("idx_asset_event_asset_date", "asset_id", "date"),
         Index("idx_asset_event_asset_type_date", "asset_id", "type", "date"),
         Index("idx_asset_event_provider_assignment", "provider_assignment_id"),
