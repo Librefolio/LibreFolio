@@ -685,4 +685,93 @@ Già coperto in §3.6.
 - [ ] Test Configuration frontend: risultati Current Price e History
 - [ ] `./dev.py api sync` → aggiornare tipi TypeScript generati con nuovi enum
 
+---
+
+
+Riepilogo Analisi
+✅ Conferma: financial_math.py è usata solo da scheduled_investment.py
+In codice di produzione, tutte le funzioni esportate (calculate_day_count_fraction, calculate_simple_interest) sono importate esclusivamente da scheduled_investment.py. L'altra import in test_asset_source.py è solo per i test.
+❌ find_active_period — Dead Code
+Non è importata da nessun codice di produzione. Era parte della vecchia architettura per-data. Il motore attuale (_generate_schedule_values) itera sullo schedule con indice diretto. I 13 test in test_financial_math.py testano una funzione orfana → da rimuovere.
+🔍 Compound Interest — Come Funziona
+Scenario
+Meccanismo
+COMPOUND nello schedule
+Loop giornaliero: base = principal + total_interest, poi total_interest += base * rate * Δt. Equiv. a P*(1+r/365)^N
+SIMPLE nello schedule
+Loop giornaliero: total_interest += principal * rate * Δt. Base sempre il capitale iniziale.
+COMPOUND nel late
+Stesso loop day-by-day, rate cambia a grace_end (da scheduled rate → late rate)
+SIMPLE nel late
+Calcolo diretto P * r * Δt senza loop. Base = initial_value.amount, non last_scheduled_value
+💡 Proposte di Refactoring
+find_active_period → rimuovere (dead code)
+_calculate_act_365 + _calculate_act_360 → fattorizzare in _calculate_act_fixed(start, end, denominator)
+calculate_simple_interest → mantenere (self-documenting), ma consapevoli che è a*b*c
+
+
+### 📋 Checklist Frontend — ScheduledInvestmentEditor (da Round 12)
+
+Le modifiche backend al motore `scheduled_investment` e agli schemi impattano il frontend.
+Verificare **manualmente** in browser tutti i seguenti scenari:
+
+#### Serializzazione / Deserializzazione
+- [ ] **Caricamento editor**: un asset esistente con schedule + late_interest si carica correttamente
+non abbiamo ancora la edit page, siamo ancora in solo creazione
+- [ ] **`initial_value` Currency**: il campo mostra amount + currency code (non il vecchio formato flat)
+Si, ma il campo del currencySelector è pù alto degli altri, si reisce a farlo alto tanto quanto gli altri?
+
+- [x] **`interest_type` globale**: il select mostra SIMPLE/COMPOUND e il valore è persistito nel JSON
+- [x] **`day_count` globale**: il select mostra tutte le 4 opzioni (ACT/365, ACT/360, ACT/ACT, 30/360)
+Sarebbe molto utile se nel titolo avesse anche lui, come per le colonne della tabella una i con un tooltip custom che spieghi che si applica a tutta la schedulazione e che se cliccato riporta alla pagina di documentazione: http://localhost:8001/mkdocs/it/financial-theory/day-count/
+- [x] **`maturation_frequency`**: la colonna nella tabella mostra tutte le 6 opzioni
+si e sono pure tradotte, ma le opzini sono solo testuali, delle icone aiuterebbero, in oltre ora è la colonna del tasso di interesse ad avere la dimensione troppo grande, ti direi di lasciare la colonna azione e selezione di questa grandezza e fare le altre 3 equi distribuite.
+- [x] **Late interest row**: toggle on/off funziona, `interest_type` per late è indipendente dal globale
+- [-] **Salvataggio**: `serialize()` produce JSON corretto con `initial_value: {code, amount}` formato Currency
+Appena salvato il frontend ha mandato solo questo  pacchetto:
+Request URL
+http://localhost:8001/api/v1/assets
+Request Method
+POST
+[{"display_name":"asdasd","currency":"USD","asset_type":"STOCK"}]
+
+e la modale si è chiusa 
+
+
+Piccola nota, il pulsante di testa configurazione c'è ma è read only, non capisco se manca qualcosa da impostare da me, o un problema sw
+In oltre al salva, quando l'asset si crea, io farei subito un sinc non solo nel range date configurato nella pagina (come avviene con gli altri) bensì essendo sintetico e locale, lo farei su tutte le date del periodo impostato, o almeno dall'inizio ad oggi, aggiungiamo nel piano principale (plan-phase06Asset) nello step in cui andiamo a fare la pagina di dettaglio, che se il frontend rileva delle riconfigurazioni del provider di un asset con shcedule_investment, allora fa preventivamente delete di tutti i prezzi ed eventi precedentemente salvati, così da garantire un DB allineato alle configurazioni.
+#### Asset Events
+- [x] **Aggiunta evento**: nuovo INTEREST o PRICE_ADJUSTMENT con amount + currency
+- [-] **Modifica evento**: date, tipo, valore, note editabili inline
+c'è tutto ma con componenti standard os, dovevi usare singleDatePick e simpleSelect
+- [x] **Rimozione evento**: elimina e riserializza correttamente
+Si ma manca la selezione e l'azione bulk, che come toolbar dovrebbe comparire accanto ad aggiungi evento e chiedere la conferma elencando gli eventi che verranno eliminati
+In oltre l'aggiungi evento di questa sezione ha la label che non scompare quando si va in modalità mobile
+- [?] **Currency evento**: se non impostata, eredita dalla currency globale dell'editor
+non ho capito il test, cosa è, dove lo vedo e a cosa serve
+
+#### CRUD Periodi
+- [x] **Add periodo**: aggiunge contiguamente dopo l'ultimo
+- [x] **Delete periodo**: gestisce boundary date con modale
+- [x] **Split periodo**: divide a metà con boundary modale
+- [x] **Merge periodi**: selezionando 2+ periodi contigui, il merge funziona
+- [x] **Bulk delete**: selezionando periodi non contigui, gaps risolti correttamente
+- [x] **Range change**: propagazione contiguità (backward/forward) senza gap/overlap
+
+#### Probe / Test Configuration (da verificare dopo API completata)
+- [ ] **Probe `scheduled_investment`**: con `initial_value` Currency produce current_price + history
+- [ ] **Chart preview**: grafico mostra valori crescenti (interesse) con eventuale drop per eventi
+- [ ] **Late interest nel chart**: post-maturity il grafico continua a salire
+come detto sopra, il test è readonly
+
+#### Edge Cases
+- [x] **Schedule vuoto**: stato empty corretto, nessun crash
+- [ ] **Un solo periodo**: CRUD funziona senza errori
+senza test-connection non lo so
+- [ ] **Tasso 0%**: valore resta costante (= initial_value)
+senza test-connection non lo so
+- [ ] **COMPOUND vs SIMPLE**: switch globale cambia il JSON, ma UI non cambia (è calcolo backend)
+senza test-connection non lo so
+- [!] **Retrocompatibilità**: vecchi JSON con `initial_value` flat number vengono deserializzati
+Non serve, sto in ambiente di test e ho resettato il DB, e se il codice attuale gestisce la retro compatibilità. rimuovila.
 

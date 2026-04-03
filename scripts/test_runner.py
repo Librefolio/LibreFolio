@@ -747,14 +747,6 @@ def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Day count convention tests", verbose=verbose)
 
 
-def utils_compound_interest(verbose: bool = False, test_names: list = None) -> bool:
-    """Test compound interest calculations."""
-    print_section("Utils: Compound Interest")
-    print_info("Testing: backend/app/utils/financial_math.py (interest calculations)")
-    print_info("Tests: Simple, Compound (annual, semiannual, quarterly, monthly, daily, continuous)")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_compound_interest.py", test_names)
-    return run_command(cmd, "Compound interest tests", verbose=verbose)
-
 
 def utils_geo_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test geographic area normalization utilities (country codes, weight validation)."""
@@ -2127,14 +2119,6 @@ These tests verify utility modules and helper functions:
             "desc": "Test day count conventions",
             "prereq": "None",
             "tests": "ACT/365, ACT/360, ACT/ACT, 30/360",
-            },
-        "compound-interest": {
-            "func": utils_compound_interest,
-            "test_names": True,
-            "name": "Compound Interest",
-            "desc": "Test compound interest calculations",
-            "prereq": "None",
-            "tests": "Simple, compound (annual, monthly, daily, continuous)",
             },
         "geo-normalization": {
             "func": utils_geo_utils,

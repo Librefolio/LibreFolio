@@ -61,7 +61,6 @@ from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial_math import (
     calculate_day_count_fraction,
     calculate_simple_interest,
-    calculate_compound_interest,
     )
 
 logger = get_logger(__name__)
