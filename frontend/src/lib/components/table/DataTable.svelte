@@ -346,6 +346,8 @@
                 return cell.value;
             case 'editable-select':
                 return cell.value;
+            case 'editable-checkbox':
+                return cell.value;
             case 'html':
                 // Strip HTML tags for sorting
                 return cell.html.replace(/<[^>]*>/g, '');
@@ -1122,6 +1124,19 @@
                                                     showChevron={false}
                                                     dropdownPosition="auto"
                                                     onchange={(v) => cellContent.onchange(v)}
+                                            />
+                                        </div>
+                                    {:else if cellContent.type === 'editable-checkbox'}
+                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                        <div class="cell-checkbox-wrapper" onclick={(e) => e.stopPropagation()}>
+                                            <input
+                                                    type="checkbox"
+                                                    checked={cellContent.value}
+                                                    onchange={(e) => cellContent.onchange(e.currentTarget.checked)}
+                                                    class="w-4 h-4 rounded border-gray-300 dark:border-slate-600
+                                                           text-emerald-600 focus:ring-emerald-500 dark:bg-slate-700
+                                                           cursor-pointer"
                                             />
                                         </div>
                                     {:else if cellContent.type === 'html'}

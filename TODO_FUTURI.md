@@ -463,3 +463,60 @@ genera eventi. I provider market dovranno essere estesi per catturare:
 3. Override `supports_events = True` nei provider aggiornati
 4. Il sync layer già gestisce l'upsert — basta ritornare gli eventi nel `FAHistoricalData.events`
 5. Il frontend (pagina Asset Detail, Phase 8) dovrà mostrare gli eventi sul grafico come marker
+
+---
+
+## 🔗 Phase 7 — Collegamento AssetEvent → Transaction
+
+**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)
+**Status**: 📋 PIANIFICATO
+**Priorità**: Alta (prerequisito per Phase 7)
+
+### Collegamento evento→transazione
+
+- Aggiungere `asset_event_id: Optional[int] = Field(default=None, foreign_key="asset_events.id")` su `Transaction`
+- Tipo DIVIDEND/INTEREST nella transaction collega all'evento asset auto-generato
+- Il FK `Transaction.asset_event_id` blocca il CASCADE delete su `AssetEvent` quando ci sono transazioni collegate → il backend ritorna errore **409 Conflict**
+- Frontend mostra modale "Alcuni eventi hanno transazioni collegate" con opzioni: migrazione date, scollegamento (`SET NULL` su `transaction.asset_event_id`), o annullamento
+- Gli eventi manuali (`provider_assignment_id=NULL`) servono per eventi un-planned
+- Gli eventi auto-generati (`provider_assignment_id` non-NULL, da `generate_interest=True`) sono planned e ricreabili deterministicamente
+- **MATURITY_SETTLEMENT** → al momento del settlement, il frontend suggerisce la creazione di una transazione SELL 100% (o del residuo)
+
+### Modale cambio provider
+
+Quando l'utente cambia provider su un asset che ha eventi auto-generati (`provider_assignment_id` non-NULL):
+1. Frontend mostra modale: "Ci sono N eventi generati dalla configurazione attuale"
+2. **Opzione A**: "Elimina tutto" → procedi con DELETE assignment (CASCADE elimina eventi)
+3. **Opzione B**: "Mantieni come manuali" → `UPDATE asset_events SET provider_assignment_id=NULL`, poi DELETE assignment
+4. **Opzione C**: "Annulla"
+- Se ci sono transazioni collegate (Phase 7+), l'opzione A è bloccata → mostrare dettaglio transazioni da scollegare prima
+
+---
+
+## 💰 Futura policy cedola (coupon_policy)
+
+**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)
+**Status**: 📋 IDEA FUTURA
+**Priorità**: Bassa
+
+### Concetto
+
+Colonna `coupon_policy` su `FAInterestRatePeriod` con opzioni:
+- **FULL_RESET** (attuale): torna a `initial_value` dopo coupon
+- **CUSTOM_RATE**: tasso cedola diverso dal tasso di accumulo
+- **PARTIAL**: percentuale del valore accumulato
+
+Per ora solo FULL_RESET è implementato.
+
+---
+
+## 🕐 Late interest con generate_interest
+
+**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)
+**Status**: ✅ IMPLEMENTATO
+**Priorità**: N/A
+
+Il late interest ora supporta `generate_interest=True`. Genera INTEREST periodici + MATURITY_SETTLEMENT finale.
+Il late interest NON è una "opportunità" ma una penale — tuttavia il flag unifica il pattern: l'utente decide se auto-generare eventi o meno, indipendentemente dalla natura del tasso.
+Se l'utente non vuole auto-generare eventi di penale, lascia `generate_interest=False` sul late interest e usa eventi manuali.
+

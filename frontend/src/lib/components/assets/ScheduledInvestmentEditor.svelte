@@ -58,6 +58,7 @@
         end_date: string;
         annual_rate: number;
         maturation_frequency: string;
+        generate_interest: boolean;
         isLate: boolean;
         grace_period_days: number;
         enabled: boolean;
@@ -98,12 +99,12 @@
 
     // Source of truth: backend/app/schemas/assets.py → MaturationFrequency enum
     let MATURATION_FREQ_OPTIONS = $derived([
-        {value: 'DAILY', label: $t('assets.schedule.matFreqDaily')},
-        {value: 'WEEKLY', label: $t('assets.schedule.matFreqWeekly')},
-        {value: 'MONTHLY', label: $t('assets.schedule.matFreqMonthly')},
-        {value: 'QUARTERLY', label: $t('assets.schedule.matFreqQuarterly')},
-        {value: 'SEMIANNUAL', label: $t('assets.schedule.matFreqSemiannual')},
-        {value: 'ANNUAL', label: $t('assets.schedule.matFreqAnnual')},
+        {value: 'DAILY', label: `🕐 ${$t('assets.schedule.matFreqDaily')}`},
+        {value: 'WEEKLY', label: `📅 ${$t('assets.schedule.matFreqWeekly')}`},
+        {value: 'MONTHLY', label: `📆 ${$t('assets.schedule.matFreqMonthly')}`},
+        {value: 'QUARTERLY', label: `📊 ${$t('assets.schedule.matFreqQuarterly')}`},
+        {value: 'SEMIANNUAL', label: `📈 ${$t('assets.schedule.matFreqSemiannual')}`},
+        {value: 'ANNUAL', label: `🗓️ ${$t('assets.schedule.matFreqAnnual')}`},
     ]);
 
     // =========================================================================
@@ -135,6 +136,27 @@
     function midpointDate(start: string, end: string): string {
         const days = daysBetween(start, end);
         return addDays(start, Math.floor(days / 2));
+    }
+
+    // =========================================================================
+    // Maturation Frequency Validation
+    // =========================================================================
+
+    /** Minimum period duration (in days) for each maturation frequency. */
+    const MATURATION_MIN_DAYS: Record<string, number> = {
+        DAILY: 0, WEEKLY: 7, MONTHLY: 28, QUARTERLY: 90, SEMIANNUAL: 180, ANNUAL: 365,
+    };
+
+    /** Check if a maturation frequency is valid for a given period length. */
+    function isMaturationFrequencyValid(frequency: string, periodDays: number): boolean {
+        return periodDays >= (MATURATION_MIN_DAYS[frequency] ?? 0);
+    }
+
+    /** Filter maturation frequency options based on period duration (in days). */
+    function filteredMaturationOptions(row: ScheduleRow) {
+        if (row.isLate) return MATURATION_FREQ_OPTIONS; // late interest: all options
+        const days = daysBetween(row.start_date, row.end_date);
+        return MATURATION_FREQ_OPTIONS.filter(o => isMaturationFrequencyValid(o.value, days));
     }
 
     // =========================================================================
@@ -271,6 +293,7 @@
                 end_date: p.end_date,
                 annual_rate: Number(p.annual_rate) * 100,
                 maturation_frequency: p.maturation_frequency ?? 'DAILY',
+                generate_interest: p.generate_interest ?? false,
                 isLate: false,
                 grace_period_days: 0,
                 enabled: true,
@@ -286,6 +309,7 @@
             end_date: '',
             annual_rate: li ? Number(li.annual_rate) * 100 : 12,
             maturation_frequency: li?.maturation_frequency ?? 'DAILY',
+            generate_interest: li?.generate_interest ?? false,
             isLate: true,
             grace_period_days: li?.grace_period_days ?? 0,
             enabled: !!li,
@@ -314,6 +338,7 @@
                 end_date: r.end_date,
                 annual_rate: (r.annual_rate / 100).toFixed(4),
                 maturation_frequency: r.maturation_frequency,
+                generate_interest: r.generate_interest,
             }));
 
         const lr = allRows.find(r => r.isLate && r.enabled);
@@ -321,6 +346,8 @@
             annual_rate: (lr.annual_rate / 100).toFixed(4),
             grace_period_days: lr.grace_period_days,
             interest_type: lr.lateInterestType,
+            maturation_frequency: lr.maturation_frequency,
+            generate_interest: lr.generate_interest,
         } : null;
 
         const serializedEvents = assetEvents.map(e => ({
@@ -448,6 +475,7 @@
             end_date: newEnd,
             annual_rate: lastPeriod?.annual_rate ?? 5.00,
             maturation_frequency: lastPeriod?.maturation_frequency ?? 'DAILY',
+            generate_interest: lastPeriod?.generate_interest ?? false,
             isLate: false,
             grace_period_days: 0,
             enabled: true,
@@ -759,7 +787,15 @@
     function updateRow(id: string, field: keyof ScheduleRow, val: any): void {
         rows = rows.map(r => {
             if (r.id !== id) return r;
-            return {...r, [field]: val};
+            const updated = {...r, [field]: val};
+            // Auto-fallback: if date change invalidates current maturation_frequency, reset to DAILY
+            if ((field === 'start_date' || field === 'end_date') && !updated.isLate) {
+                const days = daysBetween(updated.start_date, updated.end_date);
+                if (!isMaturationFrequencyValid(updated.maturation_frequency, days)) {
+                    updated.maturation_frequency = 'DAILY';
+                }
+            }
+            return updated;
         });
         emitChange();
     }
@@ -837,8 +873,23 @@
             cell: (row: ScheduleRow): CellContent => ({
                 type: 'editable-select',
                 value: row.maturation_frequency,
-                options: MATURATION_FREQ_OPTIONS,
+                options: filteredMaturationOptions(row),
                 onchange: (v: string) => updateRow(row.id, 'maturation_frequency', v),
+            }),
+        },
+        {
+            id: 'generate_interest',
+            header: () => $t('assets.schedule.generateInterest'),
+            headerTooltip: () => $t('assets.schedule.generateInterestHint'),
+            type: 'custom',
+            sortable: false,
+            filterable: false,
+            width: 60,
+            minWidth: 50,
+            cell: (row: ScheduleRow): CellContent => ({
+                type: 'editable-checkbox',
+                value: row.generate_interest,
+                onchange: (v: boolean) => updateRow(row.id, 'generate_interest', v),
             }),
         },
     ]);

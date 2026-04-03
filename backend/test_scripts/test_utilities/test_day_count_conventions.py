@@ -16,7 +16,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas.assets import DayCountConvention
-from backend.app.utils.financial_math import calculate_day_count_fraction
+from backend.app.services.asset_source_providers.scheduled_investment import calculate_day_count_fraction
 
 
 class TestACT365:
