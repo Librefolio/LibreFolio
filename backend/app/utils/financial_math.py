@@ -1,14 +1,18 @@
 """
 Financial mathematics utility functions.
 
-Provides day count conventions, interest calculations, and other
-financial formulas used across the application.
+Provides day count conventions, simple interest, and schedule helpers
+used across the application.
 
 All functions are pure (no side effects) and reusable.
 
 Key concepts:
 - Day count conventions: ACT/365, ACT/360, 30/360, ACT/ACT
-- Interest types: SIMPLE and COMPOUND interest
+- Simple interest: I = P * r * t
+- Compound interest is NOT a standalone function here — it's implemented
+  in the engine via daily iteration of simple interest on the running value:
+    V_t = V_{t-1} + V_{t-1} * r * Δt
+  which is mathematically equivalent to P * (1 + r/365)^N.
 - Rate format: Annual rate as Decimal (0.05 = 5%)
 
 Note:
@@ -18,7 +22,6 @@ Note:
 """
 
 import calendar
-import math
 from datetime import date as date_type, timedelta
 from decimal import Decimal
 from typing import Optional, List
@@ -27,7 +30,6 @@ from backend.app.schemas.assets import (
     FAInterestRatePeriod,
     FALateInterestConfig,
     DayCountConvention,
-    MaturationFrequency,
     )
 
 
@@ -166,83 +168,11 @@ def _calculate_30_360(start_date: date_type, end_date: date_type) -> Decimal:
     return Decimal(days) / Decimal(360)
 
 
+
 # ============================================================================
-# COMPOUND INTEREST CALCULATIONS
+# SIMPLE INTEREST
 # ============================================================================
 
-
-def get_compounding_periods_per_year(frequency: MaturationFrequency) -> int:
-    """
-    Get the number of maturation periods per year for a given frequency.
-
-    Args:
-        frequency: Maturation frequency
-
-    Returns:
-        Number of periods per year
-    """
-    if frequency == MaturationFrequency.DAILY:
-        return 365
-    elif frequency == MaturationFrequency.WEEKLY:
-        return 52
-    elif frequency == MaturationFrequency.MONTHLY:
-        return 12
-    elif frequency == MaturationFrequency.QUARTERLY:
-        return 4
-    elif frequency == MaturationFrequency.SEMIANNUAL:
-        return 2
-    elif frequency == MaturationFrequency.ANNUAL:
-        return 1
-    else:
-        raise ValueError(f"Unsupported maturation frequency: {frequency}")
-
-
-def calculate_compound_interest(
-    principal: Decimal, annual_rate: Decimal, time_fraction: Decimal, frequency: MaturationFrequency
-    ) -> Decimal:
-    """
-    Calculate compound interest for a given period.
-
-    Formula (periodic compounding): A = P * (1 + r/n)^(n*t)
-    Formula (continuous compounding): A = P * e^(r*t)
-
-    Where:
-        - P: Principal
-        - r: Annual interest rate (as decimal, e.g., 0.05 for 5%)
-        - n: Number of compounding periods per year
-        - t: Time in years (as fraction)
-        - A: Final amount (principal + interest)
-
-    Args:
-        principal: Starting principal amount
-        annual_rate: Annual interest rate (e.g., 0.05 for 5%)
-        time_fraction: Time period as fraction of year (from day count convention)
-        frequency: Compounding frequency
-
-    Returns:
-        Interest earned (A - P)
-
-    Example:
-        >>> # €10,000 at 5% for 1 year, monthly compounding
-        >>> principal = Decimal("10000")
-        >>> rate = Decimal("0.05")
-        >>> time = Decimal("1")  # 1 year
-        >>> interest = calculate_compound_interest(principal, rate, time, MaturationFrequency.MONTHLY)
-        >>> # Returns approximately €511.62
-    """
-    # Periodic compounding: A = P * (1 + r/n)^(n*t)
-    n = Decimal(get_compounding_periods_per_year(frequency))
-    rate_per_period = annual_rate / n
-    num_periods = n * time_fraction
-
-    # (1 + r/n)^(n*t)
-    base = Decimal("1") + rate_per_period
-    exponent = float(num_periods)
-    multiplier = Decimal(str(pow(float(base), exponent)))
-    final_amount = principal * multiplier
-
-    # Return only the interest portion (A - P)
-    return final_amount - principal
 
 
 def calculate_simple_interest(

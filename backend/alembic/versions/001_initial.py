@@ -241,7 +241,7 @@ def upgrade() -> None:
                    id              INTEGER PRIMARY KEY,
                    asset_id        INTEGER     NOT NULL UNIQUE,
                    provider_code   VARCHAR(50) NOT NULL,
-                   identifier      VARCHAR     NOT NULL,
+                   identifier      VARCHAR,
                    identifier_type VARCHAR(20) NOT NULL,
                    provider_params TEXT,
                    last_fetch_at   DATETIME,
@@ -295,17 +295,18 @@ def upgrade() -> None:
         sa.text(
             """CREATE TABLE asset_events
                (
-                   id                INTEGER PRIMARY KEY,
-                   asset_id          INTEGER        NOT NULL,
-                   date              DATE           NOT NULL,
-                   type              VARCHAR        NOT NULL,
-                   value             NUMERIC(18, 6) NOT NULL,
-                   currency          VARCHAR        NOT NULL,
-                   source_plugin_key VARCHAR,
-                   notes             TEXT,
-                   created_at        DATETIME       NOT NULL,
-                   updated_at        DATETIME       NOT NULL,
+                   id                     INTEGER PRIMARY KEY,
+                   asset_id               INTEGER        NOT NULL,
+                   date                   DATE           NOT NULL,
+                   type                   VARCHAR        NOT NULL,
+                   value                  NUMERIC(18, 6) NOT NULL,
+                   currency               VARCHAR        NOT NULL,
+                   provider_assignment_id INTEGER,
+                   notes                  TEXT,
+                   created_at             DATETIME       NOT NULL,
+                   updated_at             DATETIME       NOT NULL,
                    FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
+                   FOREIGN KEY (provider_assignment_id) REFERENCES asset_provider_assignments (id) ON DELETE CASCADE,
                    CONSTRAINT uq_asset_event_asset_date_type UNIQUE (asset_id, date, type)
                )"""
             )
@@ -317,7 +318,10 @@ def upgrade() -> None:
     conn.execute(
         sa.text("CREATE INDEX idx_asset_event_asset_type_date ON asset_events (asset_id, type, date)")
         )
-    print("  ✓ 2 Indexes created")
+    conn.execute(
+        sa.text("CREATE INDEX idx_asset_event_provider_assignment ON asset_events (provider_assignment_id)")
+        )
+    print("  ✓ 3 Indexes created")
 
     # Unified Transactions table (REFACTORED)
     # NOTE: related_transaction_id uses DEFERRABLE INITIALLY DEFERRED FK

@@ -731,6 +731,7 @@ class AssetEvent(SQLModel, table=True):
         UniqueConstraint("asset_id", "date", "type", name="uq_asset_event_asset_date_type"),
         Index("idx_asset_event_asset_date", "asset_id", "date"),
         Index("idx_asset_event_asset_type_date", "asset_id", "type", "date"),
+        Index("idx_asset_event_provider_assignment", "provider_assignment_id"),
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -739,7 +740,15 @@ class AssetEvent(SQLModel, table=True):
     type: AssetEventType = Field(nullable=False)
     value: Decimal = Field(sa_column=Column(Numeric(18, 6), nullable=False))
     currency: str = Field(nullable=False)
-    source_plugin_key: Optional[str] = Field(default=None)
+    provider_assignment_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("asset_provider_assignments.id", ondelete="CASCADE"),
+            nullable=True,
+        ),
+        description="FK to provider config that generated this event. NULL = user-created manual event."
+    )
     notes: Optional[str] = Field(default=None, sa_column=Column(Text))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -917,7 +926,7 @@ class AssetProviderAssignment(SQLModel, table=True):
 
     asset_id: int = Field(foreign_key="assets.id", nullable=False, unique=True, description="Asset ID (1-to-1 relationship)", )
     provider_code: str = Field(max_length=50, nullable=False, description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)", )
-    identifier: str = Field(nullable=False, description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)", )
+    identifier: Optional[str] = Field(default=None, nullable=True, description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.). NULL for AUTO_GENERATED providers.", )
     identifier_type: ProviderInputType = Field(nullable=False, description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED)")
     provider_params: Optional[str] = Field(default=None, sa_column=Column(Text), description="JSON configuration for provider (validated by plugin)", )
     last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")

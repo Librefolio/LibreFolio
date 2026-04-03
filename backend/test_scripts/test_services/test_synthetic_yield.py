@@ -391,5 +391,72 @@ async def test_compound_with_different_day_counts():
     )
 
 
+# ============================================================================
+# LATE INTEREST COMPOUND vs SIMPLE TESTS
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_late_interest_compound_vs_simple():
+    """Test that COMPOUND late interest yields more than SIMPLE for same parameters."""
+    base_args = dict(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 3, 31),
+                annual_rate=Decimal("0.05"),
+                maturation_frequency=MaturationFrequency.DAILY,
+                )
+            ],
+        asset_events=[],
+        )
+
+    simple_params = FAScheduledInvestmentSchedule(
+        late_interest=FALateInterestConfig(
+            annual_rate=Decimal("0.12"),
+            grace_period_days=10,
+            interest_type=InterestType.SIMPLE,
+            ),
+        **base_args,
+        )
+    compound_params = FAScheduledInvestmentSchedule(
+        late_interest=FALateInterestConfig(
+            annual_rate=Decimal("0.12"),
+            grace_period_days=10,
+            interest_type=InterestType.COMPOUND,
+            ),
+        **base_args,
+        )
+
+    simple_cached = _generate_schedule_values(simple_params)
+    compound_cached = _generate_schedule_values(compound_params)
+    maturity = date(2025, 3, 31)
+    simple_maturity = simple_cached[maturity]
+    compound_maturity = compound_cached[maturity]
+
+    # Both should have same value at maturity (main schedule is identical)
+    assert simple_maturity == compound_maturity
+
+    # Well after grace period: compound late interest should exceed simple
+    target = date(2025, 8, 1)  # ~4 months after maturity
+    simple_late = _compute_late_interest_value(simple_params, target, simple_maturity, maturity)
+    compound_late = _compute_late_interest_value(compound_params, target, compound_maturity, maturity)
+
+    assert compound_late > simple_late, (
+        f"COMPOUND late ({compound_late}) should exceed SIMPLE late ({simple_late})"
+    )
+    # Both should exceed maturity value (interest is accruing)
+    assert simple_late > simple_maturity
+    assert compound_late > compound_maturity
+
+
+@pytest.mark.asyncio
+async def test_late_interest_default_is_compound():
+    """Test that FALateInterestConfig defaults to COMPOUND interest_type."""
+    li = FALateInterestConfig(annual_rate=Decimal("0.10"), grace_period_days=15)
+    assert li.interest_type == InterestType.COMPOUND
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
