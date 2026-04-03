@@ -303,7 +303,7 @@
             if (response.current_price) {
                 const cp = response.current_price;
                 const detail = cp.success
-                    ? `${cp.value} ${cp.currency ?? ''}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}`
+                    ? `${Number(cp.value).toFixed(2)} ${cp.currency ?? ''}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}`
                     : cp.error;
                 items.push({
                     success: cp.success,

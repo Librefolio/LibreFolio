@@ -611,13 +611,13 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
 ### Frontend
 - [x] `./dev.py front check` → 0 errori, 0 warning ✅ (2026-04-03)
 - [x] `./dev.py front build --debug` → OK ✅ (2026-04-03)
-- [ ] Manuale: creare asset con scheduled_investment → save funziona, provider assegnato
-- [ ] Manuale: Test Configuration → probe ritorna current_price + history
-- [ ] Manuale: chart preview mostra valori con step alle maturation dates
-- [ ] Manuale: `generate_interest=true` → chart mostra denti di sega (interesse accumulato → stacco → torna a initial_value)
-- [ ] Manuale: late interest con maturation frequency diversa da DAILY → funziona
-- [ ] Manuale: COMPOUND + generate_interest → dopo stacco il compound riparte da initial_value
-- [ ] Manuale: MATURITY_SETTLEMENT visibile come ultimo evento su asset chiuso
+- [x] Manuale: creare asset con scheduled_investment → save funziona, provider assegnato
+- [x] Manuale: Test Configuration → probe ritorna current_price + history
+- [x] Manuale: chart preview mostra valori con step alle maturation dates
+- [x] Manuale: `generate_interest=true` → chart mostra denti di sega (interesse accumulato → stacco → torna a initial_value)
+- [x] Manuale: late interest con maturation frequency diversa da DAILY → funziona
+- [x] Manuale: COMPOUND + generate_interest → dopo stacco il compound riparte da initial_value
+- [x] Manuale: MATURITY_SETTLEMENT visibile come ultimo evento su asset chiuso
 
 ### Full suite
 - [ ] `./dev.py test all` → ⚠️ API tests have server startup issue (non-related to code changes)
@@ -641,4 +641,17 @@ In futuro: colonna apposita per policy di generazione più fini (tasso cedola cu
 - [x] AssetModal: skip provider assignment per scheduled_investment se nessuno schedule configurato
 - [x] ProviderAssignmentSection: fix emitChange per usare providerParams per scheduled_investment
 - [x] SearchSelect: aggiunta prop `compact` per trigger a dimensioni ridotte
+
+### Review Fixes Round 2 (2026-04-03)
+- [x] CurrencySearchSelect compact: aggiunto `&nbsp;` spazio tra codice valuta e simbolo ("EUR €" non "EUR€")
+- [x] Backend: scheduled_investment probe accetta schedule vuoto e params null, ritorna initial_value
+- [x] Asset Events: rimossa colonna currency dalla tabella, usa valuta globale della configurazione
+- [x] SingleDatePicker: sostituito svelte:window onclick con $effect + mousedown in capture phase (click-outside fix)
+- [x] MATURITY_SETTLEMENT: pre-fill valore con initialValue quando selezionato, step=100
+- [x] Initial value: fix bug 0.01 (min="0" invece di min="0.01")
+- [x] Frequenza default: cambiata da DAILY a MONTHLY in 3 punti
+- [x] Info tooltip: icone ℹ️ su Interest Type e Day Count linkano a pagine documentazione mkdocs
+- [x] Test Configuration: prezzo corrente formattato a 2 decimali (Number.toFixed(2))
+- [x] CalendarMonth: selettore anno da dropdown (2016-2028) a campo numerico libero (1900-2200)
+
 

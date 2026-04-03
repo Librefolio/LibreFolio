@@ -2,7 +2,7 @@
 
 **Data creazione**: 23 Marzo 2026  
 **Ultimo aggiornamento**: 27 Marzo 2026  
-**Status**: 🚧 IN CORSO (Step 1–2c completati, Step 3 in pianificazione)  
+**Status**: 🚧 IN CORSO (Step 1–3 completati, Step 4 prossimo)  
 **Durata stimata**: ~8 giorni  
 **Dipendenze**: Phase 5 (PriceChartFull, Signal Library, DataEditor), Phase 4 (DataTable, ModalBase, component library), Phase 4.8 (user_role)
 
@@ -1042,8 +1042,9 @@ Phase 6 — Step 1 (Backend: params_schema, fix perf) ✅
      │
      ├── Step 2c (Sync-All + Multi-Delete modals) ✅
      │
-     ├── Step 3 (AssetModal + Search + Probe) ← dettaglio in phases/phase-06-subplan/plan-phase06Step3AssetModal.prompt.md
-     │      │
+     ├── Step 3 (AssetModal + Search + Probe + ScheduledInvestment Engine) ✅
+     │      │    ← dettaglio in phases/phase-06-subplan/plan-phase06Step3AssetModal.prompt.md
+     │      │    ← Round 12 Finale: plan-phase06Step3Round12Finale-MaturationEngine.prompt.md
      │      ▼
      ├── Step 4 (Asset Detail Page) ← dipende da Step 3 per edit modal + ProviderAssignmentSection
      │
