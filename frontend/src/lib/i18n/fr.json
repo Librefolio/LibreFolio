@@ -368,7 +368,8 @@
       "noEvents": "Aucun événement d'actif configuré",
       "eventType": {
         "INTEREST": "Intérêt",
-        "PRICE_ADJUSTMENT": "Ajustement de Prix"
+        "PRICE_ADJUSTMENT": "Ajustement de Prix",
+        "MATURITY_SETTLEMENT": "Règlement à Échéance"
       },
       "interestType": "Type d'intérêt",
       "interestTypeSimple": "Simple",
@@ -381,8 +382,10 @@
       "matFreqQuarterly": "Trimestrielle",
       "matFreqSemiannual": "Semestrielle",
       "matFreqAnnual": "Annuelle",
-      "generateInterest": "Paiement auto",
-      "generateInterestHint": "Générer automatiquement des événements de paiement d'intérêts à chaque date de maturité"
+      "generateInterest": "Générer Coupon",
+      "generateInterestHint": "Générer automatiquement des événements de paiement de coupon à chaque date de maturité. Les intérêts accumulés sont versés et l'actif revient à la valeur initiale.",
+      "interestTypeTooltip": "Détermine le mode de calcul des intérêts. Simple : sur la valeur initiale uniquement. Composé : les intérêts s'accumulent aussi sur les intérêts.",
+      "dayCountTooltip": "Convention de calcul des jours dans la période d'intérêt. ACT/365 et ACT/360 sont les plus courantes. Affecte le calcul des intérêts journaliers."
     },
     "probe": {
       "currentPrice": "Prix Actuel",

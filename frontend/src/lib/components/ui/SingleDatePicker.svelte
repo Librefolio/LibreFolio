@@ -140,6 +140,14 @@
         }
     }
 
+    // Close on click outside — use mousedown in capture phase to avoid stopPropagation issues
+    $effect(() => {
+        if (!calendarOpen) return;
+        const handler = (e: MouseEvent) => handleClickOutside(e);
+        document.addEventListener('mousedown', handler, true);
+        return () => document.removeEventListener('mousedown', handler, true);
+    });
+
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape' && calendarOpen) closeCalendar();
     }
@@ -179,7 +187,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown}/>
+<svelte:window onkeydown={handleKeydown}/>
 
 <div class="relative sdp-trigger inline-block">
     <button

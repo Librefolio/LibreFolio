@@ -2,13 +2,13 @@
   ScheduledInvestmentEditor — DataTable-based editor for interest schedules.
 
   Features:
-  - Editable DataTable with Period, Rate %, Maturation Frequency, Day Count
+  - Editable DataTable with Period, Rate %, Maturation Frequency, Generate Coupon
   - Late Interest as permanent special row with toggle on/off
   - Automatic contiguity propagation (no overlaps/gaps by design)
   - CRUD: Add, Delete (with boundary modal), Split, Merge
   - Bulk delete with multi-gap support
   - JSON ↔ form bidirectional serialization
-  - Asset Events table (INTEREST payouts, PRICE_ADJUSTMENT write-downs)
+  - Asset Events table (INTEREST payouts, PRICE_ADJUSTMENT write-downs, MATURITY_SETTLEMENT)
 
   Props:
   - value: Record<string, any> (provider_params JSON, bindable)
@@ -19,13 +19,15 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Plus, Scissors, X, Link2, Trash2, CalendarDays} from 'lucide-svelte';
+    import {Plus, Scissors, X, Link2, Trash2, CalendarDays, CalendarClock, Info} from 'lucide-svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef, RowAction, CellContent} from '$lib/components/table/types';
     import CellDateRange from './CellDateRange.svelte';
     import BoundaryDateModal from './BoundaryDateModal.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
+    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
 
     // =========================================================================
     // Types
@@ -34,7 +36,7 @@
     interface AssetEventRow {
         id: string;
         date: string;
-        type: 'INTEREST' | 'PRICE_ADJUSTMENT';
+        type: 'INTEREST' | 'PRICE_ADJUSTMENT' | 'MATURITY_SETTLEMENT';
         value: number;
         currency: string;
         notes: string;
@@ -46,6 +48,7 @@
     const EVENT_TYPE_OPTIONS = [
         {value: 'INTEREST', labelKey: 'assets.schedule.eventType.INTEREST'},
         {value: 'PRICE_ADJUSTMENT', labelKey: 'assets.schedule.eventType.PRICE_ADJUSTMENT'},
+        {value: 'MATURITY_SETTLEMENT', labelKey: 'assets.schedule.eventType.MATURITY_SETTLEMENT'},
     ];
 
     // =========================================================================
@@ -106,6 +109,11 @@
         {value: 'SEMIANNUAL', label: `📈 ${$t('assets.schedule.matFreqSemiannual')}`},
         {value: 'ANNUAL', label: `🗓️ ${$t('assets.schedule.matFreqAnnual')}`},
     ]);
+
+    /** Event type options for SimpleSelect (pre-translated) */
+    let eventTypeSelectOptions = $derived(
+        EVENT_TYPE_OPTIONS.map(o => ({value: o.value, label: $t(o.labelKey)}))
+    );
 
     // =========================================================================
     // Date Helpers
@@ -197,6 +205,12 @@
         interestType = v?.interest_type ?? 'SIMPLE';
         dayCount = v?.day_count ?? 'ACT/365';
         assetEvents = deserializeEvents(v?.asset_events ?? []);
+
+        // Emit initial state if the value prop was empty (ensures providerParams is never null)
+        if (!v || Object.keys(v).length === 0) {
+            // Use queueMicrotask to avoid emitting during $effect execution
+            queueMicrotask(() => emitChange());
+        }
     });
 
     // Modal state
@@ -259,10 +273,13 @@
         if (normalRows.length === 0) return false;
         for (const p of normalRows) {
             if (p.annual_rate < 0) return false;
+            // Require maturation frequency to be set on all periods
+            if (!p.maturation_frequency) return false;
         }
         if (lateRow?.enabled) {
             if (lateRow.annual_rate < 0) return false;
             if (lateRow.grace_period_days < 0) return false;
+            if (!lateRow.maturation_frequency) return false;
         }
         return true;
     });
@@ -292,7 +309,7 @@
                 start_date: p.start_date,
                 end_date: p.end_date,
                 annual_rate: Number(p.annual_rate) * 100,
-                maturation_frequency: p.maturation_frequency ?? 'DAILY',
+                maturation_frequency: p.maturation_frequency ?? 'MONTHLY',
                 generate_interest: p.generate_interest ?? false,
                 isLate: false,
                 grace_period_days: 0,
@@ -308,7 +325,7 @@
             start_date: result.length > 0 ? addDays(result[result.length - 1].end_date, 1) : '',
             end_date: '',
             annual_rate: li ? Number(li.annual_rate) * 100 : 12,
-            maturation_frequency: li?.maturation_frequency ?? 'DAILY',
+            maturation_frequency: li?.maturation_frequency ?? 'MONTHLY',
             generate_interest: li?.generate_interest ?? false,
             isLate: true,
             grace_period_days: li?.grace_period_days ?? 0,
@@ -353,7 +370,7 @@
         const serializedEvents = assetEvents.map(e => ({
             date: e.date,
             type: e.type,
-            value: {code: e.currency || currencyValue, amount: e.value.toString()},
+            value: {code: currencyValue, amount: e.value.toString()},
             notes: e.notes || undefined,
         }));
 
@@ -444,6 +461,15 @@
             }
         }
 
+        // Validate maturation frequencies after date changes
+        for (const p of periods) {
+            if (p.isLate) continue;
+            const days = daysBetween(p.start_date, p.end_date);
+            if (p.maturation_frequency && !isMaturationFrequencyValid(p.maturation_frequency, days)) {
+                p.maturation_frequency = '';
+            }
+        }
+
         // Rebuild rows: updated normals + late
         const late = rows.find(r => r.isLate);
         rows = [...periods, ...(late ? [late] : [])];
@@ -474,7 +500,7 @@
             start_date: newStart,
             end_date: newEnd,
             annual_rate: lastPeriod?.annual_rate ?? 5.00,
-            maturation_frequency: lastPeriod?.maturation_frequency ?? 'DAILY',
+            maturation_frequency: lastPeriod?.maturation_frequency ?? 'MONTHLY',
             generate_interest: lastPeriod?.generate_interest ?? false,
             isLate: false,
             grace_period_days: 0,
@@ -514,21 +540,39 @@
             return;
         }
 
-        if (hasPrev && !hasNext) {
-            periods[rowIndex - 1].end_date = toDelete.end_date;
-        } else if (!hasPrev && hasNext) {
-            periods[rowIndex + 1].start_date = toDelete.start_date;
+        // Head or tail: also use boundary modal but default to edge
+        if (!hasPrev && hasNext) {
+            // Deleting first period — boundary modal with default at end
+            pendingActionIndex = rowIndex;
+            pendingBulkGaps = [];
+            pendingBulkDeleteData = null;
+            boundaryModalMode = 'delete';
+            boundaryModalMin = toDelete.start_date;
+            boundaryModalMax = toDelete.end_date;
+            boundaryModalDefault = toDelete.end_date; // default to end edge
+            showBoundaryModal = true;
+            return;
         }
 
-        periods.splice(rowIndex, 1);
-        rebuildAndEmit(periods);
+        if (hasPrev && !hasNext) {
+            // Deleting last period — boundary modal with default at start
+            pendingActionIndex = rowIndex;
+            pendingBulkGaps = [];
+            pendingBulkDeleteData = null;
+            boundaryModalMode = 'delete';
+            boundaryModalMin = toDelete.start_date;
+            boundaryModalMax = toDelete.end_date;
+            boundaryModalDefault = toDelete.start_date; // default to start edge
+            showBoundaryModal = true;
+            return;
+        }
     }
 
     function handleSplitRequest(rowIndex: number): void {
         const period = normalRows[rowIndex];
         if (!period) return;
         const days = daysBetween(period.start_date, period.end_date);
-        if (days <= 1) return;
+        if (days < 2) return; // Need at least 3 calendar days to split (days >= 2)
 
         pendingActionIndex = rowIndex;
         pendingBulkGaps = [];
@@ -556,10 +600,23 @@
     function confirmDelete(boundaryDate: string): void {
         const periods = [...normalRows];
         const idx = pendingActionIndex;
-        if (idx <= 0 || idx >= periods.length - 1) return;
+        if (idx < 0 || idx >= periods.length) return;
 
-        periods[idx - 1].end_date = boundaryDate;
-        periods[idx + 1].start_date = addDays(boundaryDate, 1);
+        const hasPrev = idx > 0;
+        const hasNext = idx < periods.length - 1;
+
+        if (hasPrev && hasNext) {
+            // Middle: split the gap between prev and next
+            periods[idx - 1].end_date = boundaryDate;
+            periods[idx + 1].start_date = addDays(boundaryDate, 1);
+        } else if (!hasPrev && hasNext) {
+            // First period: next period starts after boundary
+            periods[idx + 1].start_date = addDays(boundaryDate, 1);
+        } else if (hasPrev && !hasNext) {
+            // Last period: prev period ends at boundary
+            periods[idx - 1].end_date = boundaryDate;
+        }
+
         periods.splice(idx, 1);
         rebuildAndEmit(periods);
     }
@@ -581,6 +638,16 @@
             start_date: addDays(boundaryDate, 1),
         };
 
+        // Check if maturation_frequency is still valid for each half
+        const days1 = daysBetween(row1.start_date, row1.end_date);
+        const days2 = daysBetween(row2.start_date, row2.end_date);
+        if (row1.maturation_frequency && !isMaturationFrequencyValid(row1.maturation_frequency, days1)) {
+            row1.maturation_frequency = ''; // Leave undefined for user choice
+        }
+        if (row2.maturation_frequency && !isMaturationFrequencyValid(row2.maturation_frequency, days2)) {
+            row2.maturation_frequency = ''; // Leave undefined for user choice
+        }
+
         periods.splice(idx, 1, row1, row2);
         rebuildAndEmit(periods);
     }
@@ -592,6 +659,7 @@
         const first = periods[indices[0]];
         const last = periods[indices[indices.length - 1]];
 
+        // Merge: use first element's rate, frequency, generate_interest
         const merged: ScheduleRow = {
             ...first,
             id: crypto.randomUUID(),
@@ -788,11 +856,11 @@
         rows = rows.map(r => {
             if (r.id !== id) return r;
             const updated = {...r, [field]: val};
-            // Auto-fallback: if date change invalidates current maturation_frequency, reset to DAILY
+            // Auto-fallback: if date change invalidates current maturation_frequency, clear it
             if ((field === 'start_date' || field === 'end_date') && !updated.isLate) {
                 const days = daysBetween(updated.start_date, updated.end_date);
-                if (!isMaturationFrequencyValid(updated.maturation_frequency, days)) {
-                    updated.maturation_frequency = 'DAILY';
+                if (updated.maturation_frequency && !isMaturationFrequencyValid(updated.maturation_frequency, days)) {
+                    updated.maturation_frequency = '';
                 }
             }
             return updated;
@@ -884,8 +952,8 @@
             type: 'custom',
             sortable: false,
             filterable: false,
-            width: 60,
-            minWidth: 50,
+            width: 80,
+            minWidth: 70,
             cell: (row: ScheduleRow): CellContent => ({
                 type: 'editable-checkbox',
                 value: row.generate_interest,
@@ -900,7 +968,7 @@
             icon: Scissors,
             label: () => $t('assets.schedule.split'),
             visible: (row) => !row.isLate,
-            disabled: (row) => disabled || readonly || daysBetween(row.start_date, row.end_date) <= 1,
+            disabled: (row) => disabled || readonly || daysBetween(row.start_date, row.end_date) < 2,
             onClick: (row) => {
                 const idx = normalRows.findIndex(r => r.id === row.id);
                 if (idx >= 0) handleSplitRequest(idx);
@@ -976,7 +1044,12 @@
     function handleEventFieldChange(index: number, field: keyof AssetEventRow, val: any): void {
         assetEvents = assetEvents.map((e, i) => {
             if (i !== index) return e;
-            return {...e, [field]: val};
+            const updated = {...e, [field]: val};
+            // Pre-fill value with initialValue when switching to MATURITY_SETTLEMENT
+            if (field === 'type' && val === 'MATURITY_SETTLEMENT') {
+                updated.value = initialValue;
+            }
+            return updated;
         });
         emitChange();
     }
@@ -994,11 +1067,12 @@
                 <input
                     id="initial-value"
                     type="number"
-                    min="0.01"
+                    min="0"
                     step="100"
                     value={initialValue}
                     oninput={(e) => {
-                        initialValue = Number(e.currentTarget.value) || 0;
+                        const raw = e.currentTarget.value;
+                        initialValue = raw === '' ? 0 : Number(raw);
                         emitChange();
                     }}
                     disabled={disabled || readonly}
@@ -1015,6 +1089,7 @@
                 <CurrencySearchSelect
                     bind:value={currencyValue}
                     disabled={disabled || readonly}
+                    compact={true}
                     onchange={(v) => { currencyValue = v; emitChange(); }}
                 />
             </div>
@@ -1022,9 +1097,19 @@
         <!-- Row 2: Interest Type + Day Count -->
         <div class="flex items-end gap-2">
             <div class="flex-1 min-w-0">
-                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    📐 {$t('assets.schedule.interestType')}
-                </span>
+                <div class="flex items-center gap-1 mb-1">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        📐 {$t('assets.schedule.interestType')}
+                    </span>
+                    <Tooltip text={$t('assets.schedule.interestTypeTooltip')} position="top">
+                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#how-value-is-calculated"
+                           target="_blank" rel="noopener noreferrer"
+                           class="text-gray-400 hover:text-libre-green transition-colors"
+                           onclick={(e) => e.stopPropagation()}>
+                            <Info size={12}/>
+                        </a>
+                    </Tooltip>
+                </div>
                 <SimpleSelect
                     bind:value={interestType}
                     options={INTEREST_TYPE_OPTIONS}
@@ -1033,9 +1118,19 @@
                 />
             </div>
             <div class="flex-1 min-w-0">
-                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    📆 {$t('assets.schedule.dayCount')}
-                </span>
+                <div class="flex items-center gap-1 mb-1">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        📆 {$t('assets.schedule.dayCount')}
+                    </span>
+                    <Tooltip text={$t('assets.schedule.dayCountTooltip')} position="top">
+                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#interest-schedule-editor"
+                           target="_blank" rel="noopener noreferrer"
+                           class="text-gray-400 hover:text-libre-green transition-colors"
+                           onclick={(e) => e.stopPropagation()}>
+                            <Info size={12}/>
+                        </a>
+                    </Tooltip>
+                </div>
                 <SimpleSelect
                     bind:value={dayCount}
                     options={DAY_COUNT_OPTIONS}
@@ -1156,10 +1251,43 @@
         />
     {/if}
 
+    <!-- Late interest toggle + interest type (always visible if lateRow exists and there are normal periods) -->
+    {#if lateRow && normalRows.length > 0}
+        <div class="flex items-center justify-end gap-2 text-xs text-gray-500 dark:text-gray-400">
+            {#if lateRow.enabled}
+                <div class="w-36">
+                    <SimpleSelect
+                        value={lateRow.lateInterestType}
+                        options={INTEREST_TYPE_OPTIONS}
+                        disabled={disabled || readonly}
+                        compact={true}
+                        onchange={(v) => updateRow('late-interest', 'lateInterestType', v)}
+                    />
+                </div>
+            {/if}
+            <span>⚡ {$t('assets.schedule.lateInterest')}</span>
+            <button
+                type="button"
+                onclick={toggleLateInterest}
+                disabled={disabled || readonly}
+                aria-label="Toggle late interest"
+                class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors
+                       {lateRow.enabled ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <span class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
+                             {lateRow.enabled ? 'translate-x-[18px]' : 'translate-x-[3px]'}"></span>
+            </button>
+        </div>
+    {/if}
+
     <!-- Asset Events Section -->
     <div class="space-y-2">
         <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">📋 {$t('assets.schedule.assetEvents')}</span>
+            <div class="flex items-center gap-1.5">
+                <CalendarClock size={14} class="text-gray-400"/>
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{$t('assets.schedule.assetEvents')}</span>
+            </div>
             {#if !readonly && !disabled}
                 <button
                     type="button"
@@ -1170,7 +1298,7 @@
                            hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
                 >
                     <Plus size={12}/>
-                    <span>{$t('assets.schedule.addEvent')}</span>
+                    <span class="hidden sm:inline">{$t('assets.schedule.addEvent')}</span>
                 </button>
             {/if}
         </div>
@@ -1190,29 +1318,24 @@
                         {#each assetEvents as evt, idx}
                             <tr class="border-t border-gray-100 dark:border-slate-700">
                                 <td class="px-2 py-1">
-                                    <input type="date" value={evt.date}
-                                        oninput={(e) => handleEventFieldChange(idx, 'date', e.currentTarget.value)}
-                                        disabled={disabled || readonly}
-                                        class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
-                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                               disabled:opacity-50"
+                                    <SingleDatePicker
+                                        value={evt.date}
+                                        label=""
+                                        compact={true}
+                                        allowFuture={true}
+                                        onchange={(d) => handleEventFieldChange(idx, 'date', d)}
+                                    />
+                                </td>
+                                <td class="px-2 py-1 min-w-[130px]">
+                                    <SimpleSelect
+                                        value={evt.type}
+                                        options={eventTypeSelectOptions}
+                                        compact={true}
+                                        onchange={(v) => handleEventFieldChange(idx, 'type', v)}
                                     />
                                 </td>
                                 <td class="px-2 py-1">
-                                    <select value={evt.type}
-                                        onchange={(e) => handleEventFieldChange(idx, 'type', e.currentTarget.value)}
-                                        disabled={disabled || readonly}
-                                        class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
-                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                               disabled:opacity-50"
-                                    >
-                                        {#each EVENT_TYPE_OPTIONS as opt}
-                                            <option value={opt.value}>{$t(opt.labelKey)}</option>
-                                        {/each}
-                                    </select>
-                                </td>
-                                <td class="px-2 py-1">
-                                    <input type="number" value={evt.value} step="0.01"
+                                    <input type="number" value={evt.value} step={evt.type === 'MATURITY_SETTLEMENT' ? '100' : '0.01'}
                                         oninput={(e) => handleEventFieldChange(idx, 'value', Number(e.currentTarget.value))}
                                         disabled={disabled || readonly}
                                         class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
@@ -1248,36 +1371,6 @@
             </div>
         {/if}
     </div>
-
-    <!-- Late interest toggle + interest type (always visible if lateRow exists and there are normal periods) -->
-    {#if lateRow && normalRows.length > 0}
-        <div class="flex items-center justify-end gap-2 text-xs text-gray-500 dark:text-gray-400">
-            {#if lateRow.enabled}
-                <div class="w-36">
-                    <SimpleSelect
-                        value={lateRow.lateInterestType}
-                        options={INTEREST_TYPE_OPTIONS}
-                        disabled={disabled || readonly}
-                        compact={true}
-                        onchange={(v) => updateRow('late-interest', 'lateInterestType', v)}
-                    />
-                </div>
-            {/if}
-            <span>⚡ {$t('assets.schedule.lateInterest')}</span>
-            <button
-                type="button"
-                onclick={toggleLateInterest}
-                disabled={disabled || readonly}
-                aria-label="Toggle late interest"
-                class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors
-                       {lateRow.enabled ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
-                       disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                <span class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
-                             {lateRow.enabled ? 'translate-x-[18px]' : 'translate-x-[3px]'}"></span>
-            </button>
-        </div>
-    {/if}
 
     <!-- Status banner -->
     <div class="flex items-center gap-2 text-xs {statusBanner.ok ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}">

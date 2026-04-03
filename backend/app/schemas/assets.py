@@ -324,7 +324,7 @@ class FAScheduledInvestmentSchedule(BaseModel):
     def validate_schedule_continuity(cls, v):
         """Ensure schedule periods are contiguous and non-overlapping."""
         if not v:
-            raise ValueError("schedule must contain at least one period")
+            return v  # Allow empty schedule (probe returns initial_value)
 
         # Sort by start_date to ensure proper ordering
         sorted_schedule = sorted(v, key=lambda p: p.start_date)

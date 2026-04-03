@@ -227,7 +227,7 @@
     // =========================================================================
 
     function emitChange() {
-        const computedParams = paramsSchema.length > 0 ? {...paramsValues} : null;
+        const computedParams = uiComponent === 'scheduled_investment' ? providerParams : (paramsSchema.length > 0 ? {...paramsValues} : null);
         onchange?.({
             providerCode,
             identifier,

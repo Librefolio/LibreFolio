@@ -368,7 +368,8 @@
       "noEvents": "No asset events configured",
       "eventType": {
         "INTEREST": "Interest",
-        "PRICE_ADJUSTMENT": "Price Adjustment"
+        "PRICE_ADJUSTMENT": "Price Adjustment",
+        "MATURITY_SETTLEMENT": "Maturity Settlement"
       },
       "interestType": "Interest Type",
       "interestTypeSimple": "Simple",
@@ -381,8 +382,10 @@
       "matFreqQuarterly": "Quarterly",
       "matFreqSemiannual": "Semiannual",
       "matFreqAnnual": "Annual",
-      "generateInterest": "Auto-payout",
-      "generateInterestHint": "Auto-generate interest payout events at each maturation date"
+      "generateInterest": "Generate Coupon",
+      "generateInterestHint": "Auto-generate coupon payout events at each maturation date. The interest accrued is paid out and the asset resets to initial value.",
+      "interestTypeTooltip": "Determines how interest is calculated. Simple: interest on initial value only. Compound: interest accrues on accumulated interest too.",
+      "dayCountTooltip": "Convention for counting days in the interest period. ACT/365 and ACT/360 are the most common. Affects how daily interest is calculated."
     },
     "probe": {
       "currentPrice": "Current Price",
