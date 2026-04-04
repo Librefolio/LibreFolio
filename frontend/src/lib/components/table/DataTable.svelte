@@ -855,7 +855,7 @@
                 <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
                 {#if effectiveSelectionMode === 'multi'}
                     <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center justify-center gap-1">
                             <button type="button" class="checkbox-btn" onclick={toggleAllPageRows}>
                                 {#if isAllPageSelected}
                                     <Check size={16} class="check-icon checked"/>
@@ -1009,6 +1009,7 @@
                         <!-- Selection cell (multi mode only - shows checkboxes) -->
                         {#if effectiveSelectionMode === 'multi'}
                             <td class="td-fixed td-select">
+                                <div class="flex items-center justify-center gap-1">
                                 {#if !isRowSelectable || isRowSelectable(row)}
                                 <button
                                         type="button"
@@ -1024,6 +1025,9 @@
                                 {:else}
                                 <div style="width:28px"></div>
                                 {/if}
+                                <!-- Invisible spacer matching filter button width for alignment -->
+                                <div class="invisible" style="width:20px" aria-hidden="true"></div>
+                                </div>
                             </td>
                         {/if}
 
