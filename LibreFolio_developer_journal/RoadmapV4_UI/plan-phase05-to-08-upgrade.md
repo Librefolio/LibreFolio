@@ -415,18 +415,21 @@ fx.manual.title, fx.manual.date, fx.manual.rate
 
 ## 5. Phase 6 — Assets Management (Riscritta)
 
-**Durata**: ~5 giorni  
+**Durata**: ~8 giorni  
 **Dipendenze**: Phase 5 (PriceChartShared), Schema changes, **Phase 4.8 (user_role per permessi)**  
-**Status**: ⏳ TODO
+**Status**: 🚧 IN CORSO (Step 1–3 completati, Step 4 prossimo)
 
-> **📌 Nota per il plan di dettaglio futuro**: Quando si arriva a creare il plan dedicato per Phase 6,
-> ripartire da questa sezione (§5). Include: Asset list con DataTable e filtri URL-based, AssetModal CRUD
-> con ImagePickerWrapper per icona, AssetSearchAutocomplete multi-provider, AssetDetail con PriceChartShared
-> (riusato da Phase 5), AssetGainLossTable con metodo selezionabile (PMC formale + FIFO/LIFO analitico),
-> AssetMatchingWizard a 3 step (search DB → search providers → create new).
-> Il wizard di matching è **CONDIVISO** con Phase 7 (import BRIM), quindi deve essere progettato come
-> componente standalone riusabile. Il regime fiscale mostra un **disclaimer PMC** per conformità italiana.
-> `user_role` condiziona: VIEWER non può creare/editare asset, EDITOR/OWNER sì.
+> **📌 Piano di dettaglio**: [`plan-phase06Assets.prompt.md`](plan-phase06Assets.prompt.md)  
+> **📌 Sotto-piani**: [`phases/phase-06-subplan/`](phases/phase-06-subplan/)
+>
+> **Step completati (Step 1–3)**:
+> - Step 1: Backend `params_schema`, fix perf, pre-warm async
+> - Step 2: Asset List dual view (card grid + DataTable) + FX Table + ViewModeToggle
+> - Step 2b: Bugfix migration (9 sotto-step)
+> - Step 2c: Sync modal + bulk delete refactor
+> - Step 3: AssetModal + Search + Probe + ScheduledInvestment Engine (12 round)
+>   - Include: `ProviderAssignmentSection`, `AssetSearchAutocomplete`, `ScheduledInvestmentEditor`
+>   - Round 12 Finale: maturation engine, generate_interest, MATURITY_SETTLEMENT, late interest, auto-events
 
 ### Nota su Gain/Loss e Regimi Fiscali
 

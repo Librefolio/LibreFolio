@@ -1,9 +1,9 @@
 # Plan: Phase 06 — Asset Management (Grafico & Analisi Tecnica)
 
 **Data creazione**: 23 Marzo 2026  
-**Ultimo aggiornamento**: 23 Marzo 2026  
-**Status**: 📋 PIANIFICATO  
-**Durata stimata**: ~7 giorni  
+**Ultimo aggiornamento**: 3 Aprile 2026  
+**Status**: 🚧 IN CORSO (Step 1–3 completati, Step 4 prossimo)  
+**Durata stimata**: ~8 giorni  
 **Dipendenze**: Phase 5 (PriceChartFull, Signal Library, DataEditor), Phase 4 (DataTable, ModalBase, component library), Phase 4.8 (user_role)
 
 ---
