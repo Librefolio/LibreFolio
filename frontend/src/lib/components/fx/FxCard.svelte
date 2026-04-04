@@ -191,7 +191,9 @@
                 >
                     <ArrowLeftRight size={14}/>
                 </button>
+            </div>
 
+            <div class="flex items-center gap-1.5 shrink-0">
                 <button
                         class="p-1 rounded-md transition-colors {cardViewMode === 'percentage'
                         ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400'
@@ -201,13 +203,12 @@
                 >
                     <Percent size={14}/>
                 </button>
+                {#if manualOnly}
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                        ✏️ Manual
+                    </span>
+                {/if}
             </div>
-
-            {#if manualOnly}
-                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
-                    ✏️ Manual
-                </span>
-            {/if}
         </div>
     </div>
 

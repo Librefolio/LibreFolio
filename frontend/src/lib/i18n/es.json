@@ -801,7 +801,9 @@
       "assetComparison": "Comparación de activo",
       "assetComparisonFull": "Superposición de precio de activo",
       "assetComparisonAbbr": "Activo",
-      "assetComparisonDesc": "Superponer el precio de otro activo en este gráfico para comparación"
+      "assetComparisonDesc": "Superponer el precio de otro activo en este gráfico para comparación",
+      "fxPairFull": "Superposición de tipo de cambio",
+      "fxPairDesc": "Superponer el tipo de cambio de un par FX en este gráfico para comparación"
     },
     "params": {
       "annualRate": "Tasa Anual",
@@ -833,7 +835,8 @@
       "multiplier": "Número de desviaciones estándar ($k \\cdot \\sigma$). $k=2$ cubre ~95% de los valores asumiendo distribución normal.",
       "overbought": "Nivel por encima del cual el activo se considera sobrecomprado. Estándar: 70. Valores cercanos a 100 indican fuerte presión compradora.",
       "oversold": "Nivel por debajo del cual el activo se considera sobrevendido. Estándar: 30. Valores cercanos a 0 indican fuerte presión vendedora.",
-      "assetComparison": "Seleccione un activo para superponer su precio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%."
+      "assetComparison": "Seleccione un activo para superponer su precio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%.",
+      "fxPair": "Seleccione un par FX para superponer su tipo de cambio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%."
     },
     "macdLineColor": "Color Línea MACD"
   },

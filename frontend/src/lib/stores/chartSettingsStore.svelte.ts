@@ -76,23 +76,35 @@ function bump() {
 
 /**
  * Get current global chart settings.
+ * If scope is provided, returns scoped global settings (e.g., 'assets' or 'fx').
+ * Falls back to the base global settings if no scoped override exists.
  * Returns a copy to prevent accidental mutation.
  */
-export function getGlobalSettings(): ChartSettings {
+export function getGlobalSettings(scope?: string): ChartSettings {
     // Access _version to register reactive dependency
     void _version;
+    if (scope) {
+        const scoped = pairOverrides.get(`__global_${scope}__`);
+        if (scoped) return deepClone(scoped);
+    }
     return deepClone(globalSettings);
 }
 
 /**
  * Get effective settings for a specific pair.
- * Returns pair override if it exists, otherwise falls back to global settings.
+ * Returns pair override if it exists, otherwise falls back to scoped global (if scope provided),
+ * then base global settings.
  */
-export function getSettingsForPair(slug: string): ChartSettings {
+export function getSettingsForPair(slug: string, scope?: string): ChartSettings {
     // Access _version to register reactive dependency
     void _version;
     const override = pairOverrides.get(slug);
-    return override ? deepClone(override) : deepClone(globalSettings);
+    if (override) return deepClone(override);
+    if (scope) {
+        const scoped = pairOverrides.get(`__global_${scope}__`);
+        if (scoped) return deepClone(scoped);
+    }
+    return deepClone(globalSettings);
 }
 
 /**
@@ -117,11 +129,26 @@ export function getSettingsVersion(): number {
 
 /**
  * Save global settings.
- * IMPORTANT: clears ALL pair overrides — global settings override everything.
+ * If scope is provided (e.g., 'assets' or 'fx'), saves as a scoped global
+ * and only clears pair overrides within that scope.
+ * Without scope: clears ALL pair overrides (backward compatible).
  */
-export function setGlobalSettings(settings: ChartSettings): void {
-    globalSettings = deepClone(settings);
-    pairOverrides.clear();
+export function setGlobalSettings(settings: ChartSettings, scope?: string): void {
+    if (scope) {
+        pairOverrides.set(`__global_${scope}__`, deepClone(settings));
+        // Clear per-item overrides for this scope only
+        for (const key of [...pairOverrides.keys()]) {
+            if (key.startsWith('__global_')) continue; // Don't clear scoped globals
+            if (scope === 'assets' && key.startsWith('asset-')) {
+                pairOverrides.delete(key);
+            } else if (scope === 'fx' && !key.startsWith('asset-') && !key.startsWith('__')) {
+                pairOverrides.delete(key);
+            }
+        }
+    } else {
+        globalSettings = deepClone(settings);
+        pairOverrides.clear();
+    }
     bump();
 }
 

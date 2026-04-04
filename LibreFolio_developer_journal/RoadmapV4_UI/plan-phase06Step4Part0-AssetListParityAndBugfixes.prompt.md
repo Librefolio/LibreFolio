@@ -860,3 +860,14 @@ Tutti i bug A–H sono stati risolti:
 - **G**: `SearchSelect` dropdown migrato da `position:absolute z-50` a `position:fixed` con calcolo coordinate via `getBoundingClientRect()`. Aggiunto listener scroll/resize per riposizionamento.
 - **H**: `CountrySearchSelect` e `SectorSearchSelect`: aggiunta prop `compact`, passata a `SearchSelect`, con snippet `selectedItem` compatto (single-line). `DistributionEditor` passa `compact: true`.
 
+### Implementazione (Round 3 — 04/04/2026)
+
+Feedback residui dalla verifica utente Round 2:
+
+- **FxCard % posizione**: Pulsante `%` spostato da sinistra (accanto al swap) a destra (allineato ad AssetCard).
+- **FxPair i18n**: Aggiunte 3 chiavi mancanti: `fxPairFull`, `fxPairDesc`, `tooltips.fxPair` (con menzione 0% mode). Tooltip aggiornato in `FxPairSignal.ts`.
+- **Settings globali separati**: `chartSettingsStore` ora supporta `scope` opzionale (`'assets'`/`'fx'`). `getGlobalSettings(scope)`, `setGlobalSettings(s, scope)`, `getSettingsForPair(slug, scope)` — gli scope mantengono global settings indipendenti e la pulizia overrides è limitata allo scope. Tutte le pagine (assets list, fx list, fx detail) aggiornate con scope corretto.
+- **Preview cross-domain**: Assets page ora carica dati FX rates per tutte le coppie configurate (`loadFxRateData()`) e passa `pairsDataMap` al `ChartSettingsModal` per preview. FX page preview per asset comparison: graceful skip (dati asset non pre-caricati nella fx page).
+- **FX overlay su card asset**: Risolto: `loadFxRateData` popola i `FxStore` → `getRenderedSignals` nella asset page trova dati nelle store → segnali FX visibili sulle card.
+- **Errori IDE ChartSignalsSection**: Eliminati tutti gli errori: `as` casts nel template sostituiti con helper functions (`getOptionName`, `getOptionFullName`). Rimossa funzione inutilizzata `getSignalAbbr`.
+

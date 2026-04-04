@@ -182,6 +182,12 @@
                 <span class="font-semibold text-gray-800 dark:text-gray-100 truncate block">{asset.display_name}</span>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
+                {#if asset.asset_type}
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded {typeBadgeClass(asset.asset_type)}">
+                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[asset.asset_type] ?? 'other'}.png" alt="" class="w-3.5 h-3.5 object-contain"/>
+                        {$t(`assets.types.${asset.asset_type}`) || asset.asset_type}
+                    </span>
+                {/if}
                 <button
                         class="p-1 rounded-md transition-colors {cardViewMode === 'percentage'
                         ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400'
@@ -191,12 +197,6 @@
                 >
                     <Percent size={14}/>
                 </button>
-                {#if asset.asset_type}
-                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded {typeBadgeClass(asset.asset_type)}">
-                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[asset.asset_type] ?? 'other'}.png" alt="" class="w-3.5 h-3.5 object-contain"/>
-                        {$t(`assets.types.${asset.asset_type}`) || asset.asset_type}
-                    </span>
-                {/if}
                 <span class="w-2 h-2 rounded-full shrink-0 {asset.active ? 'bg-emerald-500' : 'bg-red-400'}"></span>
             </div>
         </div>

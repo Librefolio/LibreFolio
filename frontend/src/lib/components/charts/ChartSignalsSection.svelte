@@ -69,14 +69,6 @@
         return key ? $t(`chartSettings.signals.${key}`) : st.displayName;
     }
 
-    function getSignalAbbr(signalType: string): string {
-        const key = SIGNAL_TYPE_I18N_KEY[signalType];
-        if (!key) return '';
-        const abbrKey = `chartSettings.signals.${key}Abbr`;
-        const abbr = $t(abbrKey);
-        return abbr !== abbrKey ? abbr : '';
-    }
-
     function getSignalFullName(signalType: string): string {
         const key = SIGNAL_TYPE_I18N_KEY[signalType];
         if (!key) return '';
@@ -231,6 +223,17 @@
     function findAssetInfo(assetId: string) {
         return (availableAssets ?? []).find(a => String(a.id) === assetId);
     }
+
+    /** Extract signal option data fields (avoids TS `as` casts in template) */
+    function getOptionName(option: SelectOption): string {
+        const d = option.data as Record<string, unknown> | undefined;
+        return (d?.name as string) ?? '';
+    }
+
+    function getOptionFullName(option: SelectOption): string {
+        const d = option.data as Record<string, unknown> | undefined;
+        return (d?.fullName as string) ?? '';
+    }
 </script>
 
 <div>
@@ -250,14 +253,10 @@
                             onchange={(v) => { addSignal(v); indicatorSelect = ''; }}
                     >
                         {#snippet item(option)}
-                            {#if option.data}
-                                <span class="truncate">
-                                    {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as
-                                            {fullName: string}).fullName}<span
-                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
-                                </span>
-                            {/if}
+                            <span class="truncate">
+                                {option.icon} <span class="font-medium">{getOptionName(option)}</span>
+                                {#if getOptionFullName(option)}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{getOptionFullName(option)}</span>{/if}
+                            </span>
                         {/snippet}
                     </SimpleSelect>
                 </div>
@@ -273,14 +272,10 @@
                             onchange={(v) => { addSignal(v); comparisonSelect = ''; }}
                     >
                         {#snippet item(option)}
-                            {#if option.data}
-                                <span class="truncate">
-                                    {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as
-                                            {fullName: string}).fullName}<span
-                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
-                                </span>
-                            {/if}
+                            <span class="truncate">
+                                {option.icon} <span class="font-medium">{getOptionName(option)}</span>
+                                {#if getOptionFullName(option)}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{getOptionFullName(option)}</span>{/if}
+                            </span>
                         {/snippet}
                     </SimpleSelect>
                 </div>
@@ -296,14 +291,10 @@
                             onchange={(v) => { addSignal(v); benchmarkSelect = ''; }}
                     >
                         {#snippet item(option)}
-                            {#if option.data}
-                                <span class="truncate">
-                                    {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as
-                                            {fullName: string}).fullName}<span
-                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
-                                </span>
-                            {/if}
+                            <span class="truncate">
+                                {option.icon} <span class="font-medium">{getOptionName(option)}</span>
+                                {#if getOptionFullName(option)}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{getOptionFullName(option)}</span>{/if}
+                            </span>
                         {/snippet}
                     </SimpleSelect>
                 </div>
