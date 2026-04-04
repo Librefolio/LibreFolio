@@ -33,6 +33,8 @@
         dropdownPosition?: 'top' | 'bottom' | 'auto';
         /** Change callback */
         onchange?: (value: string) => void;
+        /** Compact mode: single-line display, smaller height to match standard inputs */
+        compact?: boolean;
     }
 
     let {
@@ -42,7 +44,8 @@
         disabled = false,
         maxVisibleItems = 6,
         dropdownPosition = 'auto',
-        onchange
+        onchange,
+        compact = false,
     }: Props = $props();
 
     let allCountriesLocal = $state<CountryInfo[]>([]);
@@ -92,6 +95,7 @@
 
 <SearchSelect
         bind:value
+        {compact}
         {disabled}
         {dropdownPosition}
         inlineSearch={true}
@@ -115,17 +119,26 @@
         </div>
     {/snippet}
     {#snippet selectedItem(option)}
-        <div class="flex items-center space-x-2 min-w-0">
-            {#if option.icon}
-                <span class="text-base shrink-0 leading-none">{option.icon}</span>
-            {/if}
-            <div class="min-w-0">
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {option.value || ''}
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={option.label}>{option.label}</div>
+        {#if compact}
+            <div class="flex items-center gap-1.5 min-w-0">
+                {#if option.icon}
+                    <span class="text-sm shrink-0 leading-none">{option.icon}</span>
+                {/if}
+                <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{option.value || ''}</span>
             </div>
-        </div>
+        {:else}
+            <div class="flex items-center space-x-2 min-w-0">
+                {#if option.icon}
+                    <span class="text-base shrink-0 leading-none">{option.icon}</span>
+                {/if}
+                <div class="min-w-0">
+                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {option.value || ''}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={option.label}>{option.label}</div>
+                </div>
+            </div>
+        {/if}
     {/snippet}
 </SearchSelect>
 

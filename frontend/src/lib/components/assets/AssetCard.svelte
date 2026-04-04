@@ -1,19 +1,21 @@
 <!--
   AssetCard — Card displaying an asset with mini chart and quick actions.
-  Layout: Header (icon + name + type badge), Rate row, Mini chart, Footer (edit + delete).
-  NO swap button (unlike FxCard).
+  Layout: Header (icon + name + % toggle + type badge), Rate row, Mini chart, Footer (settings + sync + refresh | delete).
   Svelte 5 runes, dark mode.
   Used by: /assets list page (grid view)
 -->
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
-    import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
+    import {Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import AssetIcon from './AssetIcon.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
+    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import type {RenderedSignal} from '$lib/charts/signals';
+    import {normalizeToPercentage} from '$lib/utils/chartUtils';
 
     // =========================================================================
     // Props
@@ -37,8 +39,17 @@
         deltaPercent?: number | null;
         /** Delta absolute */
         deltaAbs?: number | null;
-        /** Which delta to display on the card: 'percentage' (default) or 'absolute' */
-        deltaDisplayMode?: 'percentage' | 'absolute';
+        /** Global view mode from parent: 'percentage' (default) or 'absolute' */
+        globalViewMode?: 'percentage' | 'absolute';
+        /** Chart settings for this card (resolved from store by parent) */
+        chartSettings?: ChartSettings;
+        /**
+         * Callback to render overlay signals on demand.
+         * Called reactively whenever cardViewMode changes.
+         * @param chartData absolute chart data
+         * @param viewMode  current card view mode
+         */
+        renderSignals?: (chartData: LineDataPoint[], viewMode: 'absolute' | 'percentage') => RenderedSignal[];
         /** Chart data points */
         chartData?: LineDataPoint[];
         /** Loading state */
@@ -49,6 +60,7 @@
         onsync?: (asset: AssetData) => void;
         onrefresh?: (asset: AssetData) => void;
         ondelete?: (asset: AssetData) => void;
+        onsettings?: (asset: AssetData) => void;
     }
 
     let {
@@ -56,14 +68,54 @@
         lastPrice = null,
         deltaPercent = null,
         deltaAbs = null,
-        deltaDisplayMode = 'percentage',
+        globalViewMode = 'percentage',
+        chartSettings,
+        renderSignals,
         chartData = [],
         loading = false,
         syncing = false,
         onsync,
         onrefresh,
         ondelete,
+        onsettings,
     }: Props = $props();
+
+    // =========================================================================
+    // State
+    // =========================================================================
+
+    let localViewModeOverride = $state<'absolute' | 'percentage' | null>(null);
+
+    // Card view mode: local override takes precedence, otherwise follows global
+    let cardViewMode = $derived(localViewModeOverride ?? globalViewMode);
+
+    // Reset local override when global changes
+    let prevGlobal: string | undefined;
+    $effect(() => {
+        if (prevGlobal !== undefined && globalViewMode !== prevGlobal) {
+            localViewModeOverride = null;
+        }
+        prevGlobal = globalViewMode;
+    });
+
+    // =========================================================================
+    // Derived
+    // =========================================================================
+
+    /** Absolute data for signal rendering (chartData is already absolute for assets) */
+    let absoluteData = $derived(chartData);
+
+    /** Display data: converted to % when in percentage mode (like FxCard) */
+    let displayData = $derived.by((): LineDataPoint[] => {
+        if (cardViewMode === 'absolute' || chartData.length === 0) return chartData;
+        return normalizeToPercentage(chartData);
+    });
+
+    /** Overlay signals — re-rendered reactively when cardViewMode changes */
+    let overlaySignals = $derived.by((): RenderedSignal[] => {
+        if (!renderSignals || absoluteData.length === 0) return [];
+        return renderSignals(absoluteData, cardViewMode);
+    });
 
     // =========================================================================
     // Helpers
@@ -122,7 +174,7 @@
         role="button"
         tabindex="0"
 >
-    <!-- Row 1: Icon + Name + Type Badge -->
+    <!-- Row 1: Icon + Name + % toggle + Type Badge -->
     <div class="px-4 pt-3 pb-1">
         <div class="flex items-center gap-2">
             <AssetIcon altText={asset.display_name} assetType={asset.asset_type} iconUrl={asset.icon_url} size="sm"/>
@@ -130,6 +182,15 @@
                 <span class="font-semibold text-gray-800 dark:text-gray-100 truncate block">{asset.display_name}</span>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
+                <button
+                        class="p-1 rounded-md transition-colors {cardViewMode === 'percentage'
+                        ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400'
+                        : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
+                        onclick={(e) => { stop(e); localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute'; }}
+                        title={cardViewMode === 'absolute' ? $t('chart.showPercentage') : $t('chart.showAbsolute')}
+                >
+                    <Percent size={14}/>
+                </button>
                 {#if asset.asset_type}
                     <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded {typeBadgeClass(asset.asset_type)}">
                         <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[asset.asset_type] ?? 'other'}.png" alt="" class="w-3.5 h-3.5 object-contain"/>
@@ -149,7 +210,7 @@
                     {Number(lastPrice).toFixed(2)}
                 </span>
                 <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)} {asset.currency}</span>
-                {#if deltaDisplayMode === 'absolute' && deltaAbs !== null}
+                {#if cardViewMode === 'absolute' && deltaAbs !== null}
                     <span class="text-sm font-medium {deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                         {deltaAbs >= 0 ? '▲' : '▼'} {deltaAbs >= 0 ? '+' : ''}{Number(deltaAbs).toFixed(2)} {asset.currency}
                     </span>
@@ -168,12 +229,16 @@
 
     <!-- Mini Chart -->
     <div class="px-4">
-        {#if chartData.length > 0}
+        {#if displayData.length > 0}
             <PriceChartCompact
-                    data={chartData}
+                    data={displayData}
                     height="80px"
-                    areaFill={true}
-                    showGradient={true}
+                    viewMode={cardViewMode}
+                    areaFill={chartSettings?.areaFill ?? true}
+                    colorByBaseline={chartSettings?.colorByBaseline}
+                    showGridLines={chartSettings?.gridLines}
+                    showGradient={chartSettings?.staleGradient ?? true}
+                    overlaySignals={overlaySignals}
             />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
@@ -186,9 +251,16 @@
         {/if}
     </div>
 
-    <!-- Footer: actions (sync, refresh, delete) -->
+    <!-- Footer: actions (settings, sync, refresh | delete) -->
     <div class="px-4 py-2.5 flex items-center justify-between border-t border-gray-50 dark:border-slate-700/50">
         <div class="flex items-center gap-0.5">
+            <button
+                    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    onclick={(e) => { stop(e); onsettings?.(asset); }}
+                    title={$t('chartSettings.title')}
+            >
+                <Settings size={15}/>
+            </button>
             <button
                     class="p-1.5 rounded-md transition-colors {!asset.provider_code ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
                     disabled={!asset.provider_code || syncing}

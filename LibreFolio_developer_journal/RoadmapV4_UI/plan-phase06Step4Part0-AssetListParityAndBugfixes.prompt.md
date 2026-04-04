@@ -7,7 +7,7 @@
 
 ---
 
-## 0.1 — AssetCard: nuove props e pulsanti (allineamento a FxCard)
+## ✅ 0.1 — AssetCard: nuove props e pulsanti (allineamento a FxCard) — COMPLETATO
 
 **File:** `frontend/src/lib/components/assets/AssetCard.svelte`
 **Riferimento:** `frontend/src/lib/components/fx/FxCard.svelte` (righe 24-64 Props, 76-88 localViewModeOverride, 128-141 overlaySignals, 199-207 pulsante %, 265-271 pulsante ⚙)
@@ -97,7 +97,7 @@
 
 ---
 
-## 0.2 — Assets List Page: wiring settings + signals nelle card (RIVISTO)
+## ✅ 0.2 — Assets List Page: wiring settings + signals nelle card (RIVISTO) — COMPLETATO
 
 **File:** `frontend/src/routes/(app)/assets/+page.svelte`
 **Riferimento:** `frontend/src/routes/(app)/fx/+page.svelte` (righe 26-28 imports signals, 337-353 settings handlers, 359-393 getRenderedSignals, 855-869 FxCard props)
@@ -225,13 +225,13 @@
 
 ---
 
-## 0.3 — Abs/% toggle coerenza grid ↔ table
+## ✅ 0.3 — Abs/% toggle coerenza grid ↔ table — COMPLETATO
 
 **Decisione: nessuna modifica.** La matrice 2×2 della pagina lista (righe 797-817) mostra già `ColumnVisibilityToggle` in table mode e `Abs/%` in grid mode. La tabella `AssetTable` mostra le colonne Δ% multi-periodo, quindi il toggle Abs/% per le card non ha senso in table view. Confermato: as-is (stesso pattern della FX page, righe 759-779).
 
 ---
 
-## 0.4 — NUOVO: `AssetComparisonSignal` (nuovo tipo di segnale)
+## ✅ 0.4 — NUOVO: `AssetComparisonSignal` (nuovo tipo di segnale) — COMPLETATO
 
 **Scopo:** Permettere di sovrapporre il prezzo di un asset come segnale su qualsiasi grafico (FX o Asset). Complementare a `FxPairSignal` che permette di sovrapporre un cambio FX.
 
@@ -304,7 +304,7 @@ Architettura (modello: `FxPairSignal.ts`):
 
 ---
 
-## 0.5 — NUOVO: BrokerIcon `effect_update_depth_exceeded` + icon non reattiva a pluginCode — Bugfix critico
+## ✅ 0.5 — NUOVO: BrokerIcon `effect_update_depth_exceeded` + icon non reattiva a pluginCode — Bugfix critico — COMPLETATO
 
 **File:** `frontend/src/lib/components/brokers/BrokerIcon.svelte`
 
@@ -347,9 +347,7 @@ Sostituire la state machine imperativa con un approccio puramente dichiarativo:
    }
    ```
    Questo risolve Bug 2: ogni volta che `pluginCode` cambia (es. l'utente seleziona un plugin nel form), l'icona si aggiorna.
-3. `candidateUrls = $derived(...)` — array ordinato di URL candidate, derivato da props + `pluginIconUrl`:
-   ```typescript
-   let candidateUrls = $derived.by(() => {
+3. `candidateUrls = $derived.by(() => {
        const urls: string[] = [];
        if (iconUrl?.trim()) urls.push(iconUrl);
        if (portalUrl?.trim()) {
@@ -357,8 +355,7 @@ Sostituire la state machine imperativa con un approccio puramente dichiarativo:
        }
        if (pluginIconUrl) urls.push(pluginIconUrl);
        return urls;
-   });
-   ```
+   });` — array ordinato di URL candidate, derivato da props + `pluginIconUrl`
 4. `failedUrls = $state(new Set<string>())` — aggiornato solo da `handleError()`
 5. `currentDisplayUrl = $derived(candidateUrls.find(u => !failedUrls.has(u)) ?? null)` — prima URL non-fallita
 6. **Eliminare** entrambi i vecchi `$effect`, `moveToNextFallback()`, `resetAttempt()`, `currentAttempt`, `imageKey`, `onMount`
@@ -393,7 +390,7 @@ Questo elimina completamente le dipendenze effect↔effect, rende il plugin load
 
 ---
 
-## 0.6 — NUOVO: BrokerForm — Usare `SingleDatePicker` per `opened_at`
+## ✅ 0.6 — NUOVO: BrokerForm — Usare `SingleDatePicker` per `opened_at` — COMPLETATO
 
 **File:** `frontend/src/lib/components/brokers/BrokerForm.svelte`
 
@@ -416,7 +413,7 @@ Importare `SingleDatePicker` nel file. Rimuovere il `<label>` wrapper poiché Si
 
 ---
 
-## 0.7 — NUOVO: DistributionEditor — `SectorSearchSelect` + `CountrySearchSelect` inline
+## ✅ 0.7 — NUOVO: DistributionEditor — `SectorSearchSelect` + `CountrySearchSelect` inline — COMPLETATO
 
 **File principali:**
 - `frontend/src/lib/components/ui/input/DistributionEditor.svelte`
@@ -464,7 +461,7 @@ export {default as SectorSearchSelect} from './SectorSearchSelect.svelte';
 
 ---
 
-## 0.8 — NUOVO: DataTable — Filtro "Show selected only" nell'header della colonna selezione
+## ✅ 0.8 — NUOVO: DataTable — Filtro "Show selected only" nell'header della colonna selezione — COMPLETATO
 
 **File:** `frontend/src/lib/components/table/DataTable.svelte`
 
@@ -511,24 +508,24 @@ Aggiungere al DataTable un toggle per mostrare solo le righe attualmente selezio
 
 ## Riepilogo file da modificare (Parte 0 completa)
 
-| Step | File | Tipo |
-|------|------|------|
-| 0.1 | `frontend/src/lib/components/assets/AssetCard.svelte` | Modifica (props, pulsanti, chart) |
-| 0.2 | `frontend/src/routes/(app)/assets/+page.svelte` | Modifica (wiring, `getRenderedSignals` completo) |
-| 0.2 | `frontend/src/routes/(app)/fx/+page.svelte` | Modifica (estendere `getRenderedSignals` per `asset-comparison`) |
-| 0.4 | `frontend/src/lib/charts/signals/AssetComparisonSignal.ts` | **Nuovo file** |
-| 0.4 | `frontend/src/lib/charts/signals/registry.ts` | Modifica (registro) |
-| 0.4 | `frontend/src/lib/charts/signals/index.ts` | Modifica (export) |
-| 0.4 | `frontend/src/lib/components/charts/ChartSignalsSection.svelte` | Modifica (dynamic options per assets) |
-| 0.4 | `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | Modifica (nuove props assets) |
-| 0.5 | `frontend/src/lib/components/brokers/BrokerIcon.svelte` | **Riscrittura** (da state machine a `$derived` + plugin loading reattivo) |
-| 0.5 | `frontend/src/lib/components/brokers/BrokerIcon.test.ts` | **Nuovo file** (vitest) |
-| 0.5 | `frontend/e2e/broker-icon.spec.ts` | **Nuovo file** (playwright) |
-| 0.6 | `frontend/src/lib/components/brokers/BrokerForm.svelte` | Modifica (SingleDatePicker) |
-| 0.7 | `frontend/src/lib/components/ui/select/SectorSearchSelect.svelte` | **Nuovo file** |
-| 0.7 | `frontend/src/lib/components/ui/select/index.ts` | Modifica (export SectorSearchSelect) |
-| 0.7 | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` | Modifica (CountrySearchSelect + SectorSearchSelect inline) |
-| 0.8 | `frontend/src/lib/components/table/DataTable.svelte` | Modifica (show selected filter in selection column header) |
+| Step | File | Tipo | Stato |
+|------|------|------|-------|
+| 0.1 | `frontend/src/lib/components/assets/AssetCard.svelte` | Modifica (props, pulsanti, chart) | ✅ |
+| 0.2 | `frontend/src/routes/(app)/assets/+page.svelte` | Modifica (wiring, `getRenderedSignals` completo) | ✅ |
+| 0.2 | `frontend/src/routes/(app)/fx/+page.svelte` | Modifica (estendere `getRenderedSignals` per `asset-comparison`) | ✅ |
+| 0.4 | `frontend/src/lib/charts/signals/AssetComparisonSignal.ts` | **Nuovo file** | ✅ |
+| 0.4 | `frontend/src/lib/charts/signals/registry.ts` | Modifica (registro) | ✅ |
+| 0.4 | `frontend/src/lib/charts/signals/index.ts` | Modifica (export) | ✅ |
+| 0.4 | `frontend/src/lib/components/charts/ChartSignalsSection.svelte` | Modifica (dynamic options per assets) | ✅ |
+| 0.4 | `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | Modifica (nuove props assets) | ✅ |
+| 0.5 | `frontend/src/lib/components/brokers/BrokerIcon.svelte` | **Riscrittura** | ✅ |
+| 0.5 | `frontend/src/lib/components/brokers/BrokerIcon.test.ts` | **Nuovo file** (vitest) | ✅ |
+| 0.5 | `frontend/e2e/broker-icon.spec.ts` | **Nuovo file** (playwright) | ✅ |
+| 0.6 | `frontend/src/lib/components/brokers/BrokerForm.svelte` | Modifica (SingleDatePicker) | ✅ |
+| 0.7 | `frontend/src/lib/components/ui/select/SectorSearchSelect.svelte` | **Nuovo file** | ✅ |
+| 0.7 | `frontend/src/lib/components/ui/select/index.ts` | Modifica (export SectorSearchSelect) | ✅ |
+| 0.7 | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` | Modifica | ✅ |
+| 0.8 | `frontend/src/lib/components/table/DataTable.svelte` | Modifica (show selected filter) | ✅ |
 
 ---
 
@@ -553,4 +550,313 @@ Aggiungere al DataTable un toggle per mostrare solo le righe attualmente selezio
 2. **Caricamento dati Asset per segnali nelle pagine FX:** La pagina FX non ha dati Asset. Approccio iniziale: skip graceful. La risoluzione completa (caricamento on-demand via `POST /assets/prices/query`) verrà implementata in Parte A quando la detail page esiste e l'infrastruttura di caricamento è consolidata.
 
 3. **BrokerCard Svelte 4 legacy:** `BrokerCard.svelte` usa ancora `createEventDispatcher` e `on:click` (Svelte 4). La convention del progetto è "Edit > Rewrite" e "No backward compatibility". Il refactor a Svelte 5 è fuori scope per Step 4 — va segnalato come tech debt.
+
+---
+
+## 0.9 — Problemi emersi dal review utente e soluzioni proposte
+
+> **Stato:** IN ATTESA DI REVIEW — I punti sottostanti derivano dal feedback utente del 04/04/2026 sul risultato della Parte 0.
+
+---
+
+### Bug A — Toggle Abs/% nell'AssetCard non normalizza a p0 (cambia solo scala Y)
+
+**Severità:** Alta — Il toggle è visivamente presente ma il comportamento non è quello atteso.
+
+**Problema:** In FxCard, `chartData` è un `$derived` che converte i valori assoluti in percentuale quando `cardViewMode === 'percentage'` (formula: `((value - p0) / p0) * 100`, righe 119-125). In AssetCard, `chartData` è un prop passato direttamente a `PriceChartCompact` senza alcuna conversione — il toggle cambia solo il `viewMode` passato al chart, che influenza colore/baseline ma NON trasforma i dati in %.
+
+**Soluzione proposta:**
+
+1. **Estrarre utility condivisa** — Creare `frontend/src/lib/utils/chartUtils.ts` (o aggiungere a un file utils esistente):
+   ```typescript
+   import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+   
+   /** Normalize data points to percentage change from first value (p0). */
+   export function normalizeToPercentage(data: LineDataPoint[]): LineDataPoint[] {
+       if (data.length === 0) return data;
+       const p0 = data[0].value;
+       if (p0 === 0) return data;
+       return data.map(d => ({...d, value: ((d.value - p0) / p0) * 100}));
+   }
+   ```
+
+2. **In `AssetCard.svelte`**: aggiungere un `displayData` derivato:
+   ```typescript
+   import {normalizeToPercentage} from '$lib/utils/chartUtils';
+   
+   let displayData = $derived.by((): LineDataPoint[] => {
+       if (cardViewMode === 'absolute' || chartData.length === 0) return chartData;
+       return normalizeToPercentage(chartData);
+   });
+   ```
+   Passare `displayData` (non `chartData`) a `PriceChartCompact`:
+   ```svelte
+   <PriceChartCompact data={displayData} viewMode={cardViewMode} ... />
+   ```
+   Nota: `absoluteData` resta `chartData` (non convertito) — i segnali overlay lo usano.
+
+3. **In `FxCard.svelte`**: rifattorizzare per usare la stessa utility `normalizeToPercentage` nel `chartData` derivato (righe 119-125), eliminando la logica duplicata.
+
+4. **In `ChartSettingsModal.svelte`**: il preview (riga 194-199) fa già la stessa conversione manualmente — rifattorizzare per usare `normalizeToPercentage`.
+
+**File da modificare:**
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/utils/chartUtils.ts` | **Nuovo** (o aggiungere a utils esistente) |
+| `frontend/src/lib/components/assets/AssetCard.svelte` | Aggiungere `displayData` derivato, usarlo nel template |
+| `frontend/src/lib/components/fx/FxCard.svelte` | Rifattorizzare per usare `normalizeToPercentage` |
+| `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | Rifattorizzare preview per usare `normalizeToPercentage` |
+
+---
+
+### Bug B — Traduzioni mancanti per le label di AssetComparisonSignal
+
+**Severità:** Media — Le label delle card "Asset Comparison" mostrano le chiavi i18n raw anziché testo tradotto.
+
+**Problema:** `ChartSignalsSection.svelte` usa `SIGNAL_TYPE_I18N_KEY['asset-comparison'] = 'assetComparison'` per costruire chiavi come `chartSettings.signals.assetComparison`, `chartSettings.signals.assetComparisonFull`, `chartSettings.signals.assetComparisonAbbr`, `chartSettings.signals.assetComparisonDesc`, e `chartSettings.tooltips.assetComparison`. Nessuna di queste chiavi esiste nei 4 file di traduzione (`en.json`, `it.json`, `fr.json`, `es.json`).
+
+**Soluzione proposta:**
+
+Usare `./dev.py i18n add` per aggiungere le chiavi mancanti. Comandi:
+
+```bash
+./dev.py i18n add "chartSettings.signals.assetComparison" \
+  --en "Asset Comparison" --it "Confronto Asset" --fr "Comparaison d'actif" --es "Comparación de activo"
+
+./dev.py i18n add "chartSettings.signals.assetComparisonFull" \
+  --en "Asset Price Overlay" --it "Sovrapposizione prezzo asset" --fr "Superposition du prix d'actif" --es "Superposición de precio de activo"
+
+./dev.py i18n add "chartSettings.signals.assetComparisonAbbr" \
+  --en "Asset" --it "Asset" --fr "Actif" --es "Activo"
+
+./dev.py i18n add "chartSettings.signals.assetComparisonDesc" \
+  --en "Overlay another asset's price on this chart for comparison" \
+  --it "Sovrapponi il prezzo di un altro asset su questo grafico per confronto" \
+  --fr "Superposer le prix d'un autre actif sur ce graphique pour comparaison" \
+  --es "Superponer el precio de otro activo en este gráfico para comparación"
+
+./dev.py i18n add "chartSettings.tooltips.assetComparison" \
+  --en "Select an asset to overlay its price on this chart. In percentage mode, both curves start at 0%." \
+  --it "Seleziona un asset per sovrapporne il prezzo su questo grafico. In modalità percentuale, entrambe le curve partono da 0%." \
+  --fr "Sélectionnez un actif pour superposer son prix sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%." \
+  --es "Seleccione un activo para superponer su precio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%."
+```
+
+**File da modificare:** `en.json`, `it.json`, `fr.json`, `es.json` (tramite `dev.py i18n add`)
+
+---
+
+### Bug C — Dropdown FX pairs vuoto in asset settings / Dropdown assets vuoto in FX settings (bug gemello)
+
+**Severità:** Alta — L'utente non può aggiungere segnali cross-domain (FX su asset, asset su FX).
+
+**Problema:**
+- **Assets page** (`+page.svelte` riga 991-1001): `ChartSettingsModal` riceve `availableAssets` ma **NON** `availablePairs` → il dropdown FX pair nel settings dell'asset è vuoto.
+- **FX page** (`+page.svelte` riga 940-965): `ChartSettingsModal` riceve `availablePairs` ma **NON** `availableAssets` → il dropdown asset nel settings di FX è vuoto.
+
+**Soluzione proposta:**
+
+1. **Assets page → aggiungere `availablePairs`:**
+   - Caricare la lista delle coppie FX configurate. Due opzioni:
+     - **(a) API call on-demand:** Aggiungere una funzione `loadFxPairSlugs()` che chiama `GET /fx/pairs` (endpoint leggero, restituisce solo config), salva il risultato in uno stato locale `fxPairSlugs = $state<string[]>([])`. Invocarla `onMount` o alla prima apertura del settings modal.
+     - **(b) Store condiviso:** Creare un `fxPairConfigStore` globale (stile currencyStore) caricato lazily. Meglio per evitare chiamate duplicate se l'utente torna più volte sulla pagina.
+   - Passare `availablePairs={fxPairSlugs}` a `ChartSettingsModal`.
+   - Per la preview, costruire anche `pairsDataMap` — ma i dati FX potrebbero non essere disponibili. Approccio: caricare on-demand i dati delle coppie referenziate nei segnali, oppure graceful skip (preview senza linea FX, con messaggio).
+
+2. **FX page → aggiungere `availableAssets`:**
+   - Caricare la lista degli asset configurati. Due opzioni:
+     - **(a) API call on-demand:** `GET /assets` (lista leggera) + mappare a `{id, display_name}`.
+     - **(b) Store condiviso:** `assetListStore` globale caricato lazily.
+   - Passare `availableAssets={...}` a `ChartSettingsModal`.
+   - Per la preview, `assetsDataMap` non è disponibile nella pagina FX — graceful skip con messaggio "dati asset non disponibili nella preview, visibili nel chart reale".
+
+**Raccomandazione:** Opzione (a) per entrambi — singola API call per pagina, minimo impatto architetturale. L'API call è cacheable se l'utente riapre il modal.
+
+**File da modificare:**
+| File | Modifica |
+|------|----------|
+| `frontend/src/routes/(app)/assets/+page.svelte` | Caricare FX pairs, passare `availablePairs` e `pairsDataMap` a `ChartSettingsModal` |
+| `frontend/src/routes/(app)/fx/+page.svelte` | Caricare asset list, passare `availableAssets` a `ChartSettingsModal` |
+
+---
+
+### Bug D — Preview nel settings non mostra la linea dell'asset selezionato
+
+**Severità:** Media — La preview funziona per i segnali sintetici ma non per i segnali che richiedono dati esterni.
+
+**Problema:** `ChartSettingsModal` risolve `asset-comparison` signals usando `assetsDataMap[targetId]` (righe 214-220), ma la pagina **assets** non passa `assetsDataMap` al modale. Quindi `resolvedData` è `undefined` e la linea dell'asset non appare nella preview.
+
+**Soluzione proposta:**
+
+Nella pagina assets, costruire e passare `assetsDataMap`:
+```svelte
+<ChartSettingsModal
+    ...
+    assetsDataMap={Object.fromEntries(
+        assets
+            .filter(a => a.chartData.length > 0)
+            .map(a => [String(a.id), a.chartData])
+    )}
+/>
+```
+
+Questo usa i dati asset già caricati in memoria (`assets[].chartData`). Nessuna API call aggiuntiva necessaria.
+
+**File da modificare:** `frontend/src/routes/(app)/assets/+page.svelte` (una sola riga da aggiungere al `ChartSettingsModal`)
+
+---
+
+### Bug E — SimpleSelect per asset manca l'icona dell'asset
+
+**Severità:** Bassa (UX polish) — L'utente vorrebbe vedere l'icona dell'asset prima del nome nel dropdown.
+
+**Problema:** Il `SimpleSelect` per `configuredAssets` (in `ChartSignalsSection.svelte` riga 436-442) mostra solo il `display_name` come label, senza icona.
+
+**Soluzione proposta:**
+
+1. **Estendere i dati passati in `availableAssets`** per includere `icon_url` e `asset_type`:
+   ```typescript
+   // In Props di ChartSignalsSection e ChartSettingsModal:
+   availableAssets?: Array<{id: number, display_name: string, icon_url?: string | null, asset_type?: string | null}>;
+   ```
+
+2. **Nella pagina assets**, passare i campi extra:
+   ```typescript
+   availableAssets={assets.map(a => ({ id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type }))}
+   ```
+
+3. **In `ChartSignalsSection.svelte`**, nel blocco `configuredAssets` (riga 435-443):
+   - Usare lo snippet `item` del `SimpleSelect` per renderizzare una mini icona (15px) prima del nome.
+   - Logica di fallback identica a `AssetIcon.svelte`: `icon_url` → PNG per `asset_type` → icona generica BarChart3.
+   - Esempio:
+   ```svelte
+   <SimpleSelect ...>
+       {#snippet item(option)}
+           {@const assetInfo = (availableAssets ?? []).find(a => String(a.id) === option.value)}
+           <span class="flex items-center gap-1.5 truncate">
+               {#if assetInfo?.icon_url}
+                   <img src={assetInfo.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
+               {:else if assetInfo?.asset_type}
+                   <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[assetInfo.asset_type] ?? 'other'}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+               {:else}
+                   <BarChart3 size={14} class="text-gray-400 shrink-0" />
+               {/if}
+               <span>{option.label}</span>
+           </span>
+       {/snippet}
+   </SimpleSelect>
+   ```
+
+**File da modificare:**
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/charts/ChartSignalsSection.svelte` | Props + snippet item con icona |
+| `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | Props estese |
+| `frontend/src/routes/(app)/assets/+page.svelte` | Passare `icon_url` e `asset_type` in `availableAssets` |
+| `frontend/src/routes/(app)/fx/+page.svelte` | Passare `icon_url` e `asset_type` in `availableAssets` (quando caricati) |
+
+---
+
+### Bug F — Filtro "Show selected only" sotto la checkbox anziché di fianco
+
+**Severità:** Bassa (UX polish) — Layout non ottimale.
+
+**Problema:** Nel `DataTable`, il pulsante filtro nella colonna di selezione è posizionato sotto la checkbox "select all" anziché accanto ad essa.
+
+**Soluzione proposta:**
+
+Nell'header della colonna selezione, wrappare la checkbox e il pulsante filtro in un `flex` orizzontale:
+```svelte
+<div class="flex items-center gap-1">
+    <input type="checkbox" ... />  <!-- select all -->
+    <button class="filter-btn" ...>  <!-- show selected only -->
+        <Filter size={12}/>
+    </button>
+</div>
+```
+
+Verificare che lo spazio nella colonna sia sufficiente (la colonna selezione è stretta ~40-48px). Se non basta, considerare un tooltip-popover o icona più piccola (10px).
+
+**File da modificare:** `frontend/src/lib/components/table/DataTable.svelte`
+
+---
+
+### Bug G — CountrySearchSelect e SectorSearchSelect: z-index troppo basso, dropdown troncato
+
+**Severità:** Alta — I dropdown sono inutilizzabili quando il componente è dentro una tabella con overflow.
+
+**Problema:** Entrambi usano `SearchSelect` che renderizza il dropdown con `position: absolute; z-50` (riga 338 di SearchSelect.svelte). Quando il componente è usato dentro un `<td>` di una tabella con `overflow: hidden` o `overflow: auto`, il dropdown viene troncato ai bordi della tabella. `SimpleSelect` risolve già questo problema usando `position: fixed` per il dropdown.
+
+**Soluzione proposta:**
+
+Migrare il dropdown di `SearchSelect.svelte` a `position: fixed` (stesso approccio di `SimpleSelect.svelte`):
+
+1. Al momento dell'apertura, calcolare la posizione assoluta del trigger tramite `getBoundingClientRect()`.
+2. Posizionare il dropdown con `position: fixed; top: ...; left: ...; width: ...`.
+3. Aggiornare la posizione su scroll/resize (con un `$effect` + eventListener o con Floating UI).
+4. Usare z-index alto (`z-[999]` o simile) per passare sopra qualsiasi contenitore.
+
+In alternativa, usare `@floating-ui/dom` per gestire posizionamento e flip automatico (già usato nel progetto? da verificare).
+
+**File da modificare:** `frontend/src/lib/components/ui/select/SearchSelect.svelte`
+
+---
+
+### Bug H — Compact mode mancante in CountrySearchSelect e SectorSearchSelect
+
+**Severità:** Bassa (UX polish) — Inconsistenza con `CurrencySearchSelect` che già supporta `compact`.
+
+**Problema:** `CurrencySearchSelect` ha una prop `compact` che passa a `SearchSelect` + usa snippet `selectedItem` diversificati per compact/normal. `CountrySearchSelect` e `SectorSearchSelect` non hanno questa prop.
+
+**Soluzione proposta:**
+
+Dato che `SearchSelect` (il padre) supporta già `compact` come prop (riga 39), la migrazione è semplice:
+
+1. **In `CountrySearchSelect.svelte`:**
+   - Aggiungere prop `compact?: boolean` (default `false`)
+   - Passare `{compact}` a `SearchSelect`
+   - Nel snippet `selectedItem`, aggiungere una variante compact (single-line, font più piccolo) come in `CurrencySearchSelect` righe 173-198
+
+2. **In `SectorSearchSelect.svelte`:**
+   - Stessa modifica: aggiungere prop `compact` e passarla a `SearchSelect`
+   - Snippet `selectedItem` con variante compact
+
+3. **(Opzionale) Estrarre logica compact nel padre `SearchSelect`:**
+   - `SearchSelect` potrebbe avere un comportamento di default compact per il `selectedItem` snippet fallback (il blocco `{:else}` nel trigger, righe 318-329). Se `compact=true`, usare padding ridotto e font più piccolo anche nel rendering di default.
+   - Questo renderebbe i figli più semplici: non avrebbero bisogno di differenziare il proprio snippet `selectedItem` per compact.
+
+**File da modificare:**
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/ui/select/CountrySearchSelect.svelte` | Aggiungere prop `compact`, passarla a SearchSelect, snippet selectedItem compatto |
+| `frontend/src/lib/components/ui/select/SectorSearchSelect.svelte` | Stessa modifica |
+| `frontend/src/lib/components/ui/select/SearchSelect.svelte` | (Opzionale) migliorare il default selectedItem per compact |
+
+---
+
+### Riepilogo Bug e priorità
+
+| ID | Bug | Severità | File principali | Stato |
+|----|-----|----------|-----------------|-------|
+| **A** | Toggle %: non normalizza a p0 | 🔴 Alta | AssetCard, FxCard, ChartSettingsModal, chartUtils | ✅ |
+| **B** | Traduzioni AssetComparison mancanti | 🟡 Media | en/it/fr/es.json | ✅ |
+| **C** | Dropdown cross-domain vuoti (bug gemello) | 🔴 Alta | assets/+page, fx/+page | ✅ |
+| **D** | Preview settings non mostra linea asset | 🟡 Media | assets/+page | ✅ |
+| **E** | Icona asset nel SimpleSelect | 🟢 Bassa | ChartSignalsSection, ChartSettingsModal, pages | ✅ |
+| **F** | Layout filtro "selected" | 🟢 Bassa | DataTable | ✅ |
+| **G** | z-index dropdown troppo basso | 🔴 Alta | SearchSelect | ✅ |
+| **H** | Compact mode mancante in Country/Sector | 🟢 Bassa | CountrySearchSelect, SectorSearchSelect | ✅ |
+
+### Implementazione (Round 2 — 04/04/2026)
+
+Tutti i bug A–H sono stati risolti:
+
+- **A**: Creato `chartUtils.ts` con `normalizeToPercentage()`. AssetCard usa `displayData` derivato che converte a %. FxCard e ChartSettingsModal rifattorizzati per usare la stessa utility.
+- **B**: 5 chiavi i18n aggiunte via `./dev.py i18n add` in 4 lingue (EN/IT/FR/ES).
+- **C**: Assets page carica FX pair slugs on mount (`loadFxPairSlugs`), FX page carica asset list on mount (`loadAssetList`). Entrambi passati a `ChartSettingsModal`.
+- **D**: Assets page passa `assetsDataMap` costruito da `assets[].chartData` al modal.
+- **E**: `ChartSignalsSection` aggiornato con snippet `item`/`selectedItem` per il SimpleSelect asset: icona asset → icona tipo → fallback BarChart3. Tipo `availableAssets` esteso con `icon_url`/`asset_type`.
+- **F**: DataTable: wrapper cambiato da `flex flex-col` a `flex items-center gap-1` → checkbox e filtro affiancati.
+- **G**: `SearchSelect` dropdown migrato da `position:absolute z-50` a `position:fixed` con calcolo coordinate via `getBoundingClientRect()`. Aggiunto listener scroll/resize per riposizionamento.
+- **H**: `CountrySearchSelect` e `SectorSearchSelect`: aggiunta prop `compact`, passata a `SearchSelect`, con snippet `selectedItem` compatto (single-line). `DistributionEditor` passa `compact: true`.
 

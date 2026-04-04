@@ -93,6 +93,9 @@
         settingsTargetSlug ? getSettingsForPair(settingsTargetSlug) : getGlobalSettings()
     );
 
+    // Asset list for cross-domain signal selection (loaded lazily)
+    let availableAssetsList = $state<Array<{id: number, display_name: string, icon_url?: string | null, asset_type?: string | null}>>([]);
+
     // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
     const fxLayout = createResponsiveLayout({wide: 1030, tablet: 700, tabletS: 530, labelHide: 460});
@@ -204,6 +207,8 @@
         // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
         getCurrencyGraph();
         await loadPairSources();
+        // Load asset list for cross-domain signal selection
+        loadAssetList();
     });
 
     // ResizeObserver for adaptive filter bar layout.
@@ -352,6 +357,22 @@
         }
     }
 
+    /** Load asset list for signal settings — lightweight, no chart data needed */
+    async function loadAssetList() {
+        try {
+            const response = await zodiosApi.list_assets_api_v1_assets_query_get({ queries: {} });
+            const items = response as any[];
+            availableAssetsList = items.map((a: any) => ({
+                id: a.id,
+                display_name: a.display_name,
+                icon_url: a.icon_url ?? null,
+                asset_type: a.asset_type ?? null,
+            }));
+        } catch {
+            // Non-critical — asset dropdown will just be empty
+        }
+    }
+
     /**
      * Render overlay signals for a pair. Called by FxCard reactively whenever
      * cardViewMode or inverted changes. Receives absolute chart data (post-inversion).
@@ -382,6 +403,12 @@
                 } catch {
                     continue; // Store not available for this pair
                 }
+            }
+
+            // AssetComparisonSignal: graceful skip — asset data not available in FX view
+            // Full resolution requires async loading, will be implemented in Parte A
+            if (cfg.signalType === 'asset-comparison') {
+                continue;
             }
 
             const results = instance.renderMulti(absoluteData, vm);
@@ -932,6 +959,7 @@
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal
+        availableAssets={availableAssetsList}
         availablePairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
         bind:open={settingsModalOpen}
         mode={settingsTargetSlug ? 'pair' : 'global'}

@@ -16,6 +16,7 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
+    import {normalizeToPercentage} from '$lib/utils/chartUtils';
 
     // =========================================================================
     // Props
@@ -117,12 +118,7 @@
             staleDays: d.backwardFillInfo?.daysBack ?? 0,
         }));
         if (cardViewMode === 'absolute' || absolute.length === 0) return absolute;
-        const baseValue = absolute[0].value;
-        if (baseValue === 0) return absolute;
-        return absolute.map(d => ({
-            ...d,
-            value: ((d.value - baseValue) / baseValue) * 100,
-        }));
+        return normalizeToPercentage(absolute);
     });
 
     /** Absolute data for signal rendering (before % conversion) */

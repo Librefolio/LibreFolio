@@ -11,6 +11,7 @@
 import type {SignalParamDescriptor} from './ChartSignal';
 import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalStyle,} from './ChartSignal';
 import {FxPairSignal} from './FxPairSignal';
+import {AssetComparisonSignal} from './AssetComparisonSignal';
 import {LinearSignal} from './LinearSignal';
 import {CompoundSignal} from './CompoundSignal';
 import {SineSignal} from './SineSignal';
@@ -32,6 +33,7 @@ type SignalConstructor = typeof ChartSignal;
 
 const SIGNAL_REGISTRY = new Map<string, SignalConstructor>([
     [FxPairSignal.signalType, FxPairSignal as unknown as SignalConstructor],
+    [AssetComparisonSignal.signalType, AssetComparisonSignal as unknown as SignalConstructor],
     [LinearSignal.signalType, LinearSignal as unknown as SignalConstructor],
     [CompoundSignal.signalType, CompoundSignal as unknown as SignalConstructor],
     [SineSignal.signalType, SineSignal as unknown as SignalConstructor],

@@ -130,6 +130,9 @@
     // Row selection
     let rowSelection = $state<SelectionState>({});
 
+    // Show selected only filter
+    let showSelectedOnly = $state(false);
+
     // Column filters
     let columnFilters = $state<Record<string, FilterValue>>({});
 
@@ -207,6 +210,11 @@
     // Filtered data
     let filteredData = $derived.by(() => {
         let result = [...data];
+
+        // Apply "show selected only" filter
+        if (showSelectedOnly) {
+            result = result.filter(row => rowSelection[getRowId(row)]);
+        }
 
         // Apply column filters
         for (const [columnId, filterValue] of Object.entries(columnFilters)) {
@@ -497,6 +505,14 @@
             if (currentSelected !== selectedRowId) {
                 rowSelection = {[selectedRowId]: true};
             }
+        }
+    });
+
+    // Auto-deactivate "show selected only" when selection becomes empty
+    $effect(() => {
+        const selectedCount = Object.keys(rowSelection).filter(id => rowSelection[id]).length;
+        if (selectedCount === 0 && showSelectedOnly) {
+            showSelectedOnly = false;
         }
     });
 
@@ -839,15 +855,26 @@
                 <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
                 {#if effectiveSelectionMode === 'multi'}
                     <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
-                        <button type="button" class="checkbox-btn" onclick={toggleAllPageRows}>
-                            {#if isAllPageSelected}
-                                <Check size={16} class="check-icon checked"/>
-                            {:else if isSomePageSelected}
-                                <Check size={16} class="check-icon partial"/>
-                            {:else}
-                                <span class="check-box"></span>
-                            {/if}
-                        </button>
+                        <div class="flex items-center gap-1">
+                            <button type="button" class="checkbox-btn" onclick={toggleAllPageRows}>
+                                {#if isAllPageSelected}
+                                    <Check size={16} class="check-icon checked"/>
+                                {:else if isSomePageSelected}
+                                    <Check size={16} class="check-icon partial"/>
+                                {:else}
+                                    <span class="check-box"></span>
+                                {/if}
+                            </button>
+                            <button
+                                    type="button"
+                                    class="filter-btn"
+                                    class:active={showSelectedOnly}
+                                    onclick={() => { showSelectedOnly = !showSelectedOnly; }}
+                                    title="Show selected only"
+                            >
+                                <Filter size={12}/>
+                            </button>
+                        </div>
                     </th>
                 {/if}
 

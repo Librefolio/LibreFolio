@@ -23,6 +23,7 @@
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {type RenderedSignal, type SignalConfig, signalFromConfig,} from '$lib/charts/signals';
     import {SineSignal} from '$lib/charts/signals/SineSignal';
+    import {normalizeToPercentage} from '$lib/utils/chartUtils';
 
     // =========================================================================
     // Props
@@ -36,10 +37,14 @@
         mode?: 'global' | 'pair';
         /** Available FX pairs for FxPairSignal dynamic options (slug format: 'EUR-GBP') */
         availablePairs?: string[];
+        /** Available assets for AssetComparisonSignal dynamic options */
+        availableAssets?: Array<{id: number, display_name: string, icon_url?: string | null, asset_type?: string | null}>;
         /** Pair-specific data for preview chart (used in pair mode). If omitted, uses synthetic demo data. */
         pairData?: LineDataPoint[];
         /** Map of pair slug → data points for resolving FxPairSignal data in preview */
         pairsDataMap?: Record<string, LineDataPoint[]>;
+        /** Map of asset ID → data points for resolving AssetComparisonSignal data in preview */
+        assetsDataMap?: Record<string, LineDataPoint[]>;
         /** Called when user saves */
         onsave?: (settings: ChartSettings) => void;
         /** Called when user closes without saving */
@@ -51,8 +56,10 @@
         settings,
         mode = 'global',
         availablePairs = [],
+        availableAssets = [],
         pairData,
         pairsDataMap = {},
+        assetsDataMap = {},
         onsave,
         onclose,
     }: Props = $props();
@@ -187,9 +194,7 @@
 
     let previewData = $derived.by((): LineDataPoint[] => {
         if (previewViewMode !== 'percentage' || previewDataAbs.length === 0) return previewDataAbs;
-        const p0 = previewDataAbs[0].value;
-        if (p0 === 0) return previewDataAbs;
-        return previewDataAbs.map(d => ({...d, value: ((d.value - p0) / p0) * 100}));
+        return normalizeToPercentage(previewDataAbs);
     });
 
     let previewSignals = $derived.by((): RenderedSignal[] => {
@@ -202,6 +207,13 @@
                 const pairSlug = String(cfg.params.pairSlug || '');
                 if (!pairSlug) continue;
                 const resolvedData = pairsDataMap[pairSlug];
+                if (!resolvedData || resolvedData.length === 0) continue;
+                instance.params._resolvedData = resolvedData;
+            }
+            if (cfg.signalType === 'asset-comparison') {
+                const targetId = String(cfg.params.assetId || '');
+                if (!targetId) continue;
+                const resolvedData = assetsDataMap[targetId];
                 if (!resolvedData || resolvedData.length === 0) continue;
                 instance.params._resolvedData = resolvedData;
             }
@@ -303,6 +315,7 @@
             <!-- Signals Section (extracted component) -->
             <ChartSignalsSection
                     {availablePairs}
+                    {availableAssets}
                     bind:signals
             />
         </div>

@@ -34,6 +34,7 @@
     import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/countryStore';
     import {getSectorKeysList, sectorI18nKey} from '$lib/utils/assetTypes';
     import {ensureSectorsLoaded} from '$lib/stores/sectorStore';
+    import {CountrySearchSelect, SectorSearchSelect} from '$lib/components/ui/select';
 
     // =========================================================================
     // Types
@@ -263,7 +264,7 @@
     let dtColumns = $derived.by<ColumnDef<DistEntry>[]>(() => {
         const cols: ColumnDef<DistEntry>[] = [];
 
-        // Key / Name column — editable select when not readonly
+        // Key / Name column — SearchSelect when not readonly
         cols.push({
             id: 'key',
             header: () => kind === 'sector' ? $t('assets.modal.sectorDistribution') : $t('assets.modal.geographicDistribution'),
@@ -272,12 +273,34 @@
                 if (isReadonly || disabled) {
                     return {type: 'html' as const, html: `<span class="text-xs">${formatLabel(row.key)}</span>`};
                 }
-                const options = kind === 'sector' ? allSectorOptions : allCountryOptions;
+                if (kind === 'geographic') {
+                    const excluded = new Set([...usedKeys].filter(k => k !== row.key));
+                    return {
+                        type: 'custom' as const,
+                        component: CountrySearchSelect,
+                        props: {
+                            value: row.key,
+                            excludedCountries: excluded,
+                            maxVisibleItems: 5,
+                            dropdownPosition: 'auto' as const,
+                            compact: true,
+                            onchange: (v: string) => updateKey(row.id, v),
+                        },
+                    };
+                }
+                // Sector
+                const excluded = new Set([...usedKeys].filter(k => k !== row.key));
                 return {
-                    type: 'editable-select' as const,
-                    value: row.key,
-                    options,
-                    onchange: (newVal: string) => updateKey(row.id, newVal),
+                    type: 'custom' as const,
+                    component: SectorSearchSelect,
+                    props: {
+                        value: row.key,
+                        excludedSectors: excluded,
+                        maxVisibleItems: 5,
+                        dropdownPosition: 'auto' as const,
+                        compact: true,
+                        onchange: (v: string) => updateKey(row.id, v),
+                    },
                 };
             },
             sortable: true,

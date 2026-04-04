@@ -797,7 +797,11 @@
       "emaAbbr": "EMA",
       "macdAbbr": "MACD",
       "rsiAbbr": "RSI",
-      "bollingerAbbr": "Boll"
+      "bollingerAbbr": "Boll",
+      "assetComparison": "Asset Comparison",
+      "assetComparisonFull": "Asset Price Overlay",
+      "assetComparisonAbbr": "Asset",
+      "assetComparisonDesc": "Overlay another asset's price on this chart for comparison"
     },
     "params": {
       "annualRate": "Annual Rate",
@@ -828,7 +832,8 @@
       "signalPeriod": "EMA smoothing applied to the MACD line. Standard: 9 days. Reduces noise in crossover signals.",
       "multiplier": "Number of standard deviations ($k \\cdot \\sigma$). $k=2$ covers ~95% of values assuming normal distribution.",
       "overbought": "Level above which the asset is considered overbought. Standard: 70. Values near 100 indicate strong buying pressure.",
-      "oversold": "Level below which the asset is considered oversold. Standard: 30. Values near 0 indicate strong selling pressure."
+      "oversold": "Level below which the asset is considered oversold. Standard: 30. Values near 0 indicate strong selling pressure.",
+      "assetComparison": "Select an asset to overlay its price on this chart. In percentage mode, both curves start at 0%."
     },
     "macdLineColor": "MACD Line Color"
   },

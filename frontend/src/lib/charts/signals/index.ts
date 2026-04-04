@@ -22,6 +22,7 @@ export {
 
 // Concrete signal classes
 export {FxPairSignal} from './FxPairSignal';
+export {AssetComparisonSignal} from './AssetComparisonSignal';
 export {LinearSignal} from './LinearSignal';
 export {CompoundSignal} from './CompoundSignal';
 export {SineSignal} from './SineSignal';

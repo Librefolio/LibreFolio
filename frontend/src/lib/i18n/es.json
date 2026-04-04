@@ -797,7 +797,11 @@
       "emaAbbr": "EMA",
       "macdAbbr": "MACD",
       "rsiAbbr": "RSI",
-      "bollingerAbbr": "Boll"
+      "bollingerAbbr": "Boll",
+      "assetComparison": "Comparación de activo",
+      "assetComparisonFull": "Superposición de precio de activo",
+      "assetComparisonAbbr": "Activo",
+      "assetComparisonDesc": "Superponer el precio de otro activo en este gráfico para comparación"
     },
     "params": {
       "annualRate": "Tasa Anual",
@@ -828,7 +832,8 @@
       "signalPeriod": "Suavizado EMA aplicado a la línea MACD. Estándar: 9 días. Reduce el ruido en las señales de cruce.",
       "multiplier": "Número de desviaciones estándar ($k \\cdot \\sigma$). $k=2$ cubre ~95% de los valores asumiendo distribución normal.",
       "overbought": "Nivel por encima del cual el activo se considera sobrecomprado. Estándar: 70. Valores cercanos a 100 indican fuerte presión compradora.",
-      "oversold": "Nivel por debajo del cual el activo se considera sobrevendido. Estándar: 30. Valores cercanos a 0 indican fuerte presión vendedora."
+      "oversold": "Nivel por debajo del cual el activo se considera sobrevendido. Estándar: 30. Valores cercanos a 0 indican fuerte presión vendedora.",
+      "assetComparison": "Seleccione un activo para superponer su precio en este gráfico. En modo porcentaje, ambas curvas comienzan en 0%."
     },
     "macdLineColor": "Color Línea MACD"
   },
