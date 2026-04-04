@@ -90,7 +90,7 @@
     let settingsTargetSlug = $state<string | null>(null);
     /** Settings to pass to the modal (global or pair-specific) */
     let settingsForModal = $derived(
-        settingsTargetSlug ? getSettingsForPair(settingsTargetSlug) : getGlobalSettings()
+        settingsTargetSlug ? getSettingsForPair(settingsTargetSlug, 'fx') : getGlobalSettings('fx')
     );
 
     // Asset list for cross-domain signal selection (loaded lazily)
@@ -353,7 +353,7 @@
         if (settingsTargetSlug) {
             setPairSettings(settingsTargetSlug, s);
         } else {
-            setGlobalSettings(s);
+            setGlobalSettings(s, 'fx');
         }
     }
 
@@ -380,7 +380,7 @@
     function getRenderedSignals(slug: string, absoluteData: LineDataPoint[], vm: 'absolute' | 'percentage'): RenderedSignal[] {
         // Access version to trigger reactivity
         void getSettingsVersion();
-        const settings = getSettingsForPair(slug);
+        const settings = getSettingsForPair(slug, 'fx');
         if (!settings.signals.length) return [];
         const rendered: RenderedSignal[] = [];
         for (const cfg of settings.signals) {
@@ -887,7 +887,7 @@
                         loading={pair.loading}
                         manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
                         {globalViewMode}
-                        chartSettings={getSettingsForPair(pair.config.slug)}
+                        chartSettings={getSettingsForPair(pair.config.slug, 'fx')}
                         renderSignals={(chartData, vm) => getRenderedSignals(pair.config.slug, chartData, vm)}
                         ondelete={handleDeletePair}
                         onrefresh={handleRefreshPair}

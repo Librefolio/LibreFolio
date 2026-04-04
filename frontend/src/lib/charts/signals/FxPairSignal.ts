@@ -26,7 +26,7 @@ export class FxPairSignal extends ChartSignal {
             type: 'select',
             default: '',
             dynamicOptionsKey: 'configuredFxPairs',    // resolved at runtime by the modal
-            tooltip: 'chartSettings.tooltips.currencyPair',
+            tooltip: 'chartSettings.tooltips.fxPair',
         },
     ];
 

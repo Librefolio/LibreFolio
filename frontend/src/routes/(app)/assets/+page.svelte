@@ -36,8 +36,7 @@
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {getFxStore} from '$lib/stores/fxStoreRegistry';
-    import {createPairSlug} from '$lib/stores/fxStoreRegistry';
+    import {apiResultToFxDataPoint, createPairSlug, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
 
     // =========================================================================
     // Types
@@ -161,7 +160,7 @@
     let settingsModalOpen = $state(false);
     let settingsTargetId = $state<string | null>(null);
     let settingsForModal = $derived(
-        settingsTargetId ? getSettingsForPair(`asset-${settingsTargetId}`) : getGlobalSettings()
+        settingsTargetId ? getSettingsForPair(`asset-${settingsTargetId}`, 'assets') : getGlobalSettings('assets')
     );
 
     // FX pair slugs for cross-domain signal selection (loaded lazily)
@@ -570,7 +569,7 @@
         if (settingsTargetId) {
             setPairSettings(`asset-${settingsTargetId}`, s);
         } else {
-            setGlobalSettings(s);
+            setGlobalSettings(s, 'assets');
         }
     }
 
@@ -579,7 +578,7 @@
         settingsModalOpen = true;
     }
 
-    /** Load FX pair slugs for signal settings — lightweight, no chart data needed */
+    /** Load FX pair slugs and their rate data for cross-domain signal resolution */
     async function loadFxPairSlugs() {
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
@@ -589,9 +588,32 @@
                 slugSet.add(createPairSlug(item.base, item.quote));
             }
             fxPairSlugs = [...slugSet].sort();
+            // Load FX rate data into stores for signal rendering on cards + preview
+            await loadFxRateData();
         } catch {
             // Non-critical — FX pair dropdown will just be empty
         }
+    }
+
+    /** Fetch FX rate data for all configured pairs (populates FxStores) */
+    async function loadFxRateData() {
+        const promises = fxPairSlugs.map(async (slug) => {
+            const store = getFxStore(slug);
+            if (store.getAllSorted().length > 0) return; // Already has data
+            try {
+                const [base, quote] = slug.split('-');
+                const convertRequests = [{
+                    from_amount: {code: base, amount: 1},
+                    to: quote,
+                    date_range: {start: dateStart, end: dateEnd},
+                }];
+                const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
+                const results = (response as any)?.results || [];
+                const points: FxDataPoint[] = results.map((r: any) => apiResultToFxDataPoint(r));
+                store.merge(points);
+            } catch { /* graceful skip */ }
+        });
+        await Promise.allSettled(promises);
     }
 
     /**
@@ -604,7 +626,7 @@
         vm: 'absolute' | 'percentage'
     ): RenderedSignal[] {
         void getSettingsVersion();
-        const settings = getSettingsForPair(`asset-${assetId}`);
+        const settings = getSettingsForPair(`asset-${assetId}`, 'assets');
         if (!settings.signals.length) return [];
         const rendered: RenderedSignal[] = [];
         for (const cfg of settings.signals) {
@@ -981,7 +1003,7 @@
                         deltaPercent={asset.deltaPercent}
                         deltaAbs={asset.deltaAbs}
                         globalViewMode={globalViewMode}
-                        chartSettings={getSettingsForPair(`asset-${asset.id}`)}
+                        chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
                         renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                         chartData={asset.chartData}
                         loading={asset.loadingPrices}
@@ -1024,6 +1046,18 @@
             assets
                 .filter(a => a.chartData.length > 0)
                 .map(a => [String(a.id), a.chartData])
+        )}
+        pairsDataMap={Object.fromEntries(
+            fxPairSlugs
+                .map(slug => {
+                    try {
+                        const store = getFxStore(slug);
+                        const data = store.getAllSorted();
+                        if (data.length === 0) return null;
+                        return [slug, data.map(d => ({ date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0 }))];
+                    } catch { return null; }
+                })
+                .filter((e): e is [string, any[]] => e !== null)
         )}
 />
 

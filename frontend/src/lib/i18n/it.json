@@ -801,7 +801,9 @@
       "assetComparison": "Confronto Asset",
       "assetComparisonFull": "Sovrapposizione prezzo asset",
       "assetComparisonAbbr": "Asset",
-      "assetComparisonDesc": "Sovrapponi il prezzo di un altro asset su questo grafico per confronto"
+      "assetComparisonDesc": "Sovrapponi il prezzo di un altro asset su questo grafico per confronto",
+      "fxPairFull": "Sovrapposizione tasso FX",
+      "fxPairDesc": "Sovrapponi il tasso di una coppia FX su questo grafico per confronto"
     },
     "params": {
       "annualRate": "Tasso Annuo",
@@ -833,7 +835,8 @@
       "multiplier": "Numero di deviazioni standard ($k \\cdot \\sigma$). $k=2$ copre ~95% dei valori assumendo distribuzione normale.",
       "overbought": "Livello sopra il quale l'asset è considerato ipercomprato. Standard: 70. Valori vicini a 100 indicano forte pressione d'acquisto.",
       "oversold": "Livello sotto il quale l'asset è considerato ipervenduto. Standard: 30. Valori vicini a 0 indicano forte pressione di vendita.",
-      "assetComparison": "Seleziona un asset per sovrapporne il prezzo su questo grafico. In modalità percentuale, entrambe le curve partono da 0%."
+      "assetComparison": "Seleziona un asset per sovrapporne il prezzo su questo grafico. In modalità percentuale, entrambe le curve partono da 0%.",
+      "fxPair": "Seleziona una coppia FX per sovrapporne il tasso su questo grafico. In modalità percentuale, entrambe le curve partono da 0%."
     },
     "macdLineColor": "Colore Linea MACD"
   },

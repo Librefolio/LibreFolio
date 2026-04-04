@@ -95,7 +95,7 @@
     let showActionLabels = $state(true);
 
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
-    let settings = $derived(getSettingsForPair(data.canonicalSlug));
+    let settings = $derived(getSettingsForPair(data.canonicalSlug, 'fx'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
 
     // Measure panel
