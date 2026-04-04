@@ -871,3 +871,15 @@ Feedback residui dalla verifica utente Round 2:
 - **FX overlay su card asset**: Risolto: `loadFxRateData` popola i `FxStore` → `getRenderedSignals` nella asset page trova dati nelle store → segnali FX visibili sulle card.
 - **Errori IDE ChartSignalsSection**: Eliminati tutti gli errori: `as` casts nel template sostituiti con helper functions (`getOptionName`, `getOptionFullName`). Rimossa funzione inutilizzata `getSignalAbbr`.
 
+### Implementazione (Round 4 — 04/04/2026) — FINALE
+
+Ultime due micro-fix dalla verifica utente Round 3:
+
+- **DataTable checkbox centramento**: Nell'header della colonna selezione aggiunto `justify-center`. Nelle righe dati, la checkbox è ora wrappata in un `flex justify-center gap-1` con uno spacer invisibile (`invisible`, 20px) che compensa la larghezza del pulsante filtro, mantenendo l'allineamento visivo con l'header.
+- **AssetTable colonna provider**: `assetProviderBadgeHtml()` ora mostra icona **+ nome** del provider (non solo icona). `providerHelpers.ts` salva anche `assetProviderNames` nella cache. Colonna allargata a 140px.
+
+---
+
+## ✅ PARTE 0 — COMPLETATA
+
+Tutti gli step (0.1–0.8) e tutti i bug feedback (A–H + Round 3 + Round 4) sono stati implementati e verificati dall'utente. `svelte-check: 0 errors, 0 warnings`.

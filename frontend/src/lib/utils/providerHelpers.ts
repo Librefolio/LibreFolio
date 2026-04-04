@@ -68,6 +68,7 @@ export function fxProviderBadgeHtml(providerCode: string): string {
  * Kept separate from FX providers to avoid registry key collisions.
  */
 let assetProviderIcons: Map<string, string | null> = new Map();
+let assetProviderNames: Map<string, string> = new Map();
 let assetProvidersFetched = false;
 let assetProvidersFetchPromise: Promise<void> | null = null;
 
@@ -89,6 +90,7 @@ export async function ensureAssetProvidersCached(): Promise<void> {
             const providers = await zodiosApi.list_providers_api_v1_assets_provider_get();
             for (const p of providers as any[]) {
                 assetProviderIcons.set(p.code, p.icon_url ?? null);
+                assetProviderNames.set(p.code, p.name ?? p.code);
             }
         } catch {
             // Fail silently — icon lookup will just return null
@@ -106,14 +108,15 @@ export function getAssetProviderIconUrl(code: string): string | null {
     return assetProviderIcons.get(code) ?? null;
 }
 
-/** Build an asset provider badge as HTML (icon or text code). */
+/** Build an asset provider badge as HTML (icon + name). */
 export function assetProviderBadgeHtml(providerCode: string): string {
     const iconUrl = assetProviderIcons.get(providerCode);
+    const name = assetProviderNames.get(providerCode) ?? providerCode;
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
     if (iconUrl) {
-        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${iconUrl}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${iconUrl}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.style.display='none'" /><span class="text-[10px] font-medium">${name}</span></span>`;
     }
-    return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
+    return `<span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}">${name}</span>`;
 }
 
 // =========================================================================

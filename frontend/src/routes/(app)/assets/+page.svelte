@@ -616,6 +616,20 @@
         await Promise.allSettled(promises);
     }
 
+    /** Build pairsDataMap from FX stores for ChartSettingsModal preview */
+    function buildPairsDataMap(): Record<string, LineDataPoint[]> {
+        const entries: Array<[string, LineDataPoint[]]> = [];
+        for (const slug of fxPairSlugs) {
+            try {
+                const store = getFxStore(slug);
+                const data = store.getAllSorted();
+                if (data.length === 0) continue;
+                entries.push([slug, data.map(d => ({ date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0 }))]);
+            } catch { /* skip */ }
+        }
+        return Object.fromEntries(entries);
+    }
+
     /**
      * Render overlay signals for an asset card. Called by AssetCard reactively
      * whenever cardViewMode changes. Receives absolute chart data.
@@ -1047,18 +1061,7 @@
                 .filter(a => a.chartData.length > 0)
                 .map(a => [String(a.id), a.chartData])
         )}
-        pairsDataMap={Object.fromEntries(
-            fxPairSlugs
-                .map(slug => {
-                    try {
-                        const store = getFxStore(slug);
-                        const data = store.getAllSorted();
-                        if (data.length === 0) return null;
-                        return [slug, data.map(d => ({ date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0 }))];
-                    } catch { return null; }
-                })
-                .filter((e): e is [string, any[]] => e !== null)
-        )}
+        pairsDataMap={buildPairsDataMap()}
 />
 
 <!-- Delete Asset Confirm Dialog (single) -->

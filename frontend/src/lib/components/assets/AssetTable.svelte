@@ -138,8 +138,8 @@
                     enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'].map(v => ({value: v, label: $t(`assets.types.${v}`) || v})),
                     getValue: (row) => row.asset_type ?? '',
                     filterable: false,
-                    width: 110,
-                    minWidth: 80,
+                    width: 70,
+                    minWidth: 40,
                 },
                 {
                     id: 'currency',
@@ -192,8 +192,8 @@
                     }),
                     type: 'text',
                     getValue: (row) => row.provider_code ?? '',
-                    width: 80,
-                    minWidth: 60,
+                    width: 240,
+                    minWidth: 160,
                     filterable: false,
                 },
             ]));
