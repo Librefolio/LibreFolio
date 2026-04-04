@@ -92,12 +92,8 @@ class FXConversionRequest(BaseModel):
         )
 
     from_amount: Currency = Field(..., description="Amount to convert with source currency")
-    to_currency: str = Field(
-        ..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)"
-        )
-    date_range: DateRangeModel = Field(
-        ..., description="Date range for conversion (start required, end optional for single day)"
-        )
+    to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
+    date_range: DateRangeModel = Field(..., description="Date range for conversion (start required, end optional for single day)")
 
     @field_validator("to_currency", mode="before")
     @classmethod
