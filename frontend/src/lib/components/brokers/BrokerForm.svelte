@@ -9,6 +9,7 @@
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
+    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
     import {Info, Plus, Trash2, Upload} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
@@ -296,14 +297,11 @@
     <div class="flex flex-col sm:flex-row sm:items-end gap-4">
         <!-- Opened At -->
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-opened">
-                {$_('brokers.openedAt')}
-            </label>
-            <input
-                    bind:value={openedAt}
-                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
-                    id="broker-opened"
-                    type="date"
+            <SingleDatePicker
+                    value={openedAt}
+                    onchange={(d) => { openedAt = d; }}
+                    label={$_('brokers.openedAt')}
+                    allowFuture={false}
             />
         </div>
 

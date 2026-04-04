@@ -30,10 +30,14 @@
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {getGlobalSettings, getSettingsForPair, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
+    import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
+    import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+    import {getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug} from '$lib/stores/fxStoreRegistry';
 
     // =========================================================================
     // Types
@@ -160,6 +164,9 @@
         settingsTargetId ? getSettingsForPair(`asset-${settingsTargetId}`) : getGlobalSettings()
     );
 
+    // FX pair slugs for cross-domain signal selection (loaded lazily)
+    let fxPairSlugs = $state<string[]>([]);
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -208,6 +215,8 @@
 
     onMount(async () => {
         await loadAssets();
+        // Load FX pair slugs for cross-domain signal selection in settings modal
+        loadFxPairSlugs();
     });
 
     // ResizeObserver for adaptive filter bar layout
@@ -565,6 +574,76 @@
         }
     }
 
+    function handleCardSettings(asset: { id: number }) {
+        settingsTargetId = String(asset.id);
+        settingsModalOpen = true;
+    }
+
+    /** Load FX pair slugs for signal settings — lightweight, no chart data needed */
+    async function loadFxPairSlugs() {
+        try {
+            const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
+            const items = (response as any)?.items || [];
+            const slugSet = new Set<string>();
+            for (const item of items) {
+                slugSet.add(createPairSlug(item.base, item.quote));
+            }
+            fxPairSlugs = [...slugSet].sort();
+        } catch {
+            // Non-critical — FX pair dropdown will just be empty
+        }
+    }
+
+    /**
+     * Render overlay signals for an asset card. Called by AssetCard reactively
+     * whenever cardViewMode changes. Receives absolute chart data.
+     */
+    function getRenderedSignals(
+        assetId: number,
+        absoluteData: LineDataPoint[],
+        vm: 'absolute' | 'percentage'
+    ): RenderedSignal[] {
+        void getSettingsVersion();
+        const settings = getSettingsForPair(`asset-${assetId}`);
+        if (!settings.signals.length) return [];
+        const rendered: RenderedSignal[] = [];
+        for (const cfg of settings.signals) {
+            const instance = signalFromConfig(cfg);
+            if (!instance) continue;
+
+            // Resolve FxPairSignal data from FX stores
+            if (cfg.signalType === 'fx-pair') {
+                const pairSlug = String(cfg.params.pairSlug || '');
+                if (!pairSlug) continue;
+                try {
+                    const store = getFxStore(pairSlug);
+                    const storeData = store.getAllSorted();
+                    if (storeData.length === 0) continue;
+                    instance.params._resolvedData = storeData.map(d => ({
+                        date: d.date,
+                        value: d.rate,
+                    }));
+                } catch { continue; }
+            }
+
+            // Resolve AssetComparisonSignal data from local assets array
+            if (cfg.signalType === 'asset-comparison') {
+                const targetId = Number(cfg.params.assetId);
+                if (!targetId || targetId === assetId) continue;
+                const targetAsset = assets.find(a => a.id === targetId);
+                if (!targetAsset?.chartData?.length) continue;
+                instance.params._resolvedData = targetAsset.chartData;
+                instance.params._assetDisplayName = targetAsset.display_name;
+            }
+
+            const results = instance.renderMulti(absoluteData, vm);
+            for (const result of results) {
+                if (result.data.length > 0) rendered.push(result);
+            }
+        }
+        return rendered;
+    }
+
     function clearFilters() {
         searchText = '';
         filterTypes = new Set();
@@ -901,13 +980,16 @@
                         lastPrice={asset.lastPrice}
                         deltaPercent={asset.deltaPercent}
                         deltaAbs={asset.deltaAbs}
-                        deltaDisplayMode={globalViewMode}
+                        globalViewMode={globalViewMode}
+                        chartSettings={getSettingsForPair(`asset-${asset.id}`)}
+                        renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                         chartData={asset.chartData}
                         loading={asset.loadingPrices}
                         syncing={syncingAssetIds.has(asset.id)}
                         onsync={handleSyncAsset}
                         onrefresh={handleRefreshAsset}
                         ondelete={handleDeleteAsset}
+                        onsettings={handleCardSettings}
                 />
             {/each}
         </div>
@@ -933,6 +1015,16 @@
         onclose={() => { settingsModalOpen = false; settingsTargetId = null; }}
         onsave={handleSettingsSave}
         settings={settingsForModal}
+        pairData={settingsTargetId
+            ? assets.find(a => a.id === Number(settingsTargetId))?.chartData
+            : undefined}
+        availablePairs={fxPairSlugs}
+        availableAssets={assets.map(a => ({ id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type }))}
+        assetsDataMap={Object.fromEntries(
+            assets
+                .filter(a => a.chartData.length > 0)
+                .map(a => [String(a.id), a.chartData])
+        )}
 />
 
 <!-- Delete Asset Confirm Dialog (single) -->

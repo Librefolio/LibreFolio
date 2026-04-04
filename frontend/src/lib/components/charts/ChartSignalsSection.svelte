@@ -10,7 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {ArrowLeftRight, ExternalLink, Info, RotateCw, Trash2} from 'lucide-svelte';
+    import {ArrowLeftRight, BarChart3, ExternalLink, Info, RotateCw, Trash2} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -30,6 +30,8 @@
         signals?: SignalConfig[];
         /** Available FX pairs for FxPairSignal (slug format: 'EUR-GBP') */
         availablePairs?: string[];
+        /** Available assets for AssetComparisonSignal */
+        availableAssets?: Array<{id: number, display_name: string, icon_url?: string | null, asset_type?: string | null}>;
         /** Slug of the main chart pair (for crown emoji in dropdown) */
         mainPairSlug?: string;
         /** Called when signals change */
@@ -43,6 +45,7 @@
     let {
         signals = $bindable([]),
         availablePairs = [],
+        availableAssets = [],
         mainPairSlug = '',
         onchange,
         onsyncpair,
@@ -56,7 +59,7 @@
     const signalTypes: SignalTypeInfo[] = getRegisteredSignalTypes();
 
     const SIGNAL_TYPE_I18N_KEY: Record<string, string> = {
-        'fx-pair': 'fxPair', 'linear': 'linear', 'compound': 'compound',
+        'fx-pair': 'fxPair', 'asset-comparison': 'assetComparison', 'linear': 'linear', 'compound': 'compound',
         'sine': 'sine', 'ema': 'ema', 'macd': 'macd', 'rsi': 'rsi',
         'bollinger': 'bollinger',
     };
@@ -191,6 +194,12 @@
                 label: slug.replace('-', '/'),
             }));
         }
+        if (dynamicKey === 'configuredAssets') {
+            return (availableAssets ?? []).map(a => ({
+                value: String(a.id),
+                label: a.display_name,
+            }));
+        }
         return [];
     }
 
@@ -211,6 +220,17 @@
         signals.filter(s => s.signalType === 'fx-pair' && s.params.pairSlug)
             .map(s => String(s.params.pairSlug))
     ));
+
+    /** Asset type → icon filename mapping (same as AssetCard) */
+    const ASSET_TYPE_ICON_MAP: Record<string, string> = {
+        STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
+        FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
+    };
+
+    /** Find asset info by id for icon rendering */
+    function findAssetInfo(assetId: string) {
+        return (availableAssets ?? []).find(a => String(a.id) === assetId);
+    }
 </script>
 
 <div>
@@ -421,6 +441,43 @@
                                                             <ExternalLink size={12}/>
                                                         </button>
                                                     {/if}
+                                                </div>
+                                            {:else if desc.dynamicOptionsKey === 'configuredAssets'}
+                                                <div class="w-48">
+                                                    <SimpleSelect
+                                                            value={getParamString(signal, desc.key)}
+                                                            options={resolveDynamicOptions('configuredAssets')}
+                                                            placeholder="— Select asset"
+                                                            dropdownPosition="auto"
+                                                            onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
+                                                    >
+                                                        {#snippet item(option)}
+                                                            {@const info = findAssetInfo(option.value)}
+                                                            <span class="flex items-center gap-1.5 truncate">
+                                                                {#if info?.icon_url}
+                                                                    <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
+                                                                {:else if info?.asset_type && ASSET_TYPE_ICON_MAP[info.asset_type]}
+                                                                    <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[info.asset_type]}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                                                {:else}
+                                                                    <BarChart3 size={14} class="text-gray-400 shrink-0" />
+                                                                {/if}
+                                                                <span class="text-xs">{option.label}</span>
+                                                            </span>
+                                                        {/snippet}
+                                                        {#snippet selectedItem(option)}
+                                                            {@const info = findAssetInfo(option.value)}
+                                                            <span class="flex items-center gap-1.5 truncate">
+                                                                {#if info?.icon_url}
+                                                                    <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
+                                                                {:else if info?.asset_type && ASSET_TYPE_ICON_MAP[info.asset_type]}
+                                                                    <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[info.asset_type]}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                                                {:else}
+                                                                    <BarChart3 size={14} class="text-gray-400 shrink-0" />
+                                                                {/if}
+                                                                <span class="text-xs">{option.label}</span>
+                                                            </span>
+                                                        {/snippet}
+                                                    </SimpleSelect>
                                                 </div>
                                             {:else}
                                                 {@const opts = desc.options ?? []}

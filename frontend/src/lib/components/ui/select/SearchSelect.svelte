@@ -65,6 +65,8 @@
     let dynamicMaxHeight = $state(0);
     /** Timestamp when trigger received focus — used to debounce Enter after advanceFocus */
     let triggerFocusedAt = $state(0);
+    /** Fixed dropdown position for portal-like rendering (avoids overflow clipping) */
+    let dropdownStyle = $state('');
 
     // Derived state
     let selectedOption = $derived(options.find(o => o.value === value));
@@ -92,30 +94,15 @@
         if (!containerRef) {
             computedPosition = dropdownPosition === 'top' ? 'top' : 'bottom';
             dynamicMaxHeight = maxDropdownHeight;
+            dropdownStyle = '';
             return;
         }
 
         const rect = containerRef.getBoundingClientRect();
         const padding = 20; // Safety padding from edges
 
-        // Find the closest scrollable parent or use viewport
-        let scrollParent = containerRef.parentElement;
-        let parentTop = 0;
-        let parentBottom = window.innerHeight;
-
-        while (scrollParent) {
-            const style = getComputedStyle(scrollParent);
-            if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-                const parentRect = scrollParent.getBoundingClientRect();
-                parentTop = parentRect.top;
-                parentBottom = parentRect.bottom;
-                break;
-            }
-            scrollParent = scrollParent.parentElement;
-        }
-
-        const spaceBelow = parentBottom - rect.bottom - padding;
-        const spaceAbove = rect.top - parentTop - padding;
+        const spaceBelow = window.innerHeight - rect.bottom - padding;
+        const spaceAbove = rect.top - padding;
 
         // Calculate how many items can fit in each direction
         const itemsFitBelow = Math.floor(spaceBelow / ITEM_HEIGHT);
@@ -131,16 +118,23 @@
             dynamicMaxHeight = (dropdownPosition === 'top' ? maxAbove : maxBelow) * ITEM_HEIGHT;
             // Ensure at least 2 items visible
             dynamicMaxHeight = Math.max(dynamicMaxHeight, ITEM_HEIGHT * 2);
-            return;
+        } else {
+            // Auto: choose direction with more space, prefer bottom if equal
+            if (maxBelow >= maxAbove || maxBelow >= maxVisibleItems) {
+                computedPosition = 'bottom';
+                dynamicMaxHeight = Math.max(maxBelow, 2) * ITEM_HEIGHT;
+            } else {
+                computedPosition = 'top';
+                dynamicMaxHeight = Math.max(maxAbove, 2) * ITEM_HEIGHT;
+            }
         }
 
-        // Auto: choose direction with more space, prefer bottom if equal
-        if (maxBelow >= maxAbove || maxBelow >= maxVisibleItems) {
-            computedPosition = 'bottom';
-            dynamicMaxHeight = Math.max(maxBelow, 2) * ITEM_HEIGHT;
+        // Compute fixed position style to escape overflow:hidden containers
+        const totalDropdownHeight = dynamicMaxHeight + 50; // account for search bar
+        if (computedPosition === 'bottom') {
+            dropdownStyle = `position:fixed; top:${rect.bottom + 4}px; left:${rect.left}px; width:${rect.width}px; z-index:9999;`;
         } else {
-            computedPosition = 'top';
-            dynamicMaxHeight = Math.max(maxAbove, 2) * ITEM_HEIGHT;
+            dropdownStyle = `position:fixed; bottom:${window.innerHeight - rect.top + 4}px; left:${rect.left}px; width:${rect.width}px; z-index:9999;`;
         }
     }
 
@@ -163,6 +157,19 @@
 
         document.addEventListener('mousedown', handleClickOutside, true);
         return () => document.removeEventListener('mousedown', handleClickOutside, true);
+    });
+
+    // Reposition dropdown on scroll/resize while open
+    $effect(() => {
+        if (!isOpen) return;
+
+        const reposition = () => updateDropdownPosition();
+        window.addEventListener('scroll', reposition, true);
+        window.addEventListener('resize', reposition);
+        return () => {
+            window.removeEventListener('scroll', reposition, true);
+            window.removeEventListener('resize', reposition);
+        };
     });
 
     // Focus search input when dropdown opens
@@ -335,8 +342,8 @@
 
     <!-- Dropdown -->
     {#if isOpen}
-        <div class="absolute z-50 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden
-                    {computedPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}"
+        <div class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden"
+             style={dropdownStyle}
         >
             {#if !inlineSearch}
                 <div class="p-2 border-b border-gray-100 dark:border-slate-700">
