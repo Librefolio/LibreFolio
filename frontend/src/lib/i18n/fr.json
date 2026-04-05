@@ -62,7 +62,8 @@
     "other": "Autre",
     "date": "Date",
     "value": "Valeur",
-    "notes": "Notes"
+    "notes": "Notes",
+    "syncing": "Synchronisation..."
   },
   "table": {
     "columns": "Colonnes",
@@ -922,5 +923,35 @@
     "Telecommunication": "📡 Télécommunication",
     "Utilities": "💡 Services publics",
     "Other": "📦 Autre"
+  },
+  "assetDetail": {
+    "backToList": "Retour aux actifs",
+    "loadingPrices": "Chargement des prix...",
+    "noData": "Aucune donnée de prix pour cette plage.",
+    "noDataManual": "Aucun fournisseur configuré — configurez via Modifier",
+    "editData": "Modifier prix et événements",
+    "editDataComingSoon": "L édition des données sera disponible prochainement",
+    "closeEditor": "Fermer éditeur",
+    "exitMeasure": "Quitter le mode mesure",
+    "addMeasure": "Ajouter une mesure",
+    "metadata": "Métadonnées et classification",
+    "editViaModal": "Modifier dans la modale",
+    "displayCurrency": "Devise affichage",
+    "noIdentifiers": "Aucun identifiant configuré",
+    "noClassification": "Aucune donnée de classification",
+    "measures": "Mesures",
+    "signals": "Signaux",
+    "noDataScheduled": "Configurez le calendrier des intérêts via Modifier pour générer les prix",
+    "syncPrices": "Synchroniser les prix",
+    "recalculate": "Recalculer",
+    "syncDisabledManual": "Synchronisation désactivée — aucun fournisseur configuré",
+    "identifiers": "Identifiants",
+    "classification": "Classification",
+    "sectorDistribution": "Distribution sectorielle",
+    "geoDistribution": "Distribution géographique",
+    "eventMarkers": "Marqueurs d'événements",
+    "syncSuccess": "Prix synchronisés : {fetched} récupérés, {changed} modifiés",
+    "syncFailed": "Échec de la synchronisation",
+    "syncPartial": "Synchronisation partielle : {fetched} récupérés, {changed} modifiés"
   }
 }

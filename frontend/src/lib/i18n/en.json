@@ -62,7 +62,8 @@
     "other": "Other",
     "date": "Date",
     "value": "Value",
-    "notes": "Notes"
+    "notes": "Notes",
+    "syncing": "Syncing..."
   },
   "table": {
     "columns": "Columns",
@@ -922,5 +923,35 @@
     "Telecommunication": "📡 Telecommunication",
     "Utilities": "💡 Utilities",
     "Other": "📦 Other"
+  },
+  "assetDetail": {
+    "backToList": "Back to Assets",
+    "loadingPrices": "Loading prices...",
+    "noData": "No price data available for this range.",
+    "noDataManual": "No provider configured — set one up via Edit",
+    "editData": "Edit Prices & Events",
+    "editDataComingSoon": "Data editing will be available in a future update",
+    "closeEditor": "Close editor",
+    "exitMeasure": "Exit measure mode",
+    "addMeasure": "Add measurement",
+    "metadata": "Metadata & Classification",
+    "editViaModal": "Edit in asset modal",
+    "displayCurrency": "Display currency",
+    "noIdentifiers": "No identifiers configured",
+    "noClassification": "No classification data",
+    "measures": "Measures",
+    "signals": "Signals",
+    "noDataScheduled": "Configure interest schedule via Edit to generate prices",
+    "syncPrices": "Sync Prices",
+    "recalculate": "Recalculate",
+    "syncDisabledManual": "Sync disabled — no provider configured",
+    "identifiers": "Identifiers",
+    "classification": "Classification",
+    "sectorDistribution": "Sector Distribution",
+    "geoDistribution": "Geographic Distribution",
+    "eventMarkers": "Event Markers",
+    "syncSuccess": "Prices synced: {fetched} fetched, {changed} changed",
+    "syncFailed": "Sync failed",
+    "syncPartial": "Partial sync: {fetched} fetched, {changed} changed"
   }
 }
