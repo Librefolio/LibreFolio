@@ -47,6 +47,11 @@ export type PricePointInput = z.infer<typeof schemas.FAPricePoint_Input>;
  */
 export type PricePoint = z.infer<typeof schemas.FAPricePoint_Output>;
 
+/**
+ * Provider assignment for an asset.
+ */
+export type ProviderAssignment = z.infer<typeof schemas.FAProviderAssignmentReadItem>;
+
 // =============================================================================
 // FRONTEND-ONLY TYPES
 // =============================================================================
