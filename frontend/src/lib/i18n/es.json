@@ -62,7 +62,8 @@
     "other": "Otro",
     "date": "Fecha",
     "value": "Valor",
-    "notes": "Notas"
+    "notes": "Notas",
+    "syncing": "Sincronizando..."
   },
   "table": {
     "columns": "Columnas",
@@ -922,5 +923,35 @@
     "Telecommunication": "📡 Telecomunicaciones",
     "Utilities": "💡 Servicios públicos",
     "Other": "📦 Otro"
+  },
+  "assetDetail": {
+    "backToList": "Volver a activos",
+    "loadingPrices": "Cargando precios...",
+    "noData": "No hay datos de precios para este rango.",
+    "noDataManual": "Ningún proveedor configurado — configura via Editar",
+    "editData": "Editar precios y eventos",
+    "editDataComingSoon": "La edición de datos estará disponible próximamente",
+    "closeEditor": "Cerrar editor",
+    "exitMeasure": "Salir del modo medida",
+    "addMeasure": "Añadir medida",
+    "metadata": "Metadatos y clasificación",
+    "editViaModal": "Editar en el modal",
+    "displayCurrency": "Moneda de visualización",
+    "noIdentifiers": "Sin identificadores configurados",
+    "noClassification": "Sin datos de clasificación",
+    "measures": "Medidas",
+    "signals": "Señales",
+    "noDataScheduled": "Configure el calendario de intereses en Editar para generar precios",
+    "syncPrices": "Sincronizar precios",
+    "recalculate": "Recalcular",
+    "syncDisabledManual": "Sincronización desactivada — sin proveedor configurado",
+    "identifiers": "Identificadores",
+    "classification": "Clasificación",
+    "sectorDistribution": "Distribución sectorial",
+    "geoDistribution": "Distribución geográfica",
+    "eventMarkers": "Marcadores de eventos",
+    "syncSuccess": "Precios sincronizados: {fetched} obtenidos, {changed} modificados",
+    "syncFailed": "Error de sincronización",
+    "syncPartial": "Sincronización parcial: {fetched} obtenidos, {changed} modificados"
   }
 }

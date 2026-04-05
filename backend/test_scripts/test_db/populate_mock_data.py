@@ -1053,6 +1053,90 @@ def populate_price_history(session: Session):
     session.commit()
 
 
+def populate_asset_events(session: Session):
+    """Create asset events for testing event markers on charts.
+
+    Inserts manual events (provider_assignment_id=None) for:
+    - Apple: quarterly dividends
+    - VWCE: semi-annual dividends
+    - Loan Milano: monthly interest + one haircut
+    - Loan Roma: maturity settlement
+    """
+    print("\n📅 Creating Asset Events...")
+    print("-" * 60)
+
+    today = date.today()
+
+    apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
+    vwce = session.exec(select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")).first()
+    loan1 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Milano Centro")).first()
+    loan2 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Roma Parioli")).first()
+
+    events_data = []
+
+    # Apple — quarterly dividends (USD)
+    if apple:
+        for days_ago, amount in [(90, "0.24"), (180, "0.24"), (270, "0.25")]:
+            events_data.append(AssetEvent(
+                asset_id=apple.id,
+                date=today - timedelta(days=days_ago),
+                type=AssetEventType.DIVIDEND,
+                value=Decimal(amount),
+                currency="USD",
+                notes="Quarterly dividend",
+            ))
+
+    # VWCE — semi-annual distributions (EUR)
+    if vwce:
+        for days_ago, amount in [(120, "0.52"), (300, "0.48")]:
+            events_data.append(AssetEvent(
+                asset_id=vwce.id,
+                date=today - timedelta(days=days_ago),
+                type=AssetEventType.DIVIDEND,
+                value=Decimal(amount),
+                currency="EUR",
+                notes="Distribution",
+            ))
+
+    # Loan Milano — monthly interest + haircut
+    if loan1:
+        for days_ago, amount in [(30, "25.00"), (60, "25.00"), (90, "25.00"), (120, "25.50")]:
+            events_data.append(AssetEvent(
+                asset_id=loan1.id,
+                date=today - timedelta(days=days_ago),
+                type=AssetEventType.INTEREST,
+                value=Decimal(amount),
+                currency="EUR",
+                notes="Monthly interest",
+            ))
+        events_data.append(AssetEvent(
+            asset_id=loan1.id,
+            date=today - timedelta(days=45),
+            type=AssetEventType.PRICE_ADJUSTMENT,
+            value=Decimal("-200.00"),
+            currency="EUR",
+            notes="Haircut Q3 — collateral revaluation",
+        ))
+
+    # Loan Roma — maturity settlement
+    if loan2:
+        events_data.append(AssetEvent(
+            asset_id=loan2.id,
+            date=today - timedelta(days=15),
+            type=AssetEventType.MATURITY_SETTLEMENT,
+            value=Decimal("10000.00"),
+            currency="EUR",
+            notes="Final capital return at maturity",
+        ))
+
+    for evt in events_data:
+        session.add(evt)
+        print(f"  ✅ Asset #{evt.asset_id} — {evt.type.value} {evt.value} {evt.currency} ({evt.date})")
+
+    session.commit()
+    print(f"\n  📊 Total: {len(events_data)} events created")
+
+
 def populate_fx_rates(session: Session):
     """Populate FX rates for the last 30 days."""
     print("\n💱 Creating FX Rates...")
@@ -1507,6 +1591,7 @@ def main():
             populate_asset_provider_assignments(session)
             populate_transactions(session)
             populate_price_history(session)
+            populate_asset_events(session)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
             configure_user_avatars(session)
