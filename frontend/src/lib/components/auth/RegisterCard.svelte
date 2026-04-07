@@ -75,6 +75,10 @@
     async function handleSubmit() {
         error = '';
 
+        // Strip leading/trailing whitespace (mobile keyboards often add trailing spaces)
+        username = username.trim();
+        email = email.trim();
+
         // Run all validations
         const isUsernameValid = validateUsername();
         const isEmailValid = validateEmail();

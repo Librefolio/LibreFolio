@@ -10,6 +10,7 @@ from backend.app.db.base import (
     AssetEventType,
     TransactionType,
     UserRole,
+    ProviderInputType,
     # Models
     User,
     UserSettings,
@@ -36,6 +37,7 @@ __all__ = [
     "AssetEventType",
     "TransactionType",
     "UserRole",
+    "ProviderInputType",
     # Models
     "User",
     "UserSettings",

@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
+    import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
     import {ChevronDown, ChevronRight, Loader2, Minus, Plus, RefreshCw, Trash2, Upload, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
@@ -31,6 +32,7 @@
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
+    import {generateUUID} from '$lib/utils/uuid';
 
     // =========================================================================
     // Types
@@ -201,7 +203,7 @@
         for (const idType of IDENTIFIER_TYPES) {
             const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
             const value = (data[key] as string) ?? '';
-            if (value) rows.push({id: crypto.randomUUID(), type: idType, value});
+            if (value) rows.push({id: generateUUID(), type: idType, value});
         }
         return rows;
     }
@@ -222,7 +224,7 @@
         // Find first unused type
         const usedTypes = new Set(identifierRows.map(r => r.type));
         const availableType = IDENTIFIER_TYPES.find(t => !usedTypes.has(t)) ?? 'TICKER';
-        identifierRows = [...identifierRows, {id: crypto.randomUUID(), type: availableType, value: ''}];
+        identifierRows = [...identifierRows, {id: generateUUID(), type: availableType, value: ''}];
     }
 
     function updateIdentifierRow(id: string, field: 'type' | 'value', val: string) {
@@ -311,11 +313,16 @@
 
     $effect(() => {
         if (open) {
-            if (editMode && editData) {
-                populateFromEditData(editData);
-            } else {
-                resetForm();
-            }
+            // untrack: only `open` should trigger this effect.
+            // populateFromEditData reads $state vars it just wrote (e.g. identifierRows.length)
+            // which would create a dependency loop → effect_update_depth_exceeded.
+            untrack(() => {
+                if (editMode && editData) {
+                    populateFromEditData(editData);
+                } else {
+                    resetForm();
+                }
+            });
         }
     });
 
@@ -443,7 +450,7 @@
             if (existing) {
                 identifierRows = identifierRows.map(r => r.type === idType ? {...r, value: result.identifier} : r);
             } else {
-                identifierRows = [...identifierRows, {id: crypto.randomUUID(), type: idType, value: result.identifier}];
+                identifierRows = [...identifierRows, {id: generateUUID(), type: idType, value: result.identifier}];
             }
         }
 
@@ -506,7 +513,7 @@
         if (existing) {
             identifierRows = identifierRows.map(r => r.type === type ? {...r, value: val, autoFilled: true} : r);
         } else {
-            identifierRows = [...identifierRows, {id: crypto.randomUUID(), type, value: val, autoFilled: true}];
+            identifierRows = [...identifierRows, {id: generateUUID(), type, value: val, autoFilled: true}];
         }
     }
 
@@ -761,7 +768,6 @@
                     identifier_type: providerIdentifierType,
                     provider_params: providerParams,
                     fetch_interval: fetchInterval,
-                    user_url: providerUserUrl || undefined,
                 }];
                 await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
             } catch (assignErr: any) {
@@ -793,6 +799,7 @@
             currency: currency,
             asset_type: assetType,
             icon_url: iconUrl,
+            user_url: providerUserUrl || null,
             classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
             identifier_isin: idCols.identifier_isin || null,
             identifier_ticker: idCols.identifier_ticker || null,
@@ -819,7 +826,6 @@
                 identifier_type: providerIdentifierType,
                 provider_params: providerParams,
                 fetch_interval: fetchInterval,
-                user_url: providerUserUrl || undefined,
             }];
             await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
         }

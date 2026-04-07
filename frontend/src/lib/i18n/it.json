@@ -952,6 +952,9 @@
     "eventMarkers": "Indicatori eventi",
     "syncSuccess": "Prezzi sincronizzati: {fetched} scaricati, {changed} modificati",
     "syncFailed": "Sincronizzazione fallita",
-    "syncPartial": "Sincronizzazione parziale: {fetched} scaricati, {changed} modificati"
+    "syncPartial": "Sincronizzazione parziale: {fetched} scaricati, {changed} modificati",
+    "fxPairMissing": "Coppia FX {base}/{quote} non configurata — conversione non disponibile",
+    "addFxPair": "Aggiungi coppia FX",
+    "goToFxPair": "Vai al dettaglio coppia FX"
   }
 }

@@ -164,7 +164,6 @@ class FAProviderAssignmentItem(FAProviderConfigBase):
 
     asset_id: int = Field(..., description="Asset ID")
     fetch_interval: int = Field(1440, description="Refresh frequency in minutes (default: 1440 = 24h)")
-    user_url: Optional[str] = Field(None, description="User-defined URL for this asset (notes, external dashboard, etc.)")
 
     @field_validator("fetch_interval", mode="before")
     @classmethod
@@ -190,7 +189,6 @@ class FAProviderAssignmentReadItem(BaseModel):
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider configuration")
     fetch_interval: Optional[int] = Field(None, description="Refresh frequency in minutes")
     last_fetch_at: Optional[str] = Field(None, description="Last fetch timestamp (ISO format)")
-    user_url: Optional[str] = Field(None, description="User-defined URL")
     provider_url: Optional[str] = Field(None, description="Auto-generated URL to provider page")
 
 

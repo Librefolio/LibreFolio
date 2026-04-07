@@ -16,7 +16,6 @@
     70 = third-level modals (e.g. ConfirmModal over FileEditModal)
 -->
 <script lang="ts">
-    import {tick} from 'svelte';
     import {fade, scale} from 'svelte/transition';
 
     // Props
@@ -60,9 +59,12 @@
     let hasFocusedOnOpen = false;
 
     // Focus the backdrop ONCE when modal opens so keyboard events are captured
+    // NOTE: uses requestAnimationFrame instead of tick() to avoid triggering
+    // Svelte 5's flushSync inside a reactive block, which causes
+    // effect_update_depth_exceeded when combined with complex $effect chains.
     $: if (open && backdropEl && !hasFocusedOnOpen) {
         hasFocusedOnOpen = true;
-        tick().then(() => backdropEl?.focus());
+        requestAnimationFrame(() => backdropEl?.focus());
     }
 
     // Reset when modal closes

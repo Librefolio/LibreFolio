@@ -28,6 +28,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import {generateUUID} from '$lib/utils/uuid';
 
     // =========================================================================
     // Types
@@ -634,7 +635,7 @@
         };
         const row2: ScheduleRow = {
             ...original,
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             start_date: addDays(boundaryDate, 1),
         };
 
@@ -662,7 +663,7 @@
         // Merge: use first element's rate, frequency, generate_interest
         const merged: ScheduleRow = {
             ...first,
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             end_date: last.end_date,
         };
 
@@ -1026,7 +1027,7 @@
 
     function handleAddEvent(): void {
         assetEvents = [...assetEvents, {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             date: todayISO(),
             type: 'INTEREST',
             value: 0,

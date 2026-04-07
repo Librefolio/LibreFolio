@@ -1353,6 +1353,12 @@ type FAAssetPatchItem = {
      */
     ((boolean | null) | Array<boolean | null>)
     | undefined;
+  user_url?:
+    | /**
+     * Update user-defined URL (None = clear)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
   identifier_isin?:
     | /**
      * Update ISIN code
@@ -2172,12 +2178,6 @@ type FAProviderAssignmentReadItem = {
      */
     ((string | null) | Array<string | null>)
     | undefined;
-  user_url?:
-    | /**
-     * User-defined URL
-     */
-    ((string | null) | Array<string | null>)
-    | undefined;
   provider_url?:
     | /**
      * Auto-generated URL to provider page
@@ -2603,6 +2603,12 @@ type FAinfoResponse = {
    * Whether asset is active
    */
   active: boolean;
+  user_url?:
+    | /**
+     * User-defined URL (notes, external dashboard, etc.)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
   provider_code?:
     | /**
      * Provider code if assigned (e.g. 'yfinance')
@@ -4402,6 +4408,10 @@ const FAAssetPatchItem: z.ZodType<FAAssetPatchItem> = z.object({
     .union([z.boolean(), z.null()])
     .describe("Update active status")
     .optional(),
+  user_url: z
+    .union([z.string(), z.null()])
+    .describe("Update user-defined URL (None = clear)")
+    .optional(),
   identifier_isin: z
     .union([z.string(), z.null()])
     .describe("Update ISIN code")
@@ -4546,6 +4556,10 @@ const FAinfoResponse: z.ZodType<FAinfoResponse> = z.object({
     .optional(),
   asset_type: z.union([z.string(), z.null()]).describe("Asset type").optional(),
   active: z.boolean().describe("Whether asset is active"),
+  user_url: z
+    .union([z.string(), z.null()])
+    .describe("User-defined URL (notes, external dashboard, etc.)")
+    .optional(),
   provider_code: z
     .union([z.string(), z.null()])
     .describe("Provider code if assigned (e.g. 'yfinance')")
@@ -4982,12 +4996,6 @@ const FAProviderAssignmentItem = z.object({
     .describe("Refresh frequency in minutes (default: 1440 = 24h)")
     .optional()
     .default(1440),
-  user_url: z
-    .union([z.string(), z.null()])
-    .describe(
-      "User-defined URL for this asset (notes, external dashboard, etc.)"
-    )
-    .optional(),
 });
 const FAProviderRefreshFieldsDetail: z.ZodType<FAProviderRefreshFieldsDetail> =
   z.object({
@@ -5282,10 +5290,6 @@ Mapping to stored IdentifierType:
     last_fetch_at: z
       .union([z.string(), z.null()])
       .describe("Last fetch timestamp (ISO format)")
-      .optional(),
-    user_url: z
-      .union([z.string(), z.null()])
-      .describe("User-defined URL")
       .optional(),
     provider_url: z
       .union([z.string(), z.null()])
