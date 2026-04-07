@@ -12,6 +12,8 @@
  *   toasts.info('Note: ...');
  */
 
+import { generateUUID } from '$lib/utils/uuid';
+
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
 export interface Toast {
@@ -36,7 +38,7 @@ const DEFAULT_DURATION: Record<ToastVariant, number> = {
 let items = $state<Toast[]>([]);
 
 function show(variant: ToastVariant, message: string, duration?: number): string {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const ms = duration ?? DEFAULT_DURATION[variant];
 
     const toast: Toast = {id, variant, message, duration: ms, createdAt: Date.now()};

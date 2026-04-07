@@ -306,7 +306,7 @@
 
         for (const p of schedule) {
             result.push({
-                id: crypto.randomUUID(),
+                id: generateUUID(),
                 start_date: p.start_date,
                 end_date: p.end_date,
                 annual_rate: Number(p.annual_rate) * 100,
@@ -339,7 +339,7 @@
 
     function deserializeEvents(events: any[]): AssetEventRow[] {
         return events.map((e: any) => ({
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             date: e.date ?? todayISO(),
             type: e.type ?? 'INTEREST',
             value: Number(e.value?.amount ?? e.value ?? 0),
@@ -497,7 +497,7 @@
 
         const lastPeriod = periods.length > 0 ? periods[periods.length - 1] : null;
         const newRow: ScheduleRow = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             start_date: newStart,
             end_date: newEnd,
             annual_rate: lastPeriod?.annual_rate ?? 5.00,
@@ -630,7 +630,7 @@
 
         const row1: ScheduleRow = {
             ...original,
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             end_date: boundaryDate,
         };
         const row2: ScheduleRow = {
