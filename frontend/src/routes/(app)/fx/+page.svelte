@@ -63,6 +63,7 @@
     let dateEnd = $state(new Date().toISOString().slice(0, 10));
     let activePreset: any = $state('3M');
     let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
+    let refreshing = $state(false);
 
     // View mode (grid/list)
     let viewMode = $state<'grid' | 'list'>('grid');
@@ -424,9 +425,14 @@
     // =========================================================================
 
     async function handleRefreshAll() {
-        invalidateAllFxStores();
-        pairs = pairs.map(p => ({...p, data: [], loading: true}));
-        await fetchAllPairData();
+        refreshing = true;
+        try {
+            invalidateAllFxStores();
+            pairs = pairs.map(p => ({...p, data: [], loading: true}));
+            await fetchAllPairData();
+        } finally {
+            refreshing = false;
+        }
     }
 
     async function handleRefreshPair(detail: { slug: string }) {
@@ -828,7 +834,7 @@
                     data-testid="fx-refresh-all-button"
                     onclick={handleRefreshAll}
             >
-                <RefreshCw size={14}/>
+                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14}/>
                 {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
             </button>
         </div>

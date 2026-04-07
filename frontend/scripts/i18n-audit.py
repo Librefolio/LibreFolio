@@ -21,20 +21,29 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Try to import required libraries
+# Try to import required libraries (lazy: don't sys.exit at import time
+# so dev.py can import this module just for register_subparser)
 try:
     import pandas as pd
 except ImportError:
-    print("❌ pandas is required for this script.")
-    print("   Install with: pipenv install pandas")
-    sys.exit(1)
+    pd = None  # type: ignore[assignment]
 
 try:
     from tabulate import tabulate
 except ImportError:
-    print("❌ tabulate is required for this script.")
-    print("   Install with: pipenv install tabulate --dev")
-    sys.exit(1)
+    tabulate = None  # type: ignore[assignment]
+
+
+def _check_deps() -> None:
+    """Verify runtime dependencies are available. Called by command entry points."""
+    if pd is None:
+        print("❌ pandas is required for this script.")
+        print("   Install with: pipenv install pandas")
+        sys.exit(1)
+    if tabulate is None:
+        print("❌ tabulate is required for this script.")
+        print("   Install with: pipenv install tabulate --dev")
+        sys.exit(1)
 
 # Configuration
 I18N_DIR = Path(__file__).parent.parent / "src" / "lib" / "i18n"
@@ -920,6 +929,7 @@ def add_arguments(parser) -> None:
 
 def run_from_args(args) -> int:
     """Execute the command from parsed args."""
+    _check_deps()
     return run_audit(
         format_type=getattr(args, 'format', 'none'),
         output=getattr(args, 'output', None),
@@ -929,6 +939,7 @@ def run_from_args(args) -> int:
 
 def main():
     """Main entry point."""
+    _check_deps()
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -1024,6 +1035,7 @@ def save_lang_file(lang: str, data: dict) -> None:
 
 def cmd_add(args) -> int:
     """Add a new translation key to all languages."""
+    _check_deps()
     key = args.key
     translations = {
         "en": args.en,
@@ -1074,6 +1086,7 @@ def cmd_add(args) -> int:
 
 def cmd_remove(args) -> int:
     """Remove a translation key from all languages."""
+    _check_deps()
     key = args.key
 
     # Check current values
@@ -1130,6 +1143,7 @@ def cmd_remove(args) -> int:
 
 def cmd_update(args) -> int:
     """Update a specific translation in one or more languages."""
+    _check_deps()
     key = args.key
     updates = {}
 
@@ -1194,6 +1208,7 @@ def cmd_search(args) -> int:
     Default (no flags): search in keys AND all values.
     Result always shows ALL languages for matching keys.
     """
+    _check_deps()
     query = args.query.lower()
     search_keys = getattr(args, 'keys', False)
     search_values = getattr(args, 'values', False)
@@ -1295,6 +1310,7 @@ def cmd_tree(args) -> int:
         ./dev.py i18n tree -d 2                # Limit depth to 2 levels
         ./dev.py i18n tree --counts            # Show leaf count per branch
     """
+    _check_deps()
     prefix = getattr(args, 'prefix', '') or ''
     max_depth = getattr(args, 'depth', 0) or 0
     show_counts = getattr(args, 'counts', False)

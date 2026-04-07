@@ -825,6 +825,7 @@ class FAinfoResponse(BaseModel):
     icon_url: Optional[str] = Field(None, description="Asset icon URL")
     asset_type: Optional[str] = Field(None, description="Asset type")
     active: bool = Field(..., description="Whether asset is active")
+    user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 
@@ -887,30 +888,21 @@ class FAAssetPatchItem(BaseModel):
 
     # Optional fields - if present (even if None), they will be updated
     display_name: Optional[str] = Field(None, description="Update display name")
-    currency: Optional[str] = Field(
-        None, min_length=3, max_length=3, description="Update currency (ISO 4217)"
-        )
-    asset_type: Optional[AssetType] = Field(
-        None, description="Update asset type (STOCK, ETF, BOND, etc.)"
-        )
+    currency: Optional[str] = Field(None, min_length=3, max_length=3, description="Update currency (ISO 4217)")
+    asset_type: Optional[AssetType] = Field(None, description="Update asset type (STOCK, ETF, BOND, etc.)")
     icon_url: Optional[str] = Field(None, description="Update icon URL (None = clear)")
-    classification_params: Optional[FAClassificationParams] = Field(
-        None, description="Update classification (None = clear)"
-        )
+    classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
     active: Optional[bool] = Field(None, description="Update active status")
+    user_url: Optional[str] = Field(None, description="Update user-defined URL (None = clear)")
 
     # Identifier fields (one per IdentifierType)
     identifier_isin: Optional[str] = Field(None, max_length=12, description="Update ISIN code")
-    identifier_ticker: Optional[str] = Field(
-        None, max_length=20, description="Update ticker symbol"
-        )
+    identifier_ticker: Optional[str] = Field(None, max_length=20, description="Update ticker symbol")
     identifier_cusip: Optional[str] = Field(None, max_length=9, description="Update CUSIP code")
     identifier_sedol: Optional[str] = Field(None, max_length=7, description="Update SEDOL code")
     identifier_figi: Optional[str] = Field(None, max_length=12, description="Update FIGI code")
     identifier_uuid: Optional[str] = Field(None, max_length=36, description="Update UUID")
-    identifier_other: Optional[str] = Field(
-        None, max_length=100, description="Update other identifier"
-        )
+    identifier_other: Optional[str] = Field(None, max_length=100, description="Update other identifier")
 
     @field_validator("currency")
     @classmethod

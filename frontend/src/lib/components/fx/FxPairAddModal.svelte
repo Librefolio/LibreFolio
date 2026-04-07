@@ -43,6 +43,10 @@
         editQuote?: string;
         /** Pre-populated routes (used in editMode) */
         editRoutes?: ChainStep[][];
+        /** Initial base currency for create mode (editable, not locked) */
+        initialBase?: string;
+        /** Initial quote currency for create mode (editable, not locked) */
+        initialQuote?: string;
         oncreated?: (detail: { base: string; quote: string; hasRealProvider: boolean }) => void;
         onclose?: () => void;
     }
@@ -55,6 +59,8 @@
         editBase = '',
         editQuote = '',
         editRoutes = [],
+        initialBase = '',
+        initialQuote = '',
         oncreated,
         onclose,
     }: Props = $props();
@@ -88,6 +94,14 @@
             quoteCurrency = editQuote;
             // Load actual routes from backend for pre-existing pair
             loadRoutesFromBackend();
+        }
+    });
+
+    // Pre-fill currencies in create mode (editable, not locked)
+    $effect(() => {
+        if (open && !editMode) {
+            if (initialBase && !baseCurrency) baseCurrency = initialBase;
+            if (initialQuote && !quoteCurrency) quoteCurrency = initialQuote;
         }
     });
 

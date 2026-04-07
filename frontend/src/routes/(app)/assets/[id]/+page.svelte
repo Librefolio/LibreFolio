@@ -13,12 +13,12 @@
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
     import {onMount, tick} from 'svelte';
-    import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
+    import {goBack} from '$lib/stores/navigationStore';
     import {
-        ArrowLeft, ChevronDown, Construction, Info, Pencil, RefreshCw, RotateCw,
+        AlertTriangle, ArrowLeft, ArrowLeftRight, ChevronDown, Construction, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
         Ruler, Settings, TrendingDown, TrendingUp
     } from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
@@ -26,8 +26,11 @@
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
     import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
+    import SectorPieChart from '$lib/components/charts/SectorPieChart.svelte';
+    import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -40,7 +43,40 @@
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
     import {getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import type {AssetInfo, ProviderAssignment} from '$lib/types/asset';
+    import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName} from '$lib/utils/providerHelpers';
+
+    // Local interfaces — correct types instead of Zod union artefacts
+    interface AssetDetailInfo {
+        id: number;
+        display_name: string;
+        currency: string;
+        asset_type?: string | null;
+        icon_url?: string | null;
+        provider_code?: string | null;
+        has_metadata: boolean;
+        active: boolean;
+        user_url?: string | null;
+        identifier_isin?: string | null;
+        identifier_ticker?: string | null;
+        identifier_cusip?: string | null;
+        identifier_sedol?: string | null;
+        identifier_figi?: string | null;
+        identifier_uuid?: string | null;
+        identifier_other?: string | null;
+        identifier?: string | null;
+        identifier_type?: string | null;
+    }
+
+    interface ProviderAssignmentLocal {
+        asset_id: number;
+        provider_code: string;
+        identifier: string;
+        identifier_type: string;
+        provider_params?: Record<string, any> | null;
+        fetch_interval?: number | null;
+        last_fetch_at?: string | null;
+        provider_url?: string | null;
+    }
 
     // =========================================================================
     // Page data
@@ -56,8 +92,8 @@
     // State
     // =========================================================================
 
-    let assetInfo: AssetInfo | null = $state(null);
-    let providerAssignment: ProviderAssignment | null = $state(null);
+    let assetInfo = $state<AssetDetailInfo | null>(null);
+    let providerAssignment = $state<ProviderAssignmentLocal | null>(null);
     let chartData: any[] = $state([]);
     let events: any[] = $state([]);
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -104,9 +140,26 @@
     let overlayDataVersion = $state(0);
     let editModalOpen = $state(false);
 
+    // Edit data — computed on-demand when modal opens (NOT $derived, to avoid effect loops)
+    let editDataForModal = $state<ReturnType<typeof buildEditData>>(null);
+
     // Cross-domain data for signals
     let allConfiguredFxSlugs: string[] = $state([]);
     let allAssets: Array<{ id: number; display_name: string; icon_url?: string | null; asset_type?: string | null }> = $state([]);
+
+    // Classification data (loaded when has_metadata)
+    let sectorDistribution: Record<string, number> | null = $state(null);
+    let geographicDistribution: Record<string, number> | null = $state(null);
+
+    // Provider icon for header badge
+    let providerIconUrl = $state<string | null>(null);
+
+    // FX warning toast
+    let fxWarningToastId = $state<string | null>(null);
+    let fxWarningToastVisible = $derived(fxWarningToastId ? toasts.items.some(t => t.id === fxWarningToastId) : false);
+
+    // FX pair add modal (opened from FX warning)
+    let showFxPairAddModal = $state(false);
 
     // =========================================================================
     // Derived
@@ -148,12 +201,23 @@
         return getCurrencyInfo(assetInfo.currency).flag_emoji;
     });
 
-    let primaryIdentifier = $derived.by(() => {
-        if (!assetInfo) return null;
-        return assetInfo.identifier_ticker ?? assetInfo.identifier_isin
-            ?? assetInfo.identifier_cusip ?? assetInfo.identifier_sedol
-            ?? assetInfo.identifier_figi ?? assetInfo.identifier_uuid
-            ?? assetInfo.identifier_other ?? assetInfo.identifier ?? null;
+    let externalUrl = $derived(assetInfo?.user_url || providerAssignment?.provider_url || null);
+
+    /** True when display currency differs from asset currency and FX pair is not configured */
+    let fxConversionMissing = $derived.by(() => {
+        if (!assetInfo || !displayCurrency || displayCurrency === assetInfo.currency) return false;
+        const a = assetInfo.currency < displayCurrency ? assetInfo.currency : displayCurrency;
+        const b = assetInfo.currency < displayCurrency ? displayCurrency : assetInfo.currency;
+        const slug = `${a}-${b}`;
+        return !allConfiguredFxSlugs.includes(slug);
+    });
+
+    /** Canonical FX pair slug (alphabetically ordered) for linking */
+    let fxPairSlug = $derived.by(() => {
+        if (!assetInfo || !displayCurrency || displayCurrency === assetInfo.currency) return '';
+        const a = assetInfo.currency < displayCurrency ? assetInfo.currency : displayCurrency;
+        const b = assetInfo.currency < displayCurrency ? displayCurrency : assetInfo.currency;
+        return `${a}-${b}`;
     });
 
     let identifiersList = $derived.by((): [string, string][] => {
@@ -216,12 +280,21 @@
     onMount(async () => {
         await Promise.all([
             ensureCurrenciesLoaded(get(currentLanguage)),
+            ensureAssetProvidersCached(),
             loadAssetInfo(),
             loadProviderAssignment(),
             loadChartData(),
             loadFxPairSlugs(),
             loadAssetList(),
         ]);
+        // Resolve provider icon after data loads
+        if (assetInfo?.provider_code) {
+            providerIconUrl = getAssetProviderIconUrl(assetInfo.provider_code);
+        }
+        // Load classification data if available
+        if (assetInfo?.has_metadata) {
+            await loadClassificationData();
+        }
     });
 
     $effect(() => {
@@ -238,6 +311,21 @@
         }
     });
 
+    // FX conversion warning — auto-show/dismiss toast
+    $effect(() => {
+        if (fxConversionMissing && assetInfo) {
+            if (!fxWarningToastVisible) {
+                const tr = get(t);
+                const msg = tr('assetDetail.fxPairMissing', {values: {base: assetInfo.currency, quote: displayCurrency}})
+                    + ' — ' + tr('assetDetail.addFxPair') + ': /fx';
+                fxWarningToastId = toasts.warning(msg, 20000);
+            }
+        } else if (!fxConversionMissing && fxWarningToastId) {
+            toasts.dismiss(fxWarningToastId);
+            fxWarningToastId = null;
+        }
+    });
+
     // =========================================================================
     // Data Loading
     // =========================================================================
@@ -248,7 +336,7 @@
             const items = response as any[];
             const asset = items.find((a: any) => a.id === data.assetId);
             if (asset) {
-                assetInfo = asset;
+                assetInfo = asset as AssetDetailInfo;
                 if (!displayCurrency) displayCurrency = asset.currency;
             } else {
                 error = `Asset #${data.assetId} not found`;
@@ -265,7 +353,7 @@
                 queries: {asset_ids: [data.assetId]},
             });
             const items = response as any[];
-            providerAssignment = items.length > 0 ? items[0] : null;
+            providerAssignment = items.length > 0 ? (items[0] as ProviderAssignmentLocal) : null;
         } catch (e: any) {
             console.error('Failed to load provider assignment:', e);
         }
@@ -320,6 +408,20 @@
         } catch (e) { console.error('Failed to load asset list:', e); }
     }
 
+    async function loadClassificationData() {
+        try {
+            const response = await zodiosApi.read_assets_bulk_api_v1_assets_get({
+                queries: {asset_ids: [data.assetId]},
+            });
+            const items = response as any[];
+            if (items.length > 0 && items[0].classification_params) {
+                const cp = items[0].classification_params;
+                sectorDistribution = cp.sector_area?.distribution ?? null;
+                geographicDistribution = cp.geographic_area?.distribution ?? null;
+            }
+        } catch (e) { console.error('Failed to load classification data:', e); }
+    }
+
     async function loadComparisonAssetsData(compSignals: SignalConfig[]) {
         const idsToLoad = compSignals
             .map(s => Number(s.params.assetId))
@@ -351,9 +453,29 @@
     // Actions
     // =========================================================================
 
+    function showFxWarningToast() {
+        if (fxWarningToastVisible || !assetInfo) return;
+        const tr = get(t);
+        const msg = tr('assetDetail.fxPairMissing', {values: {base: assetInfo.currency, quote: displayCurrency}})
+            + ' — ' + tr('assetDetail.addFxPair') + ': /fx';
+        fxWarningToastId = toasts.warning(msg, 20000);
+    }
+
     async function handleRefresh() {
         await loadChartData();
         overlayDataVersion++;
+    }
+
+    async function reloadMetadata() {
+        await Promise.all([loadAssetInfo(), loadProviderAssignment()]);
+        // Update provider icon if changed
+        if (assetInfo?.provider_code) {
+            providerIconUrl = getAssetProviderIconUrl(assetInfo.provider_code);
+        }
+        // Reload classification if metadata became available
+        if (assetInfo?.has_metadata && !sectorDistribution && !geographicDistribution) {
+            await loadClassificationData();
+        }
     }
 
     async function handleSync() {
@@ -377,6 +499,7 @@
                 }
             }
             await handleRefresh();
+            await reloadMetadata();
         } catch (e: any) {
             console.error('Sync failed:', e);
             toasts.error('Sync failed: ' + (e?.message || 'unknown'));
@@ -409,8 +532,7 @@
 
     async function handleAssetUpdated() {
         editModalOpen = false;
-        await loadAssetInfo();
-        await loadProviderAssignment();
+        await reloadMetadata();
         if (providerAssignment) {
             await handleSync();
         } else {
@@ -438,7 +560,7 @@
             provider_identifier: providerAssignment?.identifier ?? '',
             provider_identifier_type: providerAssignment?.identifier_type ?? '',
             provider_params: providerAssignment?.provider_params ?? null,
-            provider_user_url: providerAssignment?.user_url ?? '',
+            provider_user_url: assetInfo.user_url ?? '',
             provider_url: providerAssignment?.provider_url ?? null,
         };
     }
@@ -452,38 +574,51 @@
         <button
                 class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors"
                 data-testid="asset-detail-back-btn"
-                onclick={() => goto('/assets')}
+                onclick={() => goBack('/assets')}
                 title={$t('assetDetail.backToList')}
         >
             <ArrowLeft size={20}/>
         </button>
 
         {#if assetInfo}
-            <div class="flex items-center gap-3 flex-wrap" data-testid="asset-detail-info">
-                <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md"/>
-                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{assetInfo.display_name}</h2>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3" data-testid="asset-detail-info">
+                <div class="flex items-center gap-3">
+                    <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md"/>
+                    <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{assetInfo.display_name}</h2>
+                </div>
 
-                {#if assetInfo.asset_type}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
-                        <img src={getAssetTypeIconUrl(assetInfo.asset_type)} alt="" class="w-3.5 h-3.5"/>
-                        {$t(`assets.types.${assetInfo.asset_type}`)}
-                    </span>
-                {/if}
+                <div class="flex items-center gap-2 flex-wrap ml-0 sm:ml-0">
+                    {#if assetInfo.asset_type}
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
+                            <img src={getAssetTypeIconUrl(assetInfo.asset_type)} alt="" class="w-3.5 h-3.5"/>
+                            {$t(`assets.types.${assetInfo.asset_type}`)}
+                        </span>
+                    {/if}
 
-                <span class="text-lg emoji-flag">{currencyFlag}</span>
-                <span class="text-sm font-mono text-gray-500 dark:text-gray-400">{assetInfo.currency}</span>
+                    <span class="text-lg emoji-flag">{currencyFlag}</span>
+                    <span class="text-sm font-mono text-gray-500 dark:text-gray-400">{assetInfo.currency}</span>
 
-                {#if primaryIdentifier}
-                    <span class="px-2 py-0.5 rounded bg-gray-50 dark:bg-slate-700 text-xs font-mono text-gray-500 dark:text-gray-400">
-                        {primaryIdentifier}
-                    </span>
-                {/if}
+                    {#if assetInfo.provider_code}
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                            {#if providerIconUrl}
+                                <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
+                            {/if}
+                            {assetInfo.provider_code}
+                        </span>
+                    {/if}
 
-                {#if assetInfo.provider_code}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
-                        {assetInfo.provider_code}
-                    </span>
-                {/if}
+                    {#if externalUrl}
+                        <a
+                            href={externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center p-1 rounded text-gray-400 hover:text-libre-green transition-colors"
+                            title={externalUrl}
+                        >
+                            <ExternalLink size={14}/>
+                        </a>
+                    {/if}
+                </div>
             </div>
         {:else if loading}
             <div class="h-8 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
@@ -520,39 +655,76 @@
             </div>
 
             {#if assetInfo}
-                <div class="w-32">
-                    <CurrencySearchSelect
-                            bind:value={displayCurrency}
-                            compact={true}
-                            placeholder={$t('assetDetail.displayCurrency')}
-                    />
-                </div>
-            {/if}
+                <div class="flex {layout.layoutMode === 'wide' ? 'flex-col gap-1.5' : 'flex-row items-center gap-3 flex-wrap'}">
+                    {#if lastPrice !== null}
+                        <div class="flex items-center gap-2 {layout.layoutMode === 'wide' ? 'px-3 border-l border-gray-200 dark:border-slate-600' : ''} {layout.layoutMode === 'tablet' || layout.layoutMode === 'tablet-s' ? 'w-full justify-center' : ''}">
+                            <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
+                                {lastPrice.toFixed(2)}
+                            </span>
+                            <span class="text-xs text-gray-400 dark:text-gray-500">{displayCurrency}</span>
+                            {#if deltaPercent !== null}
+                                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                    {#if deltaPercent >= 0}<TrendingUp size={12}/>{:else}<TrendingDown size={12}/>{/if}
+                                    {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                                </span>
+                            {/if}
+                            {#if deltaAbs !== null}
+                                <span class="text-xs text-gray-400 dark:text-gray-500">
+                                    ({deltaAbs >= 0 ? '+' : ''}{deltaAbs.toFixed(2)})
+                                </span>
+                            {/if}
+                        </div>
+                    {/if}
 
-            {#if lastPrice !== null}
-                <div class="flex items-center gap-2 px-3 {layout.layoutMode === 'wide' ? 'border-l border-r border-gray-200 dark:border-slate-600' : ''} {layout.layoutMode === 'tablet' || layout.layoutMode === 'tablet-s' ? 'w-full justify-center' : ''}">
-                    <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
-                        {lastPrice.toFixed(2)}
-                    </span>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{displayCurrency}</span>
-                    {#if deltaPercent !== null}
-                        <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                            {#if deltaPercent >= 0}<TrendingUp size={12}/>{:else}<TrendingDown size={12}/>{/if}
-                            {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                    <div class="flex items-center gap-2 {layout.layoutMode === 'wide' ? 'px-3' : ''}">
+                        <span class="text-[10px] uppercase font-semibold text-gray-400 dark:text-gray-500 tracking-wider">
+                            {$t('assetDetail.displayCurrency')}
                         </span>
-                    {/if}
-                    {#if deltaAbs !== null}
-                        <span class="text-xs text-gray-400 dark:text-gray-500">
-                            ({deltaAbs >= 0 ? '+' : ''}{deltaAbs.toFixed(2)})
-                        </span>
-                    {/if}
+                        <div class="w-32">
+                            <CurrencySearchSelect
+                                    bind:value={displayCurrency}
+                                    compact={true}
+                                    placeholder={$t('assetDetail.displayCurrency')}
+                            />
+                        </div>
+                    </div>
                 </div>
+
+                {#if fxConversionMissing}
+                    <div class="flex items-center gap-1">
+                        <button
+                            class="p-1 rounded transition-colors {fxWarningToastVisible
+                                ? 'text-amber-300 dark:text-amber-700 cursor-not-allowed opacity-50'
+                                : 'text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 cursor-pointer'}"
+                            disabled={fxWarningToastVisible}
+                            onclick={showFxWarningToast}
+                            title={$t('assetDetail.fxPairMissing', {values: {base: assetInfo.currency, quote: displayCurrency}})}
+                        >
+                            <AlertTriangle size={16}/>
+                        </button>
+                        <button
+                            class="text-[10px] text-amber-500 dark:text-amber-400 hover:underline cursor-pointer"
+                            onclick={() => showFxPairAddModal = true}
+                            title={$t('assetDetail.addFxPair')}
+                        >
+                            FX +
+                        </button>
+                    </div>
+                {:else if displayCurrency && assetInfo && displayCurrency !== assetInfo.currency && fxPairSlug}
+                    <a
+                        href="/fx/{fxPairSlug}"
+                        class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors"
+                        title={$t('assetDetail.goToFxPair')}
+                    >
+                        <ArrowLeftRight size={14}/>
+                    </a>
+                {/if}
             {/if}
         </div>
 
         <!-- Actions 2×2 -->
         <div class="flex shrink-0 gap-1.5
-                    {layout.layoutMode === 'mobile' ? 'flex-row justify-center' : 'grid grid-cols-2'}">
+                    {layout.layoutMode === 'mobile' || layout.layoutMode === 'tablet-s' ? 'flex-col items-stretch' : 'grid grid-cols-2'}">
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
                         class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute'
@@ -570,7 +742,7 @@
             <button
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     data-testid="asset-detail-edit-btn"
-                    onclick={() => editModalOpen = true}
+                    onclick={() => { editDataForModal = buildEditData(); editModalOpen = true; }}
             >
                 <Pencil size={14}/>
                 {#if layout.showActionLabels}<span>{$t('common.edit')}</span>{/if}
@@ -599,38 +771,35 @@
     </div>
 
     <!-- ======================================================================= -->
-    <!-- Foldable Panel: Aesthetics (ABOVE chart) -->
+    <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                data-testid="asset-detail-aesthetics-toggle"
-                onclick={() => showAesthetics = !showAesthetics}
+                data-testid="asset-detail-signals-toggle"
+                onclick={() => showSignals = !showSignals}
         >
             <span class="flex items-center gap-2">
-                <Settings class="text-libre-green" size={15}/>
-                {$t('common.aesthetics')}
+                <TrendingUp class="text-blue-500" size={15}/>
+                {$t('assetDetail.signals')}
             </span>
-            <ChevronDown class="transition-transform {showAesthetics ? 'rotate-180' : ''}" size={15}/>
+            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15}/>
         </button>
-        {#if showAesthetics}
-            <div data-testid="asset-detail-aesthetics-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <ChartAestheticsSection
-                        colorByBaseline={settings.colorByBaseline}
-                        areaFill={settings.areaFill}
-                        gridLines={settings.gridLines}
-                        staleGradient={settings.staleGradient}
-                        yAxisMode={settings.yAxisMode}
-                        yAxisMin={settings.yAxisMin}
-                        yAxisMax={settings.yAxisMax}
-                        onchange={handleAestheticsChange}
+        {#if showSignals}
+            <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+                <ChartSignalsSection
+                        signals={[...signals]}
+                        availablePairs={allConfiguredFxSlugs}
+                        availableAssets={allAssets.filter(a => a.id !== data.assetId)}
+                        mainPairSlug={`asset-${data.assetId}`}
+                        onchange={handleSignalsChange}
                 />
             </div>
         {/if}
     </div>
 
     <!-- ======================================================================= -->
-    <!-- Chart -->
+    <!-- Chart with left toolbar -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="asset-detail-chart">
         {#if loading && lineData.length === 0}
@@ -641,7 +810,24 @@
                 </div>
             </div>
         {:else if lineData.length > 0}
+            <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
+            {#if showAesthetics}
+                <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700">
+                    <ChartAestheticsSection
+                            colorByBaseline={settings.colorByBaseline}
+                            areaFill={settings.areaFill}
+                            gridLines={settings.gridLines}
+                            staleGradient={settings.staleGradient}
+                            yAxisMode={settings.yAxisMode}
+                            yAxisMin={settings.yAxisMin}
+                            yAxisMax={settings.yAxisMax}
+                            onchange={handleAestheticsChange}
+                    />
+                </div>
+            {/if}
+
             <div class="relative">
+                <!-- Right toolbar -->
                 <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
                     <button
                             data-testid="asset-detail-measure-btn"
@@ -674,6 +860,16 @@
                     >
                         <Pencil size={16}/>
                     </button>
+                    <button
+                            data-testid="asset-detail-aesthetics-toggle"
+                            class="p-1.5 rounded-lg transition-colors {showAesthetics
+                            ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
+                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                            onclick={() => showAesthetics = !showAesthetics}
+                            title={$t('common.aesthetics')}
+                    >
+                        <Settings size={16}/>
+                    </button>
                 </div>
 
                 <PriceChartFull
@@ -702,10 +898,10 @@
                 <div class="text-center">
                     {#if isManualOnly}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataManual')}</p>
-                        <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => editModalOpen = true}>{$t('common.edit')}</button>
+                        <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => { editDataForModal = buildEditData(); editModalOpen = true; }}>{$t('common.edit')}</button>
                     {:else if isScheduledInvestment}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataScheduled')}</p>
-                        <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => editModalOpen = true}>{$t('common.edit')}</button>
+                        <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => { editDataForModal = buildEditData(); editModalOpen = true; }}>{$t('common.edit')}</button>
                     {:else}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noData')}</p>
                         <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
@@ -766,33 +962,6 @@
         </div>
     </div>
 
-    <!-- ======================================================================= -->
-    <!-- Foldable Panel: Signals -->
-    <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <button
-                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                data-testid="asset-detail-signals-toggle"
-                onclick={() => showSignals = !showSignals}
-        >
-            <span class="flex items-center gap-2">
-                <TrendingUp class="text-blue-500" size={15}/>
-                {$t('assetDetail.signals')}
-            </span>
-            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15}/>
-        </button>
-        {#if showSignals}
-            <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <ChartSignalsSection
-                        signals={[...signals]}
-                        availablePairs={allConfiguredFxSlugs}
-                        availableAssets={allAssets.filter(a => a.id !== data.assetId)}
-                        mainPairSlug={`asset-${data.assetId}`}
-                        onchange={handleSignalsChange}
-                />
-            </div>
-        {/if}
-    </div>
 
     <!-- ======================================================================= -->
     <!-- Foldable Panel: Metadata & Classification -->
@@ -812,10 +981,48 @@
             </button>
             {#if showMetadata}
                 <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3 space-y-4">
+                    <!-- External URLs -->
+                    {#if externalUrl}
+                        <div>
+                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assets.provider.userUrl')}</h4>
+                            <a href={externalUrl} target="_blank" rel="noopener noreferrer"
+                               class="text-sm text-libre-green hover:underline break-all">{externalUrl}</a>
+                        </div>
+                    {/if}
+
+                    <!-- Classification Charts -->
+                    {#if assetInfo.has_metadata && (sectorDistribution || geographicDistribution)}
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('assetDetail.classification')}</h4>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {#if geographicDistribution && Object.keys(geographicDistribution).length > 0}
+                                    <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
+                                        <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('assetDetail.geoDistribution')}</h5>
+                                        <GeographyMap data={geographicDistribution} height="280px" language={$currentLanguage}/>
+                                    </div>
+                                {/if}
+
+                                {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
+                                    <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
+                                        <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('assetDetail.sectorDistribution')}</h5>
+                                        <SectorPieChart data={sectorDistribution} height="280px"/>
+                                    </div>
+                                {/if}
+                            </div>
+                        </div>
+                    {:else if assetInfo.has_metadata}
+                        <div class="text-sm text-gray-500 dark:text-gray-400 italic">
+                            {$t('assetDetail.classification')} — {$t('common.loading')}...
+                        </div>
+                    {:else}
+                        <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noClassification')}</p>
+                    {/if}
+
                     <!-- Identifiers -->
                     {#if identifiersList.length > 0}
                         <div>
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Identifiers</h4>
+                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assetDetail.identifiers')}</h4>
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 {#each identifiersList as [label, value]}
                                     <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
@@ -829,24 +1036,21 @@
                         <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noIdentifiers')}</p>
                     {/if}
 
-                    {#if assetInfo.has_metadata}
-                        <div class="text-sm text-gray-500 dark:text-gray-400 italic">
-                            Classification data available — view full details via Edit modal.
-                        </div>
-                    {:else}
-                        <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noClassification')}</p>
-                    {/if}
-
                     {#if providerAssignment}
                         <div>
                             <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Provider</h4>
                             <div class="flex items-center gap-3 text-sm flex-wrap">
-                                <span class="font-medium text-gray-700 dark:text-gray-200">{providerAssignment.provider_code}</span>
+                                <span class="inline-flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-200">
+                                    {#if providerIconUrl}
+                                        <img src={providerIconUrl} alt="" class="w-4 h-4 rounded-sm object-contain" />
+                                    {/if}
+                                    {getAssetProviderName(providerAssignment.provider_code)}
+                                </span>
                                 <span class="text-gray-400">→</span>
                                 <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
                                 {#if providerAssignment.last_fetch_at}
                                     <span class="text-xs text-gray-400 dark:text-gray-500">
-                                        {$t('assets.provider.lastFetch')}: {new Date(providerAssignment.last_fetch_at).toLocaleDateString()}
+                                        {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString()}
                                     </span>
                                 {:else}
                                     <span class="text-xs text-gray-400 dark:text-gray-500">{$t('assets.provider.neverFetched')}</span>
@@ -855,7 +1059,7 @@
                         </div>
                     {/if}
 
-                    <button class="text-xs text-libre-green hover:underline" onclick={() => editModalOpen = true}>
+                    <button class="text-xs text-libre-green hover:underline" onclick={() => { editDataForModal = buildEditData(); editModalOpen = true; }}>
                         {$t('assetDetail.editViaModal')} →
                     </button>
                 </div>
@@ -870,9 +1074,21 @@
         <AssetModal
                 bind:open={editModalOpen}
                 editMode={true}
-                editData={buildEditData()}
+                editData={editDataForModal}
                 onupdated={handleAssetUpdated}
                 onclose={() => editModalOpen = false}
+        />
+
+        <!-- FX Pair Add Modal (opened from FX warning) -->
+        <FxPairAddModal
+                bind:open={showFxPairAddModal}
+                initialBase={assetInfo.currency}
+                initialQuote={displayCurrency}
+                oncreated={async () => {
+                    showFxPairAddModal = false;
+                    await loadFxPairSlugs();
+                }}
+                onclose={() => showFxPairAddModal = false}
         />
     {/if}
 </div>

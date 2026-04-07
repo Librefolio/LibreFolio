@@ -10,6 +10,7 @@
 
 import type {SignalParamDescriptor} from './ChartSignal';
 import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalStyle,} from './ChartSignal';
+import {generateUUID} from '$lib/utils/uuid';
 import {FxPairSignal} from './FxPairSignal';
 import {AssetComparisonSignal} from './AssetComparisonSignal';
 import {LinearSignal} from './LinearSignal';
@@ -124,7 +125,7 @@ export function createSignal(
     const Cls = SIGNAL_REGISTRY.get(signalType);
     if (!Cls) return null;
 
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     // Technical indicators get thinner lines (1px) by default — they are auxiliary.
     // Benchmarks and comparisons get 2px.
     const defaultWidth = Cls.category === 'indicator' ? 1 : 2;

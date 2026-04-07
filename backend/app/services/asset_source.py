@@ -95,6 +95,7 @@ from backend.app.schemas.provider import (
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
+from decimal import Decimal
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
@@ -699,7 +700,6 @@ class AssetSourceManager:
                 existing.identifier_type = mapped_type
                 existing.provider_params = params_to_store
                 existing.fetch_interval = a.fetch_interval
-                existing.user_url = a.user_url
             else:
                 # INSERT new assignment
                 new_assignment = AssetProviderAssignment(
@@ -709,7 +709,6 @@ class AssetSourceManager:
                     identifier_type=mapped_type,
                     provider_params=params_to_store,
                     fetch_interval=a.fetch_interval,
-                    user_url=a.user_url,
                     last_fetch_at=None,
                 )
                 session.add(new_assignment)
@@ -1856,6 +1855,41 @@ class AssetSourceManager:
         # ── Phase 3: PERSIST (per-task session, parallel, isolated commits) ──
         engine = get_async_engine()
 
+        async def _count_actual_price_changes(
+            session,
+            asset_id: int,
+            price_items: list,
+        ) -> tuple[int, int]:
+            """
+            Compare fetched prices with existing DB prices.
+            Returns (new_count, changed_count) — truly new inserts and actual value changes.
+            """
+            if not price_items:
+                return 0, 0
+
+            dates = [p.date for p in price_items]
+
+            # Load existing prices for these dates
+            stmt = select(PriceHistory.date, PriceHistory.close).where(
+                and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates))
+            )
+            result = await session.execute(stmt)
+            existing: dict = {row[0]: row[1] for row in result.all()}
+
+            new_count = 0
+            changed_count = 0
+            for p in price_items:
+                old_close = existing.get(p.date)
+                if old_close is None:
+                    new_count += 1
+                else:
+                    # Truncate fetched value to DB precision before comparing
+                    truncated_new = truncate_priceHistory(Decimal(str(p.close)), "close")
+                    if float(old_close) != float(truncated_new):
+                        changed_count += 1
+
+            return new_count, changed_count
+
         async def _persist_single(asset_id: int) -> FARefreshResult:
             """Upsert fetched prices and update assignment in an isolated session."""
             t_start_ns = time.monotonic_ns()
@@ -1921,11 +1955,20 @@ class AssetSourceManager:
             # Isolated session for this asset's DB writes
             try:
                 async with AsyncSession(engine, expire_on_commit=False) as persist_session:
+                    # Count actual changes BEFORE upserting (compare with DB)
+                    try:
+                        new_count, changed_count = await _count_actual_price_changes(
+                            persist_session, asset_id, price_items
+                        )
+                    except Exception:
+                        new_count, changed_count = fetched_count, 0  # Fallback
+
                     try:
                         upsert_res = await AssetSourceManager.bulk_upsert_prices(
                             [upsert_obj], persist_session
                             )
-                        inserted_count = upsert_res.get("inserted_count", 0)
+                        inserted_count = new_count
+                        updated_count = changed_count
                     except Exception as e:
                         errors.append(f"DB upsert failed: {str(e)}")
 
@@ -2224,6 +2267,7 @@ class AssetCRUDService:
                     icon_url=asset.icon_url,
                     asset_type=asset.asset_type,
                     active=asset.active,
+                    user_url=asset.user_url,
                     provider_code=provider_code,
                     has_metadata=asset.classification_params is not None,
                     # Identifier columns from Asset

@@ -59,6 +59,7 @@ from backend.app.db import (
     FxConversionRoute,
     AssetType,
     IdentifierType,
+    ProviderInputType,
     TransactionType,
     User,
     UserSettings,
@@ -442,11 +443,12 @@ def populate_assets(session: Session):
             "display_name": "Apple Inc.",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
+            "user_url": "https://investor.apple.com",
             "classification_params": json.dumps(
                 {
                     "short_description": "Technology company",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Technology",
+                    "geographic_area": {"distribution": {"USA": 1.0}},
+                    "sector_area": {"distribution": {"Technology": 0.85, "Services": 0.15}},
                     }
                 ),
             },
@@ -454,11 +456,12 @@ def populate_assets(session: Session):
             "display_name": "Microsoft Corporation",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
+            "user_url": "https://www.microsoft.com/en-us/investor",
             "classification_params": json.dumps(
                 {
                     "short_description": "Software and cloud computing",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Technology",
+                    "geographic_area": {"distribution": {"USA": 1.0}},
+                    "sector_area": {"distribution": {"Technology": 0.70, "Cloud": 0.30}},
                     }
                 ),
             },
@@ -469,8 +472,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Electric vehicles and clean energy",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Consumer Discretionary",
+                    "geographic_area": {"distribution": {"USA": 0.50, "CHN": 0.25, "DEU": 0.25}},
+                    "sector_area": {"distribution": {"Consumer Discretionary": 0.70, "Energy": 0.30}},
                     }
                 ),
             },
@@ -483,13 +486,26 @@ def populate_assets(session: Session):
                 {
                     "short_description": "Global diversified equity ETF",
                     "geographic_area": {
-                        "USA": 0.60,
-                        "DEU": 0.10,
-                        "GBR": 0.10,
-                        "JPN": 0.10,
-                        "CHN": 0.10,
+                        "distribution": {
+                            "USA": 0.60,
+                            "DEU": 0.10,
+                            "GBR": 0.10,
+                            "JPN": 0.10,
+                            "CHN": 0.10,
+                            }
                         },
-                    "sector": "Diversified",
+                    "sector_area": {
+                        "distribution": {
+                            "Technology": 0.25,
+                            "Financials": 0.20,
+                            "Healthcare": 0.15,
+                            "Consumer Discretionary": 0.12,
+                            "Industrials": 0.10,
+                            "Communication": 0.08,
+                            "Energy": 0.05,
+                            "Other": 0.05,
+                            }
+                        },
                     }
                 ),
             },
@@ -610,13 +626,42 @@ def populate_assets(session: Session):
                 {
                     "short_description": "MSCI World Index — global developed markets benchmark",
                     "geographic_area": {
-                        "USA": 0.70,
-                        "JPN": 0.06,
-                        "GBR": 0.04,
-                        "FRA": 0.03,
-                        "DEU": 0.03,
+                        "distribution": {
+                            "USA": 0.70,
+                            "JPN": 0.06,
+                            "GBR": 0.04,
+                            "FRA": 0.03,
+                            "DEU": 0.03,
+                            }
                         },
-                    "sector": "Diversified",
+                    }
+                ),
+            },
+        # Scheduled Investment — bond with interest schedule
+        {
+            "display_name": "BTP Italia 2028",
+            "currency": "EUR",
+            "asset_type": AssetType.BOND,
+            "user_url": "https://www.dt.mef.gov.it/it/debito_pubblico/titoli_di_stato/",
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Italian government inflation-linked bond maturing 2028",
+                    "geographic_area": {"distribution": {"ITA": 1.0}},
+                    "sector_area": {"distribution": {"Government Bonds": 1.0}},
+                    }
+                ),
+            },
+        # CSS Scraper — gold spot price
+        {
+            "display_name": "Gold Spot Price",
+            "currency": "USD",
+            "asset_type": AssetType.OTHER,
+            "user_url": "https://www.kitco.com/charts/livegold.html",
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Gold spot price (XAU/USD) via web scraping",
+                    "geographic_area": {"distribution": {"GLOBAL": 1.0}},
+                    "sector_area": {"distribution": {"Precious Metals": 1.0}},
                     }
                 ),
             },
@@ -637,22 +682,50 @@ def populate_asset_provider_assignments(session: Session):
 
     # Map assets to their provider configs
     provider_configs = [
-        ("Apple Inc.", "yfinance", "AAPL", IdentifierType.TICKER, None, "https://investor.apple.com"),
-        ("Microsoft Corporation", "yfinance", "MSFT", IdentifierType.TICKER, None, "https://www.microsoft.com/en-us/investor"),
-        ("Tesla, Inc.", "yfinance", "TSLA", IdentifierType.TICKER, None, None),
-        ("Vanguard FTSE All-World UCITS ETF", "yfinance", "VWCE.DE", IdentifierType.TICKER, None, None),
-        ("iShares Core S&P 500 UCITS ETF", "yfinance", "SXR8.DE", IdentifierType.TICKER, None, None),
-        ("Bitcoin", "yfinance", "BTC-USD", IdentifierType.TICKER, None, None),
-        ("Ethereum", "yfinance", "ETH-USD", IdentifierType.TICKER, None, None),
+        ("Apple Inc.", "yfinance", "AAPL", IdentifierType.TICKER, None),
+        ("Microsoft Corporation", "yfinance", "MSFT", IdentifierType.TICKER, None),
+        ("Tesla, Inc.", "yfinance", "TSLA", IdentifierType.TICKER, None),
+        ("Vanguard FTSE All-World UCITS ETF", "yfinance", "VWCE.DE", IdentifierType.TICKER, None),
+        ("iShares Core S&P 500 UCITS ETF", "yfinance", "SXR8.DE", IdentifierType.TICKER, None),
+        ("Bitcoin", "yfinance", "BTC-USD", IdentifierType.TICKER, None),
+        ("Ethereum", "yfinance", "ETH-USD", IdentifierType.TICKER, None),
         # Assets without transactions (for testing delete success flow)
-        ("NVIDIA Corporation", "yfinance", "NVDA", IdentifierType.TICKER, None, None),
-        ("Amundi MSCI World UCITS ETF", "yfinance", "MWRD.DE", IdentifierType.TICKER, None, None),
+        ("NVIDIA Corporation", "yfinance", "NVDA", IdentifierType.TICKER, None),
+        ("Amundi MSCI World UCITS ETF", "yfinance", "MWRD.DE", IdentifierType.TICKER, None),
         # INDEX benchmarks (price tracking only, no transactions)
-        ("S&P 500", "yfinance", "^GSPC", IdentifierType.TICKER, None, None),
-        ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None, None),
+        ("S&P 500", "yfinance", "^GSPC", IdentifierType.TICKER, None),
+        ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None),
+        # Scheduled Investment — BTP Italia with interest schedule
+        (
+            "BTP Italia 2028", "scheduled_investment", None, ProviderInputType.AUTO_GENERATED,
+            {
+                "initial_value": 1000,
+                "purchase_date": "2024-01-15",
+                "interest_type": "simple",
+                "day_count_convention": "ACT/365",
+                "schedule": [
+                    {
+                        "start_date": "2024-01-15",
+                        "end_date": "2028-01-15",
+                        "annual_rate": 0.035,
+                        "maturation_frequency": "SEMIANNUAL",
+                        "generate_interest": True,
+                    }
+                ],
+            },
+        ),
+        # CSS Scraper — Gold spot price
+        (
+            "Gold Spot Price", "css_scraper", "https://www.kitco.com/charts/livegold.html",
+            ProviderInputType.URL,
+            {
+                "css_selector": "#sp-last",
+                "decimal_separator": ".",
+            },
+        ),
         ]
 
-    for display_name, provider_code, identifier, id_type, params, user_url in provider_configs:
+    for display_name, provider_code, identifier, id_type, params in provider_configs:
         asset = session.exec(select(Asset).where(Asset.display_name == display_name)).first()
 
         if asset:
@@ -663,7 +736,6 @@ def populate_asset_provider_assignments(session: Session):
                 identifier_type=id_type,
                 provider_params=json.dumps(params) if params else None,
                 fetch_interval=1440,  # 24 hours
-                user_url=user_url,
                 )
             session.add(assignment)
             print(f"  ✅ {display_name} → {provider_code} ({identifier})")
