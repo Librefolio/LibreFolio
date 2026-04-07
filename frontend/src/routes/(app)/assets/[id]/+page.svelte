@@ -18,7 +18,7 @@
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/navigationStore';
     import {
-        AlertTriangle, ArrowLeft, ArrowLeftRight, ChevronDown, Construction, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
+        AlertTriangle, ArrowLeft, ChevronDown, Coins, Construction, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
         Ruler, Settings, TrendingDown, TrendingUp
     } from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
@@ -691,7 +691,7 @@
                 </div>
 
                 {#if fxConversionMissing}
-                    <div class="flex items-center gap-1">
+                    <div class="flex gap-1 {layout.layoutMode === 'wide' ? 'flex-col items-center' : 'flex-row items-center'}">
                         <button
                             class="p-1 rounded transition-colors {fxWarningToastVisible
                                 ? 'text-amber-300 dark:text-amber-700 cursor-not-allowed opacity-50'
@@ -703,11 +703,11 @@
                             <AlertTriangle size={16}/>
                         </button>
                         <button
-                            class="text-[10px] text-amber-500 dark:text-amber-400 hover:underline cursor-pointer"
+                            class="p-1 rounded text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 cursor-pointer transition-colors"
                             onclick={() => showFxPairAddModal = true}
                             title={$t('assetDetail.addFxPair')}
                         >
-                            FX +
+                            <Coins size={14}/>
                         </button>
                     </div>
                 {:else if displayCurrency && assetInfo && displayCurrency !== assetInfo.currency && fxPairSlug}
@@ -716,7 +716,7 @@
                         class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors"
                         title={$t('assetDetail.goToFxPair')}
                     >
-                        <ArrowLeftRight size={14}/>
+                        <Coins size={14}/>
                     </a>
                 {/if}
             {/if}
