@@ -35,6 +35,7 @@
     import {getSectorKeysList, sectorI18nKey} from '$lib/utils/assetTypes';
     import {ensureSectorsLoaded} from '$lib/stores/sectorStore';
     import {CountrySearchSelect, SectorSearchSelect} from '$lib/components/ui/select';
+    import {generateUUID} from '$lib/utils/uuid';
 
     // =========================================================================
     // Types
@@ -93,7 +94,7 @@
         }
         if (value) {
             entries = Object.entries(value)
-                .map(([key, w]) => ({id: crypto.randomUUID(), key, weight: Number(w) * 100}))
+                .map(([key, w]) => ({id: generateUUID(), key, weight: Number(w) * 100}))
                 .sort((a, b) => {
                     if (a.key === 'Other' && b.key !== 'Other') return 1;
                     if (b.key === 'Other' && a.key !== 'Other') return -1;
@@ -192,7 +193,7 @@
             const firstUnused = countries.find(c => !usedKeys.has(c.iso3));
             defaultKey = firstUnused?.iso3 ?? '';
         }
-        entries = [...entries, {id: crypto.randomUUID(), key: defaultKey, weight: 100}];
+        entries = [...entries, {id: generateUUID(), key: defaultKey, weight: 100}];
         emitChange();
     }
 
