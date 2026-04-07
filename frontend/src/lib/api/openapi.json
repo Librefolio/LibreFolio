@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.9-25-g61fb633f-dirty"
+    "version": "v0.5.9-26-g3885260d-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
