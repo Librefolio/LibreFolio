@@ -499,6 +499,7 @@ class Asset(SQLModel, table=True):
     asset_type: AssetType = Field(default=AssetType.OTHER)
 
     active: bool = Field(default=True)
+    user_url: Optional[str] = Field(default=None, description="User-defined URL (notes, external dashboard, etc.)")
 
     # Identifier columns - one per IdentifierType enum value
     # Allows direct search without JOIN to asset_provider_assignments
@@ -934,7 +935,6 @@ class AssetProviderAssignment(SQLModel, table=True):
     provider_params: Optional[str] = Field(default=None, sa_column=Column(Text), description="JSON configuration for provider (validated by plugin)", )
     last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
     fetch_interval: Optional[int] = Field(default=None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)")
-    user_url: Optional[str] = Field(default=None, description="User-defined URL (notes, external dashboard, etc.)")
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

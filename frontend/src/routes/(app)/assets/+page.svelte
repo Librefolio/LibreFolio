@@ -79,6 +79,7 @@
 
     let assets = $state<AssetState[]>([]);
     let loading = $state(true);
+    let refreshing = $state(false);
     let error = $state<string | null>(null);
     let assetTableComponent: AssetTable | undefined = $state(undefined);
     let selectedAssetRows = $state<AssetRow[]>([]);
@@ -327,6 +328,7 @@
     async function fetchAllPriceData() {
         if (assets.length === 0) return;
 
+        refreshing = true;
         // Mark all as loading
         assets = assets.map(a => ({...a, loadingPrices: true}));
 
@@ -388,6 +390,8 @@
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
             assets = assets.map(a => ({...a, loadingPrices: false, deltas: {}}));
+        } finally {
+            refreshing = false;
         }
     }
 
@@ -951,7 +955,7 @@
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     onclick={() => fetchAllPriceData()}
             >
-                <RefreshCw size={14}/>
+                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14}/>
                 {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
             </button>
         </div>

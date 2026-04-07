@@ -45,6 +45,7 @@
   "dependencies": {
     "@tanstack/table-core": "^8.21.3",
     "@types/cropperjs": "^1.1.5",
+    "@types/topojson-client": "^3.1.5",
     "@zodios/core": "^10.9.6",
     "@zxcvbn-ts/core": "^3.0.4",
     "@zxcvbn-ts/language-common": "^3.0.4",
@@ -57,6 +58,7 @@
     "katex": "^0.16.38",
     "lucide-svelte": "^0.559.0",
     "svelte-i18n": "^4.0.1",
+    "topojson-client": "^3.1.0",
     "zod": "3.24.1"
   }
 }

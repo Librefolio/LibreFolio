@@ -952,6 +952,9 @@
     "eventMarkers": "Marcadores de eventos",
     "syncSuccess": "Precios sincronizados: {fetched} obtenidos, {changed} modificados",
     "syncFailed": "Error de sincronización",
-    "syncPartial": "Sincronización parcial: {fetched} obtenidos, {changed} modificados"
+    "syncPartial": "Sincronización parcial: {fetched} obtenidos, {changed} modificados",
+    "fxPairMissing": "Par FX {base}/{quote} no configurado — conversión no disponible",
+    "addFxPair": "Añadir par FX",
+    "goToFxPair": "Ir al detalle del par FX"
   }
 }

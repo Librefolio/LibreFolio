@@ -17,6 +17,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
+    import {goBack} from '$lib/stores/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingDown, TrendingUp, Wrench} from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -91,7 +92,7 @@
 
     // Filter bar adaptive layout (same ResizeObserver as FX list page)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    let layoutMode = $state<'wide' | 'tablet' | 'mobile'>('tablet');
+    let layoutMode = $state<'wide' | 'tablet' | 'tablet-s' | 'mobile'>('tablet');
     let showActionLabels = $state(true);
 
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
@@ -236,6 +237,7 @@
             const w = entry.contentRect.width;
             if (w >= 730) layoutMode = 'wide';
             else if (w >= 550) layoutMode = 'tablet';
+            else if (w >= 400) layoutMode = 'tablet-s';
             else layoutMode = 'mobile';
             showActionLabels = w >= 600;
         });
@@ -611,7 +613,7 @@
         <button
                 class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors"
                 data-testid="fx-detail-back-btn"
-                onclick={() => goto('/fx')}
+                onclick={() => goBack('/fx')}
                 title={$t('fxDetail.backToList')}
         >
             <ArrowLeft size={20}/>
@@ -685,9 +687,9 @@
             {/if}
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), horizontal row (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet), stacked column (tablet-s+mobile) -->
         <div class="flex shrink-0 gap-1.5
-                    {layoutMode === 'mobile' ? 'flex-row justify-center' : 'grid grid-cols-2'}">
+                    {layoutMode === 'mobile' || layoutMode === 'tablet-s' ? 'flex-col items-stretch' : 'grid grid-cols-2'}">
             <!-- Row 1, Col 1: Abs/% segmented toggle -->
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
@@ -740,38 +742,36 @@
     </div>
 
     <!-- ======================================================================= -->
-    <!-- Foldable Panel: Aesthetics (ABOVE chart) -->
+    <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <button
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                data-testid="fx-detail-aesthetics-toggle"
-                onclick={() => showAesthetics = !showAesthetics}
+                data-testid="fx-detail-signals-toggle"
+                onclick={() => showSignals = !showSignals}
         >
             <span class="flex items-center gap-2">
-                <Settings class="text-libre-green" size={15}/>
-                {$t('common.aesthetics')}
+                <TrendingUp class="text-blue-500" size={15}/>
+                {$t('fxDetail.signals')}
             </span>
-            <ChevronDown class="transition-transform {showAesthetics ? 'rotate-180' : ''}" size={15}/>
+            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15}/>
         </button>
-        {#if showAesthetics}
-            <div data-testid="fx-detail-aesthetics-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <ChartAestheticsSection
-                        colorByBaseline={settings.colorByBaseline}
-                        areaFill={settings.areaFill}
-                        gridLines={settings.gridLines}
-                        staleGradient={settings.staleGradient}
-                        yAxisMode={settings.yAxisMode}
-                        yAxisMin={settings.yAxisMin}
-                        yAxisMax={settings.yAxisMax}
-                        onchange={handleAestheticsChange}
+        {#if showSignals}
+            <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+                <ChartSignalsSection
+                        signals={[...signals]}
+                        availablePairs={configuredPairSlugs}
+                        mainPairSlug={data.canonicalSlug}
+                        onchange={handleSignalsChange}
+                        onsyncpair={handleSyncPair}
+                        ondetailpair={handleDetailPair}
                 />
             </div>
         {/if}
     </div>
 
     <!-- ======================================================================= -->
-    <!-- Chart with overlay action buttons (Edit + Add Measure) -->
+    <!-- Chart with left toolbar -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart">
         {#if loading && lineData.length === 0}
@@ -782,8 +782,24 @@
                 </div>
             </div>
         {:else if lineData.length > 0}
+            <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
+            {#if showAesthetics}
+                <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700">
+                    <ChartAestheticsSection
+                            colorByBaseline={settings.colorByBaseline}
+                            areaFill={settings.areaFill}
+                            gridLines={settings.gridLines}
+                            staleGradient={settings.staleGradient}
+                            yAxisMode={settings.yAxisMode}
+                            yAxisMin={settings.yAxisMin}
+                            yAxisMax={settings.yAxisMax}
+                            onchange={handleAestheticsChange}
+                    />
+                </div>
+            {/if}
+
             <div class="relative">
-                <!-- Action buttons: top-right corner of chart -->
+                <!-- Right toolbar -->
                 <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
                     <button
                             data-testid="fx-detail-measure-btn"
@@ -810,7 +826,6 @@
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
                             onclick={() => {
                             if (showDataEditor) {
-                                // Exiting edit mode: hide editor, restore panel states
                                 showDataEditor = false;
                                 pendingPreviewSignal = null;
                                 if (savedPanelStates) {
@@ -820,7 +835,6 @@
                                     savedPanelStates = null;
                                 }
                             } else {
-                                // Entering edit mode: save panel states, fold all, show editor
                                 savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
                                 showAesthetics = false;
                                 showMeasures = false;
@@ -831,6 +845,16 @@
                             title={showDataEditor ? $t('fxDetail.closeEditor') : $t('fxDetail.editRates')}
                     >
                         <Pencil size={16}/>
+                    </button>
+                    <button
+                            data-testid="fx-detail-aesthetics-toggle"
+                            class="p-1.5 rounded-lg transition-colors {showAesthetics
+                            ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
+                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                            onclick={() => showAesthetics = !showAesthetics}
+                            title={$t('common.aesthetics')}
+                    >
+                        <Settings size={16}/>
                     </button>
                 </div>
 
@@ -981,34 +1005,6 @@
         </div>
     </div>
 
-    <!-- ======================================================================= -->
-    <!-- Foldable Panel: Signals (below Measures) -->
-    <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <button
-                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                data-testid="fx-detail-signals-toggle"
-                onclick={() => showSignals = !showSignals}
-        >
-            <span class="flex items-center gap-2">
-                <TrendingUp class="text-blue-500" size={15}/>
-                {$t('fxDetail.signals')}
-            </span>
-            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15}/>
-        </button>
-        {#if showSignals}
-            <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <ChartSignalsSection
-                        signals={[...signals]}
-                        availablePairs={configuredPairSlugs}
-                        mainPairSlug={data.canonicalSlug}
-                        onchange={handleSignalsChange}
-                        onsyncpair={handleSyncPair}
-                        ondetailpair={handleDetailPair}
-                />
-            </div>
-        {/if}
-    </div>
 
 
     <!-- ======================================================================= -->

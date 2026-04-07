@@ -667,85 +667,96 @@ A10 (i18n — in parallelo ad ogni step, man mano che servono)
 ## Checklist di Validazione — Parte A
 
 ### Pre-requisiti
-- [ ] DB test popolato: `./dev.py test db populate --force`
-- [ ] Server avviato: `./dev.py server --test`
-- [ ] Frontend dev: `./dev.py front dev`
+- [x] DB test popolato: `./dev.py test db populate --force`
+- [x] Server avviato: `./dev.py server --test`
+- [x] Frontend dev: `./dev.py front dev`
 
 ### A1 — `+page.ts` (Param Validation)
-- [ ] Navigare a `/assets/abc` → redirect a `/assets`
-- [ ] Navigare a `/assets/-1` → redirect a `/assets`
-- [ ] Navigare a `/assets/0` → redirect a `/assets`
-- [ ] Navigare a `/assets/1` → carica la pagina
+- [x] Navigare a `/assets/abc` → redirect a `/assets`
+- [x] Navigare a `/assets/-1` → redirect a `/assets`
+- [x] Navigare a `/assets/0` → redirect a `/assets`
+- [x] Navigare a `/assets/1` → carica la pagina
 
 ### A2 — Scaffold (State + API calls)
-- [ ] La pagina carica senza errori nella console
-- [ ] `assetInfo` viene popolato (nome e currency visibili)
-- [ ] `chartData` viene caricato (chart visibile con dati mock)
-- [ ] `providerAssignment` caricato per asset con provider
-- [ ] `allConfiguredFxSlugs` caricato (verificare in Signals → FxPair dropdown)
-- [ ] `allAssets` caricato (verificare in Signals → AssetComparison dropdown)
+- [x] La pagina carica senza errori nella console
+- [x] `assetInfo` viene popolato (nome e currency visibili)
+nell'header c'è anche il provider usato, ma solo come nome, vorrei anche qui icona e nome, in oltre nell'header sarebbe utile aver il link all'url esterno messo dall'utente, se assete fallback su quello del provider, se assente, non mostrare il bottone
+- [x] `chartData` viene caricato (chart visibile con dati mock)
+- [x] `providerAssignment` caricato per asset con provider
+- [x] `allConfiguredFxSlugs` caricato (verificare in Signals → FxPair dropdown)
+- [x] `allAssets` caricato (verificare in Signals → AssetComparison dropdown)
 
 ### A3 — Header
-- [ ] Back button `←` torna a `/assets`
+- [x] Back button `←` torna a `/assets`
 - [ ] `AssetIcon` mostra icona o fallback tipo
-- [ ] Nome asset in `h2` bold
-- [ ] Badge tipo (es. "STOCK", "ETF", "LOAN") con icona tipo
-- [ ] Flag emoji + codice currency (es. 🇺🇸 USD)
-- [ ] Identificatore principale visibile (ticker > ISIN > CUSIP > ...)
-- [ ] Badge provider visibile (es. "yfinance") se presente
-- [ ] Asset senza provider: nessun badge provider mostrato
+il fall back si mostra ma se vado su edit e clicco l'icona non si apre l'image picker, ed in oltre non riesco a chiudere più la modale, devo fare f5
+- [x] Nome asset in `h2` bold
+- [x] Badge tipo (es. "STOCK", "ETF", "LOAN") con icona tipo
+- [x] Flag emoji + codice currency (es. 🇺🇸 USD)
+si ma farei si che in modalità mobile tutta la riga andasse sotto al nome assieme, non che va a capo come ora che è flex
+- [x] Identificatore principale visibile (ticker > ISIN > CUSIP > ...)
+l'indentificatore penso sia inutile, meglio mettere il link alla pagina esterna se cè
+- [x] Badge provider visibile (es. "yfinance") se presente
+come scritto sopra, vorrei anche l'icona assieme al nome
+- [x] Asset senza provider: nessun badge provider mostrato
+L'url utente deve essere tra le opzioni base dell'add asset, non nel panel dei provider, così che si possa inserire anche nei provider manuali. Di conseguenza, anche a db, l'user_url non è un campo dentro il provider, ma una colonna tra gli asset.
 
 ### A4 — Filter Bar + Actions 2×2
-- [ ] DateRangePicker funzionante, default 3M
-- [ ] Cambiare range → chart si aggiorna
-- [ ] CurrencySearchSelect visibile, default = currency asset
-- [ ] Price summary: ultimo prezzo, Δ%, Δabs visibili
-- [ ] Segmented toggle `Abs | %` cambia `viewMode` del chart
-- [ ] Bottone Edit `✏` → apre AssetModal
-- [ ] Bottone Sync `⟳`:
-  - [ ] Label "Recalculate" per scheduled_investment
-  - [ ] Label "Sync" per altri provider
-  - [ ] Disabilitato se no provider (`opacity-50 cursor-not-allowed`)
-  - [ ] Tooltip "Sync disabled" se no provider
-  - [ ] Animazione spin durante sync
-- [ ] Bottone Refresh `↻` → ri-carica dati, spin durante loading
-- [ ] **Responsive** — ridimensionare finestra:
-  - [ ] Wide (≥730px): tutto in una riga
-  - [ ] Tablet (550-729px): filtri e azioni su 2 righe
-  - [ ] Mobile (<400px): tutto verticale centrato
+- [x] DateRangePicker funzionante, default 3M
+- [x] Cambiare range → chart si aggiorna
+- [x] CurrencySearchSelect visibile, default = currency asset
+si ma lo invertieri con il Price summary, e sopra il bottone aggiungerei una label che faccia capire che serve per convertire la valuta degli asset presenti nel diagramma, e bisogna prevedere che se un asset selezionato ha una valuta non convertibile, compaia un warning che dica che manca la conversione e che si può risolvere aggiungendo quella tratta, aprendo la modale dell'add forex pair e la scelta del provider.
+- [x] Price summary: ultimo prezzo, Δ%, Δabs visibili
+- [x] Segmented toggle `Abs | %` cambia `viewMode` del chart
+- [x] Bottone Edit `✏` → apre AssetModal
+ma come detto, poi non si chiude più, e se si deseleziona un "no provider" non succede comunque nulla
+- [x] Bottone Sync `⟳`:
+  - [-] Label "Recalculate" per scheduled_investment
+  no, compare sincronizza ed è anche in readonly, non calcola i punti e se ci entro dentro dice pure "Nessun provider configurato — configura tramite Modifica"
+  - [x] Label "Sync" per altri provider
+  - [x] Disabilitato se no provider (`opacity-50 cursor-not-allowed`)
+  - [x] Tooltip "Sync disabled" se no provider
+  - [x] Animazione spin durante sync
+- [-] Bottone Refresh `↻` → ri-carica dati, spin durante loading
+un pacchetto di query parte, però non gira, e mi pare che non lo facesse neanche in asset, fx e fx/detail, aggiungi a tutti la rotazione oraria se manca
+- [x] **Responsive** — ridimensionare finestra:
+  - [x] Wide (≥730px): tutto in una riga
+  - [x] Tablet (550-729px): filtri e azioni su 2 righe
+  - [x] Mobile (<400px): tutto verticale centrato
+Le soglie sono da aggiustare ma facciamolo quando troviamo il layout definitivo
 
 ### A5 — Chart + Pannelli Foldable
-- [ ] **Chart visibile** con dati prezzo, linea e area
-- [ ] **Chart settings** funzionanti (colorByBaseline, areaFill, gridLines, staleGradient, yAxis)
-- [ ] **Pannello Aesthetics** (sopra chart):
-  - [ ] Toggle apre/chiude con chevron animato
-  - [ ] Modifiche estetiche si applicano al chart
-- [ ] **Pulsante 📐 Measure** (overlay chart):
-  - [ ] Click attiva measure mode
-  - [ ] Pannello Measures si apre automaticamente
-  - [ ] Click su chart aggiunge punto di misura
-  - [ ] Re-click disattiva measure mode
-- [ ] **Pulsante ✏ Edit Data** (overlay chart):
-  - [ ] Click apre pannello Data Editor placeholder
-  - [ ] Salva/ripristina stato pannelli precedenti
-  - [ ] Re-click chiude editor e ripristina pannelli
-- [ ] **Data Editor placeholder**:
-  - [ ] Icona Construction + messaggio "coming in future update"
-  - [ ] Pulsante ✕ chiude il pannello
-- [ ] **Pannello Measures** (sotto chart):
-  - [ ] Toggle apre/chiude
-  - [ ] Badge "active" visibile durante measure mode
-  - [ ] MeasurePanel funzionante (aggiungi/rimuovi misure)
-- [ ] **Pannello Signals** (sotto measures):
-  - [ ] Toggle apre/chiude
-  - [ ] ChartSignalsSection con dropdown per FxPair e AssetComparison
-  - [ ] Aggiungere un segnale EMA → visibile sul chart
-  - [ ] Aggiungere FxPair signal → carica dati e mostra overlay
-  - [ ] Aggiungere AssetComparison → carica dati e mostra overlay
-- [ ] **Empty states**:
-  - [ ] Asset senza provider e senza dati → "No provider configured — set one up via Edit" + bottone Edit
-  - [ ] Scheduled investment senza dati → "Configure interest schedule via Edit" + bottone Edit
-  - [ ] Asset con provider ma senza dati → "No price data" + bottone Sync
+- [x] **Chart visibile** con dati prezzo, linea e area
+- [x] **Chart settings** funzionanti (colorByBaseline, areaFill, gridLines, staleGradient, yAxis)
+- [x] **Pannello Aesthetics** (sopra chart):
+  - [x] Toggle apre/chiude con chevron animato
+  - [x] Modifiche estetiche si applicano al chart
+- [x] **Pulsante 📐 Measure** (overlay chart):
+  - [x] Click attiva measure mode
+  - [x] Pannello Measures si apre automaticamente
+  - [x] Click su chart aggiunge punto di misura
+  - [x] Re-click disattiva measure mode
+- [x] **Pulsante ✏ Edit Data** (overlay chart):
+  - [x] Click apre pannello Data Editor placeholder
+  - [x] Salva/ripristina stato pannelli precedenti
+  - [x] Re-click chiude editor e ripristina pannelli
+- [x] **Data Editor placeholder**:
+  - [x] Icona Construction + messaggio "coming in future update"
+  - [x] Pulsante ✕ chiude il pannello
+- [x] **Pannello Measures** (sotto chart):
+  - [x] Toggle apre/chiude
+  - [x] Badge "active" visibile durante measure mode
+  - [x] MeasurePanel funzionante (aggiungi/rimuovi misure)
+- [x] **Pannello Signals** (sotto measures):
+  - [x] Toggle apre/chiude
+  - [x] ChartSignalsSection con dropdown per FxPair e AssetComparison
+  - [x] Aggiungere un segnale EMA → visibile sul chart
+  - [x] Aggiungere FxPair signal → carica dati e mostra overlay
+  - [x] Aggiungere AssetComparison → carica dati e mostra overlay
+- [x] **Empty states**:
+  - [x] Asset senza provider e senza dati → "No provider configured — set one up via Edit" + bottone Edit
+  - [x] Scheduled investment senza dati → "Configure interest schedule via Edit" + bottone Edit
+  - [x] Asset con provider ma senza dati → "No price data" + bottone Sync
 
 ### A6 — Event Markers (⏳ DA FARE)
 - [ ] Prop `eventMarkers` su PriceChartFull
@@ -761,34 +772,114 @@ A10 (i18n — in parallelo ad ogni step, man mano che servono)
 - [ ] Se ha provider: sync automatico + toast con risultato
 - [ ] Se no provider: solo refresh dal DB
 - [ ] Modal si chiude dopo update
+come detto sopra, si apre ma poi non si riesce a fare nulla, si blocca dall'edit in poi
+questo è l'errore in console:
+errors.js:228 Uncaught Error: https://svelte.dev/e/effect_update_depth_exceeded
+    at effect_update_depth_exceeded (errors.js:228:9)
+    at infinite_loop_guard (batch.js:629:3)
+    at flush_effects (batch.js:601:5)
+    at Batch.flush (batch.js:315:4)
+    at Array.<anonymous> (batch.js:485:12)
+    at run_all (utils.js:45:8)
+    at run_micro_tasks (task.js:10:2)
+    at task.js:28:31
+effect_update_depth_exceeded @ errors.js:228
+infinite_loop_guard @ batch.js:629
+flush_effects @ batch.js:601
+flush @ batch.js:315
+(anonymous) @ batch.js:485
+run_all @ utils.js:45
+run_micro_tasks @ task.js:10
+(anonymous) @ task.js:28
+errors.js:228 Uncaught Error: https://svelte.dev/e/effect_update_depth_exceeded
+    at effect_update_depth_exceeded (errors.js:228:9)
+    at infinite_loop_guard (batch.js:629:3)
+    at flush_effects (batch.js:601:5)
+    at Batch.flush (batch.js:315:4)
+    at Array.<anonymous> (batch.js:485:12)
+    at run_all (utils.js:45:8)
+    at run_micro_tasks (task.js:10:2)
+    at task.js:28:31
+effect_update_depth_exceeded @ errors.js:228
+infinite_loop_guard @ batch.js:629
+flush_effects @ batch.js:601
+flush @ batch.js:315
+(anonymous) @ batch.js:485
+run_all @ utils.js:45
+run_micro_tasks @ task.js:10
+(anonymous) @ task.js:28
+debug.ts:45 [API] GET /api/v1/assets/provider
+debug.ts:45 [API] GET /api/v1/assets/provider
+debug.ts:45 [API] GET /api/v1/utilities/sectors
+debug.ts:45 [API] GET /api/v1/utilities/countries
+debug.ts:45 [API] GET /api/v1/assets/provider
+errors.js:228 Uncaught (in promise) Error: https://svelte.dev/e/effect_update_depth_exceeded
+    at effect_update_depth_exceeded (errors.js:228:9)
+    at infinite_loop_guard (batch.js:629:3)
+    at flush_effects (batch.js:601:5)
+    at Batch.flush (batch.js:315:4)
+    at Array.<anonymous> (batch.js:485:12)
+    at run_all (utils.js:45:8)
+    at run_micro_tasks (task.js:10:2)
+    at flush_tasks (task.js:40:3)
+    at flushSync (batch.js:541:4)
+    at tick (runtime.js:497:2)
+effect_update_depth_exceeded @ errors.js:228
+infinite_loop_guard @ batch.js:629
+flush_effects @ batch.js:601
+flush @ batch.js:315
+(anonymous) @ batch.js:485
+run_all @ utils.js:45
+run_micro_tasks @ task.js:10
+flush_tasks @ task.js:40
+flushSync @ batch.js:541
+tick @ runtime.js:497
+await in tick
+(anonymous) @ ModalBase.svelte:65
+untrack @ runtime.js:740
+(anonymous) @ effects.js:315
+update_reaction @ runtime.js:260
+update_effect @ runtime.js:453
+#traverse_effect_tree @ batch.js:245
+process @ batch.js:165
+flush_effects @ batch.js:604
+flush @ batch.js:315
+(anonymous) @ batch.js:485
+run_all @ utils.js:45
+run_micro_tasks @ task.js:10
+(anonymous) @ task.js:28
+debug.ts:45 [API] GET /api/v1/assets/query
+
 
 ### A8 — Metadata Section
-- [ ] Sezione collassata di default
-- [ ] Click espande con animazione chevron
-- [ ] **Identifiers**: griglia con tipo+valore per ogni identifier non-null
-- [ ] Se nessun identifier → "No identifiers configured"
-- [ ] **Classification**: "Classification data available — view full details via Edit modal" se `has_metadata`
-- [ ] Se no metadata → "No classification data"
-- [ ] **Provider info**: nome, identifier, identifier_type, lastFetch o "never fetched"
-- [ ] **Link "Edit in asset modal"** → apre AssetModal
+- [x] Sezione collassata di default
+- [x] Click espande con animazione chevron
+- [x] **Identifiers**: griglia con tipo+valore per ogni identifier non-null
+- [x] Se nessun identifier → "No identifiers configured"
+- [x] **Classification**: "Classification data available — view full details via Edit modal" se `has_metadata`
+- [x] Se no metadata → "No classification data"
+- [x] **Provider info**: nome, identifier, identifier_type, lastFetch o "never fetched"
+- [x] **Link "Edit in asset modal"** → apre AssetModal
+Lavorerei un attimo sull'estetica, trasformerei il diagramma di distribuzione dei settori in un grafico a torta, mentre quello con le aree geografice in un planisfero con le nazioni presenti colorate con vari livelli di intensità di colore. Entrembi questi diagrammi li farei come funzioni helper perchè serviranno anche nella dashboard. Anche qui vorrei icona e nome del provider, e gli identifier li metterei nascosti in basso, non sono tanto importanti, in alto metterei url utente e url provider.
 
 ### A9 — Mock Data Events
-- [ ] Dopo `./dev.py test db populate`: verificare che eventi esistano nel DB
-- [ ] Apple: 3 dividendi trimestrali USD
-- [ ] VWCE: 2 distribuzioni semestrali EUR
-- [ ] Loan Milano: 4 interessi mensili + 1 haircut
-- [ ] Loan Roma: 1 maturity settlement
+- [x] Dopo `./dev.py test db populate`: verificare che eventi esistano nel DB
+- [x] Apple: 3 dividendi trimestrali USD
+- [x] VWCE: 2 distribuzioni semestrali EUR
+- [x] Loan Milano: 4 interessi mensili + 1 haircut
+- [x] Loan Roma: 1 maturity settlement
+si ma servirebbero anche degli asset con scheduled_investment come provider e anche con css_scraber
 
 ### A10 — i18n (28 chiavi)
-- [ ] `./dev.py i18n tree assetDetail` mostra 28 chiavi
-- [ ] Cambiare lingua (IT, FR, ES) → tutte le label nella pagina tradotte
-- [ ] Nessun testo hardcoded in inglese nel template (eccetto "Abs", "%" nei toggle)
-- [ ] Chiave `chartSettings.tooltips.currencyPair` eliminata (se non ancora fatto: `./dev.py i18n remove chartSettings.tooltips.currencyPair`)
+- [x] `./dev.py i18n tree assetDetail` mostra 28 chiavi
+- [x] Cambiare lingua (IT, FR, ES) → tutte le label nella pagina tradotte
+- [x] Nessun testo hardcoded in inglese nel template (eccetto "Abs", "%" nei toggle)
+- [x] Chiave `chartSettings.tooltips.currencyPair` eliminata (se non ancora fatto: `./dev.py i18n remove chartSettings.tooltips.currencyPair`)
 
 ### Controlli Generali
-- [ ] **Dark mode**: tutti i pannelli, header, filter bar, empty states leggibili in dark
-- [ ] **No errori console** durante navigazione e interazione
-- [ ] **`svelte-check` pulito**: `./dev.py front check` senza errori rilevanti
-- [ ] **Tipi corretti**: nessuna interfaccia locale duplicata — tutti i tipi da `$lib/types/asset` e `generated.ts`
-- [ ] **Nessun `as any` evitabile**: verificare che i cast `as any` siano solo per API response parsing (Zodios)
+- [x] **Dark mode**: tutti i pannelli, header, filter bar, empty states leggibili in dark
+- [x] **No errori console** durante navigazione e interazione
+- [x] **`svelte-check` pulito**: `./dev.py front check` senza errori rilevanti
+- [x] **Tipi corretti**: nessuna interfaccia locale duplicata — tutti i tipi da `$lib/types/asset` e `generated.ts`
+- [x] **Nessun `as any` evitabile**: verificare che i cast `as any` siano solo per API response parsing (Zodios)
 

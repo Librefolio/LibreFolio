@@ -3,9 +3,9 @@
      * Broker Detail Page - Shows broker info, cash balances, holdings, and recent transactions
      */
     import {onMount} from 'svelte';
-    import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
+    import {goBack} from '$lib/stores/navigationStore';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileUp, Pencil, RefreshCw, Share2, TrendingUp, Wallet} from 'lucide-svelte';
     import CashBalanceCard from '$lib/components/brokers/CashBalanceCard.svelte';
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
@@ -63,7 +63,7 @@
     }
 
     function handleBack() {
-        goto('/brokers');
+        goBack('/brokers');
     }
 
     function handleEdit() {

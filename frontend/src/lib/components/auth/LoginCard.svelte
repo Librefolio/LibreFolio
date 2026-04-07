@@ -17,6 +17,7 @@
     let password = '';
 
     async function handleSubmit() {
+        username = username.trim();
         const success = await auth.login(username, password);
         if (success) {
             goto(redirectTo);

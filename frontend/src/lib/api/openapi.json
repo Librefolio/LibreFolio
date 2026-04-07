@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.9-23-g07d17c1f-dirty"
+    "version": "v0.5.9-24-g9cb476e0-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -6708,6 +6708,18 @@
             "title": "Active",
             "description": "Update active status"
           },
+          "user_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Url",
+            "description": "Update user-defined URL (None = clear)"
+          },
           "identifier_isin": {
             "anyOf": [
               {
@@ -7736,18 +7748,6 @@
             "title": "Fetch Interval",
             "description": "Refresh frequency in minutes (default: 1440 = 24h)",
             "default": 1440
-          },
-          "user_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User Url",
-            "description": "User-defined URL for this asset (notes, external dashboard, etc.)"
           }
         },
         "additionalProperties": false,
@@ -7818,18 +7818,6 @@
             ],
             "title": "Last Fetch At",
             "description": "Last fetch timestamp (ISO format)"
-          },
-          "user_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User Url",
-            "description": "User-defined URL"
           },
           "provider_url": {
             "anyOf": [
@@ -8617,6 +8605,18 @@
             "type": "boolean",
             "title": "Active",
             "description": "Whether asset is active"
+          },
+          "user_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Url",
+            "description": "User-defined URL (notes, external dashboard, etc.)"
           },
           "provider_code": {
             "anyOf": [

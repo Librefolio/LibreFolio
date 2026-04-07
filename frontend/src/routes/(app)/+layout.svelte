@@ -1,8 +1,9 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {browser} from '$app/environment';
-    import {goto} from '$app/navigation';
+    import {afterNavigate, goto} from '$app/navigation';
     import {i18nLoading, initI18n} from '$lib/i18n';
+    import {trackNavigation} from '$lib/stores/navigationStore';
     import {currentLanguage} from '$lib/stores/language';
     import {auth, isAuthenticated, isAuthInitialized} from '$lib/stores/auth';
     import {userSettings} from '$lib/stores/settings';
@@ -21,6 +22,11 @@
 
     // Initialize i18n
     initI18n();
+
+    // Track SPA navigation depth for smart back-navigation
+    afterNavigate((nav) => {
+        trackNavigation(nav.type);
+    });
 
     onMount(async () => {
         debug.log('AppLayout', 'onMount started');

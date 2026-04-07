@@ -32,10 +32,10 @@ It includes:
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- Pipenv
-- Docker (optional)
+- Python 3.13+
+- [Pipenv](https://pipenv.pypa.io/en/latest/installation.html)
+- [Node.js](https://nodejs.org/en/download) 20.19+ (includes npm)
+- Docker (optional, for deployment)
 
 ### Installation
 
@@ -45,39 +45,47 @@ git clone https://github.com/Alfystar/LibreFolio.git
 cd LibreFolio
 ```
 
-2. Install all dependencies:
+2. Install Python dependencies and activate the virtual environment:
 ```bash
-./dev.sh install
+pipenv install --dev
+pipenv shell
 ```
 
-3. Create environment file:
+3. Install all dependencies (backend + frontend):
+```bash
+./dev.py install
+```
+
+4. Create environment file:
 ```bash
 cp .env.example .env
 ```
 
-4. Run database migrations:
+5. Run database migrations:
 ```bash
-./dev.sh db:upgrade
+./dev.py db upgrade
 ```
 
-5. Start the development server:
+6. Start the development server:
 ```bash
-./dev.sh server
+./dev.py server
 ```
 
-6. Access the application:
+7. Access the application:
    - **Dashboard**: http://localhost:8000
    - **API Docs**: http://localhost:8000/api/v1/docs
 
-### Helper Script (`dev.sh`)
+### Helper Script (`dev.py`)
 
-The `./dev.sh` script is your main tool for development:
+The `./dev.py` script is your main tool for development (activate the virtual environment first with `pipenv shell`):
 
-- `./dev.sh install` - Install dependencies
-- `./dev.sh server` - Start backend + frontend build
-- `./dev.sh test all` - Run all tests
-- `./dev.sh db:migrate "msg"` - Create migration
-- `./dev.sh info:mk serve` - Serve documentation locally
+- `./dev.py install` - Install all dependencies (backend + frontend)
+- `./dev.py server` - Start backend + frontend build
+- `./dev.py test all` - Run all tests
+- `./dev.py db migrate "msg"` - Create migration
+- `./dev.py info mk serve` - Serve documentation locally
+
+> **Note:** `./dev.sh` is also available as a backward-compatible wrapper around `dev.py`.
 
 ## 🌍 Internationalization
 
@@ -90,7 +98,7 @@ Contributions are welcome! Please read the **[Developer Manual](https://alfystar
 
 ### For New Contributors
 
-1. **Start with tests**: Run `./dev.sh test all` to understand the project.
+1. **Start with tests**: Run `./dev.py test all` to understand the project.
 2. **Read the guides**: Check the "Developer Manual" section in the documentation.
 3. **Code Standards**:
    - Use **type hints** everywhere.

@@ -6,6 +6,7 @@
     import {auth} from '$lib/stores/auth';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {userSettings} from '$lib/stores/settings';
+    import {resetNavDepth} from '$lib/stores/navigationStore';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, X} from 'lucide-svelte';
     import {APP_VERSION} from '$lib/version';
 
@@ -70,6 +71,7 @@
 
     function closeSidebar() {
         isOpen = false;
+        resetNavDepth();
     }
 </script>
 
@@ -119,7 +121,7 @@
                 <li>
                     <a
                             href={item.href}
-                            on:click={closeSidebar}
+                            on:click={() => { closeSidebar(); resetNavDepth(); }}
                             class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
 						{activeHref === item.href
@@ -150,7 +152,7 @@
                 <li>
                     <a
                             href={item.href}
-                            on:click={closeSidebar}
+                            on:click={() => { closeSidebar(); resetNavDepth(); }}
                             class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
 						{activeHref === item.href
@@ -181,7 +183,7 @@
                 <li>
                     <a
                             href={item.href}
-                            on:click={closeSidebar}
+                            on:click={() => { closeSidebar(); resetNavDepth(); }}
                             class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
 						{activeHref === item.href

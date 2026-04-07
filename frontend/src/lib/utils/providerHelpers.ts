@@ -108,6 +108,11 @@ export function getAssetProviderIconUrl(code: string): string | null {
     return assetProviderIcons.get(code) ?? null;
 }
 
+/** Get asset provider display name from the asset provider cache. */
+export function getAssetProviderName(code: string): string {
+    return assetProviderNames.get(code) ?? code;
+}
+
 /** Build an asset provider badge as HTML (icon + name). */
 export function assetProviderBadgeHtml(providerCode: string): string {
     const iconUrl = assetProviderIcons.get(providerCode);

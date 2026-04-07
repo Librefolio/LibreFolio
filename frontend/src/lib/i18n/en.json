@@ -952,6 +952,9 @@
     "eventMarkers": "Event Markers",
     "syncSuccess": "Prices synced: {fetched} fetched, {changed} changed",
     "syncFailed": "Sync failed",
-    "syncPartial": "Partial sync: {fetched} fetched, {changed} changed"
+    "syncPartial": "Partial sync: {fetched} fetched, {changed} changed",
+    "fxPairMissing": "FX pair {base}/{quote} not configured — conversion not available",
+    "addFxPair": "Add FX pair",
+    "goToFxPair": "Go to FX pair detail"
   }
 }

@@ -576,7 +576,6 @@ async def get_provider_assignments(
                     provider_params=params,
                     fetch_interval=a.fetch_interval,
                     last_fetch_at=a.last_fetch_at.isoformat() if a.last_fetch_at else None,
-                    user_url=a.user_url,
                     provider_url=provider_url,
                     )
                 )
