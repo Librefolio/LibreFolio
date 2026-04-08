@@ -13,6 +13,7 @@
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
     import {onMount, tick} from 'svelte';
+    import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
@@ -23,8 +24,10 @@
     } from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
+    import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
     import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
+    import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import SectorPieChart from '$lib/components/charts/SectorPieChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
@@ -41,7 +44,7 @@
     import {currentLanguage} from '$lib/stores/language';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
-    import {getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {getFxStore, apiResultToFxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName} from '$lib/utils/providerHelpers';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
@@ -232,6 +235,81 @@
         ...overlaySignals,
         ...measureSignals,
     ]);
+
+    // Event markers for the chart (own events + comparison asset events)
+    let chartEventMarkers: EventMarker[] = $derived.by(() => {
+        const markers: EventMarker[] = [];
+
+        // Own asset events
+        for (const ev of events) {
+            markers.push({
+                date: ev.date,
+                type: ev.type ?? 'OTHER',
+                value: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
+                currency: ev.value?.code ?? assetInfo?.currency ?? '',
+                notes: ev.notes ?? undefined,
+            });
+        }
+
+        // Comparison asset events
+        for (const [aid, evts] of comparisonEvents) {
+            const targetAsset = allAssets.find(a => a.id === aid);
+            const label = targetAsset?.display_name ?? `Asset #${aid}`;
+            // Find signal color for this comparison asset
+            const sigColor = overlaySignals.find(s => s.label === label)?.color;
+            for (const ev of evts) {
+                markers.push({
+                    date: ev.date,
+                    type: ev.type ?? 'OTHER',
+                    value: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
+                    currency: ev.value?.code ?? '',
+                    notes: ev.notes ?? undefined,
+                    assetLabel: label,
+                    signalColor: sigColor,
+                });
+            }
+        }
+
+        return markers;
+    });
+
+    // Summary data per signal (point count, event counts, first date) — for ChartSignalsSection
+    let signalSummaries: Map<string, SignalDataSummary> = $derived.by(() => {
+        const result = new Map<string, SignalDataSummary>();
+        for (const cfg of signals) {
+            if (cfg.signalType === 'asset-comparison') {
+                const targetId = Number(cfg.params.assetId);
+                if (!targetId) continue;
+                const resolvedData = cfg.params._resolvedData as Array<{date: string; value: number}> | undefined;
+                const evts = comparisonEvents.get(targetId) ?? [];
+                const eventCounts: Record<string, number> = {};
+                for (const ev of evts) {
+                    const t = ev.type ?? 'OTHER';
+                    eventCounts[t] = (eventCounts[t] ?? 0) + 1;
+                }
+                result.set(cfg.id, {
+                    pointCount: resolvedData?.length ?? 0,
+                    eventCounts,
+                    firstDate: resolvedData && resolvedData.length > 0 ? resolvedData[0].date : null,
+                });
+            } else if (cfg.signalType === 'fx-pair') {
+                const pairSlug = String(cfg.params.pairSlug || '');
+                if (!pairSlug) continue;
+                try {
+                    const store = getFxStore(pairSlug);
+                    const storeData = store.getAllSorted();
+                    result.set(cfg.id, {
+                        pointCount: storeData.length,
+                        eventCounts: {},
+                        firstDate: storeData.length > 0 ? storeData[0].date : null,
+                    });
+                } catch {
+                    result.set(cfg.id, { pointCount: 0, eventCounts: {}, firstDate: null });
+                }
+            }
+        }
+        return result;
+    });
 
     // =========================================================================
     // Lifecycle
@@ -486,6 +564,65 @@
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
     }
 
+    async function handleSyncAsset(assetId: number) {
+        try {
+            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{
+                asset_id: assetId,
+                date_range: {start: dateStart, end: dateEnd},
+            }]);
+            const r = (response as any)?.results?.[0];
+            const tr = get(t);
+            if (r?.status === 'ok') {
+                toasts.success(`${tr('common.sync')}: ${r.points_fetched ?? 0}↓ ${r.points_changed ?? 0}Δ`);
+            } else {
+                toasts.error(`${tr('common.sync')} — ${r?.message || 'failed'}`);
+            }
+        } catch (e: any) {
+            toasts.error('Sync failed: ' + (e?.message || 'unknown'));
+        }
+        // Reload comparison data for the synced asset
+        const compSignals = signals.filter(s => s.signalType === 'asset-comparison');
+        await loadComparisonAssetsData(compSignals);
+    }
+
+    function handleDetailAsset(assetId: number) {
+        goto(`/assets/${assetId}`);
+    }
+
+    async function handleSyncPair(slug: string) {
+        try {
+            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                pairs: [slug],
+                start: dateStart,
+                end: dateEnd,
+            });
+            // Refetch FX data into store after sync (invalidate + reload)
+            const store = getFxStore(slug);
+            store.invalidateAll();
+            const parts = slug.split('-');
+            const base = parts[0], quote = parts[1];
+            try {
+                const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([{
+                    from_amount: {code: base, amount: 1},
+                    to: quote,
+                    date_range: {start: dateStart, end: dateEnd},
+                }]);
+                const results = (response as any)?.results || [];
+                const points = results.map((r: any) => apiResultToFxDataPoint(r));
+                store.merge(points);
+            } catch { /* convert may fail if no data yet */ }
+            overlayDataVersion++;
+            const tr = get(t);
+            toasts.success(`${tr('common.sync')} FX ${slug.replace('-', '/')} ✓`);
+        } catch (e: any) {
+            toasts.error('FX sync failed: ' + (e?.message || 'unknown'));
+        }
+    }
+
+    function handleDetailPair(slug: string) {
+        goto(`/fx/${slug}`);
+    }
+
     async function handleAssetUpdated() {
         editModalOpen = false;
         await reloadMetadata();
@@ -714,6 +851,12 @@
                         availableAssets={allAssets.filter(a => a.id !== data.assetId)}
                         mainPairSlug={`asset-${data.assetId}`}
                         onchange={handleSignalsChange}
+                        onsyncpair={handleSyncPair}
+                        ondetailpair={handleDetailPair}
+                        onsyncasset={handleSyncAsset}
+                        ondetailasset={handleDetailAsset}
+                        {signalSummaries}
+                        {dateStart}
                 />
             </div>
         {/if}
@@ -806,6 +949,7 @@
                         mainSeriesLabel={assetInfo?.display_name ?? ''}
                         chartHeight="400px"
                         overlaySignals={allOverlaySignals}
+                        eventMarkers={chartEventMarkers}
                         colorByBaseline={settings.colorByBaseline}
                         areaFill={settings.areaFill}
                         showGridLines={settings.gridLines}
@@ -884,7 +1028,7 @@
                     onmeasuremodechange={(active) => measureMode = active}
                     onmeasureschange={(m) => measureSignals = m}
                     overlaySignals={overlaySignals}
-                    pairLabel={assetInfo ? `📊 ${assetInfo.display_name}` : ''}
+                    pairLabel={assetInfo ? `👑 ${assetInfo.display_name}` : ''}
                     {viewMode}
             />
         </div>
@@ -1010,11 +1154,24 @@
         <!-- FX Pair Add Modal (opened from FX warning) -->
         <FxPairAddModal
                 bind:open={showFxPairAddModal}
+                readonlyBase={true}
                 initialBase={assetInfo.currency}
-                initialQuote={displayCurrency}
-                oncreated={async () => {
+                initialQuote={displayCurrency !== assetInfo.currency ? displayCurrency : ''}
+                dateStart={dateStart}
+                dateEnd={dateEnd}
+                oncreated={async ({ base, quote, hasRealProvider }) => {
                     showFxPairAddModal = false;
                     await loadFxPairSlugs();
+                    // Update display currency to the quote of the created pair
+                    const assetCur = assetInfo?.currency ?? '';
+                    const newQuote = assetCur === base ? quote : base;
+                    if (newQuote !== assetCur) {
+                        displayCurrency = newQuote;
+                    }
+                    if (hasRealProvider) {
+                        toasts.success($t('assetDetail.fxPairCreatedSynced'));
+                    }
+                    await handleRefresh();
                 }}
                 onclose={() => showFxPairAddModal = false}
         />

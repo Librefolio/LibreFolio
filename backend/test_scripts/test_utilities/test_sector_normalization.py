@@ -98,6 +98,11 @@ class TestFinancialSectorFromString:
             ("materials", FinancialSector.BASIC_MATERIALS),  # Short form
             ("telecom", FinancialSector.TELECOMMUNICATION),  # Short form
             ("HealthCare", FinancialSector.HEALTH_CARE),
+            # Yahoo Finance aliases
+            ("Financial Services", FinancialSector.FINANCIALS),
+            ("Communication Services", FinancialSector.TELECOMMUNICATION),
+            ("Consumer Cyclical", FinancialSector.CONSUMER_DISCRETIONARY),
+            ("Consumer Defensive", FinancialSector.CONSUMER_STAPLES),
             ],
         )
     def test_aliases(self, input_val, expected):
@@ -164,6 +169,13 @@ class TestNormalizeSector:
         assert normalize_sector("materials") == "Basic Materials"
         assert normalize_sector("telecom") == "Telecommunication"
 
+    def test_yahoo_finance_alias_normalization(self):
+        """Yahoo Finance sector names should normalize to standard GICS names."""
+        assert normalize_sector("Financial Services") == "Financials"
+        assert normalize_sector("Communication Services") == "Telecommunication"
+        assert normalize_sector("Consumer Cyclical") == "Consumer Discretionary"
+        assert normalize_sector("Consumer Defensive") == "Consumer Staples"
+
     def test_unknown_returns_other(self):
         """Unknown sectors should return 'Other'."""
         assert normalize_sector("SomeUnknownSector") == "Other"
@@ -183,6 +195,13 @@ class TestValidateSector:
         assert validate_sector("Technology") is True
         assert validate_sector("Financials") is True
         assert validate_sector("healthcare") is True  # Alias
+
+    def test_yahoo_finance_aliases_return_true(self):
+        """Yahoo Finance sector names should be recognized as valid."""
+        assert validate_sector("Financial Services") is True
+        assert validate_sector("Communication Services") is True
+        assert validate_sector("Consumer Cyclical") is True
+        assert validate_sector("Consumer Defensive") is True
 
     def test_other_returns_false(self):
         """'Other' should return False (not a recognized sector)."""

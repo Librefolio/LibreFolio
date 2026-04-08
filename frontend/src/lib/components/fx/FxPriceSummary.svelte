@@ -27,7 +27,7 @@
 </script>
 
 {#if lastRate !== null}
-    <div class="flex items-center gap-3 {layoutMode === 'wide' ? 'px-3 border-l border-r border-gray-200 dark:border-slate-600' : 'justify-center'}">
+    <div class="flex items-center gap-3 {layoutMode === 'wide' ? 'px-3' : 'justify-center'}">
         <!-- Left half: delta % -->
         {#if deltaPercent !== null}
             <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">

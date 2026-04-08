@@ -764,6 +764,7 @@
     "discardMessage": "You have unsaved changes in chart settings. Discard them?",
     "discard": "Discard",
     "removeSignal": "Remove signal",
+    "dataMissingBefore": "Data starts after chart range — first point at {date}. Try syncing to fetch earlier data.",
     "preview": "Preview",
     "previewDescGlobal": "Synthetic demo data — shows how aesthetics affect all charts",
     "previewDescPair": "Live preview with actual pair data and overlay signals",
@@ -955,6 +956,14 @@
     "syncPartial": "Partial sync: {fetched} fetched, {changed} changed",
     "fxPairMissing": "FX pair {base}/{quote} not configured — conversion not available",
     "addFxPair": "Add FX pair",
-    "goToFxPair": "Go to FX pair detail"
+    "goToFxPair": "Go to FX pair detail",
+    "fxPairCreatedSynced": "FX pair created and synced",
+    "eventType": {
+      "DIVIDEND": "Dividend",
+      "INTEREST": "Interest",
+      "PRICE_ADJUSTMENT": "Price Adjustment",
+      "MATURITY_SETTLEMENT": "Maturity",
+      "SPLIT": "Split"
+    }
   }
 }

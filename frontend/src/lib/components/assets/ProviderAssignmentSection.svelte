@@ -84,7 +84,6 @@
         identifier?: string;
         identifierType?: string;
         providerParams?: Record<string, any> | null;
-        userUrl?: string;
         providerUrl?: string | null;
         noProvider?: boolean;
         fetchInterval?: number;
@@ -95,7 +94,6 @@
             identifier: string;
             identifierType: string;
             providerParams: Record<string, any> | null;
-            userUrl: string;
             noProvider: boolean;
             testStatus: TestStatus;
         }) => void;
@@ -106,7 +104,6 @@
         identifier = $bindable(''),
         identifierType = $bindable('TICKER'),
         providerParams = $bindable(null),
-        userUrl = $bindable(''),
         providerUrl = $bindable(null),
         noProvider = $bindable(false),
         fetchInterval = $bindable(1440),
@@ -233,7 +230,6 @@
             identifier,
             identifierType,
             providerParams: computedParams,
-            userUrl,
             noProvider,
             testStatus,
         });
@@ -721,33 +717,6 @@
                 </div>
             {/if}
 
-            <!-- User URL (always visible) -->
-            <div>
-                <label for="provider-user-url" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    {$t('assets.provider.userUrl')}
-                </label>
-                <div class="flex gap-1.5">
-                    <input
-                            id="provider-user-url"
-                            type="text"
-                            bind:value={userUrl}
-                            oninput={() => emitChange()}
-                            disabled={disabled || readonly}
-                            placeholder="https://..."
-                            class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                   bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                   placeholder-gray-400 dark:placeholder-gray-500
-                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50
-                                   disabled:opacity-50"
-                    />
-                    {#if userUrl}
-                        <a href={userUrl} target="_blank" rel="noopener noreferrer"
-                           class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
-                            <ExternalLink size={14}/>
-                        </a>
-                    {/if}
-                </div>
-            </div>
         </div>
 
     {/if}

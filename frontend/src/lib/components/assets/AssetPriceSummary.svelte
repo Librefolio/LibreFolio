@@ -55,7 +55,7 @@
     );
 </script>
 
-<div class="flex {layoutMode === 'wide' ? 'flex-row items-center gap-4 px-3 border-l border-gray-200 dark:border-slate-600' : 'flex-col items-center gap-2'}">
+<div class="flex {layoutMode === 'wide' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
     <!-- Price row: [Δ%  |  Price (Δ$)] -->
     {#if lastPrice !== null}
         <div class="flex items-center gap-3 {layoutMode === 'wide' ? '' : 'justify-center w-full'}">

@@ -114,6 +114,9 @@
     // All configured FX pair slugs (from backend, for FxPair signal dropdown)
     let allConfiguredSlugs: string[] = $state([]);
 
+    // All assets (for asset comparison signals in ChartSignalsSection)
+    let allAssets: Array<{ id: number; display_name: string; icon_url?: string | null; asset_type?: string | null }> = $state([]);
+
     // Panel states before edit mode (to restore when exiting)
     let savedPanelStates: { aesthetics: boolean; measures: boolean; signals: boolean } | null = $state(null);
 
@@ -214,6 +217,7 @@
             loadChartData(),
             loadProviders(),
             loadAvailableProviders(),
+            loadAssetList(),
         ]);
         // Force flag reactivity after currencies load
         flagVersion++;
@@ -327,6 +331,16 @@
         } catch (e) {
             console.error('Failed to load available providers:', e);
         }
+    }
+
+    async function loadAssetList() {
+        try {
+            const response = await zodiosApi.get_all_assets_api_v1_assets_all_get();
+            allAssets = (response as any[]).map((a: any) => ({
+                id: a.id, display_name: a.display_name,
+                icon_url: a.icon_url ?? null, asset_type: a.asset_type ?? null,
+            }));
+        } catch (e) { console.error('Failed to load asset list:', e); }
     }
 
     // =========================================================================
@@ -751,6 +765,7 @@
                 <ChartSignalsSection
                         signals={[...signals]}
                         availablePairs={configuredPairSlugs}
+                        availableAssets={allAssets}
                         mainPairSlug={data.canonicalSlug}
                         onchange={handleSignalsChange}
                         onsyncpair={handleSyncPair}

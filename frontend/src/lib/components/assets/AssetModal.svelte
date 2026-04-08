@@ -14,7 +14,7 @@
     import {_ as t} from '$lib/i18n';
     import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
-    import {ChevronDown, ChevronRight, Loader2, Minus, Plus, RefreshCw, Trash2, Upload, X} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, ExternalLink, Loader2, Minus, Plus, RefreshCw, Trash2, Upload, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -915,34 +915,61 @@
                     </div>
                 </div>
 
-                <!-- Right: Name, Type+Currency -->
+                <!-- Right: Name+URL row, Type+Currency row (2×2 on desktop, column on mobile) -->
                 <div class="space-y-3">
-                    <!-- Display Name -->
-                    <div>
-                        <label for="asset-display-name" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                            {$t('common.name')} *
-                        </label>
-                        <input
-                                id="asset-display-name"
-                                type="text"
-                                bind:value={displayName}
-                                placeholder="Apple Inc."
-                                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                       placeholder-gray-400 dark:placeholder-gray-500
-                                       focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
-                        />
-                        {#if duplicateAssetName}
-                            <Tooltip
-                                text={$t('assets.modal.duplicateNameTooltip', {values: {name: duplicateAssetName}})}
-                                position="bottom"
-                                maxWidth="300px"
-                            >
-                                <span class="inline-flex items-center gap-1 mt-1 text-xs text-amber-600 dark:text-amber-400">
-                                    ⚠️ {$t('assets.modal.duplicateNameWarning', {values: {name: duplicateAssetName}})}
-                                </span>
-                            </Tooltip>
-                        {/if}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Display Name -->
+                        <div>
+                            <label for="asset-display-name" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                                {$t('common.name')} *
+                            </label>
+                            <input
+                                    id="asset-display-name"
+                                    type="text"
+                                    bind:value={displayName}
+                                    placeholder="Apple Inc."
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                           placeholder-gray-400 dark:placeholder-gray-500
+                                           focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                            />
+                            {#if duplicateAssetName}
+                                <Tooltip
+                                    text={$t('assets.modal.duplicateNameTooltip', {values: {name: duplicateAssetName}})}
+                                    position="bottom"
+                                    maxWidth="300px"
+                                >
+                                    <span class="inline-flex items-center gap-1 mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                        ⚠️ {$t('assets.modal.duplicateNameWarning', {values: {name: duplicateAssetName}})}
+                                    </span>
+                                </Tooltip>
+                            {/if}
+                        </div>
+
+                        <!-- User URL (custom link for this asset) -->
+                        <div>
+                            <label for="asset-user-url" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                                {$t('assets.provider.userUrl')}
+                            </label>
+                            <div class="flex gap-1.5">
+                                <input
+                                        id="asset-user-url"
+                                        type="text"
+                                        bind:value={providerUserUrl}
+                                        placeholder="https://..."
+                                        class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                               placeholder-gray-400 dark:placeholder-gray-500
+                                               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                                />
+                                {#if providerUserUrl}
+                                    <a href={providerUserUrl} target="_blank" rel="noopener noreferrer"
+                                       class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
+                                        <ExternalLink size={14}/>
+                                    </a>
+                                {/if}
+                            </div>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -980,6 +1007,7 @@
                                     value={currency}
                                     onchange={(v) => { if (v) currency = v; }}
                                     maxVisibleItems={6}
+                                    compact={true}
                             />
                         </div>
                     </div>
@@ -1173,7 +1201,6 @@
                             bind:identifier={providerIdentifier}
                             bind:identifierType={providerIdentifierType}
                             bind:providerParams
-                            bind:userUrl={providerUserUrl}
                             bind:providerUrl
                             bind:noProvider={providerNoProvider}
                             bind:fetchInterval
