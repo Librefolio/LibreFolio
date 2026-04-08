@@ -47,7 +47,9 @@
         initialBase?: string;
         /** Initial quote currency for create mode (editable, not locked) */
         initialQuote?: string;
-        oncreated?: (detail: { base: string; quote: string; hasRealProvider: boolean }) => void;
+        /** Lock the base currency field (e.g. when creating FX from asset detail) */
+        readonlyBase?: boolean;
+        oncreated?: (detail: { base: string; quote: string; hasRealProvider: boolean; slug: string }) => void;
         onclose?: () => void;
     }
 
@@ -61,6 +63,7 @@
         editRoutes = [],
         initialBase = '',
         initialQuote = '',
+        readonlyBase = false,
         oncreated,
         onclose,
     }: Props = $props();
@@ -282,6 +285,7 @@
             oncreated?.({
                 base, quote,
                 hasRealProvider,
+                slug: base < quote ? `${base}-${quote}` : `${quote}-${base}`,
             });
             resetAndClose();
         } catch (e: any) {
@@ -356,8 +360,8 @@
                         </div>
                         <CurrencySearchSelect
                                 bind:value={baseCurrency}
-                                disabled={editMode}
-                                excludedCurrencies={editMode ? new Set() : excludedForBase}
+                                disabled={editMode || readonlyBase}
+                                excludedCurrencies={editMode || readonlyBase ? new Set() : excludedForBase}
                                 onchange={() => {
                                 if (!editMode) {
                                     // Auto-focus the quote currency select after picking base

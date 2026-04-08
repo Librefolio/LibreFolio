@@ -764,6 +764,7 @@
     "discardMessage": "Hai modifiche non salvate nelle impostazioni del grafico. Scartarle?",
     "discard": "Scarta",
     "removeSignal": "Rimuovi segnale",
+    "dataMissingBefore": "I dati iniziano dopo l'intervallo del grafico — primo punto al {date}. Prova a sincronizzare per ottenere dati precedenti.",
     "preview": "Anteprima",
     "previewDescGlobal": "Dati sintetici di esempio — mostra come le impostazioni influenzano tutti i grafici",
     "previewDescPair": "Anteprima dal vivo con i dati reali della coppia e segnali overlay",
@@ -955,6 +956,14 @@
     "syncPartial": "Sincronizzazione parziale: {fetched} scaricati, {changed} modificati",
     "fxPairMissing": "Coppia FX {base}/{quote} non configurata — conversione non disponibile",
     "addFxPair": "Aggiungi coppia FX",
-    "goToFxPair": "Vai al dettaglio coppia FX"
+    "goToFxPair": "Vai al dettaglio coppia FX",
+    "fxPairCreatedSynced": "Coppia FX creata e sincronizzata",
+    "eventType": {
+      "DIVIDEND": "Dividendo",
+      "INTEREST": "Interesse",
+      "PRICE_ADJUSTMENT": "Aggiustamento Prezzo",
+      "MATURITY_SETTLEMENT": "Scadenza",
+      "SPLIT": "Split"
+    }
   }
 }

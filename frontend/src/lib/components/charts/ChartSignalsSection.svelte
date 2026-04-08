@@ -10,7 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {ArrowLeftRight, BarChart3, ExternalLink, Info, RotateCw, Trash2} from 'lucide-svelte';
+    import {ArrowLeftRight, BarChart3, ExternalLink, Info, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -20,6 +20,16 @@
     import type {SelectOption} from '$lib/components/ui/select/types';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {createSignal, getRegisteredSignalTypes, type SignalConfig, type SignalStyle, type SignalTypeInfo,} from '$lib/charts/signals';
+
+    // =========================================================================
+    // Types
+    // =========================================================================
+
+    export interface SignalDataSummary {
+        pointCount: number;
+        eventCounts: Record<string, number>;
+        firstDate: string | null;
+    }
 
     // =========================================================================
     // Props
@@ -40,6 +50,14 @@
         onsyncpair?: (slug: string) => void;
         /** Called when user clicks Detail on an FxPair signal */
         ondetailpair?: (slug: string) => void;
+        /** Called when user clicks Sync on an AssetComparison signal */
+        onsyncasset?: (assetId: number) => void;
+        /** Called when user clicks Detail on an AssetComparison signal */
+        ondetailasset?: (assetId: number) => void;
+        /** Data summaries per signal id (point count, event counts, first date) */
+        signalSummaries?: Map<string, SignalDataSummary>;
+        /** Current chart date range start (for "data missing before" warning) */
+        dateStart?: string;
     }
 
     let {
@@ -50,6 +68,10 @@
         onchange,
         onsyncpair,
         ondetailpair,
+        onsyncasset,
+        ondetailasset,
+        signalSummaries = new Map(),
+        dateStart = '',
     }: Props = $props();
 
     // =========================================================================
@@ -69,12 +91,10 @@
         return key ? $t(`chartSettings.signals.${key}`) : st.displayName;
     }
 
-    function getSignalAbbr(signalType: string): string {
-        const key = SIGNAL_TYPE_I18N_KEY[signalType];
-        if (!key) return '';
-        const abbrKey = `chartSettings.signals.${key}Abbr`;
-        const abbr = $t(abbrKey);
-        return abbr !== abbrKey ? abbr : '';
+    /** Extract typed data from dropdown option (avoids TS `as` cast in template) */
+    function getOptionData(option: SelectOption): { name: string; fullName: string } {
+        const d = (option.data ?? {}) as Record<string, string>;
+        return { name: d.name ?? '', fullName: d.fullName ?? '' };
     }
 
     function getSignalFullName(signalType: string): string {
@@ -215,6 +235,18 @@
         }
     }
 
+    /** Set of asset IDs currently syncing (for rotating icon) */
+    let syncingAssets = $state<Set<number>>(new Set());
+
+    async function handleSyncAssetWithSpin(assetId: number) {
+        syncingAssets = new Set([...syncingAssets, assetId]);
+        try {
+            await onsyncasset?.(assetId);
+        } finally {
+            syncingAssets = new Set([...syncingAssets].filter(id => id !== assetId));
+        }
+    }
+
     /** Set of pair slugs already used by other FxPair signals */
     let usedPairSlugs = $derived(new Set(
         signals.filter(s => s.signalType === 'fx-pair' && s.params.pairSlug)
@@ -231,6 +263,23 @@
     function findAssetInfo(assetId: string) {
         return (availableAssets ?? []).find(a => String(a.id) === assetId);
     }
+
+    /** Set of asset IDs already used by asset-comparison signals */
+    let usedAssetIds = $derived(new Set(
+        signals.filter(s => s.signalType === 'asset-comparison' && s.params.assetId)
+            .map(s => Number(s.params.assetId))
+    ));
+
+    /** Main asset ID parsed from mainPairSlug (format: "asset-123") */
+    let mainAssetId = $derived(mainPairSlug.startsWith('asset-') ? Number(mainPairSlug.slice(6)) : 0);
+
+    const EVENT_EMOJI: Record<string, string> = {
+        DIVIDEND: '💰',
+        INTEREST: '💎',
+        PRICE_ADJUSTMENT: '🔧',
+        MATURITY_SETTLEMENT: '📅',
+        SPLIT: '✂️',
+    };
 </script>
 
 <div>
@@ -251,11 +300,11 @@
                     >
                         {#snippet item(option)}
                             {#if option.data}
+                                {@const d = getOptionData(option)}
                                 <span class="truncate">
-                                    {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as
-                                            {fullName: string}).fullName}<span
-                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
+                                    {option.icon} <span class="font-medium">{d.name}</span>
+                                    {#if d.fullName}<span
+                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{d.fullName}</span>{/if}
                                 </span>
                             {/if}
                         {/snippet}
@@ -274,11 +323,11 @@
                     >
                         {#snippet item(option)}
                             {#if option.data}
+                                {@const d = getOptionData(option)}
                                 <span class="truncate">
-                                    {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as
-                                            {fullName: string}).fullName}<span
-                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
+                                    {option.icon} <span class="font-medium">{d.name}</span>
+                                    {#if d.fullName}<span
+                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{d.fullName}</span>{/if}
                                 </span>
                             {/if}
                         {/snippet}
@@ -297,11 +346,11 @@
                     >
                         {#snippet item(option)}
                             {#if option.data}
+                                {@const d = getOptionData(option)}
                                 <span class="truncate">
-                                    {option.icon} <span class="font-medium">{(option.data as {name: string}).name}</span>
-                                    {#if (option.data as
-                                            {fullName: string}).fullName}<span
-                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{(option.data as {fullName: string}).fullName}</span>{/if}
+                                    {option.icon} <span class="font-medium">{d.name}</span>
+                                    {#if d.fullName}<span
+                                            class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{d.fullName}</span>{/if}
                                 </span>
                             {/if}
                         {/snippet}
@@ -327,6 +376,8 @@
                     {@const signalName = typeInfo ? getSignalName(typeInfo) : signal.signalType}
                     {@const signalFullName = getSignalFullName(signal.signalType)}
                     {@const signalDescText = getSignalDesc(signal.signalType)}
+                    {@const summary = signalSummaries.get(signal.id)}
+                    {@const dataStartsLate = summary?.firstDate && dateStart && summary.firstDate > dateStart}
                     <div class="space-y-2">
                         <!-- Signal header -->
                         <div class="flex items-center justify-between gap-1">
@@ -339,8 +390,26 @@
                                 {#if typeInfo?.docsPath}
                                     <DocsLink path={typeInfo.docsPath} label={signalDescText || signalName} math/>
                                 {/if}
+                                {#if dataStartsLate}
+                                    <Tooltip text={$t('chartSettings.dataMissingBefore', {values: {date: summary?.firstDate ?? ''}})} position="top">
+                                        <AlertTriangle size={13} class="text-amber-500 shrink-0 cursor-help"/>
+                                    </Tooltip>
+                                {/if}
                             </div>
-                            <div class="flex items-center gap-0.5 flex-shrink-0">
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <!-- Summary badges (inline in title) -->
+                                {#if summary && summary.pointCount > 0}
+                                    <span class="text-[10px] text-gray-400 dark:text-gray-500 px-1 py-0.5 bg-gray-100 dark:bg-slate-700 rounded">
+                                        📈{summary.pointCount}
+                                    </span>
+                                {/if}
+                                {#if summary}
+                                    {#each Object.entries(summary.eventCounts) as [evType, count]}
+                                        <span class="text-[10px] text-gray-400 dark:text-gray-500 px-1 py-0.5 bg-gray-100 dark:bg-slate-700 rounded">
+                                            {EVENT_EMOJI[evType] ?? '📊'}{count}
+                                        </span>
+                                    {/each}
+                                {/if}
                                 <button
                                         type="button"
                                         class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
@@ -443,41 +512,73 @@
                                                     {/if}
                                                 </div>
                                             {:else if desc.dynamicOptionsKey === 'configuredAssets'}
-                                                <div class="w-48">
-                                                    <SimpleSelect
-                                                            value={getParamString(signal, desc.key)}
-                                                            options={resolveDynamicOptions('configuredAssets')}
-                                                            placeholder="— Select asset"
-                                                            dropdownPosition="auto"
-                                                            onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
-                                                    >
-                                                        {#snippet item(option)}
-                                                            {@const info = findAssetInfo(option.value)}
-                                                            <span class="flex items-center gap-1.5 truncate">
-                                                                {#if info?.icon_url}
-                                                                    <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
-                                                                {:else if info?.asset_type && ASSET_TYPE_ICON_MAP[info.asset_type]}
-                                                                    <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[info.asset_type]}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
-                                                                {:else}
-                                                                    <BarChart3 size={14} class="text-gray-400 shrink-0" />
-                                                                {/if}
-                                                                <span class="text-xs">{option.label}</span>
-                                                            </span>
-                                                        {/snippet}
-                                                        {#snippet selectedItem(option)}
-                                                            {@const info = findAssetInfo(option.value)}
-                                                            <span class="flex items-center gap-1.5 truncate">
-                                                                {#if info?.icon_url}
-                                                                    <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
-                                                                {:else if info?.asset_type && ASSET_TYPE_ICON_MAP[info.asset_type]}
-                                                                    <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[info.asset_type]}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
-                                                                {:else}
-                                                                    <BarChart3 size={14} class="text-gray-400 shrink-0" />
-                                                                {/if}
-                                                                <span class="text-xs">{option.label}</span>
-                                                            </span>
-                                                        {/snippet}
-                                                    </SimpleSelect>
+                                                {@const assetIdStr = getParamString(signal, desc.key)}
+                                                <div class="flex items-center gap-1">
+                                                    <div class="w-48">
+                                                        <SimpleSelect
+                                                                value={assetIdStr}
+                                                                options={resolveDynamicOptions('configuredAssets').map(o => {
+                                                                    const aid = Number(o.value);
+                                                                    const isCurrent = o.value === assetIdStr;
+                                                                    const isMain = mainAssetId > 0 && aid === mainAssetId;
+                                                                    const isUsedElsewhere = !isCurrent && usedAssetIds.has(aid);
+                                                                    const suffix = isMain ? ' 👑' : isCurrent ? ' ✓' : isUsedElsewhere ? ' 📌' : '';
+                                                                    return {...o, label: `${o.label}${suffix}`};
+                                                                })}
+                                                                placeholder="— Select asset"
+                                                                dropdownPosition="auto"
+                                                                onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
+                                                        >
+                                                            {#snippet item(option)}
+                                                                {@const info = findAssetInfo(option.value)}
+                                                                <span class="flex items-center gap-1.5 truncate">
+                                                                    {#if info?.icon_url}
+                                                                        <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
+                                                                    {:else if info?.asset_type && ASSET_TYPE_ICON_MAP[info.asset_type]}
+                                                                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[info.asset_type]}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                                                    {:else}
+                                                                        <BarChart3 size={14} class="text-gray-400 shrink-0" />
+                                                                    {/if}
+                                                                    <span class="text-xs">{option.label}</span>
+                                                                </span>
+                                                            {/snippet}
+                                                            {#snippet selectedItem(option)}
+                                                                {@const info = findAssetInfo(option.value)}
+                                                                <span class="flex items-center gap-1.5 truncate">
+                                                                    {#if info?.icon_url}
+                                                                        <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
+                                                                    {:else if info?.asset_type && ASSET_TYPE_ICON_MAP[info.asset_type]}
+                                                                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[info.asset_type]}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                                                    {:else}
+                                                                        <BarChart3 size={14} class="text-gray-400 shrink-0" />
+                                                                    {/if}
+                                                                    <span class="text-xs">{option.label}</span>
+                                                                </span>
+                                                            {/snippet}
+                                                        </SimpleSelect>
+                                                    </div>
+                                                    {#if onsyncasset && assetIdStr}
+                                                        {@const aid = Number(assetIdStr)}
+                                                        <button
+                                                                type="button"
+                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-500 transition-colors"
+                                                                title={$t('common.sync')}
+                                                                disabled={syncingAssets.has(aid)}
+                                                                onclick={() => handleSyncAssetWithSpin(aid)}
+                                                        >
+                                                            <RotateCw size={12} class={syncingAssets.has(aid) ? 'animate-spin' : ''}/>
+                                                        </button>
+                                                    {/if}
+                                                    {#if ondetailasset && assetIdStr}
+                                                        <button
+                                                                type="button"
+                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                                                                title={$t('common.detail')}
+                                                                onclick={() => ondetailasset?.(Number(assetIdStr))}
+                                                        >
+                                                            <ExternalLink size={12}/>
+                                                        </button>
+                                                    {/if}
                                                 </div>
                                             {:else}
                                                 {@const opts = desc.options ?? []}

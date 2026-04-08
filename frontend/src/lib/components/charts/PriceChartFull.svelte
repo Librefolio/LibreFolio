@@ -17,6 +17,36 @@
     import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations,} from './lineChartHelpers';
 
     // =========================================================================
+    // Event Marker types and constants
+    // =========================================================================
+
+    export interface EventMarker {
+        date: string;
+        type: string;        // DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT, MATURITY_SETTLEMENT
+        value?: number;
+        currency?: string;
+        notes?: string;
+        assetLabel?: string; // only for comparison events
+        signalColor?: string; // color of the overlay signal for comparison events
+    }
+
+    const EVENT_COLORS: Record<string, string> = {
+        INTEREST: '#10b981',           // emerald-500
+        DIVIDEND: '#3b82f6',           // blue-500
+        PRICE_ADJUSTMENT: '#f59e0b',   // amber-500
+        MATURITY_SETTLEMENT: '#ef4444', // red-500
+        SPLIT: '#8b5cf6',             // violet-500
+    };
+
+    const EVENT_SYMBOLS: Record<string, string> = {
+        INTEREST: 'diamond',
+        DIVIDEND: 'triangle',
+        PRICE_ADJUSTMENT: 'rect',
+        MATURITY_SETTLEMENT: 'roundRect',
+        SPLIT: 'arrow',
+    };
+
+    // =========================================================================
     // Props
     // =========================================================================
 
@@ -49,6 +79,8 @@
         externalViewMode?: ViewMode;
         /** Custom label for the main series in the tooltip (overrides currency) */
         mainSeriesLabel?: string;
+        /** Event markers to display as scatter points on the chart */
+        eventMarkers?: EventMarker[];
     }
 
     let {
@@ -73,6 +105,7 @@
         hideToolbar = false,
         externalViewMode,
         mainSeriesLabel,
+        eventMarkers = [],
     }: Props = $props();
 
     // =========================================================================
@@ -133,6 +166,7 @@
             void yAxisMin;
             void yAxisMax;
             void mainSeriesLabel;
+            void eventMarkers;
             tick().then(renderChart);
         }
     });
@@ -423,6 +457,81 @@
                 itemStyle: {color: 'transparent'},
                 emphasis: {disabled: true}, tooltip: {show: false}, silent: true, z: 0,
             });
+        }
+
+        // Event markers — scatter series grouped by event type and asset
+        if (eventMarkers && eventMarkers.length > 0) {
+            const dateIndexMap = new Map(dates.map((d, i) => [d, i]));
+            // Group by composite key: main asset uses type, comparison uses "label::type"
+            const grouped = new Map<string, { markers: EventMarker[], color: string, label: string }>();
+            for (const m of eventMarkers) {
+                const isComparison = !!m.assetLabel;
+                const groupKey = isComparison ? `${m.assetLabel}::${m.type}` : m.type;
+                const color = isComparison ? (m.signalColor ?? '#6b7280') : (EVENT_COLORS[m.type] ?? '#6b7280');
+                const seriesLabel = isComparison ? `${m.assetLabel} ${m.type}` : m.type;
+                if (!grouped.has(groupKey)) {
+                    grouped.set(groupKey, { markers: [], color, label: seriesLabel });
+                }
+                grouped.get(groupKey)!.markers.push(m);
+            }
+
+            for (const [, group] of grouped) {
+                const { markers, color: eventColor, label: seriesLabel } = group;
+                const eventType = markers[0].type;
+                const scatterData: any[] = [];
+                for (const m of markers) {
+                    const idx = dateIndexMap.get(m.date);
+                    if (idx === undefined) continue;
+                    scatterData.push({
+                        value: [m.date, displayData[idx]?.value ?? 0],
+                        marker: m,
+                    });
+                }
+                if (scatterData.length === 0) continue;
+
+                series.push({
+                    type: 'scatter',
+                    name: `Events: ${seriesLabel}`,
+                    data: scatterData,
+                    xAxisIndex: 0,
+                    yAxisIndex: 0,
+                    symbol: EVENT_SYMBOLS[eventType] ?? 'diamond',
+                    symbolSize: 10,
+                    itemStyle: {
+                        color: eventColor,
+                    },
+                    emphasis: {
+                        scale: 1.5,
+                    },
+                    tooltip: {
+                        trigger: 'item' as const,
+                        formatter: (params: any) => {
+                            const m = params.data?.marker as EventMarker | undefined;
+                            if (!m) return '';
+                            const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor};margin-right:4px;"></span>`;
+                            let html = `<strong>${m.date}</strong>`;
+                            html += `<br/>${dot}${m.type}`;
+                            if (m.value !== undefined) {
+                                html += `<br/>💰 ${m.value.toFixed(4)} ${m.currency ?? ''}`;
+                            }
+                            if (m.notes) {
+                                html += `<br/>📝 ${m.notes}`;
+                            }
+                            if (m.assetLabel) {
+                                const sigDot = m.signalColor
+                                    ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${m.signalColor};margin-right:3px;"></span>`
+                                    : '';
+                                html += `<br/>🔗 ${sigDot}${m.assetLabel}`;
+                            }
+                            return html;
+                        },
+                        backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                        borderColor: isDark ? '#334155' : '#e2e8f0',
+                        textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                    },
+                    z: 20,
+                });
+            }
         }
 
         // Check which overlay axes are active

@@ -121,9 +121,9 @@ Il container esterno in tablet-s usa `flex-row` (bottoni a destra), non `flex-co
 - [ ] Se cambio la seconda valuta nella modale, `displayCurrency` si aggiorna
 
 ### Responsive
-- [ ] Asset detail: wide → datepicker + price a fianco, bottoni 2×2 a destra
-- [ ] Asset detail: tablet → filtri impilati, bottoni 2×2 a destra
-- [ ] Asset detail: tablet-s → filtri impilati, bottoni 4×1 colonna a destra
-- [ ] Asset detail: mobile → tutto centrato, bottoni 1×4 riga
-- [ ] FX detail: stesse transizioni coerenti
+- [x] Asset detail: wide → datepicker + price a fianco, bottoni 2×2 a destra
+- [x] Asset detail: tablet → filtri impilati, bottoni 2×2 a destra
+- [x] Asset detail: tablet-s → filtri impilati, bottoni 4×1 colonna a destra
+- [x] Asset detail: mobile → tutto centrato, bottoni 1×4 riga
+- [x] FX detail: stesse transizioni coerenti
 

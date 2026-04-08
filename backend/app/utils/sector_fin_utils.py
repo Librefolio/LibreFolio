@@ -67,10 +67,15 @@ class FinancialSector(str, Enum):
             "materials": cls.BASIC_MATERIALS,  # Short alias
             "energy": cls.ENERGY,
             "consumer staples": cls.CONSUMER_STAPLES,
+            "consumer defensive": cls.CONSUMER_STAPLES,  # Yahoo Finance alias
             "telecommunication": cls.TELECOMMUNICATION,
             "telecom": cls.TELECOMMUNICATION,  # Short alias
+            "communication services": cls.TELECOMMUNICATION,  # Yahoo Finance alias
             "utilities": cls.UTILITIES,
             "other": cls.OTHER,
+            # Yahoo Finance aliases
+            "financial services": cls.FINANCIALS,
+            "consumer cyclical": cls.CONSUMER_DISCRETIONARY,
             }
 
         if normalized_key in mapping:
@@ -129,4 +134,5 @@ def validate_sector(sector_name: str) -> bool:
     Returns:
         True if sector is recognized (not "Other")
     """
+
     return FinancialSector.from_string(sector_name) != FinancialSector.OTHER
