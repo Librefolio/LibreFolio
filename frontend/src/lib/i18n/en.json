@@ -936,7 +936,7 @@
     "addMeasure": "Add measurement",
     "metadata": "Metadata & Classification",
     "editViaModal": "Edit in asset modal",
-    "displayCurrency": "Display currency",
+    "displayCurrency": "Convert to",
     "noIdentifiers": "No identifiers configured",
     "noClassification": "No classification data",
     "measures": "Measures",
