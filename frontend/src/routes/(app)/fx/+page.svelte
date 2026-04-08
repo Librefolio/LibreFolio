@@ -99,7 +99,7 @@
 
     // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const fxLayout = createResponsiveLayout({wide: 1030, tablet: 700, tabletS: 530, labelHide: 460});
+    const fxLayout = createResponsiveLayout({wide: 1030, tablet: 700, tabletS: 520, labelHide: 460});
     let layoutMode = $derived(fxLayout.layoutMode);
     let showActionLabels = $derived(fxLayout.showActionLabels);
 
@@ -738,7 +738,7 @@
 
             <!-- Currency Filters — always grouped as a pair -->
             <div class="flex items-center gap-3">
-                <div class="w-40" data-testid="fx-currency-filter">
+                <div class="w-28 sm:w-40" data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                             allowedCurrencies={allowedForFilter1}
                             bind:value={filterCurrency1}
@@ -758,7 +758,7 @@
                             placeholder={$_('fx.filter.filterCurrency')}
                     />
                 </div>
-                <div class="w-40 transition-opacity {filterCurrency1 ? '' : 'opacity-50'}" data-testid="fx-currency-filter">
+                <div class="w-28 sm:w-40 transition-opacity {filterCurrency1 ? '' : 'opacity-50'}" data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                             allowedCurrencies={allowedForFilter2}
                             bind:value={filterCurrency2}

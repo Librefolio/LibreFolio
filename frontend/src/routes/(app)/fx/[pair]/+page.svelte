@@ -18,7 +18,7 @@
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/navigationStore';
-    import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingDown, TrendingUp, Wrench} from 'lucide-svelte';
+    import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
@@ -26,6 +26,7 @@
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import FxDataEditorSection from '$lib/components/fx/FxDataEditorSection.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import FxPriceSummary from '$lib/components/fx/FxPriceSummary.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -38,6 +39,7 @@
     import {apiResultToFxDataPoint, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
+    import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
 
     // =========================================================================
     // Page data
@@ -90,10 +92,9 @@
     // Provider config modal
     let showProviderModal = $state(false);
 
-    // Filter bar adaptive layout (same ResizeObserver as FX list page)
+    // Filter bar adaptive layout (shared utility — same as asset detail)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    let layoutMode = $state<'wide' | 'tablet' | 'tablet-s' | 'mobile'>('tablet');
-    let showActionLabels = $state(true);
+    const layout = createResponsiveLayout({wide: 730, tablet: 550, tabletS: 400, labelHide: 500});
 
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
     let settings = $derived(getSettingsForPair(data.canonicalSlug, 'fx'));
@@ -229,20 +230,12 @@
         return getCurrencyInfo(displayQuote).flag_emoji;
     });
 
-    // ResizeObserver for adaptive filter bar layout (same breakpoints as FX list page)
+    // ResizeObserver for adaptive filter bar layout (shared utility)
     $effect(() => {
         const el = filterBarRef;
         if (!el) return;
-        const ro = new ResizeObserver(([entry]) => {
-            const w = entry.contentRect.width;
-            if (w >= 730) layoutMode = 'wide';
-            else if (w >= 550) layoutMode = 'tablet';
-            else if (w >= 400) layoutMode = 'tablet-s';
-            else layoutMode = 'mobile';
-            showActionLabels = w >= 600;
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
+        layout.attach(el);
+        return () => layout.detach();
     });
 
     // =========================================================================
@@ -645,21 +638,23 @@
 
     <!-- ======================================================================= -->
     <!-- Filter bar: responsive layout matching FX list page -->
-    <!-- wide:   [ datepicker  pair-info ─── actions-2×2 ]  all in one row -->
-    <!-- tablet: [ datepicker       ] [ actions-2×2 ]      filters stacked, actions grid right -->
-    <!--         [ pair-info        ] [             ]                                           -->
-    <!-- mobile: [ datepicker       ]  all stacked centered                                    -->
-    <!--         [ pair-info        ]                                                            -->
-    <!--         [ actions-row      ]                                                            -->
+    <!-- wide:     [ datepicker  pair-info ─── actions-2×2 ]  all in one row -->
+    <!-- tablet:   [ datepicker       ] [ actions-2×2 ]       filters stacked, actions grid right -->
+    <!--           [ pair-info        ] [             ]                                           -->
+    <!-- tablet-s: [ datepicker  ──── actions-4×1    ]        single row each                    -->
+    <!--           [ pair-info                        ]                                           -->
+    <!-- mobile:   [ datepicker       ]  all stacked centered                                    -->
+    <!--           [ pair-info        ]                                                           -->
+    <!--           [ actions-1×4      ]                                                           -->
     <!-- ======================================================================= -->
     <div
             bind:this={filterBarRef}
             class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
+               {layout.layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
             data-testid="fx-detail-filter-bar"
     >
         <!-- Filters block -->
-        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-start'}">
+        <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center' : layout.layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-start'}">
             <!-- DateRangePicker -->
             <div class="max-w-md">
                 <DateRangePicker
@@ -671,25 +666,19 @@
                 />
             </div>
 
-            <!-- Pair Summary (rate + delta) — no date, already in DateRangePicker -->
-            {#if lastRate !== null}
-                <div class="flex items-center gap-2 px-3 {layoutMode === 'wide' ? 'border-l border-r border-gray-200 dark:border-slate-600' : ''} {layoutMode === 'tablet' ? 'w-full justify-center' : ''}">
-                    <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
-                        {lastRate.toFixed(4)}
-                    </span>
-                    {#if deltaPercent !== null}
-                        <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                            {#if deltaPercent >= 0}<TrendingUp size={12}/>{:else}<TrendingDown size={12}/>{/if}
-                            {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
-                        </span>
-                    {/if}
-                </div>
-            {/if}
+            <!-- Pair Summary (rate + delta) -->
+            <FxPriceSummary
+                    {lastRate}
+                    {deltaPercent}
+                    layoutMode={layout.layoutMode}
+            />
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), stacked column (tablet-s+mobile) -->
-        <div class="flex shrink-0 gap-1.5
-                    {layoutMode === 'mobile' || layoutMode === 'tablet-s' ? 'flex-col items-stretch' : 'grid grid-cols-2'}">
+        <!-- Actions: 2×2 grid (wide+tablet), 4×1 row (tablet-s), 1×4 column (mobile) -->
+        <div class="flex shrink-0 gap-1.5 self-center
+                    {layout.layoutMode === 'mobile' ? 'flex-col items-stretch w-full max-w-[200px]'
+                     : layout.layoutMode === 'tablet-s' ? 'flex-row items-center'
+                     : 'grid grid-cols-2 ml-auto'}">
             <!-- Row 1, Col 1: Abs/% segmented toggle -->
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
@@ -714,7 +703,7 @@
                     onclick={() => showProviderModal = true}
             >
                 <Wrench size={14}/>
-                {#if showActionLabels}<span>{$t('fx.providers')}</span>{/if}
+                {#if layout.showActionLabels}<span>{$t('fx.providers')}</span>{/if}
             </button>
             <!-- Row 2, Col 1: Sync -->
             <button
@@ -726,7 +715,7 @@
                     title={isManualOnly ? $t('fxDetail.syncDisabledManual') : ''}
             >
                 <RotateCw class={syncing ? 'animate-spin' : ''} size={14}/>
-                {#if showActionLabels}<span>{syncing ? $t('fx.syncing') : $t('common.sync')}</span>{/if}
+                {#if layout.showActionLabels}<span>{syncing ? $t('fx.syncing') : $t('common.sync')}</span>{/if}
             </button>
             <!-- Row 2, Col 2: Refresh -->
             <button
@@ -736,7 +725,7 @@
                     onclick={handleRefresh}
             >
                 <RefreshCw class={loading ? 'animate-spin' : ''} size={14}/>
-                {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
+                {#if layout.showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
         </div>
     </div>
@@ -784,7 +773,14 @@
         {:else if lineData.length > 0}
             <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
             {#if showAesthetics}
-                <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700">
+                <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
+                    <button
+                        class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+                        onclick={() => showAesthetics = false}
+                        title={$t('common.close')}
+                    >
+                        <X size={16}/>
+                    </button>
                     <ChartAestheticsSection
                             colorByBaseline={settings.colorByBaseline}
                             areaFill={settings.areaFill}

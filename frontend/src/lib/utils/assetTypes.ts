@@ -60,6 +60,28 @@ export function buildAssetTypeOptions(t: (key: string) => string): Array<{
 
 export const IDENTIFIER_TYPES = schemas.IdentifierType.options;
 
+/**
+ * Map IdentifierType enum value to a human-readable label.
+ * Upper-case acronyms stay as-is; multi-word → Title Case.
+ */
+function identifierLabel(type: string): string {
+    const ACRONYMS = new Set(['ISIN', 'CUSIP', 'SEDOL', 'FIGI', 'UUID']);
+    if (ACRONYMS.has(type)) return type;
+    return type.charAt(0) + type.slice(1).toLowerCase(); // TICKER → Ticker, OTHER → Other
+}
+
+/**
+ * Build a list of [label, value] pairs for non-empty identifiers on an asset.
+ * Derives field names from the IdentifierType enum to stay in sync with backend.
+ *
+ * @example buildIdentifiersList(asset) → [['ISIN', 'IE00B4L5Y983'], ['Ticker', 'VWCE']]
+ */
+export function buildIdentifiersList(asset: Record<string, unknown>): [string, string][] {
+    return IDENTIFIER_TYPES
+        .map(type => [identifierLabel(type), asset[`identifier_${type.toLowerCase()}`]])
+        .filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0);
+}
+
 // =============================================================================
 // SECTOR KEYS — loaded from backend via GET /utilities/sectors
 // =============================================================================
@@ -100,4 +122,3 @@ export function getSectorKeysList(): readonly string[] {
 export function sectorI18nKey(backendKey: string): string {
     return backendKey.replaceAll(' ', '');
 }
-

@@ -3,14 +3,19 @@
 
   Shows countries colored by weight using ECharts map series.
   Data keys are ISO 3166-1 Alpha-3 codes (USA, DEU, ITA, etc.)
-  mapped to the GeoJSON country names via an internal lookup table.
+  mapped to the GeoJSON country names via the ISO_A3 property embedded in world.json.
+
+  Country names, ISO-2 codes, and flag emoji are resolved via countryStore
+  (backed by GET /api/v1/utilities/countries).
 
   Props:
   - data: Record<string, number> — ISO A3 code → weight (0-1)
   - height: CSS height (default "320px")
+  - language: Language code for localized names (e.g. 'it', 'en')
 
   Requires:
-  - /data/world.json (ECharts GeoJSON) in static folder
+  - /data/world.json (ECharts GeoJSON with ISO_A3 property) in static folder
+  - countryStore loaded for the current language
 
   Used by:
   - Asset Detail Page (metadata section)
@@ -18,6 +23,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/countryStore';
 
     // =========================================================================
     // Props
@@ -47,64 +53,11 @@
     let resizeObserver: ResizeObserver | null = null;
     let mapRegistered = $state(false);
     let mapError = $state<string | null>(null);
-    let localizedNames = $state<Record<string, string>>({});
 
-    // =========================================================================
-    // ISO A3 → ECharts GeoJSON name mapping
-    // =========================================================================
-
-    const ISO_A3_TO_NAME: Record<string, string> = {
-        AFG: 'Afghanistan', ALB: 'Albania', DZA: 'Algeria', AGO: 'Angola',
-        ARG: 'Argentina', ARM: 'Armenia', AUS: 'Australia', AUT: 'Austria',
-        AZE: 'Azerbaijan', BHS: 'Bahamas', BGD: 'Bangladesh', BLR: 'Belarus',
-        BEL: 'Belgium', BLZ: 'Belize', BEN: 'Benin', BTN: 'Bhutan',
-        BOL: 'Bolivia', BIH: 'Bosnia and Herz.', BWA: 'Botswana', BRA: 'Brazil',
-        BRN: 'Brunei', BGR: 'Bulgaria', BFA: 'Burkina Faso', BDI: 'Burundi',
-        KHM: 'Cambodia', CMR: 'Cameroon', CAN: 'Canada', CAF: 'Central African Rep.',
-        TCD: 'Chad', CHL: 'Chile', CHN: 'China', COL: 'Colombia',
-        COG: 'Congo', COD: 'Dem. Rep. Congo', CRI: 'Costa Rica', CIV: "Côte d'Ivoire",
-        HRV: 'Croatia', CUB: 'Cuba', CYP: 'Cyprus', CZE: 'Czech Rep.',
-        DNK: 'Denmark', DJI: 'Djibouti', DOM: 'Dominican Rep.', ECU: 'Ecuador',
-        EGY: 'Egypt', SLV: 'El Salvador', GNQ: 'Eq. Guinea', ERI: 'Eritrea',
-        EST: 'Estonia', ETH: 'Ethiopia', FLK: 'Falkland Is.', FJI: 'Fiji',
-        FIN: 'Finland', FRA: 'France', GAB: 'Gabon', GMB: 'Gambia',
-        GEO: 'Georgia', DEU: 'Germany', GHA: 'Ghana', GRC: 'Greece',
-        GRL: 'Greenland', GTM: 'Guatemala', GIN: 'Guinea', GNB: 'Guinea-Bissau',
-        GUY: 'Guyana', HTI: 'Haiti', HND: 'Honduras', HUN: 'Hungary',
-        ISL: 'Iceland', IND: 'India', IDN: 'Indonesia', IRN: 'Iran',
-        IRQ: 'Iraq', IRL: 'Ireland', ISR: 'Israel', ITA: 'Italy',
-        JAM: 'Jamaica', JPN: 'Japan', JOR: 'Jordan', KAZ: 'Kazakhstan',
-        KEN: 'Kenya', PRK: 'North Korea', KOR: 'Korea', KWT: 'Kuwait',
-        KGZ: 'Kyrgyzstan', LAO: 'Lao PDR', LVA: 'Latvia', LBN: 'Lebanon',
-        LSO: 'Lesotho', LBR: 'Liberia', LBY: 'Libya', LTU: 'Lithuania',
-        LUX: 'Luxembourg', MKD: 'Macedonia', MDG: 'Madagascar', MWI: 'Malawi',
-        MYS: 'Malaysia', MLI: 'Mali', MRT: 'Mauritania', MEX: 'Mexico',
-        MDA: 'Moldova', MNG: 'Mongolia', MNE: 'Montenegro', MAR: 'Morocco',
-        MOZ: 'Mozambique', MMR: 'Myanmar', NAM: 'Namibia', NPL: 'Nepal',
-        NLD: 'Netherlands', NZL: 'New Zealand', NIC: 'Nicaragua', NER: 'Niger',
-        NGA: 'Nigeria', NOR: 'Norway', OMN: 'Oman', PAK: 'Pakistan',
-        PAN: 'Panama', PNG: 'Papua New Guinea', PRY: 'Paraguay', PER: 'Peru',
-        PHL: 'Philippines', POL: 'Poland', PRT: 'Portugal', QAT: 'Qatar',
-        ROU: 'Romania', RUS: 'Russia', RWA: 'Rwanda', SAU: 'Saudi Arabia',
-        SEN: 'Senegal', SRB: 'Serbia', SLE: 'Sierra Leone', SGP: 'Singapore',
-        SVK: 'Slovakia', SVN: 'Slovenia', SLB: 'Solomon Is.', SOM: 'Somalia',
-        ZAF: 'South Africa', SSD: 'S. Sudan', ESP: 'Spain', LKA: 'Sri Lanka',
-        SDN: 'Sudan', SUR: 'Suriname', SWZ: 'Swaziland', SWE: 'Sweden',
-        CHE: 'Switzerland', SYR: 'Syria', TWN: 'Taiwan', TJK: 'Tajikistan',
-        TZA: 'Tanzania', THA: 'Thailand', TLS: 'Timor-Leste', TGO: 'Togo',
-        TTO: 'Trinidad and Tobago', TUN: 'Tunisia', TUR: 'Turkey',
-        TKM: 'Turkmenistan', UGA: 'Uganda', UKR: 'Ukraine',
-        ARE: 'United Arab Emirates', GBR: 'United Kingdom', USA: 'United States',
-        URY: 'Uruguay', UZB: 'Uzbekistan', VUT: 'Vanuatu', VEN: 'Venezuela',
-        VNM: 'Vietnam', PSE: 'W. Sahara', YEM: 'Yemen', ZMB: 'Zambia',
-        ZWE: 'Zimbabwe',
-    };
-
-    // Reverse lookup: English GeoJSON name → ISO A3
-    const NAME_TO_ISO_A3: Record<string, string> = {};
-    for (const [code, name] of Object.entries(ISO_A3_TO_NAME)) {
-        NAME_TO_ISO_A3[name] = code;
-    }
+    /** ISO A3 → GeoJSON feature name (built dynamically from loaded world.json) */
+    let iso3ToGeoName: Record<string, string> = {};
+    /** GeoJSON feature name → ISO A3 (reverse of above) */
+    let geoNameToIso3: Record<string, string> = {};
 
     // =========================================================================
     // Lifecycle
@@ -121,25 +74,12 @@
         };
     });
 
-    // Load localized country names from backend
+    // Load country data from backend via countryStore when language changes
     $effect(() => {
-        const lang = language;
-        if (lang === 'en') {
-            localizedNames = {};  // English names are already in ISO_A3_TO_NAME
-            return;
-        }
-        fetch(`/api/v1/utilities/countries?language=${lang}`)
-            .then(r => r.ok ? r.json() : {items: []})
-            .then((response: {items: Array<{iso3: string; name: string}>}) => {
-                const map: Record<string, string> = {};
-                for (const item of (response.items || [])) {
-                    map[item.iso3] = item.name;
-                }
-                localizedNames = map;
-                // Re-render chart with new names
-                renderChart();
-            })
-            .catch(() => { localizedNames = {}; });
+        ensureCountriesLoaded(language).then(() => {
+            // Re-render chart with new localized names
+            renderChart();
+        });
     });
 
     $effect(() => {
@@ -178,6 +118,19 @@
                 return;
             }
             const geoJson = await response.json();
+
+            // Build ISO A3 ↔ GeoJSON name mappings from the enriched GeoJSON
+            iso3ToGeoName = {};
+            geoNameToIso3 = {};
+            for (const feature of (geoJson.features ?? [])) {
+                const name: string = feature.properties?.name ?? '';
+                const iso3: string = feature.properties?.ISO_A3 ?? '';
+                if (name && iso3) {
+                    iso3ToGeoName[iso3] = name;
+                    geoNameToIso3[name] = iso3;
+                }
+            }
+
             echarts.registerMap('world', geoJson as any);
             mapRegistered = true;
         } catch (e: any) {
@@ -199,11 +152,11 @@
 
         const isDark = document.documentElement.classList.contains('dark');
 
-        // Convert ISO A3 → country name + percentage
+        // Convert ISO A3 → GeoJSON country name + percentage
         const chartData: Array<{ name: string; value: number }> = [];
         for (const [code, weight] of Object.entries(data)) {
             if (weight <= 0) continue;
-            const countryName = ISO_A3_TO_NAME[code] ?? code;
+            const countryName = iso3ToGeoName[code] ?? code;
             chartData.push({name: countryName, value: +(weight * 100).toFixed(2)});
         }
 
@@ -213,13 +166,16 @@
             tooltip: {
                 trigger: 'item',
                 formatter: (params: any) => {
-                    // Reverse lookup: GeoJSON name → ISO A3 → localized name
-                    const iso3 = NAME_TO_ISO_A3[params.name];
-                    const displayName = (iso3 && localizedNames[iso3]) || params.name;
+                    // Reverse lookup: GeoJSON name → ISO A3 → countryStore info
+                    const iso3 = geoNameToIso3[params.name] ?? '';
+                    const info = iso3 ? getCountryInfo(iso3) : null;
+                    const flag = info?.flag_emoji ?? '';
+                    const displayName = info?.name ?? params.name;
+                    const prefix = flag ? `${flag} ` : '';
                     if (params.value != null && !isNaN(params.value)) {
-                        return `${displayName}: ${params.value}%`;
+                        return `${prefix}${displayName}: ${params.value}%`;
                     }
-                    return displayName;
+                    return `${prefix}${displayName}`;
                 },
                 backgroundColor: isDark ? '#1e293b' : '#fff',
                 borderColor: isDark ? '#334155' : '#e2e8f0',
@@ -279,6 +235,4 @@
         style="height: {height};"
     ></div>
 {/if}
-
-
 

@@ -18,8 +18,8 @@
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/navigationStore';
     import {
-        AlertTriangle, ArrowLeft, ChevronDown, Coins, Construction, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
-        Ruler, Settings, TrendingDown, TrendingUp
+        ArrowLeft, ChevronDown, Construction, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
+        Ruler, Settings, TrendingUp, X
     } from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -30,9 +30,9 @@
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
-    import {CurrencySearchSelect} from '$lib/components/ui/select';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
     import {signalFromConfig} from '$lib/charts/signals';
@@ -42,41 +42,9 @@
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
     import {getFxStore} from '$lib/stores/fxStoreRegistry';
-    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName} from '$lib/utils/providerHelpers';
-
-    // Local interfaces — correct types instead of Zod union artefacts
-    interface AssetDetailInfo {
-        id: number;
-        display_name: string;
-        currency: string;
-        asset_type?: string | null;
-        icon_url?: string | null;
-        provider_code?: string | null;
-        has_metadata: boolean;
-        active: boolean;
-        user_url?: string | null;
-        identifier_isin?: string | null;
-        identifier_ticker?: string | null;
-        identifier_cusip?: string | null;
-        identifier_sedol?: string | null;
-        identifier_figi?: string | null;
-        identifier_uuid?: string | null;
-        identifier_other?: string | null;
-        identifier?: string | null;
-        identifier_type?: string | null;
-    }
-
-    interface ProviderAssignmentLocal {
-        asset_id: number;
-        provider_code: string;
-        identifier: string;
-        identifier_type: string;
-        provider_params?: Record<string, any> | null;
-        fetch_interval?: number | null;
-        last_fetch_at?: string | null;
-        provider_url?: string | null;
-    }
+    import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
 
     // =========================================================================
     // Page data
@@ -92,8 +60,8 @@
     // State
     // =========================================================================
 
-    let assetInfo = $state<AssetDetailInfo | null>(null);
-    let providerAssignment = $state<ProviderAssignmentLocal | null>(null);
+    let assetInfo = $state<AssetDetail | null>(null);
+    let providerAssignment = $state<ProviderAssignmentFlat | null>(null);
     let chartData: any[] = $state([]);
     let events: any[] = $state([]);
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -123,7 +91,7 @@
 
     // Filter bar layout
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const layout = createResponsiveLayout({wide: 730, tablet: 550, tabletS: 400, labelHide: 500});
+    const layout = createResponsiveLayout({wide: 900, tablet: 690, tabletS: 570, labelHide: 370});
 
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
@@ -150,13 +118,12 @@
     // Classification data (loaded when has_metadata)
     let sectorDistribution: Record<string, number> | null = $state(null);
     let geographicDistribution: Record<string, number> | null = $state(null);
+    let classificationLoaded = $state(false);
 
     // Provider icon for header badge
     let providerIconUrl = $state<string | null>(null);
 
-    // FX warning toast
-    let fxWarningToastId = $state<string | null>(null);
-    let fxWarningToastVisible = $derived(fxWarningToastId ? toasts.items.some(t => t.id === fxWarningToastId) : false);
+    // FX warning (tooltip-based, no toast)
 
     // FX pair add modal (opened from FX warning)
     let showFxPairAddModal = $state(false);
@@ -201,7 +168,8 @@
         return getCurrencyInfo(assetInfo.currency).flag_emoji;
     });
 
-    let externalUrl = $derived(assetInfo?.user_url || providerAssignment?.provider_url || null);
+    let userUrl = $derived(assetInfo?.user_url || null);
+    let providerExternalUrl = $derived(providerAssignment?.provider_url || null);
 
     /** True when display currency differs from asset currency and FX pair is not configured */
     let fxConversionMissing = $derived.by(() => {
@@ -222,15 +190,7 @@
 
     let identifiersList = $derived.by((): [string, string][] => {
         if (!assetInfo) return [];
-        return ([
-            ['ISIN', assetInfo.identifier_isin],
-            ['Ticker', assetInfo.identifier_ticker],
-            ['CUSIP', assetInfo.identifier_cusip],
-            ['SEDOL', assetInfo.identifier_sedol],
-            ['FIGI', assetInfo.identifier_figi],
-            ['UUID', assetInfo.identifier_uuid],
-            ['Other', assetInfo.identifier_other],
-        ] as [string, string | null | undefined][]).filter((e): e is [string, string] => !!e[1]);
+        return buildIdentifiersList(assetInfo as Record<string, unknown>);
     });
 
     // Overlay signals
@@ -294,6 +254,8 @@
         // Load classification data if available
         if (assetInfo?.has_metadata) {
             await loadClassificationData();
+        } else {
+            classificationLoaded = true;
         }
     });
 
@@ -311,20 +273,6 @@
         }
     });
 
-    // FX conversion warning — auto-show/dismiss toast
-    $effect(() => {
-        if (fxConversionMissing && assetInfo) {
-            if (!fxWarningToastVisible) {
-                const tr = get(t);
-                const msg = tr('assetDetail.fxPairMissing', {values: {base: assetInfo.currency, quote: displayCurrency}})
-                    + ' — ' + tr('assetDetail.addFxPair') + ': /fx';
-                fxWarningToastId = toasts.warning(msg, 20000);
-            }
-        } else if (!fxConversionMissing && fxWarningToastId) {
-            toasts.dismiss(fxWarningToastId);
-            fxWarningToastId = null;
-        }
-    });
 
     // =========================================================================
     // Data Loading
@@ -336,7 +284,7 @@
             const items = response as any[];
             const asset = items.find((a: any) => a.id === data.assetId);
             if (asset) {
-                assetInfo = asset as AssetDetailInfo;
+                assetInfo = asset as AssetDetail;
                 if (!displayCurrency) displayCurrency = asset.currency;
             } else {
                 error = `Asset #${data.assetId} not found`;
@@ -353,7 +301,7 @@
                 queries: {asset_ids: [data.assetId]},
             });
             const items = response as any[];
-            providerAssignment = items.length > 0 ? (items[0] as ProviderAssignmentLocal) : null;
+            providerAssignment = items.length > 0 ? (items[0] as ProviderAssignmentFlat) : null;
         } catch (e: any) {
             console.error('Failed to load provider assignment:', e);
         }
@@ -418,8 +366,18 @@
                 const cp = items[0].classification_params;
                 sectorDistribution = cp.sector_area?.distribution ?? null;
                 geographicDistribution = cp.geographic_area?.distribution ?? null;
+            } else {
+                // No classification data — reset to null (prevents stale data from previous asset)
+                sectorDistribution = null;
+                geographicDistribution = null;
             }
-        } catch (e) { console.error('Failed to load classification data:', e); }
+        } catch (e) {
+            console.error('Failed to load classification data:', e);
+            sectorDistribution = null;
+            geographicDistribution = null;
+        } finally {
+            classificationLoaded = true;
+        }
     }
 
     async function loadComparisonAssetsData(compSignals: SignalConfig[]) {
@@ -453,13 +411,6 @@
     // Actions
     // =========================================================================
 
-    function showFxWarningToast() {
-        if (fxWarningToastVisible || !assetInfo) return;
-        const tr = get(t);
-        const msg = tr('assetDetail.fxPairMissing', {values: {base: assetInfo.currency, quote: displayCurrency}})
-            + ' — ' + tr('assetDetail.addFxPair') + ': /fx';
-        fxWarningToastId = toasts.warning(msg, 20000);
-    }
 
     async function handleRefresh() {
         await loadChartData();
@@ -472,9 +423,14 @@
         if (assetInfo?.provider_code) {
             providerIconUrl = getAssetProviderIconUrl(assetInfo.provider_code);
         }
-        // Reload classification if metadata became available
-        if (assetInfo?.has_metadata && !sectorDistribution && !geographicDistribution) {
+        // Reload classification data if metadata is available (always refresh after sync)
+        classificationLoaded = false;
+        if (assetInfo?.has_metadata) {
             await loadClassificationData();
+        } else {
+            sectorDistribution = null;
+            geographicDistribution = null;
+            classificationLoaded = true;
         }
     }
 
@@ -542,6 +498,12 @@
 
     function buildEditData() {
         if (!assetInfo) return null;
+        // Build classification_params from loaded data
+        const hasClassification = sectorDistribution || geographicDistribution;
+        const classification_params = hasClassification ? {
+            sector_area: sectorDistribution ? {distribution: sectorDistribution} : null,
+            geographic_area: geographicDistribution ? {distribution: geographicDistribution} : null,
+        } : null;
         return {
             id: assetInfo.id,
             display_name: assetInfo.display_name,
@@ -549,6 +511,7 @@
             asset_type: assetInfo.asset_type ?? '',
             icon_url: assetInfo.icon_url,
             active: assetInfo.active,
+            classification_params,
             identifier_isin: assetInfo.identifier_isin,
             identifier_ticker: assetInfo.identifier_ticker,
             identifier_cusip: assetInfo.identifier_cusip,
@@ -603,17 +566,17 @@
                             {#if providerIconUrl}
                                 <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
                             {/if}
-                            {assetInfo.provider_code}
+                            {getAssetProviderName(assetInfo.provider_code)}
                         </span>
                     {/if}
 
-                    {#if externalUrl}
+                    {#if userUrl}
                         <a
-                            href={externalUrl}
+                            href={userUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             class="inline-flex items-center p-1 rounded text-gray-400 hover:text-libre-green transition-colors"
-                            title={externalUrl}
+                            title={userUrl}
                         >
                             <ExternalLink size={14}/>
                         </a>
@@ -635,6 +598,14 @@
 
     <!-- ======================================================================= -->
     <!-- Filter bar -->
+    <!-- wide:     [ datepicker  price-summary ─── actions-2×2 ]                -->
+    <!-- tablet:   [ datepicker       ] [ actions-2×2 ]                          -->
+    <!--           [ price-summary    ] [             ]                          -->
+    <!-- tablet-s: [ datepicker       ──── actions-4×1 ]                         -->
+    <!--           [ price-summary                     ]                         -->
+    <!-- mobile:   [ datepicker       ] all stacked centered                     -->
+    <!--           [ price-summary    ]                                          -->
+    <!--           [ actions-1×4      ]                                          -->
     <!-- ======================================================================= -->
     <div
             bind:this={filterBarRef}
@@ -655,76 +626,25 @@
             </div>
 
             {#if assetInfo}
-                <div class="flex {layout.layoutMode === 'wide' ? 'flex-col gap-1.5' : 'flex-row items-center gap-3 flex-wrap'}">
-                    {#if lastPrice !== null}
-                        <div class="flex items-center gap-2 {layout.layoutMode === 'wide' ? 'px-3 border-l border-gray-200 dark:border-slate-600' : ''} {layout.layoutMode === 'tablet' || layout.layoutMode === 'tablet-s' ? 'w-full justify-center' : ''}">
-                            <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
-                                {lastPrice.toFixed(2)}
-                            </span>
-                            <span class="text-xs text-gray-400 dark:text-gray-500">{displayCurrency}</span>
-                            {#if deltaPercent !== null}
-                                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                                    {#if deltaPercent >= 0}<TrendingUp size={12}/>{:else}<TrendingDown size={12}/>{/if}
-                                    {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
-                                </span>
-                            {/if}
-                            {#if deltaAbs !== null}
-                                <span class="text-xs text-gray-400 dark:text-gray-500">
-                                    ({deltaAbs >= 0 ? '+' : ''}{deltaAbs.toFixed(2)})
-                                </span>
-                            {/if}
-                        </div>
-                    {/if}
-
-                    <div class="flex items-center gap-2 {layout.layoutMode === 'wide' ? 'px-3' : ''}">
-                        <span class="text-[10px] uppercase font-semibold text-gray-400 dark:text-gray-500 tracking-wider">
-                            {$t('assetDetail.displayCurrency')}
-                        </span>
-                        <div class="w-32">
-                            <CurrencySearchSelect
-                                    bind:value={displayCurrency}
-                                    compact={true}
-                                    placeholder={$t('assetDetail.displayCurrency')}
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {#if fxConversionMissing}
-                    <div class="flex gap-1 {layout.layoutMode === 'wide' ? 'flex-col items-center' : 'flex-row items-center'}">
-                        <button
-                            class="p-1 rounded transition-colors {fxWarningToastVisible
-                                ? 'text-amber-300 dark:text-amber-700 cursor-not-allowed opacity-50'
-                                : 'text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 cursor-pointer'}"
-                            disabled={fxWarningToastVisible}
-                            onclick={showFxWarningToast}
-                            title={$t('assetDetail.fxPairMissing', {values: {base: assetInfo.currency, quote: displayCurrency}})}
-                        >
-                            <AlertTriangle size={16}/>
-                        </button>
-                        <button
-                            class="p-1 rounded text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 cursor-pointer transition-colors"
-                            onclick={() => showFxPairAddModal = true}
-                            title={$t('assetDetail.addFxPair')}
-                        >
-                            <Coins size={14}/>
-                        </button>
-                    </div>
-                {:else if displayCurrency && assetInfo && displayCurrency !== assetInfo.currency && fxPairSlug}
-                    <a
-                        href="/fx/{fxPairSlug}"
-                        class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors"
-                        title={$t('assetDetail.goToFxPair')}
-                    >
-                        <Coins size={14}/>
-                    </a>
-                {/if}
+                <AssetPriceSummary
+                        {lastPrice}
+                        {deltaPercent}
+                        {deltaAbs}
+                        bind:displayCurrency
+                        assetCurrency={assetInfo.currency}
+                        {fxConversionMissing}
+                        {fxPairSlug}
+                        layoutMode={layout.layoutMode}
+                        onAddFxPair={() => showFxPairAddModal = true}
+                />
             {/if}
         </div>
 
-        <!-- Actions 2×2 -->
-        <div class="flex shrink-0 gap-1.5
-                    {layout.layoutMode === 'mobile' || layout.layoutMode === 'tablet-s' ? 'flex-col items-stretch' : 'grid grid-cols-2'}">
+        <!-- Actions: 2×2 grid (wide+tablet), 4×1 row (tablet-s), 1×4 column (mobile) -->
+        <div class="flex shrink-0 gap-1.5 self-center
+                    {layout.layoutMode === 'mobile' ? 'flex-col items-stretch w-full max-w-[200px]'
+                     : layout.layoutMode === 'tablet-s' ? 'flex-row items-center'
+                     : 'grid grid-cols-2 ml-auto'}">
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
                         class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute'
@@ -812,7 +732,14 @@
         {:else if lineData.length > 0}
             <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
             {#if showAesthetics}
-                <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700">
+                <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
+                    <button
+                        class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+                        onclick={() => showAesthetics = false}
+                        title={$t('common.close')}
+                    >
+                        <X size={16}/>
+                    </button>
                     <ChartAestheticsSection
                             colorByBaseline={settings.colorByBaseline}
                             areaFill={settings.areaFill}
@@ -981,17 +908,17 @@
             </button>
             {#if showMetadata}
                 <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3 space-y-4">
-                    <!-- External URLs -->
-                    {#if externalUrl}
+                    <!-- External URLs (provider URL only — user URL is in header) -->
+                    {#if providerExternalUrl}
                         <div>
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assets.provider.userUrl')}</h4>
-                            <a href={externalUrl} target="_blank" rel="noopener noreferrer"
-                               class="text-sm text-libre-green hover:underline break-all">{externalUrl}</a>
+                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assets.provider.providerUrl')}</h4>
+                            <a href={providerExternalUrl} target="_blank" rel="noopener noreferrer"
+                               class="text-sm text-libre-green hover:underline break-all">{providerExternalUrl}</a>
                         </div>
                     {/if}
 
                     <!-- Classification Charts -->
-                    {#if assetInfo.has_metadata && (sectorDistribution || geographicDistribution)}
+                    {#if classificationLoaded && (sectorDistribution || geographicDistribution)}
                         <div class="space-y-3">
                             <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('assetDetail.classification')}</h4>
 
@@ -1011,7 +938,7 @@
                                 {/if}
                             </div>
                         </div>
-                    {:else if assetInfo.has_metadata}
+                    {:else if !classificationLoaded}
                         <div class="text-sm text-gray-500 dark:text-gray-400 italic">
                             {$t('assetDetail.classification')} — {$t('common.loading')}...
                         </div>
