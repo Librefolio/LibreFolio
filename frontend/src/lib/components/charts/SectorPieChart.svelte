@@ -15,6 +15,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {_ as t} from '$lib/i18n';
+    import {sectorI18nKey} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Props
@@ -114,8 +115,9 @@
 
         const chartData = entries.map(([key, value]) => {
             // Try i18n translation, fallback to raw key
-            const label = tr(`assets.sectors.${key}`) !== `assets.sectors.${key}`
-                ? tr(`assets.sectors.${key}`)
+            const i18nKey = `sectors.${sectorI18nKey(key)}`;
+            const label = tr(i18nKey) !== i18nKey
+                ? tr(i18nKey)
                 : key.replace(/_/g, ' ');
             return {
                 name: label,
