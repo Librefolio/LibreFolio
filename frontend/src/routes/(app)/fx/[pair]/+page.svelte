@@ -94,7 +94,7 @@
 
     // Filter bar adaptive layout (shared utility — same as asset detail)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const layout = createResponsiveLayout({wide: 730, tablet: 550, tabletS: 400, labelHide: 500});
+    const layout = createResponsiveLayout({wide: 790, tablet: 620, tabletS: 520, labelHide: 430});
 
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
     let settings = $derived(getSettingsForPair(data.canonicalSlug, 'fx'));
@@ -638,14 +638,15 @@
 
     <!-- ======================================================================= -->
     <!-- Filter bar: responsive layout matching FX list page -->
-    <!-- wide:     [ datepicker  pair-info ─── actions-2×2 ]  all in one row -->
-    <!-- tablet:   [ datepicker       ] [ actions-2×2 ]       filters stacked, actions grid right -->
-    <!--           [ pair-info        ] [             ]                                           -->
-    <!-- tablet-s: [ datepicker  ──── actions-4×1    ]        single row each                    -->
-    <!--           [ pair-info                        ]                                           -->
-    <!-- mobile:   [ datepicker       ]  all stacked centered                                    -->
-    <!--           [ pair-info        ]                                                           -->
-    <!--           [ actions-1×4      ]                                                           -->
+    <!-- wide:     [ datepicker  pair-info ─── actions-2×2 ]  all in one row            -->
+    <!-- tablet:   [ datepicker       ] [ actions-2×2 ]       filters stacked, grid right -->
+    <!--           [ pair-info        ] [             ]                                    -->
+    <!-- tablet-s: [ datepicker       ]  filters stacked, actions 4×1 column               -->
+    <!--           [ pair-info        ]                                                     -->
+    <!--           [ actions-4×1 col  ]                                                     -->
+    <!-- mobile:   [ datepicker       ]  all stacked, actions 1×4 row                      -->
+    <!--           [ pair-info        ]                                                     -->
+    <!--           [ actions ──── 1×4 ]                                                     -->
     <!-- ======================================================================= -->
     <div
             bind:this={filterBarRef}
@@ -674,10 +675,10 @@
             />
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), 4×1 row (tablet-s), 1×4 column (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet), 4×1 column (tablet-s), 1×4 row (mobile) -->
         <div class="flex shrink-0 gap-1.5 self-center
-                    {layout.layoutMode === 'mobile' ? 'flex-col items-stretch w-full max-w-[200px]'
-                     : layout.layoutMode === 'tablet-s' ? 'flex-row items-center'
+                    {layout.layoutMode === 'mobile' ? 'flex-row items-center justify-center'
+                     : layout.layoutMode === 'tablet-s' ? 'flex-col'
                      : 'grid grid-cols-2 ml-auto'}">
             <!-- Row 1, Col 1: Abs/% segmented toggle -->
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">

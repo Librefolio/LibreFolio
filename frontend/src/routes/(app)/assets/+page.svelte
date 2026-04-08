@@ -149,7 +149,7 @@
 
     // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const layout = createResponsiveLayout({wide: 1240, tablet: 920, tabletS: 500, labelHide: 460});
+    const layout = createResponsiveLayout({wide: 1240, tablet: 960, tabletS: 500, labelHide: 460});
     let layoutMode = $derived(layout.layoutMode);
     let showActionLabels = $derived(layout.showActionLabels);
 

@@ -91,7 +91,7 @@
 
     // Filter bar layout
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const layout = createResponsiveLayout({wide: 900, tablet: 690, tabletS: 570, labelHide: 370});
+    const layout = createResponsiveLayout({wide: 1090, tablet: 870, tabletS: 570, labelHide: 380});
 
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
@@ -598,14 +598,14 @@
 
     <!-- ======================================================================= -->
     <!-- Filter bar -->
-    <!-- wide:     [ datepicker  price-summary ─── actions-2×2 ]                -->
-    <!-- tablet:   [ datepicker       ] [ actions-2×2 ]                          -->
-    <!--           [ price-summary    ] [             ]                          -->
-    <!-- tablet-s: [ datepicker       ──── actions-4×1 ]                         -->
-    <!--           [ price-summary                     ]                         -->
-    <!-- mobile:   [ datepicker       ] all stacked centered                     -->
-    <!--           [ price-summary    ]                                          -->
-    <!--           [ actions-1×4      ]                                          -->
+    <!-- wide:     [ datepicker  price-summary ─── actions-2×2 ]                        -->
+    <!-- tablet:   [ datepicker       ] [ actions-2×2 ]  summary 2-row, beside picker   -->
+    <!--           [ price-summary    ] [             ]                                  -->
+    <!-- tablet-s: [ datepicker       ] [ actions ]  filters stacked, actions column     -->
+    <!--           [ price-summary    ] [ 4×1    ]  to the right                         -->
+    <!-- mobile:   [ datepicker       ]  all stacked, actions 1×4 row                   -->
+    <!--           [ price-summary    ]                                                  -->
+    <!--           [ actions ──── 1×4 ]                                                  -->
     <!-- ======================================================================= -->
     <div
             bind:this={filterBarRef}
@@ -613,8 +613,10 @@
                {layout.layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
             data-testid="asset-detail-filter-bar"
     >
-        <!-- Filters block -->
-        <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center' : layout.layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-start'}">
+        <!-- Filters block: wide = row (side by side), tablet/tablet-s = column (stacked), mobile = centered -->
+        <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center'
+             : layout.layoutMode === 'wide' ? 'flex-row items-center flex-1'
+             : 'flex-col items-start flex-1'}">
             <div class="max-w-md">
                 <DateRangePicker
                         bind:activePreset
@@ -640,10 +642,10 @@
             {/if}
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), 4×1 row (tablet-s), 1×4 column (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet), 4×1 column (tablet-s), 1×4 row (mobile) -->
         <div class="flex shrink-0 gap-1.5 self-center
-                    {layout.layoutMode === 'mobile' ? 'flex-col items-stretch w-full max-w-[200px]'
-                     : layout.layoutMode === 'tablet-s' ? 'flex-row items-center'
+                    {layout.layoutMode === 'mobile' ? 'flex-row items-center justify-center'
+                     : layout.layoutMode === 'tablet-s' ? 'flex-col items-stretch'
                      : 'grid grid-cols-2 ml-auto'}">
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
