@@ -280,6 +280,15 @@
         MATURITY_SETTLEMENT: '📅',
         SPLIT: '✂️',
     };
+
+    /** Map event type → i18n badge key suffix */
+    const EVENT_BADGE_KEY: Record<string, string> = {
+        DIVIDEND: 'badgeDividend',
+        INTEREST: 'badgeInterest',
+        PRICE_ADJUSTMENT: 'badgePriceAdjustment',
+        MATURITY_SETTLEMENT: 'badgeMaturitySettlement',
+        SPLIT: 'badgeSplit',
+    };
 </script>
 
 <div>
@@ -378,6 +387,7 @@
                     {@const signalDescText = getSignalDesc(signal.signalType)}
                     {@const summary = signalSummaries.get(signal.id)}
                     {@const dataStartsLate = summary?.firstDate && dateStart && summary.firstDate > dateStart}
+                    {@const hasNoData = summary && summary.pointCount === 0}
                     <div class="space-y-2">
                         <!-- Signal header -->
                         <div class="flex items-center justify-between gap-1">
@@ -390,7 +400,11 @@
                                 {#if typeInfo?.docsPath}
                                     <DocsLink path={typeInfo.docsPath} label={signalDescText || signalName} math/>
                                 {/if}
-                                {#if dataStartsLate}
+                                {#if hasNoData}
+                                    <Tooltip text={$t('chartSettings.noDataAvailable')} position="top">
+                                        <AlertTriangle size={13} class="text-amber-500 shrink-0 cursor-help"/>
+                                    </Tooltip>
+                                {:else if dataStartsLate}
                                     <Tooltip text={$t('chartSettings.dataMissingBefore', {values: {date: summary?.firstDate ?? ''}})} position="top">
                                         <AlertTriangle size={13} class="text-amber-500 shrink-0 cursor-help"/>
                                     </Tooltip>
@@ -399,15 +413,19 @@
                             <div class="flex items-center gap-1 flex-shrink-0">
                                 <!-- Summary badges (inline in title) -->
                                 {#if summary && summary.pointCount > 0}
-                                    <span class="text-[10px] text-gray-400 dark:text-gray-500 px-1 py-0.5 bg-gray-100 dark:bg-slate-700 rounded">
-                                        📈{summary.pointCount}
-                                    </span>
+                                    <Tooltip text={$t('chartSettings.badgePoints', {values: {count: summary.pointCount}})} position="top">
+                                        <span class="text-[10px] text-gray-400 dark:text-gray-500 px-1 py-0.5 bg-gray-100 dark:bg-slate-700 rounded cursor-help">
+                                            📈{summary.pointCount}
+                                        </span>
+                                    </Tooltip>
                                 {/if}
                                 {#if summary}
                                     {#each Object.entries(summary.eventCounts) as [evType, count]}
-                                        <span class="text-[10px] text-gray-400 dark:text-gray-500 px-1 py-0.5 bg-gray-100 dark:bg-slate-700 rounded">
-                                            {EVENT_EMOJI[evType] ?? '📊'}{count}
-                                        </span>
+                                        <Tooltip text={$t(`chartSettings.${EVENT_BADGE_KEY[evType] ?? 'badgePoints'}`, {values: {count}})} position="top">
+                                            <span class="text-[10px] text-gray-400 dark:text-gray-500 px-1 py-0.5 bg-gray-100 dark:bg-slate-700 rounded cursor-help">
+                                                {EVENT_EMOJI[evType] ?? '📊'}{count}
+                                            </span>
+                                        </Tooltip>
                                     {/each}
                                 {/if}
                                 <button

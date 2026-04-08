@@ -82,15 +82,17 @@ export class AssetComparisonSignal extends ChartSignal {
             markerStart: this.style.markerStart,
             markerEnd: this.style.markerEnd,
             yAxisIndex: 0,
+            iconUrl: (this.params._assetIconUrl as string | undefined) ?? null,
+            assetType: (this.params._assetType as string | undefined) ?? null,
         };
     }
 
     getLabel(): string {
         const displayName = this.params._assetDisplayName as string | undefined;
-        if (displayName) return `📊 ${displayName}`;
+        if (displayName) return displayName;
         const assetId = this.params.assetId;
-        if (assetId) return `📊 Asset #${assetId}`;
-        return '📊 Asset';
+        if (assetId) return `Asset #${assetId}`;
+        return 'Asset';
     }
 }
 

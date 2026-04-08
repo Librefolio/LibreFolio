@@ -17,6 +17,7 @@
     import type {MeasurementResult} from '$lib/charts/signals/MeasureSignal';
     import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
     import {hslToHex} from '$lib/utils/colors';
+    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -33,7 +34,8 @@
         onmeasureschange?: (measures: RenderedSignal[]) => void;
         onmeasuremodechange?: (active: boolean) => void;
         viewMode?: 'absolute' | 'percentage';
-        pairLabel?: string;
+        /** Label info for the main/primary series (replaces old pairLabel string) */
+        mainSignalInfo?: SignalLabelInfo;
     }
 
     let {
@@ -42,7 +44,7 @@
         onmeasureschange,
         onmeasuremodechange,
         viewMode = 'absolute',
-        pairLabel = 'Main',
+        mainSignalInfo = {label: 'Main', isCrown: true},
     }: Props = $props();
 
     // =========================================================================
@@ -241,8 +243,7 @@
 
     interface MeasureSummaryRow {
         id: string;
-        signal: string;
-        signalColor: string | null;
+        signalInfo: SignalLabelInfo;
         valueStart: number;
         valueEnd: number;
         deltaAbs: number;
@@ -261,7 +262,7 @@
     const summaryColumns: ColumnDef<MeasureSummaryRow>[] = [
         {
             id: 'signal', header: () => $t('measure.table.signal'), type: 'text',
-            cell: (r) => ({type: 'html', html: r.signalColor ? `<span style="color:${r.signalColor}">●</span> ${r.signal}` : `<span class="font-medium">${r.signal}</span>`}),
+            cell: (r) => ({type: 'html', html: signalLabelToHtml(r.signalInfo)}),
             sortable: false, filterable: false, width: 100,
         },
         {
@@ -298,8 +299,7 @@
         const rows: MeasureSummaryRow[] = [
             {
                 id: 'main',
-                signal: pairLabel,
-                signalColor: null,
+                signalInfo: mainSignalInfo,
                 valueStart: result.startValue,
                 valueEnd: result.endValue,
                 deltaAbs: result.deltaAbs,
@@ -312,8 +312,12 @@
             if (sigResult) {
                 rows.push({
                     id: `sig-${signal.label}`,
-                    signal: signal.label,
-                    signalColor: signal.color,
+                    signalInfo: {
+                        label: signal.label,
+                        color: signal.color,
+                        iconUrl: signal.iconUrl,
+                        assetType: signal.assetType,
+                    },
                     valueStart: sigResult.startValue,
                     valueEnd: sigResult.endValue,
                     deltaAbs: sigResult.deltaAbs,

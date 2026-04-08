@@ -15,6 +15,7 @@
     import type {LineDataPoint} from './LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations,} from './lineChartHelpers';
+    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
 
     // =========================================================================
     // Event Marker types and constants
@@ -81,6 +82,12 @@
         mainSeriesLabel?: string;
         /** Event markers to display as scatter points on the chart */
         eventMarkers?: EventMarker[];
+        /** Signal label info for overlay signals — keyed by series name (label) */
+        overlaySignalInfoMap?: Map<string, SignalLabelInfo>;
+        /** Main series icon URL (for tooltip rendering) */
+        mainIconUrl?: string | null;
+        /** Main series asset type (for tooltip icon fallback) */
+        mainAssetType?: string | null;
     }
 
     let {
@@ -106,6 +113,9 @@
         externalViewMode,
         mainSeriesLabel,
         eventMarkers = [],
+        overlaySignalInfoMap,
+        mainIconUrl,
+        mainAssetType,
     }: Props = $props();
 
     // =========================================================================
@@ -167,6 +177,9 @@
             void yAxisMax;
             void mainSeriesLabel;
             void eventMarkers;
+            void overlaySignalInfoMap;
+            void mainIconUrl;
+            void mainAssetType;
             tick().then(renderChart);
         }
     });
@@ -462,12 +475,24 @@
         // Event markers — scatter series grouped by event type and asset
         if (eventMarkers && eventMarkers.length > 0) {
             const dateIndexMap = new Map(dates.map((d, i) => [d, i]));
+
+            // Build overlay data lookup: label → (date → value) for comparison event Y positioning
+            const overlayDataByLabel = new Map<string, Map<string, number>>();
+            if (overlaySignals) {
+                for (const signal of overlaySignals) {
+                    if (!signal.data.length) continue;
+                    const dateLookup = new Map(signal.data.map(d => [d.date, d.value]));
+                    overlayDataByLabel.set(signal.label, dateLookup);
+                }
+            }
+
             // Group by composite key: main asset uses type, comparison uses "label::type"
             const grouped = new Map<string, { markers: EventMarker[], color: string, label: string }>();
             for (const m of eventMarkers) {
                 const isComparison = !!m.assetLabel;
                 const groupKey = isComparison ? `${m.assetLabel}::${m.type}` : m.type;
-                const color = isComparison ? (m.signalColor ?? '#6b7280') : (EVENT_COLORS[m.type] ?? '#6b7280');
+                // Main events use the chart line color; comparison events use their signal color
+                const color = isComparison ? (m.signalColor ?? '#6b7280') : baseColor;
                 const seriesLabel = isComparison ? `${m.assetLabel} ${m.type}` : m.type;
                 if (!grouped.has(groupKey)) {
                     grouped.set(groupKey, { markers: [], color, label: seriesLabel });
@@ -482,8 +507,16 @@
                 for (const m of markers) {
                     const idx = dateIndexMap.get(m.date);
                     if (idx === undefined) continue;
+                    // For comparison events, use Y from overlay data; for main events, use displayData
+                    let yValue: number;
+                    if (m.assetLabel) {
+                        const overlayLookup = overlayDataByLabel.get(m.assetLabel);
+                        yValue = overlayLookup?.get(m.date) ?? displayData[idx]?.value ?? 0;
+                    } else {
+                        yValue = displayData[idx]?.value ?? 0;
+                    }
                     scatterData.push({
-                        value: [m.date, displayData[idx]?.value ?? 0],
+                        value: [m.date, yValue],
                         marker: m,
                     });
                 }
@@ -655,11 +688,27 @@
                         if (shownNames.has(p.seriesName)) continue;
                         shownNames.add(p.seriesName);
                         const suffix = isPercentage ? '%' : '';
-                        const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                         const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
                         const valueSuffix = axisIdx === 0 ? suffix : '';
                         const axisNote = axisIdx === 1 ? ' <span style="font-size:10px;color:#94a3b8">[RSI]</span>' : axisIdx === 2 ? ' <span style="font-size:10px;color:#a78bfa">[MACD]</span>' : '';
-                        html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+
+                        // Use signalLabelToHtml for proper icon rendering
+                        let labelHtml: string;
+                        const sigInfo = overlaySignalInfoMap?.get(p.seriesName);
+                        if (sigInfo) {
+                            labelHtml = signalLabelToHtml(sigInfo);
+                        } else if (p.seriesName === mainSeriesName) {
+                            labelHtml = signalLabelToHtml({
+                                label: mainSeriesName,
+                                iconUrl: mainIconUrl,
+                                assetType: mainAssetType,
+                                isCrown: true,
+                            });
+                        } else {
+                            const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
+                            labelHtml = `${colorDot}${p.seriesName}`;
+                        }
+                        html += `<br/>${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
                         // Show delta from first visible point for the main axis (yAxisIndex 0)
                         if (axisIdx === 0 && firstValue !== null) {
                             const numVal = Number(value);

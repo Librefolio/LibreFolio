@@ -765,6 +765,12 @@
     "discard": "Scarta",
     "removeSignal": "Rimuovi segnale",
     "dataMissingBefore": "I dati iniziano dopo l'intervallo del grafico — primo punto al {date}. Prova a sincronizzare per ottenere dati precedenti.",
+    "badgePoints": "{count} punti prezzo caricati",
+    "badgeDividend": "{count} eventi dividendo",
+    "badgeInterest": "{count} eventi interesse",
+    "badgePriceAdjustment": "{count} eventi rettifica prezzo",
+    "badgeMaturitySettlement": "{count} eventi scadenza/regolamento",
+    "badgeSplit": "{count} eventi split",
     "preview": "Anteprima",
     "previewDescGlobal": "Dati sintetici di esempio — mostra come le impostazioni influenzano tutti i grafici",
     "previewDescPair": "Anteprima dal vivo con i dati reali della coppia e segnali overlay",
@@ -840,7 +846,8 @@
       "assetComparison": "Seleziona un asset per sovrapporne il prezzo su questo grafico. In modalità percentuale, entrambe le curve partono da 0%.",
       "fxPair": "Seleziona una coppia FX per sovrapporne il tasso su questo grafico. In modalità percentuale, entrambe le curve partono da 0%."
     },
-    "macdLineColor": "Colore Linea MACD"
+    "macdLineColor": "Colore Linea MACD",
+    "noDataAvailable": "Nessun dato disponibile. Prova a sincronizzare questo asset/coppia."
   },
   "chart": {
     "tooltip": {

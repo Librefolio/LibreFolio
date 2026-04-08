@@ -765,6 +765,12 @@
     "discard": "Discard",
     "removeSignal": "Remove signal",
     "dataMissingBefore": "Data starts after chart range — first point at {date}. Try syncing to fetch earlier data.",
+    "badgePoints": "{count} price points loaded",
+    "badgeDividend": "{count} dividend events",
+    "badgeInterest": "{count} interest events",
+    "badgePriceAdjustment": "{count} price adjustment events",
+    "badgeMaturitySettlement": "{count} maturity/settlement events",
+    "badgeSplit": "{count} split events",
     "preview": "Preview",
     "previewDescGlobal": "Synthetic demo data — shows how aesthetics affect all charts",
     "previewDescPair": "Live preview with actual pair data and overlay signals",
@@ -840,7 +846,8 @@
       "assetComparison": "Select an asset to overlay its price on this chart. In percentage mode, both curves start at 0%.",
       "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%."
     },
-    "macdLineColor": "MACD Line Color"
+    "macdLineColor": "MACD Line Color",
+    "noDataAvailable": "No data available. Try syncing this asset/pair."
   },
   "chart": {
     "tooltip": {
