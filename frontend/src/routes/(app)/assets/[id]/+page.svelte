@@ -599,8 +599,7 @@
     <!-- ======================================================================= -->
     <!-- Filter bar -->
     <!-- wide:     [ datepicker  price-summary ─── actions-2×2 ]                        -->
-    <!-- tablet:   [ datepicker       ] [ actions-2×2 ]  summary 2-row, beside picker   -->
-    <!--           [ price-summary    ] [             ]                                  -->
+    <!-- tablet:   [ datepicker  price-summary ] [ actions-2×2 ]  side by side           -->
     <!-- tablet-s: [ datepicker       ] [ actions ]  filters stacked, actions column     -->
     <!--           [ price-summary    ] [ 4×1    ]  to the right                         -->
     <!-- mobile:   [ datepicker       ]  all stacked, actions 1×4 row                   -->
@@ -613,10 +612,10 @@
                {layout.layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
             data-testid="asset-detail-filter-bar"
     >
-        <!-- Filters block: wide = row (side by side), tablet/tablet-s = column (stacked), mobile = centered -->
+        <!-- Filters block: wide+tablet = row (side by side), tablet-s = column (stacked), mobile = centered -->
         <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center'
-             : layout.layoutMode === 'wide' ? 'flex-row items-center flex-1'
-             : 'flex-col items-start flex-1'}">
+             : layout.layoutMode === 'tablet-s' ? 'flex-col items-start flex-1'
+             : 'flex-row items-center flex-1'}">
             <div class="max-w-md">
                 <DateRangePicker
                         bind:activePreset

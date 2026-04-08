@@ -42,7 +42,7 @@ class CSSScraperProvider(AssetSourceProvider):
 
     @property
     def provider_code(self) -> str:
-        return "cssscraper"
+        return "css_scraper"
 
     @property
     def provider_name(self) -> str:
