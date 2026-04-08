@@ -765,6 +765,12 @@
     "discard": "Rejeter",
     "removeSignal": "Supprimer le signal",
     "dataMissingBefore": "Les données commencent après la plage du graphique — premier point au {date}. Essayez de synchroniser pour obtenir des données antérieures.",
+    "badgePoints": "{count} points de prix chargés",
+    "badgeDividend": "{count} événements dividende",
+    "badgeInterest": "{count} événements intérêt",
+    "badgePriceAdjustment": "{count} événements ajustement de prix",
+    "badgeMaturitySettlement": "{count} événements échéance/règlement",
+    "badgeSplit": "{count} événements split",
     "preview": "Aperçu",
     "previewDescGlobal": "Données synthétiques — montre comment les paramètres affectent tous les graphiques",
     "previewDescPair": "Aperçu en direct avec les données réelles de la paire et les signaux overlay",
@@ -840,7 +846,8 @@
       "assetComparison": "Sélectionnez un actif pour superposer son prix sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%.",
       "fxPair": "Sélectionnez une paire FX pour superposer son taux sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%."
     },
-    "macdLineColor": "Couleur Ligne MACD"
+    "macdLineColor": "Couleur Ligne MACD",
+    "noDataAvailable": "Aucune donnée disponible. Essayez de synchroniser cet actif/paire."
   },
   "chart": {
     "tooltip": {

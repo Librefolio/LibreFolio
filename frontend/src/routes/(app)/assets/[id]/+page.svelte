@@ -14,6 +14,7 @@
      */
     import {onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
+    import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
@@ -48,6 +49,10 @@
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName} from '$lib/utils/providerHelpers';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
+    import type {SignalLabelInfo} from '$lib/charts/signalLabel';
+    import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
+    import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {parseDateRangeFromUrl} from '$lib/utils/dateRangeFromUrl';
 
     // =========================================================================
     // Page data
@@ -73,16 +78,13 @@
     let error: string | null = $state(null);
     let syncing = $state(false);
 
-    // Date range (default 3M)
-    let dateEnd = $state(new Date().toISOString().slice(0, 10));
-    let dateStart = $state((() => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - 3);
-        return d.toISOString().slice(0, 10);
-    })());
-    let activePreset: any = $state('3M');
+    // Date range (from query params if present, otherwise default 3M)
+    const _initRange = parseDateRangeFromUrl($page.url.searchParams);
+    let dateEnd = $state(_initRange.end);
+    let dateStart = $state(_initRange.start);
+    let activePreset: any = $state(_initRange.hasCustomRange ? null : '3M');
 
-    let viewMode: ViewMode = $state('absolute');
+    let viewMode: ViewMode = $state('percentage');
     let displayCurrency = $state('');
 
     // Foldable panels
@@ -125,8 +127,6 @@
 
     // Provider icon for header badge
     let providerIconUrl = $state<string | null>(null);
-
-    // FX warning (tooltip-based, no toast)
 
     // FX pair add modal (opened from FX warning)
     let showFxPairAddModal = $state(false);
@@ -236,6 +236,16 @@
         ...measureSignals,
     ]);
 
+    // Signal label info for MeasurePanel and PriceChartFull tooltip
+    let mainSignalInfo: SignalLabelInfo = $derived({
+        label: assetInfo?.display_name ?? '',
+        iconUrl: assetInfo?.icon_url,
+        assetType: assetInfo?.asset_type,
+        isCrown: true,
+    });
+
+    let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
+
     // Event markers for the chart (own events + comparison asset events)
     let chartEventMarkers: EventMarker[] = $derived.by(() => {
         const markers: EventMarker[] = [];
@@ -275,6 +285,7 @@
 
     // Summary data per signal (point count, event counts, first date) — for ChartSignalsSection
     let signalSummaries: Map<string, SignalDataSummary> = $derived.by(() => {
+        void overlayDataVersion; // recompute when overlay data changes (e.g. after sync)
         const result = new Map<string, SignalDataSummary>();
         for (const cfg of signals) {
             if (cfg.signalType === 'asset-comparison') {
@@ -335,6 +346,8 @@
         } else {
             classificationLoaded = true;
         }
+        // Load comparison asset data after initial data is ready
+        await maybeLoadComparison();
     });
 
     $effect(() => {
@@ -344,12 +357,6 @@
         return () => layout.detach();
     });
 
-    $effect(() => {
-        const compSignals = signals.filter(s => s.signalType === 'asset-comparison');
-        if (compSignals.length > 0 && lineData.length > 0) {
-            loadComparisonAssetsData(compSignals);
-        }
-    });
 
 
     // =========================================================================
@@ -458,32 +465,25 @@
         }
     }
 
-    async function loadComparisonAssetsData(compSignals: SignalConfig[]) {
-        const idsToLoad = compSignals
-            .map(s => Number(s.params.assetId))
-            .filter(id => id && id !== data.assetId);
-        if (idsToLoad.length === 0) return;
+    /**
+     * Load comparison asset data if any comparison signals are configured.
+     * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
+     */
+    async function maybeLoadComparison() {
+        const compSignals = signals.filter(s => s.signalType === 'asset-comparison');
+        if (compSignals.length === 0 || lineData.length === 0) return;
         try {
-            const queries = idsToLoad.map(id => ({
-                asset_id: id,
-                date_range: {start: dateStart, end: dateEnd},
-                include_events: true,
-            }));
-            const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries);
-            const items = (response as any)?.items ?? [];
-            const newCompEvents = new Map<number, any[]>(comparisonEvents);
-            for (const result of items) {
-                const aid = result.asset_id;
-                const prices = (result.prices ?? []).map((p: any) => ({date: p.date, value: Number(p.close ?? 0)}));
-                for (const cfg of compSignals) {
-                    if (Number(cfg.params.assetId) === aid) cfg.params._resolvedData = prices;
-                }
-                newCompEvents.set(aid, result.events ?? []);
-            }
-            comparisonEvents = newCompEvents;
+            comparisonEvents = await loadComparisonAssetsData(
+                compSignals,
+                {start: dateStart, end: dateEnd},
+                allAssets,
+                comparisonEvents,
+                data.assetId,
+            );
             overlayDataVersion++;
         } catch (e) { console.error('Failed to load comparison asset data:', e); }
     }
+
 
     // =========================================================================
     // Actions
@@ -493,6 +493,7 @@
     async function handleRefresh() {
         await loadChartData();
         overlayDataVersion++;
+        await maybeLoadComparison();
     }
 
     async function reloadMetadata() {
@@ -542,10 +543,11 @@
         }
     }
 
-    function handleDateRangeChange(newStart: string, newEnd: string) {
+    async function handleDateRangeChange(newStart: string, newEnd: string) {
         dateStart = newStart;
         dateEnd = newEnd;
-        loadChartData();
+        await loadChartData();
+        await maybeLoadComparison();
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -562,6 +564,7 @@
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
+        maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
     }
 
     async function handleSyncAsset(assetId: number) {
@@ -581,12 +584,11 @@
             toasts.error('Sync failed: ' + (e?.message || 'unknown'));
         }
         // Reload comparison data for the synced asset
-        const compSignals = signals.filter(s => s.signalType === 'asset-comparison');
-        await loadComparisonAssetsData(compSignals);
+        await maybeLoadComparison();
     }
 
     function handleDetailAsset(assetId: number) {
-        goto(`/assets/${assetId}`);
+        goto(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`);
     }
 
     async function handleSyncPair(slug: string) {
@@ -620,7 +622,7 @@
     }
 
     function handleDetailPair(slug: string) {
-        goto(`/fx/${slug}`);
+        goto(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`);
     }
 
     async function handleAssetUpdated() {
@@ -950,6 +952,9 @@
                         chartHeight="400px"
                         overlaySignals={allOverlaySignals}
                         eventMarkers={chartEventMarkers}
+                        {overlaySignalInfoMap}
+                        mainIconUrl={assetInfo?.icon_url}
+                        mainAssetType={assetInfo?.asset_type}
                         colorByBaseline={settings.colorByBaseline}
                         areaFill={settings.areaFill}
                         showGridLines={settings.gridLines}
@@ -1028,7 +1033,7 @@
                     onmeasuremodechange={(active) => measureMode = active}
                     onmeasureschange={(m) => measureSignals = m}
                     overlaySignals={overlaySignals}
-                    pairLabel={assetInfo ? `👑 ${assetInfo.display_name}` : ''}
+                    {mainSignalInfo}
                     {viewMode}
             />
         </div>

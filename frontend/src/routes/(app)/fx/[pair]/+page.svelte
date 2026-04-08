@@ -14,6 +14,7 @@
      */
     import {onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
+    import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
@@ -21,8 +22,10 @@
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
+    import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
     import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
+    import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import FxDataEditorSection from '$lib/components/fx/FxDataEditorSection.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
@@ -40,6 +43,10 @@
     import {setCardInverted} from '$lib/stores/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
+    import type {SignalLabelInfo} from '$lib/charts/signalLabel';
+    import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
+    import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {parseDateRangeFromUrl} from '$lib/utils/dateRangeFromUrl';
 
     // =========================================================================
     // Page data
@@ -67,17 +74,14 @@
     // Confirm modal for swap while editing
     let showSwapConfirm = $state(false);
 
-    // Date range (default 3M)
-    let dateEnd = $state(new Date().toISOString().slice(0, 10));
-    let dateStart = $state((() => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - 3);
-        return d.toISOString().slice(0, 10);
-    })());
-    let activePreset: any = $state('3M');
+    // Date range (from query params if present, otherwise default 3M)
+    const _initRange = parseDateRangeFromUrl($page.url.searchParams);
+    let dateEnd = $state(_initRange.end);
+    let dateStart = $state(_initRange.start);
+    let activePreset: any = $state(_initRange.hasCustomRange ? null : '3M');
 
     // View mode (abs/%) — controlled by the page, not by chart toolbar
-    let viewMode: ViewMode = $state('absolute');
+    let viewMode: ViewMode = $state('percentage');
 
     // Provider config
     let providers: Array<{ providerCode: string; priority: number; chainSteps?: Array<{ from: string; to: string; provider: string }> }> = $state([]);
@@ -117,6 +121,9 @@
     // All assets (for asset comparison signals in ChartSignalsSection)
     let allAssets: Array<{ id: number; display_name: string; icon_url?: string | null; asset_type?: string | null }> = $state([]);
 
+    // Comparison events (asset-comparison signals)
+    let comparisonEvents = $state<Map<number, any[]>>(new Map());
+
     // Panel states before edit mode (to restore when exiting)
     let savedPanelStates: { aesthetics: boolean; measures: boolean; signals: boolean } | null = $state(null);
 
@@ -145,8 +152,6 @@
         const pct = ((last - first) / first) * 100;
         return inverted ? -pct : pct;
     });
-
-    let lastDate = $derived(chartData.length > 0 ? chartData[chartData.length - 1].date : null);
 
     let lineData: LineDataPoint[] = $derived(chartData.map((d) => ({
         date: d.date,
@@ -182,6 +187,17 @@
                 }
             }
 
+            // For AssetComparisonSignal: resolve data injected by loadComparisonAssetsData
+            if (cfg.signalType === 'asset-comparison') {
+                const targetId = Number(cfg.params.assetId);
+                if (!targetId) continue;
+                const targetAsset = allAssets.find(a => a.id === targetId);
+                instance.params._assetDisplayName = targetAsset?.display_name ?? `Asset #${targetId}`;
+                instance.params._assetIconUrl = targetAsset?.icon_url ?? null;
+                instance.params._assetType = targetAsset?.asset_type ?? null;
+                if (!instance.params._resolvedData) continue;
+            }
+
             const results = instance.renderMulti(lineData, viewMode);
             for (const result of results) {
                 if (result.data.length > 0) rendered.push(result);
@@ -197,7 +213,85 @@
         ...(pendingPreviewSignal ? [pendingPreviewSignal] : []),
     ]);
 
-    let configuredPairSlugs = $derived(allConfiguredSlugs);
+    // Trigger flag re-evaluation when currencies finish loading
+    let flagVersion = $state(0);
+    let baseFlag = $derived.by(() => {
+        void flagVersion;
+        return getCurrencyInfo(displayBase).flag_emoji;
+    });
+    let quoteFlag = $derived.by(() => {
+        void flagVersion;
+        return getCurrencyInfo(displayQuote).flag_emoji;
+    });
+
+    // Signal label info for MeasurePanel and PriceChartFull tooltip
+    let mainSignalInfo: SignalLabelInfo = $derived({
+        label: `${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`,
+        isCrown: true,
+    });
+
+    let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
+
+    // Event markers for the chart (comparison asset events — FX pairs don't have own events)
+    let chartEventMarkers: EventMarker[] = $derived.by(() => {
+        const markers: EventMarker[] = [];
+        for (const [aid, evts] of comparisonEvents) {
+            const targetAsset = allAssets.find(a => a.id === aid);
+            const label = targetAsset?.display_name ?? `Asset #${aid}`;
+            const sigColor = overlaySignals.find(s => s.label === label)?.color;
+            for (const ev of evts) {
+                markers.push({
+                    date: ev.date,
+                    type: ev.type ?? 'OTHER',
+                    value: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
+                    currency: ev.value?.code ?? '',
+                    notes: ev.notes ?? undefined,
+                    assetLabel: label,
+                    signalColor: sigColor,
+                });
+            }
+        }
+        return markers;
+    });
+
+    // Summary data per signal (point count, event counts, first date) — for ChartSignalsSection
+    let signalSummaries: Map<string, SignalDataSummary> = $derived.by(() => {
+        void overlayDataVersion; // recompute when overlay data changes (e.g. after sync)
+        const result = new Map<string, SignalDataSummary>();
+        for (const cfg of signals) {
+            if (cfg.signalType === 'asset-comparison') {
+                const targetId = Number(cfg.params.assetId);
+                if (!targetId) continue;
+                const resolvedData = cfg.params._resolvedData as Array<{date: string; value: number}> | undefined;
+                const evts = comparisonEvents.get(targetId) ?? [];
+                const eventCounts: Record<string, number> = {};
+                for (const ev of evts) {
+                    const t = ev.type ?? 'OTHER';
+                    eventCounts[t] = (eventCounts[t] ?? 0) + 1;
+                }
+                result.set(cfg.id, {
+                    pointCount: resolvedData?.length ?? 0,
+                    eventCounts,
+                    firstDate: resolvedData && resolvedData.length > 0 ? resolvedData[0].date : null,
+                });
+            } else if (cfg.signalType === 'fx-pair') {
+                const pairSlug = String(cfg.params.pairSlug || '');
+                if (!pairSlug) continue;
+                try {
+                    const store = getFxStore(pairSlug);
+                    const storeData = store.getAllSorted();
+                    result.set(cfg.id, {
+                        pointCount: storeData.length,
+                        eventCounts: {},
+                        firstDate: storeData.length > 0 ? storeData[0].date : null,
+                    });
+                } catch {
+                    result.set(cfg.id, { pointCount: 0, eventCounts: {}, firstDate: null });
+                }
+            }
+        }
+        return result;
+    });
 
     // Provider config: build editRoutes for the modal
     let editRoutes = $derived.by(() => {
@@ -221,17 +315,8 @@
         ]);
         // Force flag reactivity after currencies load
         flagVersion++;
-    });
-
-    // Trigger flag re-evaluation when currencies finish loading
-    let flagVersion = $state(0);
-    let baseFlag = $derived.by(() => {
-        void flagVersion;
-        return getCurrencyInfo(displayBase).flag_emoji;
-    });
-    let quoteFlag = $derived.by(() => {
-        void flagVersion;
-        return getCurrencyInfo(displayQuote).flag_emoji;
+        // Load comparison asset data after initial data is ready
+        await maybeLoadComparison();
     });
 
     // ResizeObserver for adaptive filter bar layout (shared utility)
@@ -241,6 +326,7 @@
         layout.attach(el);
         return () => layout.detach();
     });
+
 
     // =========================================================================
     // Data Loading (same as before, unchanged logic)
@@ -343,6 +429,25 @@
         } catch (e) { console.error('Failed to load asset list:', e); }
     }
 
+    /**
+     * Load comparison asset data if any comparison signals are configured.
+     * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
+     */
+    async function maybeLoadComparison() {
+        const compSignals = signals.filter(s => s.signalType === 'asset-comparison');
+        if (compSignals.length === 0 || lineData.length === 0) return;
+        try {
+            comparisonEvents = await loadComparisonAssetsData(
+                compSignals,
+                {start: dateStart, end: dateEnd},
+                allAssets,
+                comparisonEvents,
+            );
+            overlayDataVersion++;
+        } catch (e) { console.error('Failed to load comparison asset data:', e); }
+    }
+
+
     // =========================================================================
     // Actions
     // =========================================================================
@@ -374,6 +479,7 @@
             }
         }
         overlayDataVersion++;
+        await maybeLoadComparison();
     }
 
     async function handleSync() {
@@ -423,10 +529,11 @@
         }
     }
 
-    function handleDateRangeChange(newStart: string, newEnd: string) {
+    async function handleDateRangeChange(newStart: string, newEnd: string) {
         dateStart = newStart;
         dateEnd = newEnd;
-        loadChartData();
+        await loadChartData();
+        await maybeLoadComparison();
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -443,6 +550,7 @@
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
+        maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
     }
 
     async function handleSyncPair(slug: string) {
@@ -512,72 +620,35 @@
     }
 
     function handleDetailPair(slug: string) {
-        goto(`/fx/${slug}`);
+        goto(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`);
     }
 
-    // Provider handlers (unchanged logic)
-    async function handleAddProvider(detail: { providerCode: string; priority: number; chainSteps?: Array<{ from: string; to: string; provider: string }> }) {
+    async function handleSyncAsset(assetId: number) {
         try {
-            const steps = detail.chainSteps ?? [{from: data.canonicalBase, to: data.canonicalQuote, provider: detail.providerCode}];
-            await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([{
-                base: data.canonicalBase, quote: data.canonicalQuote, chain_steps: steps, priority: detail.priority,
+            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{
+                asset_id: assetId,
+                date_range: {start: dateStart, end: dateEnd},
             }]);
-            await loadProviders();
+            const r = (response as any)?.results?.[0];
+            const tr = get(t);
+            if (r?.status === 'ok') {
+                toasts.success(`${tr('common.sync')}: ${r.points_fetched ?? 0}↓ ${r.points_changed ?? 0}Δ`);
+            } else {
+                toasts.error(`${tr('common.sync')} — ${r?.message || 'failed'}`);
+            }
         } catch (e: any) {
-            error = 'Failed to add provider: ' + (e?.message || 'unknown error');
+            toasts.error('Sync failed: ' + (e?.message || 'unknown'));
         }
+        // Reload comparison data for the synced asset
+        await maybeLoadComparison();
     }
 
-    async function handleRemoveProvider(detail: { providerCode: string }) {
-        try {
-            await applyProviderDiff(providers.filter(p => p.providerCode !== detail.providerCode));
-            await loadProviders();
-        } catch (e: any) {
-            error = 'Failed to remove provider: ' + (e?.message || 'unknown error');
-        }
-    }
-
-    async function handleSaveProviderOrder(reorderedProviders: Array<{ providerCode: string; priority: number }>) {
-        try {
-            await applyProviderDiff(reorderedProviders);
-            await loadProviders();
-        } catch (e: any) {
-            error = 'Failed to save provider order: ' + (e?.message || 'unknown error');
-        }
-    }
-
-    async function applyProviderDiff(desired: Array<{ providerCode: string; priority: number; chainSteps?: Array<{ from: string; to: string; provider: string }> }>) {
-        const desiredNormalized = desired.map((p, idx) => ({
-            providerCode: p.providerCode,
-            priority: idx + 1,
-            chainSteps: p.chainSteps ?? [{from: data.canonicalBase, to: data.canonicalQuote, provider: p.providerCode}],
-        }));
-
-        if (desiredNormalized.length > 0) {
-            await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(
-                desiredNormalized.map(p => ({
-                    base: data.canonicalBase, quote: data.canonicalQuote, chain_steps: p.chainSteps, priority: p.priority,
-                }))
-            );
-        }
-
-        const freshResp = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-        const freshForPair = (freshResp.items ?? []).filter(
-            (s: any) => s.base === data.canonicalBase && s.quote === data.canonicalQuote
-        );
-
-        const desiredPriorities = new Set(desiredNormalized.map(p => p.priority));
-        const toDelete = freshForPair.filter((s: any) => !desiredPriorities.has(s.priority));
-
-        if (toDelete.length > 0) {
-            await zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete(
-                toDelete.map((s: any) => ({base: data.canonicalBase, quote: data.canonicalQuote, priority: s.priority}))
-            );
-        }
+    function handleDetailAsset(assetId: number) {
+        goto(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`);
     }
 
     /** Handle provider modal save — reload providers after edit */
-    async function handleProviderModalCreated(detail: { base: string; quote: string; hasRealProvider: boolean }) {
+    async function handleProviderModalCreated(_detail: { base: string; quote: string; hasRealProvider: boolean }) {
         await loadProviders();
         showProviderModal = false;
     }
@@ -764,12 +835,16 @@
             <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection
                         signals={[...signals]}
-                        availablePairs={configuredPairSlugs}
+                        availablePairs={allConfiguredSlugs}
                         availableAssets={allAssets}
                         mainPairSlug={data.canonicalSlug}
                         onchange={handleSignalsChange}
                         onsyncpair={handleSyncPair}
                         ondetailpair={handleDetailPair}
+                        onsyncasset={handleSyncAsset}
+                        ondetailasset={handleDetailAsset}
+                        {signalSummaries}
+                        {dateStart}
                 />
             </div>
         {/if}
@@ -876,6 +951,8 @@
                         mainSeriesLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
                         chartHeight="400px"
                         overlaySignals={allOverlaySignals}
+                        eventMarkers={chartEventMarkers}
+                        {overlaySignalInfoMap}
                         colorByBaseline={settings.colorByBaseline}
                         areaFill={settings.areaFill}
                         showGridLines={settings.gridLines}
@@ -1011,7 +1088,7 @@
                     onmeasuremodechange={(active) => measureMode = active}
                     onmeasureschange={(m) => measureSignals = m}
                     overlaySignals={overlaySignals}
-                    pairLabel={`👑 ${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
+                    {mainSignalInfo}
                     {viewMode}
             />
         </div>

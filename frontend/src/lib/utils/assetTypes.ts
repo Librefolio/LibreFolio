@@ -25,7 +25,6 @@ const PNG_MAP: Record<string, string> = {
     FUND: 'fund',
     HOLD: 'hold',
     CROWDFUND_LOAN: 'crowdfunding',
-    INDEX: 'index',
     OTHER: 'other',
 };
 

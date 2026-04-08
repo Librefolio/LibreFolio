@@ -151,6 +151,10 @@ export interface RenderedSignal {
         middle: number[];
         lower: number[];
     };
+    /** Custom icon URL for the signal source (e.g. asset icon_url) — used by MeasurePanel and tooltip */
+    iconUrl?: string | null;
+    /** Asset type code for PNG icon fallback (e.g. "CRYPTO", "ETF") — used by MeasurePanel and tooltip */
+    assetType?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
