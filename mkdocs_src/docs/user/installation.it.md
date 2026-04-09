@@ -78,3 +78,4 @@ Per aggiornare a una nuova versione:
  ```bash
  docker-compose exec backend pipenv run alembic upgrade head
  ```
+

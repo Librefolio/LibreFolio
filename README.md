@@ -83,9 +83,33 @@ The `./dev.py` script is your main tool for development (activate the virtual en
 - `./dev.py server` - Start backend + frontend build
 - `./dev.py test all` - Run all tests
 - `./dev.py db migrate "msg"` - Create migration
-- `./dev.py info mk serve` - Serve documentation locally
+- `./dev.py mkdocs serve` - Serve documentation locally
+- `./dev.py --help` - Show all available commands
 
-> **Note:** `./dev.sh` is also available as a backward-compatible wrapper around `dev.py`.
+### 🐳 Docker Deployment
+
+Build and run with Docker:
+
+```bash
+./dev.py docker build      # Build image (auto-builds frontend + docs)
+docker compose up -d       # Start container
+docker compose exec librefolio python dev.py user create <user> <email> <pass>
+```
+
+Use `./dev.py docker rebuild` to build a new image and restart containers in one step.
+
+#### 🧪 Docker Test Mode
+
+You can start a test server alongside the production one to explore the app with mock data:
+
+```bash
+./dev.py docker exec test db populate --force --with-static   # Populate test DB
+./dev.py docker exec server --test                            # Start test server on :8001
+```
+
+Access: **http://localhost:8001** — Test users: `e2e_test_user` / `E2eTestPass123!`
+
+> ⚠️ The test database lives inside the container's writable layer (not on a persistent volume). It is lost when the container is removed (`docker compose down`). Use `docker compose stop` / `docker compose start` to preserve it across restarts.
 
 ## 🌍 Internationalization
 

@@ -262,8 +262,28 @@ def run_command_live(cmd: list, cwd: Optional[Path] = None, env: Optional[dict] 
         return 1
 
 
+def _is_docker() -> bool:
+    """Detect if running inside a Docker container."""
+    return (
+        os.path.exists("/.dockerenv")
+        or os.environ.get("container") == "docker"
+        or (os.path.exists("/proc/1/cgroup") and "docker" in open("/proc/1/cgroup").read())
+    )
+
+
+def pipenv_prefix() -> list:
+    """Return ['pipenv', 'run'] on host, [] in Docker (system-wide install)."""
+    return [] if _is_docker() else ["pipenv", "run"]
+
+
 def run_pipenv(args: list, cwd: Optional[Path] = None) -> int:
-    """Run a pipenv command with live output."""
+    """Run a pipenv command with live output.
+
+    In Docker containers (where packages are installed system-wide),
+    runs the command directly without pipenv.
+    """
+    if _is_docker():
+        return run_command_live(args, cwd=cwd)
     return run_command_live(["pipenv", "run"] + args, cwd=cwd)
 
 

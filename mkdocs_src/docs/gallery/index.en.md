@@ -29,6 +29,7 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
     - **Profile**: Avatar management and account settings
     - **Media & Upload**: Image crop/edit, asset picker, file renaming
     - **FX Rates**: Currency pairs, charts, sync, data editor, CSV import
+    - **Assets**: Track stocks, ETFs, bonds, crypto with charts, signals, measures & classification
 
 ## 🌍 Language Support
 

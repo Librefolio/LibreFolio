@@ -52,6 +52,9 @@ frontend/build/
 # Pipenv
 Pipfile.lock
 
+# Generated for Docker (from Pipfile.lock via dev.py docker build)
+requirements.txt
+
 # Node.js
 **/node_modules/
 **/package-lock.json

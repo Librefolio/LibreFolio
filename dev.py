@@ -17,6 +17,7 @@ Autocompletion setup:
 
 import os
 import sys
+import argparse
 from pathlib import Path
 
 try:
@@ -47,6 +48,7 @@ from scripts.cli_base import (
     print_error,
     print_warning,
     check_server_running,
+    pipenv_prefix,
 )
 
 from scripts.cli_tree_parser import TreeParser, format_help
@@ -245,7 +247,7 @@ def cmd_server(args):
     env.setdefault("JWT_SECRET", _secrets.token_urlsafe(64))
 
     uvicorn_cmd = [
-        "pipenv", "run", "uvicorn",
+        *pipenv_prefix(), "uvicorn",
         "backend.app.main:app",
         "--host", host,
         "--port", str(port),
@@ -276,7 +278,7 @@ def cmd_db_current(args):
 
     env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
     return run_command_live(
-        ["pipenv", "run", "alembic", "-c", "backend/alembic.ini", "current"],
+        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "current"],
         env=env
     )
 
@@ -293,7 +295,7 @@ def cmd_db_migrate(args):
 
     env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
     return run_command_live(
-        ["pipenv", "run", "alembic", "-c", "backend/alembic.ini", "revision", "--autogenerate", "-m", message],
+        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "revision", "--autogenerate", "-m", message],
         env=env
     )
 
@@ -308,7 +310,7 @@ def cmd_db_upgrade(args):
 
     env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
     return run_command_live(
-        ["pipenv", "run", "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
+        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
         env=env
     )
 
@@ -323,7 +325,7 @@ def cmd_db_downgrade(args):
 
     env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
     return run_command_live(
-        ["pipenv", "run", "alembic", "-c", "backend/alembic.ini", "downgrade", "-1"],
+        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "downgrade", "-1"],
         env=env
     )
 
@@ -358,7 +360,7 @@ def cmd_db_create_clean(args):
         env["LIBREFOLIO_TEST_MODE"] = "1"
 
     result = run_command_live(
-        ["pipenv", "run", "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
+        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
         env=env
     )
 
@@ -680,26 +682,83 @@ def _get_docker_tag(override: str | None = None) -> str:
 
 
 def _docker_ensure_assets_built():
-    """Ensure frontend and docs are built before Docker image build."""
-    # Frontend
-    frontend_index = PROJECT_ROOT / "frontend" / "build" / "index.html"
-    if not frontend_index.exists():
-        print_warning("Frontend build not found — building now...")
+    """Ensure frontend, docs and JS cache are built/up-to-date before Docker image build.
+
+    Uses the same staleness checks as the 'server' command so that
+    ``dev.py docker build`` always produces an image with fresh assets.
+    """
+    from scripts.cli_base import check_frontend_needs_build
+
+    # --- 1. Frontend ----------------------------------------------------------
+    if check_frontend_needs_build():
+        print_warning("Frontend build missing or outdated — building now...")
         class BuildArgs:
             debug = False
         result = cmd_fe_build(BuildArgs())
         if result != 0:
             print_error("Frontend build failed. Cannot build Docker image.")
             return result
-    # MkDocs
+        print_success("Frontend build ready")
+    else:
+        print(Colors.info("ℹ️  Frontend build is up to date"))
+
+    # --- 2. MkDocs ------------------------------------------------------------
     docs_index = PROJECT_ROOT / "mkdocs_src" / "site" / "index.html"
+    docs_dir = PROJECT_ROOT / "mkdocs_src" / "docs"
+    needs_mkdocs = False
+
     if not docs_index.exists():
-        print_warning("MkDocs build not found — building now...")
+        needs_mkdocs = True
+    else:
+        try:
+            build_time = docs_index.stat().st_mtime
+            for doc_file in docs_dir.rglob("*.md"):
+                if doc_file.stat().st_mtime > build_time:
+                    needs_mkdocs = True
+                    break
+        except Exception:
+            needs_mkdocs = True
+
+    if needs_mkdocs:
+        print_warning("MkDocs build missing or outdated — building now...")
         copy_docs_assets()
         result = run_pipenv(["mkdocs", "build", "-f", "mkdocs_src/mkdocs.yml"])
         if result != 0:
             print_error("MkDocs build failed. Cannot build Docker image.")
             return result
+        print_success("MkDocs build ready")
+    else:
+        print(Colors.info("ℹ️  MkDocs build is up to date"))
+
+    # --- 3. JS library cache --------------------------------------------------
+    update_js_cache()
+
+    # --- 4. requirements.txt for Docker (no pipenv needed in image) -----------
+    req_file = PROJECT_ROOT / "requirements.txt"
+    lock_file = PROJECT_ROOT / "Pipfile.lock"
+    needs_req = not req_file.exists()
+    if not needs_req:
+        # Regenerate if Pipfile.lock is newer than requirements.txt
+        try:
+            needs_req = lock_file.stat().st_mtime > req_file.stat().st_mtime
+        except Exception:
+            needs_req = True
+
+    if needs_req:
+        import subprocess
+        print(Colors.info("📦 Generating requirements.txt from Pipfile.lock..."))
+        result = subprocess.run(
+            ["pipenv", "requirements"],
+            capture_output=True, text=True, cwd=PROJECT_ROOT
+        )
+        if result.returncode != 0:
+            print_error(f"Failed to generate requirements.txt: {result.stderr}")
+            return 1
+        req_file.write_text(result.stdout)
+        print_success("requirements.txt generated")
+    else:
+        print(Colors.info("ℹ️  requirements.txt is up to date"))
+
     return 0
 
 
@@ -793,6 +852,29 @@ def cmd_docker_logs(args):
 def cmd_docker_status(args):
     """Show container status."""
     return run_command_live(["docker", "compose", "ps"])
+
+
+def cmd_docker_exec(args):
+    """Execute a dev.py command inside the running Docker container.
+
+    Examples:
+        ./dev.py docker exec server --test
+        ./dev.py docker exec test db populate --force
+        ./dev.py docker exec user create admin admin@test.com Pass123!
+        ./dev.py docker exec db upgrade
+    """
+    extra = getattr(args, 'cmd_args', [])
+    if not extra:
+        print_error("No command specified. Usage: ./dev.py docker exec <command> [args...]")
+        print(Colors.info("Examples:"))
+        print(f"  ./dev.py docker exec server --test")
+        print(f"  ./dev.py docker exec test db populate --force")
+        print(f"  ./dev.py docker exec user create admin admin@test.com Pass123!")
+        return 1
+
+    cmd = ["docker", "compose", "exec", "librefolio", "python", "dev.py"] + extra
+    print(Colors.info(f"🐳 Running in container: dev.py {' '.join(extra)}"))
+    return run_command_live(cmd)
 
 
 # =============================================================================
@@ -938,7 +1020,7 @@ def copy_docs_assets():
 def update_js_cache():
     """Update JS library cache."""
     result = run_command_live(
-        ["pipenv", "run", "python", "scripts/update_js_cache.py"],
+        [*pipenv_prefix(), "python", "scripts/update_js_cache.py"],
         cwd=PROJECT_ROOT
     )
     if result == 0:
@@ -1116,13 +1198,17 @@ Examples:
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
     # Translate - Import from mkdocs_src/aphra-pipeline/translate_docs.py
-    sys.path.insert(0, str(PROJECT_ROOT / "mkdocs_src" / "aphra-pipeline"))
-    from translate_docs import register_subparser as register_translate_parser
-    register_translate_parser(mk_sub)
+    # (not available inside Docker — aphra-pipeline is excluded from image)
+    try:
+        sys.path.insert(0, str(PROJECT_ROOT / "mkdocs_src" / "aphra-pipeline"))
+        from translate_docs import register_subparser as register_translate_parser
+        register_translate_parser(mk_sub)
 
-    # Translate-validate - structural validation of translated files
-    from validate_translations import register_subparser as register_validate_parser
-    register_validate_parser(mk_sub)
+        # Translate-validate - structural validation of translated files
+        from validate_translations import register_subparser as register_validate_parser
+        register_validate_parser(mk_sub)
+    except (ImportError, ModuleNotFoundError):
+        pass  # Not available in Docker runtime
 
     # =========================================================================
     # 📦 Tools Commands Group
@@ -1142,10 +1228,14 @@ Examples:
     api_p.set_defaults(func=cmd_api_sync)
 
     # i18n - Import from frontend/scripts/i18n-audit.py
-    sys.path.insert(0, str(PROJECT_ROOT / "frontend" / "scripts"))
-    from importlib import import_module
-    i18n_module = import_module("i18n-audit")
-    i18n_module.register_subparser(subparsers)
+    # (not available inside Docker — frontend/scripts is excluded from image)
+    try:
+        sys.path.insert(0, str(PROJECT_ROOT / "frontend" / "scripts"))
+        from importlib import import_module
+        i18n_module = import_module("i18n-audit")
+        i18n_module.register_subparser(subparsers)
+    except (ImportError, ModuleNotFoundError):
+        pass  # Not available in Docker runtime
 
     # Cache - Import from scripts/update_js_cache.py
     from scripts.update_js_cache import register_subparser as register_cache_parser
@@ -1188,6 +1278,10 @@ Examples:
 
     docker_p = docker_sub.add_parser("status", help="Show container status")
     docker_p.set_defaults(func=cmd_docker_status)
+
+    docker_p = docker_sub.add_parser("exec", help="Run a dev.py command inside the container")
+    docker_p.add_argument("cmd_args", nargs=argparse.REMAINDER, help="Command and arguments (e.g. server --test)")
+    docker_p.set_defaults(func=cmd_docker_exec)
 
     # Format & Lint
     p = subparsers.add_parser("format", help="📦 Format code with black")
