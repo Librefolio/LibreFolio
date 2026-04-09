@@ -35,6 +35,7 @@ os.chdir(PROJECT_ROOT)
 
 from scripts.cli_base import (
     Colors,
+    get_server_host,
     get_server_port,
     get_test_server_port,
     get_database_path,
@@ -129,6 +130,8 @@ def cmd_server(args):
     debug_mode = getattr(args, 'debug', False)
     force = getattr(args, 'force', False)
     workers = getattr(args, 'workers', 1)
+    host_override = getattr(args, 'host', None)
+    port_override = getattr(args, 'port', None)
 
     if test_mode:
         port = get_test_server_port()
@@ -137,6 +140,11 @@ def cmd_server(args):
     else:
         port = get_server_port()
         db = get_database_path(test_mode=False)
+
+    # Apply --host / --port overrides (take priority over env vars)
+    host = host_override if host_override else get_server_host()
+    if port_override:
+        port = port_override
 
     # Check if port is already in use
     processes_using_port = check_port_in_use(port)
@@ -193,6 +201,7 @@ def cmd_server(args):
     mode_str = " (TEST MODE)" if test_mode else " (DEBUG MODE)" if debug_mode else ""
     print(Colors.success(f"Starting LibreFolio API server{mode_str}..."))
     print(Colors.warning(f"Database: {db}"))
+    print(Colors.warning(f"Host: {host}"))
     print(Colors.warning(f"Port: {port}"))
     if test_mode:
         print()
@@ -238,7 +247,7 @@ def cmd_server(args):
     uvicorn_cmd = [
         "pipenv", "run", "uvicorn",
         "backend.app.main:app",
-        "--host", "0.0.0.0",
+        "--host", host,
         "--port", str(port),
     ]
     if workers > 1:
@@ -649,6 +658,142 @@ def cmd_mkdocs_gallery(args):
     return 1 if failures else 0
 
 
+# =============================================================================
+# Docker Commands
+# =============================================================================
+
+def _get_docker_tag(override: str | None = None) -> str:
+    """Get Docker image tag from git version or override.
+
+    Uses the same git-based versioning as `./dev.py info version`:
+      - On a tag:       librefolio:v1.2.3
+      - After commits:  librefolio:v1.2.3-5-gabcdef
+      - Dirty tree:     librefolio:v1.2.3-dirty
+      - No tags:        librefolio:v0.0.0-gabcdef
+    """
+    if override:
+        return override
+
+    from backend.app.utils.version import get_git_version
+    version = get_git_version()  # e.g. "v0.5.0" or "v0.5.0-3-gabcdef-dirty"
+    return f"librefolio:{version}"
+
+
+def _docker_ensure_assets_built():
+    """Ensure frontend and docs are built before Docker image build."""
+    # Frontend
+    frontend_index = PROJECT_ROOT / "frontend" / "build" / "index.html"
+    if not frontend_index.exists():
+        print_warning("Frontend build not found — building now...")
+        class BuildArgs:
+            debug = False
+        result = cmd_fe_build(BuildArgs())
+        if result != 0:
+            print_error("Frontend build failed. Cannot build Docker image.")
+            return result
+    # MkDocs
+    docs_index = PROJECT_ROOT / "mkdocs_src" / "site" / "index.html"
+    if not docs_index.exists():
+        print_warning("MkDocs build not found — building now...")
+        copy_docs_assets()
+        result = run_pipenv(["mkdocs", "build", "-f", "mkdocs_src/mkdocs.yml"])
+        if result != 0:
+            print_error("MkDocs build failed. Cannot build Docker image.")
+            return result
+    return 0
+
+
+def cmd_docker_build(args):
+    """Build the Docker image with git-based versioning."""
+    tag_override = getattr(args, 'tag', None)
+    no_cache = getattr(args, 'no_cache', False)
+
+    result = _docker_ensure_assets_built()
+    if result != 0:
+        return result
+
+    image_tag = _get_docker_tag(tag_override)
+    print(Colors.success(f"🐳 Building Docker image: {image_tag}..."))
+    docker_cmd = ["docker", "build", "-t", image_tag]
+    # Also tag as 'librefolio:latest'
+    docker_cmd.extend(["-t", "librefolio:latest"])
+    if no_cache:
+        docker_cmd.append("--no-cache")
+    docker_cmd.append(".")
+    result = run_command_live(docker_cmd)
+    if result == 0:
+        print_success(f"✅ Image built: {image_tag} (also tagged librefolio:latest)")
+    return result
+
+
+def cmd_docker_rebuild(args):
+    """Rebuild image, stop running containers, restart with new version."""
+    tag_override = getattr(args, 'tag', None)
+    no_cache = getattr(args, 'no_cache', False)
+
+    print(Colors.success("🐳 Rebuild: build new image → stop → start..."))
+    print()
+
+    # Step 1: Build new image
+    result = _docker_ensure_assets_built()
+    if result != 0:
+        return result
+
+    image_tag = _get_docker_tag(tag_override)
+    print(Colors.info(f"[1/3] Building new image: {image_tag}..."))
+    docker_cmd = ["docker", "build", "-t", image_tag, "-t", "librefolio:latest"]
+    if no_cache:
+        docker_cmd.append("--no-cache")
+    docker_cmd.append(".")
+    result = run_command_live(docker_cmd)
+    if result != 0:
+        print_error("Build failed — containers NOT restarted.")
+        return result
+    print_success(f"Image built: {image_tag}")
+    print()
+
+    # Step 2: Stop current containers
+    print(Colors.info("[2/3] Stopping current containers..."))
+    run_command_live(["docker", "compose", "down"])
+    print()
+
+    # Step 3: Start with new image
+    print(Colors.info("[3/3] Starting containers with new image..."))
+    result = run_command_live(["docker", "compose", "up", "-d"])
+    if result == 0:
+        print_success(f"✅ Rebuild complete: {image_tag} is now running")
+    return result
+
+
+def cmd_docker_up(args):
+    """Start containers with docker compose."""
+    detach = not getattr(args, 'no_detach', False)
+    print(Colors.success("🐳 Starting LibreFolio containers..."))
+    cmd = ["docker", "compose", "up"]
+    if detach:
+        cmd.append("-d")
+    return run_command_live(cmd)
+
+
+def cmd_docker_down(args):
+    """Stop containers."""
+    print(Colors.success("🐳 Stopping LibreFolio containers..."))
+    return run_command_live(["docker", "compose", "down"])
+
+
+def cmd_docker_logs(args):
+    """Show container logs."""
+    follow = getattr(args, 'follow', False)
+    cmd = ["docker", "compose", "logs"]
+    if follow:
+        cmd.append("-f")
+    return run_command_live(cmd)
+
+
+def cmd_docker_status(args):
+    """Show container status."""
+    return run_command_live(["docker", "compose", "ps"])
+
 
 # =============================================================================
 # Format/Lint Commands
@@ -869,6 +1014,8 @@ Examples:
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
     p.add_argument("--workers", "-w", type=int, default=1, help="Number of uvicorn workers (default: 1)")
+    p.add_argument("--host", type=str, default=None, help="Bind host (default: HOST env or 0.0.0.0)")
+    p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 8000)")
     p.set_defaults(func=cmd_server)
 
     # Database
@@ -1013,6 +1160,34 @@ Examples:
 
     info_p = info_sub.add_parser("version", help="Show application version")
     info_p.set_defaults(func=cmd_info_version)
+
+    # Docker
+    p = subparsers.add_parser("docker", help="🐳 Docker commands")
+    docker_sub = p.add_subparsers(dest="docker_cmd", metavar="action")
+
+    docker_p = docker_sub.add_parser("build", help="Build Docker image (tag from git version)")
+    docker_p.add_argument("--tag", "-t", default=None, help="Override image tag (default: librefolio:<git-version>)")
+    docker_p.add_argument("--no-cache", action="store_true", help="Build without Docker cache")
+    docker_p.set_defaults(func=cmd_docker_build)
+
+    docker_p = docker_sub.add_parser("rebuild", help="Build new image → stop containers → restart with new version")
+    docker_p.add_argument("--tag", "-t", default=None, help="Override image tag (default: librefolio:<git-version>)")
+    docker_p.add_argument("--no-cache", action="store_true", help="Build without Docker cache")
+    docker_p.set_defaults(func=cmd_docker_rebuild)
+
+    docker_p = docker_sub.add_parser("up", help="Start containers (docker compose up)")
+    docker_p.add_argument("--no-detach", action="store_true", help="Run in foreground")
+    docker_p.set_defaults(func=cmd_docker_up)
+
+    docker_p = docker_sub.add_parser("down", help="Stop containers (docker compose down)")
+    docker_p.set_defaults(func=cmd_docker_down)
+
+    docker_p = docker_sub.add_parser("logs", help="Show container logs")
+    docker_p.add_argument("-f", "--follow", action="store_true", help="Follow log output")
+    docker_p.set_defaults(func=cmd_docker_logs)
+
+    docker_p = docker_sub.add_parser("status", help="Show container status")
+    docker_p.set_defaults(func=cmd_docker_status)
 
     # Format & Lint
     p = subparsers.add_parser("format", help="📦 Format code with black")

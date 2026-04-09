@@ -1325,3 +1325,161 @@ async def test_user_url_round_trip(test_server):
         # Cleanup
         await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
 
+
+# ============================================================
+# Test: CSS Scraper probe with malformed params → clear error
+# ============================================================
+@pytest.mark.asyncio
+async def test_probe_css_scraper_invalid_params(test_server):
+    """Probe CSS scraper with malformed provider_params returns clear error."""
+    print_section("Test: CSS Scraper probe with invalid params")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Create asset
+        asset_item = FAAssetCreateItem(
+            display_name=f"CSS Invalid Test {unique_id('CSSINV')}",
+            currency="USD",
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert create_resp.status_code in (200, 201)
+        asset_id = create_resp.json()["items"][0]["id"]
+
+        # Assign CSS scraper with WRONG param names (the old buggy format)
+        assignment = FAProviderAssignmentItem(
+            asset_id=asset_id,
+            provider_code="css_scraper",
+            identifier="https://example.com",
+            identifier_type=ProviderInputType.URL,
+            provider_params={
+                "css_selector": "#price",  # WRONG: should be current_css_selector
+                "decimal_separator": ".",   # WRONG: should be decimal_format
+                # MISSING: currency (required!)
+            },
+            )
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment.model_dump(mode="json")],
+            timeout=TIMEOUT,
+            )
+
+        # Assignment might succeed (params stored as JSON), but sync should fail
+        if assign_resp.status_code == 200:
+            # Try to sync — should fail with validation error
+            today = date.today()
+            sync_resp = await client.post(
+                f"{API_BASE}/assets/prices/sync",
+                json=[{"asset_id": asset_id, "date_range": {
+                    "start": (today - timedelta(days=1)).isoformat(),
+                    "end": today.isoformat()
+                }}],
+                timeout=TIMEOUT,
+                )
+            # The sync should report an error for this asset
+            if sync_resp.status_code == 200:
+                result = sync_resp.json()["results"][0]
+                assert result.get("error") or result.get("status") == "error", \
+                    "Sync with malformed CSS params should report an error"
+                print_success("  ✓ Sync with malformed CSS params reported error in result")
+            else:
+                print_success(f"  ✓ Sync rejected with status {sync_resp.status_code}")
+        else:
+            # Assignment itself was rejected — also fine
+            print_success(f"  ✓ Assignment rejected with status {assign_resp.status_code}")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================
+# Test: ScheduledInvestment via API — assign + sync
+# ============================================================
+@pytest.mark.asyncio
+async def test_scheduled_investment_via_api(test_server):
+    """Assign ScheduledInvestment provider and sync → generated price curve."""
+    print_section("Test: ScheduledInvestment via API")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Create asset
+        asset_item = FAAssetCreateItem(
+            display_name=f"Scheduled Inv Test {unique_id('SCHED')}",
+            currency="EUR",
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert create_resp.status_code in (200, 201)
+        asset_id = create_resp.json()["items"][0]["id"]
+        print_info(f"  Created asset: {asset_id}")
+
+        # Assign scheduled_investment provider with valid params
+        schedule_params = {
+            "initial_value": {"code": "EUR", "amount": 10000},
+            "interest_type": "SIMPLE",
+            "day_count": "ACT/365",
+            "schedule": [
+                {
+                    "start_date": "2025-01-01",
+                    "end_date": "2025-12-31",
+                    "annual_rate": "0.05",
+                    "maturation_frequency": "MONTHLY",
+                    "generate_interest": False,
+                }
+            ],
+        }
+
+        assignment = FAProviderAssignmentItem(
+            asset_id=asset_id,
+            provider_code="scheduled_investment",
+            identifier=None,
+            identifier_type=ProviderInputType.AUTO_GENERATED,
+            provider_params=schedule_params,
+            )
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment.model_dump(mode="json")],
+            timeout=TIMEOUT,
+            )
+        assert assign_resp.status_code == 200, f"Assignment failed: {assign_resp.text}"
+        print_info("  ScheduledInvestment provider assigned")
+
+        # Sync prices — should generate the calculated curve
+        sync_resp = await client.post(
+            f"{API_BASE}/assets/prices/sync",
+            json=[{"asset_id": asset_id, "date_range": {
+                "start": "2025-01-01", "end": "2025-12-31"
+            }}],
+            timeout=TIMEOUT,
+            )
+        assert sync_resp.status_code == 200, f"Sync failed: {sync_resp.text}"
+        sync_result = sync_resp.json()["results"][0]
+        fetched = sync_result.get("points_fetched", 0)
+        changed = sync_result.get("points_changed", 0)
+        print_info(f"  Sync: fetched={fetched}, changed={changed}")
+
+        # Query prices — should have calculated curve
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{"asset_id": asset_id, "date_range": {
+                "start": "2025-01-01", "end": "2025-12-31"
+            }}],
+            timeout=TIMEOUT,
+            )
+        assert query_resp.status_code == 200
+        prices = query_resp.json()["items"][0]["prices"]
+        assert len(prices) > 0, "ScheduledInvestment should generate price points"
+        print_info(f"  Generated {len(prices)} price points")
+
+        # Verify prices are monotonically increasing (SIMPLE interest on 10000 @ 5%)
+        closes = [float(p["close"]) for p in prices]
+        assert closes[-1] > closes[0], "Prices should increase over time with positive interest"
+        print_success(f"  ✓ Price curve generated: {closes[0]:.2f} → {closes[-1]:.2f}")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+

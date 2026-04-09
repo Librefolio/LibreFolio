@@ -2,6 +2,7 @@
     import {_, LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
     import {userSettings} from '$lib/stores/settings';
+    import {applyTheme, getStoredThemePreference} from '$lib/stores/themeStore';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
     import {onMount} from 'svelte';
@@ -99,7 +100,7 @@
             originalValues = {
                 language: response.language || $currentLanguage,
                 default_currency: response.base_currency || 'EUR',
-                theme: response.theme || getStoredTheme()
+                theme: response.theme || getStoredThemePreference()
             };
             editedValues = {...originalValues};
         } catch (e) {
@@ -109,13 +110,6 @@
         }
     }
 
-
-    function getStoredTheme(): 'light' | 'dark' | 'auto' {
-        if (typeof localStorage === 'undefined') return 'auto';
-        const saved = localStorage.getItem('librefolio-theme');
-        if (saved === 'light' || saved === 'dark') return saved;
-        return 'auto';
-    }
 
     // Check if a field has been modified (reactive computed)
     $: languageModified = editedValues.language !== originalValues.language;
@@ -175,11 +169,7 @@
                     theme: editedValues.theme
                 });
             } else if (field === 'theme') {
-                localStorage.setItem('librefolio-theme', editedValues.theme === 'auto' ? '' : editedValues.theme);
-                document.documentElement.classList.remove('light', 'dark');
-                if (editedValues.theme !== 'auto') {
-                    document.documentElement.classList.add(editedValues.theme);
-                }
+                applyTheme(editedValues.theme as 'light' | 'dark' | 'auto');
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({theme: editedValues.theme});
                 // Sync userSettings store
                 userSettings.setDirect({
@@ -234,11 +224,7 @@
             }
 
             if (themeModified) {
-                localStorage.setItem('librefolio-theme', editedValues.theme === 'auto' ? '' : editedValues.theme);
-                document.documentElement.classList.remove('light', 'dark');
-                if (editedValues.theme !== 'auto') {
-                    document.documentElement.classList.add(editedValues.theme);
-                }
+                applyTheme(editedValues.theme as 'light' | 'dark' | 'auto');
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({theme: editedValues.theme});
                 originalValues.theme = editedValues.theme;
                 saved.push($_('settings.theme'));

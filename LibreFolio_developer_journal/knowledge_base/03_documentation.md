@@ -48,7 +48,7 @@ Test: aprire una pagina nella nuova sezione con `<img class="gallery-img">` e co
 </div>
 ```
 
-- `data-category`: cartella screenshot (`auth`, `dashboard`, `settings`, `files`, `brokers`, `fx`)
+- `data-category`: cartella screenshot (`auth`, `dashboard`, `settings`, `files`, `brokers`, `fx`, `assets`)
 - `data-name`: file senza estensione (`01-login`, `main`, `list`)
 - Path risolto: `{basePath}/gallery/{viewport}/{lang}/{theme}/{category}/{name}.png`
 

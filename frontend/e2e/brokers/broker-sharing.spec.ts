@@ -1,6 +1,6 @@
 import {expect, Page, test} from '@playwright/test';
-import {login, navigateTo} from './fixtures/auth-helpers';
-import {TEST_ADMIN, TEST_USER, TEST_USER_2} from './fixtures/test-users';
+import {login, navigateTo} from '../fixtures/auth-helpers';
+import {TEST_ADMIN, TEST_USER, TEST_USER_2} from '../fixtures/test-users';
 
 /**
  * Broker Sharing E2E Tests

@@ -2,66 +2,43 @@
     /**
      * ThemeToggle - Switch between light and dark themes
      *
-     * Features:
-     * - Sun/Moon icon toggle
-     * - Respects prefers-color-scheme as default
-     * - Saves preference to localStorage
-     * - Applies theme class to html element
+     * Uses centralized themeStore for all theme logic.
      */
     import {onMount} from 'svelte';
     import {Moon, Sun} from 'lucide-svelte';
+    import {
+        applyTheme,
+        getCurrentResolvedTheme,
+        getStoredThemePreference,
+        initThemeListener
+    } from '$lib/stores/themeStore';
 
     let theme: 'light' | 'dark' = 'light';
     let mounted = false;
 
-    // Key for localStorage
-    const STORAGE_KEY = 'librefolio-theme';
-
-    function getSystemTheme(): 'light' | 'dark' {
-        if (typeof window === 'undefined') return 'light';
-        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-
-    function getSavedTheme(): 'light' | 'dark' | null {
-        if (typeof localStorage === 'undefined') return null;
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved === 'light' || saved === 'dark') return saved;
-        return null;
-    }
-
-    function applyTheme(newTheme: 'light' | 'dark') {
-        theme = newTheme;
-        if (typeof document !== 'undefined') {
-            document.documentElement.classList.remove('light', 'dark');
-            document.documentElement.classList.add(newTheme);
-        }
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY, newTheme);
-        }
-    }
-
     function toggleTheme() {
-        applyTheme(theme === 'light' ? 'dark' : 'light');
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        applyTheme(newTheme);
+        theme = newTheme;
     }
 
     onMount(() => {
-        // Check saved preference first, then system preference
-        const saved = getSavedTheme();
-        const initial = saved ?? getSystemTheme();
-        applyTheme(initial);
+        theme = getCurrentResolvedTheme();
         mounted = true;
 
-        // Listen for system theme changes
+        const cleanup = initThemeListener();
+
+        // Also react to OS changes for the icon
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const handleChange = (e: MediaQueryListEvent) => {
-            // Only apply if user hasn't explicitly set a preference
-            if (!getSavedTheme()) {
-                applyTheme(e.matches ? 'dark' : 'light');
+        const handleChange = () => {
+            if (getStoredThemePreference() === 'auto') {
+                theme = getCurrentResolvedTheme();
             }
         };
         mediaQuery.addEventListener('change', handleChange);
 
         return () => {
+            cleanup();
             mediaQuery.removeEventListener('change', handleChange);
         };
     });

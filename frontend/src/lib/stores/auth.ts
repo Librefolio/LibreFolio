@@ -73,23 +73,8 @@ function createAuthStore() {
 
                     // Apply theme preference
                     if (settings.theme) {
-                        const theme = settings.theme;
-                        if (theme === 'dark') {
-                            document.documentElement.classList.add('dark');
-                            localStorage.setItem('theme', 'dark');
-                        } else if (theme === 'light') {
-                            document.documentElement.classList.remove('dark');
-                            localStorage.setItem('theme', 'light');
-                        } else {
-                            // auto mode - match system preference
-                            localStorage.setItem('theme', 'auto');
-                            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                            if (prefersDark) {
-                                document.documentElement.classList.add('dark');
-                            } else {
-                                document.documentElement.classList.remove('dark');
-                            }
-                        }
+                        const {applyTheme} = await import('$lib/stores/themeStore');
+                        applyTheme(settings.theme as 'light' | 'dark' | 'auto');
                     }
 
                     // Cache settings to localStorage for userSettings store

@@ -1,6 +1,6 @@
 import {expect, test} from '@playwright/test';
-import {login, navigateTo} from './fixtures/auth-helpers';
-import {TEST_USER} from './fixtures/test-users';
+import {login, navigateTo} from '../fixtures/auth-helpers';
+import {TEST_USER} from '../fixtures/test-users';
 
 test.describe('Brokers', () => {
     test.beforeEach(async ({page}) => {

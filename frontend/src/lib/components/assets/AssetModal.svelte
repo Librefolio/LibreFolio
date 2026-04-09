@@ -870,7 +870,7 @@
     </div>
 
     <!-- Body -->
-    <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
+    <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto" data-testid="asset-modal-form">
         <!-- Search Online -->
         <AssetSearchAutocomplete onselect={handleSearchSelect}/>
 
@@ -928,6 +928,7 @@
                                     type="text"
                                     bind:value={displayName}
                                     placeholder="Apple Inc."
+                                    data-testid="asset-modal-display-name"
                                     class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
                                            placeholder-gray-400 dark:placeholder-gray-500
@@ -1232,6 +1233,7 @@
         <button
                 type="button"
                 onclick={handleClose}
+                data-testid="asset-modal-cancel"
                 class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
         >
             {$t('common.cancel')}
@@ -1240,6 +1242,7 @@
                 type="button"
                 onclick={handleSave}
                 disabled={!isValid || saving}
+                data-testid="asset-modal-save"
                 class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
             {#if saving}

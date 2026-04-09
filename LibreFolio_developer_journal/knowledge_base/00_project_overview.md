@@ -7,11 +7,11 @@
 
 ## 🎯 Cos'è LibreFolio
 
-LibreFolio è un **portfolio tracker finanziario self-hosted e open-source** — alternativa a Ghostfolio. Supporta asset tradizionali, crypto, prestiti P2P, tassi di cambio multi-provider, e import da 11+ broker.
+LibreFolio è un **portfolio tracker finanziario self-hosted e open-source** — alternativa a Ghostfolio. Supporta asset tradizionali (ETF, azioni, obbligazioni, crypto), tassi di cambio multi-provider, asset management con analisi tecnica (EMA, MACD, RSI, Bollinger), e import da 11+ broker.
 
 - **Privacy**: dati sul proprio server
 - **Multi-utenza**: Owner/Editor/Viewer per broker condivisi
-- **Multi-lingua**: UI in EN/IT/FR/ES, documentazione tradotta via LLM
+- **Multi-lingua**: UI in EN/IT/FR/ES (840+ chiavi), documentazione tradotta via LLM
 - **Repository**: https://github.com/Alfystar/LibreFolio
 
 ---
@@ -48,24 +48,26 @@ LibreFolio/
 
 1. **Calcoli solo nel Backend** — il frontend è pura presentazione
 2. **FIFO a Runtime** — matching costi calcolato on-demand, non persistito
-3. **Provider Registry Pattern** — auto-discovery per FX, Asset e BRIM providers
+3. **Provider Registry Pattern** — auto-discovery per FX, Asset e BRIM providers con `params_schema` per form dinamici
 4. **Multi-Provider con Fallback** — FX rates da ECB→FED→BOE→SNB + MANUAL sentinella
 5. **Svelte 5 Runes** — `$state`, `$derived`, `$effect` nei componenti nuovi
 6. **Zodios API Client** — tipi da OpenAPI, validazione Zod runtime
 7. **Data Separation prod/test** — cartelle completamente isolate
 8. **E2E Test Gallery** — screenshot automatici per docs (light/dark × desktop/mobile)
-9. **Signal Library** — segnali tecnici (EMA, MACD, RSI, Bollinger) calcolati in O(N) nel frontend
+9. **Signal Library** — 10 segnali tecnici/analitici (EMA, MACD, RSI, Bollinger, AssetComparison, Measure…) calcolati in O(N) nel frontend
+10. **Dual View** — card grid + DataTable per Assets e FX, toggle persistito in localStorage
+11. **Smart Search Multi-Provider** — ricerca parallela su yfinance + JustETF + CSS Scraper con auto-fill form
 
 ---
 
-## 📊 Stato Progetto (Marzo 2026)
+## 📊 Stato Progetto (Aprile 2026)
 
 | Fase | Status | Contenuto |
 |------|--------|-----------|
 | Phase 0-3 | ✅ | Setup, Auth, Layout, Settings |
 | Phase 4 | ✅ | Brokers, Files, Component Library |
 | Phase 5 | ✅ | FX Management, Charts, Signals, i18n Docs |
-| Phase 6 | 📋 | Asset Management |
+| Phase 6 | 🚧 | Asset Management (Step 1-4 completati, detail page + test + docs in corso) |
 | Phase 7 | 📋 | Transactions + BRIM Import UI |
 | Phase 8 | 📋 | Dashboard con KPI |
 | Phase 9 | 📋 | Polish & Responsive finale |
