@@ -15,7 +15,7 @@ import {expect, Page, test} from '@playwright/test';
 import {login, navigateTo, setLanguage} from './fixtures/auth-helpers';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
-import {goToAssetsPage} from './assets/assets-helpers';
+import {goToAssetsPage, navigateToAssetByName} from './assets/assets-helpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import {fileURLToPath} from 'url';
@@ -1027,6 +1027,9 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
         });
 
+        // Gallery target: Apple Inc. — has 30 days of price history from db populate
+        const GALLERY_ASSET = 'Apple';
+
         test('Asset list page', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 
@@ -1068,24 +1071,9 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     await freezeAnimations(page);
-                    await page.waitForTimeout(1000);
 
-                    // Click first asset card to navigate to detail
-                    const card = page.locator('[data-testid^="asset-card-"]').first();
-                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
-                        await card.click();
-                    } else {
-                        // Fallback: try table row
-                        const row = page.locator('[data-testid^="asset-row-"]').first();
-                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
-                            await row.click();
-                        }
-                    }
-
-                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
-                    // Wait for ECharts canvas to render
-                    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
-                    await page.waitForTimeout(2000);
+                    await navigateToAssetByName(page, GALLERY_ASSET);
+                    await page.waitForTimeout(500);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-chart');
                 }
             }
@@ -1100,22 +1088,8 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     await freezeAnimations(page);
-                    await page.waitForTimeout(1000);
 
-                    // Navigate to first asset detail
-                    const card = page.locator('[data-testid^="asset-card-"]').first();
-                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
-                        await card.click();
-                    } else {
-                        const row = page.locator('[data-testid^="asset-row-"]').first();
-                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
-                            await row.click();
-                        }
-                    }
-
-                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
-                    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
-                    await page.waitForTimeout(1500);
+                    await navigateToAssetByName(page, GALLERY_ASSET);
 
                     // Toggle signals panel
                     const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
@@ -1137,22 +1111,8 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     await freezeAnimations(page);
-                    await page.waitForTimeout(1000);
 
-                    // Navigate to first asset detail
-                    const card = page.locator('[data-testid^="asset-card-"]').first();
-                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
-                        await card.click();
-                    } else {
-                        const row = page.locator('[data-testid^="asset-row-"]').first();
-                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
-                            await row.click();
-                        }
-                    }
-
-                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
-                    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
-                    await page.waitForTimeout(1500);
+                    await navigateToAssetByName(page, GALLERY_ASSET);
 
                     // Toggle measures panel
                     const measuresToggle = page.getByTestId('asset-detail-measures-toggle');
@@ -1174,21 +1134,8 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     await freezeAnimations(page);
-                    await page.waitForTimeout(1000);
 
-                    // Navigate to first asset (Vanguard FTSE should have classification data)
-                    const card = page.locator('[data-testid^="asset-card-"]').first();
-                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
-                        await card.click();
-                    } else {
-                        const row = page.locator('[data-testid^="asset-row-"]').first();
-                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
-                            await row.click();
-                        }
-                    }
-
-                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
-                    await page.waitForTimeout(1500);
+                    await navigateToAssetByName(page, GALLERY_ASSET);
 
                     // Toggle classification (metadata) panel
                     const metadataToggle = page.getByTestId('asset-detail-metadata-toggle');
@@ -1217,22 +1164,8 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     await freezeAnimations(page);
-                    await page.waitForTimeout(1000);
 
-                    // Navigate to first asset detail
-                    const card = page.locator('[data-testid^="asset-card-"]').first();
-                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
-                        await card.click();
-                    } else {
-                        const row = page.locator('[data-testid^="asset-row-"]').first();
-                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
-                            await row.click();
-                        }
-                    }
-
-                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
-                    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
-                    await page.waitForTimeout(1000);
+                    await navigateToAssetByName(page, GALLERY_ASSET);
 
                     // Click edit data button
                     const editDataBtn = page.getByTestId('asset-detail-editdata-btn');

@@ -260,6 +260,15 @@ nav:
           - Chart Settings: user/fx/chart-settings.md
       - Assets:
           - Overview: user/assets/index.md
+          - Create & Edit: user/assets/create-edit.md
+          - Asset Detail:
+              - Overview: user/assets/detail/index.md
+              - Interactive Chart: user/assets/detail/chart.md
+              - Signals: user/assets/detail/signals.md
+              - Measures: user/assets/detail/measures.md
+              - Classification: user/assets/detail/classification.md
+              - Data Editor: user/assets/detail/data-editor.md
+              - Events: user/assets/detail/events.md
           - Providers:
               - Overview: user/assets/providers/index.md
               - Yahoo Finance: user/assets/providers/yahoo-finance.md

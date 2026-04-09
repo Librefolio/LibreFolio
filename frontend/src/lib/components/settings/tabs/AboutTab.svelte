@@ -65,8 +65,8 @@ Generated: ${new Date().toISOString()}
 <div class="space-y-8" data-testid="about-tab">
     <!-- App Info -->
     <div class="flex items-center space-x-4">
-        <div class="p-4 bg-libre-green rounded-xl">
-            <img alt="LibreFolio" class="w-10 h-10" src="/logo.png"/>
+        <div class="w-14 h-14 rounded-xl shadow-sm flex items-center justify-center p-2" style="background:#fff">
+            <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png"/>
         </div>
         <div>
             <h3 class="text-xl font-bold text-gray-800" data-testid="about-app-name">LibreFolio</h3>

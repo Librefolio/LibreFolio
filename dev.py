@@ -393,6 +393,9 @@ def cmd_fe_build(args):
         print_error("API sync failed - aborting build")
         return sync_result
 
+    # Generate favicon from logo before build
+    generate_favicon()
+
     if args.debug:
         print(Colors.success("Building frontend in DEBUG mode (no minify, with sourcemaps)..."))
         result = run_command_live(["npm", "run", "build:debug"], cwd=PROJECT_ROOT / "frontend")
@@ -994,9 +997,27 @@ def auto_build_mkdocs():
         pass
 
 
+def generate_favicon():
+    """Generate a square 48x48 favicon from logo.png (logo is non-square 765x944)."""
+    from PIL import Image
+    src = PROJECT_ROOT / "frontend" / "static" / "logo.png"
+    dst = PROJECT_ROOT / "frontend" / "static" / "favicon.png"
+    if not src.exists():
+        print_warning("logo.png not found, skipping favicon generation")
+        return
+    img = Image.open(src)
+    w, h = img.size
+    size = max(w, h)
+    square = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    square.paste(img, ((size - w) // 2, (size - h) // 2))
+    square.resize((48, 48), Image.LANCZOS).save(dst)
+    print_success(f"favicon.png generated (48×48 from {w}×{h} logo)")
+
+
 def copy_docs_assets():
     """Copy logo, favicon, and icons to docs."""
     import shutil
+    generate_favicon()
     static_dir = PROJECT_ROOT / "mkdocs_src" / "docs" / "static"
     static_dir.mkdir(parents=True, exist_ok=True)
 
