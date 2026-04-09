@@ -2,27 +2,31 @@
 # LibreFolio — Docker Compose
 # =============================================================================
 # Usage:
-#   1. Build frontend & docs on host:
-#        ./dev.py front build && ./dev.py mkdocs build
-#   2. Start:
-#        docker compose up -d
-#   3. Access:
-#        http://localhost:${PORT:-8000}
+#   1. Build image:     ./dev.py docker build
+#   2. Start:           docker compose up -d
+#   3. Access:          http://localhost:${PORT:-8000}
+#
+# Test mode (optional):
+#   ./dev.py docker exec server --test            # start test server on :8001
+#   ./dev.py docker exec test db populate --force --with-static
+#   Access:  http://localhost:${TEST_PORT:-8001}
 # =============================================================================
 
 services:
   librefolio:
+    image: librefolio:latest
     build: .
     container_name: librefolio
     restart: unless-stopped
     ports:
       - "${PORT:-8000}:8000"
+      - "${TEST_PORT:-8001}:8001"
     volumes:
-      - librefolio-data:/app/backend/data/prod
+      - librefolio-data:/app/backend/data/prod-docker
     environment:
       - HOST=0.0.0.0
       - PORT=8000
-      - LIBREFOLIO_DATA_DIR=/app/backend/data/prod
+      - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PORTFOLIO_BASE_CURRENCY=${PORTFOLIO_BASE_CURRENCY:-EUR}
     healthcheck:

@@ -305,6 +305,74 @@ Configure provider priority and conversion routes.
 
 ---
 
+## 💼 Assets
+
+### 📋 Asset List
+
+All your tracked financial instruments, optimized for mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="list" alt="Asset List Page">
+</div>
+
+### 🔎 Asset List Filtered
+
+Filter assets by name, type, or search text on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="list-filtered" alt="Asset List Filtered">
+</div>
+
+### 📈 Detail Chart
+
+Interactive price chart with date range and currency toggle.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Chart">
+</div>
+
+### 📡 Signals Overlay
+
+Technical indicators (EMA, MACD, RSI, Bollinger) on the price chart.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Detail Signals">
+</div>
+
+### 📏 Measures Panel
+
+Click-to-click measurement tool on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Detail Measures">
+</div>
+
+### 🗂️ Classification
+
+Sector pie chart and geographic world map on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Detail Classification">
+</div>
+
+### ✏️ Data Editor
+
+Inline price data editor on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Asset Data Editor">
+</div>
+
+### ➕ Create Asset Modal
+
+Create a new asset with all fields on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal">
+</div>
+
+---
+
 
 <style>
 .screenshot-container {

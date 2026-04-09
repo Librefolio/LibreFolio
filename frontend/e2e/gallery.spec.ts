@@ -15,6 +15,7 @@ import {expect, Page, test} from '@playwright/test';
 import {login, navigateTo, setLanguage} from './fixtures/auth-helpers';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
+import {goToAssetsPage} from './assets/assets-helpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import {fileURLToPath} from 'url';
@@ -1014,6 +1015,257 @@ test.describe('Gallery Screenshots', () => {
                     await expect(addPairModal).toBeVisible({timeout: 5000});
                     await page.waitForTimeout(2000); // Extra time for provider icons and route loading
                     await screenshot(page, viewport, lang, theme, 'fx', 'provider-config');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+    });
+
+    test.describe('Assets', () => {
+        test.beforeEach(async ({page}) => {
+            await login(page, TEST_ADMIN);
+        });
+
+        test('Asset list page', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await goToAssetsPage(page);
+                await freezeAnimations(page);
+                await page.waitForTimeout(1500);
+                await screenshot(page, viewport, lang, theme, 'assets', 'list');
+            });
+        });
+
+        test('Asset list filtered', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Type search text
+                    const searchInput = page.getByTestId('assets-search-input');
+                    if (await searchInput.isVisible({timeout: 2000}).catch(() => false)) {
+                        await searchInput.fill('ETF');
+                        await page.waitForTimeout(1000);
+                    }
+                    await screenshot(page, viewport, lang, theme, 'assets', 'list-filtered');
+                }
+            }
+        });
+
+        test('Asset detail chart', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(1000);
+
+                    // Click first asset card to navigate to detail
+                    const card = page.locator('[data-testid^="asset-card-"]').first();
+                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
+                        await card.click();
+                    } else {
+                        // Fallback: try table row
+                        const row = page.locator('[data-testid^="asset-row-"]').first();
+                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
+                            await row.click();
+                        }
+                    }
+
+                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
+                    // Wait for ECharts canvas to render
+                    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
+                    await page.waitForTimeout(2000);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-chart');
+                }
+            }
+        });
+
+        test('Asset detail signals', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(1000);
+
+                    // Navigate to first asset detail
+                    const card = page.locator('[data-testid^="asset-card-"]').first();
+                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
+                        await card.click();
+                    } else {
+                        const row = page.locator('[data-testid^="asset-row-"]').first();
+                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
+                            await row.click();
+                        }
+                    }
+
+                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
+                    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
+                    await page.waitForTimeout(1500);
+
+                    // Toggle signals panel
+                    const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await signalsToggle.click();
+                        await page.waitForTimeout(500);
+                    }
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals');
+                }
+            }
+        });
+
+        test('Asset detail measures', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(1000);
+
+                    // Navigate to first asset detail
+                    const card = page.locator('[data-testid^="asset-card-"]').first();
+                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
+                        await card.click();
+                    } else {
+                        const row = page.locator('[data-testid^="asset-row-"]').first();
+                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
+                            await row.click();
+                        }
+                    }
+
+                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
+                    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
+                    await page.waitForTimeout(1500);
+
+                    // Toggle measures panel
+                    const measuresToggle = page.getByTestId('asset-detail-measures-toggle');
+                    if (await measuresToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await measuresToggle.click();
+                        await page.waitForTimeout(500);
+                    }
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures');
+                }
+            }
+        });
+
+        test('Asset detail classification', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(1000);
+
+                    // Navigate to first asset (Vanguard FTSE should have classification data)
+                    const card = page.locator('[data-testid^="asset-card-"]').first();
+                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
+                        await card.click();
+                    } else {
+                        const row = page.locator('[data-testid^="asset-row-"]').first();
+                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
+                            await row.click();
+                        }
+                    }
+
+                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
+                    await page.waitForTimeout(1500);
+
+                    // Toggle classification (metadata) panel
+                    const metadataToggle = page.getByTestId('asset-detail-metadata-toggle');
+                    if (await metadataToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await metadataToggle.click();
+                        await page.waitForTimeout(1000); // Wait for pie charts and map to render
+
+                        // Scroll to classification panel
+                        const metadataPanel = page.getByTestId('asset-detail-metadata-panel');
+                        if (await metadataPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                            await metadataPanel.scrollIntoViewIfNeeded();
+                            await page.waitForTimeout(500);
+                        }
+                    }
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-classification');
+                }
+            }
+        });
+
+        test('Asset detail data editor', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(1000);
+
+                    // Navigate to first asset detail
+                    const card = page.locator('[data-testid^="asset-card-"]').first();
+                    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
+                        await card.click();
+                    } else {
+                        const row = page.locator('[data-testid^="asset-row-"]').first();
+                        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
+                            await row.click();
+                        }
+                    }
+
+                    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
+                    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
+                    await page.waitForTimeout(1000);
+
+                    // Click edit data button
+                    const editDataBtn = page.getByTestId('asset-detail-editdata-btn');
+                    if (await editDataBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await editDataBtn.click();
+                        await page.waitForTimeout(500);
+                        // Scroll to editor panel
+                        const editorPanel = page.getByTestId('asset-detail-editor-panel');
+                        if (await editorPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                            await editorPanel.scrollIntoViewIfNeeded();
+                            await page.waitForTimeout(300);
+                        }
+                    }
+                    await screenshot(page, viewport, lang, theme, 'assets', 'detail-editor');
+                }
+            }
+        });
+
+        test('Asset create modal', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Open create modal
+                    await page.getByTestId('assets-add-button').click();
+                    await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
+                    await page.waitForTimeout(500);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'create-modal');
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }

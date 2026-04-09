@@ -301,6 +301,74 @@ Configure provider priority and conversion routes for a currency pair.
 
 ---
 
+## 💼 Assets
+
+### 📋 Asset List
+
+All your tracked financial instruments — stocks, ETFs, bonds, crypto — in one view.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="list" alt="Asset List Page">
+</div>
+
+### 🔎 Asset List Filtered
+
+Filter assets by name, type, or search text.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="list-filtered" alt="Asset List Filtered">
+</div>
+
+### 📈 Detail Chart
+
+Full-size interactive price chart with date range selector and currency toggle.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Chart">
+</div>
+
+### 📡 Signals Overlay
+
+Technical indicators panel (EMA, MACD, RSI, Bollinger Bands) overlaid on the price chart.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Detail Signals">
+</div>
+
+### 📏 Measures Panel
+
+Click-to-click measurement tool for price differences, percentage changes, and annualized returns.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Detail Measures">
+</div>
+
+### 🗂️ Classification
+
+Sector distribution pie chart and geographic allocation world map.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Detail Classification">
+</div>
+
+### ✏️ Data Editor
+
+Inline data editor for viewing and modifying individual price data points.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Asset Data Editor">
+</div>
+
+### ➕ Create Asset Modal
+
+Create a new asset with name, type, currency, identifiers, provider, and classification.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal">
+</div>
+
+---
+
 
 <style>
 .screenshot-container {

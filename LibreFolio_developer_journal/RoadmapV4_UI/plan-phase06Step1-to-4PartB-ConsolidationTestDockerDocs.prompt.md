@@ -1,6 +1,6 @@
 # Phase 06 Step 4 Part B — Consolidamento, Test, Docker & Documentazione
 
-**Status**: 🚧 IN CORSO (Blocchi 1-4, 6A, 6B completati — Blocco 3B e 5 parziali)  
+**Status**: ✅ COMPLETATO  
 **Ultimo aggiornamento**: 9 Aprile 2026
 
 Fase di consolidamento post Step 4 Part A. 6 blocchi: fix tema dark/light, splash screen, test completa (backend + E2E), fix populate, documentazione + gallery, Dockerfile runtime-only. Il Docker è un'immagine singola di runtime (build frontend su host, non in Docker). Health check: `GET /api/v1/system/health`.
@@ -19,8 +19,8 @@ Fase di consolidamento post Step 4 Part A. 6 blocchi: fix tema dark/light, splas
 | **6B+** | Comandi `./dev.py docker build/up/down/logs/status` | ✅ Completato |
 | **3B** | Test E2E assets (helpers + 3 spec files) | ✅ Struttura creata |
 | **3B+** | `front-asset` in test_runner.py + E2E reorg (`brokers/`) | ✅ Completato |
-| **5A** | Audit e fix documentazione | ⏳ Da fare |
-| **5B** | Gallery assets in gallery.spec.ts | ⏳ Da fare |
+| **5A** | Audit e fix documentazione | ✅ Completato (EN-only, traduzioni via LLM pipeline) |
+| **5B** | Gallery assets in gallery.spec.ts | ✅ Completato (8 scene Assets) |
 
 ---
 

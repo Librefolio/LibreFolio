@@ -4,9 +4,9 @@ This guide covers setting up a local development environment. For production dep
 
 ## ✅ Prerequisites
 
-- 🐍 **Python 3.11+**
-- 📦 **Node.js 18+**
-- 📋 **Pipenv** (Python package manager)
+- 🐍 **Python 3.13+**
+- 📦 **Node.js 20.19+** (includes npm)
+- 📋 **Pipenv** (`pip install pipenv`)
 - 🐳 **Docker** (Optional, for production deployment)
 
 ## 📋 Setup Instructions
@@ -56,6 +56,18 @@ To start the FastAPI server with auto-reload:
 ```
 
 The server will be available at `http://localhost:8000`.
+
+#### Server Options
+
+| Flag | Description |
+|------|-------------|
+| `--host HOST` | Bind address (default: `HOST` env var or `0.0.0.0`) |
+| `--port PORT` | Bind port (default: `PORT` env var or `8000`) |
+| `--test` / `-t` | Use test database (port 8001) |
+| `--debug` / `-d` | Debug mode: verbose logging + frontend debug build |
+| `--rebuild` / `-r` | Force rebuild frontend before starting |
+| `--force` / `-f` | Kill blocking processes on the port before starting |
+| `--workers N` | Number of uvicorn workers (default: 1, disables reload) |
 
 For frontend development with Hot Module Replacement, start a second terminal:
 
@@ -138,5 +150,18 @@ Run `./dev.py --help` for the full command tree.
 | `./dev.py mkdocs serve` | Start MkDocs dev server |
 | `./dev.py mkdocs build` | Build MkDocs static site |
 | `./dev.py info api` | Show API info (routes, models) |
-| `./dev.py cache js` | Clear frontend build cache |
+| `./dev.py info version` | Show application version (from git tags) |
+| `./dev.py cache js` | Update JS library cache |
 | `./dev.py shell` | Open `pipenv` shell |
+
+### 🐳 Docker
+
+| Command | Description |
+|---------|-------------|
+| `./dev.py docker build` | Build Docker image (auto-builds frontend + docs if needed) |
+| `./dev.py docker rebuild` | Build → stop containers → restart with new image |
+| `./dev.py docker up` | Start containers (`docker compose up -d`) |
+| `./dev.py docker down` | Stop containers |
+| `./dev.py docker logs` | Show container logs (`-f` to follow) |
+| `./dev.py docker status` | Show container status |
+

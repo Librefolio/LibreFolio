@@ -37,6 +37,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Change to project root so relative paths work
 os.chdir(PROJECT_ROOT)
 
+from scripts.cli_base import pipenv_prefix
+
 # Setup test database configuration and get test database path
 from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH, TEST_DATABASE_URL
 # Import test utilities (avoid code duplication)
@@ -183,7 +185,7 @@ def _build_pytest_cmd(test_path: str, test_names: list = None) -> list:
     Returns:
         List of command parts for run_command
     """
-    cmd = ["pipenv", "run", "python", "-m", "pytest", test_path, "-v"]
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", test_path, "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
     return cmd
@@ -427,7 +429,7 @@ def db_populate(verbose: bool = False, force: bool = False,
 
     if force:
         print_warning("--force flag detected: Will DELETE existing data")
-    cmd = ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.populate_mock_data"]
+    cmd = [*pipenv_prefix(), "python", "-m", "backend.test_scripts.test_db.populate_mock_data"]
     if force:
         cmd.append("--force")
     if clean:
@@ -661,7 +663,7 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
     print_info("Testing: backend/app/services/transaction_service.py")
     print_info("Tests: CRUD, balance validation, link resolution, balance queries")
 
-    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_transaction_service.py", "-v"]
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", "backend/test_scripts/test_services/test_transaction_service.py", "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
 
@@ -676,7 +678,7 @@ def services_broker(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Testing: backend/app/services/broker_service.py")
     print_info("Tests: CRUD, initial deposits, get_summary, flag validation")
 
-    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_broker_service.py", "-v"]
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", "backend/test_scripts/test_services/test_broker_service.py", "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
 
@@ -804,7 +806,7 @@ def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool
     print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
     print_info("Testing: backend/app/schemas/transactions.py")
 
-    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_schemas/test_transaction_schemas.py", "-v"]
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", "backend/test_scripts/test_schemas/test_transaction_schemas.py", "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
 
@@ -816,7 +818,7 @@ def schemas_brokers(verbose: bool = False, test_names: list = None) -> bool:
     print_section("Schemas: Brokers (BRCreateItem, BRReadItem, etc.)")
     print_info("Testing: backend/app/schemas/brokers.py")
 
-    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_schemas/test_broker_schemas.py", "-v"]
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", "backend/test_scripts/test_schemas/test_broker_schemas.py", "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
 
@@ -1757,7 +1759,7 @@ def _list_pytest_tests(category: str, action: str = None) -> bool:
     print(f"  Use {Colors.YELLOW}./dev.py test {category} <action> \"<test name>\"{Colors.NC} to run a specific test\n")
 
     try:
-        cmd = ["pipenv", "run", "python", "-m", "pytest", str(test_path), "--collect-only", "-q"]
+        cmd = [*pipenv_prefix(), "python", "-m", "pytest", str(test_path), "--collect-only", "-q"]
         result = subprocess.run(
             cmd,
             cwd=PROJECT_ROOT,
@@ -3143,7 +3145,7 @@ def _dispatch_test_command(args):
         if cov_clean:
             import subprocess
             result = subprocess.run(
-                ["pipenv", "run", "coverage", "erase"],
+                [*pipenv_prefix(), "coverage", "erase"],
                 cwd=os.getcwd(),
                 capture_output=True,
                 text=True
@@ -3230,7 +3232,7 @@ def main():
         if cov_clean:
             print(f"{Colors.YELLOW}🗑️  Resetting coverage database...{Colors.NC}")
             result = subprocess.run(
-                ["pipenv", "run", "coverage", "erase"],
+                [*pipenv_prefix(), "coverage", "erase"],
                 cwd=os.getcwd(),
                 capture_output=True,
                 text=True
@@ -3266,7 +3268,7 @@ def main():
 
         # Generate final coverage report with table
         result = subprocess.run(
-            ["pipenv", "run", "coverage", "report", "--skip-covered"],
+            [*pipenv_prefix(), "coverage", "report", "--skip-covered"],
             cwd=os.getcwd(),
             capture_output=False,  # Show output directly
             text=True

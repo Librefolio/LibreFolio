@@ -9,21 +9,18 @@
 
 FROM python:3.13-slim
 
-# System dependencies
+# System dependencies (git needed for justetf-scraping pip dependency)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libffi-dev \
+    gcc libffi-dev git \
     && rm -rf /var/lib/apt/lists/*
-
-# Install pipenv
-RUN pip install --no-cache-dir pipenv
 
 WORKDIR /app
 
-# Copy dependency files first (layer caching)
-COPY Pipfile Pipfile.lock ./
+# Copy pre-generated requirements (created by ./dev.py docker build)
+COPY requirements.txt ./
 
 # Install Python dependencies (system-wide, no virtualenv in Docker)
-RUN pipenv install --deploy --system && \
+RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir uvicorn[standard]
 
 # Copy application code
@@ -40,11 +37,12 @@ COPY mkdocs_src/site/ ./mkdocs_src/site/
 # Copy environment config
 COPY .env.example ./.env
 
-# Create data directory
+# Create data directories (prod + test for --test mode)
 RUN mkdir -p /app/backend/data/prod/sqlite \
              /app/backend/data/prod/custom-uploads \
              /app/backend/data/prod/broker_reports \
-             /app/backend/data/prod/logs
+             /app/backend/data/prod/logs \
+             /app/backend/data/test/sqlite
 
 # Default environment
 ENV HOST=0.0.0.0 \
@@ -53,7 +51,7 @@ ENV HOST=0.0.0.0 \
     LOG_LEVEL=INFO \
     PORTFOLIO_BASE_CURRENCY=EUR
 
-EXPOSE 8000
+EXPOSE 8000 8001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
