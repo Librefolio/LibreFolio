@@ -7,17 +7,28 @@
     // Initialize i18n
     initI18n();
 
+    function removeSplash() {
+        const splash = document.getElementById('app-splash');
+        if (splash) {
+            splash.classList.add('fade-out');
+            setTimeout(() => splash.remove(), 350);
+        }
+    }
+
     onMount(() => {
         // Sync language store with i18n after mount
         currentLanguage.init();
     });
+
+    // Remove splash when i18n is ready (reactive)
+    $: if (!$i18nLoading && typeof document !== 'undefined') {
+        removeSplash();
+    }
 </script>
 
 {#if $i18nLoading}
-    <!-- Show loading while translations load -->
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige">
-        <div class="text-libre-green text-xl">Loading...</div>
-    </div>
+    <!-- Splash screen is visible in app.html; keep a minimal placeholder here -->
+    <div></div>
 {:else}
     <div class="min-h-screen">
         <slot/>

@@ -82,5 +82,7 @@ Applicare `.emoji-flag` SOLO ai container bandiera (language selector, currency 
 | Piani attivi | `LibreFolio_developer_journal/RoadmapV4_UI/plan-*.md` |
 | Sub-plan Phase 4 completati | `RoadmapV4_UI/phases/phase-04-subplan/` |
 | Sub-plan Phase 5 completati | `RoadmapV4_UI/phases/phase-05-subplan/` |
+| Sub-plan Phase 6 | `RoadmapV4_UI/phases/phase-06-subplan/` (Bugfix Step 1-4) |
 | Fasi macro | `RoadmapV4_UI/phases/phase-{00..09}.md` |
+| Knowledge base consolidation | `plan-asset06_Steps0-4_knowledgeBaseConsolidationAndEmojiFix.prompt.md` |
 

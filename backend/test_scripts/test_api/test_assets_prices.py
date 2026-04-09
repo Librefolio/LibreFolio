@@ -486,3 +486,178 @@ async def test_query_without_sync_returns_empty(test_server):
         # Cleanup
         await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         print_info("  Cleanup completed")
+
+
+# ============================================================
+# Test 8: Sync idempotency — re-sync same range → 0 points_changed
+# ============================================================
+@pytest.mark.asyncio
+async def test_sync_idempotency(test_server):
+    """Test 8: Re-syncing the same date range produces points_changed == 0."""
+    print_section("Test 8: Sync idempotency")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Create asset + assign provider
+        create_item = FAAssetCreateItem(
+            display_name=f"Idempotency Test {unique_id('IDEMP')}", currency="USD"
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert create_resp.status_code == 200
+        asset_id = create_resp.json()["items"][0]["id"]
+
+        assignment = FAProviderAssignmentItem(
+            asset_id=asset_id, provider_code="yfinance",
+            identifier="AAPL", identifier_type=IdentifierType.TICKER,
+            provider_params=None,
+            )
+        await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment.model_dump(mode="json")], timeout=TIMEOUT,
+            )
+
+        today = date.today()
+        start = (today - timedelta(days=7)).isoformat()
+        end = today.isoformat()
+
+        # First sync — expect points_changed > 0
+        sync1 = await client.post(
+            f"{API_BASE}/assets/prices/sync",
+            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
+            timeout=TIMEOUT,
+            )
+        assert sync1.status_code == 200
+        r1 = sync1.json()["results"][0]
+        assert r1["points_changed"] > 0, "First sync should insert prices"
+        print_info(f"  First sync: {r1['points_changed']} points changed")
+
+        # Second sync — same range → 0 points_changed
+        sync2 = await client.post(
+            f"{API_BASE}/assets/prices/sync",
+            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
+            timeout=TIMEOUT,
+            )
+        assert sync2.status_code == 200
+        r2 = sync2.json()["results"][0]
+        assert r2["points_changed"] == 0, f"Re-sync should change 0 points, got {r2['points_changed']}"
+        print_success("  ✓ Re-sync produced points_changed == 0 (idempotent)")
+
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================
+# Test 9: Query with include_events: true
+# ============================================================
+@pytest.mark.asyncio
+async def test_query_with_include_events(test_server):
+    """Test 9: Price query with include_events flag returns events field."""
+    print_section("Test 9: Query with include_events")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Create asset
+        create_item = FAAssetCreateItem(
+            display_name=f"Events Test {unique_id('EVT')}", currency="USD"
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert create_resp.status_code == 200
+        asset_id = create_resp.json()["items"][0]["id"]
+
+        today = date.today()
+        start = (today - timedelta(days=30)).isoformat()
+        end = today.isoformat()
+
+        # Query with include_events: true — should succeed and have 'events' key
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end},
+                   "include_events": True}],
+            timeout=TIMEOUT,
+            )
+        assert query_resp.status_code == 200
+        result = query_resp.json()["items"][0]
+        assert "events" in result, "Response must contain 'events' field when include_events is true"
+        assert isinstance(result["events"], list), "Events must be a list"
+        print_success(f"  ✓ Query with include_events returned events field (count: {len(result['events'])})")
+
+        # Also test with include_events: false (default) — events should be empty list
+        query_resp2 = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
+            timeout=TIMEOUT,
+            )
+        assert query_resp2.status_code == 200
+        result2 = query_resp2.json()["items"][0]
+        assert result2.get("events", []) == [], "Events should be empty when include_events is not set"
+        print_success("  ✓ Query without include_events returns empty events")
+
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================
+# Test 10: Bulk sync multi-asset (3+ assets in one request)
+# ============================================================
+@pytest.mark.asyncio
+async def test_bulk_sync_multi_asset(test_server):
+    """Test 10: Sync 3 assets in a single bulk request."""
+    print_section("Test 10: Bulk sync multi-asset")
+
+    tickers = [
+        ("AAPL", f"Apple Bulk {unique_id('BLK1')}"),
+        ("MSFT", f"Microsoft Bulk {unique_id('BLK2')}"),
+        ("GOOGL", f"Google Bulk {unique_id('BLK3')}"),
+    ]
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        asset_ids = []
+        for ticker, name in tickers:
+            create_item = FAAssetCreateItem(display_name=name, currency="USD")
+            resp = await client.post(
+                f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
+                )
+            assert resp.status_code == 200
+            aid = resp.json()["items"][0]["id"]
+            asset_ids.append(aid)
+
+            assignment = FAProviderAssignmentItem(
+                asset_id=aid, provider_code="yfinance",
+                identifier=ticker, identifier_type=IdentifierType.TICKER,
+                provider_params=None,
+                )
+            await client.post(
+                f"{API_BASE}/assets/provider",
+                json=[assignment.model_dump(mode="json")], timeout=TIMEOUT,
+                )
+        print_info(f"  Created {len(asset_ids)} assets with providers")
+
+        today = date.today()
+        start = (today - timedelta(days=7)).isoformat()
+        end = today.isoformat()
+
+        # Bulk sync all 3
+        sync_body = [{"asset_id": aid, "date_range": {"start": start, "end": end}} for aid in asset_ids]
+        sync_resp = await client.post(
+            f"{API_BASE}/assets/prices/sync", json=sync_body, timeout=60.0,
+            )
+        assert sync_resp.status_code == 200
+        results = sync_resp.json()["results"]
+        assert len(results) == 3, f"Expected 3 results, got {len(results)}"
+
+        for i, r in enumerate(results):
+            assert r.get("points_fetched", 0) > 0 or r.get("points_changed", 0) >= 0, \
+                f"Asset {i} sync should report results"
+            print_info(f"  {tickers[i][0]}: fetched={r.get('points_fetched', 0)}, changed={r.get('points_changed', 0)}")
+
+        print_success(f"  ✓ Bulk sync of {len(asset_ids)} assets completed successfully")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
+

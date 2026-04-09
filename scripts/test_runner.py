@@ -1349,7 +1349,7 @@ def front_brokers(verbose: bool = False, ui: bool = False, headed: bool = False,
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("brokers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("brokers/brokers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
 
 def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
@@ -1359,7 +1359,7 @@ def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = Fal
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("multi-user.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("brokers/multi-user.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
 
 def front_select(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
@@ -1391,7 +1391,7 @@ def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool =
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("broker-sharing.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("brokers/broker-sharing.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
 
 def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
@@ -1518,6 +1518,62 @@ def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debu
     )
 
 
+# =============================================================================
+# Frontend Asset Tests (Playwright E2E)
+# =============================================================================
+
+def front_asset_list(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run Asset list page E2E tests."""
+    print_section("Frontend Asset List Page Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_asset_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run Asset detail page E2E tests."""
+    print_section("Frontend Asset Detail Page Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_asset_modal(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run Asset modal E2E tests."""
+    print_section("Frontend Asset Modal Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-modal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run all Asset E2E tests."""
+    return _run_test_suite(
+        suite_name="All Asset Tests (E2E)",
+        tests=[
+            ("Asset List Page", lambda: front_asset_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("Asset Detail Page", lambda: front_asset_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("Asset Modal", lambda: front_asset_modal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+        ],
+        verbose=verbose,
+        header_msg="All Asset Tests (E2E)",
+        summary_title="Asset Test Summary",
+        success_msg="All Asset tests passed! 🎉",
+    )
+
+
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run all frontend utility/component E2E tests."""
     print_header("Frontend Utility Tests (Playwright)")
@@ -1545,7 +1601,7 @@ def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False
         return False
     if not _ensure_test_users():
         return False
-    specs = ["brokers.spec.ts", "multi-user.spec.ts", "broker-sharing.spec.ts"]
+    specs = ["brokers/brokers.spec.ts", "brokers/multi-user.spec.ts", "brokers/broker-sharing.spec.ts"]
     return _run_test_suite(
         suite_name="Frontend User Tests",
         tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug)) for spec in specs],
@@ -2461,7 +2517,7 @@ Options: --ui, --headed, --debug
             "name": "Brokers Tests",
             "desc": "CRUD broker, import files modal",
             "prereq": "Login working",
-            "tests": "brokers.spec.ts",
+            "tests": "brokers/brokers.spec.ts",
             },
         "multi-user": {
             "func": front_multi_user,
@@ -2469,7 +2525,7 @@ Options: --ui, --headed, --debug
             "name": "Multi-User Tests",
             "desc": "Data isolation between users",
             "prereq": "Multiple test users",
-            "tests": "multi-user.spec.ts",
+            "tests": "brokers/multi-user.spec.ts",
             },
         "broker-sharing": {
             "func": front_broker_sharing,
@@ -2477,7 +2533,7 @@ Options: --ui, --headed, --debug
             "name": "Broker Sharing Tests",
             "desc": "BrokerSharingModal, ownership chart, add/remove users",
             "prereq": "Login working, brokers exist",
-            "tests": "broker-sharing.spec.ts",
+            "tests": "brokers/broker-sharing.spec.ts",
             },
         "all": {
             "func": front_user_all,
@@ -2569,6 +2625,51 @@ Options: --ui, --headed, --debug
             "test_names": False,
             "name": "All FX Tests",
             "desc": "Run all FX tests (unit + E2E)",
+            },
+        },
+    "front-asset": {
+        "_meta": {
+            "help": "Frontend Asset E2E tests (list, detail, modal)",
+            "description": """
+Frontend Asset Tests
+
+Browser-based tests for the Asset Management subsystem:
+  • Asset list page (cards/table, filters, navigation)
+  • Asset detail page (chart, signals, measures, classification)
+  • Asset modal (create, edit, provider, distributions)
+
+Options: --ui, --headed, --debug
+""",
+            },
+        "asset-list": {
+            "func": front_asset_list,
+            "test_names": True,
+            "name": "Asset List Page",
+            "desc": "Asset list page navigation, cards/table, filters",
+            "prereq": "Login working, DB populated",
+            "tests": "assets/asset-list.spec.ts",
+            },
+        "asset-detail": {
+            "func": front_asset_detail,
+            "test_names": True,
+            "name": "Asset Detail Page",
+            "desc": "Asset detail page chart, panels, sync, edit",
+            "prereq": "Login working, DB populated",
+            "tests": "assets/asset-detail.spec.ts",
+            },
+        "asset-modal": {
+            "func": front_asset_modal,
+            "test_names": True,
+            "name": "Asset Modal",
+            "desc": "Create/edit asset modal, provider, distributions",
+            "prereq": "Login working, DB populated",
+            "tests": "assets/asset-modal.spec.ts",
+            },
+        "all": {
+            "func": front_asset_all,
+            "test_names": False,
+            "name": "All Asset Tests",
+            "desc": "Run all Asset E2E tests",
             },
         },
     }

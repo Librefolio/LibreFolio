@@ -5,17 +5,17 @@
 ```text
 backend/
 ├── app/
-│   ├── api/v1/                # REST API endpoints (84+)
+│   ├── api/v1/                # REST API endpoints (~82)
 │   ├── db/models.py           # SQLModel ORM models
 │   ├── schemas/               # Pydantic schemas (validazione I/O)
 │   ├── services/              # Business logic
-│   │   ├── asset_source_providers/   # yfinance, JustETF, CSS Scraper, Scheduled
+│   │   ├── asset_source_providers/   # yfinance, JustETF, CSS Scraper, Scheduled Investment
 │   │   ├── fx_providers/             # ECB, FED, BOE, SNB, MANUAL
 │   │   └── brim_providers/           # 11 plugin import broker
 │   ├── config.py              # get_data_dir(), paths, env vars
 │   └── utils/                 # Utilities condivise
 ├── alembic/                   # Migrazioni database (001_initial.py)
-├── test_scripts/              # Test suite completa (8 categorie)
+├── test_scripts/              # Test suite completa (800+ test, 8 categorie)
 └── data/
     ├── prod/                  # sqlite/app.db, broker_reports/, logs/
     └── test/                  # Stessa struttura, isolati
@@ -50,7 +50,14 @@ Tutti i provider usano **auto-discovery** tramite Registry Pattern.
 
 ### Asset Providers (`asset_source_providers/`)
 
-yfinance, JustETF scraper, CSS Scraper (BeautifulSoup), Scheduled Investment.
+| Provider | `identifier` | `provider_params` | `supports_search` |
+|----------|-------------|-------------------|-------------------|
+| `yfinance` | ticker (es. "AAPL") | `None` | ✅ |
+| `justetf` | ISIN (es. "IE00B4L5Y983") | `None` | ✅ |
+| `cssscraper` | URL pagina web | `{current_css_selector, currency, decimal_format?}` | ❌ |
+| `scheduled_investment` | asset_id | `FAScheduledInvestmentSchedule` (complesso) | ❌ |
+
+Ogni provider espone `params_schema` (proprietà sulla base class) per descrivere i campi `provider_params` necessari → il frontend genera form dinamici.
 
 ### BRIM Providers (`brim_providers/`)
 
@@ -69,7 +76,7 @@ yfinance, JustETF scraper, CSS Scraper (BeautifulSoup), Scheduled Investment.
 
 ## 🧪 Test
 
-8 categorie via `./dev.py test <category> <action>`:
+8 categorie via `./dev.py test <category> <action>` — **800+ test** totali:
 
 | Categoria | Cosa testa |
 |-----------|-----------|
@@ -78,9 +85,9 @@ yfinance, JustETF scraper, CSS Scraper (BeautifulSoup), Scheduled Investment.
 | `services` | Business logic |
 | `utils` | Utilities |
 | `schemas` | Validazione Pydantic |
-| `api` | Endpoint REST (20+ FX tests) |
-| `e2e` | End-to-end backend |
-| `front` | Playwright E2E frontend (67+ test) |
+| `api` | Endpoint REST (276 test: 70 asset, 28 fx, 22 brokers, 21 auth, …) |
+| `e2e` | End-to-end backend (search→create→assign→sync) |
+| `front` | Playwright E2E frontend (181+ test) |
 
 ---
 
@@ -96,7 +103,10 @@ yfinance, JustETF scraper, CSS Scraper (BeautifulSoup), Scheduled Investment.
 | Provider FX | `backend/app/services/fx_providers/` |
 | Provider Asset | `backend/app/services/asset_source_providers/` |
 | Import Broker | `backend/app/services/brim_providers/` |
+| System & Health | `backend/app/api/v1/system.py` |
+| Backup & Restore | `backend/app/api/v1/backup.py` |
 | Test Suite | `backend/test_scripts/` |
+| Test Asset API | `backend/test_scripts/test_api/test_assets_*.py` (5 file, 70 test) |
 | Dati Produzione | `backend/data/prod/` |
 | Dati Test | `backend/data/test/` |
 
