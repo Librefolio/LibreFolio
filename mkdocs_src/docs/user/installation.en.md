@@ -66,17 +66,7 @@ docker compose up -d
 
 - 🔄 `-d` runs the application in detached mode (in the background).
 
-## 👤 6. Create a User
-
-To log in, you need to create a user account. The first user created automatically becomes the superuser (admin).
-
-```bash
-docker compose exec librefolio python dev.py user create <username> <email> <password>
-```
-
-Replace `<username>`, `<email>`, and `<password>` with your credentials.
-
-## 🌐 7. Access LibreFolio
+## 🌐 6. Access LibreFolio
 
 Open your browser and go to:
 
@@ -84,10 +74,16 @@ Open your browser and go to:
 
 (Or use the port you configured in `.env`).
 
+The first time you access LibreFolio, you'll be presented with a **registration page** — create your account directly from the browser. The first user registered automatically becomes the administrator.
+
 Available endpoints:
 
 - 🏠 **Frontend**: `http://localhost:8000/`
 - 📚 **User Docs**: `http://localhost:8000/mkdocs/`
+
+!!! tip "CLI user management"
+
+    You can also manage users from the command line. See the [Admin Manual — CLI Tools](../admin/cli_tools.en.md) for commands like user creation, promotion, and listing.
 
 ## 🔄 Updating LibreFolio
 

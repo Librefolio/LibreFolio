@@ -37,56 +37,6 @@ description: Reprenez possession de vos données financières. LibreFolio est le
  Contrôle total, aucun compromis.
  </p>
 
- <div class="asset-icons">
- <a href="financial-theory/asset-types/" class="asset-icon-link">
- <div class="asset-icon" title="Actions">
- <img src="../static/icons/asset-types/stock.png" alt="Actions" />
- <span>Actions</span>
- </div>
- </a>
- <a href="financial-theory/asset-types/" class="asset-icon-link">
- <div class="asset-icon" title="ETF">
- <img src="../static/icons/asset-types/etf.png" alt="ETF" />
- <span>ETF</span>
- </div>
- </a>
- <a href="financial-theory/asset-types/" class="asset-icon-link">
- <div class="asset-icon" title="Crypto">
- <img src="../static/icons/asset-types/crypto.png" alt="Crypto" />
- <span>Crypto</span>
- </div>
- </a>
- <a href="financial-theory/asset-types/" class="asset-icon-link">
- <div class="asset-icon" title="Obligations">
- <img src="../static/icons/asset-types/bond.png" alt="Obligations" />
- <span>Obligations</span>
- </div>
- </a>
- <a href="financial-theory/asset-types/" class="asset-icon-link">
- <div class="asset-icon" title="Prêts P2P">
- <img src="../static/icons/asset-types/crowdfunding.png" alt="P2P" />
- <span>Prêts P2P</span>
- </div>
- </a>
- <a href="financial-theory/asset-types/" class="asset-icon-link">
- <div class="asset-icon" title="Fonds">
- <img src="../static/icons/asset-types/fund.png" alt="Fonds" />
- <span>Fonds</span>
- </div>
- </a>
- <a href="financial-theory/asset-types/" class="asset-icon-link">
- <div class="asset-icon" title="Matières premières">
- <img src="../static/icons/asset-types/hold.png" alt="Matières premières" />
- <span>Matières premières</span>
- </div>
- </a>
- <a href="financial-theory/asset-types/" class="asset-icon-link">
- <div class="asset-icon" title="Autre">
- <img src="../static/icons/asset-types/other.png" alt="Autre" />
- <span>Autre</span>
- </div>
- </a>
- </div>
 
  </div>
 </div>

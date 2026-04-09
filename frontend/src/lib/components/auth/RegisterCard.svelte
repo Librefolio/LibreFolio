@@ -135,7 +135,9 @@
     <!-- Header Section (Dark Green) -->
     <div class="bg-libre-green p-8 flex flex-col items-center justify-center space-y-2">
         <div class="flex items-center space-x-3 text-white">
-            <img alt="LibreFolio" class="h-10 w-auto" src="/logo.png"/>
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center p-1" style="background:#fff">
+                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png"/>
+            </div>
             <span class="text-2xl font-bold tracking-wide">LibreFolio</span>
         </div>
         <span class="text-white/80 text-sm">{$_('auth.registerTitle')}</span>

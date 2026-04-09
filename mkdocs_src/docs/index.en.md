@@ -37,56 +37,6 @@ description: Reclaim ownership of your financial data. LibreFolio is the privacy
       Total control, zero compromise.
     </p>
 
-    <div class="asset-icons">
-      <a href="financial-theory/asset-types/" class="asset-icon-link">
-        <div class="asset-icon" title="Stocks">
-          <img src="static/icons/asset-types/stock.png" alt="Stocks" />
-          <span>Stocks</span>
-        </div>
-      </a>
-      <a href="financial-theory/asset-types/" class="asset-icon-link">
-        <div class="asset-icon" title="ETFs">
-          <img src="static/icons/asset-types/etf.png" alt="ETFs" />
-          <span>ETFs</span>
-        </div>
-      </a>
-      <a href="financial-theory/asset-types/" class="asset-icon-link">
-        <div class="asset-icon" title="Crypto">
-          <img src="static/icons/asset-types/crypto.png" alt="Crypto" />
-          <span>Crypto</span>
-        </div>
-      </a>
-      <a href="financial-theory/asset-types/" class="asset-icon-link">
-        <div class="asset-icon" title="Bonds">
-          <img src="static/icons/asset-types/bond.png" alt="Bonds" />
-          <span>Bonds</span>
-        </div>
-      </a>
-      <a href="financial-theory/asset-types/" class="asset-icon-link">
-        <div class="asset-icon" title="P2P Loans">
-          <img src="static/icons/asset-types/crowdfunding.png" alt="P2P" />
-          <span>P2P</span>
-        </div>
-      </a>
-      <a href="financial-theory/asset-types/" class="asset-icon-link">
-        <div class="asset-icon" title="Funds">
-          <img src="static/icons/asset-types/fund.png" alt="Funds" />
-          <span>Funds</span>
-        </div>
-      </a>
-      <a href="financial-theory/asset-types/" class="asset-icon-link">
-        <div class="asset-icon" title="Commodities">
-          <img src="static/icons/asset-types/hold.png" alt="Commodities" />
-          <span>Commodities</span>
-        </div>
-      </a>
-      <a href="financial-theory/asset-types/" class="asset-icon-link">
-        <div class="asset-icon" title="Other">
-          <img src="static/icons/asset-types/other.png" alt="Other" />
-          <span>Other</span>
-        </div>
-      </a>
-    </div>
 
   </div>
 </div>

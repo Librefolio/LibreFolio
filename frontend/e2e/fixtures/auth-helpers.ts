@@ -16,8 +16,10 @@ export async function login(page: Page, user = TEST_USER) {
     await page.getByTestId('login-password').fill(user.password);
     await page.getByTestId('login-submit').click();
 
-    // Wait for dashboard (20s max to handle parallel worker load)
-    await expect(page).toHaveURL(/.*dashboard.*/, {timeout: 20_000});
+    // Wait for login to complete: login form disappears and app layout loads
+    // (more robust than checking URL, which varies by redirect timing)
+    await expect(page.getByTestId('login-page')).not.toBeVisible({timeout: 20_000});
+    await page.waitForLoadState('domcontentloaded');
 }
 
 /**

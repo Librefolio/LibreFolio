@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
 
+/* dark: variant uses html.dark class (set by anti-FOUC script in app.html) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* LibreFolio Design System */
 @theme {
     /* Brand Colors */

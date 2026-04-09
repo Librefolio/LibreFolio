@@ -15,12 +15,6 @@
                 : stored === 'light' ? 'light'
                     : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             document.documentElement.classList.add(theme);
-            // Set splash background color based on theme
-            var splash = document.getElementById('app-splash');
-            if (splash) {
-                splash.style.backgroundColor = theme === 'dark' ? '#0f172a' : '#f5f4ef';
-                splash.querySelector('.splash-spinner').style.borderTopColor = theme === 'dark' ? '#86efac' : '#1a4031';
-            }
         })();
     </script>
     <style>
@@ -32,7 +26,18 @@
             transition: opacity 0.3s ease;
         }
         #app-splash.fade-out { opacity: 0; pointer-events: none; }
-        .splash-logo { width: 80px; height: 80px; margin-bottom: 24px; }
+        .splash-logo {
+            width: 80px; height: 80px; margin-bottom: 24px;
+            border-radius: 16px;
+            background: #ffffff;
+            padding: 8px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .splash-logo img {
+            max-width: 100%; max-height: 100%;
+            object-fit: contain;
+        }
         .splash-spinner {
             width: 36px; height: 36px;
             border: 3px solid rgba(0,0,0,0.1);
@@ -41,15 +46,18 @@
             animation: splash-spin 0.8s linear infinite;
         }
         @keyframes splash-spin { to { transform: rotate(360deg); } }
+        /* Dark mode splash — applied via html.dark class set by anti-FOUC script */
+        html.dark #app-splash { background-color: #0f172a; }
+        html.dark .splash-spinner {
+            border-color: rgba(255,255,255,0.1);
+            border-top-color: #86efac;
+        }
     </style>
     %sveltekit.head%
 </head>
 <body data-sveltekit-preload-data="hover">
 <div id="app-splash">
-    <svg class="splash-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" r="45" fill="#1a4031"/>
-        <text x="50" y="62" text-anchor="middle" font-size="36" font-weight="bold" fill="#f5f4ef" font-family="system-ui,sans-serif">LF</text>
-    </svg>
+    <div class="splash-logo"><img alt="LibreFolio" src="/logo.png"/></div>
     <div class="splash-spinner"></div>
 </div>
 <div style="display: contents">%sveltekit.body%</div>

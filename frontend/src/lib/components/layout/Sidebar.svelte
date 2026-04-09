@@ -100,7 +100,9 @@
                 on:click={toggleCollapsed}
                 title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-            <img alt="LibreFolio" class="h-8 w-auto flex-shrink-0" src="/logo.png"/>
+            <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1" style="background:#fff">
+                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png"/>
+            </div>
             {#if !collapsed}
                 <span class="text-xl font-bold tracking-wide whitespace-nowrap">LibreFolio</span>
             {/if}

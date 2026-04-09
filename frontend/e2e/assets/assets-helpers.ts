@@ -30,6 +30,39 @@ export async function goToAssetDetailPage(page: import('@playwright/test').Page,
 }
 
 /**
+ * Navigate to a specific asset detail page by searching for its name.
+ * Searches in the asset list, clicks the matching card, and waits for the detail page.
+ *
+ * @param page - Playwright page
+ * @param assetName - Display name to search for (e.g. "Apple")
+ */
+export async function navigateToAssetByName(page: import('@playwright/test').Page, assetName: string) {
+    // Type in search input to filter
+    const searchInput = page.getByTestId('assets-search-input');
+    if (await searchInput.isVisible({timeout: 3000}).catch(() => false)) {
+        await searchInput.fill(assetName);
+        await page.waitForTimeout(800);
+    }
+
+    // Click the first matching card
+    const card = page.locator('[data-testid^="asset-card-"]').first();
+    if (await card.isVisible({timeout: 3000}).catch(() => false)) {
+        await card.click();
+    } else {
+        // Fallback: try table row
+        const row = page.locator('[data-testid^="asset-row-"]').first();
+        if (await row.isVisible({timeout: 2000}).catch(() => false)) {
+            await row.click();
+        }
+    }
+
+    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
+    // Wait for ECharts canvas to render
+    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
+    await page.waitForTimeout(1500);
+}
+
+/**
  * Open the Create Asset modal from the list page.
  */
 export async function openCreateAssetModal(page: import('@playwright/test').Page) {
