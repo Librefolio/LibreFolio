@@ -72,6 +72,11 @@ def get_scripts_dir() -> Path:
 # Port Configuration
 # =============================================================================
 
+def get_server_host() -> str:
+    """Get server host from environment variable (default: 0.0.0.0)."""
+    return os.environ.get("HOST", "0.0.0.0")
+
+
 def get_server_port() -> int:
     """Get server port from environment variable (default: 8000)."""
     return int(os.environ.get("PORT", "8000"))

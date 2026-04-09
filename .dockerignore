@@ -1,0 +1,54 @@
+# =============================================================================
+# LibreFolio .dockerignore
+# =============================================================================
+
+# Version control
+.git/
+.gitignore
+
+# Node.js
+node_modules/
+frontend/node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Test data
+backend/data/test/
+
+# Development files
+LibreFolio_developer_journal/
+e2e/
+frontend/e2e/
+frontend/playwright-report/
+frontend/.svelte-kit/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation sources (we copy the built site, not sources)
+mkdocs_src/docs/
+mkdocs_src/aphra-pipeline/
+mkdocs_src/mkdocs.yml
+mkdocs_src/overrides/
+
+# Misc
+*.md
+!README.md
+artwork/
+_backup_docs/
+

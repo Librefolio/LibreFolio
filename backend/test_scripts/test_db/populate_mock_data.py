@@ -699,10 +699,9 @@ def populate_asset_provider_assignments(session: Session):
         (
             "BTP Italia 2028", "scheduled_investment", None, ProviderInputType.AUTO_GENERATED,
             {
-                "initial_value": 1000,
-                "purchase_date": "2024-01-15",
-                "interest_type": "simple",
-                "day_count_convention": "ACT/365",
+                "initial_value": {"code": "EUR", "amount": 1000},
+                "interest_type": "SIMPLE",
+                "day_count": "ACT/365",
                 "schedule": [
                     {
                         "start_date": "2024-01-15",
@@ -719,8 +718,9 @@ def populate_asset_provider_assignments(session: Session):
             "Gold Spot Price", "css_scraper", "https://www.kitco.com/charts/livegold.html",
             ProviderInputType.URL,
             {
-                "css_selector": "#sp-last",
-                "decimal_separator": ".",
+                "current_css_selector": "#sp-last",
+                "currency": "USD",
+                "decimal_format": "us",
             },
         ),
         ]
