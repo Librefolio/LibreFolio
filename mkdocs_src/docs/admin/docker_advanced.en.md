@@ -125,7 +125,55 @@ The Docker Compose configuration exposes **two ports**:
 
 ## 🏭 Production Considerations
 
-### 🔒 1. Reverse Proxy
+### 🎮 1. Customizing `docker-compose.yml`
+
+The repository includes a ready-to-use `docker-compose.yml`. Here is the full file with annotations showing what you can customize:
+
+```yaml
+services:
+  librefolio:
+    image: librefolio:latest           # Built by ./dev.py docker build
+    build: .
+    container_name: librefolio
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"           # (1) Production port — change via PORT env
+      - "${TEST_PORT:-8001}:8001"      # (2) Test server port (optional)
+    volumes:
+      - librefolio-data:/app/backend/data/prod-docker  # (3) Persistent data
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}                    # (4) DEBUG, INFO, WARNING, ERROR
+      - PORTFOLIO_BASE_CURRENCY=${PORTFOLIO_BASE_CURRENCY:-EUR}  # (5) EUR, USD, GBP...
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  librefolio-data:
+    driver: local
+```
+
+**Common customizations:**
+
+| # | What | How |
+|---|------|-----|
+| (1) | Change production port | Set `PORT=3000` in `.env` or shell |
+| (2) | Disable test port | Remove the `TEST_PORT` line from `ports:` |
+| (3) | Custom data path | Use a bind mount: `./my-data:/app/backend/data/prod-docker` |
+| (4) | Verbose logging | Set `LOG_LEVEL=DEBUG` in `.env` |
+| (5) | Base currency | Set `PORTFOLIO_BASE_CURRENCY=USD` |
+
+!!! tip "First user"
+
+    The first time you access LibreFolio in the browser, you'll see a registration page. Create your account directly — the first user automatically becomes the administrator. No CLI needed.
+
+### 🔒 2. Reverse Proxy
 
 It is highly recommended to run LibreFolio behind a reverse proxy like **Nginx** or **Traefik**. This allows you to:
 
@@ -133,7 +181,7 @@ It is highly recommended to run LibreFolio behind a reverse proxy like **Nginx**
 - 🖥️ Serve multiple applications on the same server.
 - 🛡️ Add security headers and rate limiting.
 
-### 💾 2. Database Backup
+### 💾 3. Database Backup
 
 The database is stored in the `librefolio-data` Docker volume. Set up a `cron` job to back it up regularly:
 
@@ -142,7 +190,7 @@ The database is stored in the `librefolio-data` Docker volume. Set up a `cron` j
 docker cp librefolio:/app/backend/data/prod-docker/sqlite/app.db /path/to/backups/app.db-$(date +%F)
 ```
 
-### 🔑 3. Environment Variables
+### 🔑 4. Environment Variables
 
 For production, consider setting these in `docker-compose.yml` or via `docker compose --env-file`:
 

@@ -79,13 +79,21 @@ The dev server runs at `http://localhost:5173` and proxies API calls to the back
 
 ### 👤 5. Create a User
 
-To log in, you need to create a user account. The first user automatically becomes the superuser.
+The first time you access LibreFolio in the browser, you'll see a **registration page** — you can create your first account directly from the frontend. The first user registered automatically becomes the administrator.
+
+Alternatively, you can create users from the CLI:
 
 ```bash
 ./dev.py user create <username> <email> <password>
 ```
 
-Replace `<username>`, `<email>`, and `<password>` with your desired credentials.
+!!! note "Admin promotion requires CLI"
+
+    While any user can register from the frontend, **promoting a user to administrator** (superuser) can only be done from the command line:
+
+    ```bash
+    ./dev.py user promote <username>
+    ```
 
 ---
 

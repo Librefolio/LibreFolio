@@ -2,6 +2,10 @@
 
 Assets are the core of LibreFolio. They represent any financial instrument you own or track: stocks, ETFs, bonds, cryptocurrencies, or custom instruments like savings accounts with scheduled interest.
 
+<div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="list" alt="Assets List Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
 ## 📌 What is an Asset?
 
 An asset in LibreFolio is a financial instrument with:
@@ -23,86 +27,25 @@ Navigate to **Assets** in the sidebar to see all your assets. The list page prov
 - **Sync All**: fetch latest prices for all assets with a provider
 - **Refresh All**: reload asset data from the database
 
-Click on any asset card to navigate to its **detail page**.
+Click on any asset card to navigate to its **[detail page](detail/index.en.md)**.
 
-## ➕ Creating an Asset
+## 🧭 Features
 
-1. Click **+ New Asset** on the assets page
-2. Fill in the basic information:
-    - **Name** (required)
-    - **Category** (required)
-    - **Currency** (required)
-    - **Identifiers**: ISIN, ticker, CUSIP, SEDOL, etc.
-3. Optionally configure a **Provider** for automatic price fetching
-4. Optionally add **Sector** and **Geographic** distributions
-5. Click **Save**
+### ➕ [Create & Edit](create-edit.en.md)
 
-## 📊 Asset Detail Page
+Step-by-step guide for creating new assets, configuring providers, and editing existing assets.
 
-The detail page is the heart of asset analysis. It includes:
+### 📊 [Asset Detail Page](detail/index.en.md)
 
-### 🔧 Header & Controls
+The heart of asset analysis — interactive chart, technical signals, measures, classification, and data editor.
 
-- **Back button**: return to the asset list
-- **Asset info**: name, type badge, currency, current price
-- **Edit**: open the edit modal to modify asset properties
-- **Sync**: fetch latest price data from the provider
-- **Refresh**: reload data from the database
+### 🔌 [Providers](providers/index.en.md)
 
-### 📈 Price Chart
+Automatic price fetching from Yahoo Finance, justETF, CSS Scraper, or the Scheduled Investment engine.
 
-An interactive ECharts chart showing historical price data with:
+---
 
-- **Date range filter**: select a time window (1W, 1M, 3M, 6M, 1Y, ALL, or custom range)
-- **Currency selector**: view prices in the asset's native currency or your portfolio base currency
-- **Absolute/Percentage toggle**: switch between absolute price values and percentage change
-- **Event markers**: dividends, splits, and other corporate events are shown as markers on the chart
+## 🔗 Related
 
-### 📐 Technical Signals
-
-Toggle the **Signals** panel to overlay technical indicators on the chart:
-
-- **EMA** (Exponential Moving Average) — configurable period
-- **MACD** (Moving Average Convergence Divergence)
-- **RSI** (Relative Strength Index)
-- **Bollinger Bands** — configurable period and standard deviation
-- **Asset Comparison** — compare with another asset's performance
-
-Each signal can be added, configured, and removed individually.
-
-### 📏 Measure Tool
-
-Enable the **Measure** tool to interactively measure price differences, percentage changes, and time intervals between any two points on the chart.
-
-### 🗂️ Classification
-
-If sector or geographic distributions are configured, the detail page shows:
-
-- **Sector pie chart**: breakdown by industry sector
-- **Geographic world map**: geographic allocation with an interactive world map
-- **Geographic pie chart**: percentage breakdown by country/region
-
-### ✏️ Data Editor
-
-Toggle the **Edit Data** panel to manually add, modify, or delete individual price data points directly on the chart.
-
-## 🛠️ Editing an Asset
-
-Click the **Edit** button on the detail page to open the asset modal with all fields pre-populated. All fields are editable, including provider configuration and distributions.
-
-## 🧪 Testing Provider Configuration
-
-After configuring a provider, click **Test Configuration** to verify that pricing data can be fetched. The test checks:
-
-- **Current Price**: fetches the latest price
-- **History**: fetches historical price data (if supported)
-
-Results are displayed inline with execution times. A ⚠️ warning means the operation is not supported by this provider (e.g., CSS Scraper doesn't support history).
-
-## 🔌 Provider Assignment
-
-Each asset can have one pricing provider assigned. See [Providers](providers/index.en.md) for details on available providers and their configuration.
-
-## ⏱️ Fetch Interval
-
-The fetch interval controls how often LibreFolio automatically refreshes the asset's price data. Default is 24 hours (24:00). Format: `HH:MM`.
+- 📚 **[Financial Theory — Asset Types](../../financial-theory/asset-types.md)** — Stock, ETF, Bond, Crypto, etc.
+- 💱 **[FX Rates](../fx/index.md)** — Currency exchange rates used for cross-currency conversion
