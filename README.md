@@ -88,15 +88,32 @@ The `./dev.py` script is your main tool for development (activate the virtual en
 
 ### 🐳 Docker Deployment
 
-Build and run with Docker:
+> **Prerequisites (Linux):** Your user must be in the `docker` group:
+> ```bash
+> sudo usermod -aG docker $USER && newgrp docker
+> ```
+
+1. **Configure environment** (required):
+
+```bash
+cp .env.example .env
+$EDITOR .env              # review and customize parameters
+```
+
+2. **Build and run:**
 
 ```bash
 ./dev.py docker build      # Build image (auto-builds frontend + docs)
 docker compose up -d       # Start container
-docker compose exec librefolio python dev.py user create <user> <email> <pass>
 ```
 
+3. **Access** at **http://localhost:8000** — the first user registered becomes the administrator.
+
 Use `./dev.py docker rebuild` to build a new image and restart containers in one step.
+
+Data is persisted in `./LibreFolio-data/` alongside `docker-compose.yml` (bind mount — back it up directly from the host).
+
+For reverse proxy, custom ports, test mode, and more, see the [Advanced Docker Guide](https://alfystar.github.io/LibreFolio/admin/docker_advanced/).
 
 #### 🧪 Docker Test Mode
 

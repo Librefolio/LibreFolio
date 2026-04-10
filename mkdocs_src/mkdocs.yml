@@ -294,7 +294,7 @@ nav:
       - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.md
       - Taxation & Tax Efficiency: financial-theory/taxation.md
   - Developer Manual:
-      - Overview: developer/index.md
+      - System Overview: developer/index.md
       - Dev Installation: developer/dev-installation.md
       - Architecture:
           - System Overview: developer/architecture/overview.md
@@ -329,8 +329,13 @@ nav:
               - Providers List: developer/backend/brim/providers_list.md
           - Assets (Pricing):
               - Architecture: developer/backend/assets/architecture.md
-              - System Providers: developer/backend/assets/system_providers.md
-              - Providers List: developer/backend/assets/providers_list.md
+              - Providers:
+                  - Overview Providers: developer/backend/assets/system_providers.md
+                  - Yahoo Finance Tech: developer/backend/assets/provider_yahoo_finance.md
+                  - justETF Tech: developer/backend/assets/provider_justetf.md
+                  - CSS Scraper Tech: developer/backend/assets/provider_cssscraper.md
+                  - Scheduled Investment Tech: developer/backend/assets/provider_scheduled_investment.md
+              - Events: developer/backend/assets/events.md
           - FX (Currency):
               - Architecture: developer/backend/fx/architecture.md
               - Configuration & Routing: developer/backend/fx/configuration.md

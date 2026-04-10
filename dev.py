@@ -684,6 +684,22 @@ def _get_docker_tag(override: str | None = None) -> str:
     return f"librefolio:{version}"
 
 
+def _check_env_file():
+    """Check that .env exists; if not, abort with helpful instructions."""
+    env_file = PROJECT_ROOT / ".env"
+    if not env_file.exists():
+        print_error("❌ .env file not found!")
+        print()
+        print(Colors.info("The .env file is required for Docker builds."))
+        print(Colors.info("Create it from the example and edit the parameters:"))
+        print()
+        print(f"    cp {PROJECT_ROOT / '.env.example'} {env_file}")
+        print(f"    $EDITOR {env_file}")
+        print()
+        return False
+    return True
+
+
 def _docker_ensure_assets_built():
     """Ensure frontend, docs and JS cache are built/up-to-date before Docker image build.
 
@@ -767,6 +783,8 @@ def _docker_ensure_assets_built():
 
 def cmd_docker_build(args):
     """Build the Docker image with git-based versioning."""
+    if not _check_env_file():
+        return 1
     tag_override = getattr(args, 'tag', None)
     no_cache = getattr(args, 'no_cache', False)
 
@@ -790,6 +808,8 @@ def cmd_docker_build(args):
 
 def cmd_docker_rebuild(args):
     """Rebuild image, stop running containers, restart with new version."""
+    if not _check_env_file():
+        return 1
     tag_override = getattr(args, 'tag', None)
     no_cache = getattr(args, 'no_cache', False)
 

@@ -17,11 +17,24 @@ The backend server must be running in **test mode**:
 ## 🔑 Key Tests
 
 - **Auth**: Login, token refresh, protected routes.
-- **Assets**: Create, read, update, delete assets via API.
+- **Assets CRUD**: Create, read, update, delete assets via API (19 tests).
+- **Assets Metadata**: Classification params, sector/geo distributions (4 tests).
+- **Assets Patch**: Partial field updates including identifiers (8 tests).
+- **Assets Provider**: Provider assignment, probe with valid/invalid params, Scheduled Investment via API (16 tests).
+- **Assets Prices**: Bulk upsert, query with backward-fill, sync idempotency, events in response, bulk multi-asset sync (9 tests).
+- **FX**: Currency pair CRUD, conversion, sync, delete (25+ tests).
+- **Brokers**: CRUD, sharing, multi-user access control.
 - **Transactions**: Import and manage transactions.
+- **Uploads**: File upload and media management.
+- **Settings**: Global and user settings.
+- **Utilities**: Country codes, currency utils.
 
 ## 🚀 Running
 
 ```bash
+# All API tests
 ./dev.py test api
+
+# Specific test file
+./dev.py test api -k test_assets_prices
 ```

@@ -9,6 +9,16 @@ This guide explains how to deploy LibreFolio for regular use using Docker. This 
 - 📋 **Pipenv**: `pip install pipenv`
 - 🐋 **Docker**: [Install Docker](https://docs.docker.com/get-docker/) (includes Docker Compose)
 
+!!! warning "Docker group (Linux)"
+
+    On Linux, your user must be in the `docker` group to run Docker commands without `sudo`:
+
+    ```bash
+    sudo usermod -aG docker $USER
+    ```
+
+    Then **log out and log back in**, or run `newgrp docker` to activate the group in the current session.
+
 !!! note "Why Python and Node.js?"
 
     LibreFolio uses a **runtime-only Docker image** — the frontend and documentation are built on the host before packaging into the Docker image. Pre-built images on a container registry are planned for future releases.
@@ -26,17 +36,17 @@ Or download the latest release from [GitHub Releases](https://github.com/Alfysta
 
 ## ⚙️ 2. Configure Environment
 
-1. **Copy the example file**:
+1. **Copy the example file** (required — the build will refuse to proceed without `.env`):
 
     ```bash
     cp .env.example .env
     ```
 
-2. **Edit `.env`** (Optional):
+2. **Edit `.env`** to customize:
 
     - 🔌 `PORT`: Change the port if `8000` is already in use.
-    - 📁 `LIBREFOLIO_DATA_DIR`: Change where data is stored (default: `./backend/data/prod`).
     - 💰 `PORTFOLIO_BASE_CURRENCY`: Your base currency (default: `EUR`).
+    - 📊 `LOG_LEVEL`: Logging verbosity (default: `INFO`).
 
 ## 📦 3. Install Dependencies
 
@@ -116,5 +126,11 @@ You can start a test server with pre-populated mock data to explore the applicat
 
 Access at **`http://localhost:8001`** with user `e2e_test_user` / `E2eTestPass123!`.
 
-The test server runs alongside the production one, using a separate database. See the [Advanced Docker Guide](../admin/docker_advanced.en.md#-test-mode) for details.
+The test server runs alongside the production one, using a separate database. See the [Advanced Docker Guide](../admin/docker_advanced.en.md#test-mode) for details.
+
+---
+
+!!! tip "Advanced topics"
+
+    For reverse proxy setup, database backups, custom data paths, and production considerations, see the [🐳 Advanced Docker Guide](../admin/docker_advanced.en.md).
 
