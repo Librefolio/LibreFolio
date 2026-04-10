@@ -2,6 +2,27 @@
 
 This guide provides a deeper look into the Docker configuration for LibreFolio, intended for users who want to customize their deployment.
 
+## ⚠️ Prerequisites
+
+!!! warning "Docker group (Linux)"
+
+    On Linux, your user must be in the `docker` group to run Docker commands without `sudo`:
+
+    ```bash
+    sudo usermod -aG docker $USER
+    ```
+
+    Then **log out and log back in**, or run `newgrp docker` to activate the group in the current session. Without this, all `docker` and `docker compose` commands will fail with a permission error.
+
+!!! warning "`.env` file required"
+
+    LibreFolio requires a `.env` file in the project root. If it's missing, `./dev.py docker build` will refuse to proceed.
+
+    ```bash
+    cp .env.example .env
+    $EDITOR .env          # review and customize parameters
+    ```
+
 ## 🏗️ Architecture
 
 LibreFolio uses a **runtime-only Docker image**. The frontend (SvelteKit) and documentation (MkDocs) are built on the host and then copied into the image. The `./dev.py docker build` command handles this automatically.
@@ -18,19 +39,20 @@ Host (build)                    Docker Image (runtime)
 
 ## 📄 `docker-compose.yml`
 
-The `docker-compose.yml` file defines the service and persistent volume.
+The `docker-compose.yml` file defines the service and persistent data directory.
 
 ### 🔧 Service: `librefolio`
 
 - 🏗️ **`build: .`**: Builds from the `Dockerfile` in the project root.
 - 🔌 **`ports`**: Maps the host port (`${PORT:-8000}`) to the container's port `8000`, and `${TEST_PORT:-8001}` to `8001` for test mode.
-- 📂 **`volumes`**: A named volume `librefolio-data` is mounted at `/app/backend/data/prod-docker` to persist database, uploads, broker reports, and logs.
-- 🌍 **`environment`**: Sets `HOST`, `PORT`, `LIBREFOLIO_DATA_DIR`, `LOG_LEVEL`, and `PORTFOLIO_BASE_CURRENCY`.
+- 📂 **`volumes`**: A bind mount `./LibreFolio-data` → `/app/backend/data/prod-docker` persists database, uploads, broker reports, and logs **in the same directory as `docker-compose.yml`**.
+- 📝 **`env_file: .env`**: Loads all configuration from the `.env` file (copied from `.env.example`).
+- 🌍 **`environment`**: Overrides only Docker-specific values: `LIBREFOLIO_DATA_DIR` (container path) and `HOST=0.0.0.0`.
 - 🩺 **`healthcheck`**: Polls `GET /api/v1/system/health` every 30 seconds.
 
-### 💾 Volume: `librefolio-data`
+### 💾 Data Directory: `LibreFolio-data/`
 
-A named Docker volume that persists the SQLite database, custom uploads, broker reports, and log files. Data survives container stop/restart/removal.
+A **bind mount** directory created alongside `docker-compose.yml`. Contains the SQLite database, custom uploads, broker reports, and log files. Data survives container stop/restart/removal. You can back it up directly from the host filesystem.
 
 ## 🛠️ CLI Commands
 
@@ -46,6 +68,16 @@ All Docker operations are available through `dev.py`:
 ./dev.py docker status         # Show container status
 ./dev.py docker exec <cmd>     # Run a dev.py command inside the container
 ```
+
+!!! tip "Documentation with screenshots"
+
+    If you are building the documentation and want complete screenshots in the gallery, run:
+
+    ```bash
+    ./dev.py mkdocs --gallery
+    ```
+
+    This requires a fully installed environment (with `pipenv`) and a running server with populated test data. Be patient — gallery generation takes a few minutes.
 
 ### 📡 `docker exec` — Running Commands Inside the Container
 
@@ -100,27 +132,17 @@ The Docker Compose configuration exposes **two ports**:
 
 !!! warning "Test data is ephemeral"
 
-    The test database lives inside the container's **writable layer**, not on a persistent Docker volume. This means:
+    The test database lives inside the container's **writable layer**, not on a persistent bind mount. This means:
 
     - ✅ Data survives `docker compose stop` / `docker compose start` (container is paused, not removed).
     - ❌ Data is **lost** with `docker compose down` (container is removed and recreated).
 
-    If you need persistent test data, add a dedicated volume in `docker-compose.yml`:
+    If you need persistent test data, add a dedicated bind mount in `docker-compose.yml`:
 
     ```yaml
     volumes:
-      - librefolio-data:/app/backend/data/prod-docker
-      - librefolio-test-data:/app/backend/data/test    # ← add this
-    ```
-
-    And declare the volume:
-
-    ```yaml
-    volumes:
-      librefolio-data:
-        driver: local
-      librefolio-test-data:       # ← add this
-        driver: local
+      - ./LibreFolio-data:/app/backend/data/prod-docker
+      - ./LibreFolio-test-data:/app/backend/data/test    # ← add this
     ```
 
 ## 🏭 Production Considerations
@@ -137,37 +159,30 @@ services:
     container_name: librefolio
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"           # (1) Production port — change via PORT env
+      - "${PORT:-8000}:8000"           # (1) Production port — change via PORT in .env
       - "${TEST_PORT:-8001}:8001"      # (2) Test server port (optional)
     volumes:
-      - librefolio-data:/app/backend/data/prod-docker  # (3) Persistent data
+      - ./LibreFolio-data:/app/backend/data/prod-docker  # (3) Persistent data (bind mount)
+    env_file: .env                     # (4) All config from .env file
     environment:
+      - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker  # Docker-specific override
       - HOST=0.0.0.0
-      - PORT=8000
-      - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}                    # (4) DEBUG, INFO, WARNING, ERROR
-      - PORTFOLIO_BASE_CURRENCY=${PORTFOLIO_BASE_CURRENCY:-EUR}  # (5) EUR, USD, GBP...
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health')"]
       interval: 30s
       timeout: 10s
       start_period: 15s
       retries: 3
-
-volumes:
-  librefolio-data:
-    driver: local
 ```
 
 **Common customizations:**
 
 | # | What | How |
 |---|------|-----|
-| (1) | Change production port | Set `PORT=3000` in `.env` or shell |
+| (1) | Change production port | Set `PORT=3000` in `.env` |
 | (2) | Disable test port | Remove the `TEST_PORT` line from `ports:` |
-| (3) | Custom data path | Use a bind mount: `./my-data:/app/backend/data/prod-docker` |
-| (4) | Verbose logging | Set `LOG_LEVEL=DEBUG` in `.env` |
-| (5) | Base currency | Set `PORTFOLIO_BASE_CURRENCY=USD` |
+| (3) | Custom data path | Change bind mount: `./my-data:/app/backend/data/prod-docker` |
+| (4) | All configuration | Edit `.env` file (copied from `.env.example`) |
 
 !!! tip "First user"
 
@@ -183,21 +198,25 @@ It is highly recommended to run LibreFolio behind a reverse proxy like **Nginx**
 
 ### 💾 3. Database Backup
 
-The database is stored in the `librefolio-data` Docker volume. Set up a `cron` job to back it up regularly:
+The database is stored in the `LibreFolio-data/` directory alongside `docker-compose.yml`. Back it up directly from the host filesystem:
 
 ```bash
 #!/bin/bash
-docker cp librefolio:/app/backend/data/prod-docker/sqlite/app.db /path/to/backups/app.db-$(date +%F)
+cp ./LibreFolio-data/sqlite/app.db /path/to/backups/app.db-$(date +%F)
 ```
+
+No `docker cp` needed — the data directory is a bind mount accessible from the host.
 
 ### 🔑 4. Environment Variables
 
-For production, consider setting these in `docker-compose.yml` or via `docker compose --env-file`:
+All configuration is managed in the `.env` file (copied from `.env.example`). The Docker-specific overrides in the `environment:` block should not be changed:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8000` | Host port for production server |
-| `TEST_PORT` | `8001` | Host port for test server |
-| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `PORTFOLIO_BASE_CURRENCY` | `EUR` | Base currency for portfolio calculations |
-| `PREVIEW_CACHE_MAX_MB` | `50` | Max in-memory image preview cache (MB) |
+| Variable | Default | Description | Where |
+|----------|---------|-------------|-------|
+| `PORT` | `8000` | Host port for production server | `.env` |
+| `TEST_PORT` | `8001` | Host port for test server | `.env` |
+| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `.env` |
+| `PORTFOLIO_BASE_CURRENCY` | `EUR` | Base currency for portfolio calculations | `.env` |
+| `PREVIEW_CACHE_MAX_MB` | `50` | Max in-memory image preview cache (MB) | `.env` |
+| `LIBREFOLIO_DATA_DIR` | `/app/backend/data/prod-docker` | Container path for data (do not change) | `docker-compose.yml` |
+| `HOST` | `0.0.0.0` | Container bind address (do not change) | `docker-compose.yml` |

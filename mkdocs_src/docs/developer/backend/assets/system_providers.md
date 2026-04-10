@@ -1,70 +1,88 @@
-# 🔌 System Providers (Assets)
+# 🔌 Asset Providers (Developer)
 
-LibreFolio includes two powerful "system" providers for asset pricing that do not rely on a specific external API. They provide flexibility for tracking a wide range of assets.
+This section provides the technical deep-dive for each asset pricing provider in LibreFolio. For the end-user perspective, see the [User Manual — Providers](../../../user/assets/providers/index.md).
 
-## 🌐 CSS Scraper (`cssscraper`)
+## 📦 Providers at a Glance
 
-The CSS Scraper is a versatile provider that can extract a price from any public webpage using a CSS selector.
+| Provider | Code | Features | `get_asset_url` | `params_schema` | Identifier Types | Test Level |
+|:---|:---|:---|:---:|:---:|:---|:---|
+| [**Yahoo Finance**](provider_yahoo_finance.md) | `yfinance` | History, Search, Metadata | ✅ | — | TICKER, ISIN | Beta |
+| [**JustETF**](provider_justetf.md) | `justetf` | History, Search, Metadata | ✅ | — | ISIN | Beta |
+| [**CSS Scraper**](provider_cssscraper.md) | `cssscraper` | Current Value | ✅ | ✅ | URL | Beta |
+| [**Scheduled Investment**](provider_scheduled_investment.md) | `scheduled_investment` | History (Calc), Events | — | ✅ | AUTO_GENERATED | Beta |
+| **Mock Provider** | `mockprov` | History, Search | — | — | TICKER, ISIN | Alpha |
 
-### ⚙️ How it Works
+### 🔑 Feature Key
 
-1. **Configuration**: When assigning this provider to an asset, you must provide:
-    - `identifier`: The URL of the webpage to scrape.
-    - `provider_params`:
-        - `current_css_selector`: The CSS selector to locate the price element on the page (e.g., `.price-value`, `#stock-price`).
-        - `currency`: The currency of the price.
-        - `decimal_format`: `us` (e.g., `1,234.56`) or `eu` (e.g., `1.234,56`).
+- 📈 **History**: Can fetch historical OHLC data.
+- 🔎 **Search**: Supports searching for assets by name/ticker. Detected via `test_search_query is not None`.
+- 📋 **Metadata**: Can fetch asset details (sector, description, identifiers) via `fetch_asset_metadata()`.
+- 💰 **Current Value**: Can fetch the latest real-time price.
+- 📊 **Events**: Can produce asset events (dividends, interest, settlements) via `supports_events = True`.
+- 🔗 **`get_asset_url`**: Generates a link to the provider's page for this asset (e.g., Yahoo Finance quote page).
+- 🧩 **`params_schema`**: Exposes a form schema for the frontend to render dynamic configuration fields.
+- 🧪 **Probe**: All providers support `POST /assets/provider/probe` for dry-run testing (`current_price`, `history`, `metadata` operations).
 
-2. **Execution**:
-    - It fetches the HTML of the specified URL.
-    - It uses **BeautifulSoup** to parse the HTML and find the element matching the CSS selector.
-    - It extracts the text content of the element and parses it into a `Decimal` value, handling different number formats.
+### 📝 Notes
 
-### 📋 Use Cases
+- **CSS Scraper** `get_asset_url` returns the identifier itself (which is the URL to scrape).
+- **Scheduled Investment** uses `AUTO_GENERATED` identifier type — no external identifier needed.
+- **Mock Provider** (`mockprov`) is only registered when `LIBREFOLIO_TEST_MODE` is enabled.
 
-- Tracking the price of an asset from a financial news website.
-- Scraping data from a niche market data provider that doesn't have an API.
-- Tracking the value of a collectible from an auction site.
+---
 
-### ⚠️ Limitations
+## 📈 [Yahoo Finance (`yfinance`)](provider_yahoo_finance.md)
 
-- **No Historical Data**: It can only fetch the current value.
-- **Fragile**: If the website's layout changes, the CSS selector may break.
-- **Requires Public Access**: It cannot access pages that require a login.
+The primary market data provider — fetches stock, ETF, crypto, and index prices using the [yfinance](https://github.com/ranaroussi/yfinance) library.
 
-## 📅 Scheduled Investment (`scheduled_investment`)
+- **Features**: History, Search, Metadata, Current Value
+- **Identifier types**: `TICKER`, `ISIN`
+- **Key details**: `fast_info` fast path, search caching (10 min TTL), currency caching (1 hour), sector/geographic metadata
+- 📖 [Technical Details →](provider_yahoo_finance.md)
+- 📖 [User Guide →](../../../user/assets/providers/yahoo-finance.en.md)
 
-This is a synthetic provider that calculates the value of an asset based on a predefined interest schedule. It does not make any external calls.
+---
 
-### ⚙️ How it Works
+## 🔍 [JustETF (`justetf`)](provider_justetf.md)
 
-1. **Configuration**: The asset's value is determined entirely by `provider_params`, which include:
-    - `initial_value`: The principal / face value of the asset (required, > 0).
-    - `currency`: The asset's currency (ISO 4217).
-    - `schedule`: Interest rate periods (start date, end date, annual rate).
-    - **Compounding Type**: `SIMPLE` or `COMPOUND`.
-    - **Day Count Convention**: `ACT/365`, `ACT/360`, `30/360`, etc.
-    - **Late Interest**: A separate rate to apply after the scheduled maturity date.
-    - `asset_events`: Planned events (INTEREST payouts, PRICE_ADJUSTMENT write-downs).
+Specialized ETF provider — fetches data from [justetf.com](https://www.justetf.com/) including sector and geographic distributions.
 
-2. **Calculation** (pure deterministic — no DB access, no transaction dependency):
-    - Starts with `initial_value` as the base principal.
-    - Calculates **accrued interest** up to the requested date using the schedule periods.
-    - Applies **asset events**: INTEREST events subtract from price (ex-date drop), PRICE_ADJUSTMENT events modify value algebraically.
-    - `price(d) = initial_value + accrued_interest - Σ(INTEREST events) + Σ(PRICE_ADJUSTMENT events)`
-    - Interest is always calculated on `initial_value`, not the running value.
+- **Features**: History, Search, Metadata, Current Value (Gettex)
+- **Identifier types**: `ISIN`
+- **Key details**: Cached ETF list for instant search, Gettex WebSocket for real-time quotes, geographic/sector distributions, pre-warm at startup
+- 📖 [Technical Details →](provider_justetf.md)
+- 📖 [User Guide →](../../../user/assets/providers/justetf.en.md)
 
-3. **Events**: This provider sets `supports_events = True` and returns events filtered to the requested date range via `FAHistoricalData.events`.
+---
 
-### 📋 Use Cases
+## 🌐 [CSS Scraper (`cssscraper`)](provider_cssscraper.md)
 
-- **P2P/Crowdfunding Loans**: Model a loan with a fixed interest rate and periodic interest payouts.
-- **Fixed-Rate Bonds**: Calculate the value of a bond including accrued interest and coupon payments.
-- **Any asset with predictable cash flows**.
+A versatile provider that can extract a current price from **any public webpage** using a CSS selector. Useful for tracking assets from niche sources without an API.
 
-### 📐 Example
+- **Features**: Current Value only (no historical data)
+- **Identifier type**: `URL`
+- **Key config**: `current_css_selector`, `currency`, `decimal_format`
+- 📖 [Technical Details →](provider_cssscraper.md)
+- 📖 [User Guide →](../../../user/assets/providers/css-scraper.en.md)
 
-If you have a P2P loan of €10,000 with a 5% simple annual interest rate and an INTEREST event of €250 on July 1:
+---
 
-- Before July 1: value = €10,000 + accrued interest (e.g., after 6 months: €10,250)
-- After July 1 (ex-date): value drops by €250 (interest paid out) → continues accruing from €10,000 base
+## 📅 [Scheduled Investment (`scheduled_investment`)](provider_scheduled_investment.md)
+
+A synthetic, deterministic provider that calculates asset value based on a predefined interest schedule. No external calls, no DB access — pure math.
+
+- **Features**: Calculated History, Auto-generated Events (💵 INTEREST, 🏁 MATURITY_SETTLEMENT)
+- **Identifier type**: `AUTO_GENERATED`
+- **Key config**: `initial_value`, `schedule[]`, `day_count`, `interest_type`, `late_interest`
+- 📖 [Technical Details →](provider_scheduled_investment.md)
+- 📖 [User Guide →](../../../user/assets/providers/scheduled-investment.en.md)
+
+---
+
+## 🔗 Related Documentation
+
+- 📅 [Asset Events](events.md) — Event types, dedup strategy, MATURITY_SETTLEMENT
+- 📐 [Day Count Conventions](../../../financial-theory/day-count.md) — ACT/365, ACT/360, 30/360, ACT/ACT
+- 📊 [Asset Types](../../../financial-theory/asset-types.md) — CROWDFUND_LOAN, BOND, etc.
+- 💰 [Asset Architecture](architecture.md) — Sync pipeline and event persistence
+- 📈 [Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md) — How to create a new provider

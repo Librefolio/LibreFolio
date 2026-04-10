@@ -14,21 +14,26 @@ The system calls provider methods in three distinct phases:
 
 ```mermaid
 graph TD
-    subgraph "Phase 1 — Search (user looks for asset)"
-        S1["search(query)<br/><small>e.g., 'Apple'</small>"] --> S2["Returns: list of<br/>{identifier, display_name,<br/>currency, type}"]
+    subgraph P1["Phase 1 — Search"]
+        S1["🔎 search(query)"]
+        S2["list of<br/>{identifier, name,<br/>currency, type}"]
+        S1 --> S2
     end
 
-    subgraph "Phase 2 — Current Price (dashboard, refresh)"
-        C1["get_current_value(<br/>identifier, type, params)"] --> C2["Returns: FACurrentValue<br/><small>(price, currency, date)</small>"]
+    subgraph P2["Phase 2 — Current Price"]
+        C1["💰 get_current_value(<br/>identifier, type, params)"]
+        C2["FACurrentValue<br/>(price, currency, date)"]
+        C1 --> C2
     end
 
-    subgraph "Phase 3 — Historical Data (charts, analysis)"
-        H1["get_history_value(<br/>identifier, ..., start, end)"] --> H2["Returns: FAHistoricalData<br/><small>(prices[], currency)</small>"]
-        H2 --> H3["Core fills gaps<br/><small>weekends, holidays<br/>→ backward_filled=True</small>"]
+    subgraph P3["Phase 3 — Historical Data"]
+        H1["📈 get_history_value(<br/>identifier, ..., start, end)"]
+        H2["FAHistoricalData<br/>(prices[], currency)"]
+        H3["🔧 Core fills gaps<br/>(weekends, holidays)"]
+        H1 --> H2 --> H3
     end
 
-    S2 ~~~ C1
-    C2 ~~~ H1
+    P1 ~~~ P2 ~~~ P3
 
     style S1 fill:#e3f2fd,stroke:#1565c0
     style S2 fill:#e3f2fd,stroke:#1565c0
@@ -81,6 +86,11 @@ graph TD
 | `get_icon` | `None` | Provider icon URL for the UI |
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
 | `validate_params(params)` | — | Validate provider-specific configuration (raise on invalid) |
+| `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. |
+| `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page) |
+| `accepted_identifier_types` | `[TICKER, ISIN]` | Input types accepted by this provider (shown in frontend dropdown) |
+| `fetch_asset_metadata(identifier, type, params)` | `None` | Fetch asset metadata (type, sector, identifiers) from the provider |
+| `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
 | `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/asset/{path}` |
 
 ---
@@ -99,25 +109,37 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 
 ### 🔌 Provider Support
 
-| Provider | `search()` | `test_search_query` | Notes |
-|----------|-----------|---------------------|-------|
-| **Yahoo Finance** | ✅ | `"Apple"` | Full ticker search with caching (10 min TTL) |
-| **JustETF** | ✅ | `"iShares Core S&P 500"` | ISIN-based search across cached ETF list |
-| **CSS Scraper** | ❌ | `None` | No search — URL must be provided manually |
-| **Scheduled Investment** | ❌ | `None` | Synthetic provider, no external search |
+| Provider | `search()` | `test_search_query` | `get_asset_url` | Notes |
+|----------|-----------|---------------------|:---:|-------|
+| **Yahoo Finance** | ✅ | `"Apple"` | ✅ | Full ticker search with caching (10 min TTL) |
+| **JustETF** | ✅ | `"iShares Core S&P 500"` | ✅ | ISIN-based search across cached ETF list |
+| **CSS Scraper** | ❌ | `None` | ✅ | No search — URL must be provided manually |
+| **Scheduled Investment** | ❌ | `None` | — | Synthetic provider, no external search |
 
-### 🌐 API Endpoint
+!!! info "`supports_search` detection"
+
+    The `list_providers` endpoint checks `instance.test_search_query is not None` (a local property) to determine search support. This avoids cold-start HTTP calls.
+
+### 🌐 API Endpoints
+
+**Standard search** (returns all results at once):
 
 ```
 GET /api/v1/assets/provider/search?q=Apple&providers=yfinance,justetf
 ```
 
-**Query parameters**:
+**Streaming search** (Server-Sent Events — results arrive as providers respond):
+
+```
+GET /api/v1/assets/provider/search/stream?q=Apple&providers=yfinance,justetf
+```
+
+**Query parameters** (both endpoints):
 
 - `q` (required): Search query, min 1 character
 - `providers` (optional): Comma-separated provider codes. Default: all providers with search support.
 
-**Response**:
+**Response** (standard):
 
 ```json
 {
@@ -129,7 +151,8 @@ GET /api/v1/assets/provider/search?q=Apple&providers=yfinance,justetf
       "display_name": "Apple Inc.",
       "provider_code": "yfinance",
       "currency": "USD",
-      "asset_type": "stock"
+      "asset_type": "stock",
+      "provider_url": "https://finance.yahoo.com/quote/AAPL"
     }
   ],
   "providers_queried": ["yfinance", "justetf"],
@@ -140,6 +163,17 @@ GET /api/v1/assets/provider/search?q=Apple&providers=yfinance,justetf
 - Searches are executed **in parallel** — one slow provider won't block others
 - Provider-specific errors are logged but don't fail the entire request
 - Errors are reported in `providers_with_errors` for debugging
+- `provider_url` is generated by the provider's `get_asset_url()` method (if implemented)
+
+### 🧪 Probe Endpoint
+
+After a provider is configured, use the **probe** endpoint to dry-run test it:
+
+```
+POST /api/v1/assets/provider/probe
+```
+
+This runs selectable operations (`current_price`, `history`, `metadata`) without persisting anything. See [Asset Architecture](../../backend/assets/architecture.md#provider-probe) for details.
 
 ---
 
@@ -171,6 +205,21 @@ class MyProvider(AssetSourceProvider):
             {"identifier": "AAPL", "identifier_type": IdentifierType.TICKER, "provider_params": None}
         ]
 
+    @property
+    def test_search_query(self) -> str | None:
+        return "Apple"  # Return None if search not supported
+
+    @property
+    def params_schema(self) -> list[dict]:
+        """Optional: define fields for frontend dynamic form."""
+        return [
+            {"key": "api_key", "type": "string", "required": True, "description": "API key for authentication"},
+        ]
+
+    def get_asset_url(self, identifier, identifier_type, provider_params=None) -> str | None:
+        """Optional: URL to the provider's page for this asset."""
+        return f"https://myprovider.com/asset/{identifier}"
+
     async def get_current_value(
         self, identifier: str, identifier_type: IdentifierType, provider_params: dict
     ) -> FACurrentValue:
@@ -190,7 +239,7 @@ class MyProvider(AssetSourceProvider):
         # Fetch historical data — return ONLY actual trading days
         raw_data = await self._fetch_history(identifier, start_date, end_date)
         prices = [
-            FAPricePoint(date=d, close=Decimal(str(p)), open=None, high=None, low=None, volume=None)
+            FAPricePoint(date=d, close=Decimal(str(p)), open=None, high=None, low=None, volume=None, currency="USD")
             for d, p in raw_data
         ]
         return FAHistoricalData(prices=prices, currency="USD", source=self.provider_name)
@@ -200,8 +249,8 @@ class MyProvider(AssetSourceProvider):
 
 ## 🔗 Related Documentation
 
-- [Asset Architecture](../../backend/assets/architecture.md) — Provider interface, caching, refresh logic
-- [System Providers](../../backend/assets/system_providers.md) — Built-in providers (Scheduled Investment, Manual)
-- [Providers List](../../backend/assets/providers_list.md) — All available providers
-- [Registry Pattern Overview](registry_pattern.md) — How the plugin system works
+- 🏗️ [Asset Architecture](../../backend/assets/architecture.md) — Provider interface, caching, refresh logic
+- 🔌 [Asset Providers](../../backend/assets/system_providers.md) — All providers (Yahoo Finance, JustETF, CSS Scraper, Scheduled Investment)
+- 📦 [Providers Overview](../../backend/assets/system_providers.md) — Summary table of all providers
+- 🔄 [Registry Pattern Overview](registry_pattern.md) — How the plugin system works
 

@@ -1,6 +1,6 @@
 # 🔍 Asset Detail Page
 
-Click on any asset from the [Asset List](../index.en.md) to open its detail page. Here you can visualize, analyze, and manage price data for that specific asset.
+Click on any asset from the [Asset List](../index.md) to open its detail page. Here you can visualize, analyze, and manage price data for that specific asset.
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -51,5 +51,5 @@ Asset-level events (dividends, interest, splits, price adjustments) shown as mar
 ## 🔗 Related
 
 - ➕ **[Create & Edit](../create-edit.en.md)** — Creating and configuring assets
-- 📋 **[Asset Overview](../index.en.md)** — Back to the asset list page
+- 📋 **[Asset Overview](../index.md)** — Back to the asset list page
 

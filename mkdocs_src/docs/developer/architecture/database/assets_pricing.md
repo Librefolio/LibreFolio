@@ -97,4 +97,4 @@ Asset-level events that affect pricing or generate distributions. Events are dis
 
 - 📚 [Asset Types (Financial Theory)](../../../financial-theory/asset-types.md) — Stock, ETF, Bond, Crypto, etc.
 - ⚙️ [Asset Architecture](../../backend/assets/architecture.md) — How asset prices are fetched and managed
-- 📋 [Asset Providers List](../../backend/assets/providers_list.md) — Available pricing providers
+- 📋 [Asset Providers List](../../backend/assets/system_providers.md) — Available pricing providers

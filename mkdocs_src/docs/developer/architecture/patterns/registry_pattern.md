@@ -102,7 +102,7 @@ Each plugin subsystem also has architecture docs, provider lists, and configurat
 
 - [Architecture](../../backend/assets/architecture.md) — Provider interface, caching, refresh logic
 - [System Providers](../../backend/assets/system_providers.md) — Built-in providers (Scheduled Investment, Manual)
-- [Providers List](../../backend/assets/providers_list.md) — All available providers (Yahoo Finance, etc.)
+- [Providers List](../../backend/assets/system_providers.md) — All available providers (Yahoo Finance, etc.)
 
 ### 💱 FX (Foreign Exchange)
 
