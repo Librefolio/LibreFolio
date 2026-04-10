@@ -37,6 +37,7 @@ from backend.app.schemas.prices import (
     FABulkDeleteResponse,
     FAPriceQueryItem,
     FAPriceQueryResponse,
+    FACurrentPriceResponse,
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,
@@ -650,6 +651,48 @@ async def query_prices_bulk(
         return FAPriceQueryResponse(items=results)
     except Exception as e:
         logger.error(f"Error querying prices bulk: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@price_router.post("/current", response_model=FACurrentPriceResponse)
+async def get_current_prices_bulk(
+    asset_ids: List[int],
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+    ):
+    """
+    Bulk fetch current/live prices for multiple assets.
+
+    For each asset:
+    1. If a provider is assigned → calls provider.get_current_value() (parallel)
+    2. Fallback → returns the latest price from DB (PriceHistory)
+
+    This is a **read-only** operation — no data is written.
+
+    **Example Request**:
+    ```json
+    POST /api/v1/assets/prices/current
+    [1, 2, 3]
+    ```
+
+    **Example Response**:
+    ```json
+    {
+      "results": [
+        {"asset_id": 1, "value": "142.50", "currency": "USD", "as_of_date": "2026-04-10", "source": "provider:yfinance"},
+        {"asset_id": 2, "value": "98.32", "currency": "EUR", "as_of_date": "2026-04-10", "source": "db:last_known"},
+        {"asset_id": 3, "value": null, "currency": null, "as_of_date": null, "source": null, "error": "No price data available"}
+      ],
+      "success_count": 2
+    }
+    ```
+    """
+    try:
+        results = await AssetSourceManager.get_current_prices_bulk(asset_ids, session)
+        success_count = sum(1 for r in results if r.value is not None)
+        return FACurrentPriceResponse(results=results, success_count=success_count)
+    except Exception as e:
+        logger.error(f"Error fetching current prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

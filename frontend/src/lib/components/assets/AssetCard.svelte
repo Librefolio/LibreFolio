@@ -1,6 +1,7 @@
 <!--
   AssetCard — Card displaying an asset with mini chart and quick actions.
-  Layout: Header (icon + name + % toggle + type badge), Rate row, Mini chart, Footer (settings + sync + refresh | delete).
+  Layout: Header (icon + name + % toggle + type badge), Live Price row, Mini chart, Footer (settings + sync + refresh | delete).
+  Live price flashes green/red on value changes.
   Svelte 5 runes, dark mode.
   Used by: /assets list page (grid view)
 -->
@@ -16,6 +17,7 @@
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
+    import type {LivePriceDirection} from '$lib/services/livePriceService';
 
     // =========================================================================
     // Props
@@ -33,22 +35,18 @@
 
     interface Props {
         asset: AssetData;
-        /** Last price close value */
-        lastPrice?: number | null;
-        /** Delta percent (first vs last in range) */
+        /** Live current price (from bulk current-price endpoint) */
+        livePrice?: number | null;
+        /** Direction of last price change (for flash animation) */
+        livePriceDirection?: LivePriceDirection;
+        /** Delta percent (first vs last in range — from chart data) */
         deltaPercent?: number | null;
-        /** Delta absolute */
+        /** Delta absolute (from chart data) */
         deltaAbs?: number | null;
         /** Global view mode from parent: 'percentage' (default) or 'absolute' */
         globalViewMode?: 'percentage' | 'absolute';
         /** Chart settings for this card (resolved from store by parent) */
         chartSettings?: ChartSettings;
-        /**
-         * Callback to render overlay signals on demand.
-         * Called reactively whenever cardViewMode changes.
-         * @param chartData absolute chart data
-         * @param viewMode  current card view mode
-         */
         renderSignals?: (chartData: LineDataPoint[], viewMode: 'absolute' | 'percentage') => RenderedSignal[];
         /** Chart data points */
         chartData?: LineDataPoint[];
@@ -65,7 +63,8 @@
 
     let {
         asset,
-        lastPrice = null,
+        livePrice = null,
+        livePriceDirection = 'neutral',
         deltaPercent = null,
         deltaAbs = null,
         globalViewMode = 'percentage',
@@ -85,11 +84,8 @@
     // =========================================================================
 
     let localViewModeOverride = $state<'absolute' | 'percentage' | null>(null);
-
-    // Card view mode: local override takes precedence, otherwise follows global
     let cardViewMode = $derived(localViewModeOverride ?? globalViewMode);
 
-    // Reset local override when global changes
     let prevGlobal: string | undefined;
     $effect(() => {
         if (prevGlobal !== undefined && globalViewMode !== prevGlobal) {
@@ -102,19 +98,28 @@
     // Derived
     // =========================================================================
 
-    /** Absolute data for signal rendering (chartData is already absolute for assets) */
     let absoluteData = $derived(chartData);
 
-    /** Display data: converted to % when in percentage mode (like FxCard) */
     let displayData = $derived.by((): LineDataPoint[] => {
         if (cardViewMode === 'absolute' || chartData.length === 0) return chartData;
         return normalizeToPercentage(chartData);
     });
 
-    /** Overlay signals — re-rendered reactively when cardViewMode changes */
     let overlaySignals = $derived.by((): RenderedSignal[] => {
         if (!renderSignals || absoluteData.length === 0) return [];
         return renderSignals(absoluteData, cardViewMode);
+    });
+
+    /** Dynamic card border based on price direction (flash effect) */
+    let cardBorderClass = $derived.by(() => {
+        switch (livePriceDirection) {
+            case 'up':
+                return 'border-emerald-300 dark:border-emerald-600';
+            case 'down':
+                return 'border-red-300 dark:border-red-600';
+            default:
+                return 'border-gray-100 dark:border-slate-700';
+        }
     });
 
     // =========================================================================
@@ -135,7 +140,6 @@
         e.stopPropagation();
     }
 
-    // Type badge color mapping
     function typeBadgeClass(type: string | null | undefined): string {
         switch (type) {
             case 'STOCK':
@@ -157,7 +161,6 @@
         }
     }
 
-    // Asset type → icon PNG filename mapping
     const ASSET_TYPE_ICON_MAP: Record<string, string> = {
         STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
         FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
@@ -165,9 +168,10 @@
 </script>
 
 <div
-        class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden cursor-pointer
-       transition-all duration-200 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
-       focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
+        class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border overflow-hidden cursor-pointer
+       transition-all duration-300 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
+       focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2
+       {cardBorderClass}"
         data-testid="asset-card-{asset.id}"
         onclick={handleCardClick}
         onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
@@ -202,29 +206,27 @@
         </div>
     </div>
 
-    <!-- Row 2: Price + delta -->
+    <!-- Row 2: Live Price + flag + code + delta -->
     <div class="px-4 pb-2">
-        {#if lastPrice !== null}
-            <div class="flex items-baseline gap-2">
-                <span class="text-xl font-mono font-bold text-gray-800 dark:text-gray-100">
-                    {Number(lastPrice).toFixed(2)}
+        <div class="flex items-baseline gap-2">
+            <span class="text-xl font-mono font-bold transition-colors duration-300
+                         {livePriceDirection === 'up' ? 'text-emerald-600 dark:text-emerald-400'
+                          : livePriceDirection === 'down' ? 'text-red-500 dark:text-red-400'
+                          : 'text-gray-800 dark:text-gray-100'}">
+                {livePrice != null ? Number(livePrice).toFixed(2) : '--'}
+            </span>
+            <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)}</span>
+            <span class="text-xs text-gray-500 dark:text-gray-400">{asset.currency}</span>
+            {#if cardViewMode === 'absolute' && deltaAbs !== null}
+                <span class="text-sm font-medium {deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                    {deltaAbs >= 0 ? '▲' : '▼'} {deltaAbs >= 0 ? '+' : ''}{Number(deltaAbs).toFixed(2)} {asset.currency}
                 </span>
-                <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)} {asset.currency}</span>
-                {#if cardViewMode === 'absolute' && deltaAbs !== null}
-                    <span class="text-sm font-medium {deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                        {deltaAbs >= 0 ? '▲' : '▼'} {deltaAbs >= 0 ? '+' : ''}{Number(deltaAbs).toFixed(2)} {asset.currency}
-                    </span>
-                {:else if deltaPercent !== null}
-                    <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                        {deltaPercent >= 0 ? '▲' : '▼'} {deltaPercent >= 0 ? '+' : ''}{Number(deltaPercent).toFixed(2)}%
-                    </span>
-                {/if}
-            </div>
-        {:else if loading}
-            <div class="text-lg text-gray-400 dark:text-gray-500">...</div>
-        {:else}
-            <div class="text-lg text-gray-400 dark:text-gray-500">—</div>
-        {/if}
+            {:else if deltaPercent !== null}
+                <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                    {deltaPercent >= 0 ? '▲' : '▼'} {deltaPercent >= 0 ? '+' : ''}{Number(deltaPercent).toFixed(2)}%
+                </span>
+            {/if}
+        </div>
     </div>
 
     <!-- Mini Chart -->
@@ -251,38 +253,27 @@
         {/if}
     </div>
 
-    <!-- Footer: actions (settings, sync, refresh | delete) -->
+    <!-- Footer: actions -->
     <div class="px-4 py-2.5 flex items-center justify-between border-t border-gray-50 dark:border-slate-700/50">
         <div class="flex items-center gap-0.5">
-            <button
-                    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    onclick={(e) => { stop(e); onsettings?.(asset); }}
-                    title={$t('chartSettings.title')}
-            >
+            <button class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    onclick={(e) => { stop(e); onsettings?.(asset); }} title={$t('chartSettings.title')}>
                 <Settings size={15}/>
             </button>
-            <button
-                    class="p-1.5 rounded-md transition-colors {!asset.provider_code ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
+            <button class="p-1.5 rounded-md transition-colors {!asset.provider_code ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
                     disabled={!asset.provider_code || syncing}
                     onclick={(e) => { stop(e); if (asset.provider_code) onsync?.(asset); }}
-                    title={asset.provider_code ? 'Sync prices from provider' : 'No provider assigned'}
-            >
+                    title={asset.provider_code ? 'Sync prices from provider' : 'No provider assigned'}>
                 <RotateCw class={syncing ? 'animate-spin' : ''} size={15}/>
             </button>
-            <button
-                    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
-                    onclick={(e) => { stop(e); onrefresh?.(asset); }}
-                    title={$t('common.refresh')}
-            >
+            <button class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                    onclick={(e) => { stop(e); onrefresh?.(asset); }} title={$t('common.refresh')}>
                 <RefreshCw size={15}/>
             </button>
         </div>
         <div class="flex items-center gap-0.5">
-            <button
-                    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
-                    onclick={(e) => { stop(e); ondelete?.(asset); }}
-                    title={$t('common.delete')}
-            >
+            <button class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
+                    onclick={(e) => { stop(e); ondelete?.(asset); }} title={$t('common.delete')}>
                 <Trash2 size={15}/>
             </button>
         </div>

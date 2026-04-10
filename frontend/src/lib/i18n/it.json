@@ -972,5 +972,11 @@
       "MATURITY_SETTLEMENT": "Scadenza",
       "SPLIT": "Split"
     }
+  },
+  "ticker": {
+    "noAssets": "Nessun asset monitorato",
+    "loading": "Caricamento prezzi…",
+    "errorFetching": "Errore nel caricamento prezzi",
+    "livePrices": "Prezzi Live"
   }
 }

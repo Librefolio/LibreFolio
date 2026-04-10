@@ -611,6 +611,18 @@ class AssetSourceProvider(ABC):
         """
         return None
 
+    def shutdown(self) -> None:
+        """
+        Cleanup resources on application shutdown.
+
+        Override to release persistent connections, stop background threads,
+        flush caches, etc.  Called once per provider during app lifespan teardown
+        via ``AssetProviderRegistry.shutdown_all_providers()``.
+
+        Default: no-op.
+        """
+        pass
+
 
 # ============================================================================
 # ASSET SOURCE MANAGER
@@ -2051,6 +2063,116 @@ class AssetSourceManager:
             date_range=date_range_model,
             total_points_changed=total_points_changed,
             )
+
+    # ========================================================================
+    # BULK CURRENT PRICE (READ-ONLY, NO DB WRITES)
+    # ========================================================================
+
+    @staticmethod
+    async def get_current_prices_bulk(
+        asset_ids: list[int],
+        session: AsyncSession,
+        concurrency: int = 5,
+        ) -> list:
+        """
+        Fetch current/live prices for multiple assets.
+
+        For each asset:
+        1. If a provider is assigned → call provider.get_current_value() (parallel, semaphore-limited)
+        2. Fallback → read latest PriceHistory row from DB
+
+        This is a **read-only** operation — no data is written to the DB.
+
+        Args:
+            asset_ids: Asset IDs to fetch prices for
+            session: Database session (read only)
+            concurrency: Max parallel provider calls
+
+        Returns:
+            List of FACurrentPriceItem (one per requested asset_id, preserving order)
+        """
+        from backend.app.schemas.prices import FACurrentPriceItem
+
+        if not asset_ids:
+            return []
+
+        sem = asyncio.Semaphore(concurrency)
+
+        # Batch query: assets + assignments
+        asset_stmt = select(Asset).where(Asset.id.in_(asset_ids))
+        asset_res = await session.execute(asset_stmt)
+        asset_map = {a.id: a for a in asset_res.scalars().all()}
+
+        assign_stmt = select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids))
+        assign_res = await session.execute(assign_stmt)
+        assign_map = {a.asset_id: a for a in assign_res.scalars().all()}
+
+        async def _fetch_one(asset_id: int) -> FACurrentPriceItem:
+            """Fetch current price for one asset via provider or DB fallback."""
+            asset = asset_map.get(asset_id)
+            if not asset:
+                return FACurrentPriceItem(asset_id=asset_id, error="Asset not found")
+
+            assignment = assign_map.get(asset_id)
+
+            # --- Try provider ---
+            if assignment:
+                provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
+                if provider:
+                    params = AssetSourceManager._parse_provider_params(assignment.provider_params)
+                    mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(
+                        assignment.identifier_type
+                        )
+                    try:
+                        async with sem:
+                            cv = await asyncio.wait_for(
+                                provider.get_current_value(
+                                    assignment.identifier, mapped_id_type, params
+                                    ),
+                                timeout=10.0,
+                                )
+                        return FACurrentPriceItem(
+                            asset_id=asset_id,
+                            value=cv.value,
+                            currency=cv.currency,
+                            as_of_date=cv.as_of_date,
+                            source=f"provider:{assignment.provider_code}",
+                            )
+                    except Exception as prov_err:
+                        logger.debug(
+                            "Provider current-price failed, falling back to DB",
+                            asset_id=asset_id,
+                            error=str(prov_err),
+                            )
+
+            # --- Fallback: last known price from DB ---
+            last_stmt = (
+                select(PriceHistory)
+                .where(PriceHistory.asset_id == asset_id)
+                .order_by(PriceHistory.date.desc())
+                .limit(1)
+            )
+            last_res = await session.execute(last_stmt)
+            last_price = last_res.scalar_one_or_none()
+
+            if last_price:
+                return FACurrentPriceItem(
+                    asset_id=asset_id,
+                    value=Decimal(str(last_price.close)),
+                    currency=last_price.currency,
+                    as_of_date=last_price.date,
+                    source="db:last_known",
+                    )
+
+            return FACurrentPriceItem(
+                asset_id=asset_id,
+                error="No price data available",
+                )
+
+        # Run all fetches in parallel
+        tasks = [_fetch_one(aid) for aid in asset_ids]
+        results = await asyncio.gather(*tasks)
+        return list(results)
 
 
 # ============================================================================

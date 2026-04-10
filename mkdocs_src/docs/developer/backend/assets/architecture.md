@@ -36,6 +36,7 @@ Central service that coordinates all asset-related operations:
 - **Provider Assignment**: Link an asset to a provider (e.g., "AAPL" → "yfinance").
 - **Price Sync**: 3-phase pipeline: PREPARE → FETCH → PERSIST (see [Data Flow](#data-flow-sync-pipeline) below).
 - **Price Query**: DB-only bulk query with backward-fill via `POST /assets/prices/query`.
+- **Current Price** *(new)*: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback. Used by the [LiveTicker](../../frontend/components/live-ticker.md) component.
 - **Event Sync**: Persist asset events from providers into the `asset_events` table, filtered by `provider_assignment_id` (manual events survive sync).
 - **Probe**: Dry-run provider config testing via `probe_provider_config()`.
 - **Metadata**: Delegate to `AssetMetadataService` for classification merging.

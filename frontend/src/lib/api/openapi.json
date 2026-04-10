@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.9-34-gad159426-dirty"
+    "version": "v0.5.9-36-gffbad44f-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -1810,6 +1810,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FAPriceQueryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assets/prices/current": {
+      "post": {
+        "tags": [
+          "FA (Financial Assets)",
+          "FA Prices"
+        ],
+        "summary": "Get Current Prices Bulk",
+        "description": "Bulk fetch current/live prices for multiple assets.\n\nFor each asset:\n1. If a provider is assigned \u2192 calls provider.get_current_value() (parallel)\n2. Fallback \u2192 returns the latest price from DB (PriceHistory)\n\nThis is a **read-only** operation \u2014 no data is written.\n\n**Example Request**:\n```json\nPOST /api/v1/assets/prices/current\n[1, 2, 3]\n```\n\n**Example Response**:\n```json\n{\n  \"results\": [\n    {\"asset_id\": 1, \"value\": \"142.50\", \"currency\": \"USD\", \"as_of_date\": \"2026-04-10\", \"source\": \"provider:yfinance\"},\n    {\"asset_id\": 2, \"value\": \"98.32\", \"currency\": \"EUR\", \"as_of_date\": \"2026-04-10\", \"source\": \"db:last_known\"},\n    {\"asset_id\": 3, \"value\": null, \"currency\": null, \"as_of_date\": null, \"source\": null, \"error\": \"No price data available\"}\n  ],\n  \"success_count\": 2\n}\n```",
+        "operationId": "get_current_prices_bulk_api_v1_assets_prices_current_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "title": "Asset Ids"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FACurrentPriceResponse"
                 }
               }
             }
@@ -7283,6 +7330,118 @@
         "type": "object",
         "title": "FAClassificationParams",
         "description": "Asset classification metadata.\n\nAll fields optional (partial updates supported via PATCH).\ngeographic_area and sector_area are indivisible blocks (full replace on update, no merge).\n\nValidation:\n- geographic_area: ISO-3166-A3 codes, weights must sum to 1.0 (\u00b11e-6)\n- sector_area: Standard FinancialSector enum values, weights must sum to 1.0 (\u00b11e-6)\n- Weights quantized to 4 decimals (ROUND_HALF_EVEN)\n- Automatic renormalization if sum != 1.0\n\nExamples:\n    >>> params = FAClassificationParams(\n    ...     short_description=\"Apple Inc. - Technology company\",\n    ...     geographic_area=FAGeographicArea(distribution={\"USA\": Decimal(\"0.6\"), \"EUR\": Decimal(\"0.4\")}),\n    ...     sector_area=FASectorArea(distribution={\"Technology\": Decimal(\"1.0\")})\n    ... )"
+      },
+      "FACurrentPriceItem": {
+        "properties": {
+          "asset_id": {
+            "type": "integer",
+            "title": "Asset Id",
+            "description": "Asset ID"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value",
+            "description": "Current price value"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency",
+            "description": "Currency code (ISO 4217)"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date",
+            "description": "Date/time the price refers to"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "Price source (e.g. 'provider:justetf', 'db:last_known')"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message if price could not be fetched"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_id"
+        ],
+        "title": "FACurrentPriceItem",
+        "description": "Current price result for a single asset."
+      },
+      "FACurrentPriceResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/FACurrentPriceItem"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Per-item operation results"
+          },
+          "success_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Success Count",
+            "description": "Number of successful operations"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "Operation-level errors (not per-item)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "results",
+          "success_count"
+        ],
+        "title": "FACurrentPriceResponse",
+        "description": "Response for bulk current-price fetch.\n\nInherits from BaseBulkResponse[FACurrentPriceItem]:\n- results: List[FACurrentPriceItem]\n- success_count: int\n- errors: List[str]"
       },
       "FAGeographicArea-Input": {
         "properties": {

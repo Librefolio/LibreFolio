@@ -776,6 +776,7 @@
                         {fxPairSlug}
                         layoutMode={layout.layoutMode}
                         onAddFxPair={() => showFxPairAddModal = true}
+                        assetId={assetInfo.id}
                 />
             {/if}
         </div>

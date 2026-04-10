@@ -1889,6 +1889,68 @@ type FAUpsertResult = {
   count: number;
   message: string;
 };
+type FACurrentPriceResponse = {
+  /**
+   * Per-item operation results
+   */
+  results: Array<FACurrentPriceItem>;
+  /**
+   * Number of successful operations
+   *
+   * @minimum 0
+   */
+  success_count: number;
+  errors?: /**
+   * Operation-level errors (not per-item)
+   */
+  Array<string> | undefined;
+};
+type FACurrentPriceItem = {
+  /**
+   * Asset ID
+   */
+  asset_id: number;
+  value?:
+    | /**
+     * Current price value
+     */
+    (| /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            string | null
+          >
+      )
+    | undefined;
+  currency?:
+    | /**
+     * Currency code (ISO 4217)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  as_of_date?:
+    | /**
+     * Date/time the price refers to
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  source?:
+    | /**
+     * Price source (e.g. 'provider:justetf', 'db:last_known')
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  error?:
+    | /**
+     * Error message if price could not be fetched
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+};
 type FAPricePoint_Input = {
   /**
    * Price date
@@ -4825,6 +4887,41 @@ const FAPriceQueryResult: z.ZodType<FAPriceQueryResult> = z.object({
 const FAPriceQueryResponse: z.ZodType<FAPriceQueryResponse> = z
   .object({ items: z.array(FAPriceQueryResult).describe("List of items") })
   .partial();
+const FACurrentPriceItem: z.ZodType<FACurrentPriceItem> = z.object({
+  asset_id: z.number().int().describe("Asset ID"),
+  value: z
+    .union([z.string(), z.null()])
+    .describe("Current price value")
+    .optional(),
+  currency: z
+    .union([z.string(), z.null()])
+    .describe("Currency code (ISO 4217)")
+    .optional(),
+  as_of_date: z
+    .union([z.string(), z.null()])
+    .describe("Date/time the price refers to")
+    .optional(),
+  source: z
+    .union([z.string(), z.null()])
+    .describe("Price source (e.g. 'provider:justetf', 'db:last_known')")
+    .optional(),
+  error: z
+    .union([z.string(), z.null()])
+    .describe("Error message if price could not be fetched")
+    .optional(),
+});
+const FACurrentPriceResponse: z.ZodType<FACurrentPriceResponse> = z.object({
+  results: z.array(FACurrentPriceItem).describe("Per-item operation results"),
+  success_count: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of successful operations"),
+  errors: z
+    .array(z.string())
+    .describe("Operation-level errors (not per-item)")
+    .optional(),
+});
 const FARefreshItem: z.ZodType<FARefreshItem> = z.object({
   asset_id: z.number().int().describe("Asset ID"),
   date_range:
@@ -6547,6 +6644,8 @@ export const schemas = {
   FAAssetEventPoint,
   FAPriceQueryResult,
   FAPriceQueryResponse,
+  FACurrentPriceItem,
+  FACurrentPriceResponse,
   FARefreshItem,
   FARefreshResult,
   FABulkRefreshResponse,
@@ -6968,6 +7067,52 @@ Returns all active assets with identifier info.
       },
     ],
     response: FABulkDeleteResponse,
+    errors: [
+      {
+        status: 422,
+        description: `Validation Error`,
+        schema: HTTPValidationError,
+      },
+    ],
+  },
+  {
+    method: "post",
+    path: "/api/v1/assets/prices/current",
+    alias: "get_current_prices_bulk_api_v1_assets_prices_current_post",
+    description: `Bulk fetch current/live prices for multiple assets.
+
+For each asset:
+1. If a provider is assigned → calls provider.get_current_value() (parallel)
+2. Fallback → returns the latest price from DB (PriceHistory)
+
+This is a **read-only** operation — no data is written.
+
+**Example Request**:
+&#x60;&#x60;&#x60;json
+POST /api/v1/assets/prices/current
+[1, 2, 3]
+&#x60;&#x60;&#x60;
+
+**Example Response**:
+&#x60;&#x60;&#x60;json
+{
+  &quot;results&quot;: [
+    {&quot;asset_id&quot;: 1, &quot;value&quot;: &quot;142.50&quot;, &quot;currency&quot;: &quot;USD&quot;, &quot;as_of_date&quot;: &quot;2026-04-10&quot;, &quot;source&quot;: &quot;provider:yfinance&quot;},
+    {&quot;asset_id&quot;: 2, &quot;value&quot;: &quot;98.32&quot;, &quot;currency&quot;: &quot;EUR&quot;, &quot;as_of_date&quot;: &quot;2026-04-10&quot;, &quot;source&quot;: &quot;db:last_known&quot;},
+    {&quot;asset_id&quot;: 3, &quot;value&quot;: null, &quot;currency&quot;: null, &quot;as_of_date&quot;: null, &quot;source&quot;: null, &quot;error&quot;: &quot;No price data available&quot;}
+  ],
+  &quot;success_count&quot;: 2
+}
+&#x60;&#x60;&#x60;`,
+    requestFormat: "json",
+    parameters: [
+      {
+        name: "body",
+        type: "Body",
+        schema: z.array(z.number().int()),
+      },
+    ],
+    response: FACurrentPriceResponse,
     errors: [
       {
         status: 422,

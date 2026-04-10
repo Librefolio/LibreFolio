@@ -359,6 +359,18 @@ class BRIMProvider(ABC):
             icon_url=self.icon_url,
             )
 
+    def shutdown(self) -> None:
+        """
+        Cleanup resources on application shutdown.
+
+        Override to release persistent connections, stop background threads,
+        flush caches, etc.  Called once per provider during app lifespan teardown
+        via ``BRIMProviderRegistry.shutdown_all_providers()``.
+
+        Default: no-op.
+        """
+        pass
+
 
 # =============================================================================
 # FILE STORAGE

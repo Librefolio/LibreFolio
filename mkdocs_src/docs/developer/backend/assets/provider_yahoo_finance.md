@@ -14,9 +14,18 @@ The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using th
 
 ### 💰 Current Value (`get_current_value`)
 
-1. Tries `fast_info.lastPrice` first (fast, cached internally by yfinance).
-2. Falls back to the last close from `history(period="5d")` if fast_info is unavailable.
-3. Currency is extracted from `fast_info.currency` or `info.currency`.
+1. **Cache check** (120s TTL) — if a cached result exists, returns immediately (no HTTP call).
+2. Calls `ticker.info` — the Yahoo `quoteSummary` endpoint. Returns `regularMarketPrice`, `currency`, and `regularMarketTime` in a **single lightweight call**.
+3. Fallback price: `currentPrice` → `previousClose` (if `regularMarketPrice` is null).
+4. **No `history()` call at all** — current value polling never touches the chart API.
+
+!!! warning "Avoid `history()` and `fast_info` for current price"
+    - `ticker.history()` calls the chart API and logs noisy `Entering history()` lines.
+    - `ticker.fast_info` internally triggers **2 heavy HTTP calls** (`range=1y` + `range=5d`).
+    - `ticker.info` uses the `quoteSummary` endpoint — lighter, returns price + currency together.
+
+!!! tip "Cache TTL vs Polling Interval"
+    Frontend polls every **30s** for responsive UI, but the backend cache has a **120s TTL**. This means 3 out of 4 polls return instantly from cache; Yahoo Finance is called at most once per ticker every **2 minutes**.
 
 ### 📈 Historical Data (`get_history_value`)
 
@@ -31,7 +40,7 @@ The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using th
 - Minimum query length: **2 characters**.
 - Results limited to **top 20** quotes.
 - `quoteType` is normalized to LibreFolio asset types: `equity → STOCK`, `etf → ETF`, `mutualfund → FUND`, `cryptocurrency → CRYPTO`, etc.
-- Currency is fetched per-symbol via `_fetch_currency()` (cached separately, 1 hour TTL).
+- Currency is fetched per-symbol via `_fetch_currency()` (cached separately, 24-hour TTL).
 
 ### 📋 Metadata (`fetch_asset_metadata`)
 
@@ -44,14 +53,24 @@ The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using th
 
 Returns `https://finance.yahoo.com/quote/{identifier}`.
 
+### 📅 Asset Events
+
+During sync, the provider generates:
+
+- **`DIVIDEND` events** from `ticker.dividends` — ex-dividend date + per-share amount.
+- **`SPLIT` events** from `ticker.splits` — split date + ratio value (e.g., `4.0` for a 4:1 split).
+
+Events are persisted via `_upsert_asset_events()`, keyed by `provider_assignment_id`. Re-syncing replaces stale events.
+
 ---
 
 ## ⚡ Caching Strategy
 
 | Cache | Key | TTL | Max Size | Purpose |
 |---|---|---|---|---|
+| **Current value** | `identifier` | 120 sec | 200 | Avoid repeated `ticker.info` calls during LiveTicker polling (frontend polls every 30s, 3/4 are cache hits) |
 | **Search results** | `query.lower()` | 10 min | 1000 | Avoid repeated search API calls |
-| **Currency lookup** | `symbol` | 1 hour | 2000 | Avoid repeated `fast_info` calls during search |
+| **Currency lookup** | `symbol` | 24 hours | 2000 | Currency doesn't change — used by `search()` only |
 
 Caches use `get_ttl_cache()` (in-memory, per-process). They are populated lazily on first access and cleared on server restart.
 
@@ -75,7 +94,6 @@ Caches use `get_ttl_cache()` (in-memory, per-process). They are populated lazily
 - **Rate limits**: Yahoo Finance may throttle requests. No built-in rate limiter — rely on core sync Semaphore.
 - **ISIN resolution**: Not all ISINs are resolvable by yfinance (depends on market coverage).
 - **Data gaps**: Some tickers may have missing days or delayed data.
-- **No events yet**: Dividend and split events from `ticker.dividends` / `ticker.splits` are not yet parsed (marked as `TODO [AssetEvent]` in code).
 
 ---
 
