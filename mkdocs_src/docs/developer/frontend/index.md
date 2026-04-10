@@ -33,7 +33,7 @@ frontend/src/
 │   │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
 │   │   ├── brokers/  # Broker cards, forms, icon, import
 │   │   ├── files/    # FilesTable with DataTable
-│   │   ├── layout/   # Sidebar, Header, LanguageSelector
+│   │   ├── layout/   # Sidebar, Header, LanguageSelector, LiveTicker
 │   │   ├── settings/ # Settings tabs (Profile, Preferences, Global, About)
 │   │   ├── table/    # DataTable suite (ModalBase, ConfirmModal, etc.)
 │   │   └── ui/       # Generic UI atoms

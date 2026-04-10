@@ -279,3 +279,34 @@ class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
     - items: List[FAPriceQueryResult]  (one per asset queried)
     """
     pass
+
+
+# ============================================================================
+# FA BULK CURRENT PRICE
+# ============================================================================
+
+
+class FACurrentPriceItem(BaseModel):
+    """Current price result for a single asset."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., description="Asset ID")
+    value: Optional[Decimal] = Field(None, description="Current price value")
+    currency: Optional[str] = Field(None, description="Currency code (ISO 4217)")
+    as_of_date: Optional[date_type] = Field(None, description="Date/time the price refers to")
+    source: Optional[str] = Field(None, description="Price source (e.g. 'provider:justetf', 'db:last_known')")
+    error: Optional[str] = Field(None, description="Error message if price could not be fetched")
+
+
+class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
+    """Response for bulk current-price fetch.
+
+    Inherits from BaseBulkResponse[FACurrentPriceItem]:
+    - results: List[FACurrentPriceItem]
+    - success_count: int
+    - errors: List[str]
+    """
+    pass
+
+

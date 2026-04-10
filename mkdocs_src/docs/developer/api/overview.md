@@ -65,3 +65,38 @@ async function loadPortfolio() {
 ```
 
 This ensures that if the backend API changes (e.g., a field is renamed), the frontend build will fail with a type error, preventing runtime crashes.
+
+---
+
+## 📡 Notable Endpoints
+
+### `POST /api/v1/assets/prices/current` — Bulk Current Price
+
+Returns the **live current price** for a list of asset IDs. The response is designed for the `LiveTicker` frontend component.
+
+**Request body**: `List[int]` — asset IDs.
+
+**Response** (`FACurrentPriceResponse`):
+
+```json
+{
+  "results": [
+    {
+      "asset_id": 1,
+      "value": "123.45",
+      "currency": "EUR",
+      "source": "justetf",
+      "timestamp": "2026-04-10T12:00:00Z",
+      "error": null
+    }
+  ]
+}
+```
+
+**Resolution strategy** (per asset):
+
+1. Ask the assigned provider's `get_current_value()` (live quote from JustETF WebSocket, Yahoo Finance `ticker.info`, etc.)
+2. **Fallback**: if the provider fails or has no live feed, return the latest close price from the database.
+
+This endpoint is used by the `LiveTicker` component in the Dashboard and Asset Detail pages, and by the Asset List page for inline live prices in cards.
+

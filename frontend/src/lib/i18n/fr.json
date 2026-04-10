@@ -972,5 +972,11 @@
       "MATURITY_SETTLEMENT": "Échéance",
       "SPLIT": "Division"
     }
+  },
+  "ticker": {
+    "noAssets": "Aucun actif suivi",
+    "loading": "Chargement des prix…",
+    "errorFetching": "Échec du chargement des prix",
+    "livePrices": "Prix en direct"
   }
 }

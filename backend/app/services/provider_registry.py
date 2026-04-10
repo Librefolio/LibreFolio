@@ -118,6 +118,21 @@ class AbstractProviderRegistry:
                 continue
         cls._discovery_done = True
 
+    @classmethod
+    def shutdown_all_providers(cls) -> None:
+        """Invoke ``shutdown()`` on every registered provider instance.
+
+        Called during application lifespan teardown.  Errors on individual
+        providers are logged but do **not** stop the iteration.
+        """
+        cls.auto_discover()
+        for code, provider_class in cls._providers.items():
+            try:
+                instance = provider_class()
+                instance.shutdown()
+            except Exception as e:
+                logger.warning("Error during provider shutdown", provider_code=code, registry=cls.__name__, error=str(e), )
+
     # --- methods to specialize in subclasses ---
     @classmethod
     def _get_provider_folder(cls) -> str:

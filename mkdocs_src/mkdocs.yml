@@ -356,6 +356,7 @@ nav:
               - Settings: developer/frontend/components/settings.md
               - File Upload & Media: developer/frontend/components/file-upload.md
               - Select & Dropdowns: developer/frontend/components/select.md
+              - Live Ticker: developer/frontend/components/live-ticker.md
               - Brokers:
                   - Overview: developer/frontend/components/brokers/index.md
                   - Cards: developer/frontend/components/brokers/cards.md

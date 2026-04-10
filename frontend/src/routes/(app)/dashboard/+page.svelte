@@ -3,6 +3,7 @@
     import {currentUser} from '$lib/stores/auth';
     import {userSettings} from '$lib/stores/settings';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, PieChart, TrendingUp, Wallet} from 'lucide-svelte';
+    import LiveTicker from '$lib/components/layout/LiveTicker.svelte';
 
     // Get avatar URL from settings
     $: avatarUrl = $userSettings?.avatar_url as string | null | undefined;
@@ -108,6 +109,15 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Live Asset Prices -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700">
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
+            <TrendingUp size={20} class="text-libre-green"/>
+            {$_('assets.title')} — {$_('ticker.livePrices')}
+        </h2>
+        <LiveTicker />
     </div>
 
     <!-- Quick Actions -->

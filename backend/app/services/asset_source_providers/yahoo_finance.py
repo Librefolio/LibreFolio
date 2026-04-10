@@ -33,10 +33,12 @@ from backend.app.schemas.assets import (
     FACurrentValue,
     FAPricePoint,
     FAHistoricalData,
+    FAAssetEventPoint,
     FAAssetPatchItem,
     FAClassificationParams,
     FASectorArea,
     )
+from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.utils.sector_fin_utils import validate_sector
 
 logger = get_logger(__name__)
@@ -52,8 +54,12 @@ class YahooFinanceProvider(AssetSourceProvider):
         super().__init__()
         # TTLCache for search results (10 min TTL, max 1000 entries)
         self._search_cache = get_ttl_cache("yfinance_search", maxsize=1000, ttl=600)
-        # TTLCache for currency lookups (1 hour TTL, max 2000 entries)
-        self._currency_cache = get_ttl_cache("yfinance_currency", maxsize=2000, ttl=3600)
+        # TTLCache for currency lookups (24h TTL — currency doesn't change)
+        self._currency_cache = get_ttl_cache("yfinance_currency", maxsize=2000, ttl=86400)
+        # TTLCache for current values (120s TTL).
+        # Frontend polls every 30s → 3 out of 4 polls are cache hits.
+        # Yahoo is called at most once per ticker every 2 minutes.
+        self._current_value_cache = get_ttl_cache("yfinance_current_value", maxsize=200, ttl=120)
 
     def _fetch_currency(self, symbol: str) -> str | None:
         """
@@ -123,7 +129,13 @@ class YahooFinanceProvider(AssetSourceProvider):
         """
         Fetch current price from Yahoo Finance.
 
-        Uses fast_info.last_price for speed, falls back to history if unavailable.
+        Uses a 120-second TTL cache to avoid repeated API calls during polling.
+        Strategy: cache → ticker.info (quoteSummary endpoint).
+
+        ticker.info returns regularMarketPrice + currency in a single call
+        WITHOUT triggering any history() download.  This keeps the backend log
+        clean and avoids the heavy chart-API calls that history() or fast_info
+        would produce.
 
         Args:
             identifier: Yahoo Finance ticker symbol (e.g., "AAPL", "BTC-USD")
@@ -151,49 +163,48 @@ class YahooFinanceProvider(AssetSourceProvider):
                 {"identifier": identifier},
                 )
 
+        # Check cache first (avoids hitting Yahoo API on every 30s frontend poll)
+        cached, ok = self._current_value_cache.get(identifier)
+        if ok:
+            logger.debug(f"current_value cache hit for {identifier}")
+            return cached
+
         try:
             ticker = yf.Ticker(identifier)
 
-            # Try fast_info first (faster, cached)
-            try:
-                last_price = ticker.fast_info.get("lastPrice")
-                if last_price and last_price > 0:
-                    currency = ticker.fast_info.get("currency", "USD")
-                    return FACurrentValue(
-                        value=Decimal(str(last_price)),
-                        currency=currency,
-                        as_of_date=date.today(),
-                        source=self.provider_name,
-                        )
-            except Exception as e:
-                logger.debug(f"fast_info failed for {identifier}, trying history: {e}")
+            # Use ticker.info (quoteSummary endpoint) — returns price + currency
+            # in a single lightweight call.  Does NOT call history() / chart API.
+            info = ticker.info
 
-            # Fallback to history (last close)
-            hist = ticker.history(period="5d")
-            if hist.empty:
+            price = info.get("regularMarketPrice")
+            if price is None:
+                price = info.get("currentPrice") or info.get("previousClose")
+            if price is None:
                 raise AssetSourceError(
-                    f"No data available for ticker: {identifier}",
+                    f"No price available for ticker: {identifier}",
                     "NO_DATA",
                     {"identifier": identifier},
                     )
 
-            last_row = hist.iloc[-1]
-            last_date = hist.index[-1].date()
+            currency = info.get("currency") or info.get("financialCurrency") or "USD"
 
-            # Get currency from info (may be slow, but we're already in fallback)
-            currency = None
-            try:
-                info = ticker.info
-                currency = info.get("currency")
-            except Exception:
-                logger.warning(f"Could not get currency for {identifier}, using USD")
+            # Date from regularMarketTime (Unix timestamp) or today
+            rmt = info.get("regularMarketTime")
+            if rmt:
+                from datetime import datetime as _dt
+                as_of_date = _dt.utcfromtimestamp(rmt).date()
+            else:
+                as_of_date = date.today()
 
-            return FACurrentValue(
-                value=Decimal(str(last_row["Close"])),
+            result = FACurrentValue(
+                value=Decimal(str(price)),
                 currency=currency,
-                as_of_date=last_date,
+                as_of_date=as_of_date,
                 source=self.provider_name,
                 )
+            self._current_value_cache.set(identifier, result)
+            logger.debug(f"current_value for {identifier}: {price} {currency}")
+            return result
 
         except AssetSourceError:
             raise
@@ -289,10 +300,51 @@ class YahooFinanceProvider(AssetSourceProvider):
                         )
                     )
 
-            # TODO [AssetEvent]: Fetch dividend events from Yahoo Finance API
-            # yfinance provides .dividends and .splits on Ticker objects
-            # Parse and return as FAAssetEventPoint(type=DIVIDEND/SPLIT)
-            return FAHistoricalData(prices=prices, events=[], currency=currency, source=self.provider_name)
+            # --- Parse asset events (dividends + splits) ---
+            events: list[FAAssetEventPoint] = []
+
+            try:
+                # Dividends: yfinance returns a Series(DatetimeIndex → float)
+                dividends = ticker.dividends
+                if dividends is not None and not dividends.empty:
+                    # Filter to requested date range
+                    for idx, amount in dividends.items():
+                        if pd.notna(amount) and amount > 0:
+                            div_date = idx.tz_convert("UTC").date() if hasattr(idx, "tz_convert") else idx.date()
+                            if start_date <= div_date <= end_date:
+                                events.append(FAAssetEventPoint(
+                                    date=div_date,
+                                    type="DIVIDEND",
+                                    value=CurrencyAmount(code=currency, amount=Decimal(str(amount))),
+                                    notes=f"Yahoo Finance dividend for {identifier}",
+                                ))
+                    if events:
+                        logger.info(f"Parsed {len(events)} DIVIDEND events for {identifier}")
+            except Exception as e:
+                logger.debug(f"Could not parse dividends for {identifier}: {e}")
+
+            try:
+                # Splits: yfinance returns a Series(DatetimeIndex → float ratio)
+                splits = ticker.splits
+                if splits is not None and not splits.empty:
+                    split_count = 0
+                    for idx, ratio in splits.items():
+                        if pd.notna(ratio) and ratio != 0 and ratio != 1:
+                            split_date = idx.tz_convert("UTC").date() if hasattr(idx, "tz_convert") else idx.date()
+                            if start_date <= split_date <= end_date:
+                                events.append(FAAssetEventPoint(
+                                    date=split_date,
+                                    type="SPLIT",
+                                    value=CurrencyAmount(code=currency, amount=Decimal(str(ratio))),
+                                    notes=f"Stock split {ratio}:1",
+                                ))
+                                split_count += 1
+                    if split_count:
+                        logger.info(f"Parsed {split_count} SPLIT events for {identifier}")
+            except Exception as e:
+                logger.debug(f"Could not parse splits for {identifier}: {e}")
+
+            return FAHistoricalData(prices=prices, events=events, currency=currency, source=self.provider_name)
 
         except AssetSourceError:
             raise

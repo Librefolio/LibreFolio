@@ -15,6 +15,7 @@
     import {currentLanguage} from '$lib/stores/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached,} from '$lib/utils/providerHelpers';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import type {LivePriceDirection} from '$lib/services/livePriceService';
 
     // =========================================================================
     // Types
@@ -38,13 +39,15 @@
         data: AssetRow[];
         loading?: boolean;
         visiblePeriods?: ReadonlyArray<{ key: string; days: number }>;
+        /** Live price data (asset_id → {value, direction}) for flash effect */
+        livePriceMap?: Map<number, { value: number; direction: LivePriceDirection }>;
         onsync?: (asset: AssetRow) => void;
         onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
         onselectionchange?: (rows: AssetRow[]) => void;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
     ensureAssetProvidersCached();
@@ -157,13 +160,24 @@
                 {
                     id: 'lastPrice',
                     header: () => $t('assets.table.lastPrice'),
-                    cell: (row) => row.lastPrice !== null && row.lastPrice !== undefined
-                        ? {type: 'html', html: `<span class="font-mono">${Number(row.lastPrice).toFixed(2)}</span>`}
-                        : '—',
+                    cell: (row) => {
+                        const live = livePriceMap.get(row.id);
+                        const price = live?.value ?? row.lastPrice;
+                        if (price == null) return '—';
+                        const dir = live?.direction ?? 'neutral';
+                        const colorCls = dir === 'up' ? 'text-emerald-600 dark:text-emerald-400'
+                            : dir === 'down' ? 'text-red-500 dark:text-red-400'
+                            : '';
+                        const info = getCurrencyInfo(row.currency);
+                        return {
+                            type: 'html',
+                            html: `<span class="font-mono transition-colors duration-300 ${colorCls}">${Number(price).toFixed(2)}</span> <span class="emoji-flag text-xs">${info.flag_emoji}</span> <span class="text-xs text-gray-400">${row.currency}</span>`
+                        };
+                    },
                     type: 'number',
-                    getValue: (row) => row.lastPrice ?? 0,
-                    width: 110,
-                    minWidth: 80,
+                    getValue: (row) => livePriceMap.get(row.id)?.value ?? row.lastPrice ?? 0,
+                    width: 150,
+                    minWidth: 100,
                 },
                 // Dynamic Δ multi-period columns
                 ...visiblePeriods.map(period => ({

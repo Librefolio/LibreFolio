@@ -29,6 +29,9 @@ from backend.app.config import (
     )
 from backend.app.logging_config import configure_logging, get_logger
 from backend.app.utils.version import get_git_version
+from backend.app.services.provider_registry import (
+    AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry,
+    )
 
 # Check for test mode via environment variable ONLY
 # NOTE: Do NOT check sys.argv here - it causes issues when this module is imported
@@ -168,8 +171,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     asyncio.create_task(_prewarm_provider_caches())
 
     yield
-    # Shutdown
+    # Shutdown — cleanup all provider resources (WebSocket feeds, caches, etc.)
     logger.info("Shutting down LibreFolio")
+    AssetProviderRegistry.shutdown_all_providers()
+    FXProviderRegistry.shutdown_all_providers()
+    BRIMProviderRegistry.shutdown_all_providers()
 
 
 async def _initialize_global_settings():
@@ -235,7 +241,6 @@ def docs_available() -> bool:
     return SITE_DIR.exists() and (SITE_DIR / "index.html").exists()
 
 
-# TODO: aggiornare guida per il caso docker quando docker ci sarà
 def render_docs_not_built() -> HTMLResponse:
     return HTMLResponse(
         """<html><body>

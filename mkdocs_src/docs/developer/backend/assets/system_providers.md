@@ -37,7 +37,7 @@ The primary market data provider — fetches stock, ETF, crypto, and index price
 
 - **Features**: History, Search, Metadata, Current Value
 - **Identifier types**: `TICKER`, `ISIN`
-- **Key details**: `fast_info` fast path, search caching (10 min TTL), currency caching (1 hour), sector/geographic metadata
+- **Key details**: `ticker.info` for current price (no `history()` or `fast_info`), search caching (10 min TTL), currency caching (24h), sector/geographic metadata
 - 📖 [Technical Details →](provider_yahoo_finance.md)
 - 📖 [User Guide →](../../../user/assets/providers/yahoo-finance.en.md)
 

@@ -55,6 +55,23 @@ The base class for all registries. Provides:
 | `get_provider_instance(cls, code)` | Returns an **instantiated** provider object |
 | `list_providers(cls)` | List all registered providers with `code` and `name` |
 | `auto_discover(cls)` | Scan plugin folder and import all modules |
+| `shutdown_all_providers(cls)` | Call `shutdown()` on every registered provider instance (graceful teardown) |
+
+### 🛑 Provider Lifecycle — Shutdown
+
+Each ABC base class (`AssetSourceProvider`, `FXRateProvider`, `BRIMProvider`) declares a no-op `shutdown()` method. Providers that hold persistent resources (e.g., background threads, WebSocket connections) override it to release them.
+
+At application shutdown, `main.py`'s lifespan calls:
+
+```python
+AssetProviderRegistry.shutdown_all_providers()
+FXProviderRegistry.shutdown_all_providers()
+BRIMProviderRegistry.shutdown_all_providers()
+```
+
+`shutdown_all_providers()` iterates every registered provider, instantiates it (via `get_provider_instance`), and calls `shutdown()`. No `hasattr` check is needed because the method is defined in the ABC.
+
+**Example**: The JustETF provider overrides `shutdown()` to stop its live-quote WebSocket daemon threads via `shutdown_live_feeds()`.
 
 ### 🏷️ Registry Specializations
 
