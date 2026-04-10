@@ -12,6 +12,7 @@ This section documents the reusable UI components in LibreFolio, organized by fu
 | **[Settings](settings.md)** | SettingsLayout, PreferencesTab, ProfileTab, GlobalSettingsTab, AboutTab | Two-column settings with categories |
 | **[File Upload & Media](file-upload.md)** | FileUploader, ImageCropper, ImageEditModal, FileEditModal, AssetPickerModal, LazyImage | Upload, crop, edit, and pick media files |
 | **[Select & Dropdowns](select.md)** | BaseDropdown, SimpleSelect, SearchSelect, CurrencySearchSelect, FxProviderSelect, BrokerSearchSelect | Keyboard-navigable dropdowns with search |
+| **[Live Ticker](live-ticker.md)** | LiveTicker | Real-time asset price badges with polling, dynamic colors, and non-blocking loading |
 | **[Brokers](brokers/index.md)** | BrokerCard, BrokerForm, BrokerIcon, BrokerModal, BrokerSharingModal, CashBalanceCard | Broker CRUD, sharing, cash management |
 
 ## 📏 Component Guidelines

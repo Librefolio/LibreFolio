@@ -1,4 +1,4 @@
-# Plan: Documentation Audit — Phase 06 Step 4 Part B (Post-Assets)
+# Plan: Documentation Audit — Phase 06 Step 4 Part A (Post-Assets)
 
 > Base tag: `v0.5.9` → HEAD (34 commit, 220 file, +32K righe)
 > EN-only — translations deferred to LLM pipeline
@@ -97,8 +97,18 @@
 
 ---
 
-## Block 6 — Developer backend docs: review e allineamento
-**Priorità: ALTA** | **Effort: medio** | **Status: 📋 DEFERRED to next session**
+## Block 6 — Developer backend docs: review e allineamento ✅
+**Priorità: ALTA** | **Effort: medio** | **Status: ✅ COMPLETED** (April 10, 2026)
+
+Completato nella sessione del 10 Aprile 2026:
+
+- Riscritto `architecture.md`: 3-phase sync pipeline, 18-endpoint API table, provider probe, cache/performance
+- Creato `events.md`: event types con emoji, Mermaid ER, dedup strategy, auto-generated events
+- Creato pagine per-provider: `provider_yahoo_finance.md`, `provider_justetf.md` (nuovi), riscritti `provider_cssscraper.md`, `provider_scheduled_investment.md`
+- Mergiato `system_providers.md` + `providers_list.md` in unica overview page
+- Aggiornato `asset_plugin_guide.md`: Mermaid orizzontale, optional methods, SSE streaming search, probe
+- Aggiornato test walkthrough: api.md test counts, services.md nuove descrizioni
+- Docker: env_file + bind mount in compose, .env check in dev.py, riscritto docker_advanced.en.md, aggiornato installation.en.md e README.md
 
 ### 6a. `architecture.md`
 - Verificare `AssetSourceManager` vs +636 righe in `asset_source.py`
@@ -192,7 +202,7 @@ Block 9 (E2E login fix)        → ✅
 Block 3 (Restructure assets)   → ✅
 Block 4 (Docker demo compose)  → ✅
 Block 8 (Logo & Favicon)       → ✅
-Block 6 (Dev docs review)      → 📋 DEFERRED
+Block 6 (Dev docs review)      → ✅ (April 10, 2026)
 ```
 
 ---

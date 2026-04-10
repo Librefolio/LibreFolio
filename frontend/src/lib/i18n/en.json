@@ -972,5 +972,11 @@
       "MATURITY_SETTLEMENT": "Maturity",
       "SPLIT": "Split"
     }
+  },
+  "ticker": {
+    "noAssets": "No tracked assets",
+    "loading": "Loading prices…",
+    "errorFetching": "Failed to load prices",
+    "livePrices": "Live Prices"
   }
 }

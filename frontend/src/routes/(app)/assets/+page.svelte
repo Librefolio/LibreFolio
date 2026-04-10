@@ -13,13 +13,15 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onMount} from 'svelte';
+    import {onMount, onDestroy} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {zodiosApi} from '$lib/api';
+    import {zodiosApi, axiosInstance} from '$lib/api';
     import {BarChart3, Check, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
+    import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
+    import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
@@ -85,6 +87,10 @@
     let selectedAssetRows = $state<AssetRow[]>([]);
     /** Set of asset IDs currently syncing (for per-card/row rotating icon) */
     let syncingAssetIds = $state<Set<number>>(new Set());
+
+    /** Live prices from bulk current-price endpoint (asset_id → {value, direction}) */
+    let livePriceMap = $state<Map<number, { value: number; direction: LivePriceDirection }>>(new Map());
+    let livePriceIntervalId: ReturnType<typeof setInterval> | null = null;
 
     // Delete dialog (single)
     let deleteDialogOpen = $state(false);
@@ -217,6 +223,13 @@
         await loadAssets();
         // Load FX pair slugs for cross-domain signal selection in settings modal
         loadFxPairSlugs();
+        // Fire-and-forget: fetch live prices (non-blocking), start polling
+        fetchLivePrices();
+        livePriceIntervalId = setInterval(fetchLivePrices, 30_000);
+    });
+
+    onDestroy(() => {
+        if (livePriceIntervalId) clearInterval(livePriceIntervalId);
     });
 
     // ResizeObserver for adaptive filter bar layout
@@ -399,6 +412,28 @@
         dateStart = newStart;
         dateEnd = newEnd;
         fetchAllPriceData();
+    }
+
+    /** Fetch live current prices for all assets (fire-and-forget, non-blocking). */
+    async function fetchLivePrices() {
+        if (assets.length === 0) return;
+        try {
+            const ids = assets.map(a => a.id);
+            const results = await fetchCurrentPrices(ids);
+            const newMap = new Map<number, { value: number; direction: LivePriceDirection }>();
+            for (const r of results) {
+                if (r.value != null) {
+                    const prev = livePriceMap.get(r.assetId)?.value ?? null;
+                    newMap.set(r.assetId, {
+                        value: r.value,
+                        direction: computeDirection(r.value, prev),
+                    });
+                }
+            }
+            livePriceMap = newMap;
+        } catch (e: any) {
+            console.warn('[Assets] fetchLivePrices error (non-critical):', e?.message);
+        }
     }
 
     // =========================================================================
@@ -1017,7 +1052,8 @@
                         provider_code: asset.provider_code,
                         active: asset.active,
                     }}
-                        lastPrice={asset.lastPrice}
+                        livePrice={livePriceMap.get(asset.id)?.value ?? null}
+                        livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
                         deltaPercent={asset.deltaPercent}
                         deltaAbs={asset.deltaAbs}
                         globalViewMode={globalViewMode}
@@ -1040,6 +1076,7 @@
                 data={tableRows}
                 loading={false}
                 {visiblePeriods}
+                {livePriceMap}
                 onsync={handleSyncAsset}
                 onrefresh={handleRefreshAsset}
                 ondelete={handleDeleteAsset}

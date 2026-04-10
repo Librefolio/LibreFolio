@@ -972,5 +972,11 @@
       "MATURITY_SETTLEMENT": "Vencimiento",
       "SPLIT": "División"
     }
+  },
+  "ticker": {
+    "noAssets": "Sin activos rastreados",
+    "loading": "Cargando precios…",
+    "errorFetching": "Error al cargar precios",
+    "livePrices": "Precios en vivo"
   }
 }

@@ -69,6 +69,19 @@ Manual events are **never deleted** by the sync process. They survive provider r
 
 ## 🔧 Auto-Generated Events
 
+### 📈 Yahoo Finance: Dividends & Splits
+
+During sync, the Yahoo Finance provider generates:
+
+- **`DIVIDEND` events** from `ticker.dividends` — ex-dividend dates with the per-share payout value and currency.
+- **`SPLIT` events** from `ticker.splits` — split dates with the split ratio as the event value (e.g., `4.0` for a 4:1 split).
+
+Both are inserted via the standard `_upsert_asset_events()` pipeline, keyed by `provider_assignment_id`.
+
+### 🔍 JustETF: Dividends from Chart Data
+
+During sync, the JustETF provider parses dividend data from `load_chart()` response. Distribution dates and amounts are extracted and stored as **`DIVIDEND` events**.
+
 ### 📊 Scheduled Investment: `generate_interest`
 
 When a schedule period has `generate_interest = True`, the Scheduled Investment provider auto-generates:

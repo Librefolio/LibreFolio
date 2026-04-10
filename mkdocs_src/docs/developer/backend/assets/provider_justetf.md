@@ -48,6 +48,20 @@ The JustETF provider fetches ETF prices and metadata from [justetf.com](https://
 
 Returns `https://www.justetf.com/en/etf-profile.html?isin={identifier}`.
 
+### 📡 Live Quote Streaming
+
+The JustETF provider maintains persistent **WebSocket connections** to the Gettex exchange for real-time price feeds:
+
+- **`iterate_live_quote(isin)`** opens a WebSocket stream and yields price updates as they arrive.
+- A background **daemon thread** per ISIN keeps the connection alive with exponential backoff on disconnection.
+- Prices are stored in a module-level `_live_quote_store` dictionary.
+- **`get_current_value()`** fast-path: checks `_live_quote_store` first, falls back to a one-shot `get_gettex_quote()`, then optionally starts a persistent feed.
+- **`shutdown_live_feeds()`** stops all daemon threads (called from the provider's `shutdown()` method at app teardown).
+
+### 📅 Asset Events
+
+During sync, the provider parses dividend data from `load_chart()` and generates **DIVIDEND events** via the standard event pipeline.
+
 ---
 
 ## ⚡ Caching Strategy
@@ -81,7 +95,6 @@ All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are 
 - **ISIN only**: Does not accept tickers — use Yahoo Finance for ticker-based search.
 - **EUR-centric**: Chart data is always in EUR. Multi-currency support depends on justetf.com availability.
 - **Scraping fragility**: The library scrapes justetf.com HTML. Site layout changes may break it.
-- **No events yet**: Dividend dates and amounts visible on the profile page are not yet parsed (marked as `TODO [AssetEvent]` in code).
 - **Blocking I/O**: All justetf-scraping calls are synchronous — wrapped in `asyncio.to_thread()` to avoid blocking the event loop.
 
 ---
