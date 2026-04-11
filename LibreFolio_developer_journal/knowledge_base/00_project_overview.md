@@ -82,7 +82,9 @@ LibreFolio/
 | [`02_frontend.md`](LibreFolio_developer_journal/knowledge_base/02_frontend.md) | Task su pagine, componenti, stores, charts, i18n |
 | [`03_documentation.md`](LibreFolio_developer_journal/knowledge_base/03_documentation.md) | Task su MkDocs: scrittura docs, stile, emoji, admonition, traduzione |
 | [`04_devpy_reference.md`](LibreFolio_developer_journal/knowledge_base/04_devpy_reference.md) | Usare `dev.py`: command tree completo, scenari comuni |
-| [`05_project_conventions.md`](LibreFolio_developer_journal/knowledge_base/05_project_conventions.md) | Convenzioni: lingua, naming, test users, dark mode, edit vs rewrite |
+| [`05_project_conventions.md`](LibreFolio_developer_journal/knowledge_base/05_project_conventions.md) | Convenzioni: lingua, naming, test users, dark mode, async I/O rule |
+| [`06_testing_backend.md`](LibreFolio_developer_journal/knowledge_base/06_testing_backend.md) | Creare/eseguire test backend: pytest, API tests, mock data, coverage |
+| [`07_testing_frontend.md`](LibreFolio_developer_journal/knowledge_base/07_testing_frontend.md) | Creare/eseguire test frontend: Playwright E2E, fixtures, gallery |
 
 ---
 

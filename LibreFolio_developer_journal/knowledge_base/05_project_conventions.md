@@ -11,6 +11,33 @@
 
 ---
 
+## ⚠️ Async I/O Rule (Event Loop Safety)
+
+In `async def` handlers/methods, **ogni libreria sync che fa I/O** (rete, filesystem pesante) **DEVE** essere wrappata in `await asyncio.to_thread(...)`.
+
+**Mai chiamare direttamente**:
+- `requests.get()`, `urllib.urlopen()`, `httplib` (usare `httpx.AsyncClient` o `to_thread`)
+- `yf.Ticker().info`, `yf.Search()`, `ticker.history()` (yfinance usa `requests` internamente)
+- Operazioni filesystem lente (directory walk, file grandi) — `Path.exists()` veloce è ok
+
+**Perché**: uvicorn usa un singolo event loop. Una chiamata sync blocca l'intero loop per tutta la sua durata, stallando TUTTE le risposte concorrenti (incluso StaticFiles per JS chunks).
+
+**Pattern corretto** (vedi JustETF provider):
+```python
+# ❌ SBAGLIATO — blocca l'event loop per 1-5 secondi
+async def get_current_value(self, ...):
+    ticker = yf.Ticker(identifier)
+    info = ticker.info  # sync HTTP!
+
+# ✅ CORRETTO — offload al thread pool
+async def get_current_value(self, ...):
+    info = await asyncio.to_thread(lambda: yf.Ticker(identifier).info)
+```
+
+**Regola complementare**: se un endpoint fa solo sync I/O leggero (es. `Path.exists()`, `FileResponse`), definirlo come `def` (non `async def`). FastAPI lo esegue nel thread pool automaticamente, senza bloccare il loop. Esempio: `frontend_catchall()`, `mkdocs_static()` in `main.py`.
+
+---
+
 ## Test Users
 
 | Username | Password | Ruolo |

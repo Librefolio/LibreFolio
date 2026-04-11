@@ -1,6 +1,6 @@
 # Phase 6: Assets Management — Progress Summary
 
-**Status**: 🚧 IN CORSO (Step 1–3 completati, Step 4 prossimo)  
+**Status**: 🚧 IN CORSO (Step 1–4 completati, Part B quasi completa)  
 **Durata stimata**: ~8 giorni  
 **Priorità**: P0 (MVP)  
 **Dipendenze**: Phase 5 (PriceChartFull, Signal Library), Phase 4.8 (user_role)
@@ -11,8 +11,9 @@
 
 > **Il piano di dettaglio attuale è**: [`plan-phase06-assets.md`](../plan-phase06-assets.md)
 >
-> Sotto-piani di implementazione creati durante lo sviluppo andranno in:
-> `phases/phase-06-subplan/`
+> Sotto-piani di implementazione:
+> - [`plan-phase06Step4AssetDetailPage.prompt.md`](../plan-phase06Step4AssetDetailPage.prompt.md) — Step 4 (Part 0, A, B, C)
+> - [`plan-partBDataEditorUnificato.prompt.md`](../plan-partBDataEditorUnificato.prompt.md) — Part B (Data Editor + CSV Import + Test E2E)
 
 ---
 
@@ -36,7 +37,9 @@ condiviso con Phase 7.
 | **2b** | [**Rientro**](../plan-phase06BugfixMigration.prompt.md): bugfix `.toFixed`, BrokerIcon Svelte 5, localStorage user-scoped, FX delete 422, manual-only UX, ViewModeToggle header, bulk prices endpoint + colonne Δ multi-periodo + test migration, test upload, i18n | 0.5g | ✅ |
 | **2c** | [**Rientro 2**](phase-06-subplan/plan-phase06Step2cSyncDeleteRefactor.prompt.md): fix chart refresh, stopPropagation azioni tabella, rimuovere edit ridondante + sync/refresh, bulk actions multi-select, blocco 2×2 Assets, fix colonne Δ visibilità | 1g | ✅ |
 | **3** | AssetModal + Search + Probe + ScheduledInvestment Engine (12 round). Sotto-piani in [`phase-06-subplan/`](phase-06-subplan/) | 5g | ✅ |
-| **4** | Asset Detail: PriceChartFull + segnali + AssetDataEditorSection (OHLCV) + provider form | 2g | ⏳ |
+| **4** | Asset Detail: PriceChartFull + segnali + Data Editor + CSV Import + Test E2E + Docs Financial Theory | 2g | 🚧 |
+| **4b** | [**Part B fix**](../plan-partBDataEditorUnificato.prompt.md): B6 test fix (Apple search), perf fix (chunk fallback) | 0.5g | 🚧 |
+| **4c** | Financial Theory docs reorganization (4 sub-trees) + Portfolio Theory new section | 1g | ⏳ |
 | **5** | AssetMatchingWizard 3-step (condiviso Phase 7) | 1g | ⏳ |
 | **6** | i18n (30 keys × 4 lingue), E2E test, gallery, docs MkDocs | 1g | ⏳ |
 

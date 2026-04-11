@@ -35,16 +35,16 @@
     // =========================================================================
 
     const eventColumns: CsvColumnDef[] = [
+        {key: 'currency', label: 'currency', type: 'string', required: false},
         {key: 'type', label: 'type', type: 'string', required: true},
         {key: 'amount', label: 'amount', type: 'number', required: true},
-        {key: 'currency', label: 'currency', type: 'string', required: false},
         {key: 'notes', label: 'notes', type: 'string', required: false},
     ];
 
     function openDocs() {
         const lang = localStorage.getItem('librefolio-locale') || 'en';
         const prefix = lang !== 'en' ? `${lang}/` : '';
-        window.open(`/mkdocs/${prefix}user/assets/events/`, '_blank');
+        window.open(`/mkdocs/${prefix}user/assets/detail/events/`, '_blank');
     }
 </script>
 
@@ -59,7 +59,7 @@
         <InfoBanner variant="info">
             <div class="flex items-start gap-2">
                 <div class="flex-1 space-y-1">
-                    <p><strong>Format:</strong> date;type;amount;currency;notes</p>
+                    <p><strong>Format:</strong> date;currency;type;amount;notes</p>
                     <p class="text-[11px] opacity-80">
                         Types: <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">DIVIDEND</code>
                         <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">INTEREST</code>
@@ -83,10 +83,10 @@
     {#snippet helpContent()}
         <p class="font-semibold">Event CSV Format</p>
         <p>Each row represents an asset event. <code>type</code> and <code>amount</code> are required.</p>
-        <pre class="bg-white/50 dark:bg-slate-800/50 rounded p-2 text-xs font-mono">date;type;amount;currency;notes
-2024-03-15;DIVIDEND;1.25;USD;Q1 payout
-2024-06-01;SPLIT;2;;2:1 split
-2024-09-15;DIVIDEND;1.30;USD;</pre>
+        <pre class="bg-white/50 dark:bg-slate-800/50 rounded p-2 text-xs font-mono">date;currency;type;amount;notes
+2024-03-15;USD;DIVIDEND;1.25;Q1 payout
+2024-06-01;;SPLIT;2;2:1 split
+2024-09-15;USD;DIVIDEND;1.30;</pre>
         <ul class="list-disc list-inside space-y-1 text-xs">
             <li>Date: YYYY-MM-DD format</li>
             <li>Type: DIVIDEND, INTEREST, SPLIT, PRICE_ADJUSTMENT, MATURITY_SETTLEMENT</li>

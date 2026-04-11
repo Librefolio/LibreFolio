@@ -88,6 +88,12 @@
         mainIconUrl?: string | null;
         /** Main series asset type (for tooltip icon fallback) */
         mainAssetType?: string | null;
+        /** Called on double-click on a data point (date, value) — for editor scroll */
+        onDblClick?: (date: string, value: number) => void;
+        /** Called on double-click on an event marker (date, eventType) — for editor scroll */
+        onEventDblClick?: (date: string, eventType: string) => void;
+        /** Translated label for stale indicator in tooltip (e.g. "Stale: {days}d") — receives `{days}` placeholder */
+        staleLabel?: string;
     }
 
     let {
@@ -116,6 +122,9 @@
         overlaySignalInfoMap,
         mainIconUrl,
         mainAssetType,
+        onDblClick,
+        onEventDblClick,
+        staleLabel,
     }: Props = $props();
 
     // =========================================================================
@@ -242,9 +251,9 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
 
-            // Global dblclick handler for edit mode — catches double-clicks anywhere on the chart area
+            // Global dblclick handler for edit mode — scrolls editor to clicked date
             chartInstance.getZr().on('dblclick', (params: any) => {
-                if (!editMode || !onPointClick || !chartInstance) return;
+                if (!chartInstance) return;
                 const pointInPixel = [params.offsetX, params.offsetY];
                 if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                     const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
@@ -252,7 +261,17 @@
                         const dateIdx = Math.round(pointInGrid[0]);
                         if (dateIdx >= 0 && dateIdx < displayData.length) {
                             const point = displayData[dateIdx];
-                            handlePointClick(point.date, point.value);
+                            // Check if this date has an event marker
+                            const hasEvent = eventMarkers.find(e => e.date === point.date);
+                            if (hasEvent && onEventDblClick) {
+                                onEventDblClick(point.date, hasEvent.type);
+                            } else if (onDblClick) {
+                                onDblClick(point.date, point.value);
+                            }
+                            // Also handle edit mode point click (original behavior)
+                            if (editMode && onPointClick) {
+                                handlePointClick(point.date, point.value);
+                            }
                         }
                     }
                 }
@@ -339,7 +358,17 @@
                             if (dateIdx >= 0 && dateIdx < displayData.length) {
                                 const point = displayData[dateIdx];
                                 navigator.vibrate?.(50);
-                                handlePointClick(point.date, point.value);
+                                // Mirror dblclick behavior: event marker → onEventDblClick, else → onDblClick
+                                const hasEvent = eventMarkers.find(e => e.date === point.date);
+                                if (hasEvent && onEventDblClick) {
+                                    onEventDblClick(point.date, hasEvent.type);
+                                } else if (onDblClick) {
+                                    onDblClick(point.date, point.value);
+                                }
+                                // Also handle edit mode point click (original behavior)
+                                if (editMode && onPointClick) {
+                                    handlePointClick(point.date, point.value);
+                                }
                             }
                         }
                     }
@@ -661,6 +690,27 @@
                 backgroundColor: isDark ? '#1e293b' : '#ffffff',
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                confine: false,
+                position: (point: any, _params: any, _dom: any, _rect: any, size: any) => {
+                    // Center tooltip above the cursor, clamped to viewport edges
+                    const tooltipW = size.contentSize[0];
+                    const tooltipH = size.contentSize[1];
+                    const viewW = size.viewSize[0];
+                    let x = point[0] - tooltipW / 2;
+                    // ALWAYS above the finger/cursor — never below
+                    let y = point[1] - tooltipH - 30; // 30px gap above finger
+                    // Clamp horizontal to chart bounds
+                    if (x < 8) x = 8;
+                    if (x + tooltipW > viewW - 8) x = viewW - tooltipW - 8;
+                    // Clamp Y: allow going above chart boundary, but stay within viewport
+                    // The chart container offset from viewport top — tooltip uses appendToBody
+                    // so coordinates are relative to the chart container.
+                    // Let Y go negative (above chart) but not above viewport.
+                    const chartRect = chartContainer?.getBoundingClientRect();
+                    const viewportMinY = chartRect ? -chartRect.top : 0;
+                    if (y < viewportMinY) y = viewportMinY;
+                    return [x, y];
+                },
                 formatter: (params: any) => {
                     const items = Array.isArray(params) ? params : [params];
                     if (!items.length) return '';
@@ -724,7 +774,10 @@
                     }
                     const dataPoint = staleLookup.get(date);
                     if (dataPoint !== undefined) {
-                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ Stale: ${dataPoint}d</span>`;
+                        const label = staleLabel
+                            ? staleLabel.replace('{days}', String(dataPoint))
+                            : `Stale: ${dataPoint}d`;
+                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
                     }
                     return html;
                 },
