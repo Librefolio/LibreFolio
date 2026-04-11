@@ -202,7 +202,7 @@
                         type: 'html' as const,
                         html: row.provider_code
                             ? assetProviderBadgeHtml(row.provider_code)
-                            : '<span class="text-gray-400 dark:text-gray-500">—</span>',
+                            : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">✏️ Manual</span>',
                     }),
                     type: 'text',
                     getValue: (row) => row.provider_code ?? '',

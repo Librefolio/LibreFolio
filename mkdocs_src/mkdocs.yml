@@ -106,6 +106,12 @@ plugins:
             Financial Theory: Teoria Finanziaria
             Asset Types: Tipi di Asset
             Transaction Types: Tipi di Transazione
+            Asset Events: Eventi Asset
+            Dividend: Dividendo
+            Interest: Interesse
+            Split: Frazionamento
+            Price Adjustment: Rettifica Prezzo
+            Maturity Settlement: Rimborso a Scadenza
             Day Count Conventions: Convenzioni di Conteggio Giorni
             "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
             Technical Indicators: Indicatori Tecnici
@@ -157,6 +163,12 @@ plugins:
             Financial Theory: Théorie Financière
             Asset Types: Types d'Actifs
             Transaction Types: Types de Transactions
+            Asset Events: Événements d'Actifs
+            Dividend: Dividende
+            Interest: Intérêt
+            Split: Fractionnement
+            Price Adjustment: Ajustement de Prix
+            Maturity Settlement: Règlement à l'Échéance
             Day Count Conventions: Conventions de Décompte des Jours
             "Returns & Growth Rates": "Rendements & Taux de Croissance"
             Technical Indicators: Indicateurs Techniques
@@ -208,6 +220,12 @@ plugins:
             Financial Theory: Teoría Financiera
             Asset Types: Tipos de Activos
             Transaction Types: Tipos de Transacciones
+            Asset Events: Eventos de Activos
+            Dividend: Dividendo
+            Interest: Interés
+            Split: Desdoblamiento
+            Price Adjustment: Ajuste de Precio
+            Maturity Settlement: Liquidación al Vencimiento
             Day Count Conventions: Convenciones de Conteo de Días
             "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
             Technical Indicators: Indicadores Técnicos
@@ -288,6 +306,13 @@ nav:
       - Overview: financial-theory/index.md
       - Asset Types: financial-theory/asset-types.md
       - Transaction Types: financial-theory/transaction-types.md
+      - Asset Events:
+          - Overview: financial-theory/asset-events.md
+          - Dividend: financial-theory/asset-events/dividend.md
+          - Interest: financial-theory/asset-events/interest.md
+          - Split: financial-theory/asset-events/split.md
+          - Price Adjustment: financial-theory/asset-events/price-adjustment.md
+          - Maturity Settlement: financial-theory/asset-events/maturity-settlement.md
       - Day Count Conventions: financial-theory/day-count.md
       - Returns & Growth Rates: financial-theory/returns.md
       - Technical Indicators: financial-theory/technical-indicators.md

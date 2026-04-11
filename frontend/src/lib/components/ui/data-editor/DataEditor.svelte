@@ -16,13 +16,15 @@
     import {tick} from 'svelte';
     import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Plus, Trash2, Undo2, Upload} from 'lucide-svelte';
+    import {Plus, Trash2, Undo2, Upload, Eye, EyeOff} from 'lucide-svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
     import type {ColumnDef, DataRow} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
+    import {CurrencySearchSelect} from '$lib/components/ui/select';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
 
     // =========================================================================
     // Props
@@ -56,11 +58,14 @@
     let importModalOpen = $state(false);
     let dataTableRef: DataTable<DataRow> | undefined = $state(undefined);
     let selectedIds = $state<string[]>([]);
+    let hideStale = $state(false);
 
     // =========================================================================
     // Derived
     // =========================================================================
 
+    /** Whether any rows have stale days (to decide if toggle should be shown) */
+    let hasStaleRows = $derived(rows.some(r => r.staleDays && r.staleDays > 0 && r.status === 'original'));
 
     /** Dirty rows for emission */
     let dirtyRows = $derived(rows.filter(r => r.status !== 'original'));
@@ -69,11 +74,16 @@
     let modifiedCount = $derived(rows.filter(r => r.status === 'edited').length);
     let deletedCount = $derived(rows.filter(r => r.status === 'deleted').length);
     let appendedCount = $derived(rows.filter(r => r.status === 'appended').length);
+    let staleCount = $derived(rows.filter(r => r.staleDays && r.staleDays > 0 && r.status === 'original').length);
 
-    /** Sorted rows for DataTable display */
-    let sortedRows = $derived(
-        [...rows].sort((a, b) => a.date.localeCompare(b.date))
-    );
+    /** Sorted and optionally filtered rows for DataTable display */
+    let sortedRows = $derived.by(() => {
+        let filtered = [...rows];
+        if (hideStale) {
+            filtered = filtered.filter(r => !(r.staleDays && r.staleDays > 0 && r.status === 'original'));
+        }
+        return filtered.sort((a, b) => a.date.localeCompare(b.date));
+    });
 
     // =========================================================================
     // DataTable Column Definitions
@@ -173,9 +183,11 @@
                         type: 'number',
                         cell: (r) => {
                             if (r.readonly) {
+                                const val = r.values[col.key];
+                                const display = val != null ? Number(val).toLocaleString(undefined, {maximumFractionDigits: 4}) : '—';
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                                    html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${display}</span>`,
                                 };
                             }
                             return {
@@ -227,6 +239,15 @@
                         cell: (r) => {
                             if (r.readonly) {
                                 const opt = options.find(o => o.value === r.values[col.key]);
+                                if (opt?.tooltip) {
+                                    const lang = typeof localStorage !== 'undefined' ? localStorage.getItem('librefolio-locale') ?? 'en' : 'en';
+                                    const prefix = lang !== 'en' ? `${lang}/` : '';
+                                    const docsUrl = opt.docsPath ? `/mkdocs/${prefix}${opt.docsPath}/` : '';
+                                    return {
+                                        type: 'html',
+                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${opt.tooltip}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${docsUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}</span>`,
+                                    };
+                                }
                                 const label = opt ? `${opt.emoji ? opt.emoji + ' ' : ''}${opt.label}` : String(r.values[col.key] ?? '—');
                                 return {
                                     type: 'html',
@@ -244,6 +265,34 @@
                         sortable: true,
                         filterable: true,
                         width: 180,
+                    });
+                } else if (col.type === 'currency') {
+                    cols.push({
+                        id: col.key,
+                        header: col.label,
+                        type: 'text',
+                        cell: (r) => {
+                            if (r.readonly) {
+                                return {
+                                    type: 'html',
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                                };
+                            }
+                            return {
+                                type: 'custom',
+                                component: CurrencySearchSelect,
+                                props: {
+                                    value: String(r.values[col.key] ?? ''),
+                                    compact: true,
+                                    placeholder: col.placeholder ?? 'USD',
+                                    onchange: (newValue: string) => handleCellEditByRowId(r.rowId, col.key, newValue),
+                                },
+                            };
+                        },
+                        getValue: (r) => String(r.values[col.key] ?? ''),
+                        sortable: true,
+                        filterable: true,
+                        width: 150,
                     });
                 }
             } else {
@@ -490,9 +539,19 @@
     // Public API
     // =========================================================================
 
-    /** Scroll to a specific date in the table */
+    /** Scroll to a specific date in the table (finds by rowId first, then by date field) */
     export function scrollToDate(date: string) {
-        dataTableRef?.navigateToRowId(date);
+        // Try direct rowId match first (works for prices where rowId = date)
+        const directMatch = rows.find(r => r.rowId === date);
+        if (directMatch) {
+            dataTableRef?.navigateToRowId(date);
+            return;
+        }
+        // Fallback: find first row with matching date (for events where rowId = numeric id)
+        const dateMatch = rows.find(r => r.date === date);
+        if (dateMatch) {
+            dataTableRef?.navigateToRowId(dateMatch.rowId);
+        }
     }
 </script>
 
@@ -524,8 +583,27 @@
             {/if}
         </div>
 
-        <!-- Right: Selection bar + Counters + Column visibility -->
+        <!-- Right: Selection bar + Counters + Stale toggle + Column visibility -->
         <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+            {#if hasStaleRows}
+                <div class="flex items-center gap-1.5" data-testid="data-editor-stale-toggle">
+                    <Tooltip text={$t('dataEditor.staleTooltip')} position="bottom" maxWidth="220px">
+                        <span class="text-[10px] text-amber-600 dark:text-amber-400 cursor-help">⚠️ {staleCount}</span>
+                    </Tooltip>
+                    <!-- Horizontal switch lever -->
+                    <button
+                            class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
+                                   {hideStale ? 'bg-amber-500 dark:bg-amber-600' : 'bg-gray-300 dark:bg-slate-600'}"
+                            onclick={() => hideStale = !hideStale}
+                            role="switch"
+                            aria-checked={hideStale}
+                            aria-label={hideStale ? `Show ${staleCount} stale rows` : `Hide ${staleCount} stale rows`}
+                    >
+                        <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform
+                                     {hideStale ? 'translate-x-4.5' : 'translate-x-0.5'}"></span>
+                    </button>
+                </div>
+            {/if}
             {#if modifiedCount > 0}
                 <span class="text-blue-600 dark:text-blue-400">{modifiedCount} modified</span>
             {/if}

@@ -8,6 +8,7 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
@@ -170,11 +171,11 @@ class YahooFinanceProvider(AssetSourceProvider):
             return cached
 
         try:
-            ticker = yf.Ticker(identifier)
-
-            # Use ticker.info (quoteSummary endpoint) — returns price + currency
-            # in a single lightweight call.  Does NOT call history() / chart API.
-            info = ticker.info
+            # IMPORTANT: yfinance uses the sync `requests` library internally.
+            # Calling it directly in an async def would block the uvicorn event
+            # loop and stall ALL concurrent responses (including StaticFiles).
+            # We offload to a thread via asyncio.to_thread().
+            info = await asyncio.to_thread(lambda: yf.Ticker(identifier).info)
 
             price = info.get("regularMarketPrice")
             if price is None:
@@ -255,12 +256,31 @@ class YahooFinanceProvider(AssetSourceProvider):
                 )
 
         try:
-            ticker = yf.Ticker(identifier)
+            # Offload ALL yfinance I/O to a thread so the event loop stays free.
+            _start = start_date.isoformat()
+            _end = (end_date + timedelta(days=1)).isoformat()
 
-            # Fetch history (end+1 because yfinance end is exclusive)
-            hist = ticker.history(
-                start=start_date.isoformat(), end=(end_date + timedelta(days=1)).isoformat()
-                )
+            def _sync_fetch_history():
+                t = yf.Ticker(identifier)
+                hist = t.history(start=_start, end=_end)
+                # Currency (separate API call)
+                cur = "USD"
+                try:
+                    cur = t.info.get("currency", "USD")
+                except Exception:
+                    pass
+                # Dividends & splits (may trigger additional requests)
+                try:
+                    divs = t.dividends
+                except Exception:
+                    divs = None
+                try:
+                    spls = t.splits
+                except Exception:
+                    spls = None
+                return hist, cur, divs, spls
+
+            hist, currency, dividends, splits = await asyncio.to_thread(_sync_fetch_history)
 
             if hist.empty:
                 raise AssetSourceError(
@@ -269,15 +289,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                     {"identifier": identifier, "start": str(start_date), "end": str(end_date)},
                     )
 
-            # Get currency
-            currency = "USD"
-            try:
-                info = ticker.info
-                currency = info.get("currency", "USD")
-            except Exception:
-                logger.warning(f"Could not get currency for {identifier}, using USD")
-
-            # Convert DataFrame to FAPricePoint list
+            # Convert DataFrame to FAPricePoint list (pure CPU, no I/O)
             prices = []
             for idx, row in hist.iterrows():
                 # yfinance returns DatetimeIndex with market timezone.
@@ -304,8 +316,7 @@ class YahooFinanceProvider(AssetSourceProvider):
             events: list[FAAssetEventPoint] = []
 
             try:
-                # Dividends: yfinance returns a Series(DatetimeIndex → float)
-                dividends = ticker.dividends
+                # Dividends: pre-fetched in _sync_fetch_history (Series or None)
                 if dividends is not None and not dividends.empty:
                     # Filter to requested date range
                     for idx, amount in dividends.items():
@@ -324,8 +335,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 logger.debug(f"Could not parse dividends for {identifier}: {e}")
 
             try:
-                # Splits: yfinance returns a Series(DatetimeIndex → float ratio)
-                splits = ticker.splits
+                # Splits: pre-fetched in _sync_fetch_history (Series or None)
                 if splits is not None and not splits.empty:
                     split_count = 0
                     for idx, ratio in splits.items():
@@ -396,11 +406,23 @@ class YahooFinanceProvider(AssetSourceProvider):
             return cached_results
 
         try:
-            # Use yfinance Search for real search functionality
-            search_result = yf.Search(query)
+            # Offload yf.Search and per-symbol currency lookups to a thread.
+            # _fetch_currency also calls yf.Ticker(symbol).fast_info (sync HTTP).
+            def _sync_search():
+                search_result = yf.Search(query)
+                raw_quotes = getattr(search_result, "quotes", []) or []
+                fetched = []
+                for quote in raw_quotes[:20]:
+                    if not quote.get("isYahooFinance", True):
+                        continue
+                    symbol = quote.get("symbol", "")
+                    currency = self._fetch_currency(symbol) if symbol else None
+                    fetched.append((quote, symbol, currency))
+                return fetched
+
+            fetched = await asyncio.to_thread(_sync_search)
 
             results = []
-            quotes = getattr(search_result, "quotes", []) or []
 
             # Same mapping as fetch_asset_metadata, for normalizing search results
             search_type_map = {
@@ -414,15 +436,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "index": "INDEX",
             }
 
-            for quote in quotes[:20]:  # Limit to top 20 results
-                # Skip non-Yahoo Finance results
-                if not quote.get("isYahooFinance", True):
-                    continue
-
-                symbol = quote.get("symbol", "")
-                # Fetch currency for this symbol (cached)
-                currency = self._fetch_currency(symbol) if symbol else None
-
+            for quote, symbol, currency in fetched:
                 # Normalize quoteType using the same map as fetch_asset_metadata
                 raw_type = (quote.get("quoteType", "Unknown") or "").lower()
                 normalized_type = search_type_map.get(raw_type, "OTHER")
@@ -497,8 +511,21 @@ class YahooFinanceProvider(AssetSourceProvider):
             return None
 
         try:
-            ticker = yf.Ticker(identifier)
-            info = ticker.info
+            # Offload all yfinance I/O to a thread (sync `requests` library).
+            def _sync_fetch_metadata():
+                t = yf.Ticker(identifier)
+                _info = t.info
+                # Also attempt ISIN lookup (may not be available for all markets)
+                _isin = None
+                try:
+                    isin_val = t.isin
+                    if isin_val and isin_val != "-" and len(isin_val) == 12:
+                        _isin = isin_val
+                except Exception:
+                    pass
+                return _info, _isin
+
+            info, identifier_isin = await asyncio.to_thread(_sync_fetch_metadata)
 
             if not info:
                 logger.warning(f"No info data returned from yfinance for {identifier}")
@@ -562,14 +589,7 @@ class YahooFinanceProvider(AssetSourceProvider):
             symbol = info.get("symbol")
             identifier_ticker = symbol if symbol else None
 
-            # Try to get ISIN (yfinance property — may not be available for all markets)
-            identifier_isin = None
-            try:
-                isin_val = ticker.isin
-                if isin_val and isin_val != "-" and len(isin_val) == 12:
-                    identifier_isin = isin_val
-            except Exception:
-                pass  # ISIN not available for this asset
+            # identifier_isin already fetched in _sync_fetch_metadata above
 
             # Build FAAssetPatchItem (asset_id will be filled by caller)
             patch_item = FAAssetPatchItem(

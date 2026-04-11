@@ -13,7 +13,7 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onMount, onDestroy} from 'svelte';
+    import {onMount} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
     import {BarChart3, Check, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
@@ -90,7 +90,6 @@
 
     /** Live prices from bulk current-price endpoint (asset_id → {value, direction}) */
     let livePriceMap = $state<Map<number, { value: number; direction: LivePriceDirection }>>(new Map());
-    let livePriceIntervalId: ReturnType<typeof setInterval> | null = null;
 
     // Delete dialog (single)
     let deleteDialogOpen = $state(false);
@@ -125,6 +124,9 @@
     })());
     let dateEnd = $state(new Date().toISOString().slice(0, 10));
     let activePreset: any = $state('3M');
+
+    /** True when the date range ends today (or later) → show live prices from providers */
+    let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
 
     // View mode
     let viewMode = $state<'grid' | 'list'>('grid');
@@ -223,13 +225,17 @@
         await loadAssets();
         // Load FX pair slugs for cross-domain signal selection in settings modal
         loadFxPairSlugs();
-        // Fire-and-forget: fetch live prices (non-blocking), start polling
-        fetchLivePrices();
-        livePriceIntervalId = setInterval(fetchLivePrices, 30_000);
     });
 
-    onDestroy(() => {
-        if (livePriceIntervalId) clearInterval(livePriceIntervalId);
+    // Live price polling — only active when dateEnd includes today
+    $effect(() => {
+        if (!isHeadToday || assets.length === 0) {
+            livePriceMap = new Map();
+            return;
+        }
+        fetchLivePrices();
+        const id = setInterval(fetchLivePrices, 30_000);
+        return () => clearInterval(id);
     });
 
     // ResizeObserver for adaptive filter bar layout
@@ -1049,7 +1055,7 @@
                         provider_code: asset.provider_code,
                         active: asset.active,
                     }}
-                        livePrice={livePriceMap.get(asset.id)?.value ?? null}
+                        livePrice={livePriceMap.get(asset.id)?.value ?? asset.lastPrice ?? null}
                         livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
                         deltaPercent={asset.deltaPercent}
                         deltaAbs={asset.deltaAbs}

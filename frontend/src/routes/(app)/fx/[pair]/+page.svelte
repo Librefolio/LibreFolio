@@ -68,8 +68,15 @@
 
     let chartData: FxDataPoint[] = $state([]);
     let loading = $state(true);
+    /** Stores either a raw message or an i18n key prefixed with `_i18n:` for reactive translation */
     let error: string | null = $state(null);
     let syncing = $state(false);
+
+    /** Reactively resolved error message — translates i18n keys when language changes */
+    let errorMessage = $derived.by(() => {
+        if (!error) return null;
+        return error.startsWith('_i18n:') ? $t(error.slice(6)) : error;
+    });
 
     // Confirm modal for swap while editing
     let showSwapConfirm = $state(false);
@@ -362,7 +369,7 @@
             } else if (e?.response?.status === 404) {
                 chartData = [];
                 store.invalidateRange(dateStart, dateEnd);
-                error = 'No rate data available for this range. Try syncing first or adjusting the date range.';
+                error = '_i18n:fxDetail.noData';
             } else {
                 console.error('Failed to load chart data:', e);
                 chartData = [];
@@ -716,7 +723,7 @@
     <!-- Error banner -->
     {#if error}
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
-            <span>⚠️</span> <span>{error}</span>
+            <span>⚠️</span> <span>{errorMessage}</span>
             <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => error = null}>{$t('common.close')}</button>
         </div>
     {/if}
@@ -967,6 +974,7 @@
                         externalViewMode={viewMode}
                         editMode={showDataEditor}
                         onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
+                        staleLabel={$t('chart.tooltip.stale')}
                 />
             </div>
         {:else}

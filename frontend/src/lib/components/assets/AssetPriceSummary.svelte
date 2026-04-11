@@ -16,7 +16,6 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/responsiveLayout.svelte';
-    import LiveTicker from '$lib/components/layout/LiveTicker.svelte';
 
     interface Props {
         /** Last (closing) price */
@@ -37,8 +36,6 @@
         layoutMode: LayoutMode;
         /** Callback to open FX pair add modal */
         onAddFxPair?: () => void;
-        /** Asset ID for LiveTicker */
-        assetId?: number | null;
     }
 
     let {
@@ -51,7 +48,6 @@
         fxPairSlug,
         layoutMode,
         onAddFxPair,
-        assetId = null,
     }: Props = $props();
 
     let showFxPairLink = $derived(
@@ -125,10 +121,5 @@
             </a>
         {/if}
     </div>
-
-    <!-- Live Price -->
-    {#if assetId != null}
-        <LiveTicker assetIds={[assetId]} maxItems={1} />
-    {/if}
 </div>
 
