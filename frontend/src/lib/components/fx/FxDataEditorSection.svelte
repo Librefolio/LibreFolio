@@ -19,6 +19,7 @@
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {toasts} from '$lib/stores/toastStore.svelte';
+    import FxDataImportModal from './FxDataImportModal.svelte';
 
     // =========================================================================
     // Props
@@ -86,6 +87,7 @@
 
     function chartDataToRows(data: FxDataPoint[]): DataRow[] {
         return data.map(dp => ({
+            rowId: dp.date,
             date: dp.date,
             status: 'original' as const,
             originalStatus: 'original' as const,
@@ -295,10 +297,29 @@
             bind:rows
             bind:this={dataEditor}
             columns={fxColumns}
-            displayBase={base}
-            displayQuote={quote}
             onchange={handleDataChange}
-    />
+    >
+        {#snippet importModal({open, setOpen, onimport})}
+            <FxDataImportModal
+                    {open}
+                    displayBase={base}
+                    displayQuote={quote}
+                    onimport={(rows, direction) => {
+                        // Handle inversion if needed
+                        const needsInversion = direction.from === quote && direction.to === base;
+                        const mapped = rows.map(r => ({
+                            ...r,
+                            values: {
+                                ...r.values,
+                                rate: needsInversion ? 1 / Number(r.values.rate) : Number(r.values.rate),
+                            },
+                        }));
+                        onimport(mapped);
+                    }}
+                    onclose={() => setOpen(false)}
+            />
+        {/snippet}
+    </DataEditor>
 
     <!-- Save / Cancel bar -->
     <div class="flex items-center justify-end gap-2 px-1">

@@ -17,7 +17,7 @@ export interface ColumnDef {
     /** Display label for column header */
     label: string;
     /** Data type for input rendering and validation */
-    type: 'date' | 'number' | 'string';
+    type: 'date' | 'number' | 'string' | 'enum';
     /** Whether the user can edit this column */
     editable: boolean;
     /** Whether a value is required (non-empty) */
@@ -30,11 +30,15 @@ export interface ColumnDef {
     max?: number;
     /** Placeholder text for empty cells */
     placeholder?: string;
+    /** Options for type 'enum' — value shown in select, label for display, emoji prefix */
+    enumOptions?: { value: string; label: string; emoji?: string }[];
 }
 
 /** A single row in the DataEditor */
 export interface DataRow {
-    /** ISO date YYYY-MM-DD — always present, serves as row key */
+    /** Unique row identifier (prices: date, events: String(id) or UUID) */
+    rowId: string;
+    /** ISO date YYYY-MM-DD — always present */
     date: string;
     /** Current editing status */
     status: RowStatus;
@@ -44,6 +48,8 @@ export interface DataRow {
     values: Record<string, unknown>;
     /** Whether this row is selected for bulk operations */
     selected: boolean;
+    /** Whether this row is read-only (e.g., auto-generated events) — can still be deleted */
+    readonly?: boolean;
     /** Original values for revert (only set when status transitions from 'original') */
     _originalValues?: Record<string, unknown>;
     /** Number of stale days (backward-fill gap) — 0 or undefined means fresh data */

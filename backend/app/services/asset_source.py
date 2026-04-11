@@ -2174,6 +2174,156 @@ class AssetSourceManager:
         results = await asyncio.gather(*tasks)
         return list(results)
 
+    # ========================================================================
+    # EVENT CRUD — Manual event management
+    # ========================================================================
+
+    @staticmethod
+    async def bulk_upsert_events_manual(
+        data: list, session: AsyncSession
+    ) -> dict:
+        """
+        Bulk upsert manual events (provider_assignment_id = NULL).
+
+        Uses the existing _upsert_asset_events() method with provider_assignment_id=None.
+
+        Args:
+            data: List of FAEventUpsert objects (asset_id + events[])
+            session: Database session
+
+        Returns:
+            dict with results list and success_count
+        """
+        results = []
+        total_count = 0
+
+        for item in data:
+            asset_id = item.asset_id
+
+            # Verify asset exists
+            asset_stmt = select(Asset).where(Asset.id == asset_id)
+            asset_res = await session.execute(asset_stmt)
+            asset = asset_res.scalar_one_or_none()
+            if not asset:
+                results.append({
+                    "asset_id": asset_id,
+                    "count": 0,
+                    "message": f"Asset {asset_id} not found",
+                })
+                continue
+
+            # Determine default currency from asset or 'USD'
+            default_currency = asset.currency or "USD"
+
+            count = await AssetSourceManager._upsert_asset_events(
+                session=session,
+                asset_id=asset_id,
+                events=item.events,
+                provider_assignment_id=None,  # manual events
+                default_currency=default_currency,
+            )
+
+            total_count += count
+            results.append({
+                "asset_id": asset_id,
+                "count": count,
+                "message": f"Upserted {count} manual events",
+            })
+
+        return {"results": results, "success_count": sum(1 for r in results if r["count"] > 0)}
+
+    @staticmethod
+    async def query_events_bulk(
+        requests: list, session: AsyncSession
+    ) -> list:
+        """
+        Bulk query events for multiple assets, returning FAAssetEventPointOut with id + is_auto.
+
+        Args:
+            requests: List of FAEventQueryItem (asset_id + date_range)
+            session: Database session
+
+        Returns:
+            List of FAEventQueryResult
+        """
+        from backend.app.schemas.prices import FAAssetEventPointOut, FAEventQueryResult
+
+        results = []
+
+        for req in requests:
+            asset_id = req.asset_id
+            start = req.date_range.start
+            end = req.date_range.end or start
+
+            stmt = (
+                select(AssetEvent)
+                .where(
+                    and_(
+                        AssetEvent.asset_id == asset_id,
+                        AssetEvent.date >= start,
+                        AssetEvent.date <= end,
+                    )
+                )
+                .order_by(AssetEvent.date)
+            )
+            res = await session.execute(stmt)
+            db_events = res.scalars().all()
+
+            event_points = []
+            for ev in db_events:
+                event_points.append(FAAssetEventPointOut(
+                    date=ev.date,
+                    type=ev.type.value if hasattr(ev.type, 'value') else str(ev.type),
+                    value=Currency(code=ev.currency, amount=ev.value),
+                    notes=ev.notes,
+                    id=ev.id,
+                    is_auto=ev.provider_assignment_id is not None,
+                ))
+
+            results.append(FAEventQueryResult(
+                asset_id=asset_id,
+                events=event_points,
+            ))
+
+        return results
+
+    @staticmethod
+    async def delete_event_by_id(
+        event_id: int, session: AsyncSession
+    ) -> dict:
+        """
+        Delete a single event by its primary key (works for both auto and manual events).
+
+        Args:
+            event_id: AssetEvent.id
+            session: Database session
+
+        Returns:
+            dict with event_id, success, deleted_count, message
+        """
+        stmt = select(AssetEvent).where(AssetEvent.id == event_id)
+        res = await session.execute(stmt)
+        event = res.scalar_one_or_none()
+
+        if not event:
+            return {
+                "event_id": event_id,
+                "success": False,
+                "deleted_count": 0,
+                "message": f"Event {event_id} not found",
+            }
+
+        del_stmt = delete(AssetEvent).where(AssetEvent.id == event_id)
+        await session.execute(del_stmt)
+        await session.commit()
+
+        return {
+            "event_id": event_id,
+            "success": True,
+            "deleted_count": 1,
+            "message": f"Deleted event {event_id}",
+        }
+
 
 # ============================================================================
 # ASSET CRUD SERVICE
