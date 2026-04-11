@@ -1587,6 +1587,18 @@ def front_asset_modal(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("assets/asset-modal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
 
+def front_asset_data_editor(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run Asset data editor E2E tests."""
+    print_section("Frontend Asset Data Editor Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-data-editor.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
     """Run all Asset E2E tests."""
     return _run_test_suite(
@@ -1595,6 +1607,7 @@ def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = Fals
             ("Asset List Page", lambda: front_asset_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
             ("Asset Detail Page", lambda: front_asset_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
             ("Asset Modal", lambda: front_asset_modal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("Asset Data Editor", lambda: front_asset_data_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
         ],
         verbose=verbose,
         header_msg="All Asset Tests (E2E)",
@@ -2710,6 +2723,14 @@ Options: --ui, --headed, --debug
             "prereq": "Login working, DB populated",
             "tests": "assets/asset-modal.spec.ts",
             },
+        "asset-data-editor": {
+            "func": front_asset_data_editor,
+            "test_names": True,
+            "name": "Asset Data Editor",
+            "desc": "Prices/Events tabs, CSV import, save/cancel",
+            "prereq": "Login working, DB populated",
+            "tests": "assets/asset-data-editor.spec.ts",
+            },
         "all": {
             "func": front_asset_all,
             "test_names": False,
@@ -2801,7 +2822,7 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
     # Handle --list for any category
     list_tests = kwargs.get("list_tests", False)
     if list_tests:
-        if category in ("front-utility", "front-user", "front-fx"):
+        if category in ("front-utility", "front-user", "front-fx", "front-asset"):
             return _list_front_tests(category, action)
         elif category in BACKEND_TEST_PATHS:
             return _list_pytest_tests(category, action)
@@ -2810,7 +2831,7 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
             return True
 
     # Special case for front category (has ui, headed, debug flags + test_names)
-    if category in ("front-utility", "front-user", "front-fx"):
+    if category in ("front-utility", "front-user", "front-fx", "front-asset"):
 
         ui = kwargs.get("ui", False)
         headed = kwargs.get("headed", False)
@@ -2984,7 +3005,7 @@ def create_parser() -> argparse.ArgumentParser:
                 "default": False,
                 }
                 ))
-        elif category in ("front-utility", "front-user", "front-fx"):
+        elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
             extra_args.extend([
                 (
                     "--ui", {
@@ -3127,7 +3148,7 @@ def register_subparser(parent_subparsers):
                 "default": False,
                 }
                 ))
-        elif category in ("front-utility", "front-user", "front-fx"):
+        elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
             extra_args.extend([
                 (
                     "--ui", {
@@ -3218,7 +3239,7 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
                 kwargs['clean'] = getattr(args, 'clean', False)
                 kwargs['with_static'] = getattr(args, 'with_static', False)
                 kwargs['with_reports'] = getattr(args, 'with_reports', False)
-            elif category in ("front-utility", "front-user", "front-fx"):
+            elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
                 kwargs['ui'] = getattr(args, 'ui', False)
                 kwargs['headed'] = getattr(args, 'headed', False)
                 kwargs['debug'] = getattr(args, 'debug', False)

@@ -17,7 +17,7 @@ export interface ColumnDef {
     /** Display label for column header */
     label: string;
     /** Data type for input rendering and validation */
-    type: 'date' | 'number' | 'string' | 'enum';
+    type: 'date' | 'number' | 'string' | 'enum' | 'currency';
     /** Whether the user can edit this column */
     editable: boolean;
     /** Whether a value is required (non-empty) */
@@ -31,7 +31,7 @@ export interface ColumnDef {
     /** Placeholder text for empty cells */
     placeholder?: string;
     /** Options for type 'enum' — value shown in select, label for display, emoji prefix */
-    enumOptions?: { value: string; label: string; emoji?: string }[];
+    enumOptions?: { value: string; label: string; emoji?: string; tooltip?: string; docsPath?: string }[];
 }
 
 /** A single row in the DataEditor */

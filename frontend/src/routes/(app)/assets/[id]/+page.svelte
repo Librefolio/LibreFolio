@@ -20,9 +20,10 @@
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/navigationStore';
     import {
-        ArrowLeft, ChevronDown, Construction, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
+        ArrowLeft, ChevronDown, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
         Ruler, Settings, TrendingUp, X
     } from 'lucide-svelte';
+    import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
@@ -53,6 +54,7 @@
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {parseDateRangeFromUrl} from '$lib/utils/dateRangeFromUrl';
+    import {fetchCurrentPrices} from '$lib/services/livePriceService';
 
     // =========================================================================
     // Page data
@@ -75,8 +77,15 @@
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
 
     let loading = $state(true);
+    /** Stores either a raw message or an i18n key prefixed with `_i18n:` for reactive translation */
     let error: string | null = $state(null);
     let syncing = $state(false);
+
+    /** Reactively resolved error message — translates i18n keys when language changes */
+    let errorMessage = $derived.by(() => {
+        if (!error) return null;
+        return error.startsWith('_i18n:') ? $t(error.slice(6)) : error;
+    });
 
     // Date range (from query params if present, otherwise default 3M)
     const _initRange = parseDateRangeFromUrl($page.url.searchParams);
@@ -110,6 +119,12 @@
     // Editor panel state save/restore
     let savedPanelStates: { aesthetics: boolean; measures: boolean; signals: boolean } | null = $state(null);
 
+    // Data editor state
+    let savingEdit = $state(false);
+    let editorDirtyCount = $state(0);
+    let pendingPreviewSignal: RenderedSignal | null = $state(null);
+    let assetDataEditorRef: AssetDataEditorSection | undefined = $state(undefined);
+
     let overlayDataVersion = $state(0);
     let editModalOpen = $state(false);
 
@@ -131,9 +146,15 @@
     // FX pair add modal (opened from FX warning)
     let showFxPairAddModal = $state(false);
 
+    // Live current price (from provider, only when dateEnd = today)
+    let currentLivePrice = $state<number | null>(null);
+
     // =========================================================================
     // Derived
     // =========================================================================
+
+    /** True when the chart end date is today (or later) → show live price from provider */
+    let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
 
     let lineData: LineDataPoint[] = $derived(chartData.map((p: any) => ({
         date: p.date,
@@ -144,26 +165,26 @@
     let isScheduledInvestment = $derived(providerAssignment?.provider_code === 'scheduled_investment');
     let isManualOnly = $derived(!providerAssignment);
 
+    /** Effective last price: live from provider when head = today, otherwise last chart close */
     let lastPrice = $derived.by(() => {
+        if (isHeadToday && currentLivePrice != null) return currentLivePrice;
         if (chartData.length === 0) return null;
         const last = chartData[chartData.length - 1];
         return last?.close != null ? Number(last.close) : null;
     });
 
     let deltaPercent = $derived.by(() => {
-        if (chartData.length < 2) return null;
+        if (chartData.length < 2 || lastPrice == null) return null;
         const first = Number(chartData[0].close ?? 0);
-        const last = Number(chartData[chartData.length - 1].close ?? 0);
         if (first === 0) return null;
-        return ((last - first) / first) * 100;
+        return ((lastPrice - first) / first) * 100;
     });
 
     let deltaAbs = $derived.by(() => {
-        if (chartData.length < 2) return null;
+        if (chartData.length < 2 || lastPrice == null) return null;
         const first = Number(chartData[0].close ?? 0);
-        const last = Number(chartData[chartData.length - 1].close ?? 0);
         if (first === 0) return null;
-        return last - first;
+        return lastPrice - first;
     });
 
     let currencyFlag = $derived.by(() => {
@@ -234,6 +255,7 @@
     let allOverlaySignals: RenderedSignal[] = $derived([
         ...overlaySignals,
         ...measureSignals,
+        ...(pendingPreviewSignal ? [pendingPreviewSignal] : []),
     ]);
 
     // Signal label info for MeasurePanel and PriceChartFull tooltip
@@ -357,6 +379,30 @@
         return () => layout.detach();
     });
 
+    // Live current price polling — only when chart head date includes today
+    $effect(() => {
+        const id = assetInfo?.id;
+        if (!isHeadToday || !id) {
+            currentLivePrice = null;
+            return;
+        }
+        // Fetch immediately, then poll every 30s
+        _fetchLivePrice(id);
+        const timer = setInterval(() => _fetchLivePrice(id), 30_000);
+        return () => clearInterval(timer);
+    });
+
+    async function _fetchLivePrice(assetId: number) {
+        try {
+            const results = await fetchCurrentPrices([assetId]);
+            if (results.length > 0 && results[0].value != null) {
+                currentLivePrice = results[0].value;
+            }
+        } catch (e: any) {
+            // Non-blocking: keep last known value or chart fallback
+        }
+    }
+
 
 
     // =========================================================================
@@ -408,6 +454,10 @@
             } else {
                 chartData = [];
                 events = [];
+            }
+            // Show "no data" banner when query succeeded but returned empty prices
+            if (chartData.length === 0 && !error) {
+                error = '_i18n:assetDetail.noData';
             }
         } catch (e: any) {
             console.error('Failed to load chart data:', e);
@@ -707,6 +757,10 @@
                             {/if}
                             {getAssetProviderName(assetInfo.provider_code)}
                         </span>
+                    {:else}
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                            ✏️ Manual
+                        </span>
                     {/if}
 
                     {#if userUrl}
@@ -730,7 +784,7 @@
     <!-- Error banner -->
     {#if error}
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
-            <span>⚠️</span> <span>{error}</span>
+            <span>⚠️</span> <span>{errorMessage}</span>
             <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => error = null}>{$t('common.close')}</button>
         </div>
     {/if}
@@ -776,7 +830,6 @@
                         {fxPairSlug}
                         layoutMode={layout.layoutMode}
                         onAddFxPair={() => showFxPairAddModal = true}
-                        assetId={assetInfo.id}
                 />
             {/if}
         </div>
@@ -924,6 +977,7 @@
                             onclick={() => {
                             if (showDataEditor) {
                                 showDataEditor = false;
+                                pendingPreviewSignal = null;
                                 if (savedPanelStates) { showAesthetics = savedPanelStates.aesthetics; showMeasures = savedPanelStates.measures; showSignals = savedPanelStates.signals; savedPanelStates = null; }
                             } else {
                                 savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
@@ -969,6 +1023,17 @@
                         hideToolbar={true}
                         externalViewMode={viewMode}
                         editMode={showDataEditor}
+                        staleLabel={$t('chart.tooltip.stale')}
+                        onDblClick={(date) => {
+                            if (showDataEditor && assetDataEditorRef) {
+                                assetDataEditorRef.scrollToDate(date, 'prices');
+                            }
+                        }}
+                        onEventDblClick={(date) => {
+                            if (showDataEditor && assetDataEditorRef) {
+                                assetDataEditorRef.scrollToDate(date, 'events');
+                            }
+                        }}
                 />
             </div>
         {:else}
@@ -976,7 +1041,19 @@
                 <div class="text-center">
                     {#if isManualOnly}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataManual')}</p>
-                        <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => { editDataForModal = buildEditData(); editModalOpen = true; }}>{$t('common.edit')}</button>
+                        <div class="flex items-center gap-2 justify-center">
+                            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                                    onclick={() => {
+                                        savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
+                                        showAesthetics = false; showMeasures = false; showSignals = false; showDataEditor = true;
+                                    }}>
+                                <Pencil class="inline mr-1" size={14}/> {$t('fxDetail.insertManually')}
+                            </button>
+                            <button class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                    onclick={() => { editDataForModal = buildEditData(); editModalOpen = true; }}>
+                                {$t('common.edit')}
+                            </button>
+                        </div>
                     {:else if isScheduledInvestment}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataScheduled')}</p>
                         <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => { editDataForModal = buildEditData(); editModalOpen = true; }}>{$t('common.edit')}</button>
@@ -999,12 +1076,31 @@
                     <Pencil size={15}/> {$t('assetDetail.editData')}
                 </span>
                 <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                        onclick={() => { showDataEditor = false; if (savedPanelStates) { showAesthetics = savedPanelStates.aesthetics; showMeasures = savedPanelStates.measures; showSignals = savedPanelStates.signals; savedPanelStates = null; } }}
+                        onclick={() => { showDataEditor = false; pendingPreviewSignal = null; if (savedPanelStates) { showAesthetics = savedPanelStates.aesthetics; showMeasures = savedPanelStates.measures; showSignals = savedPanelStates.signals; savedPanelStates = null; } }}
                         title={$t('assetDetail.closeEditor')}>✕</button>
             </div>
-            <div class="px-4 py-8 text-center">
-                <Construction class="text-amber-400 mx-auto mb-2" size={32}/>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{$t('assetDetail.editDataComingSoon')}</p>
+            <div class="px-4 py-4">
+                <AssetDataEditorSection
+                        bind:this={assetDataEditorRef}
+                        assetId={data.assetId}
+                        {chartData}
+                        {events}
+                        bind:saving={savingEdit}
+                        bind:dirtyCount={editorDirtyCount}
+                        onsave={async (expandedRange) => {
+                            showDataEditor = false;
+                            pendingPreviewSignal = null;
+                            if (savedPanelStates) { showAesthetics = savedPanelStates.aesthetics; showMeasures = savedPanelStates.measures; showSignals = savedPanelStates.signals; savedPanelStates = null; }
+                            if (expandedRange) { dateStart = expandedRange.start; dateEnd = expandedRange.end; }
+                            await handleRefresh();
+                        }}
+                        oncancel={() => {
+                            showDataEditor = false;
+                            pendingPreviewSignal = null;
+                            if (savedPanelStates) { showAesthetics = savedPanelStates.aesthetics; showMeasures = savedPanelStates.measures; showSignals = savedPanelStates.signals; savedPanelStates = null; }
+                        }}
+                        onpendingchange={(sig) => pendingPreviewSignal = sig}
+                />
             </div>
         </div>
     {/if}
