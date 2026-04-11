@@ -46,6 +46,8 @@
             <!-- FAQ -->
             <a
                     href={mkdocsUrl('faq/')}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
                 <Book size={18} class="text-gray-500"/>
@@ -55,6 +57,8 @@
             <!-- Documentation -->
             <a
                     href={mkdocsUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
                 <MessageCircle size={18} class="text-gray-500"/>

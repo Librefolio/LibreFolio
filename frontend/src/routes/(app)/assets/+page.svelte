@@ -998,14 +998,11 @@
 
     <!-- Content -->
     {#if loading}
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {#each Array(3) as _}
-                <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-4 animate-pulse">
-                    <div class="h-5 bg-gray-200 dark:bg-slate-700 rounded w-32 mb-3"></div>
-                    <div class="h-20 bg-gray-100 dark:bg-slate-700 rounded mb-3"></div>
-                    <div class="h-4 bg-gray-100 dark:bg-slate-700 rounded w-20"></div>
-                </div>
-            {/each}
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
+                <RefreshCw class="text-libre-green animate-spin" size={32}/>
+            </div>
+            <p class="text-gray-500 dark:text-gray-400">{$t('common.loading')}</p>
         </div>
     {:else if error}
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">

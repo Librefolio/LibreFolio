@@ -151,11 +151,11 @@
     <!-- Content -->
     {#if loading && brokers.length === 0}
         <!-- Loading state -->
-        <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
                 <RefreshCw class="text-libre-green animate-spin" size={32}/>
             </div>
-            <p class="text-gray-500">{$_('common.loading')}</p>
+            <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
         </div>
     {:else if error}
         <!-- Error state -->
