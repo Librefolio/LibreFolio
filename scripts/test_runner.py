@@ -936,6 +936,21 @@ def api_assets_metadata(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Assets Metadata API tests", verbose=verbose)
 
 
+def api_assets_events(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run Assets Events API endpoint tests.
+    """
+    print_section("Assets Events API Endpoint Tests")
+    print_info("Testing REST API endpoints for asset event management")
+    print_info("Tests: POST /assets/events (bulk upsert manual)")
+    print_info("Tests: DELETE /assets/events/{id} (delete by PK)")
+    print_info("Tests: POST /assets/events/query (bulk query)")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_events.py", test_names)
+    return run_command(cmd, "Assets Events API tests", verbose=verbose)
+
+
 def api_assets_crud(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Assets CRUD API endpoint tests.
@@ -1461,6 +1476,18 @@ def front_fx_editor(verbose: bool = False, ui: bool = False, headed: bool = Fals
     if not _ensure_test_users():
         return False
     return _run_playwright("fx/fx-data-editor.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_fx_csv_import(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run FX CSV import modal E2E tests."""
+    print_section("Frontend FX CSV Import Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-csv-import.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
 
 def front_fx_sync(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
@@ -2338,6 +2365,14 @@ These tests verify REST API endpoints:
             "prereq": "Database created",
             "tests": "Provider assignment, validation",
             },
+        "assets-events": {
+            "func": api_assets_events,
+            "test_names": True,
+            "name": "Assets Events API",
+            "desc": "Test asset event CRUD endpoints",
+            "prereq": "Database created",
+            "tests": "POST /events, DELETE /events/{id}, POST /events/query",
+            },
         "utilities": {
             "func": api_utilities,
             "test_names": True,
@@ -2597,6 +2632,14 @@ Options: --ui, --headed, --debug
             "desc": "Data editor table, edit, CSV import",
             "prereq": "Login working, DB populated",
             "tests": "fx/fx-data-editor.spec.ts",
+            },
+        "fx-csv-import": {
+            "func": front_fx_csv_import,
+            "test_names": True,
+            "name": "FX CSV Import",
+            "desc": "CSV import modal, swap direction, validation",
+            "prereq": "Login working, DB populated",
+            "tests": "fx/fx-csv-import.spec.ts",
             },
         "fx-sync": {
             "func": front_fx_sync,

@@ -1,7 +1,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {browser} from '$app/environment';
-    import {afterNavigate, goto} from '$app/navigation';
+    import {afterNavigate, goto, preloadCode} from '$app/navigation';
     import {i18nLoading, initI18n} from '$lib/i18n';
     import {trackNavigation} from '$lib/stores/navigationStore';
     import {currentLanguage} from '$lib/stores/language';
@@ -68,6 +68,13 @@
                         userSettings.load(),
                         globalSettings.load()
                     ]);
+
+                    // Preload JS for common routes in background so navigation
+                    // is instant — only code is prefetched, data is still lazy.
+                    Promise.all([
+                        '/dashboard', '/fx', '/assets', '/brokers',
+                        '/transactions', '/settings', '/files',
+                    ].map(r => preloadCode(r).catch(() => {}))).catch(() => {});
                 }
             } catch (error) {
                 debug.error('AppLayout', 'Auth check failed:', error);

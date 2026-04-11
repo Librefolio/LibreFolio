@@ -14,11 +14,10 @@
 -->
 <script lang="ts">
     import {tick} from 'svelte';
+    import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {Plus, Trash2, Undo2, Upload} from 'lucide-svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
-    import type {ImportDirection} from './DataImportModal.svelte';
-    import DataImportModal from './DataImportModal.svelte';
     import type {ColumnDef, DataRow} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -36,10 +35,8 @@
         rows?: DataRow[];
         /** Read-only mode */
         readonly?: boolean;
-        /** Display base currency (follows page direction) */
-        displayBase?: string;
-        /** Display quote currency (follows page direction) */
-        displayQuote?: string;
+        /** Snippet that renders the import modal. Receives {open, onimport} props via callback. */
+        importModal?: Snippet<[{ open: boolean; setOpen: (v: boolean) => void; onimport: (rows: ParsedRow[]) => void }]>;
         /** Emits only dirty rows (status !== 'original') */
         onchange?: (dirtyRows: DataRow[]) => void;
     }
@@ -48,8 +45,7 @@
         columns,
         rows = $bindable([]),
         readonly: isReadonly = false,
-        displayBase = '',
-        displayQuote = '',
+        importModal,
         onchange,
     }: Props = $props();
 
@@ -170,24 +166,86 @@
         // Add data columns (e.g., 'rate')
         for (const col of columns) {
             if (col.editable && !isReadonly) {
-                cols.push({
-                    id: col.key,
-                    header: col.label,
-                    type: 'number',
-                    cell: (r) => ({
-                        type: 'editable-number',
-                        value: r.values[col.key] !== undefined && r.values[col.key] !== null ? Number(r.values[col.key]) : null,
-                        step: col.step ?? 0.0001,
-                        min: col.min,
-                        max: col.max,
-                        placeholder: col.placeholder ?? '',
-                        onchange: (newValue) => handleCellEditByDate(r.date, col.key, newValue),
-                    }),
-                    getValue: (r) => Number(r.values[col.key] ?? 0),
-                    sortable: true,
-                    filterable: true,
-                    width: 140,
-                });
+                if (col.type === 'number') {
+                    cols.push({
+                        id: col.key,
+                        header: col.label,
+                        type: 'number',
+                        cell: (r) => {
+                            if (r.readonly) {
+                                return {
+                                    type: 'html',
+                                    html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                                };
+                            }
+                            return {
+                                type: 'editable-number',
+                                value: r.values[col.key] !== undefined && r.values[col.key] !== null ? Number(r.values[col.key]) : null,
+                                step: col.step ?? 0.0001,
+                                min: col.min,
+                                max: col.max,
+                                placeholder: col.placeholder ?? '',
+                                onchange: (newValue) => handleCellEditByRowId(r.rowId, col.key, newValue),
+                            };
+                        },
+                        getValue: (r) => Number(r.values[col.key] ?? 0),
+                        sortable: true,
+                        filterable: true,
+                        width: 140,
+                    });
+                } else if (col.type === 'string') {
+                    cols.push({
+                        id: col.key,
+                        header: col.label,
+                        type: 'text',
+                        cell: (r) => {
+                            if (r.readonly) {
+                                return {
+                                    type: 'html',
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                                };
+                            }
+                            return {
+                                type: 'editable-text',
+                                value: String(r.values[col.key] ?? ''),
+                                placeholder: col.placeholder ?? '',
+                                onchange: (newValue) => handleCellEditByRowId(r.rowId, col.key, newValue),
+                            };
+                        },
+                        getValue: (r) => String(r.values[col.key] ?? ''),
+                        sortable: true,
+                        filterable: true,
+                        width: 140,
+                    });
+                } else if (col.type === 'enum' && col.enumOptions) {
+                    const options = col.enumOptions;
+                    cols.push({
+                        id: col.key,
+                        header: col.label,
+                        type: 'enum',
+                        enumOptions: options.map(o => ({value: o.value, label: `${o.emoji ? o.emoji + ' ' : ''}${o.label}`})),
+                        cell: (r) => {
+                            if (r.readonly) {
+                                const opt = options.find(o => o.value === r.values[col.key]);
+                                const label = opt ? `${opt.emoji ? opt.emoji + ' ' : ''}${opt.label}` : String(r.values[col.key] ?? '—');
+                                return {
+                                    type: 'html',
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${label}</span>`,
+                                };
+                            }
+                            return {
+                                type: 'editable-select',
+                                value: String(r.values[col.key] ?? ''),
+                                options: options.map(o => ({value: o.value, label: `${o.emoji ? o.emoji + ' ' : ''}${o.label}`})),
+                                onchange: (newValue) => handleCellEditByRowId(r.rowId, col.key, newValue),
+                            };
+                        },
+                        getValue: (r) => String(r.values[col.key] ?? ''),
+                        sortable: true,
+                        filterable: true,
+                        width: 180,
+                    });
+                }
             } else {
                 cols.push({
                     id: col.key,
@@ -240,7 +298,7 @@
                 icon: Trash2,
                 label: 'Delete',
                 variant: 'danger' as const,
-                onClick: (row) => handleStatusChangeByDate(row.date, 'deleted'),
+                onClick: (row) => handleStatusChangeByRowId(row.rowId, 'deleted'),
                 visible: (row) => row.status !== 'deleted',
             },
             {
@@ -248,7 +306,7 @@
                 icon: Undo2,
                 label: 'Revert',
                 variant: 'default' as const,
-                onClick: (row) => handleStatusChangeByDate(row.date, 'revert'),
+                onClick: (row) => handleStatusChangeByRowId(row.rowId, 'revert'),
                 visible: (row) => row.status === 'deleted' || row.status === 'edited' || row.status === 'appended',
             },
         ];
@@ -261,20 +319,21 @@
     /** Change the date of an appended row (via SingleDatePicker) */
     function handleDateChange(oldDate: string, newDate: string) {
         if (oldDate === newDate) return;
-        // Prevent duplicate dates
         if (rows.some(r => r.date === newDate && r.date !== oldDate)) return;
         const row = rows.find(r => r.date === oldDate && r.status === 'appended');
         if (!row) return;
         row.date = newDate;
+        row.rowId = newDate; // keep rowId synced for price rows
         rows = [...rows];
         emitDirty();
     }
 
-    function handleCellEditByDate(date: string, colKey: string, newValue: unknown) {
-        const rowIdx = rows.findIndex(r => r.date === date);
+    function handleCellEditByRowId(rowId: string, colKey: string, newValue: unknown) {
+        const rowIdx = rows.findIndex(r => r.rowId === rowId);
         if (rowIdx < 0 || isReadonly) return;
 
         const row = rows[rowIdx];
+        if (row.readonly) return; // readonly rows cannot be edited
         const oldValues = {...row.values};
         row.values[colKey] = newValue;
 
@@ -294,8 +353,8 @@
         emitDirty();
     }
 
-    function handleStatusChangeByDate(date: string, newStatus: string) {
-        const rowIdx = rows.findIndex(r => r.date === date);
+    function handleStatusChangeByRowId(rowId: string, newStatus: string) {
+        const rowIdx = rows.findIndex(r => r.rowId === rowId);
         if (rowIdx < 0 || isReadonly) return;
 
         const row = rows[rowIdx];
@@ -320,7 +379,6 @@
     }
 
     function handleAddRow() {
-        // Calculate date: 1 day after the latest date in the dataset
         const existingDates = new Set(rows.map(r => r.date));
         const todayStr = new Date().toISOString().slice(0, 10);
         let newDate: string;
@@ -330,16 +388,13 @@
             const d = new Date(lastDate + 'T00:00:00Z');
             d.setUTCDate(d.getUTCDate() + 1);
             newDate = d.toISOString().slice(0, 10);
-            // Skip over existing dates
             while (existingDates.has(newDate)) {
                 const d2 = new Date(newDate + 'T00:00:00Z');
                 d2.setUTCDate(d2.getUTCDate() + 1);
                 newDate = d2.toISOString().slice(0, 10);
             }
-            // Cap to today: future dates cause sync errors ("End date cannot be in the future")
             if (newDate > todayStr) {
                 newDate = todayStr;
-                // If today is already occupied, search backwards for first free date
                 while (existingDates.has(newDate)) {
                     const d3 = new Date(newDate + 'T00:00:00Z');
                     d3.setUTCDate(d3.getUTCDate() - 1);
@@ -350,6 +405,7 @@
             newDate = todayStr;
         }
         const newRow: DataRow = {
+            rowId: newDate,
             date: newDate,
             status: 'appended',
             originalStatus: 'appended',
@@ -360,7 +416,7 @@
         emitDirty();
         // Navigate to the page containing the new row + scroll into view
         tick().then(() => {
-            dataTableRef?.navigateToRowId(newRow.date);
+            dataTableRef?.navigateToRowId(newRow.rowId);
         });
     }
 
@@ -369,8 +425,8 @@
     // =========================================================================
 
     function handleBulkDelete(selectedIds: string[]) {
-        for (const date of selectedIds) {
-            const row = rows.find(r => r.date === date);
+        for (const rowId of selectedIds) {
+            const row = rows.find(r => r.rowId === rowId);
             if (row && row.status !== 'deleted') {
                 row.status = 'deleted';
             }
@@ -383,34 +439,37 @@
     // Import
     // =========================================================================
 
-    function handleImport(importedRows: ParsedRow[], direction: ImportDirection) {
-        const firstCol = columns[0];
-
-        // Determine if rates need inversion:
-        // If the import direction differs from the display page direction, invert rates (1/value)
-        const needsInversion = displayBase && displayQuote &&
-            direction.from === displayQuote && direction.to === displayBase;
-
+    function handleImport(importedRows: ParsedRow[]) {
         for (const pr of importedRows) {
-            const rateValue = needsInversion ? 1 / pr.value : pr.value;
             const existingIdx = rows.findIndex(r => r.date === pr.date);
             if (existingIdx >= 0) {
                 const existing = rows[existingIdx];
+                if (existing.readonly) continue; // skip readonly rows
                 if (existing.originalStatus === 'original') {
                     if (!existing._originalValues) {
                         existing._originalValues = {...existing.values};
                     }
-                    existing.values[firstCol?.key ?? 'rate'] = rateValue;
+                    // Merge imported values into existing row
+                    for (const [k, v] of Object.entries(pr.values)) {
+                        if (v !== null && v !== undefined) {
+                            existing.values[k] = v;
+                        }
+                    }
                     existing.status = 'edited';
                 } else {
-                    existing.values[firstCol?.key ?? 'rate'] = rateValue;
+                    for (const [k, v] of Object.entries(pr.values)) {
+                        if (v !== null && v !== undefined) {
+                            existing.values[k] = v;
+                        }
+                    }
                 }
             } else {
                 rows.push({
+                    rowId: pr.date,
                     date: pr.date,
                     status: 'appended',
                     originalStatus: 'appended',
-                    values: {[firstCol?.key ?? 'rate']: rateValue},
+                    values: {...pr.values},
                     selected: false,
                 });
             }
@@ -517,7 +576,7 @@
                 enableSelection={!isReadonly}
                 enableSorting={true}
                 getRowClass={rowBgClass}
-                getRowId={(r) => r.date}
+                getRowId={(r) => r.rowId}
                 getRowStyle={rowStyleFn}
                 onSelectionChange={(ids) => selectedIds = ids}
                 pageSizeOptions={[10, 25, 50, 100, 0]}
@@ -527,11 +586,8 @@
     </div>
 </div>
 
-<!-- Import Modal -->
-<DataImportModal
-        bind:open={importModalOpen}
-        displayBase={displayBase}
-        displayQuote={displayQuote}
-        onimport={handleImport}
-/>
+<!-- Import Modal (injected via snippet) -->
+{#if importModal}
+    {@render importModal({open: importModalOpen, setOpen: (v) => importModalOpen = v, onimport: handleImport})}
+{/if}
 

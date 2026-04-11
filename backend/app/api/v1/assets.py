@@ -38,6 +38,13 @@ from backend.app.schemas.prices import (
     FAPriceQueryItem,
     FAPriceQueryResponse,
     FACurrentPriceResponse,
+    # Event schemas
+    FAEventUpsert,
+    FAEventUpsertResult,
+    FABulkEventUpsertResponse,
+    FAEventDeleteResult,
+    FAEventQueryItem,
+    FAEventQueryResponse,
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,
@@ -64,6 +71,7 @@ logger = get_logger(__name__)
 asset_router = APIRouter(prefix="/assets", tags=["FA (Financial Assets)"])
 price_router = APIRouter(prefix="/prices", tags=["FA Prices"])
 provider_router = APIRouter(prefix="/provider", tags=["FA Provider"])
+event_router = APIRouter(prefix="/events", tags=["FA Events"])
 
 
 # ============================================================================
@@ -912,9 +920,73 @@ async def refresh_assets_from_provider(
         logger.error(f"Error refreshing assets from provider: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================================
+# MANUAL EVENT MANAGEMENT ENDPOINTS
+# ============================================================================
+
+
+@event_router.post("", response_model=FABulkEventUpsertResponse)
+async def upsert_events_bulk(
+    assets: List[FAEventUpsert], session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+    ):
+    """Bulk upsert manual events (provider_assignment_id = NULL).
+
+    Creates or updates manual asset events. Auto-generated events from providers
+    are NOT affected — dedup is scoped by provider_assignment_id.
+    """
+    try:
+        result = await AssetSourceManager.bulk_upsert_events_manual(assets, session)
+        results_list = [FAEventUpsertResult(**r) for r in result["results"]]
+        return FABulkEventUpsertResponse(
+            results=results_list,
+            success_count=result["success_count"],
+            )
+    except Exception as e:
+        logger.error(f"Error in bulk upsert events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@event_router.delete("/{event_id}", response_model=FAEventDeleteResult)
+async def delete_event(
+    event_id: int,
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+    ):
+    """Delete a single event by its primary key.
+
+    Works for both auto-generated and manual events.
+    Auto events will be recreated on next provider sync.
+    """
+    try:
+        result = await AssetSourceManager.delete_event_by_id(event_id, session)
+        return FAEventDeleteResult(**result)
+    except Exception as e:
+        logger.error(f"Error deleting event {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@event_router.post("/query", response_model=FAEventQueryResponse)
+async def query_events_bulk(
+    requests: List[FAEventQueryItem],
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+    ):
+    """Bulk query events for multiple assets.
+
+    Returns events with id and is_auto flag for frontend rendering.
+    """
+    try:
+        results = await AssetSourceManager.query_events_bulk(requests, session)
+        return FAEventQueryResponse(items=results)
+    except Exception as e:
+        logger.error(f"Error querying events bulk: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # Include sub-routes in main router
 # ============================================================================
 asset_router.include_router(price_router)
 asset_router.include_router(provider_router)
+asset_router.include_router(event_router)

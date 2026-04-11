@@ -1,39 +1,24 @@
 <!--
-  DataImportModal v2 — Modal for importing CSV data into the DataEditor.
+  DataImportModal — Generic CSV import modal with configurable columns and optional header slot.
 
   Features:
-  - Compact drop zone for .csv/.txt files — drop overwrites editor content
-  - Direction bar: CurrencySearchSelect (disabled) + swap ⇄ + info banner
-  - CsvEditor preview with 2-column format (date;rate) + semantic header
-  - Auto-detect direction from CSV header (>, < normalized)
-  - Help ? toggle with collapsible format guide
+  - Compact drop zone for .csv/.txt files
+  - CsvEditor with configurable N-column format
+  - Optional headerSlot for domain-specific content (e.g., FX direction bar)
+  - Help ? toggle with collapsible content (helpContent snippet)
   - Confirm discard if user has edited data and tries to close
   - Footer with valid row count + Cancel/Import
-
-  Direction is driven by a SINGLE source of truth: the CsvEditor header.
-  The ondirectiondetect callback updates the direction labels.
-  Swap only modifies the header text → triggers ondirectiondetect → labels update.
 
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import type {Snippet} from 'svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import type {ParsedRow} from './CsvEditor.svelte';
+    import type {ParsedRow, CsvColumnDef} from './CsvEditor.svelte';
     import CsvEditor from './CsvEditor.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import {CurrencySearchSelect} from '$lib/components/ui/select';
-    import {ArrowRight, FileText, HelpCircle, Upload} from 'lucide-svelte';
+    import {FileText, HelpCircle, Upload} from 'lucide-svelte';
     import {t} from '$lib/i18n';
-
-    // =========================================================================
-    // Types (exported for external use)
-    // =========================================================================
-
-    export interface ImportDirection {
-        from: string;
-        to: string;
-    }
 
     // =========================================================================
     // Props
@@ -42,29 +27,37 @@
     interface Props {
         /** Whether the modal is open */
         open?: boolean;
-        /** Display base currency (follows page direction, not canonical) */
-        displayBase: string;
-        /** Display quote currency (follows page direction) */
-        displayQuote: string;
-        /** Called when import is confirmed with valid rows + direction */
-        onimport?: (rows: ParsedRow[], direction: ImportDirection) => void;
+        /** Modal title */
+        title?: string;
+        /** Column definitions for CSV parsing */
+        columns: CsvColumnDef[];
+        /** Optional snippet rendered between drop zone and CsvEditor */
+        headerSlot?: Snippet;
+        /** Optional snippet for help section content */
+        helpContent?: Snippet;
+        /** Called when import is confirmed with valid rows */
+        onimport?: (rows: ParsedRow[]) => void;
         /** Called when modal is closed/cancelled */
         onclose?: () => void;
+        /** Called when CSV text changes (user input, file load) */
+        oncsvtextchange?: (text: string) => void;
     }
 
     let {
         open = $bindable(false),
-        displayBase,
-        displayQuote,
+        title = 'Import CSV Data',
+        columns,
+        headerSlot,
+        helpContent,
         onimport,
         onclose,
+        oncsvtextchange,
     }: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
-    let csvEditor: CsvEditor | undefined = $state(undefined);
     let csvValue = $state('');
     let validRows: ParsedRow[] = $state([]);
     let errorCount = $state(0);
@@ -74,46 +67,34 @@
     let showHelp = $state(false);
     let showDiscardConfirm = $state(false);
 
-    // Direction state — driven ONLY by ondirectiondetect (single source of truth)
-    let directionFrom = $state('');
-    let directionTo = $state('');
-
     // Guard to prevent re-initialization on csvValue changes
     let wasOpen = false;
-
-    // Track the initial header-only text to detect user edits
     let initialCsvValue = '';
 
     // =========================================================================
     // Derived
     // =========================================================================
 
-    let allowedCurrencies = $derived<[string, string]>([displayBase, displayQuote]);
-    let displayFrom = $derived(directionFrom || displayBase);
-    let displayTo = $derived(directionTo || displayQuote);
+    /** Expected header for pre-population */
+    let expectedHeader = $derived('date;' + columns.map(c => c.label).join(';'));
 
     /** True when user has typed/pasted/dropped something beyond the initial header */
     let isDirty = $derived.by(() => {
         const trimmed = csvValue.trim();
         if (!trimmed) return false;
-        // Compare against initial header-only content
         if (trimmed === initialCsvValue.trim()) return false;
-        // Also check if only the header line exists (no data rows)
         const lines = trimmed.split('\n').filter(l => l.trim());
         return lines.length > 1 || trimmed !== initialCsvValue.trim();
     });
 
     // =========================================================================
-    // Initialize on open (one-shot, not reactive to csvValue)
+    // Initialize on open
     // =========================================================================
 
     $effect(() => {
         if (open && !wasOpen) {
-            // First time opening — pre-populate header
             wasOpen = true;
-            directionFrom = displayBase;
-            directionTo = displayQuote;
-            const initValue = `date;${displayBase}>${displayQuote}\n`;
+            const initValue = expectedHeader + '\n';
             csvValue = initValue;
             initialCsvValue = initValue;
         }
@@ -121,6 +102,24 @@
             wasOpen = false;
         }
     });
+
+    // =========================================================================
+    // Public API — parent can read/write CSV text
+    // =========================================================================
+
+    /** Get the current CSV text content */
+    export function getCsvText(): string {
+        return csvValue;
+    }
+
+    /** Set the CSV text content. Auto-updates initialCsvValue if not dirty, or if updateInitial is explicitly true. */
+    export function setCsvText(text: string, updateInitial?: boolean) {
+        const shouldUpdateInitial = updateInitial ?? !isDirty;
+        csvValue = text;
+        if (shouldUpdateInitial) {
+            initialCsvValue = text;
+        }
+    }
 
     // =========================================================================
     // Handlers
@@ -132,13 +131,6 @@
         hasDuplicates = duplicates;
     }
 
-    /** Single source of truth: direction labels driven by CsvEditor header parsing */
-    function handleDirectionDetect(from: string, to: string) {
-        directionFrom = from;
-        directionTo = to;
-    }
-
-    /** Request close — show confirm if dirty, otherwise close immediately */
     function requestClose() {
         if (isDirty) {
             showDiscardConfirm = true;
@@ -147,7 +139,6 @@
         }
     }
 
-    /** Actually close and reset all state */
     function doClose() {
         csvValue = '';
         initialCsvValue = '';
@@ -155,8 +146,6 @@
         errorCount = 0;
         hasDuplicates = false;
         fileName = '';
-        directionFrom = '';
-        directionTo = '';
         showHelp = false;
         showDiscardConfirm = false;
         open = false;
@@ -165,15 +154,8 @@
 
     function handleConfirm() {
         if (validRows.length === 0) return;
-        onimport?.(validRows, {from: directionFrom, to: directionTo});
+        onimport?.(validRows);
         doClose();
-    }
-
-    /** Swap: ONLY modifies the header text. ondirectiondetect handles the rest. */
-    function handleSwap() {
-        const newFrom = directionTo || displayQuote;
-        const newTo = directionFrom || displayBase;
-        csvEditor?.setHeader(newFrom, newTo);
     }
 
     // ── File handling ──
@@ -185,6 +167,7 @@
             if (text) {
                 csvValue = text;
                 fileName = file.name;
+                oncsvtextchange?.(text);
             }
         };
         reader.readAsText(file);
@@ -218,19 +201,21 @@
     }
 </script>
 
-<ModalBase maxWidth="3xl" onRequestClose={requestClose} {open} testId="fx-data-import-modal">
+<ModalBase maxWidth="3xl" onRequestClose={requestClose} {open} testId="data-import-modal">
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-600">
         <div class="flex items-center gap-2">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{$t('csvImport.title')}</h2>
-            <button
-                    aria-label="Help"
-                    class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors"
-                    onclick={() => showHelp = !showHelp}
-                    title={$t('csvImport.helpTitle')}
-            >
-                <HelpCircle size={18}/>
-            </button>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
+            {#if helpContent}
+                <button
+                        aria-label="Help"
+                        class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors"
+                        onclick={() => showHelp = !showHelp}
+                        title={$t('csvImport.helpTitle')}
+                >
+                    <HelpCircle size={18}/>
+                </button>
+            {/if}
         </div>
         <button
                 aria-label="Close"
@@ -243,21 +228,10 @@
     <!-- Content -->
     <div class="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
         <!-- Help section (collapsible) -->
-        {#if showHelp}
+        {#if showHelp && helpContent}
             <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800
                         rounded-lg px-4 py-3 text-sm text-blue-700 dark:text-blue-300 space-y-2">
-                <p class="font-semibold">{$t('csvImport.helpTitle')}</p>
-                <p>{$t('csvImport.helpFormat')}</p>
-                <pre class="bg-white/50 dark:bg-slate-800/50 rounded p-2 text-xs font-mono">date;{displayBase}>{displayQuote}
-                    2024-01-15;1.0823
-2024-01-16;1.0845</pre>
-                <ul class="list-disc list-inside space-y-1 text-xs">
-                    <li>{$t('csvImport.helpDateFormat')}</li>
-                    <li>{$t('csvImport.helpRatePositive')}</li>
-                    <li>{$t('csvImport.helpSemicolon')}</li>
-                    <li>{$t('csvImport.helpDecimals')}</li>
-                    <li>{$t('csvImport.helpDirection')}</li>
-                </ul>
+                {@render helpContent()}
             </div>
         {/if}
 
@@ -291,49 +265,18 @@
             </div>
         </div>
 
-        <!-- Direction: currency badges (readonly CurrencySearchSelect, centered) -->
-        <div class="flex items-center justify-center gap-2">
-            <div class="w-44">
-                <CurrencySearchSelect
-                        disabled={true}
-                        value={displayFrom}
-                />
-            </div>
-            <ArrowRight class="text-gray-400 dark:text-gray-500 shrink-0" size={18}/>
-            <div class="w-44">
-                <CurrencySearchSelect
-                        disabled={true}
-                        value={displayTo}
-                />
-            </div>
-        </div>
+        <!-- Optional header slot (e.g., FX direction bar, info banners) -->
+        {#if headerSlot}
+            {@render headerSlot()}
+        {/if}
 
-        <!-- Swap ⇄ + InfoBanner on the same row -->
-        <div class="flex items-center gap-2">
-            <button
-                    aria-label={$t('common.swapDirection')}
-                    class="flex items-center justify-center w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600
-                       text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200
-                       transition-colors text-base font-bold shrink-0"
-                    onclick={handleSwap}
-                    title={$t('common.swapDirection')}
-            >⇄
-            </button>
-            <div class="flex-1">
-                <InfoBanner variant="info">
-                    <span>{$t('csvImport.ratesInterpretedAs', {values: {from: displayFrom, to: displayTo}})}</span>
-                </InfoBanner>
-            </div>
-        </div>
-
-        <!-- CSV Editor preview -->
+        <!-- CSV Editor -->
         <CsvEditor
-                {allowedCurrencies}
-                bind:this={csvEditor}
+                {columns}
                 bind:value={csvValue}
                 minHeight="250px"
-                ondirectiondetect={handleDirectionDetect}
                 onvalidchange={handleValidChange}
+                oninput={oncsvtextchange}
                 placeholder="Paste CSV data here or drop a file above..."
         />
     </div>
