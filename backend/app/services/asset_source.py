@@ -28,6 +28,7 @@ import json
 import time
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta
+from decimal import Decimal
 from typing import Optional, List, Dict, AsyncGenerator
 
 import structlog
@@ -39,7 +40,6 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     PriceHistory,
     AssetEvent,
-    AssetEventType,
     IdentifierType,
     AssetType,
     ProviderInputType,
@@ -49,7 +49,6 @@ from backend.app.schemas import (
     FACurrentValue,
     FAHistoricalData,
     FAMetadataRefreshResult,
-    BackwardFillInfo,
     FAUpsert,
     FAPricePoint,
     FAAssetDelete,
@@ -80,7 +79,7 @@ from backend.app.schemas.assets import (
     FAMetadataChangeDetail,
     )
 from backend.app.schemas.common import OldNew, Currency
-from backend.app.schemas.prices import FAPriceQueryResult, FAAssetEventPoint
+from backend.app.schemas.prices import FAPriceQueryResult, FAAssetEventPoint, AssetBackwardFillInfo
 from backend.app.schemas.provider import (
     FAProviderRefreshFieldsDetail,
     FAProviderSearchResponse,
@@ -93,9 +92,9 @@ from backend.app.schemas.provider import (
     FAProviderProbeResponse,
     )
 from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.fx import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
-from decimal import Decimal
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
@@ -513,7 +512,7 @@ class AssetSourceProvider(ABC):
             ProviderInputType.ISIN.value: IdentifierType.ISIN,
             ProviderInputType.URL.value: IdentifierType.OTHER,
             ProviderInputType.AUTO_GENERATED.value: IdentifierType.UUID,
-        }
+            }
         if input_type in mapping:
             return mapping[input_type]
         # Fallback: try direct match (e.g., TICKER → TICKER)
@@ -536,9 +535,8 @@ class AssetSourceProvider(ABC):
             IdentifierType.ISIN.value: ProviderInputType.ISIN,
             IdentifierType.OTHER.value: ProviderInputType.URL,
             IdentifierType.UUID.value: ProviderInputType.AUTO_GENERATED,
-        }
+            }
         return mapping.get(id_type)
-
 
     async def fetch_asset_metadata(
         self,
@@ -676,11 +674,11 @@ class AssetSourceManager:
         # keeping AssetEvent.provider_assignment_id FK valid.
         existing_stmt = select(AssetProviderAssignment).where(
             AssetProviderAssignment.asset_id.in_(asset_ids)
-        )
+            )
         existing_result = await session.execute(existing_stmt)
         existing_map: Dict[int, AssetProviderAssignment] = {
             row.asset_id: row for row in existing_result.scalars().all()
-        }
+            }
 
         for a in assignments:
             raw_params = a.provider_params
@@ -722,7 +720,7 @@ class AssetSourceManager:
                     provider_params=params_to_store,
                     fetch_interval=a.fetch_interval,
                     last_fetch_at=None,
-                )
+                    )
                 session.add(new_assignment)
 
         # Remove assignments for asset_ids no longer in the batch
@@ -1376,7 +1374,7 @@ class AssetSourceManager:
                 end_date = date_type.today()
                 start_date = end_date - timedelta(days=7)
                 hist = await asyncio.wait_for(
-                    provider.get_history_value(config.identifier, mapped_id_type, params,start_date, end_date,),
+                    provider.get_history_value(config.identifier, mapped_id_type, params, start_date, end_date, ),
                     timeout=15.0,
                     )
                 points = hist.prices if hist else []
@@ -1388,7 +1386,7 @@ class AssetSourceManager:
                     sample = [
                         {"date": str(p.date), "close": round(float(p.close), 2)}
                         for p in points[:10]
-                    ]
+                        ]
                 return ProbeHistoryResult(
                     success=True, points_count=len(points), date_range=date_range_str,
                     sample_prices=sample,
@@ -1409,7 +1407,7 @@ class AssetSourceManager:
             op_start = time.monotonic_ns()
             try:
                 patch = await asyncio.wait_for(
-                    provider.fetch_asset_metadata(config.identifier, mapped_id_type, params,),
+                    provider.fetch_asset_metadata(config.identifier, mapped_id_type, params, ),
                     timeout=15.0,
                     )
                 return ProbeMetadataResult(
@@ -1573,9 +1571,7 @@ class AssetSourceManager:
                         close=last_known.close,
                         volume=last_known.volume,
                         currency=last_known.currency,
-                        backward_fill_info=BackwardFillInfo(
-                            actual_rate_date=last_known.date, days_back=days_back
-                            ),
+                        backward_fill_info=AssetBackwardFillInfo(actual_rate_date=last_known.date, days_back=days_back),
                         )
                     )
             # else: skip days before first known price
@@ -1633,10 +1629,10 @@ class AssetSourceManager:
 
         # Build backward-filled series per asset (preserving request order)
         results = []
-        
+
         # Check if any request wants events
         event_requests = {req.asset_id for req in requests if getattr(req, 'include_events', False)}
-        
+
         # Query events if needed
         event_maps: dict[int, list[FAAssetEventPoint]] = {}
         if event_requests:
@@ -1663,7 +1659,7 @@ class AssetSourceManager:
                         notes=evt.notes,
                         )
                     )
-        
+
         for req in requests:
             aid = req.asset_id
             start, end = asset_ranges[aid]
@@ -1671,6 +1667,97 @@ class AssetSourceManager:
             series = AssetSourceManager._build_backward_filled_series(price_map, start, end)
             events = event_maps.get(aid, []) if aid in event_requests else []
             results.append(FAPriceQueryResult(asset_id=aid, prices=series, events=events))
+
+        # ── Currency conversion pass ──────────────────────────────────────
+        # For each result whose request has target_currency, convert OHLC
+        # values via FX rates in a single batch call per asset.
+
+        for req, result in zip(requests, results):
+            target = getattr(req, "target_currency", None)
+            if not target or not result.prices:
+                continue
+
+            # Collect conversion requests for close (required) prices
+            # We'll convert close first, then proportionally scale OHLC
+            conversions = []
+            price_indices = []  # track which prices need conversion
+            for i, p in enumerate(result.prices):
+                if p.currency == target:
+                    continue  # already in target currency
+                conversions.append((Currency(code=p.currency, amount=p.close), target, p.date))
+                price_indices.append(i)
+
+            if not conversions:
+                continue
+
+            converted, conv_errors = await convert_bulk(session, conversions, raise_on_error=False)
+
+            # Apply conversion results
+            conv_idx = 0
+            for pi in price_indices:
+                conv_result = converted[conv_idx]
+                if conv_result is None:
+                    # Conversion failed — keep native price, add warning
+                    if conv_errors:
+                        for err in conv_errors:
+                            if err not in result.errors:
+                                result.errors.append(err)
+                    conv_idx += 1
+                    continue
+
+                converted_currency, rate_date, _bfill_applied = conv_result
+                original_point = result.prices[pi]
+                original_close = original_point.close
+                original_currency = original_point.currency
+
+                # Compute conversion factor from close conversion
+                if original_close and original_close != 0:
+                    fx_factor = converted_currency.amount / original_close
+                else:
+                    conv_idx += 1
+                    continue
+
+                # Scale all OHLC values by the same factor
+                new_open = original_point.open * fx_factor if original_point.open is not None else None
+                new_high = original_point.high * fx_factor if original_point.high is not None else None
+                new_low = original_point.low * fx_factor if original_point.low is not None else None
+                new_close = converted_currency.amount
+
+                # Compute FX staleness
+                fx_days_back_val = (original_point.date - rate_date).days if rate_date < original_point.date else 0
+
+                # Build new backward_fill_info preserving price staleness
+                old_bfi = original_point.backward_fill_info
+                if old_bfi:
+                    new_bfi = AssetBackwardFillInfo(
+                        actual_rate_date=old_bfi.actual_rate_date,
+                        days_back=old_bfi.days_back,
+                        fx_rate_date=rate_date,
+                        fx_days_back=fx_days_back_val,
+                        )
+                elif fx_days_back_val > 0:
+                    new_bfi = AssetBackwardFillInfo(
+                        actual_rate_date=original_point.date,
+                        days_back=0,
+                        fx_rate_date=rate_date,
+                        fx_days_back=fx_days_back_val,
+                        )
+                else:
+                    new_bfi = None
+
+                # Replace price point with converted version
+                result.prices[pi] = FAPricePoint(
+                    date=original_point.date,
+                    open=new_open,
+                    high=new_high,
+                    low=new_low,
+                    close=new_close,
+                    volume=original_point.volume,
+                    currency=target,
+                    original_currency=original_currency,
+                    backward_fill_info=new_bfi,
+                    )
+                conv_idx += 1
 
         return results
 
@@ -1871,7 +1958,7 @@ class AssetSourceManager:
             session,
             asset_id: int,
             price_items: list,
-        ) -> tuple[int, int]:
+            ) -> tuple[int, int]:
             """
             Compare fetched prices with existing DB prices.
             Returns (new_count, changed_count) — truly new inserts and actual value changes.
@@ -1884,7 +1971,7 @@ class AssetSourceManager:
             # Load existing prices for these dates
             stmt = select(PriceHistory.date, PriceHistory.close).where(
                 and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates))
-            )
+                )
             result = await session.execute(stmt)
             existing: dict = {row[0]: row[1] for row in result.all()}
 
@@ -1971,7 +2058,7 @@ class AssetSourceManager:
                     try:
                         new_count, changed_count = await _count_actual_price_changes(
                             persist_session, asset_id, price_items
-                        )
+                            )
                     except Exception:
                         new_count, changed_count = fetched_count, 0  # Fallback
 
@@ -2181,7 +2268,7 @@ class AssetSourceManager:
     @staticmethod
     async def bulk_upsert_events_manual(
         data: list, session: AsyncSession
-    ) -> dict:
+        ) -> dict:
         """
         Bulk upsert manual events (provider_assignment_id = NULL).
 
@@ -2209,7 +2296,7 @@ class AssetSourceManager:
                     "asset_id": asset_id,
                     "count": 0,
                     "message": f"Asset {asset_id} not found",
-                })
+                    })
                 continue
 
             # Determine default currency from asset or 'USD'
@@ -2221,21 +2308,21 @@ class AssetSourceManager:
                 events=item.events,
                 provider_assignment_id=None,  # manual events
                 default_currency=default_currency,
-            )
+                )
 
             total_count += count
             results.append({
                 "asset_id": asset_id,
                 "count": count,
                 "message": f"Upserted {count} manual events",
-            })
+                })
 
         return {"results": results, "success_count": sum(1 for r in results if r["count"] > 0)}
 
     @staticmethod
     async def query_events_bulk(
         requests: list, session: AsyncSession
-    ) -> list:
+        ) -> list:
         """
         Bulk query events for multiple assets, returning FAAssetEventPointOut with id + is_auto.
 
@@ -2262,8 +2349,8 @@ class AssetSourceManager:
                         AssetEvent.asset_id == asset_id,
                         AssetEvent.date >= start,
                         AssetEvent.date <= end,
+                        )
                     )
-                )
                 .order_by(AssetEvent.date)
             )
             res = await session.execute(stmt)
@@ -2278,19 +2365,19 @@ class AssetSourceManager:
                     notes=ev.notes,
                     id=ev.id,
                     is_auto=ev.provider_assignment_id is not None,
-                ))
+                    ))
 
             results.append(FAEventQueryResult(
                 asset_id=asset_id,
                 events=event_points,
-            ))
+                ))
 
         return results
 
     @staticmethod
     async def delete_event_by_id(
         event_id: int, session: AsyncSession
-    ) -> dict:
+        ) -> dict:
         """
         Delete a single event by its primary key (works for both auto and manual events).
 
@@ -2311,7 +2398,7 @@ class AssetSourceManager:
                 "success": False,
                 "deleted_count": 0,
                 "message": f"Event {event_id} not found",
-            }
+                }
 
         del_stmt = delete(AssetEvent).where(AssetEvent.id == event_id)
         await session.execute(del_stmt)
@@ -2322,7 +2409,7 @@ class AssetSourceManager:
             "success": True,
             "deleted_count": 1,
             "message": f"Deleted event {event_id}",
-        }
+            }
 
 
 # ============================================================================
@@ -3305,4 +3392,3 @@ class AssetSearchService:
 
         # Ensure all tasks are awaited
         await asyncio.gather(*tasks, return_exceptions=True)
-

@@ -17,7 +17,7 @@
  * Y-axis: primary (same scale as price data) → yAxisIndex = 0
  *
  * For detailed mathematical theory and signal processing equivalents, see:
- * docs/financial-theory/technical-indicators.md#ema
+ * docs/financial-theory/technical-analysis/indicators/ema.en.md
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
@@ -28,7 +28,7 @@ export class EmaSignal extends ChartSignal {
     static override displayName = 'EMA';                       // i18n: 'signals.ema'
     static override icon = '📉';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
-    static docsPath = 'financial-theory/technical-indicators/#ema';
+    static docsPath = 'financial-theory/technical-analysis/indicators/ema/';
     // yAxisIndex = 0 (default, same scale as price)
 
     static override paramDescriptors: SignalParamDescriptor[] = [

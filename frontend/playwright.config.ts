@@ -62,8 +62,9 @@ export default defineConfig({
 
     // Server avviato automaticamente in test mode (--force kills stale servers)
     // GALLERY_SERVER_WORKERS env var controls uvicorn worker count (set by dev.py mkdocs gallery)
+    // COVERAGE_BACKEND=1 enables backend code coverage tracking during E2E tests
     webServer: {
-        command: `cd .. && ./dev.py server --test --force --workers ${process.env.GALLERY_SERVER_WORKERS || '1'}`,
+        command: `cd .. && ./dev.py server --test --force --workers ${process.env.GALLERY_SERVER_WORKERS || '1'}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
         url: `${BASE_URL}/api/v1/system/health`,
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000,

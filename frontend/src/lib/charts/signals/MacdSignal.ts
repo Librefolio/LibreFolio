@@ -24,7 +24,7 @@
  * independent MACD axis, auto-scaled by ECharts. No manual scaling needed.
  *
  * For detailed mathematical theory and signal processing equivalents, see:
- * docs/financial-theory/technical-indicators.md#macd
+ * docs/financial-theory/technical-analysis/indicators/macd.en.md
  */
 
 import {ChartSignal, type MarkerType, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
@@ -36,7 +36,7 @@ export class MacdSignal extends ChartSignal {
     static override icon = '📶';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
     static yAxisIndex = 2;
-    static docsPath = 'financial-theory/technical-indicators/#macd';
+    static docsPath = 'financial-theory/technical-analysis/indicators/macd/';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {

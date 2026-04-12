@@ -248,10 +248,15 @@ class TestScheduledInvestmentSchedule:
             )
         assert len(schedule.schedule) == 2
 
-    def test_empty_schedule_rejected(self):
-        """Test that empty schedule is rejected."""
-        with pytest.raises(ValidationError, match="at least one period"):
-            FAScheduledInvestmentSchedule(initial_value=Currency(code="EUR", amount=Decimal("10000")), schedule=[])
+    def test_empty_schedule_allowed(self):
+        """Test that empty schedule is allowed (returns initial_value as-is)."""
+        schedule = FAScheduledInvestmentSchedule(
+            initial_value=Currency(code="EUR", amount=Decimal("10000")),
+            schedule=[],
+            )
+        assert schedule.schedule == []
+        assert schedule.initial_value.amount == Decimal("10000")
+        assert schedule.initial_value.code == "EUR"
 
     def test_overlapping_periods_rejected(self):
         """Test that overlapping periods are rejected."""

@@ -46,7 +46,7 @@
     function openDocs() {
         const lang = localStorage.getItem('librefolio-locale') || 'en';
         const prefix = lang !== 'en' ? `${lang}/` : '';
-        window.open(`/mkdocs/${prefix}user/assets/detail/prices/`, '_blank');
+        window.open(`/mkdocs/${prefix}user/assets/detail/data-editor/`, '_blank');
     }
 </script>
 

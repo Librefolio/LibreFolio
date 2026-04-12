@@ -6,7 +6,7 @@
 
 ```text
 dev.py [-h]
-├─── server [--test] [--rebuild] [--debug] [--force] [--workers N]
+├─── server [--test] [--rebuild] [--debug] [--force] [--workers N] [--coverage]
 ├─┬─ db
 │ ├── check [PATH]
 │ ├── current [PATH]
@@ -19,7 +19,7 @@ dev.py [-h]
 │ ├── build [--debug]
 │ ├── check                        # svelte-check
 │ └── preview
-├─┬─ test [--coverage] [-v]
+├─┬─ test [--coverage] [--cov-clean] [-v]
 │ ├── external ACTION
 │ ├── db ACTION                    # include "populate"
 │ ├── services ACTION
@@ -27,8 +27,15 @@ dev.py [-h]
 │ ├── schemas ACTION
 │ ├── api ACTION
 │ ├── e2e ACTION
-│ ├── front ACTION
-│ └── all
+│ ├── front-utility ACTION         # auth, settings, files, select, image-crop
+│ ├── front-user ACTION            # brokers, multi-user, sharing
+│ ├── front-fx ACTION              # unit + E2E fx tests
+│ ├── front-asset ACTION           # list, detail, modal, data-editor
+│ ├── all
+│ ├── coverage-report [--priority] [--json] [--summary]  # Analisi funzioni scoperte
+│ └─┬─ coverage                    # Gestione report coverage
+│   ├── show [backend|frontend|combined]
+│   └── combine
 ├─┬─ user [--test-db]
 │ ├── create USERNAME EMAIL PASSWORD
 │ ├── list
@@ -77,9 +84,10 @@ dev.py [-h]
 |----------|---------|
 | Avviare per sviluppo | `./dev.py server` |
 | Test mode | `./dev.py server --test` |
+| Test mode con coverage | `./dev.py server --test --coverage` |
 | Frontend con HMR | T1: `./dev.py server` — T2: `./dev.py front dev` |
 | Tutti i test | `./dev.py test all` |
-| Solo test frontend | `./dev.py test front all` |
+| Solo test frontend | `./dev.py test front-fx all` |
 | Popola DB mock | `./dev.py test db populate --force` |
 | Gallery screenshot | `./dev.py mkdocs gallery` |
 | Dopo modifica modelli | `./dev.py db create-clean` |
@@ -95,6 +103,12 @@ dev.py [-h]
 | Build produzione | `./dev.py front build && ./dev.py server` |
 | Nuovo utente | `./dev.py user create admin admin@mail.com pass` |
 | Lista endpoint API | `./dev.py info api` |
+| Coverage backend con test | `./dev.py test --coverage api all` |
+| Coverage frontend E2E | `./dev.py test --coverage front-fx all` |
+| Report coverage backend | `./dev.py test coverage show backend` |
+| Report coverage frontend | `./dev.py test coverage show frontend` |
+| Report coverage combinato | `./dev.py test coverage show combined` |
+| Analisi funzioni scoperte | `./dev.py test coverage-report --priority high` |
 
 ---
 
@@ -112,6 +126,7 @@ I sotto-comandi complessi sono **importati** da moduli esterni via `register_sub
 | Modulo | Path | Comandi registrati |
 |--------|------|--------------------|
 | `test_runner` | `scripts/test_runner.py` | `test *` |
+| `coverage_analysis` | `scripts/coverage_analysis.py` | `test coverage-report` |
 | `user_cli` | `scripts/user_cli.py` | `user *` |
 | `translate_docs` | `mkdocs_src/aphra-pipeline/translate_docs.py` | `mkdocs translate*` |
 | `validate_translations` | `mkdocs_src/aphra-pipeline/validate_translations.py` | `mkdocs translate-validate` |

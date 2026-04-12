@@ -8,7 +8,7 @@
  * Unlimited instances per chart.
  *
  * For detailed mathematical theory, see:
- * docs/financial-theory/synthetic-benchmarks.md#linear-growth
+ * docs/financial-theory/technical-analysis/synthetic-benchmarks/linear.en.md
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
@@ -19,7 +19,7 @@ export class LinearSignal extends ChartSignal {
     static override displayName = 'Linear Growth';             // i18n: 'signals.linear'
     static override icon = '📈';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
-    static docsPath = 'financial-theory/synthetic-benchmarks/#linear-growth';
+    static docsPath = 'financial-theory/technical-analysis/synthetic-benchmarks/linear/';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {

@@ -29,6 +29,8 @@
         date: string;
         value: number;
         staleDays?: number;
+        fxStaleDays?: number;
+        originalCurrency?: string;
     }
 
 
