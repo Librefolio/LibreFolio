@@ -39,7 +39,7 @@ The primary market data provider — fetches stock, ETF, crypto, and index price
 - **Identifier types**: `TICKER`, `ISIN`
 - **Key details**: `ticker.info` for current price (no `history()` or `fast_info`), search caching (10 min TTL), currency caching (24h), sector/geographic metadata
 - 📖 [Technical Details →](provider_yahoo_finance.md)
-- 📖 [User Guide →](../../../user/assets/providers/yahoo-finance.en.md)
+- 📖 [User Guide →](../../../user/assets/providers/yahoo-finance.md)
 
 ---
 
@@ -51,7 +51,7 @@ Specialized ETF provider — fetches data from [justetf.com](https://www.justetf
 - **Identifier types**: `ISIN`
 - **Key details**: Cached ETF list for instant search, Gettex WebSocket for real-time quotes, geographic/sector distributions, pre-warm at startup
 - 📖 [Technical Details →](provider_justetf.md)
-- 📖 [User Guide →](../../../user/assets/providers/justetf.en.md)
+- 📖 [User Guide →](../../../user/assets/providers/justetf.md)
 
 ---
 
@@ -63,7 +63,7 @@ A versatile provider that can extract a current price from **any public webpage*
 - **Identifier type**: `URL`
 - **Key config**: `current_css_selector`, `currency`, `decimal_format`
 - 📖 [Technical Details →](provider_cssscraper.md)
-- 📖 [User Guide →](../../../user/assets/providers/css-scraper.en.md)
+- 📖 [User Guide →](../../../user/assets/providers/css-scraper.md)
 
 ---
 
@@ -75,7 +75,7 @@ A synthetic, deterministic provider that calculates asset value based on a prede
 - **Identifier type**: `AUTO_GENERATED`
 - **Key config**: `initial_value`, `schedule[]`, `day_count`, `interest_type`, `late_interest`
 - 📖 [Technical Details →](provider_scheduled_investment.md)
-- 📖 [User Guide →](../../../user/assets/providers/scheduled-investment.en.md)
+- 📖 [User Guide →](../../../user/assets/providers/scheduled-investment.md)
 
 ---
 

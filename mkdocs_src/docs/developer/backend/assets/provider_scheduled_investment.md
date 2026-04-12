@@ -2,7 +2,7 @@
 
 A synthetic, deterministic provider that calculates the value of an asset based on a predefined interest schedule. It makes **no external calls** and requires **no DB access** for calculation. It is one of the [Asset Providers](system_providers.md).
 
-📖 **User Guide**: [Scheduled Investment — User Manual](../../../user/assets/providers/scheduled-investment.en.md)
+📖 **User Guide**: [Scheduled Investment — User Manual](../../../user/assets/providers/scheduled-investment.md)
 
 ---
 
@@ -149,7 +149,7 @@ A P2P loan of €10,000 with 5% simple annual interest, monthly coupons (`genera
 
 ## 🔗 Related Documentation
 
-- 📖 [Scheduled Investment — User Guide](../../../user/assets/providers/scheduled-investment.en.md) — End-user configuration guide
+- 📖 [Scheduled Investment — User Guide](../../../user/assets/providers/scheduled-investment.md) — End-user configuration guide
 - 📅 [Asset Events](events.md) — Event types, dedup strategy, MATURITY_SETTLEMENT
 - 📐 [Day Count Conventions](../../../financial-theory/fundamentals/day-count.md) — ACT/365, ACT/360, 30/360, ACT/ACT
 - 📊 [Asset Types](../../../financial-theory/instruments/asset-types/index.md) — CROWDFUND_LOAN, BOND, etc.
