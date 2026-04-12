@@ -958,7 +958,7 @@ test.describe('Gallery Screenshots', () => {
                     await importBtn.scrollIntoViewIfNeeded();
                     await expect(importBtn).toBeVisible({timeout: 3000});
                     await importBtn.click();
-                    const importModal = page.getByTestId('fx-data-import-modal');
+                    const importModal = page.getByTestId('data-import-modal');
                     await expect(importModal).toBeVisible({timeout: 3000});
                     await page.waitForTimeout(300);
                     await screenshot(page, viewport, lang, theme, 'fx', 'detail-csv-import');
