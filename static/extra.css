@@ -37,6 +37,29 @@
     --md-typeset-a-color: #22c55e; /* theme-accent */
 }
 
+/* Logo background — white square to frame the non-square logo */
+.md-logo img,
+.md-header__button.md-logo img {
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 3px;
+    object-fit: contain;
+    aspect-ratio: 1 / 1;
+}
+
+.home-logo img {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 10px;
+    object-fit: contain;
+    aspect-ratio: 1 / 1;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+[data-md-color-scheme="slate"] .home-logo img {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 /* Dark mode header bar - dark with green accent text */
 [data-md-color-scheme="slate"] .md-header {
     background-color: #0f172a; /* theme-bg-primary, very dark */
@@ -340,6 +363,11 @@
     .md-nav--primary > .md-nav__title .md-nav__button.md-logo img {
         width: 1.2rem;
         height: 1.2rem;
+        background: #ffffff;
+        border-radius: 4px;
+        padding: 1px;
+        object-fit: contain;
+        aspect-ratio: 1 / 1;
     }
 
     /* Back arrow icon in mobile sub-nav titles - override absolute positioning */
