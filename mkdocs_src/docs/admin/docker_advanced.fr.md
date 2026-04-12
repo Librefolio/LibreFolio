@@ -92,7 +92,7 @@ La sous-commande `docker exec` transmet n'importe quelle commande `dev.py` vers 
 
 Ceci est équivalent à l'exécution de `docker compose exec librefolio python dev.py <cmd>`.
 
-## 🧪 Mode Test
+## 🧪 Mode Test { #test-mode }
 
 La configuration Docker Compose expose **deux ports** :
 

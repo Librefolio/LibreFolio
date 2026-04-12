@@ -2,7 +2,7 @@
 
 The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using the [yfinance](https://github.com/ranaroussi/yfinance) library. It is the primary market data provider for LibreFolio.
 
-📖 **User Guide**: [Yahoo Finance — User Manual](../../../user/assets/providers/yahoo-finance.en.md)
+📖 **User Guide**: [Yahoo Finance — User Manual](../../../user/assets/providers/yahoo-finance.md)
 
 ---
 
@@ -107,7 +107,7 @@ Caches use `get_ttl_cache()` (in-memory, per-process). They are populated lazily
 
 ## 🔗 Related Documentation
 
-- 📖 [Yahoo Finance — User Guide](../../../user/assets/providers/yahoo-finance.en.md) — End-user configuration guide
+- 📖 [Yahoo Finance — User Guide](../../../user/assets/providers/yahoo-finance.md) — End-user configuration guide
 - 📦 [Providers Overview](system_providers.md) — All available providers
 - 💰 [Asset Architecture](architecture.md) — Sync pipeline and price queries
 - 📈 [Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md) — How to create a new provider

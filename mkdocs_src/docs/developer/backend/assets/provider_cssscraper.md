@@ -2,7 +2,7 @@
 
 The CSS Scraper is a versatile provider that can extract a price from any public webpage using a CSS selector. It is one of the [Asset Providers](system_providers.md) — it does not rely on a specific financial data API.
 
-📖 **User Guide**: [CSS Scraper — User Manual](../../../user/assets/providers/css-scraper.en.md)
+📖 **User Guide**: [CSS Scraper — User Manual](../../../user/assets/providers/css-scraper.md)
 
 ---
 
@@ -69,7 +69,7 @@ The parser strips all non-numeric characters except the decimal separator, then 
 
 ## 🔗 Related Documentation
 
-- 📖 [CSS Scraper — User Guide](../../../user/assets/providers/css-scraper.en.md) — End-user configuration guide
+- 📖 [CSS Scraper — User Guide](../../../user/assets/providers/css-scraper.md) — End-user configuration guide
 - 📦 [Providers Overview](system_providers.md) — All available providers
 - 💰 [Asset Architecture](architecture.md) — Sync pipeline and price queries
 - 📈 [Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md) — How to create a new provider

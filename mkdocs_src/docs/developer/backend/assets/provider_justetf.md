@@ -2,7 +2,7 @@
 
 The JustETF provider fetches ETF prices and metadata from [justetf.com](https://www.justetf.com/) using the [`justetf-scraping`](https://github.com/Alfystar/justetf-scraping) library. It provides comprehensive ETF data including sector and geographic distributions.
 
-📖 **User Guide**: [JustETF — User Manual](../../../user/assets/providers/justetf.en.md)
+📖 **User Guide**: [JustETF — User Manual](../../../user/assets/providers/justetf.md)
 
 ---
 
@@ -109,7 +109,7 @@ All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are 
 
 ## 🔗 Related Documentation
 
-- 📖 [JustETF — User Guide](../../../user/assets/providers/justetf.en.md) — End-user configuration guide
+- 📖 [JustETF — User Guide](../../../user/assets/providers/justetf.md) — End-user configuration guide
 - 📦 [Providers Overview](system_providers.md) — All available providers
 - 💰 [Asset Architecture](architecture.md) — Sync pipeline and price queries
 - 📈 [Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md) — How to create a new provider
