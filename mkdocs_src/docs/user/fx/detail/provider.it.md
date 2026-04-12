@@ -1,68 +1,68 @@
-# 🔌 Configurazione del provider
+# 🔌 Configurazione Provider
 
-Ogni coppia di valute in LibreFolio è supportata da uno o più **provider di dati** — banche centrali che forniscono i dati dei tassi di cambio. La configurazione del provider ti permette di visualizzare e modificare quali provider vengono utilizzati per una specifica coppia.
+Ogni coppia di valute in LibreFolio è supportata da uno o più **provider di dati** — banche centrali che forniscono i dati sui tassi di cambio. La Configurazione Provider consente di visualizzare e modificare quali provider vengono utilizzati per una coppia specifica.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Configurazione provider" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Configurazione Provider" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🔓 Come accedere
+## 🔓 Come Accedere
 
-Fai clic sul pulsante **Provider** (⚙️) nella barra degli strumenti del grafico nella pagina **Dettaglio coppia**. Questo apre la modale di configurazione del provider che mostra la configurazione corrente del percorso.
-
----
-
-## 📋 Cosa vedi
-
-La modale mostra:
-
-- 🛤️ **Percorso(i) corrente(i)** — Le fonti di dati attive per questa coppia, in ordine di priorità
-- 🔀 **Tipo di percorso** — Se si tratta di un percorso **Diretto** (un singolo provider) o di un percorso **Catena** (multi‑salto attraverso una valuta intermedia)
-- 🏛️ **Dettagli del provider** — Nome, icona e valuta di base di ogni provider nel percorso
+Fai clic sul pulsante **Provider** (⚙️) nella barra degli strumenti del grafico nella pagina dei Dettagli della Coppia. Questo aprirà la finestra modale di configurazione del provider che mostra l'attuale configurazione del percorso.
 
 ---
 
-## 🔧 Cambiare i provider
+## 📋 Cosa Visualizzi
 
-Puoi configurare **uno o più** provider di dati per ogni coppia. Più provider fungono da **catena di fallback** — se la fonte primaria fallisce, il sistema prova automaticamente la successiva.
+La finestra modale mostra:
 
-Per modificare o aggiungere provider:
-
-1. Apri la modale di configurazione del provider
-2. **Rimuovi** il percorso corrente se necessario
-3. **Aggiungi un nuovo percorso** — il sistema scoprirà i percorsi disponibili utilizzando lo stesso processo di [aggiunta di una nuova coppia](../add-pair.md)
-4. **Riordina** i percorsi per impostare le priorità (trascinamento o pulsanti freccia)
-5. Clicca **Salva** — la prossima sincronizzazione preleverà i dati dal provider disponibile con la priorità più alta
+- 🛤️ **Percorsi attuali** — I provider di dati attivi per questa coppia, in ordine di priorità
+- 🔀 **Tipo di Percorso** — Se si tratta di un percorso **Direct** (provider singolo) o di un percorso **Chain** (multi-hop attraverso una valuta intermedia)
+- 🏛️ **Dettagli Provider** — Nome, icona e valuta di base di ogni provider nel percorso
 
 ---
 
-## 🔢 Priorità & Fallback
+## 🔧 Cambiare Provider
 
-Quando sono configurati più percorsi per una coppia:
+È possibile configurare **uno o più** provider di dati per ogni coppia. Più provider agiscono come una **catena di fallback** — se il provider primario fallisce, il sistema prova automaticamente il successivo.
 
-- I percorsi vengono provati **in ordine di priorità** (il primo = massima priorità)
-- Se il provider principale fallisce (timeout, errore API), il sistema **esegue il fallback** automaticamente al percorso successivo
-- Puoi **riordinare** i percorsi per cambiare le priorità
+Per cambiare o aggiungere provider:
 
-!!! example "Esempio di fallback"
+1. Apri la finestra modale di Configurazione Provider
+2. **Rimuovi** il percorso attuale, se necessario
+3. **Aggiungi un nuovo percorso** — il sistema scoprirà i percorsi disponibili (come quando si [aggiunge una nuova coppia](../add-pair.md))
+4. **Riordina** i percorsi per impostare le priorità (tramite drag & drop o pulsanti a freccia)
+5. Fai clic su **Salva** — la sincronizzazione successiva recupererà i dati dal provider disponibile con la priorità più alta
+
+---
+
+## 🔢 Priorità e Fallback
+
+Quando più percorsi sono configurati per una coppia:
+
+- I percorsi vengono provati **in ordine di priorità** (in alto = priorità massima)
+- Se il provider primario fallisce (timeout, errore API), il sistema effettua automaticamente il fallback al percorso successivo
+- È possibile **riordinare** i percorsi per cambiare le priorità
+
+!!! example "Esempio di Fallback"
 
     EUR/USD configurato con:
 
-    1. **BCE** (primario) — Banca Centrale Europea
+    1. **ECB** (primario) — Banca Centrale Europea
     2. **FED** (fallback) — Federal Reserve
 
-    Se l'API della BCE è irraggiungibile durante la sincronizzazione, il sistema utilizza automaticamente la FED.
+    Se l'API di ECB non è raggiungibile durante la sincronizzazione, il sistema utilizzerà automaticamente FED.
 
 ---
 
 ## 📚 Correlati
 
-- ➕ **[Aggiunta di una coppia](../add-pair.md)** — Scoperta completa del percorso (diretto + percorsi a catena)
+- ➕ **[Aggiungere una Coppia](../add-pair.md)** — Scoperta completa dei percorsi (percorsi Direct + Chain)
 - 🔄 **[Sincronizzazione](../sync.md)** — Come la sincronizzazione utilizza i provider configurati
-- 📋 **[Elenco dei provider FX](../../../developer/backend/fx/providers_list.md)** — Dettagli tecnici su ogni provider (BCE, FED, BOE, SNB)
+- 📋 **[Elenco Provider FX](../../../developer/backend/fx/providers_list.md)** — Dettagli tecnici su ogni provider (ECB, FED, BOE, SNB)
 
-!!! tip "🔗 Come vengono calcolati i percorsi a catena"
+!!! tip "🔗 Come vengono calcolati i percorsi chain"
 
-    Per l'algoritmo matematico dietro le catene di conversione multi‑salto, vedi [Algoritmo della catena FX](../../../developer/frontend/fx-chain-algorithm.md).
+    Per l'algoritmo matematico dietro le catene di conversione multi-hop, consulta [FX Chain Algorithm](../../../developer/frontend/fx-chain-algorithm.md).

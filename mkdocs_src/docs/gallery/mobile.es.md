@@ -1,15 +1,15 @@
 # 📱 Galería Móvil
 
-Experimenta la interfaz móvil adaptable de LibreFolio. Las capturas de pantalla se adaptan automáticamente al tema e idioma seleccionados.
+Experimente la interfaz móvil responsiva de LibreFolio. Las capturas de pantalla se adaptan automáticamente al tema e idioma seleccionados.
 
 !!! tip "Tema e Idioma"
 
-Usa el **selector de tema** en el encabezado (☀️/🌙) para cambiar entre modo claro y oscuro.
-Usa el **selector de idioma** (🇬🇧) en el encabezado para ver las capturas en diferentes idiomas.
+Use el **interruptor de tema** en el encabezado (☀️/🌙) para cambiar entre el modo claro y oscuro.
+Use el **selector de idioma** (🇬🇧) en el encabezado para ver las capturas de pantalla en diferentes idiomas.
 
-!!! info "Optimizado para Móvil"
+!!! info "Optimizado para Móviles"
 
-LibreFolio es completamente adaptable y funciona a la perfección en smartphones y tablets. La interfaz se adapta automáticamente a pantallas más pequeñas con un menú de navegación plegable.
+LibreFolio es totalmente responsivo y funciona perfectamente en smartphones y tablets. La interfaz se adapta automáticamente a pantallas más pequeñas con un menú de navegación desplegable.
 
 ---
 
@@ -25,27 +25,27 @@ Inicio de sesión limpio y accesible en dispositivos móviles.
 
 ### 📝 Registro
 
-Creación de cuenta sencilla con indicador de fortaleza de contraseña.
+Creación de cuenta sencilla con retroalimentación sobre la fortaleza de la contraseña.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Ventana de Registro">
+ <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Modal de Registro">
 </div>
 
 ---
 
-## 📊 Tablero
+## 📊 Panel de Control
 
-### 📈 Tablero Principal
+### 📈 Panel Principal
 
-Tu vista general del portafolio optimizada para móvil.
+Descripción general de su cartera optimizada para visualización móvil.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="dashboard" data-name="main" alt="Tablero">
+ <img class="gallery-img" data-category="dashboard" data-name="main" alt="Panel de Control">
 </div>
 
 ### ☰ Menú de Navegación
 
-Navegación completa accesible a través del menú hamburguesa.
+Navegación completa accesible a través del menú de hamburguesa.
 
 <div class="screenshot-container mobile">
  <img class="gallery-img" data-category="dashboard" data-name="menu-open" alt="Menú Móvil">
@@ -53,27 +53,27 @@ Navegación completa accesible a través del menú hamburguesa.
 
 ---
 
-## ⚙️ Ajustes
+## ⚙️ Configuración
 
 ### 🎛️ Preferencias de Usuario
 
-Toda la configuración accesible en móvil con la misma funcionalidad.
+Todos los ajustes accesibles en el móvil con la misma funcionalidad.
 
 <div class="screenshot-container mobile">
  <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Preferencias de Usuario">
 </div>
 
-### 🛡️ Ajustes Globales (Administrador)
+### 🛡️ Configuración Global (Admin)
 
-Ajustes a nivel de sistema en móvil.
+Configuración de todo el sistema en el móvil.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Ajustes Globales">
+ <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración Global">
 </div>
 
 ### ℹ️ Acerca de
 
-Información del sistema a tu alcance.
+Información del sistema al alcance de su mano.
 
 <div class="screenshot-container mobile">
  <img class="gallery-img" data-category="settings" data-name="about" alt="Acerca de">
@@ -81,26 +81,26 @@ Información del sistema a tu alcance.
 
 ### 🔐 Cambio de Contraseña
 
-Cambios de contraseña seguros desde cualquier lugar.
+Cambios de contraseña seguros en cualquier lugar.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Ventana de Cambio de Contraseña">
+ <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Modal de Cambio de Contraseña">
 </div>
 
 ### 👤 Perfil
 
-Tu perfil, avatar y configuración de cuenta en móvil.
+Su perfil, avatar y ajustes de cuenta en el móvil.
 
 <div class="screenshot-container mobile">
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Pestaña de Perfil">
 </div>
 
-### ✏️ Edición de Broker
+### ✏️ Editar Bróker
 
-Edita los detalles del broker: nombre, icono, moneda base y configuración.
+Edite los detalles del bróker: nombre, icono, moneda base y configuración.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Modal de Edición de Broker">
+ <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Modal de Edición de Bróker">
 </div>
 
 ---
@@ -109,51 +109,51 @@ Edita los detalles del broker: nombre, icono, moneda base y configuración.
 
 ### 📂 Recursos Estáticos
 
-Administra tus archivos subidos en móvil.
+Gestione sus archivos cargados en el móvil.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="files" data-name="static-tab" alt="Pestaña de Recursos Estáticos">
+ <img class="gallery-img" data-category="files" data-name="static-tab" alt="Pestaña de Archivos Estáticos">
 </div>
 
 ### 🗂️ Recursos Estáticos - Vista de Cuadrícula
 
-Navegación visual de archivos con vistas previas de imagen en móvil.
+Navegación visual de archivos con vistas previas de imágenes en el móvil.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vista de Cuadrícula de Recursos Estáticos">
+ <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vista de Cuadrícula de Archivos Estáticos">
 </div>
 
-### 📋 Informes de Broker (BRIM)
+### 📋 Informes de Bróker (BRIM)
 
-Importa y administra informes de broker.
+Importe y gestione informes de brókers.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Pestaña de BRIM">
+ <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Pestaña BRIM">
 </div>
 
 ---
 
-## 🖼️ Multimedia y Subida
+## 🖼️ Multimedia y Carga
 
 ### ✂️ Editor de Imágenes
 
-Recorta, rota, amplía y voltea imágenes en móvil. Incluye valores predefinidos para avatares e iconos.
+Recorte, rote, haga zoom y refleje imágenes en el móvil. Soporta preajustes para avatares e iconos.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Ventana de Edición de Imagen">
+ <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Modal de Edición de Imagen">
 </div>
 
-### 🎨 Selector de Recursos
+### 🎨 Selector de Activos
 
-Elige un archivo existente, introduce una URL o sube una nueva imagen.
+Elija un archivo existente, ingrese una URL o cargue una nueva imagen.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Ventana de Selector de Recursos">
+ <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Modal de Selector de Activos">
 </div>
 
 ### 📤 Cargador de Archivos
 
-Arrastra y suelta o explora para subir archivos. Las imágenes abren el editor de recorte, otros archivos pueden renombrarse.
+Arrastre y suelte o explore para cargar archivos. Las imágenes abren el editor de recorte, otros archivos pueden ser renombrados.
 
 <div class="screenshot-container mobile">
  <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="Cargador de Archivos">
@@ -161,103 +161,103 @@ Arrastra y suelta o explora para subir archivos. Las imágenes abren el editor d
 
 ---
 
-## 🏦 Brokers
+## 🏦 Brókers
 
-### 📋 Lista de Brokers
+### 📋 Lista de Brókers
 
-Tus cuentas de broker con tarjetas táctiles.
+Sus cuentas de corretaje con tarjetas optimizadas para pantallas táctiles.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de Brokers">
+ <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de Brókers">
 </div>
 
-### 🔍 Detalle de Broker
+### 🔍 Detalle del Bróker
 
-Vista detallada del broker optimizada para móvil.
+Vista detallada del bróker optimizada para móvil.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="brokers" data-name="detail" alt="Detalle de Broker">
+ <img class="gallery-img" data-category="brokers" data-name="detail" alt="Detalle del Bróker">
 </div>
 
-### ✏️ Editar Broker
+### ✏️ Editar Bróker
 
-Edita detalles del broker: nombre, icono, moneda base y configuración.
+Edite los detalles del bróker: nombre, icono, moneda base y configuración.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Ventana de Edición de Broker">
+ <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Modal de Edición de Bróker">
 </div>
 
-### 📥 Ventana de Importación
+### 📥 Modal de Importación
 
-Importa transacciones directamente desde tu teléfono.
+Importe transacciones directamente desde su teléfono.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Ventana de Importación">
+ <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Modal de Importación">
 </div>
 
-### 🤝 Compartir Broker
+### 🤝 Compartir Bróker
 
-Administra la copropiedad y roles de acceso con la ventana para compartir, optimizada para móvil.
+Gestione la copropiedad y los roles de acceso con el modal de compartir, optimizado para móvil.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Ventana para Compartir Broker">
+ <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Modal de Compartir Bróker">
 </div>
 
 ---
 
-## 💱 FX
+## 💱 Tipos de cambio FX
 
-### 📋 Lista FX
+### 📋 Lista de FX
 
-Todos los pares de moneda configurados con gráficos en miniatura, optimizados para móvil.
+Todos los pares de divisas configurados con mini-gráficos, optimizados para móvil.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="list" alt="Lista FX">
+ <img class="gallery-img" data-category="fx" data-name="list" alt="Página de Lista de FX">
 </div>
 
-### 🔎 Lista FX Filtrada
+### 🔎 Lista de FX Filtrada
 
-Pares de moneda filtrados por moneda base.
+Pares de divisas filtrados por moneda base.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="Lista FX Filtrada">
+ <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="Lista de FX Filtrada">
 </div>
 
 ### ➕ Añadir Par — Rutas Directas
 
-Añade un nuevo par de moneda con rutas directas del proveedor (ej. USD/CHF vía FED).
+Añada un nuevo par de divisas con rutas directas de proveedores (ej. USD/CHF vía FED).
 
 <div class="screenshot-container mobile">
  <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Añadir Par - Rutas Directas">
 </div>
 
-### 🔗 Añadir Par — Conversión Indirecta
+### 🔗 Añadir Par — Cadena
 
-Añade un par usando una ruta de conversión a través de una moneda intermediaria (ej. NOK/CHF vía EUR).
+Añada un par usando una cadena de conversión a través de una moneda intermedia (ej. NOK/CHF vía EUR).
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Añadir Par - Conversión Indirecta">
+ <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Añadir Par - Cadena">
 </div>
 
 ### 🔄 Sincronizar Todo
 
-Sincroniza todos los pares configurados desde sus proveedores.
+Sincronice todos los pares configurados desde sus proveedores.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Progreso de Sincronización Todo">
+ <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Progreso de sincronización total">
 </div>
 
 ### 📈 Gráfico de Detalle
 
-Gráfico interactivo de tamaño completo para un par de moneda.
+Gráfico interactivo de tamaño completo para un par de divisas.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Gráfico de Detalle de FX">
+ <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Gráfico de Detalle FX">
 </div>
 
 ### 📡 Superposición de Señales
 
-Panel de indicadores técnicos superpuesto en el gráfico.
+Panel de señales de indicadores técnicos superpuesto en el gráfico.
 
 <div class="screenshot-container mobile">
  <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Superposición de Señales de Detalle">
@@ -268,12 +268,12 @@ Panel de indicadores técnicos superpuesto en el gráfico.
 Herramienta de medición de clic a clic.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Panel de Medidas">
+ <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Panel de Medidas de Detalle">
 </div>
 
 ### ✏️ Editor de Datos
 
-Editor de datos en línea para valores de tipo de cambio en móvil.
+Editor de datos en línea para los valores de las tasas en el móvil.
 
 <div class="screenshot-container mobile">
  <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Editor de Datos">
@@ -281,26 +281,94 @@ Editor de datos en línea para valores de tipo de cambio en móvil.
 
 ### 📄 Importación CSV
 
-Importa datos de tipos de cambio desde archivos CSV.
+Importe datos de tasas desde archivos CSV.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Ventana de Importación CSV">
+ <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Modal de Importación CSV">
 </div>
 
-### ⚙️ Ajustes del Gráfico
+### ⚙️ Configuración del Gráfico
 
-Ajustes de estética del gráfico y superposición de señales.
+Estética del gráfico y ajustes de superposición de señales.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Ventana de Ajustes del Gráfico">
+ <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Modal de Configuración del Gráfico">
 </div>
 
-### 🔧 Ajustes del Proveedor
+### 🔧 Configuración del Proveedor
 
-Configura la prioridad de proveedores y rutas de conversión.
+Configure la prioridad del proveedor y las rutas de conversión.
 
 <div class="screenshot-container mobile">
- <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Ventana de Ajustes del Proveedor">
+ <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Modal de Configuración del Proveedor">
+</div>
+
+---
+
+## 💼 Activos
+
+### 📋 Lista de Activos
+
+Todos sus instrumentos financieros rastreados, optimizados para móvil.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="assets" data-name="list" alt="Página de Lista de Activos">
+</div>
+
+### 🔎 Lista de Activos Filtrada
+
+Filtre activos por nombre, tipo o texto de búsqueda en el móvil.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="assets" data-name="list-filtered" alt="Lista de Activos Filtrada">
+</div>
+
+### 📈 Gráfico de Detalle
+
+Gráfico de precios interactivo con rango de fechas e interruptor de moneda.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Gráfico de Detalle de Activo">
+</div>
+
+### 📡 Superposición de Señales
+
+Indicadores técnicos (EMA, MACD, RSI, Bollinger) en el gráfico de precios.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Señales de Detalle de Activo">
+</div>
+
+### 📏 Panel de Medidas
+
+Herramienta de medición de clic a clic en el móvil.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Medidas de Detalle de Activo">
+</div>
+
+### 🗂️ Clasificación
+
+Gráfico de sectores y mapa mundial geográfico en el móvil.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Clasificación de Detalle de Activo">
+</div>
+
+### ✏️ Editor de Datos
+
+Editor de datos de precios en línea en el móvil.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Editor de Datos de Activo">
+</div>
+
+### ➕ Modal de Crear Activo
+
+Cree un nuevo activo con todos los campos en el móvil.
+
+<div class="screenshot-container mobile">
+ <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Modal de Crear Activo">
 </div>
 
 ---

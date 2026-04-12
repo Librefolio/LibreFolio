@@ -1,23 +1,23 @@
-# ⚙️ Paramètres du graphique
+# ⚙️ Paramètres des Graphiques
 
-LibreFolio propose une fenêtre modale **Paramètres du graphique** pour personnaliser l'apparence et le comportement des graphiques FX. Ces paramètres s'appliquent à la fois aux mini-graphiques de la [page Liste FX](index.md) et au graphique complet de la [page de détail de la paire](detail/index.md).
+LibreFolio propose une fenêtre modale de **Paramètres des Graphiques** pour personnaliser l'apparence et le comportement des graphiques FX. Ces paramètres s'appliquent à la fois aux mini-graphiques de la [page Liste FX](index.md) et au graphique complet de la [page Détails de la Paire](detail/index.md).
 
 ---
 
-## 🔓 Accéder aux paramètres du graphique
+## 🔓 Accéder aux Paramètres des Graphiques
 
-Vous pouvez ouvrir la fenêtre modale des paramètres du graphique depuis :
+Vous pouvez ouvrir la fenêtre des Paramètres des Graphiques depuis :
 
-- 📋 La **page Liste FX** — via le bouton des paramètres (⚙️) dans la barre d'outils
-- 📊 La **page de détail de la paire** — via le bouton des paramètres du graphique
+- 📋 La **page Liste FX** — via le bouton de paramètres (⚙️) dans la barre d'outils
+- 📊 La **page Détails de la Paire** — via le bouton de paramètres du graphique
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Fenêtre modale Paramètres du graphique" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Fenêtre Paramètres des Graphiques" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🎛️ Paramètres disponibles
+## 🎛️ Paramètres Disponibles
 
 ### 🎨 Apparence
 
@@ -25,43 +25,43 @@ Vous pouvez ouvrir la fenêtre modale des paramètres du graphique depuis :
 |-----------|-------------|
 | **Couleur de la ligne** | Couleur principale de la ligne du graphique |
 | **Épaisseur de la ligne** | Épaisseur de la ligne du graphique (px) |
-| **Remplissage dégradé sous la ligne** | Active/désactive le remplissage dégradé sous la ligne |
+| **Remplissage de la zone** | Activer/désactiver le remplissage en dégradé sous la ligne |
 | **Lignes de grille** | Afficher/masquer les lignes de grille horizontales et verticales |
 
-### 🖱️ Info-bulle & Interaction
+### 🖱️ Infobulles et Interaction
 
 | Paramètre | Description |
 |-----------|-------------|
-| **Format de l'info-bulle** | Nombre de décimales affichées dans les info-bulles |
-| **Réticule** | Active/désactive le réticule au survol |
-| **Zoom** | Paramètres de zoom avec la molette de la souris et le pincement |
+| **Format de l'infobulle** | Nombre de décimales affichées dans les infobulles |
+| **Réticule** | Activer/désactiver le réticule au survol |
+| **Zoom** | Paramètres de zoom via la molette de la souris et le pincement |
 
-### 📈 Superposition des signaux
+### 📈 Superposition de Signaux
 
-Lorsque vous utilisez le graphique de la page de détail, vous pouvez configurer les **indicateurs techniques** affichés en superposition :
+Lors de l'utilisation du graphique de la page de détails, vous pouvez configurer les **indicateurs techniques** affichés en superposition :
 
-#### 🧮 Signaux calculés
+#### 🧮 Signaux Calculés
 
-Ces signaux sont calculés à partir des données propres à la paire :
+Ceux-ci sont calculés à partir des données propres à la paire :
 
-- 📉 **EMA** (Moyenne Mobile Exponentielle)
-- 📊 **MACD** (Convergence/Divergence de Moyennes Mobiles)
-- 💪 **RSI** (Indice de Force Relative)
+- 📉 **EMA** (Exponential Moving Average)
+- 📊 **MACD** (Moving Average Convergence Divergence)
+- 💪 **RSI** (Relative Strength Index)
 - 📏 **Bandes de Bollinger**
 
-Chaque signal peut être activé/désactivé indépendamment depuis le [panneau Signaux](detail/signals.md).
+Chaque signal peut être basculé via un interrupteur indépendamment depuis le [panneau des Signaux](detail/signals.md).
 
-#### 🔍 Signaux comparatifs & Références
+#### 🔍 Signaux Comparatifs et Benchmarks
 
-Vous pouvez également superposer des **comparaisons avec des références** pour voir comment une paire se comporte par rapport à une référence :
+Vous pouvez également superposer des **comparaisons de benchmarks** pour voir comment une paire performe par rapport à une référence :
 
-- 📐 **Références synthétiques** — Paniers personnalisés ou taux de référence calculés
-- ↔️ **Superpositions de paires croisées** — Comparez EUR/USD avec GBP/USD sur le même graphique
+- 📐 **Benchmarks Synthétiques** — Paniers personnalisés ou taux de référence calculés
+- ↔️ **Superpositions de paires** — Comparer l'EUR/USD par rapport au GBP/USD sur le même graphique
 
-Pour les fondements mathématiques, consultez [Indicateurs techniques](../../financial-theory/technical-analysis/indicators/index.md) et [Références synthétiques](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
+Pour les fondements mathématiques, consultez [Indicateurs Techniques](../../financial-theory/technical-analysis/indicators/index.md) et [Benchmarks Synthétiques](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
 
 ---
 
 ## 💾 Persistance
 
-Les paramètres du graphique sont stockés dans le `localStorage` de votre navigateur et s'appliquent à toutes les paires de devises. Ils survivent entre les sessions — même après avoir fermé et rouvert le navigateur — et ne seront perdus que si vous videz le cache/stockage du navigateur ou si le stockage expire (selon le navigateur, généralement des mois à des années).
+Les paramètres des graphiques sont stockés localement dans le `localStorage` de votre navigateur et s'appliquent à toutes les paires de devises. Ils sont conservés entre les sessions — même après avoir fermé et rouvert le navigateur — et ne seront perdus que si vous videz le cache/stockage de votre navigateur ou si le stockage expire (cela dépend du navigateur, généralement de quelques mois à plusieurs années).

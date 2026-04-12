@@ -106,7 +106,7 @@ The toolbar includes a **stale rows toggle** (switch). Stale rows are backward-f
 
 ## 🔗 Related
 
-- 📈 **[Interactive Chart](chart.en.md)** — Chart visualization with event markers
-- 📅 **[Asset Events](events.en.md)** — Event types and their sources
+- 📈 **[Interactive Chart](chart.md)** — Chart visualization with event markers
+- 📅 **[Asset Events](events.md)** — Event types and their sources
 - 📚 **[Asset Events (Financial Theory)](../../../financial-theory/instruments/asset-events/index.md)** — Detailed impact analysis for each event type
-- 🔌 **[Providers](../providers/index.en.md)** — Automatic price fetching
+- 🔌 **[Providers](../providers/index.md)** — Automatic price fetching

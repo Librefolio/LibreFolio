@@ -1,41 +1,42 @@
 # 🖼️ Galería de LibreFolio
 
-¡Bienvenido a la galería visual de LibreFolio! Aquí puedes explorar todas las **características** de nuestra plataforma de gestión de carteras a través de capturas de pantalla.
+¡Bienvenido a la galería visual de LibreFolio! Aquí puedes explorar todas las funciones de nuestra plataforma de gestión de carteras a través de capturas de pantalla.
 
-## 👁️ Elige tu vista
+## 👁️ Elige tu Vista
 
 <div class="gallery-cards">
  <a href="desktop/" class="gallery-card">
  <span class="gallery-icon">🖥️</span>
- <h3>Vista de escritorio</h3>
- <p>Experiencia con todas las funciones disponibles</p>
+ <h3>Vista de Escritorio</h3>
+ <p>Experiencia completa con todos los controles visibles</p>
  </a>
  <a href="mobile/" class="gallery-card">
  <span class="gallery-icon">📱</span>
- <h3>Vista móvil</h3>
- <p>Diseño responsive optimizado para pantallas táctiles</p>
+ <h3>Vista Móvil</h3>
+ <p>Diseño adaptable optimizado para pantallas táctiles</p>
  </a>
 </div>
 
-## ✨ Características destacadas
+## ✨ Funciones Destacadas
 
 !!! tip "Lo que verás"
 
- - **Autenticación**: Inicio de sesión seguro con medidor de fortaleza de contraseña
- - **Tablero**: Panorámica rápida de tu cartera
- - **Brokers**: Gestiona múltiples cuentas con brokers
- - **Archivos**: Sube y gestiona informes de brokers con vistas de cuadrícula y tabla
- - **Ajustes**: Personaliza la aplicación en 4 idiomas
- - **Perfil**: Gestión de avatar y ajustes de la cuenta
- - **Multimedia y subida de archivos**: Recortar/editar imágenes, selector de activos, renombrar archivos
- - **Tipo de cambio (FX)**: Pares de divisas, gráficos, sincronización, editor de datos, importación CSV
+    - **Autenticación**: Inicio de sesión seguro con medidor de fuerza de contraseña
+    - **Panel de Control**: Descripción general de tu cartera
+    - **Brókers**: Gestión de múltiples cuentas de bróker
+    - **Archivos**: Carga y gestión de informes de brókers con vistas de cuadrícula y tabla
+    - **Configuración**: Personaliza tu experiencia en 4 idiomas
+    - **Perfil**: Gestión de avatar y configuración de la cuenta
+    - **Multimedia y Carga**: Recorte/edición de imágenes, selector de activos, renombrado de archivos
+    - **Tipos de cambio FX**: Pares de divisas, gráficos, sincronización, editor de datos, importación CSV
+    - **Activos**: Seguimiento de acciones, ETF, bonos, criptomonedas con gráficos, señales, medidas y clasificación
 
-## 🌍 Soporte de idiomas
+## 🌍 Soporte de Idiomas
 
 LibreFolio está disponible en:
 
-| Idioma | Bandera | Disponibilidad |
-|----------|---------|----------------|
+| Idioma | Bandera | Estado |
+|----------|------|------------|
 | English | 🇬🇧 | ✅ Completo |
 | Italiano | 🇮🇹 | ✅ Completo |
 | Français | 🇫🇷 | ✅ Completo |

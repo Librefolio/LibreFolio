@@ -27,19 +27,19 @@ Navigate to **Assets** in the sidebar to see all your assets. The list page prov
 - **Sync All**: fetch latest prices for all assets with a provider
 - **Refresh All**: reload asset data from the database
 
-Click on any asset card to navigate to its **[detail page](detail/index.en.md)**.
+Click on any asset card to navigate to its **[detail page](detail/index.md)**.
 
 ## 🧭 Features
 
-### ➕ [Create & Edit](create-edit.en.md)
+### ➕ [Create & Edit](create-edit.md)
 
 Step-by-step guide for creating new assets, configuring providers, and editing existing assets.
 
-### 📊 [Asset Detail Page](detail/index.en.md)
+### 📊 [Asset Detail Page](detail/index.md)
 
 The heart of asset analysis — interactive chart, technical signals, measures, classification, and data editor.
 
-### 🔌 [Providers](providers/index.en.md)
+### 🔌 [Providers](providers/index.md)
 
 Automatic price fetching from Yahoo Finance, justETF, CSS Scraper, or the Scheduled Investment engine.
 

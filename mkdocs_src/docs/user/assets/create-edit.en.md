@@ -8,7 +8,7 @@
     - **Category** (required): Stock, ETF, Bond, Crypto, Commodity, P2P, Index, etc.
     - **Currency** (required): the currency the asset is denominated in
     - **Identifiers**: ISIN, ticker, CUSIP, SEDOL, etc.
-3. Optionally configure a **[Provider](providers/index.en.md)** for automatic price fetching
+3. Optionally configure a **[Provider](providers/index.md)** for automatic price fetching
 4. Optionally add **Sector** and **Geographic** distributions
 5. Click **Save**
 
@@ -27,7 +27,7 @@ Results are displayed inline with execution times. A ⚠️ warning means the op
 
 ## 🔌 Provider Assignment
 
-Each asset can have one pricing provider assigned. See [Providers](providers/index.en.md) for details on available providers and their configuration.
+Each asset can have one pricing provider assigned. See [Providers](providers/index.md) for details on available providers and their configuration.
 
 ## ⏱️ Fetch Interval
 
@@ -35,10 +35,10 @@ The fetch interval controls how often LibreFolio automatically refreshes the ass
 
 ## 🛠️ Editing an Asset
 
-Click the **Edit** (✏️) button on the [detail page](detail/index.en.md) to open the asset modal with all fields pre-populated. All fields are editable, including provider configuration and distributions.
+Click the **Edit** (✏️) button on the [detail page](detail/index.md) to open the asset modal with all fields pre-populated. All fields are editable, including provider configuration and distributions.
 
 ## 🔗 Related
 
-- 📊 **[Asset Detail Page](detail/index.en.md)** — View and analyze asset data
-- 🔌 **[Providers](providers/index.en.md)** — Available pricing providers
+- 📊 **[Asset Detail Page](detail/index.md)** — View and analyze asset data
+- 🔌 **[Providers](providers/index.md)** — Available pricing providers
 

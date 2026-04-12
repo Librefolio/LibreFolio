@@ -24,6 +24,6 @@ The Measure tool lets you interactively measure price differences, percentage ch
 
 ## 🔗 Related
 
-- 📈 **[Interactive Chart](chart.en.md)** — Chart controls and date range filtering
-- 📊 **[Signals](signals.en.md)** — Technical indicator overlays
+- 📈 **[Interactive Chart](chart.md)** — Chart controls and date range filtering
+- 📊 **[Signals](signals.md)** — Technical indicator overlays
 
