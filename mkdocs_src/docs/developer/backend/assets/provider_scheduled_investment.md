@@ -151,8 +151,8 @@ A P2P loan of €10,000 with 5% simple annual interest, monthly coupons (`genera
 
 - 📖 [Scheduled Investment — User Guide](../../../user/assets/providers/scheduled-investment.en.md) — End-user configuration guide
 - 📅 [Asset Events](events.md) — Event types, dedup strategy, MATURITY_SETTLEMENT
-- 📐 [Day Count Conventions](../../../financial-theory/day-count.md) — ACT/365, ACT/360, 30/360, ACT/ACT
-- 📊 [Asset Types](../../../financial-theory/asset-types.md) — CROWDFUND_LOAN, BOND, etc.
+- 📐 [Day Count Conventions](../../../financial-theory/fundamentals/day-count.md) — ACT/365, ACT/360, 30/360, ACT/ACT
+- 📊 [Asset Types](../../../financial-theory/instruments/asset-types/index.md) — CROWDFUND_LOAN, BOND, etc.
 - 💰 [Asset Architecture](architecture.md) — Sync pipeline and event persistence
 - 📦 [Providers Overview](system_providers.md) — All available providers
 

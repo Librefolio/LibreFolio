@@ -55,7 +55,7 @@ También puedes superponer **comparaciones de benchmarks** para ver cómo se com
 - 📐 **Benchmarks Sintéticos** — Canastas personalizadas o tipos de referencia calculados
 - ↔️ **Superposiciones de pares cruzados** — Comparar EUR/USD contra GBP/USD en el mismo gráfico
 
-Para los fundamentos matemáticos, consulta [Indicadores Técnicos](../../financial-theory/technical-indicators.md) y [Benchmarks Sintéticos](../../financial-theory/synthetic-benchmarks.md).
+Para los fundamentos matemáticos, consulta [Indicadores Técnicos](../../financial-theory/technical-analysis/indicators/index.md) y [Benchmarks Sintéticos](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
 
 ---
 

@@ -10,11 +10,11 @@ The Signals panel lets you overlay **technical indicators** on the price chart. 
 
 ## 📊 Available Indicators
 
-### 📉 [EMA — Exponential Moving Average](../../../financial-theory/technical-indicators.md#ema)
+### 📉 [EMA — Exponential Moving Average](../../../financial-theory/technical-analysis/indicators/ema.md)
 
 Smooths daily price noise to reveal the **underlying trend**. An EMA crossing above the price line often signals a downward trend. Configurable period: shorter = more reactive, longer = smoother.
 
-### 📊 [MACD — Moving Average Convergence Divergence](../../../financial-theory/technical-indicators.md#macd)
+### 📊 [MACD — Moving Average Convergence Divergence](../../../financial-theory/technical-analysis/indicators/macd.md)
 
 Measures **momentum** by computing the difference between a fast and a slow EMA. Useful for detecting trend reversals and momentum shifts.
 
@@ -22,11 +22,11 @@ Measures **momentum** by computing the difference between a fast and a slow EMA.
 - 〰️ **Signal Line**: EMA of the MACD line itself (smoothed momentum)
 - 📊 **Histogram**: Visual difference between MACD and Signal lines
 
-### 💪 [RSI — Relative Strength Index](../../../financial-theory/technical-indicators.md#rsi)
+### 💪 [RSI — Relative Strength Index](../../../financial-theory/technical-analysis/indicators/rsi.md)
 
 An **oscillator** (0–100) that measures the speed and magnitude of price changes. Values above 70 may suggest the asset is overbought, below 30 suggests oversold.
 
-### 📏 [Bollinger Bands](../../../financial-theory/technical-indicators.md#bollinger-bands)
+### 📏 [Bollinger Bands](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md)
 
 A **volatility envelope** around the price. The bands widen during volatile periods and contract during calm periods.
 
@@ -54,7 +54,7 @@ Compare the current asset's performance against **another asset**. The compariso
 
 For a comprehensive mathematical treatment of each indicator — including formulas, signal processing equivalents, and practical interpretation:
 
-:material-book-open-variant: **[Technical Indicators — Financial Theory](../../../financial-theory/technical-indicators.md)**
+:material-book-open-variant: **[Technical Indicators — Financial Theory](../../../financial-theory/technical-analysis/indicators/index.md)**
 
 This reference page covers:
 
@@ -62,4 +62,3 @@ This reference page covers:
 - 🎛️ **Signal processing** equivalents (EMA = IIR filter, SMA = FIR filter, etc.)
 - ⚡ The **"fast vs slow"** intuition in terms of filter cut-off frequencies
 - 📈 **Practical examples** of crossover detection and trend identification
-

@@ -8,8 +8,8 @@ Des calculs financiers précis sont critiques pour le suivi de portefeuille. Lib
 
 ## 🔑 Concepts clés
 
-- **[Types d'actifs](asset-types.md)** : Définitions de toutes les classes d'actifs prises en charge (Actions, ETF, Crypto, etc.).
-- **[Types de transactions](transaction-types.md)** : Définitions de toutes les opérations financières (Achat, Vente, Dividende, etc.).
-- **[Conventions de comptage des jours](day-count.md)** : Comment le nombre de jours entre deux dates est calculé pour l'accumulation d'intérêts.
-- **[Indicateurs techniques](technical-indicators.md)** : EMA, MACD, RSI, Bandes de Bollinger — avec leurs équivalents en traitement du signal.
-- **[Benchmarks synthétiques](synthetic-benchmarks.md)** : Benchmarks linéaires, composés et à onde sinusoïdale (inclut les formules d'intérêt et les fréquences de composition).
+- **[Types d'actifs](instruments/asset-types/index.md)** : Définitions de toutes les classes d'actifs prises en charge (Actions, ETF, Crypto, etc.).
+- **[Types de transactions](instruments/transaction-types/index.md)** : Définitions de toutes les opérations financières (Achat, Vente, Dividende, etc.).
+- **[Conventions de comptage des jours](fundamentals/day-count.md)** : Comment le nombre de jours entre deux dates est calculé pour l'accumulation d'intérêts.
+- **[Indicateurs techniques](technical-analysis/indicators/index.md)** : EMA, MACD, RSI, Bandes de Bollinger — avec leurs équivalents en traitement du signal.
+- **[Benchmarks synthétiques](technical-analysis/synthetic-benchmarks/index.md)** : Benchmarks linéaires, composés et à onde sinusoïdale (inclut les formules d'intérêt et les fréquences de composition).

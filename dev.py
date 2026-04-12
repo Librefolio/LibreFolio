@@ -558,6 +558,7 @@ def cmd_mkdocs_gallery(args):
     desktop_only = getattr(args, 'desktop_only', False)
     mobile_only = getattr(args, 'mobile_only', False)
     no_populate = getattr(args, 'no_populate', False)
+    test_port = getattr(args, 'test_port', None)
 
     # --list: show available test names and exit
     if list_tests:
@@ -625,14 +626,33 @@ def cmd_mkdocs_gallery(args):
     server_workers = max(1, math.ceil(worker_count / 4))
     print(f"{Colors.BLUE}Browser workers: {worker_count}  |  Server workers: {server_workers}{Colors.NC}")
 
+    # --- Port conflict check ---
+    # Determine which port the test server will use
+    effective_port = test_port or _os.environ.get('TEST_PORT') or get_test_server_port()
+    processes_using_port = check_port_in_use(int(effective_port))
+    if processes_using_port:
+        print_error(f"Port {effective_port} is already in use!")
+        _print_port_help(int(effective_port), processes_using_port)
+        print(f"\n{Colors.YELLOW}💡 You can use a different port:{Colors.NC}")
+        print(f"   ./dev.py mkdocs gallery --test-port 8099\n")
+        return 1
+
+    # --- Headless by default (screenshots are pixel-perfect in headless mode) ---
+    use_headed = getattr(args, 'headed', False)
+    if use_headed:
+        print(f"{Colors.YELLOW}🖥️  Running in headed mode (--headed){Colors.NC}")
+    else:
+        print(f"{Colors.BLUE}🔇 Running in headless mode (use --headed for visible browser){Colors.NC}")
+
     # Build a single Playwright command with all requested projects.
     # This shares one webServer process across desktop+mobile, avoiding port conflicts.
     cmd = [
         "npm", "run", "test:e2e", "--",
         "gallery.spec.ts",
-        "--headed",
         "--workers", str(worker_count),
     ]
+    if use_headed:
+        cmd.append("--headed")
     for viewport, _label in viewports:
         cmd.extend(["--project", viewport])
     if filter_text:
@@ -640,12 +660,17 @@ def cmd_mkdocs_gallery(args):
 
     viewport_labels = ', '.join(v[0] for v in viewports)
     print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
-    # Pass server worker count via env so playwright.config.ts can use it
+    # Pass server worker count + optional port via env so playwright.config.ts can use it
     # Stream output live to terminal (no capture_output) so user sees progress
     gallery_env = _os.environ.copy()
     gallery_env["GALLERY_SERVER_WORKERS"] = str(server_workers)
+    if test_port:
+        gallery_env["TEST_PORT"] = str(test_port)
+
+    run_cmd = cmd
+
     try:
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", env=gallery_env)
+        result = subprocess.run(run_cmd, cwd=PROJECT_ROOT / "frontend", env=gallery_env)
     except KeyboardInterrupt:
         print(f"\n{Colors.YELLOW}⚠️  Gallery interrupted by user (Ctrl+C){Colors.NC}")
         print(f"{Colors.YELLOW}Partial screenshots may have been saved to mkdocs_src/docs/gallery/{Colors.NC}")
@@ -1236,6 +1261,10 @@ Examples:
                        help="Skip DB population (faster for re-runs)")
     mk_p.add_argument("--workers", "-w", type=int, default=None,
                        help="Number of Playwright workers (default: CPU count)")
+    mk_p.add_argument("--test-port", type=int, default=None,
+                       help="Port for the test server (default: TEST_PORT env or 8001)")
+    mk_p.add_argument("--headed", action="store_true",
+                       help="Run browser in headed mode (visible window) instead of headless")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
     # Translate - Import from mkdocs_src/aphra-pipeline/translate_docs.py

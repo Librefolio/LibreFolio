@@ -58,7 +58,7 @@ Vous pouvez également superposer des **comparaisons avec des références** pou
 - 📐 **Références synthétiques** — Paniers personnalisés ou taux de référence calculés
 - ↔️ **Superpositions de paires croisées** — Comparez EUR/USD avec GBP/USD sur le même graphique
 
-Pour les fondements mathématiques, consultez [Indicateurs techniques](../../financial-theory/technical-indicators.md) et [Références synthétiques](../../financial-theory/synthetic-benchmarks.md).
+Pour les fondements mathématiques, consultez [Indicateurs techniques](../../financial-theory/technical-analysis/indicators/index.md) et [Références synthétiques](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
 
 ---
 

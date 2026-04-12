@@ -54,7 +54,7 @@ Due tab (Prices / Events), ciascuno con la propria istanza `DataEditor`. Prezzi:
 - Valori numerici readonly formattati a max 4 decimali
 - Fix FX no-data banner: stringa hardcoded inglese sostituita con `get(t)('fxDetail.noData')`
 
-### 🚧 B6 — Test E2E + fix link docs + test backend
+### ✅ B6 — Test E2E + fix link docs + test backend
 
 - ✅ **Fix `HelpMenu.svelte`**: link FAQ e Documentation già corretti con `target="_blank" rel="noopener noreferrer"`.
 - ✅ **Nuovo `e2e/assets/asset-data-editor.spec.ts`**: 23 test (apertura editor, tab switching, CSV import valid/invalid per prices e events, save/cancel, dirty tracking, close, stale toggle, import → tabella).
@@ -117,9 +117,19 @@ Due tab (Prices / Events), ciascuno con la propria istanza `DataEditor`. Prezzi:
 
 8. ✅ **Asset banner "no data for range" mancante** — Fix: stesso pattern del FX page.
 
-### 🔜 B8 — Riorganizzazione Financial Theory docs: 4 sotto-alberi tematici
+### ✅ B8 — Riorganizzazione Financial Theory docs: 4 sotto-alberi tematici
 
-Ristrutturare `mkdocs_src/docs/financial-theory/` da flat list a 4 sotto-alberi tematici. Ogni sotto-pagina attuale viene splittata in file di dettaglio.
+Ristrutturata `mkdocs_src/docs/financial-theory/` da flat list a 4 sotto-alberi tematici. Ogni sotto-pagina originale è stata splittata in file di dettaglio.
+
+**Done (12/04/2026)**:
+- 44 file `.en.md` nella nuova struttura (da 10 file flat originali)
+- 4 sotto-alberi: `instruments/` (18 file), `technical-analysis/` (9 file), `fundamentals/` (4 file), `portfolio-theory/` (8 file)
+- Index hub per ogni sotto-albero con tabelle riassuntive e cross-link
+- `mkdocs.yml` nav aggiornato con nuova struttura + traduzioni nav IT/FR/ES
+- Tutti i cross-link aggiornati in ~20 file (user/, developer/, financial-theory/)
+- File flat originali eliminati (asset-types, transaction-types, technical-indicators, synthetic-benchmarks, day-count, returns, taxation, asset-events)
+- `mkdocs build --strict` → 0 warnings, 0 errors
+- Solo EN — traduzione IT/FR/ES via pipeline AI come step successivo
 
 **Struttura target:**
 
@@ -205,9 +215,11 @@ Ristrutturare `mkdocs_src/docs/financial-theory/` da flat list a 4 sotto-alberi 
 - I file `asset-events/` esistenti (5 sotto-pagine EN) restano invariati, si spostano sotto `instruments/asset-events/`
 - Solo EN per ora — traduzione come step finale
 
-### 🔜 B9 — Portfolio Theory: contenuto pagine
+### ✅ B9 — Portfolio Theory: contenuto pagine
 
-Scrivere il contenuto delle 8 pagine sotto `portfolio-theory/`:
+Scritto il contenuto delle 8 pagine sotto `portfolio-theory/`:
+
+**Done (12/04/2026)**: Tutte le 8 pagine create con formule LaTeX, tabelle, admonitions, cross-link. Contenuti:
 
 1. **index.en.md** — Cos'è la Modern Portfolio Theory (Markowitz), efficient frontier, risk-return tradeoff
 2. **diversification.en.md** — Correlazione, riduzione varianza, systematic vs idiosyncratic risk, formule

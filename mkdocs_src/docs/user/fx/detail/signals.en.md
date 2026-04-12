@@ -10,11 +10,11 @@ The Signals panel lets you overlay **technical indicators** on the FX chart. The
 
 ## 📊 Available Indicators
 
-### 📉 [EMA — Exponential Moving Average](../../../financial-theory/technical-indicators.md#ema)
+### 📉 [EMA — Exponential Moving Average](../../../financial-theory/technical-analysis/indicators/ema.md)
 
 Smooths daily rate noise to reveal the **underlying trend**. In FX, an EMA crossing above the rate line often suggests a weakening base currency (or strengthening quote currency). Configurable period: shorter = more reactive, longer = smoother.
 
-### 📊 [MACD — Moving Average Convergence Divergence](../../../financial-theory/technical-indicators.md#macd)
+### 📊 [MACD — Moving Average Convergence Divergence](../../../financial-theory/technical-analysis/indicators/macd.md)
 
 Measures the **momentum** by computing the difference between a fast and a slow EMA. A positive MACD means the fast EMA is above the slow EMA (bullish), negative means the opposite (bearish). Useful in FX for detecting trend reversals and momentum shifts.
 
@@ -22,11 +22,11 @@ Measures the **momentum** by computing the difference between a fast and a slow 
 - 〰️ **Signal Line**: EMA of the MACD line itself (smoothed momentum)
 - 📊 **Histogram**: Visual difference between MACD and Signal lines
 
-### 💪 [RSI — Relative Strength Index](../../../financial-theory/technical-indicators.md#rsi)
+### 💪 [RSI — Relative Strength Index](../../../financial-theory/technical-analysis/indicators/rsi.md)
 
 An **oscillator** (0–100) that measures the speed and magnitude of price changes. In FX, values above 70 may suggest the currency pair is overbought, below 30 suggests oversold. Useful for spotting potential reversals.
 
-### 📏 [Bollinger Bands](../../../financial-theory/technical-indicators.md#bollinger-bands)
+### 📏 [Bollinger Bands](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md)
 
 A **volatility envelope** around the price. The bands widen during volatile periods and contract during calm periods. In FX, a rate touching the upper band may signal overbought conditions, while touching the lower band may signal oversold.
 
@@ -50,7 +50,7 @@ A **volatility envelope** around the price. The bands widen during volatile peri
 
 For a comprehensive mathematical treatment of each indicator — including formulas, signal processing equivalents, and practical interpretation:
 
-:material-book-open-variant: **[Technical Indicators — Financial Theory](../../../financial-theory/technical-indicators.md)**
+:material-book-open-variant: **[Technical Indicators — Financial Theory](../../../financial-theory/technical-analysis/indicators/index.md)**
 
 This reference page covers:
 

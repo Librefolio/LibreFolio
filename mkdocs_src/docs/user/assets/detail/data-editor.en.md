@@ -54,7 +54,7 @@ date;currency;close;open;high;low;volume
 
 ## 📅 Events Tab
 
-The Events tab shows all [asset events](../../../financial-theory/asset-events.en.md) (dividends, splits, etc.). Columns:
+The Events tab shows all [asset events](../../../financial-theory/instruments/asset-events/index.md) (dividends, splits, etc.). Columns:
 
 | Column | Required | Description |
 |--------|----------|-------------|
@@ -108,5 +108,5 @@ The toolbar includes a **stale rows toggle** (switch). Stale rows are backward-f
 
 - 📈 **[Interactive Chart](chart.en.md)** — Chart visualization with event markers
 - 📅 **[Asset Events](events.en.md)** — Event types and their sources
-- 📚 **[Asset Events (Financial Theory)](../../../financial-theory/asset-events.en.md)** — Detailed impact analysis for each event type
+- 📚 **[Asset Events (Financial Theory)](../../../financial-theory/instruments/asset-events/index.md)** — Detailed impact analysis for each event type
 - 🔌 **[Providers](../providers/index.en.md)** — Automatic price fetching

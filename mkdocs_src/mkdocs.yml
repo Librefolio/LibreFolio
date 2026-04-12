@@ -112,11 +112,42 @@ plugins:
             Split: Frazionamento
             Price Adjustment: Rettifica Prezzo
             Maturity Settlement: Rimborso a Scadenza
+            Instruments: Strumenti
+            Stocks: Azioni
+            ETFs: ETF
+            Bonds: Obbligazioni
+            Crypto: Crypto
+            "P2P / Crowdfunding": "Immobiliare & P2P"
+            Mutual Fund: Fondi Comuni
+            Commodities: Materie Prime
+            Other: Altro
+            "Index & Benchmark": "Indici & Benchmark"
+            "Buy & Sell": "Acquisto & Vendita"
+            "Deposit & Withdrawal": "Deposito & Prelievo"
+            "Fee & Tax": "Commissioni & Tasse"
+            "Transfer & FX": "Trasferimento & FX"
+            Technical Analysis: Analisi Tecnica
+            Indicators: Indicatori
+            EMA: EMA
+            MACD: MACD
+            RSI: RSI
+            Bollinger Bands: Bande di Bollinger
+            Synthetic Benchmarks: Benchmark Sintetici
+            Linear Growth: Crescita Lineare
+            Compound Growth: Crescita Composta
+            Sine Wave: Onda Sinusoidale
+            Fundamentals: Fondamenti
             Day Count Conventions: Convenzioni di Conteggio Giorni
             "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
-            Technical Indicators: Indicatori Tecnici
-            Synthetic Benchmarks: Benchmark Sintetici
             "Taxation & Tax Efficiency": "Tassazione & Efficienza Fiscale"
+            Portfolio Theory: Teoria del Portafoglio
+            Diversification: Diversificazione
+            Asset Allocation: Allocazione degli Asset
+            Risk Metrics: Metriche di Rischio
+            Sharpe Ratio: Indice di Sharpe
+            Sortino Ratio: Indice di Sortino
+            Max Drawdown: Massimo Drawdown
+            Volatility: Volatilità
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galleria
             Desktop: Desktop
@@ -169,11 +200,42 @@ plugins:
             Split: Fractionnement
             Price Adjustment: Ajustement de Prix
             Maturity Settlement: Règlement à l'Échéance
+            Instruments: Instruments
+            Stocks: Actions
+            ETFs: ETF
+            Bonds: Obligations
+            Crypto: Crypto
+            "P2P / Crowdfunding": "Immobilier & P2P"
+            Mutual Fund: Fonds Communs
+            Commodities: Matières Premières
+            Other: Autre
+            "Index & Benchmark": "Indices & Référence"
+            "Buy & Sell": "Achat & Vente"
+            "Deposit & Withdrawal": "Dépôt & Retrait"
+            "Fee & Tax": "Frais & Taxes"
+            "Transfer & FX": "Transfert & FX"
+            Technical Analysis: Analyse Technique
+            Indicators: Indicateurs
+            EMA: EMA
+            MACD: MACD
+            RSI: RSI
+            Bollinger Bands: Bandes de Bollinger
+            Synthetic Benchmarks: Benchmarks Synthétiques
+            Linear Growth: Croissance Linéaire
+            Compound Growth: Croissance Composée
+            Sine Wave: Onde Sinusoïdale
+            Fundamentals: Fondamentaux
             Day Count Conventions: Conventions de Décompte des Jours
             "Returns & Growth Rates": "Rendements & Taux de Croissance"
-            Technical Indicators: Indicateurs Techniques
-            Synthetic Benchmarks: Benchmarks Synthétiques
             "Taxation & Tax Efficiency": "Fiscalité & Efficience Fiscale"
+            Portfolio Theory: Théorie du Portefeuille
+            Diversification: Diversification
+            Asset Allocation: Allocation d'Actifs
+            Risk Metrics: Métriques de Risque
+            Sharpe Ratio: Ratio de Sharpe
+            Sortino Ratio: Ratio de Sortino
+            Max Drawdown: Drawdown Maximum
+            Volatility: Volatilité
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galerie
             Desktop: Bureau
@@ -226,11 +288,42 @@ plugins:
             Split: Desdoblamiento
             Price Adjustment: Ajuste de Precio
             Maturity Settlement: Liquidación al Vencimiento
+            Instruments: Instrumentos
+            Stocks: Acciones
+            ETFs: ETF
+            Bonds: Bonos
+            Crypto: Cripto
+            "P2P / Crowdfunding": "P2P / Crowdfunding"
+            Mutual Fund: Fondos de Inversión
+            Commodities: Materias Primas
+            Other: Otro
+            "Index & Benchmark": "Índices & Referencia"
+            "Buy & Sell": "Compra & Venta"
+            "Deposit & Withdrawal": "Depósito & Retiro"
+            "Fee & Tax": "Comisiones & Impuestos"
+            "Transfer & FX": "Transferencia & FX"
+            Technical Analysis: Análisis Técnico
+            Indicators: Indicadores
+            EMA: EMA
+            MACD: MACD
+            RSI: RSI
+            Bollinger Bands: Bandas de Bollinger
+            Synthetic Benchmarks: Benchmarks Sintéticos
+            Linear Growth: Crecimiento Lineal
+            Compound Growth: Crecimiento Compuesto
+            Sine Wave: Onda Sinusoidal
+            Fundamentals: Fundamentos
             Day Count Conventions: Convenciones de Conteo de Días
             "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
-            Technical Indicators: Indicadores Técnicos
-            Synthetic Benchmarks: Benchmarks Sintéticos
             "Taxation & Tax Efficiency": "Fiscalidad & Eficiencia Fiscal"
+            Portfolio Theory: Teoría del Portafolio
+            Diversification: Diversificación
+            Asset Allocation: Asignación de Activos
+            Risk Metrics: Métricas de Riesgo
+            Sharpe Ratio: Ratio de Sharpe
+            Sortino Ratio: Ratio de Sortino
+            Max Drawdown: Drawdown Máximo
+            Volatility: Volatilidad
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galería
             Desktop: Escritorio
@@ -304,20 +397,62 @@ nav:
       - Exposing with Tailscale: admin/tailscale_exposure.md
   - Financial Theory:
       - Overview: financial-theory/index.md
-      - Asset Types: financial-theory/asset-types.md
-      - Transaction Types: financial-theory/transaction-types.md
-      - Asset Events:
-          - Overview: financial-theory/asset-events.md
-          - Dividend: financial-theory/asset-events/dividend.md
-          - Interest: financial-theory/asset-events/interest.md
-          - Split: financial-theory/asset-events/split.md
-          - Price Adjustment: financial-theory/asset-events/price-adjustment.md
-          - Maturity Settlement: financial-theory/asset-events/maturity-settlement.md
-      - Day Count Conventions: financial-theory/day-count.md
-      - Returns & Growth Rates: financial-theory/returns.md
-      - Technical Indicators: financial-theory/technical-indicators.md
-      - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.md
-      - Taxation & Tax Efficiency: financial-theory/taxation.md
+      - Instruments:
+          - Overview: financial-theory/instruments/index.md
+          - Transaction Types:
+              - Overview: financial-theory/instruments/transaction-types/index.md
+              - Buy & Sell: financial-theory/instruments/transaction-types/buy-sell.md
+              - Deposit & Withdrawal: financial-theory/instruments/transaction-types/deposit-withdrawal.md
+              - Dividend: financial-theory/instruments/transaction-types/dividend.md
+              - Fee & Tax: financial-theory/instruments/transaction-types/fee.md
+              - Interest: financial-theory/instruments/transaction-types/interest.md
+              - Transfer & FX: financial-theory/instruments/transaction-types/transfer.md
+          - Asset Types:
+              - Overview: financial-theory/instruments/asset-types/index.md
+              - Stocks: financial-theory/instruments/asset-types/stocks.md
+              - ETFs: financial-theory/instruments/asset-types/etfs.md
+              - Bonds: financial-theory/instruments/asset-types/bonds.md
+              - Crypto: financial-theory/instruments/asset-types/crypto.md
+              - P2P / Crowdfunding: financial-theory/instruments/asset-types/real-estate.md
+              - Mutual Fund: financial-theory/instruments/asset-types/mutual-fund.md
+              - Commodities: financial-theory/instruments/asset-types/commodities.md
+              - Index & Benchmark: financial-theory/instruments/asset-types/index-benchmark.md
+              - Other: financial-theory/instruments/asset-types/other.md
+          - Asset Events:
+              - Overview: financial-theory/instruments/asset-events/index.md
+              - Dividend: financial-theory/instruments/asset-events/dividend.md
+              - Interest: financial-theory/instruments/asset-events/interest.md
+              - Split: financial-theory/instruments/asset-events/split.md
+              - Price Adjustment: financial-theory/instruments/asset-events/price-adjustment.md
+              - Maturity Settlement: financial-theory/instruments/asset-events/maturity-settlement.md
+      - Technical Analysis:
+          - Overview: financial-theory/technical-analysis/index.md
+          - Indicators:
+              - Overview: financial-theory/technical-analysis/indicators/index.md
+              - EMA: financial-theory/technical-analysis/indicators/ema.md
+              - MACD: financial-theory/technical-analysis/indicators/macd.md
+              - RSI: financial-theory/technical-analysis/indicators/rsi.md
+              - Bollinger Bands: financial-theory/technical-analysis/indicators/bollinger-bands.md
+          - Synthetic Benchmarks:
+              - Overview: financial-theory/technical-analysis/synthetic-benchmarks/index.md
+              - Linear Growth: financial-theory/technical-analysis/synthetic-benchmarks/linear.md
+              - Compound Growth: financial-theory/technical-analysis/synthetic-benchmarks/compound.md
+              - Sine Wave: financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md
+      - Fundamentals:
+          - Overview: financial-theory/fundamentals/index.md
+          - Day Count Conventions: financial-theory/fundamentals/day-count.md
+          - Returns & Growth Rates: financial-theory/fundamentals/returns.md
+          - Taxation & Tax Efficiency: financial-theory/fundamentals/taxation.md
+      - Portfolio Theory:
+          - Overview: financial-theory/portfolio-theory/index.md
+          - Diversification: financial-theory/portfolio-theory/diversification.md
+          - Asset Allocation: financial-theory/portfolio-theory/asset-allocation.md
+          - Risk Metrics:
+              - Overview: financial-theory/portfolio-theory/risk-metrics/index.md
+              - Sharpe Ratio: financial-theory/portfolio-theory/risk-metrics/sharpe-ratio.md
+              - Sortino Ratio: financial-theory/portfolio-theory/risk-metrics/sortino-ratio.md
+              - Max Drawdown: financial-theory/portfolio-theory/risk-metrics/max-drawdown.md
+              - Volatility: financial-theory/portfolio-theory/risk-metrics/volatility.md
   - Developer Manual:
       - System Overview: developer/index.md
       - Dev Installation: developer/dev-installation.md

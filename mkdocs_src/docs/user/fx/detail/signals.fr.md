@@ -10,11 +10,11 @@ Le panneau Signaux vous permet de superposer des **indicateurs techniques** sur 
 
 ## 📊 Indicateurs disponibles
 
-### 📉 [EMA — Moyenne Mobile Exponentielle](../../../financial-theory/technical-indicators.md#ema)
+### 📉 [EMA — Moyenne Mobile Exponentielle](../../../financial-theory/technical-analysis/indicators/ema.md)
 
 Lisse le bruit des taux quotidiens pour révéler la **tendance sous-jacente**. En FX, une EMA croisant au-dessus de la ligne du taux suggère souvent un affaiblissement de la devise de base (ou un renforcement de la devise de cotation). Période configurable : plus courte = plus réactive, plus longue = plus lisse.
 
-### 📊 [MACD — Convergence/Divergence des Moyennes Mobiles](../../../financial-theory/technical-indicators.md#macd)
+### 📊 [MACD — Convergence/Divergence des Moyennes Mobiles](../../../financial-theory/technical-analysis/indicators/macd.md)
 
 Mesure la **dynamique** en calculant la différence entre une EMA rapide et une EMA lente. Un MACD positif signifie que l'EMA rapide est au-dessus de l'EMA lente (haussier), négatif signifie l'inverse (baissier). Utile en FX pour détecter les inversions de tendance et les changements de dynamique.
 
@@ -22,11 +22,11 @@ Mesure la **dynamique** en calculant la différence entre une EMA rapide et une 
 - 〰️ **Ligne de signal** : EMA de la ligne MACD elle-même (dynamique lissée)
 - 📊 **Histogramme** : Différence visuelle entre les lignes MACD et de signal
 
-### 💪 [RSI — Indice de Force Relative](../../../financial-theory/technical-indicators.md#rsi)
+### 💪 [RSI — Indice de Force Relative](../../../financial-theory/technical-analysis/indicators/rsi.md)
 
 Un **oscillateur** (0–100) qui mesure la vitesse et l'amplitude des changements de prix. Des valeurs au-dessus de 70 suggèrent un surachat et en dessous de 30 une survente.
 
-### 📏 [Bandes de Bollinger](../../../financial-theory/technical-indicators.md#bollinger-bands)
+### 📏 [Bandes de Bollinger](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md)
 
 Une **enveloppe de volatilité** autour du prix. Les bandes s'élargissent pendant les périodes volatiles et se contractent pendant les périodes calmes.
 
@@ -50,7 +50,7 @@ Une **enveloppe de volatilité** autour du prix. Les bandes s'élargissent penda
 
 Pour un traitement mathématique complet de chaque indicateur — incluant les formules, les équivalents en traitement du signal et l'interprétation pratique :
 
-:material-book-open-variant: **[Indicateurs techniques — Théorie financière](../../../financial-theory/technical-indicators.md)**
+:material-book-open-variant: **[Indicateurs techniques — Théorie financière](../../../financial-theory/technical-analysis/indicators/index.md)**
 
 Cette page de référence couvre :
 

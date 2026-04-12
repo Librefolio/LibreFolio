@@ -1,6 +1,6 @@
 # Phase 6: Assets Management — Progress Summary
 
-**Status**: 🚧 IN CORSO (Step 1–4 completati, Part B quasi completa)  
+**Status**: 🚧 IN CORSO (Step 1–4b completati, Step 4c prossimo)  
 **Durata stimata**: ~8 giorni  
 **Priorità**: P0 (MVP)  
 **Dipendenze**: Phase 5 (PriceChartFull, Signal Library), Phase 4.8 (user_role)
@@ -37,9 +37,10 @@ condiviso con Phase 7.
 | **2b** | [**Rientro**](../plan-phase06BugfixMigration.prompt.md): bugfix `.toFixed`, BrokerIcon Svelte 5, localStorage user-scoped, FX delete 422, manual-only UX, ViewModeToggle header, bulk prices endpoint + colonne Δ multi-periodo + test migration, test upload, i18n | 0.5g | ✅ |
 | **2c** | [**Rientro 2**](phase-06-subplan/plan-phase06Step2cSyncDeleteRefactor.prompt.md): fix chart refresh, stopPropagation azioni tabella, rimuovere edit ridondante + sync/refresh, bulk actions multi-select, blocco 2×2 Assets, fix colonne Δ visibilità | 1g | ✅ |
 | **3** | AssetModal + Search + Probe + ScheduledInvestment Engine (12 round). Sotto-piani in [`phase-06-subplan/`](phase-06-subplan/) | 5g | ✅ |
-| **4** | Asset Detail: PriceChartFull + segnali + Data Editor + CSV Import + Test E2E + Docs Financial Theory | 2g | 🚧 |
-| **4b** | [**Part B fix**](../plan-partBDataEditorUnificato.prompt.md): B6 test fix (Apple search), perf fix (chunk fallback) | 0.5g | 🚧 |
-| **4c** | Financial Theory docs reorganization (4 sub-trees) + Portfolio Theory new section | 1g | ⏳ |
+| **4** | Asset Detail: PriceChartFull + segnali + Data Editor + CSV Import + Test E2E + Docs Financial Theory | 2g | ✅ |
+| **4b** | [**Part B fix**](../plan-partBDataEditorUnificato.prompt.md): B6 test fix (Apple search), perf fix (chunk fallback), B7 polish, B8 docs reorg, B9 portfolio theory | 1.5g | ✅ |
+| **4c** | Financial Theory docs: traduzione IT/FR/ES via pipeline AI | 0.5g | ⏳ |
+| **4d** | [**Infra**] Gallery headless default + traduzioni nav mkdocs (Mutual Fund, Commodities, Other in IT/FR) | - | ✅ |
 | **5** | AssetMatchingWizard 3-step (condiviso Phase 7) | 1g | ⏳ |
 | **6** | i18n (30 keys × 4 lingue), E2E test, gallery, docs MkDocs | 1g | ⏳ |
 
@@ -180,3 +181,12 @@ Il piano corrente (`plan-phase06-assets.md`) include ulteriori evoluzioni:
 - **AssetDataEditorSection** con colonne OHLCV (6 colonne)
 - **Gain/loss posticipato** a Phase 7/8 (non serve senza transazioni)
 - **urlFilters.ts** escluso (filtri con `$state` locale)
+
+### Aggiornamento Aprile 2026 (Part B completata + Infra)
+
+- **Part B (B1-B9) completata**: Data Editor unificato (2 tab Prices/Events), CSV import generico, test E2E (23+20+8), polish UX (stale toggle, dblclick chart→editor, tooltip mobile, emoji docs links)
+- **B8**: Financial Theory docs riorganizzati in 4 sotto-alberi (44 file .en.md), da flat a instruments/technical-analysis/fundamentals/portfolio-theory
+- **B9**: Portfolio Theory contenuto completo (8 pagine con formule LaTeX)
+- **Infra**: Gallery Playwright headless di default (rimossa dipendenza xvfb-run), nuovo flag `--headed` per debug
+- **Traduzioni nav mkdocs.yml**: aggiunte IT/FR per Mutual Fund, Commodities, Other (erano solo in ES)
+

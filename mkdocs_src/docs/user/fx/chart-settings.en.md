@@ -58,7 +58,7 @@ You can also overlay **benchmark comparisons** to see how a pair performs relati
 - 📐 **Synthetic Benchmarks** — Custom baskets or computed reference rates
 - ↔️ **Cross-pair overlays** — Compare EUR/USD against GBP/USD on the same chart
 
-For the mathematical foundations, see [Technical Indicators](../../financial-theory/technical-indicators.md) and [Synthetic Benchmarks](../../financial-theory/synthetic-benchmarks.md).
+For the mathematical foundations, see [Technical Indicators](../../financial-theory/technical-analysis/indicators/index.md) and [Synthetic Benchmarks](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
 
 ---
 

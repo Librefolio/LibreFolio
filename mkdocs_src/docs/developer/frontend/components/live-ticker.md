@@ -67,7 +67,7 @@ Each badge includes an `AssetIcon` component with the standard fallback chain:
 
 ## 🔗 Related
 
-- 📡 [Bulk Current Price Endpoint](../../api/overview.md#post-apiv1assetspricescurrent--bulk-current-price)
+- 📡 [Bulk Current Price Endpoint](../../api/overview.md#post-apiv1assetspricescurrent-bulk-current-price)
 - 💰 [Asset Architecture](../../backend/assets/architecture.md) — Sync pipeline and pricing
 - 🧩 [AssetIcon Component](../../frontend/components/index.md) — Icon fallback chain
 - 📅 [Asset Events](../../backend/assets/events.md) — Dividend and split events
