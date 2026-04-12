@@ -1,0 +1,64 @@
+# 📊 Signaux
+
+Le panneau des Signaux vous permet de superposer des **indicateurs techniques** sur le graphique des prix. Ceux-ci sont calculés en temps réel à partir des données de prix de l'actif et aident à identifier les tendances, les changements de momentum et les schémas de volatilité.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Signals Panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+---
+
+## 📊 Indicateurs disponibles
+
+### 📉 [EMA — Moyenne Mobile Exponentielle](../../../financial-theory/technical-analysis/indicators/ema.md)
+
+Lisse le bruit des prix quotidiens pour révéler la **tendance sous-jacente**. Le fait qu'une EMA croise la ligne de prix vers le haut signale souvent une tendance baissière. Période configurable : plus elle est courte, plus l'indicateur est réactif ; plus elle est longue, plus il est lisse.
+
+### 📊 [MACD — Convergence et Divergence des Moyennes Mobiles](../../../financial-theory/technical-analysis/indicators/macd.md)
+
+Mesure le **momentum** en calculant la différence entre une EMA rapide et une EMA lente. Utile pour détecter les retournements de tendance et les changements de momentum.
+
+- 📈 **Ligne MACD** : Différence entre l'EMA rapide et l'EMA lente
+- 〰️ **Ligne de Signal** : EMA de la ligne MACD elle-même (momentum lissé)
+- 📊 **Histogramme** : Différence visuelle entre les lignes MACD et de Signal
+
+### 💪 [RSI — Indice de Force Relative](../../../financial-theory/technical-analysis/indicators/rsi.md)
+
+Un **oscillateur** (0–100) qui mesure la vitesse et l'ampleur des variations de prix. Des valeurs supérieures à 70 peuvent suggérer que l'actif est suracheté, et des valeurs inférieures à 30 suggèrent qu'il est survendu.
+
+### 📏 [Bandes de Bollinger](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md)
+
+Une **enveloppe de volatilité** autour du prix. Les bandes s'élargissent lors des périodes volatiles et se contractent lors des périodes de calme.
+
+- 〰️ **Bande Centrale** : Moyenne Mobile Simple (SMA)
+- 🔺 **Bande Supérieure** : SMA + 2 écarts-types
+- 🔻 **Bande Inférieure** : SMA − 2 écarts-types
+
+### 🔀 Comparaison d'actifs
+
+Comparez la performance de l'actif actuel par rapport à **un autre actif**. Le prix de l'actif de comparaison est superposé sur le graphique, normalisé à la même échelle. Utile pour l'analyse de performance relative (par exemple, comparer une action à son benchmark).
+
+---
+
+## 🛠️ Mode d'emploi
+
+1. Cliquez sur l'**interrupteur** Signaux (📈) dans la barre d'outils
+2. Le panneau des signaux s'ouvre sous la barre d'outils
+3. Ajoutez des indicateurs via les menus déroulants catégorisés
+4. Les paramètres de chaque indicateur peuvent être ajustés en ligne
+5. Les signaux sont rendus sous forme de superpositions directement sur le graphique
+
+---
+
+## 📚 Approfondissement : Théorie Financière
+
+Pour un traitement mathématique complet de chaque indicateur — incluant les formules, les équivalents en traitement du signal et l'interprétation pratique :
+
+:material-book-open-variant: **[Indicateurs Techniques — Théorie Financière](../../../financial-theory/technical-analysis/indicators/index.md)**
+
+Cette page de référence couvre :
+
+- 🔢 Les **formules mathématiques** derrière chaque indicateur
+- 🎛️ Les équivalents en **traitement du signal** (EMA = filtre IIR, SMA = filtre FIR, etc.)
+- ⚡ L'intuition **"rapide vs lent"** en termes de fréquences de coupure des filtres
+- 📈 Des **exemples pratiques** de détection de croisement et d'identification de tendance

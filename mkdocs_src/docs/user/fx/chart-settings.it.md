@@ -1,18 +1,18 @@
 # ⚙️ Impostazioni Grafico
 
-LibreFolio fornisce una **finestra modale Impostazioni Grafico** per personalizzare l'aspetto e il comportamento dei grafici FX. Queste impostazioni si applicano sia ai mini-grafici nella [Pagina Lista FX](index.md) che al grafico completo nella [Pagina Dettaglio Coppia](detail/index.md).
+LibreFolio fornisce una modale delle **Impostazioni del Grafico** per personalizzare l'aspetto e il comportamento dei grafici FX. Queste impostazioni si applicano sia ai mini-grafici nella [pagina FX List](index.md) che al grafico completo nella [pagina Pair Detail](detail/index.md).
 
 ---
 
-## 🔓 Accedere alle Impostazioni Grafico
+## 🔓 Accesso alle Impostazioni Grafico
 
-Puoi aprire la finestra modale Impostazioni Grafico da:
+È possibile aprire la modale delle Impostazioni del Grafico da:
 
-- 📋 La **Pagina Lista FX** — tramite il pulsante delle impostazioni (⚙️) nella barra degli strumenti
-- 📊 La **Pagina Dettaglio Coppia** — tramite il pulsante delle impostazioni del grafico
+- 📋 La **pagina FX List** — tramite il pulsante delle impostazioni (⚙️) nella barra degli strumenti
+- 📊 La **pagina Pair Detail** — tramite il pulsante delle impostazioni del grafico
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Finestra modale Impostazioni Grafico" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Modale Impostazioni Grafico" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
@@ -22,46 +22,46 @@ Puoi aprire la finestra modale Impostazioni Grafico da:
 ### 🎨 Aspetto
 
 | Impostazione | Descrizione |
-|--------------|-------------|
-| **Colore della linea** | Colore principale per la linea del grafico |
-| **Spessore della linea** | Spessore della linea del grafico (px) |
-| **Riempimento dell'area** | Attiva/disattiva il riempimento graduale sotto la linea |
-| **Linee della griglia** | Mostra/nascondi le linee orizzontali e verticali della griglia |
+|-------------|-------------|
+| **Colore Linea** | Colore primario per la linea del grafico |
+| **Spessore Linea** | Spessore della linea del grafico (px) |
+| **Riempimento Area** | Abilita/disabilita il riempimento a gradiente sotto la linea |
+| **Linee della Griglia** | Mostra/nasconde le linee della griglia orizzontali e verticali |
 
-### 🖱️ Descrizione comando e Interazione
+### 🖱️ Suggerimento e Interazione
 
 | Impostazione | Descrizione |
-|--------------|-------------|
-| **Formato descrizione comando** | Numero di decimali mostrati nella descrizione comando |
-| **Mirino** | Attiva/disattiva il mirino al passaggio del mouse |
-| **Zoom** | Impostazioni di zoom con rotellina del mouse e movimento di pizzico |
+|-------------|-------------|
+| **Formato Suggerimento** | Numero di cifre decimali mostrate nei suggerimenti |
+| **Mirino** | Abilita/disabilita il mirino (crosshair) al passaggio del mouse |
+| **Zoom** | Impostazioni per lo zoom tramite rotella del mouse e pinch zoom |
 
-### 📈 Sovrapposizione Segnali
+### 📈 Overlay di Segnali
 
-Quando si utilizza il grafico della pagina dettaglio, è possibile configurare quali **indicatori tecnici** visualizzare come sovrapposizioni:
+Quando si utilizza il grafico della pagina di dettaglio, è possibile configurare quali **indicatori tecnici** devono essere visualizzati come overlay:
 
 #### 🧮 Segnali Calcolati
 
-Questi sono calcolati dai dati della stessa coppia:
+Questi sono computati a partire dai dati della coppia stessa:
 
-- 📉 **EMA** (Media Mobile Esponenziale)
+- 📉 **EMA** (Exponential Moving Average)
 - 📊 **MACD** (Moving Average Convergence Divergence)
 - 💪 **RSI** (Relative Strength Index)
 - 📏 **Bollinger Bands**
 
-Ogni segnale può essere attivato/disattivato indipendentemente dal [pannello Segnali](detail/signals.md).
+Ogni segnale può essere gestito tramite l'interruttore indipendentemente dal [pannello Signals](detail/signals.md).
 
-#### 🔍 Confronti e Benchmark
+#### 🔍 Segnali Comparativi e Benchmark
 
-Puoi anche sovrapporre **confronti con benchmark** per vedere come una coppia performa rispetto a un riferimento:
+È inoltre possibile sovrapporre **confronti con benchmark** per vedere come una coppia si comporta rispetto a un riferimento:
 
-- 📐 **Benchmark Sintetici** — Cestini personalizzati o tassi di riferimento calcolati
-- ↔️ **Confronti tra coppie valutarie** — Confronta EUR/USD con GBP/USD sullo stesso grafico
+- 📐 **Benchmark Sintetici** — Panieri personalizzati o tassi di riferimento calcolati
+- ↔️ **Overlay Cross-pair** — Confronta EUR/USD rispetto a GBP/USD sullo stesso grafico
 
-Per le basi matematiche, vedere [Indicatori Tecnici](../../financial-theory/technical-analysis/indicators/index.md) e [Benchmark Sintetici](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
+Per le basi matematiche, consultare [Indicatori Tecnici](../../financial-theory/technical-analysis/indicators/index.md) e [Benchmark Sintetici](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
 
 ---
 
 ## 💾 Persistenza
 
-Le impostazioni del grafico vengono salvate nel `localStorage` del browser e si applicano a tutte le coppie di valute. Sopravvivono tra le sessioni — anche dopo aver chiuso e riaperto il browser — e verranno perse solo se si cancella la cache/storage del browser o se lo storage scade (dipende dal browser, tipicamente mesi o anni).
+Le impostazioni del grafico sono memorizzate localmente nel `localStorage` del browser e si applicano a tutte le coppie di valute. Vengono mantenute tra le sessioni — anche dopo aver chiuso e riaperto il browser — e andranno perse solo se si svuota la cache/storage del browser o se lo storage scade (dipende dal browser, tipicamente da mesi ad anni).

@@ -1,4 +1,4 @@
-# 🔄 Sincronización de Divisas
+# 🔄 Sincronización de FX
 
 Una vez que un par de divisas está configurado con un proveedor de datos, LibreFolio puede **sincronizar automáticamente** los tipos de cambio desde fuentes oficiales de bancos centrales.
 
@@ -6,57 +6,57 @@ Una vez que un par de divisas está configurado con un proveedor de datos, Libre
 
 ## 🔄 Sincronizar Todo
 
-En la página de la lista de divisas, utiliza el botón **Sincronizar Todo** para sincronizar todos los pares configurados a la vez:
+Desde la página de la lista de FX, utilice el botón **Sync All** para sincronizar todos los pares configurados a la vez:
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Progreso de Sincronización" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-La ventana emergente de sincronización muestra:
+El modal de sincronización muestra:
 
 - 📊 **Progreso** de cada par que se está sincronizando
-- ✅ **Indicadores de estado** (éxito, error, omitido)
-- 🆕 Número de **nuevos puntos de datos** para cada par
+- ✅ Indicadores de **Estado** (éxito, error, omitido)
+- 🆕 Recuento de **nuevos datos** para cada par
 
 ---
 
-## 🎯 Sincronización de un Par Individual
+## 🎯 Sincronización de un par individual
 
-También puedes sincronizar un único par desde su [página de detalle](detail/index.md) usando el botón de sincronización. Esto es útil cuando deseas actualizar solo un par específico.
+También puede sincronizar un único par desde su [página de detalles](detail/index.md) utilizando el botón de sincronización. Esto es útil cuando desea actualizar solo un par específico.
 
 ---
 
-## ⚙️ Cómo Funciona la Sincronización
+## ⚙️ Cómo funciona la sincronización
 
 El proceso de sincronización:
 
-1. Obtiene los tipos de cambio desde la API del proveedor configurado (BCE, FED, BOE, SNB, etc.)
-2. **Sobrescribe** los puntos de datos existentes en el rango de fechas descargado con los valores del proveedor — el proveedor se considera la fuente autorizada
-3. Añade nuevos puntos para las fechas no presentes en la base de datos
-4. Si el proveedor principal falla, el sistema recurre automáticamente al siguiente proveedor configurado
+1. Obtiene los tipos de cambio de la API del proveedor configurado (ECB, FED, BOE, SNB, etc.)
+2. **Sobrescribe** los datos existentes en el rango de fechas descargado con los valores del proveedor — el proveedor se trata como la fuente oficial
+3. Añade nuevos datos para fechas que aún no están en la base de datos
+4. Si el proveedor primario falla, el sistema aplica el fallback automático al siguiente proveedor configurado
 
-Después de la sincronización, verás el número de **puntos descargados** y cuántos eran **realmente nuevos** (no presentes previamente en la base de datos).
+Después de la sincronización, verá el número de **datos descargados** y cuántos eran **realmente nuevos** (no estaban presentes previamente en la base de datos).
 
-!!! warning "El proveedor es autoritativo"
+!!! warning "El proveedor es la fuente oficial"
 
-    Volver a sincronizar un par sobrescribirá cualquier valor editado manualmente en el rango sincronizado. Para preservar las ediciones manuales, configura el par con el proveedor MANUAL (sin fuente de datos automática).
+    Volver a sincronizar un par sobrescribirá cualquier valor editado manualmente en el rango de fechas sincronizado. Si necesita preservar las ediciones manuales, considere utilizar un par configurado con el proveedor MANUAL (sin fuente de datos automática).
 
-!!! info "Precisión en las conversiones en cadena"
+!!! info "Precisión de conversión en cadena"
 
-    Al usar rutas en cadena (ej. RON → EUR → JPY), cada conversión intermedia introduce un mínimo error de redondeo. Aunque es despreciable en la mayoría de los casos, los tipos convertidos por cadena pueden diferir ligeramente de las cotizaciones directas del mercado.
+    Cuando se utilizan rutas en cadena (por ejemplo, RON → EUR → JPY), cada conversión intermedia introduce un error de redondeo mínimo. Aunque es insignificante para la mayoría de los propósitos, tenga en cuenta que los tipos convertidos en cadena pueden diferir ligeramente de las cotizaciones directas del mercado.
 
 ---
 
 ## 🌐 Cadenas de Suministro de Datos
 
-Para usuarios avanzados: LibreFolio utiliza un **sistema de enrutamiento sofisticado** para los datos de divisas. Cada par de divisas puede tener múltiples proveedores configurados con prioridades y cadenas de respaldo.
+Para usuarios avanzados: LibreFolio utiliza un **sistema de enrutamiento** sofisticado para los datos de FX. Cada par de divisas puede tener múltiples proveedores configurados con prioridades y cadenas de fallback.
 
-Esto significa:
+Esto significa que:
 
-- 🔄 Si tu proveedor principal (p.ej., BCE) no está disponible, el sistema recurre al proveedor de respaldo configurado (p.ej., FED)
-- 🔀 Los pares exóticos utilizan cadenas de varios pasos a través de monedas intermedias (p.ej., RON → EUR → JPY)
-- ⚙️ Puedes personalizar qué proveedor utilizar para cada par
+- 🔄 Si su proveedor primario (por ejemplo, ECB) no está disponible, el sistema aplica el fallback al siguiente proveedor (por ejemplo, FED)
+- 🔀 Los pares exóticos utilizan cadenas de varios pasos a través de divisas intermedias (por ejemplo, RON → EUR → JPY)
+- ⚙️ Puede personalizar qué proveedor utilizar para cada par
 
-Para la lista de proveedores soportados, consulta la [Lista de Proveedores de Divisas](../../developer/backend/fx/providers_list.md).
+Para ver la lista de proveedores compatibles, consulte la [Lista de Proveedores de FX](../../developer/backend/fx/providers_list.md).
 
-Para detalles técnicos sobre el algoritmo de enrutamiento y la configuración, consulta la documentación para desarrolladores: [Configuración y Enrutamiento de Divisas](../../developer/backend/fx/configuration.md).
+Para detalles técnicos sobre el algoritmo de enrutamiento y la configuración, consulte la documentación para desarrolladores: [Configuración y Enrutamiento de FX](../../developer/backend/fx/configuration.md).

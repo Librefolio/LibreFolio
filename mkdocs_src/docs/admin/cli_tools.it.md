@@ -1,10 +1,10 @@
 # 🛠️ Strumenti da Riga di Comando
 
-LibreFolio fornisce lo script `dev.py` per le attività di amministrazione. Questa pagina illustra i comandi più rilevanti per gli **amministratori di sistema**.
+LibreFolio fornisce lo script `dev.py` per le attività di amministrazione. Questa pagina copre i comandi più rilevanti per gli **amministratori di sistema**.
 
-!!! info "👩‍💻 Per Sviluppatori"
+!!! info "👩‍💻 Per gli Sviluppatori"
 
-    Per i comandi specifici per lo sviluppo (build frontend, test runner, sincronizzazione API, audit i18n), consultare la [Guida all'Installazione per Sviluppatori](../developer/dev-installation.md).
+    Per i comandi specifici per lo sviluppo (build del frontend, test runner, sincronizzazione API, audit i18n), consulta la [Guida all'Installazione per Sviluppatori](../developer/dev-installation.md).
 
 ---
 
@@ -26,7 +26,7 @@ Installa tutte le dipendenze del progetto (Python e Node.js):
 # Avvio standard
 ./dev.py server
 
-# Con numero di worker calcolato automaticamente (2 × (CPU-1))
+# Con worker calcolati automaticamente (2 × (CPU-1))
 ./dev.py server --workers N
 
 # Termina il processo esistente sulla porta prima di avviare
@@ -35,42 +35,42 @@ Installa tutte le dipendenze del progetto (Python e Node.js):
 
 !!! tip "Multi-worker"
 
-    In produzione, utilizza `--workers` per eseguire più worker Uvicorn. Questo migliora la produttività ed è raccomandato per qualsiasi distribuzione con più di un core CPU.
+    Per la produzione, usa `--workers` per eseguire più worker Uvicorn. Questo migliora il throughput ed è raccomandato per qualsiasi deployment con più di 1 core CPU.
 
 ---
 
 ## 👤 Gestione Utenti
 
-La gestione degli utenti si effettua tramite i sottocomandi `./dev.py user`:
+La gestione degli utenti avviene tramite i sottocomandi di `./dev.py user`:
 
 ```bash
-# Crea un utente (il primo utente diventa automaticamente amministratore)
+# Crea un utente (il primo utente diventa automaticamente admin)
 ./dev.py user create <username> <email> <password>
 
 # Elenca tutti gli utenti
 ./dev.py user list
 
-# Reimposta la password di un utente
+# Resetta la password di un utente
 ./dev.py user reset <username> <new_password>
 
-# Promuovi un utente ad amministratore
+# Promuovi un utente ad admin
 ./dev.py user promote <username>
 
-# Declassa un amministratore a utente normale
+# Rimuovi i privilegi di admin a un utente
 ./dev.py user demote <username>
 ```
 
 ---
 
-## ⚙️ Gestione del Sistema
+## ⚙️ Gestione di Sistema
 
-### 🔧 Inizializza le Impostazioni Globali
+### 🔧 Inizializza Impostazioni Globali
 
 ```bash
 ./dev.py user init-settings
 ```
 
-Popola il database con le [Impostazioni Globali](settings.md) predefinite, se non esistono già.
+Inserisce i dati predefiniti delle [Impostazioni Globali](settings.md) nel database se non esistono già.
 
 ### 🗄️ Migrazioni del Database
 
@@ -81,17 +81,17 @@ Popola il database con le [Impostazioni Globali](settings.md) predefinite, se no
 
 !!! warning "🗄️ Reset del Database"
 
-    `./dev.py db create-clean` ricrea il database da zero — **TUTTI i dati andranno persi**. Utilizzare solo se è necessario ricominciare da zero.
+    `./dev.py db create-clean` ricrea il database da zero — **tutti i dati andranno persi**. Usalo solo se hai bisogno di un nuovo inizio.
 
 ---
 
 ## 📚 Documentazione
 
 ```bash
-# Build e deploy della documentazione MkDocs su GitHub Pages
+# Crea e distribuisci la documentazione MkDocs su GitHub Pages
 ./dev.py mkdocs deploy
 
-# Genera screenshot per la galleria (richiede server in esecuzione + dati di test)
+# Genera gli screenshot della galleria (richiede il server attivo + dati di test)
 ./dev.py mkdocs gallery
 ```
 
@@ -109,7 +109,7 @@ Per un elenco completo di tutti i comandi disponibili:
 
     Comandi aggiuntivi per i flussi di lavoro di sviluppo:
 
-    - **Frontend**: `./dev.py front build`, `front dev`, `front check` — consultare [Sviluppo Frontend](../developer/frontend/index.md)
-    - **Test**: `./dev.py test all` — consultare [Guida ai Test](../developer/test-walkthrough/index.md)
-    - **Client API**: `./dev.py api sync` — consultare [Panoramica API](../developer/api/overview.md)
-    - **i18n audit**: consultare [Internazionalizzazione](../developer/frontend/i18n.md)
+    - **Frontend**: `./dev.py front build`, `front dev`, `front check` — vedi [Sviluppo Frontend](../developer/frontend/index.md)
+    - **Testing**: `./dev.py test all` — vedi [Walkthrough dei Test](../developer/test-walkthrough/index.md)
+    - **API Client**: `./dev.py api sync` — vedi [Panoramica API](../developer/api/overview.md)
+    - **i18n**: `./dev.py i18n audit` — vedi [Internazionalizzazione](../developer/frontend/i18n.md)

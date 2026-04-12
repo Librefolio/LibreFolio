@@ -43,6 +43,6 @@ Classification data can be set in two ways:
 
 ## 🔗 Related
 
-- ➕ **[Create & Edit](../create-edit.en.md)** — Configure classification data manually
-- 🔌 **[Providers](../providers/index.en.md)** — Providers that fetch classification metadata
+- ➕ **[Create & Edit](../create-edit.md)** — Configure classification data manually
+- 🔌 **[Providers](../providers/index.md)** — Providers that fetch classification metadata
 

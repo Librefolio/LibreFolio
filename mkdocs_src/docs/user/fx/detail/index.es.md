@@ -1,8 +1,8 @@
-# 🔍 Página de Detalle del Par
+# 🔍 Página de Detalles del Par
 
-Haga clic en cualquier par de divisas de la [Lista FX](../index.md) para abrir su página de detalle. Aquí puede visualizar, analizar y gestionar datos del tipo de cambio para ese par específico.
+Haga clic en cualquier par de divisas de la [FX List](../index.md) para abrir su página de detalles. Aquí puede visualizar, analizar y gestionar los datos del tipo de cambio para ese par específico.
 
-La página de detalle está organizada en varias funcionalidades, cada una accesible desde la barra de herramientas:
+La página de detalles está organizada en varias funcionalidades, cada una accesible desde la barra de herramientas:
 
 ---
 
@@ -10,27 +10,27 @@ La página de detalle está organizada en varias funcionalidades, cada una acces
 
 ### 📈 [Gráfico Interactivo](chart.md)
 
-La vista principal: un gráfico completo con tecnología de ECharts que incluye zoom, desplazamiento, alternancia entre línea y velas, y rangos de tiempo configurables. Aquí visualiza el historial del tipo de cambio de un vistazo.
+La vista principal: un gráfico completo impulsado por ECharts con zoom, desplazamiento, interruptor de línea/velas y rangos de tiempo configurables. Aquí es donde puede visualizar el historial del tipo de cambio de un vistazo.
 
 ### 📊 [Señales](signals.md)
 
-Superpone indicadores técnicos (EMA, MACD, RSI, Bandas de Bollinger) sobre el gráfico. Cada señal se calcula en tiempo real a partir de los datos del tipo de cambio y puede activarse o desactivarse de forma independiente.
+Superponga indicadores técnicos (EMA, MACD, RSI, Bollinger Bands) en el gráfico. Cada señal se calcula en tiempo real a partir de los datos del tipo de cambio y se puede activar o desactivar de forma independiente.
 
-### 📐 [Medidas](measures.md)
+### 📐 [Measures](measures.md)
 
-Herramienta de medición punto a punto. Permite seleccionar dos puntos en el gráfico para ver el delta, el cambio porcentual y el rendimiento anualizado entre ellos.
+Herramienta de medición de clic a clic. Seleccione dos puntos en el gráfico para ver el delta, el cambio porcentual y el rendimiento anualizado entre ellos.
 
-### ✏️ [Editor de Datos](data-editor.md)
+### ✏️ [Editor de datos](data-editor.md)
 
-Permite ver, agregar, editar o eliminar puntos de datos individuales. También incluye **Importación CSV** para cargar masivamente datos históricos del tipo de cambio desde archivos.
+Visualice, añada, edite o elimine puntos de datos individuales. También incluye **Importación de CSV** para la carga masiva de datos históricos de tipos de cambio desde archivos.
 
-### ⚙️ [Configuración del Proveedor](provider.md)
+### ⚙️ [Configuración del proveedor](provider.md)
 
-Permite cambiar el proveedor de datos para este par, agregar rutas de respaldo o reconfigurar la cadena de conversión.
+Cambie el proveedor de datos para este par, añada rutas de fallback o reconfigure la cadena de conversión.
 
 ---
 
-## 🔗 Relacionado
+## 🔗 Relacionados
 
-- ⚙️ **[Configuración del Gráfico](../chart-settings.md)** — Personalice la apariencia del gráfico, los colores y la configuración de superposición de señales.
-- 📋 **[Vista General FX](../index.md)** — Volver a la lista FX.
+- ⚙️ **[Configuración del gráfico](../chart-settings.md)** — Personalice la apariencia del gráfico, los colores y la configuración de la superposición de señales
+- 📋 **[Descripción general de FX](../index.md)** — Volver a la página de la lista de FX
