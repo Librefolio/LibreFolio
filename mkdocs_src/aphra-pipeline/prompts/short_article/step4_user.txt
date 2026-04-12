@@ -1,0 +1,42 @@
+Here is the original {source_language} text:
+<{source_language}_text>
+{text}
+</{source_language}_text>
+
+Here is the {target_language} translation to review:
+<{target_language}_translation>
+{translation}
+</{target_language}_translation>
+
+Here is auxiliary information for your critique — it contains a TERMINOLOGY GLOSSARY with mandatory term mappings, and optionally a STRUCTURAL DIFF REPORT with objective, programmatic findings:
+<glossary>
+{glossary}
+</glossary>
+
+Please follow these steps to complete your critique:
+
+1. Carefully read the {source_language} source, the {target_language} translation, and the auxiliary information above.
+
+2. If a TERMINOLOGY GLOSSARY is present in the <glossary> section, verify that the translation uses the specified term mappings consistently. Flag any deviation as a required improvement — these mappings are mandatory, not suggestions.
+
+3. If a STRUCTURAL DIFF REPORT is present in the <glossary> section, treat every issue listed as an OBJECTIVE FACT (counted headings, links, code blocks, etc.), not a subjective opinion. Each structural issue MUST be flagged as a required fix.
+
+4. Analyze the translation for the following aspects:
+   a. Semantic accuracy: Does the translation convey the same meaning as the original?
+   b. Grammar and syntax: Is the {target_language} grammatically correct and natural-sounding?
+   c. Markdown structure preservation: Are all headings, links, code blocks, HTML blocks, admonitions, lists, tables, and emoji preserved exactly as in the source?
+   d. Non-translatable elements: Are URLs, file paths, code content, HTML attributes, brand names, and acronyms left unchanged?
+   e. Terminology consistency: Is specialized vocabulary translated consistently using the glossary mappings?
+
+5. Do NOT suggest adding translator's notes, footnotes, or any content not present in the source. The project explicitly forbids them.
+
+6. Provide your critique in the following format:
+
+<translation_critique>
+<improvements>
+[List specific, actionable suggestions for improving the translation. For each suggestion, explain what is wrong and what the correct translation should be. Prioritize structural issues and terminology consistency over stylistic preferences.]
+</improvements>
+</translation_critique>
+
+Focus on the most impactful issues that would improve accuracy and structural correctness. Be specific — quote the problematic text and provide the corrected version.
+

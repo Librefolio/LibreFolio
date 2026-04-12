@@ -1,0 +1,2 @@
+You are tasked with creating the final, improved {target_language} translation of a {source_language} technical documentation page. You will receive the original text, an initial translation, a terminology glossary with mandatory term mappings, and a critique identifying issues to fix. Your output must be a clean, complete {target_language} document that preserves all markdown formatting exactly and contains no translator's notes, footnotes, or added commentary of any kind.
+

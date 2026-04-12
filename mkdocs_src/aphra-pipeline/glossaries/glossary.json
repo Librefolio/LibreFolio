@@ -1,0 +1,149 @@
+{
+  "_meta": {
+    "description": "Mandatory term mappings for LibreFolio documentation. LLM translators must use these exact terms for consistency across languages.",
+    "source_lang": "en"
+  },
+  "terms": {
+    "asset": {
+      "it": "asset",
+      "fr": "actif",
+      "es": "activo"
+    },
+    "portfolio": {
+      "it": "portafoglio",
+      "fr": "portefeuille",
+      "es": "cartera"
+    },
+    "broker": {
+      "it": "broker",
+      "fr": "courtier",
+      "es": "bróker"
+    },
+    "dividend": {
+      "it": "dividendo",
+      "fr": "dividende",
+      "es": "dividendo"
+    },
+    "exchange rate": {
+      "it": "tasso di cambio",
+      "fr": "taux de change",
+      "es": "tipo de cambio"
+    },
+    "stale": {
+      "it": "obsoleto",
+      "fr": "obsolète",
+      "es": "obsoleto"
+    },
+    "capital gain": {
+      "it": "plusvalenza",
+      "fr": "plus-value",
+      "es": "plusvalía"
+    },
+    "benchmark": {
+      "it": "benchmark",
+      "fr": "benchmark",
+      "es": "benchmark"
+    },
+    "allocation": {
+      "it": "allocazione",
+      "fr": "allocation",
+      "es": "asignación"
+    },
+    "volatility": {
+      "it": "volatilità",
+      "fr": "volatilité",
+      "es": "volatilidad"
+    },
+    "sidebar": {
+      "it": "barra laterale",
+      "fr": "barre latérale",
+      "es": "barra lateral"
+    },
+    "toggle": {
+      "it": "interruttore",
+      "fr": "interrupteur",
+      "es": "interruptor"
+    },
+    "dropdown": {
+      "it": "menu a tendina",
+      "fr": "menu déroulant",
+      "es": "menú desplegable"
+    },
+    "tooltip": {
+      "it": "suggerimento",
+      "fr": "infobulle",
+      "es": "información emergente"
+    },
+    "settings": {
+      "it": "impostazioni",
+      "fr": "paramètres",
+      "es": "configuración"
+    },
+    "dashboard": {
+      "it": "dashboard",
+      "fr": "tableau de bord",
+      "es": "panel de control"
+    },
+    "self-hosted": {
+      "it": "self-hosted",
+      "fr": "auto-hébergé",
+      "es": "autoalojado"
+    },
+    "open-source": {
+      "it": "open-source",
+      "fr": "open-source",
+      "es": "open-source"
+    },
+    "provider": {
+      "it": "provider",
+      "fr": "fournisseur",
+      "es": "proveedor"
+    },
+    "fallback": {
+      "it": "fallback",
+      "fr": "fallback",
+      "es": "fallback"
+    },
+    "overview": {
+      "it": "panoramica",
+      "fr": "aperçu",
+      "es": "descripción general"
+    },
+    "transaction": {
+      "it": "transazione",
+      "fr": "transaction",
+      "es": "transacción"
+    },
+    "holding": {
+      "it": "posizione",
+      "fr": "position",
+      "es": "posición"
+    },
+    "watchlist": {
+      "it": "watchlist",
+      "fr": "liste de suivi",
+      "es": "lista de seguimiento"
+    },
+    "signal": {
+      "it": "segnale",
+      "fr": "signal",
+      "es": "señal"
+    },
+    "owner": {
+      "it": "proprietario",
+      "fr": "propriétaire",
+      "es": "propietario"
+    },
+    "editor": {
+      "it": "editor",
+      "fr": "éditeur",
+      "es": "editor"
+    },
+    "viewer": {
+      "it": "visualizzatore",
+      "fr": "lecteur",
+      "es": "visor"
+    }
+  }
+}
+

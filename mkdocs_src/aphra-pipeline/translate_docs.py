@@ -55,6 +55,10 @@ EN_ONLY_SECTIONS = {"Developer Manual", "POC UX"}
 # Aphra model configuration (overridable per-role via .env)
 DEFAULT_APHRA_MODEL = "google/gemini-2.5-flash"
 
+# Prompt override and glossary directories
+PROMPTS_DIR = SCRIPT_DIR / "prompts" / "short_article"
+GLOSSARIES_DIR = SCRIPT_DIR / "glossaries"
+
 # Default Ollama base URL (OpenAI-compatible API)
 DEFAULT_OLLAMA_URL = "http://localhost:11434/v1"
 
@@ -281,7 +285,7 @@ def _generate_config_toml(api_key: str, models: dict) -> None:
 
     Format expected by Aphra (see config.example.toml):
       [openrouter]    → api_key
-      [short_article] → writer, searcher, critiquer  (model per role)
+      [short_article] → writer, searcher, critiquer, prompts_dir  (model per role + prompt overrides)
     """
     config_content = f"""[openrouter]
 api_key = "{api_key}"
@@ -290,6 +294,7 @@ api_key = "{api_key}"
 writer = "{models['writer']}"
 searcher = "{models['searcher']}"
 critiquer = "{models['critiquer']}"
+prompts_dir = "{PROMPTS_DIR}"
 """
     CONFIG_TOML.write_text(config_content, encoding="utf-8")
 
@@ -673,6 +678,55 @@ def _format_tokens(total: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Terminology glossary — per-language term mappings
+# ---------------------------------------------------------------------------
+
+def _load_glossary(target_lang: str) -> str:
+    """
+    Load terminology glossary for a target language from the monolithic glossary.json.
+
+    Reads glossaries/glossary.json (single source of truth for all languages)
+    and extracts the mappings for the requested target language.
+
+    Returns formatted glossary string, or empty string if file not found
+    or language not present.
+    """
+    glossary_file = GLOSSARIES_DIR / "glossary.json"
+    if not glossary_file.exists():
+        return ""
+
+    try:
+        data = json.loads(glossary_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  ⚠️  Failed to load glossary: {e}", file=sys.stderr)
+        return ""
+
+    terms = data.get("terms", {})
+    if not terms:
+        return ""
+
+    # Extract mappings for this target language
+    lang_name = LANG_NAMES.get(target_lang, target_lang)
+    mappings = []
+    for en_term, translations in terms.items():
+        if isinstance(translations, dict) and target_lang in translations:
+            mappings.append((en_term, translations[target_lang]))
+
+    if not mappings:
+        return ""
+
+    lines = [
+        f"## TERMINOLOGY GLOSSARY (English → {lang_name})",
+        "Use these exact translations consistently throughout the document:",
+        "",
+    ]
+    for en_term, target_term in mappings:
+        lines.append(f"- {en_term} → {target_term}")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Translation logic — shared-analysis architecture
 # ---------------------------------------------------------------------------
 
@@ -969,6 +1023,13 @@ def _analyze_source(source_text: str, model_client, models: dict):
 
     workflow_config = workflow.load_config(global_config_path=str(CONFIG_TOML))
 
+    # Ensure prompts_dir is set for step1 append files
+    if 'prompts_dir' not in workflow_config:
+        workflow_config['prompts_dir'] = str(PROMPTS_DIR)
+
+    # Store prompts_dir on workflow instance so self.get_prompt() uses overrides
+    workflow._prompts_dir = workflow_config.get('prompts_dir')
+
     # Use analyzer model (reasoning) for analysis step
     workflow_config['writer'] = models['analyzer']
 
@@ -988,6 +1049,7 @@ def _translate_one_lang(
     source_text: str, source_path: Path, target_lang: str,
     workflow, workflow_config: dict, model_client, models: dict,
     analysis: str,
+    log_buf: list[str] | None = None,
 ) -> dict:
     """
     Steps 2-5 for ONE target language: Search → Translate → Critique → Refine.
@@ -995,14 +1057,26 @@ def _translate_one_lang(
     Uses writer model (generation) for Translate+Refine and
     critiquer model (reasoning) for Critique.
 
+    Args:
+        log_buf: if provided, append log lines here instead of printing.
+                 Used in parallel mode to buffer output.
+
     Returns dict with translation artifacts:
         output_path:      Path | None — output file (None on failure)
         critique:         str — Step 4 critic output
         structural_diff:  str — Step 3.5 structural diff report
         structural_issues: int — number of structural anomalies found
         models:           dict — {"writer": ..., "critiquer": ...} used
+        log:              list[str] — collected log lines (only in parallel mode)
     """
     from aphra.core.context import TranslationContext
+
+    def _log(msg: str, end: str = "\n", is_error: bool = False) -> None:
+        """Print or buffer a log line."""
+        if log_buf is not None:
+            log_buf.append(msg)
+        else:
+            print(msg, end=end, flush=True, file=sys.stderr if is_error else sys.stdout)
 
     output_name = source_path.name.replace(".en.md", f".{target_lang}.md")
     output_path = source_path.parent / output_name
@@ -1031,22 +1105,28 @@ def _translate_one_lang(
     )
     context.set_workflow_config(workflow_config)
 
+    # Ensure prompts_dir is set on workflow for step3/4/5 append files
+    workflow._prompts_dir = workflow_config.get('prompts_dir', str(PROMPTS_DIR))
+
     web_search = _load_env_var("APHRA_WEB_SEARCH", "false").lower() in ("true", "1", "yes")
+
+    # Load terminology glossary for this target language
+    terminology = _load_glossary(target_lang)
+    if terminology:
+        _log(f"       [📖] Glossary     ... loaded ({target_lang})")
 
     # Step 2: Search (optional)
     if web_search:
         t1 = time.time()
-        print(f"       [2/5] 🔍 Search    ... ", end="", flush=True)
-        glossary = workflow.search(context, analysis)
-        print(f"({time.time() - t1:.0f}s)", flush=True)
+        search_glossary = workflow.search(context, analysis)
+        _log(f"       [2/5] 🔍 Search    ... ({time.time() - t1:.0f}s)")
     else:
-        glossary = ""
-        print(f"       [2/5] 🔍 Search    ... skipped", flush=True)
+        search_glossary = ""
+        _log(f"       [2/5] 🔍 Search    ... skipped")
 
     # Step 3: Translate (writer model — generation)
     workflow_config['writer'] = models['writer']
     t2 = time.time()
-    print(f"       [3/5] 🌐 Translate ... ", end="", flush=True)
     try:
         translation = _call_step(
             workflow.translate, context, source_text,
@@ -1055,58 +1135,60 @@ def _translate_one_lang(
     except (RateLimitError, AuthError):
         raise  # Propagate up — pipeline will abort
     except (TimeoutError, ConnectionError) as e:
-        print(f"\n       ⏱️  {e}", file=sys.stderr)
+        _log(f"       [3/5] 🌐 Translate ... ⏱️ {e}", is_error=True)
         return result
-    print(f"({time.time() - t2:.0f}s)", flush=True)
+    _log(f"       [3/5] 🌐 Translate ... ({time.time() - t2:.0f}s)")
 
     if not translation:
-        print(f"       ⚠️  Translate returned empty", file=sys.stderr)
+        _log(f"       ⚠️  Translate returned empty", is_error=True)
         return result
 
     # Step 3.5: Structural diff (fast, no LLM — objective comparison)
     struct_diff = _structural_diff(source_text, translation)
     struct_issues = 0
     if struct_diff:
-        # Prepend structural analysis to glossary so the critic sees it
-        glossary_with_diff = (
-            f"{struct_diff}\n\n---\n\n{glossary}" if glossary
-            else struct_diff
-        )
         struct_issues = sum(1 for line in struct_diff.splitlines()
                             if re.match(r'^\d+\.', line.strip()))
-        print(f"       [3.5]  📐 StructDiff ... {struct_issues} issue{'s' if struct_issues != 1 else ''}", flush=True)
+        _log(f"       [3.5]  📐 StructDiff ... {struct_issues} issue{'s' if struct_issues != 1 else ''}")
     else:
-        glossary_with_diff = glossary
-        print(f"       [3.5]  📐 StructDiff ... clean ✓", flush=True)
+        _log(f"       [3.5]  📐 StructDiff ... clean ✓")
+
+    # Build combined glossary for critique and refine:
+    # terminology glossary + search results + structural diff report
+    glossary_parts = []
+    if terminology:
+        glossary_parts.append(terminology)
+    if search_glossary:
+        glossary_parts.append(search_glossary)
+    if struct_diff:
+        glossary_parts.append(struct_diff)
+    glossary_combined = "\n\n---\n\n".join(glossary_parts) if glossary_parts else ""
 
     # Step 4: Critique (critiquer model — reasoning)
     t3 = time.time()
-    print(f"       [4/5] 🔎 Critique  ... ", end="", flush=True)
     try:
         critique = _call_step(
-            workflow.critique, context, source_text, translation, glossary_with_diff,
+            workflow.critique, context, source_text, translation, glossary_combined,
             step_name="Critique",
         )
     except (RateLimitError, AuthError):
         raise  # Propagate up — pipeline will abort
     except TimeoutError as e:
-        print(f"\n       ⏱️  {e}", file=sys.stderr)
-        # Critique timeout → skip critique, refine with what we have
         critique = "(Critique timed out — refining without critique feedback)"
-        print(f"       ⚠️  Continuing without critique...", flush=True)
+        _log(f"       [4/5] 🔎 Critique  ... ⏱️ timed out, continuing without critique")
     except ConnectionError as e:
-        print(f"\n       ❌ {e}", file=sys.stderr)
+        _log(f"       [4/5] 🔎 Critique  ... ❌ {e}", is_error=True)
         return result
-    print(f"({time.time() - t3:.0f}s)", flush=True)
+    else:
+        _log(f"       [4/5] 🔎 Critique  ... ({time.time() - t3:.0f}s)")
 
     # Step 5: Refine (writer model — generation, with retry + timeout)
     t4 = time.time()
-    print(f"       [5/5] ✨ Refine    ... ", end="", flush=True)
     translated = _robust_refine(
         workflow, context, source_text,
-        translation=translation, glossary=glossary, critique=critique,
+        translation=translation, glossary=glossary_combined, critique=critique,
     )
-    print(f"({time.time() - t4:.0f}s)", flush=True)
+    _log(f"       [5/5] ✨ Refine    ... ({time.time() - t4:.0f}s)")
 
     # Update result with collected artifacts
     result["critique"] = critique or ""
@@ -1118,7 +1200,7 @@ def _translate_one_lang(
         output_path.write_text(translated, encoding="utf-8")
         result["output_path"] = output_path
     else:
-        print(f"  ⚠️  Empty translation for {source_path.name} → {target_lang}", file=sys.stderr)
+        _log(f"       ⚠️  Empty translation for {source_path.name} → {target_lang}", is_error=True)
 
     return result
 
@@ -1139,6 +1221,7 @@ def run_translate(args) -> int:
     cli_retries = getattr(args, "rate_limit_retries", None)
     if cli_retries is not None:
         DEFAULT_RATE_LIMIT_RETRIES = cli_retries
+    workers = max(1, getattr(args, "workers", 1))
 
     # Build list of (cache_key, source_path) tuples
     # - From nav: cache_key is relative to docs/, source_path = DOCS_DIR / rel
@@ -1275,6 +1358,8 @@ def run_translate(args) -> int:
     timeout_s = _get_step_timeout()
     print(f"   Step timeout: {_format_elapsed(timeout_s)}")
     print(f"   Rate limit: {DEFAULT_RATE_LIMIT_RETRIES} retries, {DEFAULT_RATE_LIMIT_PAUSE}s pause")
+    if workers > 1:
+        print(f"   Workers: {workers} (parallel per-language translations)")
     print(f"   Cache: {HASH_FILE}")
     print()
 
@@ -1292,6 +1377,8 @@ def run_translate(args) -> int:
     total_tokens_est = 0
     translation_idx = 0
     t_total = time.time()
+    # Collect successful translations for post-step validation
+    completed_translations: list[tuple[str, Path, Path, str]] = []  # (cache_key, source_path, output_path, lang)
 
     try:
         model_client = _create_model_client(api_key, models)
@@ -1340,84 +1427,200 @@ def run_translate(args) -> int:
             _save_hashes(hashes)
 
             # ── Steps 2-5: per language ──
+            # In parallel mode: submit all languages to the pool, collect results,
+            # then print grouped output when all are done for this file.
+            # In sequential mode: run and print one at a time (original behavior).
             rate_limited = False
-            for lang in langs:
-                translation_idx += 1
-                target_label = LANG_NAMES.get(lang, lang)
-                print(f"\n     🌐 [{_now()}] [{translation_idx}/{len(plan)}] → {target_label} ({lang})")
-                start = time.time()
 
-                try:
-                    result = _translate_one_lang(
-                        source_text=source_text,
-                        source_path=source_path,
-                        target_lang=lang,
-                        workflow=workflow,
-                        workflow_config=workflow_config,
-                        model_client=model_client,
-                        models=models,
-                        analysis=analysis,
-                    )
-                except (RateLimitError, AuthError) as e:
-                    print(f"\n     🛑 {e}", file=sys.stderr)
-                    result = {"output_path": None}
-                    rate_limited = True
-                    fail_count += 1
-                    break  # Stop this file's languages
-                except Exception as e:
-                    result = {"output_path": None}
-                    print(f"\n     ❌ Error: {e}", file=sys.stderr)
+            if workers > 1 and len(langs) > 1:
+                # ── Parallel mode ──
+                from concurrent.futures import ThreadPoolExecutor, as_completed
 
-                output_path = result.get("output_path")
+                effective_workers = min(workers, len(langs))
+                print(f"\n     ⚡ [{_now()}] Parallel: {effective_workers} workers × {len(langs)} languages", flush=True)
 
-                if output_path:
+                # Submit all languages to the pool
+                lang_results: dict[str, tuple[dict, float, list[str]]] = {}
+                with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+                    futures = {}
+                    for lang in langs:
+                        log_buf: list[str] = []
+                        future = executor.submit(
+                            _translate_one_lang,
+                            source_text=source_text,
+                            source_path=source_path,
+                            target_lang=lang,
+                            workflow=workflow,
+                            workflow_config=dict(workflow_config),  # copy to avoid race
+                            model_client=model_client,
+                            models=models,
+                            analysis=analysis,
+                            log_buf=log_buf,
+                        )
+                        futures[future] = (lang, log_buf)
+
+                    for future in as_completed(futures):
+                        lang, log_buf = futures[future]
+                        try:
+                            result = future.result()
+                            elapsed = result.get("elapsed_internal", 0)
+                        except (RateLimitError, AuthError) as e:
+                            lang_results[lang] = ({"output_path": None}, 0, [f"       🛑 {e}"])
+                            rate_limited = True
+                            for f in futures:
+                                f.cancel()
+                            break
+                        except Exception as e:
+                            lang_results[lang] = ({"output_path": None}, 0, [f"       ❌ Error: {e}"])
+                            continue
+
+                        lang_results[lang] = (result, elapsed, log_buf)
+
+                # ── Print grouped output for all languages of this file ──
+                for lang in langs:
+                    if lang not in lang_results:
+                        lang_results[lang] = ({"output_path": None}, 0, ["       ❌ Cancelled (rate limit)"])
+
+                    result, elapsed, log_buf = lang_results[lang]
+                    translation_idx += 1
+                    target_label = LANG_NAMES.get(lang, lang)
+                    output_path = result.get("output_path")
+
+                    print(f"\n     🌐 [{translation_idx}/{len(plan)}] → {target_label} ({lang})")
+                    for line in log_buf:
+                        print(f"  {line}")
+
+                    if output_path:
+                        est = _estimate_tokens(source_path.stat().st_size)
+                        total_tokens_est += est["total"]
+                        print(f"     ✅ Done ({_format_tokens(est['total'])}) → {output_path}")
+                        success_count += 1
+                        completed_translations.append((cache_key, source_path, output_path, lang))
+
+                        current_md5 = _file_md5(source_path)
+                        hashes[cache_key]["md5"] = current_md5
+                        if lang not in hashes[cache_key].get("langs_done", []):
+                            hashes[cache_key].setdefault("langs_done", []).append(lang)
+                        hashes[cache_key]["last_translated"] = datetime.now(timezone.utc).isoformat()
+                        if "langs" not in hashes[cache_key]:
+                            hashes[cache_key]["langs"] = {}
+                        hashes[cache_key]["langs"][lang] = {
+                            "translated_at": datetime.now(timezone.utc).isoformat(),
+                            "models": result.get("models", {}),
+                            "critique": result.get("critique", ""),
+                            "structural_diff": result.get("structural_diff", ""),
+                            "structural_issues": result.get("structural_issues", 0),
+                        }
+                    else:
+                        fail_count += 1
+                        print(f"     ❌ Failed")
+                        if "langs" not in hashes[cache_key]:
+                            hashes[cache_key]["langs"] = {}
+                        hashes[cache_key]["langs"][lang] = {
+                            "translated_at": datetime.now(timezone.utc).isoformat(),
+                            "models": result.get("models", {}),
+                            "failed": True,
+                        }
+
+                _save_hashes(hashes)
+
+            else:
+                # ── Sequential mode (original behavior, log_buf=None → direct print) ──
+                for lang in langs:
+                    translation_idx += 1
+                    target_label = LANG_NAMES.get(lang, lang)
+                    print(f"\n     🌐 [{_now()}] [{translation_idx}/{len(plan)}] → {target_label} ({lang})")
+                    start = time.time()
+
+                    try:
+                        result = _translate_one_lang(
+                            source_text=source_text,
+                            source_path=source_path,
+                            target_lang=lang,
+                            workflow=workflow,
+                            workflow_config=workflow_config,
+                            model_client=model_client,
+                            models=models,
+                            analysis=analysis,
+                            log_buf=None,  # direct print
+                        )
+                    except (RateLimitError, AuthError) as e:
+                        print(f"\n     🛑 {e}", file=sys.stderr)
+                        result = {"output_path": None}
+                        rate_limited = True
+                        fail_count += 1
+                        break
+                    except Exception as e:
+                        result = {"output_path": None}
+                        print(f"\n     ❌ Error: {e}", file=sys.stderr)
+
+                    output_path = result.get("output_path")
                     elapsed = time.time() - start
-                    est = _estimate_tokens(source_path.stat().st_size)
-                    total_tokens_est += est["total"]
-                    print(f"     ✅ [{_now()}] Done ({_format_elapsed(elapsed)}, {_format_tokens(est['total'])}) → {output_path}")
-                    success_count += 1
 
-                    # Update hash cache — backward-compat fields
-                    current_md5 = _file_md5(source_path)
-                    hashes[cache_key]["md5"] = current_md5
-                    if lang not in hashes[cache_key].get("langs_done", []):
-                        hashes[cache_key].setdefault("langs_done", []).append(lang)
-                    hashes[cache_key]["last_translated"] = datetime.now(timezone.utc).isoformat()
+                    if output_path:
+                        est = _estimate_tokens(source_path.stat().st_size)
+                        total_tokens_est += est["total"]
+                        print(f"     ✅ [{_now()}] Done ({_format_elapsed(elapsed)}, {_format_tokens(est['total'])}) → {output_path}")
+                        success_count += 1
+                        completed_translations.append((cache_key, source_path, output_path, lang))
 
-                    # Save per-language artifacts
-                    if "langs" not in hashes[cache_key]:
-                        hashes[cache_key]["langs"] = {}
-                    hashes[cache_key]["langs"][lang] = {
-                        "translated_at": datetime.now(timezone.utc).isoformat(),
-                        "models": result.get("models", {}),
-                        "critique": result.get("critique", ""),
-                        "structural_diff": result.get("structural_diff", ""),
-                        "structural_issues": result.get("structural_issues", 0),
-                        "elapsed_s": round(elapsed, 1),
-                    }
-                    _save_hashes(hashes)
-                else:
-                    fail_count += 1
-                    print("     ❌ Failed")
+                        current_md5 = _file_md5(source_path)
+                        hashes[cache_key]["md5"] = current_md5
+                        if lang not in hashes[cache_key].get("langs_done", []):
+                            hashes[cache_key].setdefault("langs_done", []).append(lang)
+                        hashes[cache_key]["last_translated"] = datetime.now(timezone.utc).isoformat()
 
-                    # Save failure info too (useful for debugging)
-                    if "langs" not in hashes[cache_key]:
-                        hashes[cache_key]["langs"] = {}
-                    hashes[cache_key]["langs"][lang] = {
-                        "translated_at": datetime.now(timezone.utc).isoformat(),
-                        "models": result.get("models", {}),
-                        "critique": result.get("critique", ""),
-                        "structural_diff": result.get("structural_diff", ""),
-                        "structural_issues": result.get("structural_issues", 0),
-                        "failed": True,
-                    }
-                    _save_hashes(hashes)
+                        if "langs" not in hashes[cache_key]:
+                            hashes[cache_key]["langs"] = {}
+                        hashes[cache_key]["langs"][lang] = {
+                            "translated_at": datetime.now(timezone.utc).isoformat(),
+                            "models": result.get("models", {}),
+                            "critique": result.get("critique", ""),
+                            "structural_diff": result.get("structural_diff", ""),
+                            "structural_issues": result.get("structural_issues", 0),
+                            "elapsed_s": round(elapsed, 1),
+                        }
+                        _save_hashes(hashes)
+                    else:
+                        fail_count += 1
+                        print("     ❌ Failed")
+
+                        if "langs" not in hashes[cache_key]:
+                            hashes[cache_key]["langs"] = {}
+                        hashes[cache_key]["langs"][lang] = {
+                            "translated_at": datetime.now(timezone.utc).isoformat(),
+                            "models": result.get("models", {}),
+                            "critique": result.get("critique", ""),
+                            "structural_diff": result.get("structural_diff", ""),
+                            "structural_issues": result.get("structural_issues", 0),
+                            "failed": True,
+                        }
+                        _save_hashes(hashes)
 
             if rate_limited:
                 break  # Stop all files — rate limit hit
 
     finally:
         _cleanup_config_toml()
+
+    # ── Post-step: structural diff validation on FINAL output files ──
+    # The Step 3.5 diff runs on the intermediate translation (before Critique/Refine).
+    # This post-step checks the actual written files after _clean_translation().
+    post_warnings: list[tuple[str, str, int, str]] = []  # (cache_key, lang, issues, report)
+    if completed_translations:
+        print(f"\n🔍 [{_now()}] Post-step: structural validation on {len(completed_translations)} output file(s)...")
+        for cache_key, source_path, output_path, lang in completed_translations:
+            report = _structural_diff_report(source_path, output_path)
+            if report:
+                issue_count = sum(1 for line in report.splitlines()
+                                  if re.match(r'^\d+\.', line.strip()))
+                post_warnings.append((cache_key, lang, issue_count, report))
+                # Update hash cache with final structural diff
+                if cache_key in hashes and "langs" in hashes[cache_key] and lang in hashes[cache_key]["langs"]:
+                    hashes[cache_key]["langs"][lang]["final_structural_diff"] = report
+                    hashes[cache_key]["langs"][lang]["final_structural_issues"] = issue_count
+        if post_warnings:
+            _save_hashes(hashes)
 
     # Summary
     total_elapsed = time.time() - t_total
@@ -1428,6 +1631,26 @@ def run_translate(args) -> int:
     print(f"📊 Estimated tokens: {_format_tokens(total_tokens_est)}")
     if fail_count:
         print(f"⚠️  Re-run to retry failed translations.")
+
+    # Post-step warnings
+    if post_warnings:
+        print(f"\n{'─' * 50}")
+        print(f"⚠️  {len(post_warnings)} file(s) with structural issues in FINAL output:")
+        print(f"   (These need human review — the LLM may have altered markdown structure)\n")
+        for cache_key, lang, issue_count, report in post_warnings:
+            print(f"  ⚠️  {cache_key} → {lang}  ({issue_count} issue{'s' if issue_count != 1 else ''})")
+            # Print first 3 issue lines as preview
+            issue_lines = [line for line in report.splitlines() if re.match(r'^\d+\.', line.strip())]
+            for line in issue_lines[:3]:
+                print(f"       {line.strip()}")
+            if len(issue_lines) > 3:
+                print(f"       ... +{len(issue_lines) - 3} more")
+            # Print the command to inspect this specific file
+            print(f"       👉 pipenv run python mkdocs_src/aphra-pipeline/translate_docs.py diff --file {cache_key} --lang {lang} --verbose")
+            print()
+    elif completed_translations:
+        print(f"\n✅ Post-step: all {len(completed_translations)} output files structurally clean ✓")
+
     print()
 
     return 1 if fail_count else 0
@@ -1816,6 +2039,7 @@ def _add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--force", action="store_true", help="Re-translate all files (ignore MD5 cache)", )
     parser.add_argument("--dry-run", action="store_true", help="Show plan without translating", )
     parser.add_argument("--rate-limit-retries", type=int, default=DEFAULT_RATE_LIMIT_RETRIES, metavar="N", help=f"Max retries on rate limit (429), with {DEFAULT_RATE_LIMIT_PAUSE}s pause between (default: {DEFAULT_RATE_LIMIT_RETRIES})", )
+    parser.add_argument("--workers", type=int, default=1, metavar="N", help="Number of parallel translation workers per file (default: 1 = sequential). Each worker translates one language concurrently. Use with caution on free-tier models that may have rate limits.", )
 
 
 def _add_diff_arguments(parser: argparse.ArgumentParser) -> None:

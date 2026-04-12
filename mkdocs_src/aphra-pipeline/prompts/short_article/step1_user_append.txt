@@ -1,0 +1,13 @@
+
+Important domain-specific guidance for this analysis:
+
+The text is technical documentation for a financial portfolio tracker. Prioritize terms where the {target_language} translation is ambiguous or has multiple possible domain-specific meanings. Common categories in this documentation:
+
+- Financial terms used with specific meaning: "stale" (outdated market data, not food), "asset" (financial instrument, not generic possession), "holding" (portfolio position), "signal" (technical analysis indicator: EMA, MACD, RSI, Bollinger), "benchmark", "allocation", "capital gain", "dividend", "exchange rate", "volatility"
+- Software/UI terms that may need consistent translation: "provider" (data source/API integration), "fallback" (automatic backup mechanism), "self-hosted" (deployed on user's own server), "sidebar", "toggle", "dropdown", "tooltip", "dashboard", "settings"
+- Terms that should remain in English: acronyms (ETF, API, JSON, YAML, HTML, CSV, FIFO, NAV), brand names, CLI commands, code identifiers
+
+Do NOT flag markdown formatting elements (headings, links, code fences, bold markers) as translatable terms — those are structural and handled separately by an automated structural validator.
+
+You MUST output your analysis using the exact XML format shown above with <reasoning>, <analysis>, <item>, <name>, and <keywords> tags.
+

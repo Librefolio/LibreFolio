@@ -1,0 +1,37 @@
+Here is the {source_language} text to be translated:
+
+<{source_language}_text>
+{text}
+</{source_language}_text>
+
+This is technical documentation written in MkDocs Material markdown format. Your goal is to produce an accurate {target_language} translation that preserves the document structure, formatting, and technical accuracy.
+
+Follow these rules strictly:
+
+1. Translate the prose content (headings, paragraphs, list item text, admonition body text, link display text, image alt text) into natural, fluent {target_language}.
+
+2. PRESERVE EXACTLY as-is, without any modification:
+   - All URLs and file paths inside links: `[text](url)` — translate "text", keep "url" unchanged
+   - All image references: `![alt](path)` — translate "alt", keep "path" unchanged
+   - All HTML tags, attributes, inline styles, and CSS classes — copy character-for-character
+   - All fenced code blocks (``` ... ```) and inline code (`...`) — do NOT translate code content
+   - All MkDocs admonition type keywords: `!!! tip`, `??? example`, `!!! warning` — keep the keyword in English, translate only the quoted title and the 4-space-indented body
+   - Emoji characters — copy exactly as they appear (e.g., 🎯, ⚠️, 📊, 🏦)
+   - Whitespace and indentation patterns — preserve the exact number of spaces, especially in HTML blocks and admonition bodies
+
+3. Do NOT translate:
+   - Variable names, CLI commands, JSON keys, YAML keys, API endpoint paths
+   - Brand names: LibreFolio, Docker, MkDocs, OpenRouter, Ollama, etc.
+   - Acronyms: ETF, API, CSV, FIFO, NAV, MACD, RSI, EMA, FX, etc.
+
+4. Do NOT add any content not present in the source:
+   - No translator's notes, footnotes, or inline markers [N]
+   - No glossary or notes section at the end
+   - No commentary or explanation about translation choices
+
+5. Provide your {target_language} translation within <translation> tags. Output ONLY the translated document inside the tags — nothing before, nothing after.
+
+<translation>
+Your complete {target_language} translation here, preserving all markdown formatting exactly.
+</translation>
+
