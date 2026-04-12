@@ -50,6 +50,11 @@ export default defineConfig({
             name: 'mobile',
             use: {
                 ...devices['iPhone 14 Pro Max'],
+                // Force Chromium for mobile emulation — WebKit on Linux has
+                // stability issues (click actions hang, touch events stall).
+                // The device descriptor still provides viewport, isMobile,
+                // hasTouch, and deviceScaleFactor for proper mobile rendering.
+                browserName: 'chromium',
                 // viewport: { width: 430, height: 932 }  // già incluso nel device
             },
         },

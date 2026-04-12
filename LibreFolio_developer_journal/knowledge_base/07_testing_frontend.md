@@ -71,11 +71,18 @@ npx playwright test --headed
 
 ### Playwright Config (`playwright.config.ts`)
 
-- **2 progetti**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max)
+- **2 progetti**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max viewport, Chromium)
+- **Mobile usa Chromium**: il device descriptor `iPhone 14 Pro Max` fornisce viewport/isMobile/hasTouch, ma usiamo Chromium come browser (WebKit su Linux ha problemi di stabilità con click/touch)
 - **Workers**: 1 (test sequenziali — stato condiviso nel DB)
 - **Timeout**: 30s per test, 3s per singola assertion
 - **Web Server auto-start**: `./dev.py server --test --force` (porta 8001)
 - **Retry**: 0 locale, 2 in CI
+
+⚠️ **Linux**: Playwright richiede librerie di sistema aggiuntive:
+```bash
+sudo npx playwright install-deps
+# oppure: sudo apt-get install libgstreamer-plugins-bad1.0-0 libflite1 libavif16 gstreamer1.0-libav
+```
 
 ### Fixtures (`e2e/fixtures/`)
 
@@ -184,8 +191,12 @@ export async function navigateToAssetByName(page, assetName: string) {
 
 `gallery.spec.ts` cattura screenshot automatici per la documentazione MkDocs:
 - Light + Dark mode
-- Desktop + Mobile viewport
+- Desktop + Mobile viewport (entrambi via Chromium)
 - Dati deterministici (DB resettato con `--with-static --with-reports`)
+
+**Prerequisiti**:
+- `./dev.py db populate --force` prima della generazione
+- Su Linux: `sudo npx playwright install-deps` per librerie di rendering
 
 ```bash
 # Genera gallery completa
