@@ -54,6 +54,7 @@ Pipfile.lock
 
 # Generated for Docker (from Pipfile.lock via dev.py docker build)
 requirements.txt
+LibreFolio-data/
 
 # Node.js
 **/node_modules/
