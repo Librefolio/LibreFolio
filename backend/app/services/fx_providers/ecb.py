@@ -58,7 +58,7 @@ class ECBProvider(FXRateProvider):
 
     @property
     def docs_url(self) -> str | None:
-        return "/mkdocs/developer/backend/fx/providers_list/#ecb-european-central-bank"
+        return "/mkdocs/developer/backend/fx/providers_list/#ecb"
 
     @property
     def description_i18n(self) -> dict[str, str]:

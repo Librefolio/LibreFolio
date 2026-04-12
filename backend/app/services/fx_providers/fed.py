@@ -86,7 +86,7 @@ class FEDProvider(FXRateProvider):
 
     @property
     def docs_url(self) -> str | None:
-        return "/mkdocs/developer/backend/fx/providers_list/#fed-federal-reserve-fred"
+        return "/mkdocs/developer/backend/fx/providers_list/#fed"
 
     @property
     def base_currency(self) -> str:

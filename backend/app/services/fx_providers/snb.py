@@ -101,7 +101,7 @@ class SNBProvider(FXRateProvider):
 
     @property
     def docs_url(self) -> str | None:
-        return "/mkdocs/developer/backend/fx/providers_list/#snb-swiss-national-bank"
+        return "/mkdocs/developer/backend/fx/providers_list/#snb"
 
     @property
     def base_currency(self) -> str:

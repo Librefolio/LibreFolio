@@ -41,6 +41,7 @@ from backend.app.schemas.assets import (
     )
 from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.utils.sector_fin_utils import validate_sector
+from datetime import datetime as _dt, timezone as _tz
 
 logger = get_logger(__name__)
 
@@ -192,8 +193,7 @@ class YahooFinanceProvider(AssetSourceProvider):
             # Date from regularMarketTime (Unix timestamp) or today
             rmt = info.get("regularMarketTime")
             if rmt:
-                from datetime import datetime as _dt
-                as_of_date = _dt.utcfromtimestamp(rmt).date()
+                as_of_date = _dt.fromtimestamp(rmt, tz=_tz.utc).date()
             else:
                 as_of_date = date.today()
 

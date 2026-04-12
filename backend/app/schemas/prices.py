@@ -44,6 +44,28 @@ from backend.app.schemas.common import (
 
 
 # ============================================================================
+# BACKWARD-FILL INFO (EXTENDED FOR FX STALENESS)
+# ============================================================================
+
+
+class AssetBackwardFillInfo(BackwardFillInfo):
+    """Extended backward-fill info for asset prices with FX staleness tracking.
+
+    Inherits price staleness from BackwardFillInfo (actual_rate_date, days_back).
+    Adds FX-specific staleness fields for currency-converted prices.
+
+    When a price is converted to a target currency:
+    - fx_rate_date: the actual date of the FX rate used for conversion
+    - fx_days_back: how many days old the FX rate is (0 = same-day rate)
+
+    Both fields are None when no currency conversion was performed.
+    """
+
+    fx_rate_date: Optional[date_type] = Field(None, description="Actual date of the FX rate used for conversion")
+    fx_days_back: Optional[int] = Field(None, description="Days back for the FX rate (0 = same-day, None = no conversion)")
+
+
+# ============================================================================
 # FA PRICE UPSERT
 # ============================================================================
 
@@ -69,9 +91,8 @@ class FAPricePoint(BaseModel):
     close: Decimal = Field(..., description="Closing price (required)")
     volume: Optional[Decimal] = Field(None, description="Trading volume")
     currency: str = Field(..., description="Currency code (ISO 4217)")
-    backward_fill_info: Optional[BackwardFillInfo] = Field(
-        None, description="Backward-fill info (only in query results)"
-        )
+    original_currency: Optional[str] = Field(None, description="Original currency before FX conversion (None = no conversion)")
+    backward_fill_info: Optional[AssetBackwardFillInfo] = Field(None, description="Backward-fill + FX staleness info (only in query results)")
 
     @field_validator("currency")
     @classmethod
@@ -333,6 +354,14 @@ class FAPriceQueryItem(BaseModel):
     date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
     include_price: bool = Field(True, description="Include price history in response")
     include_events: bool = Field(False, description="Include asset events in response")
+    target_currency: Optional[str] = Field(None, description="Convert prices to this currency via FX rates (None = native currency)")
+
+    @field_validator("target_currency")
+    @classmethod
+    def target_currency_validate(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return Currency.validate_code(v)
+        return v
 
 
 class FAPriceQueryResult(BaseModel):
@@ -343,6 +372,7 @@ class FAPriceQueryResult(BaseModel):
     asset_id: int = Field(..., description="Asset ID queried")
     prices: List[FAPricePoint] = Field(default_factory=list, description="Price history with backward-fill")
     events: List[FAAssetEventPoint] = Field(default_factory=list, description="Asset events (if requested)")
+    errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. FX pair missing)")
 
 
 class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
@@ -381,5 +411,3 @@ class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
     - errors: List[str]
     """
     pass
-
-

@@ -506,8 +506,9 @@ async def test_sync_idempotency(test_server):
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
             )
-        assert create_resp.status_code == 200
-        asset_id = create_resp.json()["items"][0]["id"]
+        assert create_resp.status_code == 201
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
 
         assignment = FAProviderAssignmentItem(
             asset_id=asset_id, provider_code="yfinance",
@@ -566,8 +567,9 @@ async def test_query_with_include_events(test_server):
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
             )
-        assert create_resp.status_code == 200
-        asset_id = create_resp.json()["items"][0]["id"]
+        assert create_resp.status_code == 201
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
 
         today = date.today()
         start = (today - timedelta(days=30)).isoformat()
@@ -623,8 +625,9 @@ async def test_bulk_sync_multi_asset(test_server):
             resp = await client.post(
                 f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
                 )
-            assert resp.status_code == 200
-            aid = resp.json()["items"][0]["id"]
+            assert resp.status_code == 201
+            create_data = FABulkAssetCreateResponse(**resp.json())
+            aid = create_data.results[0].asset_id
             asset_ids.append(aid)
 
             assignment = FAProviderAssignmentItem(

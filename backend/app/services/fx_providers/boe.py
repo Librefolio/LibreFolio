@@ -75,7 +75,7 @@ class BOEProvider(FXRateProvider):
 
     @property
     def docs_url(self) -> str | None:
-        return "/mkdocs/developer/backend/fx/providers_list/#boe-bank-of-england"
+        return "/mkdocs/developer/backend/fx/providers_list/#boe"
 
     @property
     def base_currency(self) -> str:

@@ -17,7 +17,15 @@ Autocompletion setup:
 
 import os
 import sys
+import re
+import math
+import shutil
+import signal
+import secrets
 import argparse
+import platform
+import subprocess
+import time
 from pathlib import Path
 
 try:
@@ -60,8 +68,6 @@ from scripts.cli_tree_parser import TreeParser, format_help
 
 def check_port_in_use(port: int) -> list:
     """Check if port is in use and return list of (PID, process_name) tuples."""
-    import subprocess
-    import platform
 
     processes = []
     try:
@@ -134,6 +140,7 @@ def cmd_server(args):
     workers = getattr(args, 'workers', 1)
     host_override = getattr(args, 'host', None)
     port_override = getattr(args, 'port', None)
+    coverage_mode = getattr(args, 'coverage', False)
 
     if test_mode:
         port = get_test_server_port()
@@ -153,7 +160,6 @@ def cmd_server(args):
     if processes_using_port:
         if force:
             # --force: kill blocking processes and continue
-            import signal
             pids = [pid for pid, _ in processes_using_port]
             print_warning(f"Port {port} is in use — killing {len(pids)} blocking process(es)...")
             for pid, proc_name in processes_using_port:
@@ -166,7 +172,6 @@ def cmd_server(args):
                     print_error(f"  Cannot kill PID {pid} ({proc_name}) — permission denied")
                     return 1
             # Wait briefly for port to be released
-            import time
             time.sleep(1)
             # Verify port is now free
             still_in_use = check_port_in_use(port)
@@ -238,13 +243,20 @@ def cmd_server(args):
         env["LIBREFOLIO_TEST_MODE"] = "1"
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
+    if coverage_mode:
+        coveragerc = str(PROJECT_ROOT / ".coveragerc")
+        env["COVERAGE_PROCESS_START"] = coveragerc
+        print(f"{Colors.YELLOW}📊 Coverage tracking enabled via sitecustomize.py{Colors.NC}")
+        print(f"{Colors.YELLOW}   Config: {coveragerc}{Colors.NC}")
+        print(f"{Colors.YELLOW}   Coverage data will be written to .coverage.<pid> on shutdown{Colors.NC}")
+        print(f"{Colors.YELLOW}   After tests: coverage combine && coverage html && open htmlcov/index.html{Colors.NC}")
+        print()
 
     # Generate a shared JWT secret for all workers.
     # On macOS, Python uses 'spawn' (not fork) for multiprocessing, so each
     # uvicorn worker is a fresh process. Without a shared env var, each worker
     # would generate its own random secret → tokens invalid across workers.
-    import secrets as _secrets
-    env.setdefault("JWT_SECRET", _secrets.token_urlsafe(64))
+    env.setdefault("JWT_SECRET", secrets.token_urlsafe(64))
 
     uvicorn_cmd = [
         *pipenv_prefix(), "uvicorn",
@@ -487,7 +499,6 @@ def _check_admonition_empty_lines():
     Without the empty line, Prettier removes the 4-space body indentation,
     breaking the MkDocs admonition rendering.
     """
-    import re
     docs_dir = PROJECT_ROOT / "mkdocs_src" / "docs"
     adm_re = re.compile(r'^(?:!!!|[?]{3})\s+\w+')
     bad_files = []
@@ -495,7 +506,7 @@ def _check_admonition_empty_lines():
     for md_file in sorted(docs_dir.rglob("*.md")):
         lines = md_file.read_text().splitlines()
         for i, line in enumerate(lines):
-            if adm_re.match(line):
+            if admre.match(line):
                 if i + 1 < len(lines) and lines[i + 1].strip() != '':
                     if lines[i + 1].startswith('    '):
                         rel = md_file.relative_to(docs_dir)
@@ -534,7 +545,6 @@ def cmd_mkdocs_serve(args):
 def cmd_mkdocs_clean(args):
     """Remove built site directory."""
     print(Colors.warning("Removing site directory..."))
-    import shutil
     site_dir = PROJECT_ROOT / "mkdocs_src" / "site"
     if site_dir.exists():
         shutil.rmtree(site_dir)
@@ -551,7 +561,6 @@ def cmd_mkdocs_deploy(args):
 
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
-    import subprocess
 
     list_tests = getattr(args, 'list_tests', False)
     filter_text = getattr(args, 'filter', None)
@@ -566,7 +575,6 @@ def cmd_mkdocs_gallery(args):
         if not gallery_spec.exists():
             print_error("gallery.spec.ts not found")
             return 1
-        import re
         content = gallery_spec.read_text()
         current_describe = ""
         print(f"\n{Colors.CYAN}📸 Available Gallery Tests:{Colors.NC}")
@@ -617,10 +625,8 @@ def cmd_mkdocs_gallery(args):
 
     failures = []
     # Determine worker count: --workers flag or CPU count
-    import os as _os
-    import math
     explicit_workers = getattr(args, 'workers', None)
-    cpu_count = _os.cpu_count() or 2
+    cpu_count = os.cpu_count() or 2
     worker_count = explicit_workers if explicit_workers else max(2, cpu_count)
     # Server workers: 1 per 4 browser workers, minimum 1
     server_workers = max(1, math.ceil(worker_count / 4))
@@ -628,7 +634,7 @@ def cmd_mkdocs_gallery(args):
 
     # --- Port conflict check ---
     # Determine which port the test server will use
-    effective_port = test_port or _os.environ.get('TEST_PORT') or get_test_server_port()
+    effective_port = test_port or os.environ.get('TEST_PORT') or get_test_server_port()
     processes_using_port = check_port_in_use(int(effective_port))
     if processes_using_port:
         print_error(f"Port {effective_port} is already in use!")
@@ -662,7 +668,7 @@ def cmd_mkdocs_gallery(args):
     print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
     # Pass server worker count + optional port via env so playwright.config.ts can use it
     # Stream output live to terminal (no capture_output) so user sees progress
-    gallery_env = _os.environ.copy()
+    gallery_env = os.environ.copy()
     gallery_env["GALLERY_SERVER_WORKERS"] = str(server_workers)
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
@@ -686,6 +692,171 @@ def cmd_mkdocs_gallery(args):
         print_success("\n✅ Gallery screenshots generated successfully!")
     print(f"{Colors.GREEN}Output: mkdocs_src/docs/gallery/{Colors.NC}")
     return 1 if failures else 0
+
+
+def cmd_mkdocs_check_links(args):
+    """Validate cross-boundary links: frontend/backend → MkDocs docs.
+
+    Scope 1: Frontend docsPath / /mkdocs/ URLs → docs file existence + anchor check.
+    Scope 2: Backend provider docs_url → docs file existence.
+    """
+
+    docs_root = PROJECT_ROOT / "mkdocs_src" / "docs"
+    frontend_src = PROJECT_ROOT / "frontend" / "src"
+    errors = []
+    ok_count = 0
+
+    print(Colors.success("🔗 Checking cross-boundary links (frontend/backend → docs)...\n"))
+
+    # ── Scope 1: Frontend → docs ──────────────────────────────────────────
+    print(f"{Colors.CYAN}── Scope 1: Frontend → MkDocs ──{Colors.NC}")
+
+    # 1a. Collect docsPath values from .ts and .svelte files
+    docs_paths: list[tuple[str, str, int]] = []  # (path, file, line)
+    for ext in ("*.ts", "*.svelte"):
+        for f in frontend_src.rglob(ext):
+            for i, line in enumerate(f.read_text().splitlines(), 1):
+                # static docsPath = '...'  or  docsPath: '...'
+                m = re.search(r"""docsPath\s*[:=]\s*['"]([^'"]+)['"]""", line)
+                if m:
+                    docs_paths.append((m.group(1), str(f.relative_to(PROJECT_ROOT)), i))
+
+    # 1b. Collect /mkdocs/ URLs from window.open and href=
+    for ext in ("*.ts", "*.svelte"):
+        for f in frontend_src.rglob(ext):
+            for i, line in enumerate(f.read_text().splitlines(), 1):
+                m = re.search(r"""/mkdocs/([^'"`,\s)]+)""", line)
+                if m:
+                    raw = m.group(1).rstrip("/")
+                    # Skip template variables like ${prefix}
+                    if "${" in raw:
+                        # Extract after the template var — e.g. ${prefix}user/assets → user/assets
+                        clean = re.sub(r"\$\{[^}]+\}", "", raw).lstrip("/")
+                        if clean:
+                            docs_paths.append((clean, str(f.relative_to(PROJECT_ROOT)), i))
+                    elif ":path" not in raw:
+                        docs_paths.append((raw, str(f.relative_to(PROJECT_ROOT)), i))
+
+    # Deduplicate
+    seen = set()
+    unique_paths = []
+    for path, src_file, line_no in docs_paths:
+        key = path
+        if key not in seen:
+            seen.add(key)
+            unique_paths.append((path, src_file, line_no))
+
+    for path, src_file, line_no in sorted(unique_paths, key=lambda x: x[0]):
+        # Split anchor
+        if "#" in path:
+            file_path_str, anchor = path.rsplit("#", 1)
+        else:
+            file_path_str, anchor = path, None
+
+        # Normalize: path may end with / (directory) → look for index.en.md or file.en.md
+        file_path_str = file_path_str.rstrip("/")
+        candidates = [
+            docs_root / f"{file_path_str}.en.md",
+            docs_root / file_path_str / "index.en.md",
+            docs_root / f"{file_path_str}.md",
+            docs_root / file_path_str / "index.md",
+        ]
+
+        found_file = None
+        for c in candidates:
+            if c.exists():
+                found_file = c
+                break
+
+        if not found_file:
+            errors.append(f"  ❌ {path}\n     → File not found (from {src_file}:{line_no})")
+        elif anchor:
+            # Check anchor exists in file content (heading slug)
+            content = found_file.read_text()
+            # Generate slugs from headings + attr_list explicit anchors
+            headings = re.findall(r"^#{1,6}\s+(.+?)(?:\s*\{[^}]*\})?\s*$", content, re.MULTILINE)
+            attr_anchors = re.findall(r"\{\s*#([a-z0-9_-]+)\s*\}", content)
+
+            slugs = set(attr_anchors)
+            for h in headings:
+                # Simple slug generation: lowercase, strip emoji, replace spaces/special with -
+                slug = re.sub(r"[^\w\s-]", "", h.lower()).strip()
+                slug = re.sub(r"[\s_]+", "-", slug).strip("-")
+                slugs.add(slug)
+
+            if anchor not in slugs:
+                errors.append(f"  ⚠️  {path}\n     → File exists but anchor #{anchor} not found (from {src_file}:{line_no})")
+            else:
+                ok_count += 1
+                print(f"  ✅ {path}")
+        else:
+            ok_count += 1
+            print(f"  ✅ {path}")
+
+    # ── Scope 2: Backend provider docs_url ────────────────────────────────
+    print(f"\n{Colors.CYAN}── Scope 2: Backend provider docs_url ──{Colors.NC}")
+
+    providers_dir = PROJECT_ROOT / "backend" / "app" / "services"
+    for provider_subdir in ("fx_providers", "asset_source_providers"):
+        pdir = providers_dir / provider_subdir
+        if not pdir.exists():
+            continue
+        for f in sorted(pdir.glob("*.py")):
+            content = f.read_text()
+            for m in re.finditer(r"""['"](/mkdocs/[^'"]+)['"]""", content):
+                url = m.group(1)
+                raw = url.replace("/mkdocs/", "").rstrip("/")
+                if "#" in raw:
+                    file_part, anchor = raw.rsplit("#", 1)
+                    file_part = file_part.rstrip("/")
+                else:
+                    file_part, anchor = raw, None
+
+                candidates = [
+                    docs_root / f"{file_part}.en.md",
+                    docs_root / file_part / "index.en.md",
+                    docs_root / f"{file_part}.md",
+                    docs_root / file_part / "index.md",
+                ]
+                found_file = None
+                for c in candidates:
+                    if c.exists():
+                        found_file = c
+                        break
+
+                rel_src = str(f.relative_to(PROJECT_ROOT))
+                if not found_file:
+                    errors.append(f"  ❌ {url}\n     → File not found (from {rel_src})")
+                elif anchor:
+                    fc = found_file.read_text()
+                    headings = re.findall(r"^#{1,6}\s+(.+?)(?:\s*\{[^}]*\})?\s*$", fc, re.MULTILINE)
+                    attr_anchors = re.findall(r"\{\s*#([a-z0-9_-]+)\s*\}", fc)
+                    slugs = set(attr_anchors)
+                    for h in headings:
+                        slug = re.sub(r"[^\w\s-]", "", h.lower()).strip()
+                        slug = re.sub(r"[\s_]+", "-", slug).strip("-")
+                        slugs.add(slug)
+                    if anchor not in slugs:
+                        errors.append(f"  ⚠️  {url}\n     → File exists but anchor #{anchor} not found (from {rel_src})")
+                    else:
+                        ok_count += 1
+                        print(f"  ✅ {url}")
+                else:
+                    ok_count += 1
+                    print(f"  ✅ {url}")
+
+    # ── Summary ───────────────────────────────────────────────────────────
+    print(f"\n{Colors.CYAN}── Summary ──{Colors.NC}")
+    print(f"  ✅ {ok_count} valid link(s)")
+    if errors:
+        print(f"  ❌ {len(errors)} broken link(s):\n")
+        for e in errors:
+            print(e)
+        print()
+        return 1
+    else:
+        print_success("All cross-boundary links are valid!")
+        return 0
 
 
 # =============================================================================
@@ -789,7 +960,6 @@ def _docker_ensure_assets_built():
             needs_req = True
 
     if needs_req:
-        import subprocess
         print(Colors.info("📦 Generating requirements.txt from Pipfile.lock..."))
         result = subprocess.run(
             ["pipenv", "requirements"],
@@ -1061,7 +1231,6 @@ def generate_favicon():
 
 def copy_docs_assets():
     """Copy logo, favicon, and icons to docs."""
-    import shutil
     generate_favicon()
     static_dir = PROJECT_ROOT / "mkdocs_src" / "docs" / "static"
     static_dir.mkdir(parents=True, exist_ok=True)
@@ -1164,6 +1333,7 @@ Examples:
     p.add_argument("--workers", "-w", type=int, default=1, help="Number of uvicorn workers (default: 1)")
     p.add_argument("--host", type=str, default=None, help="Bind host (default: HOST env or 0.0.0.0)")
     p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 8000)")
+    p.add_argument("--coverage", action="store_true", help="Enable backend code coverage tracking (writes .coverage.<pid>)")
     p.set_defaults(func=cmd_server)
 
     # Database
@@ -1266,6 +1436,9 @@ Examples:
     mk_p.add_argument("--headed", action="store_true",
                        help="Run browser in headed mode (visible window) instead of headless")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
+
+    mk_p = mk_sub.add_parser("check-links", help="Validate cross-boundary links (frontend/backend → docs)")
+    mk_p.set_defaults(func=cmd_mkdocs_check_links)
 
     # Translate - Import from mkdocs_src/aphra-pipeline/translate_docs.py
     # (not available inside Docker — aphra-pipeline is excluded from image)
