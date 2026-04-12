@@ -2,7 +2,7 @@
 hide:
  - navigation
  - toc
-description: Recupera la propiedad de tus datos financieros. LibreFolio es el panel de control de inversiones autoalojado y centrado en la privacidad para toda tu cartera.
+description: Libre de entender, libre de actuar. LibreFolio reúne todas tus inversiones en un panel de control privado y seguro con potentes herramientas de análisis.
 ---
 
 <!-- Animated Background -->
@@ -20,21 +20,25 @@ description: Recupera la propiedad de tus datos financieros. LibreFolio es el pa
 <div class="home-header">
  <div class="home-logo-container">
  <div class="home-logo">
- <img src="static/logo.png" alt="Logo de LibreFolio"/>
+ <img id="home-logo-img" alt="Logo de LibreFolio"/>
+ <script>
+ (function() {
+ var p = window.location.pathname.replace(/\/+$/, '');
+ var base = p.replace(/\/(it|fr|es)$/, '');
+ document.getElementById('home-logo-img').src = base + '/static/logo.png';
+ })();
+ </script>
  </div>
- <a id="dashboard-link" href="http://localhost:8000" class="md-button md-button--primary md-button--large" style="width: 100%; text-align: center;">
- Lanzar Panel de Control 🚀
- </a>
  </div>
  <div class="home-content">
  <h1>LibreFolio</h1>
- <h2><strong>Tu riqueza, tus reglas.</strong></h2>
+ <h2><strong>Libre de entender, libre de actuar.</strong></h2>
  <p class="mission">
- Experimenta la libertad de una verdadera soberanía financiera.
+ Reúne todas tus inversiones en un panel de control privado y seguro.
  <br>
- Reúne todos tus activos en un único panel de control seguro y autoalojado.
+ Tus datos cobran vida gracias a herramientas de análisis pensadas para ti.
  <br><br>
- Control total, sin concesiones.
+ Todo claro, todo bajo control — porque las buenas decisiones nacen de buena información.
  </p>
 
  </div>

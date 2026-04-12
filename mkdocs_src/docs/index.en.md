@@ -2,7 +2,7 @@
 hide:
   - navigation
   - toc
-description: Reclaim ownership of your financial data. LibreFolio is the privacy-first, self-hosted investment dashboard for your entire portfolio.
+description: Free to understand, free to act. LibreFolio brings all your investments into one private, secure dashboard with powerful analytics tools.
 ---
 
 <!-- Animated Background -->
@@ -20,21 +20,25 @@ description: Reclaim ownership of your financial data. LibreFolio is the privacy
 <div class="home-header">
   <div class="home-logo-container">
     <div class="home-logo">
-      <img src="static/logo.png" alt="LibreFolio Logo"/>
+      <img id="home-logo-img" alt="LibreFolio Logo"/>
+      <script>
+        (function() {
+          var p = window.location.pathname.replace(/\/+$/, '');
+          var base = p.replace(/\/(it|fr|es)$/, '');
+          document.getElementById('home-logo-img').src = base + '/static/logo.png';
+        })();
+      </script>
     </div>
-    <a id="dashboard-link" href="http://localhost:8000" class="md-button md-button--primary md-button--large" style="width: 100%; text-align: center;">
-      Launch Dashboard 🚀
-    </a>
   </div>
   <div class="home-content">
     <h1>LibreFolio</h1>
-    <h2><strong>Your Wealth, Your Rules.</strong></h2>
+    <h2><strong>Free to understand, free to act.</strong></h2>
     <p class="mission">
-      Experience the freedom of true financial sovereignty.
+      Bring all your investments into one private, secure dashboard.
       <br>
-      Bring all your assets into one secure, self-hosted dashboard.
+      Your data comes to life through analytics tools designed for you.
       <br><br>
-      Total control, zero compromise.
+      Everything clear, everything under control — because good decisions start with good information.
     </p>
 
 

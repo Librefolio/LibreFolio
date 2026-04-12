@@ -6,11 +6,22 @@ Bienvenido a las FAQ de LibreFolio. Aquí encontrarás respuestas a las pregunta
 
 ### 🤔 ¿Qué es LibreFolio?
 
-LibreFolio es un rastreador de carteras open-source y autoalojado, diseñado para inversores que priorizan la privacidad. Te permite realizar un seguimiento de tus inversiones, analizar el rendimiento y mantener el control total de tus datos financieros.
+LibreFolio es un rastreador de carteras open-source que te ofrece una vista completa y privada de todas tus inversiones. Potentes herramientas de análisis dan vida a tus datos — para que puedas tomar decisiones informadas con plena confianza y pleno control.
 
 ### 💰 ¿Es LibreFolio gratuito?
 
-¡Sí! LibreFolio es completamente gratuito y open-source bajo la [licencia AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+¡Sí! LibreFolio es completamente gratuito y open-source bajo la [licencia AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Puedes instalarlo en tu propio servidor y gestionarlo todo tú mismo sin coste alguno.
+
+!!! info "Próximamente: plataforma en línea ☁️"
+
+    Estamos trabajando en una plataforma en línea para quienes no tienen el tiempo, el interés o los conocimientos técnicos para instalar LibreFolio por su cuenta. La versión alojada ofrecerá todas las funcionalidades sin configuración alguna, con actualizaciones automáticas y soporte dedicado — disponible mediante suscripción.
+
+### 🤖 ¿Hay funciones de IA previstas?
+
+¡Sí! Nuestra hoja de ruta incluye **asistentes basados en inteligencia artificial** para ayudarte a analizar tu cartera, detectar tendencias y tomar decisiones más informadas.
+
+- **Autoalojado**: puedes conectar tus propios modelos de IA y gestionarlo todo de forma independiente
+- **Plataforma en línea**: los asistentes de IA estarán totalmente integrados — listos para usar sin configuración alguna, con soporte premium
 
 ### 📊 ¿Qué activos puedo rastrear?
 
