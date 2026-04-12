@@ -1,0 +1,82 @@
+# 💰 Dividend
+
+A **dividend** is a cash distribution paid by a company (or fund) to its shareholders, representing a share of the company's profits.
+
+---
+
+## 📖 Definition
+
+Dividends are periodic payments made from a company's earnings to its shareholders. They are typically paid quarterly (common in the US) or semi-annually/annually (common in Europe). ETFs also distribute dividends collected from their underlying holdings.
+
+**Key dates** in the dividend lifecycle:
+
+| Date | Meaning |
+|------|---------|
+| **Declaration&nbsp;date** | Board announces the dividend amount and dates |
+| **Ex-dividend&nbsp;date** | First trading day where buyers do NOT receive the dividend. The stock price typically drops by the dividend amount at market open. |
+| **Record&nbsp;date** | Company checks who owns shares (usually 1-2 days after ex-date) |
+| **Payment&nbsp;date** | Cash is deposited into shareholder accounts |
+
+---
+
+## 📉 Impact on Market Price
+
+On the **ex-dividend date**, the stock price theoretically drops by the **exact dividend amount**. This is because new buyers on that date will not receive the upcoming payment.
+
+!!! example "Example"
+
+    **Apple (AAPL)** trades at $180.00. A $0.25 quarterly dividend goes ex-dividend.
+
+    - **Before ex-date close**: $180.00
+    - **Ex-date open** (theoretical): $179.75
+    - **Difference**: −$0.25 (= dividend amount)
+
+    In practice, market forces may cause the actual opening price to differ, but the exchange **adjusts the reference price** down by exactly $0.25.
+
+---
+
+## 📊 Effect on Total Return
+
+While the price drops by the dividend amount, the **total return** (price change + dividends received) remains neutral at the moment of payment. Over time, reinvested dividends compound significantly.
+
+$$
+\text{Total Return} = \frac{P_{\text{end}} - P_{\text{start}} + \sum D_i}{P_{\text{start}}}
+$$
+
+Where $D_i$ represents each dividend payment received during the holding period.
+
+---
+
+## 🔢 Dividend Yield
+
+The **dividend yield** expresses the annual dividend as a percentage of the current stock price:
+
+$$
+\text{Dividend Yield} = \frac{\text{Annual Dividends per Share}}{\text{Current Price per Share}} \times 100\%
+$$
+
+!!! tip "Typical ranges"
+
+    - Growth stocks: 0–1%
+    - Mature companies: 2–4%
+    - High-yield / REITs: 4–8%+
+
+---
+
+## 🧮 How LibreFolio Handles Dividends
+
+In LibreFolio, a `DIVIDEND` event is recorded with:
+
+- **Date**: The ex-dividend date
+- **Amount**: The per-share cash payment
+- **Currency**: The currency of payment (e.g., USD, EUR)
+
+For **market-priced assets** (Yahoo Finance, justETF), dividend events are informational — they explain the ex-date price gap but don't modify the fetched price. For **Scheduled Investment** assets, they are integral to the price model.
+
+---
+
+## 🔗 Related
+
+- 📅 **[Asset Events Overview](index.md)** — All event types
+- 💸 **[Transaction Types](../transaction-types/index.md)** — How dividends appear in portfolio transactions
+- 📈 **[Returns & Growth Rates](../../fundamentals/returns.md)** — Total return including dividends

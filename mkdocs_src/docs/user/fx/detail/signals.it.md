@@ -10,11 +10,11 @@ Il pannello Segnali ti permette di sovrapporre **indicatori tecnici** sul grafic
 
 ## 📊 Indicatori Disponibili
 
-### 📉 [EMA — Media Mobile Esponenziale](../../../financial-theory/technical-indicators.md#ema)
+### 📉 [EMA — Media Mobile Esponenziale](../../../financial-theory/technical-analysis/indicators/ema.md)
 
 Attenua il rumore dei tassi giornalieri per rivelare il **trend sottostante**. Nel FX, una EMA che incrocia al rialzo la linea del tasso spesso suggerisce un indebolimento della valuta base (o un rafforzamento della valuta quotata). Periodo configurabile: più breve = più reattiva, più lungo = più regolare.
 
-### 📊 [MACD — Convergenza/Divergenza delle Medie Mobili](../../../financial-theory/technical-indicators.md#macd)
+### 📊 [MACD — Convergenza/Divergenza delle Medie Mobili](../../../financial-theory/technical-analysis/indicators/macd.md)
 
 Misura il **momentum** calcolando la differenza tra una EMA veloce e una lenta. Un MACD positivo significa che la EMA veloce è sopra quella lenta (rialzista), negativo significa il contrario (ribassista). Utile nel FX per rilevare inversioni di trend e cambiamenti di momentum.
 
@@ -22,11 +22,11 @@ Misura il **momentum** calcolando la differenza tra una EMA veloce e una lenta. 
 - 〰️ **Linea di Segnale**: EMA della stessa linea MACD (momentum smorzato)
 - 📊 **Istogramma**: Differenza visiva tra le linee MACD e di Segnale
 
-### 💪 [RSI — Relative Strength Index](../../../financial-theory/technical-indicators.md#rsi)
+### 💪 [RSI — Relative Strength Index](../../../financial-theory/technical-analysis/indicators/rsi.md)
 
 Un **oscillatore** (0–100) che misura la velocità e l'entità delle variazioni di prezzo. Valori sopra 70 suggeriscono condizioni di ipercomprato, sotto 30 di ipervenduto.
 
-### 📏 [Bollinger Bands](../../../financial-theory/technical-indicators.md#bollinger-bands)
+### 📏 [Bollinger Bands](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md)
 
 Una **fascia di volatilità** attorno al prezzo. Le bande si allargano durante i periodi volatili e si contraggono in quelli calmi.
 
@@ -50,7 +50,7 @@ Una **fascia di volatilità** attorno al prezzo. Le bande si allargano durante i
 
 Per un trattamento matematico completo di ogni indicatore — includendo formule, equivalenti nell'elaborazione del segnale e interpretazione pratica:
 
-:material-book-open-variant: **[Indicatori Tecnici — Teoria Finanziaria](../../../financial-theory/technical-indicators.md)**
+:material-book-open-variant: **[Indicatori Tecnici — Teoria Finanziaria](../../../financial-theory/technical-analysis/indicators/index.md)**
 
 Questa pagina di riferimento copre:
 
@@ -58,4 +58,3 @@ Questa pagina di riferimento copre:
 - 🎛️ Equivalenti nell'**elaborazione del segnale** (EMA = filtro IIR, SMA = filtro FIR, ecc.)
 - ⚡ L'intuizione **"veloce vs lento"** in termini di frequenze di taglio dei filtri
 - 📈 **Esempi pratici** di identificazione degli incroci e trend
-

@@ -34,7 +34,7 @@ For each measurement, the panel displays:
 
     The annualized return uses the **Compound Annual Growth Rate (CAGR)** formula. For a comprehensive explanation including log returns, compounding, and when to use which method, see:
 
-    :material-book-open-variant: **[Returns & Growth Rates — Financial Theory](../../../financial-theory/returns.md)**
+    :material-book-open-variant: **[Returns & Growth Rates — Financial Theory](../../../financial-theory/fundamentals/returns.md)**
 
 ---
 

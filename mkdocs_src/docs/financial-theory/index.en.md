@@ -4,14 +4,37 @@ This section documents the financial models, conventions, and definitions used t
 
 ## 📖 Overview
 
-Accurate financial calculations are critical for a portfolio tracker. LibreFolio implements standard financial conventions to ensure consistency with broker reports and real-world
-data. This section covers the core concepts from asset types to the formulas used for performance analysis.
+Accurate financial calculations are critical for a portfolio tracker. LibreFolio implements standard financial conventions to ensure consistency with broker reports and real-world data. This section is organized into four thematic areas.
 
-## 🔑 Key Concepts
+## 🗺️ Conceptual Map
 
-- **[Asset Types](asset-types.md)**: Definitions of all supported asset classes (Stocks, ETFs, Crypto, etc.).
-- **[Transaction Types](transaction-types.md)**: Definitions of all financial operations (Buy, Sell, Dividend, etc.).
-- **[Asset Events](asset-events.md)**: Corporate actions and scheduled events (Dividend, Interest, Split, Price Adjustment, Maturity Settlement) — how they affect market price.
-- **[Day Count Conventions](day-count.md)**: How the number of days between two dates is calculated for interest accrual.
-- **[Technical Indicators](technical-indicators.md)**: EMA, MACD, RSI, Bollinger Bands — with signal processing equivalents.
-- **[Synthetic Benchmarks](synthetic-benchmarks.md)**: Linear, Compound, and Sine Wave reference overlays (includes interest formulas and compounding frequencies).
+### 🏦 [Instruments](instruments/index.md)
+
+The building blocks of any portfolio:
+
+- **[Asset Types](instruments/asset-types/index.md)** — Stocks, ETFs, Bonds, Crypto, Real Estate, Indexes
+- **[Transaction Types](instruments/transaction-types/index.md)** — Buy/Sell, Deposit/Withdrawal, Dividend, Fee, Interest, Transfer
+- **[Asset Events](instruments/asset-events/index.md)** — Dividend, Interest, Split, Price Adjustment, Maturity Settlement
+
+### 📊 [Technical Analysis](technical-analysis/index.md)
+
+Data-driven chart overlays and mathematical reference curves:
+
+- **[Indicators](technical-analysis/indicators/index.md)** — EMA, MACD, RSI, Bollinger Bands
+- **[Synthetic Benchmarks](technical-analysis/synthetic-benchmarks/index.md)** — Linear Growth, Compound Growth, Sine Wave
+
+### 📐 [Fundamentals](fundamentals/index.md)
+
+Core financial concepts:
+
+- **[Day Count Conventions](fundamentals/day-count.md)** — ACT/365, ACT/360, 30/360, ACT/ACT
+- **[Returns & Growth Rates](fundamentals/returns.md)** — Simple vs Log returns, CAGR, annualization
+- **[Taxation](fundamentals/taxation.md)** — Capital gains, tax deferral, Acc vs Dist
+
+### 📈 [Portfolio Theory](portfolio-theory/index.md)
+
+Modern Portfolio Theory and risk management:
+
+- **[Diversification](portfolio-theory/diversification.md)** — Correlation, systematic vs idiosyncratic risk
+- **[Asset Allocation](portfolio-theory/asset-allocation.md)** — Strategic, tactical, glide paths, rebalancing
+- **[Risk Metrics](portfolio-theory/risk-metrics/index.md)** — Sharpe, Sortino, Max Drawdown, Volatility

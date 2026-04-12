@@ -122,5 +122,4 @@ price(d) = initial_value + accrued_interest - Σ(INTEREST events) + Σ(PRICE_ADJ
 - 📊 [Assets & Pricing ER Diagram](../../architecture/database/assets_pricing.md) — Database schema
 - 💰 [Asset Architecture](architecture.md) — Sync pipeline and price queries
 - 📅 [Scheduled Investment Provider](provider_scheduled_investment.md) — Interest schedule and auto-events
-- 📐 [Day Count Conventions](../../../financial-theory/day-count.md) — ACT/365, ACT/360, 30/360
-
+- 📐 [Day Count Conventions](../../../financial-theory/fundamentals/day-count.md) — ACT/365, ACT/360, 30/360

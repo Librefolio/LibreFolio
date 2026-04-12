@@ -58,7 +58,7 @@ Puoi anche sovrapporre **confronti con benchmark** per vedere come una coppia pe
 - 📐 **Benchmark Sintetici** — Cestini personalizzati o tassi di riferimento calcolati
 - ↔️ **Confronti tra coppie valutarie** — Confronta EUR/USD con GBP/USD sullo stesso grafico
 
-Per le basi matematiche, vedere [Indicatori Tecnici](../../financial-theory/technical-indicators.md) e [Benchmark Sintetici](../../financial-theory/synthetic-benchmarks.md).
+Per le basi matematiche, vedere [Indicatori Tecnici](../../financial-theory/technical-analysis/indicators/index.md) e [Benchmark Sintetici](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md).
 
 ---
 

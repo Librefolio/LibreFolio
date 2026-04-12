@@ -34,7 +34,7 @@ Pour chaque mesure, le panneau affiche :
 
     Le rendement annualisé utilise la formule du **Taux de croissance annuel composé (CAGR)**. Pour une explication complète incluant les rendements logarithmiques, la composition, et quand utiliser quelle méthode, consultez :
 
-    :material-book-open-variant: **[Rendements & Taux de croissance — Théorie financière](../../../financial-theory/returns.md)**
+    :material-book-open-variant: **[Rendements & Taux de croissance — Théorie financière](../../../financial-theory/fundamentals/returns.md)**
 
 ---
 
