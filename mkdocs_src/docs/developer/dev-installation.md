@@ -9,6 +9,21 @@ This guide covers setting up a local development environment. For production dep
 - 📋 **Pipenv** (`pip install pipenv`)
 - 🐳 **Docker** (Optional, for production deployment)
 
+!!! note "Linux: Playwright System Dependencies"
+
+    On Linux, Playwright requires additional system libraries for headless browser rendering.
+    Install them after `./dev.py install`:
+
+    ```bash
+    # Recommended (auto-detects missing libraries)
+    sudo npx playwright install-deps
+
+    # Or install manually (Ubuntu/Debian)
+    sudo apt-get install libgstreamer-plugins-bad1.0-0 libflite1 libavif16 gstreamer1.0-libav
+    ```
+
+    Without these, the `mobile` project and gallery screenshot generation will fail.
+
 ## 📋 Setup Instructions
 
 The project includes a main orchestration script, `dev.py`, to automate all tasks.

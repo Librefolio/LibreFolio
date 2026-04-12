@@ -592,12 +592,79 @@ mkdocs_src/aphra-pipeline/glossaries/
 - Second test (same model, before prompt rewrite): Completed with warnings (`<name>` tags not found in analyze output — model not following XML format)
 - Translation quality of second test: good (markdown preserved, glossary terms used, no translator notes), but HTML indentation slightly changed
 - Model changed to `google/gemma-4-31b-it:free` for reliability
-- Multi-file parallel test pending (2 files × 3 langs × 3 workers)
+- Multi-file parallel test: 2 files × 3 langs × 3 workers = 6 translations, 0 failures, 1m 37s. StructDiff clean ✓
+- Full user manual run (old code): 31 files × 3 langs = 93 tasks, 20 workers, 32m 24s. 59 success, 21 failed (mostly rate limit cascading), 8 structural warnings
+
+#### Step 6 — Pipeline Architecture v2 (post-test improvements)
+
+**Dynamic tree architecture** — replaced two-phase (analyze all → translate all) with dynamic task spawning:
+- `ThreadPoolExecutor` with `wait(FIRST_COMPLETED)` loop
+- Analyze tasks submitted upfront to the pool
+- On analyze success → spawns translate tasks for each language (children)
+- On analyze failure → NO children created, all langs marked as failed with reason
+- Tree grows dynamically: `pending` dict tracks both analyze and translate futures
+- AuthError = global stop (cancels all). RateLimitError = local fail (only that task)
+
+**Thread-safe logging** — `_pipeline_worker` and `_pipeline_analyze` wrappers:
+- `print_lock` for atomic start/end lines: `▶ filename → Italian` / `✓ filename → Italian (42s)`
+- All detailed step logs go into `log_buf` (buffered, not printed)
+- When ALL languages of a file complete → full block printed atomically with `┌─ ... └─` box drawing
+- `_call_step()` and `_robust_refine()` now accept `log_buf` parameter — retry messages go to buffer too
+
+**Granular error handling**:
+- `_translate_one_lang()`: RateLimitError caught per-step (Translate/Critique/Refine), returns `failure_reason` instead of raising
+- Only `AuthError` propagates globally (key invalid = nothing will work)
+- `result["failure_reason"]` field tracks exactly what failed and why
+- Summary: failures grouped by reason with retry commands per group
+
+**Post-step validation** (after all translations):
+1. **Structural diff on FINAL files** — checks written output (after `_clean_translation()`) vs source
+2. **Source quality check** — flags `.en.md` links in source files (should be `.md` for i18n)
+3. Warnings grouped by category (BOLD_MARKERS, LINK_URLS, etc.)
+
+**Link normalization** (`_clean_translation()` step 9):
+- Regex strips language suffixes from internal links: `.it.md` → `.md`, `.en.md` → `.md`
+- Also normalized in `_extract_md_structure()` to avoid false positive LINK_URLS diffs
+
+#### Step 7 — Per-line detail in structural diff report
+
+Improved the `translate-diff` CLI report: when a structural check detects a count mismatch,
+the report now shows **which specific lines** differ, with both source (EN) and translated text
+for immediate visual comparison.
+
+**New generic helper** `_per_line_count_detail(source_text, translated_text, pattern)`:
+- Compares each line pair by line number
+- For each line where `pattern` match count differs → shows `L{n}: src={x} trn={y}` + EN/TR text
+- Capped at 8 mismatches to avoid flooding the output
+- Pre-compiled patterns: `_RE_BOLD`, `_RE_LINK`, `_RE_BULLET`, `_RE_NUMBERED`
+
+**Checks enhanced** (per-line detail added):
+- `BOLD_MARKERS` — shows which lines have extra/missing `**...**`
+- `LINK_COUNT` — shows which lines have extra/missing `[text](url)`
+- `BULLET_LIST` — shows which lines have extra/missing `- ` bullets
+- `NUMBERED_LIST` — shows which lines have extra/missing `1. ` numbered items
+
+Example output (before vs after):
+```
+# BEFORE: just a count, impossible to locate the problem
+BOLD_MARKERS: source=24, translated=23 (Δ-1)
+
+# AFTER: exact line + context
+BOLD_MARKERS: source=24, translated=23 (Δ-1)
+  L39: src=2 trn=1
+    EN: You can enable **Late Interest** to define a penalty rate... **grace period**
+    TR: Vous pouvez activer les **Intérêts de retard** pour définir... Un délai de grâce
+```
 
 ### 📋 Still TODO
 
-- [ ] Run full translation suite and evaluate quality
+- [x] ~~Run full translation suite~~ (done: 59/93 success, 21 failed from rate limits)
+- [x] ~~Pipeline architecture v2~~ (dynamic tree, thread-safe logging)
+- [x] ~~Error handling~~ (granular per-step, failure reasons, retry commands)
+- [x] ~~Link normalization~~ (.XX.md → .md in translations and structural diff)
+- [x] ~~Per-line detail in structural diff~~ (BOLD_MARKERS, LINK_COUNT, BULLET/NUMBERED)
+- [x] ~~Fix scheduled-investment.fr.md BOLD_MARKERS~~ (missing **délai de grâce**)
+- [x] ~~Fix source files: replace `.en.md` → `.md` in internal links~~
+- [x] ~~Re-run remaining 7 failed translations~~ (2nd run, all succeeded)
 - [ ] Tune glossary terms based on actual output review
-- [ ] Consider `step2_system.txt` override if web search is ever re-enabled
-- [ ] Update `plan-aphraPipelineV2PromptOverride.prompt.md` with final test results
 - [ ] Update `03_documentation.md` knowledge base with new pipeline architecture
