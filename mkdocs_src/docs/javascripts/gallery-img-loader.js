@@ -14,6 +14,8 @@
     'use strict';
 
     var FALLBACK_LANG = 'en';
+    // GitHub Pages URL for remote fallback when screenshots are not built locally
+    var GITHUB_PAGES_BASE = 'https://alfystar.github.io/LibreFolio';
 
     /**
      * Detect site base path from the current page URL.
@@ -94,6 +96,10 @@
         return basePath() + '/gallery/' + viewport + '/' + lang + '/' + theme + '/' + category + '/' + name + '.png';
     }
 
+    function buildGithubSrc(viewport, lang, theme, category, name) {
+        return GITHUB_PAGES_BASE + '/gallery/' + viewport + '/' + lang + '/' + theme + '/' + category + '/' + name + '.png';
+    }
+
     function updateImages() {
         var images = document.querySelectorAll('.gallery-img');
         if (images.length === 0) return;
@@ -115,14 +121,44 @@
             var newSrc = buildSrc(viewport, lang, theme, category, name);
             if (img.getAttribute('src') === newSrc) return; // Already set
 
-            // Set the image src. If it fails (404), fall back to 'en'.
+            // Cascading fallback chain:
+            // 1. Local: requested lang
+            // 2. Local: fallback lang (en)
+            // 3. GitHub Pages: requested lang
+            // 4. GitHub Pages: fallback lang (en)
             img.onerror = function () {
-                if (lang !== FALLBACK_LANG) {
-                    var fallbackSrc = buildSrc(viewport, FALLBACK_LANG, theme, category, name);
-                    if (img.getAttribute('src') !== fallbackSrc) {
-                        img.onerror = null; // Prevent infinite loop
-                        img.src = fallbackSrc;
-                    }
+                var currentSrc = img.getAttribute('src');
+                if (currentSrc === newSrc && lang !== FALLBACK_LANG) {
+                    // Step 2: try local fallback lang
+                    img.onerror = function () {
+                        // Step 3: try GitHub Pages with requested lang
+                        var ghSrc = buildGithubSrc(viewport, lang, theme, category, name);
+                        img.onerror = function () {
+                            if (lang !== FALLBACK_LANG) {
+                                // Step 4: try GitHub Pages with fallback lang
+                                var ghFallback = buildGithubSrc(viewport, FALLBACK_LANG, theme, category, name);
+                                img.onerror = null; // Prevent infinite loop
+                                img.src = ghFallback;
+                            } else {
+                                img.onerror = null;
+                            }
+                        };
+                        img.src = ghSrc;
+                    };
+                    img.src = buildSrc(viewport, FALLBACK_LANG, theme, category, name);
+                } else {
+                    // Already on fallback lang locally → try GitHub Pages
+                    var ghSrc = buildGithubSrc(viewport, lang !== FALLBACK_LANG ? lang : FALLBACK_LANG, theme, category, name);
+                    img.onerror = function () {
+                        if (lang !== FALLBACK_LANG) {
+                            var ghFallback = buildGithubSrc(viewport, FALLBACK_LANG, theme, category, name);
+                            img.onerror = null;
+                            img.src = ghFallback;
+                        } else {
+                            img.onerror = null;
+                        }
+                    };
+                    img.src = ghSrc;
                 }
             };
             img.src = newSrc;

@@ -1,8 +1,8 @@
 # 📅 Asset Events
 
-Asset events represent things that happen to the asset **globally** — not at the portfolio level. They are distinct from [transactions](../../../financial-theory/transaction-types.en.md), which track what happens in a user's portfolio.
+Asset events represent things that happen to the asset **globally** — not at the portfolio level. They are distinct from [transactions](../../../financial-theory/instruments/transaction-types/index.md), which track what happens in a user's portfolio.
 
-For a deep dive into each event type — including market impact, formulas, and practical examples — see the **[Asset Events (Financial Theory)](../../../financial-theory/asset-events.en.md)** section.
+For a deep dive into each event type — including market impact, formulas, and practical examples — see the **[Asset Events (Financial Theory)](../../../financial-theory/instruments/asset-events/index.md)** section.
 
 ---
 
@@ -10,11 +10,11 @@ For a deep dive into each event type — including market impact, formulas, and 
 
 | Type | Icon | Effect on Price | Description | Learn More |
 |------|------|----------------|-------------|-----------|
-| **Dividend** | 💰 | Price drops by event value (ex-date) | Cash distribution from equity or ETF | [📖](../../../financial-theory/asset-events/dividend.en.md) |
-| **Interest** | 📈 | Price drops by event value | Interest payment from debt instrument or loan | [📖](../../../financial-theory/asset-events/interest.en.md) |
-| **Split** | ✂️ | Changes quantity, not total value | Stock or unit split | [📖](../../../financial-theory/asset-events/split.en.md) |
-| **Price Adjustment** | 📊 | Algebraic change (+/-) | Non-cash value change: write-down, haircut, re-rating | [📖](../../../financial-theory/asset-events/price-adjustment.en.md) |
-| **Maturity Settlement** | 🏁 | Final capital return | Asset reaches maturity — no further price calculations | [📖](../../../financial-theory/asset-events/maturity-settlement.en.md) |
+| **Dividend** | 💰 | Price drops by event value (ex-date) | Cash distribution from equity or ETF | [📖](../../../financial-theory/instruments/asset-events/dividend.md) |
+| **Interest** | 📈 | Price drops by event value | Interest payment from debt instrument or loan | [📖](../../../financial-theory/instruments/asset-events/interest.md) |
+| **Split** | ✂️ | Changes quantity, not total value | Stock or unit split | [📖](../../../financial-theory/instruments/asset-events/split.md) |
+| **Price Adjustment** | 📊 | Algebraic change (+/-) | Non-cash value change: write-down, haircut, re-rating | [📖](../../../financial-theory/instruments/asset-events/price-adjustment.md) |
+| **Maturity Settlement** | 🏁 | Final capital return | Asset reaches maturity — no further price calculations | [📖](../../../financial-theory/instruments/asset-events/maturity-settlement.md) |
 
 ## 📈 Event Markers on the Chart
 
@@ -56,5 +56,5 @@ For market-priced assets (Yahoo Finance, justETF), events are informational — 
 - 📈 **[Interactive Chart](chart.en.md)** — Event markers on the chart
 - ✏️ **[Data Editor](data-editor.en.md)** — Manual event management with CSV import
 - 🧮 **[Scheduled Investment](../providers/scheduled-investment.en.md)** — Provider that generates events from interest schedules
-- 📚 **[Asset Events (Financial Theory)](../../../financial-theory/asset-events.en.md)** — Detailed analysis of each event type
-- 💸 **[Transaction Types (Financial Theory)](../../../financial-theory/transaction-types.en.md)** — Transactions vs events
+- 📚 **[Asset Events (Financial Theory)](../../../financial-theory/instruments/asset-events/index.md)** — Detailed analysis of each event type
+- 💸 **[Transaction Types (Financial Theory)](../../../financial-theory/instruments/transaction-types/index.md)** — Transactions vs events

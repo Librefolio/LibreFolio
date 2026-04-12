@@ -56,7 +56,7 @@ erDiagram
 
 ### 📦 `ASSET`
 
-Global definition of a financial instrument. Each asset has a unique combination of identifiers (ISIN, ticker) and belongs to an [Asset Type](../../../financial-theory/asset-types.md).
+Global definition of a financial instrument. Each asset has a unique combination of identifiers (ISIN, ticker) and belongs to an [Asset Type](../../../financial-theory/instruments/asset-types/index.md).
 
 - 📋 **`classification_params`** (JSON): Stores flexible metadata like Sector, Geography, and Industry without requiring schema changes.
 - 💰 **`currency`**: The asset's native currency (e.g., USD for Apple, EUR for ASML).
@@ -95,6 +95,6 @@ Asset-level events that affect pricing or generate distributions. Events are dis
 
 ## 🔗 Related Documentation
 
-- 📚 [Asset Types (Financial Theory)](../../../financial-theory/asset-types.md) — Stock, ETF, Bond, Crypto, etc.
+- 📚 [Asset Types (Financial Theory)](../../../financial-theory/instruments/asset-types/index.md) — Stock, ETF, Bond, Crypto, etc.
 - ⚙️ [Asset Architecture](../../backend/assets/architecture.md) — How asset prices are fetched and managed
 - 📋 [Asset Providers List](../../backend/assets/system_providers.md) — Available pricing providers

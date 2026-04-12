@@ -52,7 +52,7 @@ Represents a brokerage account (e.g., Interactive Brokers, Degiro, a bank accoun
 
 The single source of truth for all financial operations. Each transaction belongs to exactly one broker.
 
-- 🏷️ **`type`**: One of the [Transaction Types](../../../financial-theory/transaction-types.md) (BUY, SELL, DIVIDEND, DEPOSIT, WITHDRAWAL, FX_CONVERSION, TRANSFER, etc.)
+- 🏷️ **`type`**: One of the [Transaction Types](../../../financial-theory/instruments/transaction-types/index.md) (BUY, SELL, DIVIDEND, DEPOSIT, WITHDRAWAL, FX_CONVERSION, TRANSFER, etc.)
 - 📈 **`asset_id`**: References a global [Asset](assets_pricing.md). Nullable for cash-only operations (DEPOSIT, WITHDRAWAL).
 - 🔗 **`related_transaction_id`**: Self-referencing foreign key for paired operations:
     - 🔄 **Transfers**: Links the WITHDRAWAL from Broker A to the DEPOSIT in Broker B
@@ -79,4 +79,4 @@ For details on how FX conversion works, see [FX Architecture](../../backend/fx/a
 
 - 📖 [Brokers (User Guide)](../../../user/brokers/index.md) — How to create and manage brokers
 - 🤝 [Broker Sharing](../../../user/brokers/sharing.md) — RBAC sharing system
-- 📚 [Transaction Types (Financial Theory)](../../../financial-theory/transaction-types.md) — Definitions of all transaction types
+- 📚 [Transaction Types (Financial Theory)](../../../financial-theory/instruments/transaction-types/index.md) — Definitions of all transaction types

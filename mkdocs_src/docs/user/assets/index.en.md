@@ -47,5 +47,5 @@ Automatic price fetching from Yahoo Finance, justETF, CSS Scraper, or the Schedu
 
 ## 🔗 Related
 
-- 📚 **[Financial Theory — Asset Types](../../financial-theory/asset-types.md)** — Stock, ETF, Bond, Crypto, etc.
+- 📚 **[Financial Theory — Asset Types](../../financial-theory/instruments/asset-types/index.md)** — Stock, ETF, Bond, Crypto, etc.
 - 💱 **[FX Rates](../fx/index.md)** — Currency exchange rates used for cross-currency conversion

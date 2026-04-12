@@ -8,8 +8,8 @@ Calcoli finanziari accurati sono fondamentali per un tracker di portafoglio. Lib
 
 ## 🔑 Concetti Chiave
 
-- **[Tipi di Asset](asset-types.md)**: Definizioni di tutte le classi di asset supportate (Azioni, ETF, Crypto, ecc.).
-- **[Tipi di Transazione](transaction-types.md)**: Definizioni di tutte le operazioni finanziarie (Acquisto, Vendita, Dividendo, ecc.).
-- **[Convenzioni di Conteggio dei Giorni](day-count.md)**: Come viene calcolato il numero di giorni tra due date per la maturazione degli interessi.
-- **[Indicatori Tecnici](technical-indicators.md)**: EMA, MACD, RSI, Bande di Bollinger — con equivalenti nell'elaborazione del segnale.
-- **[Benchmark Sintetici](synthetic-benchmarks.md)**: Overlay di riferimento lineari, composti e a onda sinusoidale (includono formule di interesse e frequenze di capitalizzazione).
+- **[Tipi di Asset](instruments/asset-types/index.md)**: Definizioni di tutte le classi di asset supportate (Azioni, ETF, Crypto, ecc.).
+- **[Tipi di Transazione](instruments/transaction-types/index.md)**: Definizioni di tutte le operazioni finanziarie (Acquisto, Vendita, Dividendo, ecc.).
+- **[Convenzioni di Conteggio dei Giorni](fundamentals/day-count.md)**: Come viene calcolato il numero di giorni tra due date per la maturazione degli interessi.
+- **[Indicatori Tecnici](technical-analysis/indicators/index.md)**: EMA, MACD, RSI, Bande di Bollinger — con equivalenti nell'elaborazione del segnale.
+- **[Benchmark Sintetici](technical-analysis/synthetic-benchmarks/index.md)**: Overlay di riferimento lineari, composti e a onda sinusoidale (includono formule di interesse e frequenze di capitalizzazione).
