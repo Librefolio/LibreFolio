@@ -6,11 +6,22 @@ Bienvenue dans la FAQ de LibreFolio. Vous trouverez ici les réponses aux questi
 
 ### 🤔 Qu'est-ce que LibreFolio ?
 
-LibreFolio est un outil de suivi de portefeuille open-source et auto-hébergé, conçu pour les investisseurs soucieux de leur confidentialité. Il vous permet de suivre vos investissements, d'analyser vos performances et de garder le contrôle total de vos données financières.
+LibreFolio est un outil de suivi de portefeuille open-source qui vous offre une vue complète et privée de tous vos investissements. De puissants outils d'analyse donnent vie à vos données — pour que vous puissiez prendre des décisions éclairées en toute confiance et en tout contrôle.
 
 ### 💰 LibreFolio est-il gratuit ?
 
-Oui ! LibreFolio est entièrement gratuit et open-source sous la [licence AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+Oui ! LibreFolio est entièrement gratuit et open-source sous la [licence AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Vous pouvez l'installer sur votre propre serveur et tout gérer vous-même sans aucun coût.
+
+!!! info "Bientôt disponible : plateforme en ligne ☁️"
+
+    Nous travaillons sur une plateforme en ligne pour ceux qui n'ont pas le temps, l'intérêt ou les compétences techniques pour auto-héberger LibreFolio. La version hébergée offrira toutes les fonctionnalités sans aucune configuration, avec des mises à jour automatiques et un support dédié — disponible par abonnement.
+
+### 🤖 Des fonctionnalités IA sont-elles prévues ?
+
+Oui ! Notre feuille de route inclut des **assistants basés sur l'intelligence artificielle** pour vous aider à analyser votre portefeuille, repérer les tendances et prendre des décisions plus éclairées.
+
+- **Auto-hébergé** : vous pouvez connecter vos propres modèles IA et tout gérer de manière autonome
+- **Plateforme en ligne** : les assistants IA seront entièrement intégrés — prêts à l'emploi sans aucune configuration, avec un support premium
 
 ### 📊 Quels actifs puis-je suivre ?
 

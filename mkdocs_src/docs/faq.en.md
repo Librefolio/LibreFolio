@@ -6,12 +6,22 @@ Welcome to the LibreFolio FAQ. Here you'll find answers to common questions.
 
 ### 🤔 What is LibreFolio?
 
-LibreFolio is a self-hosted, open-source portfolio tracker designed for privacy-conscious investors. It allows you to track your investments, analyze performance, and maintain full
-control of your financial data.
+LibreFolio is an open-source portfolio tracker that gives you a complete, private view of all your investments. Powerful analytics tools turn your data into actionable insights — so you can make informed decisions with full confidence and full control.
 
 ### 💰 Is LibreFolio free?
 
-Yes! LibreFolio is completely free and open-source under the [AGPL-3.0 license](https://www.gnu.org/licenses/agpl-3.0.html).
+Yes! LibreFolio is completely free and open-source under the [AGPL-3.0 license](https://www.gnu.org/licenses/agpl-3.0.html). You can install it on your own server and manage everything yourself at no cost.
+
+!!! info "Coming soon: hosted platform ☁️"
+
+    We're working on an online platform for those who don't have the time, interest, or technical skills to self-host. The hosted version will offer all features with zero setup, automatic updates, and dedicated support — available as a paid subscription.
+
+### 🤖 Are there AI features planned?
+
+Yes! Our roadmap includes **AI-powered assistants** to help you analyze your portfolio, spot trends, and make better-informed decisions.
+
+- **Self-hosted**: you can connect your own AI models and manage everything independently
+- **Hosted platform**: AI assistants will be fully integrated — ready to use with no configuration required, along with premium support
 
 ### 📊 What assets can I track?
 

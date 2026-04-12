@@ -2,7 +2,7 @@
 hide:
  - navigation
  - toc
-description: Reprenez le contrôle de vos données financières. LibreFolio est le tableau de bord d'investissement auto-hébergé axé sur la confidentialité pour l'ensemble de votre portefeuille.
+description: Libre de comprendre, libre d'agir. LibreFolio rassemble tous vos investissements dans un tableau de bord privé et sécurisé avec de puissants outils d'analyse.
 ---
 
 <!-- Animated Background -->
@@ -20,21 +20,25 @@ description: Reprenez le contrôle de vos données financières. LibreFolio est 
 <div class="home-header">
  <div class="home-logo-container">
  <div class="home-logo">
- <img src="static/logo.png" alt="Logo LibreFolio"/>
+ <img id="home-logo-img" alt="Logo LibreFolio"/>
+ <script>
+ (function() {
+ var p = window.location.pathname.replace(/\/+$/, '');
+ var base = p.replace(/\/(it|fr|es)$/, '');
+ document.getElementById('home-logo-img').src = base + '/static/logo.png';
+ })();
+ </script>
  </div>
- <a id="dashboard-link" href="http://localhost:8000" class="md-button md-button--primary md-button--large" style="width: 100%; text-align: center;">
- Lancer le tableau de bord 🚀
- </a>
  </div>
  <div class="home-content">
  <h1>LibreFolio</h1>
- <h2><strong>Votre Patrimoine, Vos Règles.</strong></h2>
+ <h2><strong>Libre de comprendre, libre d'agir.</strong></h2>
  <p class="mission">
- Découvrez la liberté d'une véritable souveraineté financière.
+ Rassemblez tous vos investissements dans un tableau de bord privé et sécurisé.
  <br>
- Regroupez tous vos actifs dans un tableau de bord sécurisé et auto-hébergé.
+ Vos données prennent vie grâce à des outils d'analyse conçus pour vous.
  <br><br>
- Contrôle total, sans aucun compromis.
+ Tout est clair, tout est sous contrôle — parce que les bonnes décisions naissent d'une bonne information.
  </p>
 
  </div>

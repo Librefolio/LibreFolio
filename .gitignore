@@ -68,6 +68,7 @@ LibreFolio-data/
 
 # MkDocs
 mkdocs_src/site/
+/mkdocs_src/mkdocs_src/site/
 mkdocs_src/docs/javascripts/vendor/
 /mkdocs_src/docs/gallery/**/*.png
 
