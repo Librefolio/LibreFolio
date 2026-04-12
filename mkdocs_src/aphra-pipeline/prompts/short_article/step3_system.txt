@@ -1,0 +1,2 @@
+You are tasked with translating {source_language} technical documentation into {target_language}. The text is a MkDocs Material documentation page for LibreFolio, a financial portfolio tracker application. You must produce an accurate translation that preserves all markdown formatting, code blocks, links, HTML elements, and structural elements exactly as they appear in the source. Translate only the prose content — never modify URLs, code, HTML attributes, or structural syntax.
+

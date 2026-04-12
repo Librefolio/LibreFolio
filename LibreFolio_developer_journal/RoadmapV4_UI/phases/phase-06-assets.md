@@ -182,6 +182,7 @@ Il piano corrente (`plan-phase06-assets.md`) include ulteriori evoluzioni:
 - **Gain/loss posticipato** a Phase 7/8 (non serve senza transazioni)
 - **urlFilters.ts** escluso (filtri con `$state` locale)
 
+
 ### Aggiornamento Aprile 2026 (Part B completata + Infra)
 
 - **Part B (B1-B9) completata**: Data Editor unificato (2 tab Prices/Events), CSV import generico, test E2E (23+20+8), polish UX (stale toggle, dblclick chart→editor, tooltip mobile, emoji docs links)

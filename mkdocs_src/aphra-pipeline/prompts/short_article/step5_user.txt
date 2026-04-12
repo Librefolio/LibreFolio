@@ -1,0 +1,41 @@
+Follow these steps carefully to produce the final, improved translation:
+
+1. Read the original {source_language} text:
+<original_{source_language}>
+{text}
+</original_{source_language}>
+
+2. Review the initial {target_language} translation:
+<basic_translation>
+{translation}
+</basic_translation>
+
+3. Study the auxiliary information — it contains a TERMINOLOGY GLOSSARY with mandatory term mappings, and optionally a STRUCTURAL DIFF REPORT with objective findings:
+<glossary>
+{glossary}
+</glossary>
+
+4. Consider the critique of the initial translation:
+<translation_critique>
+{critique}
+</translation_critique>
+
+5. Now create the final, improved {target_language} translation. You MUST:
+   a. Fix ALL issues identified in the critique above.
+   b. Fix ALL structural issues from the STRUCTURAL DIFF REPORT (if present in the glossary) — these are objective, programmatically verified errors.
+   c. Use the term mappings from the TERMINOLOGY GLOSSARY consistently — these are mandatory.
+   d. Preserve ALL markdown formatting exactly as in the source: headings, code blocks, inline code, admonitions (keep type keyword in English), links (keep URLs unchanged), images (keep paths unchanged), HTML tags and attributes, tables, lists, emoji characters.
+   e. Do NOT translate content inside code blocks, inline code, URLs, file paths, HTML attributes, brand names, or acronyms.
+
+6. Do NOT add any content not present in the source document:
+   - No translator's notes or footnotes of any kind
+   - No [N] or [^N] markers
+   - No glossary or notes section at the end
+   - No commentary about translation choices
+   - No preamble or explanation before or after the translation
+
+7. Present your final output in the following format:
+<improved_translation>
+Your complete, final {target_language} translation. Nothing else — no notes, no markers, no explanation.
+</improved_translation>
+
