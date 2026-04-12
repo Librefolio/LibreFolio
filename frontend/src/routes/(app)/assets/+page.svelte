@@ -1149,7 +1149,14 @@
         bind:open={assetModalOpen}
         editMode={assetModalEditMode}
         editData={assetModalEditData}
-        oncreated={() => loadAssets()}
+        oncreated={async (assetId) => {
+            await loadAssets();
+            // Auto-sync the newly created asset to fetch initial price data
+            const newAsset = assets.find(a => a.id === assetId);
+            if (newAsset?.provider_code) {
+                await handleSyncAsset(newAsset);
+            }
+        }}
         onupdated={() => loadAssets()}
         onclose={() => { assetModalOpen = false; }}
 />

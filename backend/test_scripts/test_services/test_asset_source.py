@@ -12,6 +12,7 @@ Tests:
 import asyncio
 import json
 import sys
+import time
 from datetime import date
 from decimal import Decimal
 
@@ -49,20 +50,16 @@ from backend.test_scripts.test_utils import (
 
 from backend.app.db.models import PriceHistory
 from sqlalchemy import select
-from backend.app.schemas.assets import (
-    FAInterestRatePeriod,
-    FALateInterestConfig,
-    MaturationFrequency,
-    DayCountConvention,
-    )
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.prices import FAUpsert, FAPricePoint, FAPriceQueryItem
 
-from backend.app.db.models import AssetProviderAssignment
+from backend.app.db.models import AssetProviderAssignment, FxRate
 from sqlalchemy import delete
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from backend.app.schemas.prices import FAAssetDelete
 from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.refresh import FARefreshItem
 
 
 # ============================================================================
@@ -80,7 +77,6 @@ def asset_ids():
 
     Uses timestamp to ensure unique asset names across test runs.
     """
-    import time
 
     timestamp = int(time.time() * 1000)  # Millisecond timestamp for uniqueness
 
@@ -174,8 +170,6 @@ def test_act365_calculation():
         print_success(f"✓ ACT/365 OK for {start} to {end} -> {result}")
 
 
-
-
 # ============================================================================
 # PROVIDER ASSIGNMENT TESTS
 # ============================================================================
@@ -186,7 +180,6 @@ async def test_bulk_assign_providers():
     """Test bulk_assign_providers() method."""
     print_section("Test 5: Bulk Assign Providers")
 
-    import time
 
     timestamp = int(time.time() * 1000)
 
@@ -261,7 +254,6 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
     """Test metadata auto-populate on provider assignment."""
     print_section("Test 6a: Metadata Auto-Populate")
 
-    import time
 
     timestamp = int(time.time() * 1000)
 
@@ -623,7 +615,6 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
     """
     print_section("Test 13: Sync/Query Separation with Invalid Provider")
 
-    from backend.app.schemas.refresh import FARefreshItem
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         test_asset_id = asset_ids[0]
@@ -741,6 +732,269 @@ async def test_bulk_delete_prices(asset_ids: list[int]):
         # (Note: the actual count depends on what was inserted in previous tests)
         # We just verify that the operation completed successfully
         assert all(r.message for r in bulkDelresult.results), "All results should have a message"
+
+
+# ============================================================================
+# CURRENCY CONVERSION TESTS (C1/C2)
+# ============================================================================
+
+@pytest.fixture(scope="module")
+def fx_asset_ids():
+    """Create assets with EUR currency + insert FX rates for USD→EUR conversion tests."""
+
+    timestamp = int(time.time() * 1000)
+
+    async def _setup():
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            # Create a USD-denominated asset
+            asset = Asset(
+                display_name=f"FX Test Asset {timestamp}",
+                currency="USD",
+                asset_type=AssetType.STOCK,
+                active=True,
+                )
+            session.add(asset)
+            await session.commit()
+            await session.refresh(asset)
+
+            # Insert USD prices for the asset (use Feb dates to avoid collisions)
+            prices = [
+                PriceHistory(
+                    asset_id=asset.id, date=date(2025, 2, d),
+                    close=Decimal("100.00") + d, currency="USD",
+                    source_plugin_key="test_fx_conversion",
+                    )
+                for d in range(1, 6)  # Feb 1-5
+                ]
+            session.add_all(prices)
+
+            # Insert FX rates: EUR/USD (base=EUR < quote=USD → 1 EUR = rate USD)
+            # So to convert USD → EUR: divide by rate
+            # Use MERGE/upsert pattern to handle re-runs
+            for fx_data in [
+                {
+                    "date": date(2025, 2, 1), "base": "EUR", "quote": "USD",
+                    "rate": Decimal("1.10"), "source": "TEST"
+                    },
+                {
+                    "date": date(2025, 2, 2), "base": "EUR", "quote": "USD",
+                    "rate": Decimal("1.12"), "source": "TEST"
+                    },
+                # Gap on Feb 3-4 → FX backward-fill should kick in
+                {
+                    "date": date(2025, 2, 5), "base": "EUR", "quote": "USD",
+                    "rate": Decimal("1.08"), "source": "TEST"
+                    },
+                ]:
+                stmt = sqlite_insert(FxRate).values(**fx_data).on_conflict_do_update(
+                    index_elements=["date", "base", "quote"],
+                    set_={"rate": fx_data["rate"], "source": fx_data["source"]},
+                    )
+                await session.execute(stmt)
+            await session.commit()
+
+            return asset.id
+
+    asset_id = asyncio.run(_setup())
+    yield asset_id
+
+
+@pytest.mark.asyncio
+async def test_get_prices_with_target_currency(fx_asset_ids: int):
+    """Test get_prices_bulk() with target_currency conversion."""
+    print_section("Test 15: Price Query with Currency Conversion")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        results = await AssetSourceManager.get_prices_bulk(
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=fx_asset_ids,
+                    date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 5)),
+                    target_currency="EUR",
+                    )
+                ],
+            session=session,
+            )
+        result = results[0]
+        prices = result.prices
+
+        assert len(prices) == 5, f"Expected 5 prices, got {len(prices)}"
+
+        # All prices should be in EUR
+        for p in prices:
+            assert p.currency == "EUR", f"Expected EUR, got {p.currency}"
+            assert p.original_currency == "USD", f"Expected original USD, got {p.original_currency}"
+
+        # Day 1: USD 101 / 1.10 = ~91.818 EUR
+        p1 = prices[0]
+        expected_close_1 = Decimal("101.00") / Decimal("1.10")
+        assert abs(float(p1.close) - float(expected_close_1)) < 0.01, (
+            f"Day 1 close mismatch: {p1.close} vs expected ~{expected_close_1:.4f}"
+        )
+        print_info(f"Day 1: USD 101.00 → EUR {p1.close:.4f} (rate 1.10)")
+
+        # Day 2: USD 102 / 1.12 = ~91.071 EUR
+        p2 = prices[1]
+        expected_close_2 = Decimal("102.00") / Decimal("1.12")
+        assert abs(float(p2.close) - float(expected_close_2)) < 0.01, (
+            f"Day 2 close mismatch: {p2.close} vs expected ~{expected_close_2:.4f}"
+        )
+        print_info(f"Day 2: USD 102.00 → EUR {p2.close:.4f} (rate 1.12)")
+
+        # Day 3: FX backward-filled from day 2 (rate 1.12), price 103
+        p3 = prices[2]
+        assert p3.backward_fill_info is not None, "Day 3 should have backward_fill_info"
+        assert p3.backward_fill_info.fx_days_back is not None, "Day 3 should have fx_days_back"
+        assert p3.backward_fill_info.fx_days_back == 1, (
+            f"Day 3 fx_days_back should be 1, got {p3.backward_fill_info.fx_days_back}"
+        )
+        print_info(
+            f"Day 3: USD 103.00 → EUR {p3.close:.4f} (FX backfilled {p3.backward_fill_info.fx_days_back}d)"
+            )
+
+        # Day 5: exact FX rate (1.08), price 105
+        p5 = prices[4]
+        expected_close_5 = Decimal("105.00") / Decimal("1.08")
+        assert abs(float(p5.close) - float(expected_close_5)) < 0.01, (
+            f"Day 5 close mismatch: {p5.close} vs expected ~{expected_close_5:.4f}"
+        )
+        # Day 5 has exact FX rate → no FX staleness
+        if p5.backward_fill_info is not None:
+            assert p5.backward_fill_info.fx_days_back == 0 or p5.backward_fill_info.fx_days_back is None, (
+                f"Day 5 fx_days_back should be 0 or None, got {p5.backward_fill_info.fx_days_back}"
+            )
+        print_info(f"Day 5: USD 105.00 → EUR {p5.close:.4f} (rate 1.08, exact)")
+
+        print_success("✓ Currency conversion with FX backward-fill verified")
+
+
+@pytest.mark.asyncio
+async def test_get_prices_no_target_currency(fx_asset_ids: int):
+    """Test that get_prices_bulk() without target_currency returns native prices unchanged."""
+    print_section("Test 16: Price Query without Currency Conversion")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        results = await AssetSourceManager.get_prices_bulk(
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=fx_asset_ids,
+                    date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 2)),
+                    )
+                ],
+            session=session,
+            )
+        prices = results[0].prices
+
+        assert len(prices) == 2
+        for p in prices:
+            assert p.currency == "USD", f"Expected native USD, got {p.currency}"
+            assert p.original_currency is None, f"original_currency should be None, got {p.original_currency}"
+        assert prices[0].close == Decimal("101.00")
+        print_success("✓ No conversion when target_currency is absent")
+
+
+@pytest.mark.asyncio
+async def test_get_prices_same_target_currency(fx_asset_ids: int):
+    """Test that target_currency == native currency is a no-op."""
+    print_section("Test 17: Price Query with Same Currency (no-op)")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        results = await AssetSourceManager.get_prices_bulk(
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=fx_asset_ids,
+                    date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 2)),
+                    target_currency="USD",
+                    )
+                ],
+            session=session,
+            )
+        prices = results[0].prices
+
+        assert len(prices) == 2
+        for p in prices:
+            assert p.currency == "USD"
+            # Same currency → no conversion, original_currency should be None
+            assert p.original_currency is None, (
+                f"Same-currency conversion should not set original_currency, got {p.original_currency}"
+            )
+        assert prices[0].close == Decimal("101.00"), "Price should be unchanged"
+        print_success("✓ Same-currency target is a no-op")
+
+
+@pytest.mark.asyncio
+async def test_get_prices_missing_fx_pair():
+    """Test that missing FX pair results in native prices + errors list."""
+    print_section("Test 18: Price Query with Missing FX Pair")
+
+    async def _create_asset():
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            asset = Asset(
+                display_name=f"JPY Test Asset {int(time.time() * 1000)}",
+                currency="JPY",
+                asset_type=AssetType.STOCK,
+                active=True,
+                )
+            session.add(asset)
+            await session.commit()
+            await session.refresh(asset)
+
+            # Insert a JPY price
+            session.add(PriceHistory(
+                asset_id=asset.id, date=date(2025, 2, 1),
+                close=Decimal("15000.00"), currency="JPY",
+                source_plugin_key="test_fx_missing",
+                ))
+            await session.commit()
+            return asset.id
+
+    jpy_asset_id = await _create_asset()
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        results = await AssetSourceManager.get_prices_bulk(
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=jpy_asset_id,
+                    date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 1)),
+                    target_currency="CHF",  # No JPY/CHF rate exists
+                    )
+                ],
+            session=session,
+            )
+        result = results[0]
+
+        # Price should remain in JPY (conversion failed)
+        assert len(result.prices) == 1
+        p = result.prices[0]
+        assert p.currency == "JPY", f"Expected native JPY (conversion failed), got {p.currency}"
+        assert p.close == Decimal("15000.00"), "Price should be unchanged"
+
+        # Errors should report the missing FX pair
+        assert len(result.errors) > 0, "Expected error about missing FX pair"
+        print_info(f"Error message: {result.errors[0]}")
+        print_success("✓ Missing FX pair: native price returned + error reported")
+
+
+@pytest.mark.asyncio
+async def test_query_result_errors_field(fx_asset_ids: int):
+    """Test that FAPriceQueryResult.errors is empty list when no issues."""
+    print_section("Test 19: Query Result errors field (empty when no issues)")
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        results = await AssetSourceManager.get_prices_bulk(
+            requests=[
+                FAPriceQueryItem(
+                    asset_id=fx_asset_ids,
+                    date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 2)),
+                    target_currency="EUR",
+                    )
+                ],
+            session=session,
+            )
+        result = results[0]
+        assert isinstance(result.errors, list), "errors should be a list"
+        assert len(result.errors) == 0, f"Expected 0 errors, got {result.errors}"
+        print_success("✓ errors field is empty list when conversion succeeds")
 
 
 if __name__ == "__main__":

@@ -915,7 +915,7 @@
             id: 'rate',
             header: () => $t('assets.schedule.rate'),
             headerTooltip: () => $t('assets.schedule.rateHint'),
-            headerTooltipUrl: '/mkdocs/financial-theory/synthetic-benchmarks/#compound-growth',
+            headerTooltipUrl: '/mkdocs/financial-theory/technical-analysis/synthetic-benchmarks/compound/',
             type: 'custom',
             sortable: false,
             filterable: false,

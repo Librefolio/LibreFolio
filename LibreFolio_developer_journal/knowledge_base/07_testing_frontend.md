@@ -38,28 +38,30 @@ frontend/
 ## ▶️ Come Eseguire
 
 ```bash
-# Tutti i test frontend (desktop + mobile)
-./dev.py test front all
+# Categorie di test frontend (via dev.py)
+./dev.py test front-utility all     # auth, settings, files, select, image-crop
+./dev.py test front-user all        # brokers, multi-user, sharing
+./dev.py test front-fx all          # unit (Vitest) + E2E fx
+./dev.py test front-asset all       # list, detail, modal, data-editor
+
+# Singola sotto-categoria
+./dev.py test front-fx fx-list      # Solo FX list page
+./dev.py test front-asset asset-detail  # Solo asset detail
+
+# Con backend coverage tracking
+./dev.py test --coverage front-fx all
 
 # Con UI interattiva Playwright
-cd frontend
-npx playwright test --ui
+./dev.py test front-fx fx-list --ui
 
-# Singolo file
-cd frontend
-npx playwright test e2e/assets/asset-data-editor.spec.ts
+# Con browser visibile
+./dev.py test front-fx fx-list --headed
 
-# Solo desktop
-cd frontend
-npx playwright test --project=desktop
+# Con debug step-by-step
+./dev.py test front-fx fx-list --debug
 
-# Solo mobile
-cd frontend
-npx playwright test --project=mobile
-
-# Con headed browser (visuale)
-cd frontend
-npx playwright test --headed
+# Lista test disponibili
+./dev.py test front-fx fx-list --list
 
 # Generare screenshot gallery per documentazione
 ./dev.py mkdocs gallery
@@ -76,6 +78,7 @@ npx playwright test --headed
 - **Workers**: 1 (test sequenziali — stato condiviso nel DB)
 - **Timeout**: 30s per test, 3s per singola assertion
 - **Web Server auto-start**: `./dev.py server --test --force` (porta 8001)
+- **Backend coverage**: se `COVERAGE_BACKEND=1` nell'env, aggiunge `--coverage` al server command
 - **Retry**: 0 locale, 2 in CI
 
 ⚠️ **Linux**: Playwright richiede librerie di sistema aggiuntive:
@@ -213,6 +216,33 @@ export async function navigateToAssetByName(page, assetName: string) {
 ```
 
 Output: `mkdocs_src/docs/assets/img/gallery/` (usato in documentazione utente).
+
+---
+
+## 📊 Backend Coverage durante E2E
+
+I test Playwright possono tracciare la coverage del codice backend eseguito durante i test E2E:
+
+```bash
+# Eseguire test frontend con backend coverage
+./dev.py test --coverage front-fx all
+./dev.py test --coverage front-asset all
+
+# Il report viene generato in htmlcov-frontend/
+./dev.py test coverage show frontend
+```
+
+**Come funziona:**
+
+1. `./dev.py test --coverage front-fx all` setta `COVERAGE_BACKEND=1` nell'env
+2. `playwright.config.ts` rileva `COVERAGE_BACKEND` e aggiunge `--coverage` al webServer command
+3. `dev.py server --coverage` setta `COVERAGE_PROCESS_START=.coveragerc` per uvicorn
+4. `sitecustomize.py` intercetta l'env var → `coverage.process_startup()` → tracking attivo
+5. Alla chiusura del server (SIGTERM da Playwright), coverage scrive `.coverage.<pid>`
+6. Il test runner fa `coverage combine` → `htmlcov-frontend/`
+
+> **Nota**: il server deve chiudersi con SIGTERM (non SIGKILL) per fare il flush dei dati.
+> Playwright manda SIGTERM automaticamente quando i test finiscono.
 
 ---
 

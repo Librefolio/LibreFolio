@@ -2162,14 +2162,20 @@ type FAPricePoint_Input = {
    * Currency code (ISO 4217)
    */
   currency: string;
+  original_currency?:
+    | /**
+     * Original currency before FX conversion (None = no conversion)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
   backward_fill_info?:
     | /**
-     * Backward-fill info (only in query results)
+     * Backward-fill + FX staleness info (only in query results)
      */
-    ((BackwardFillInfo | null) | Array<BackwardFillInfo | null>)
+    ((AssetBackwardFillInfo | null) | Array<AssetBackwardFillInfo | null>)
     | undefined;
 };
-type BackwardFillInfo = {
+type AssetBackwardFillInfo = {
   /**
    * ISO date of actual data used (YYYY-MM-DD)
    */
@@ -2178,6 +2184,18 @@ type BackwardFillInfo = {
    * Number of days back from requested date
    */
   days_back: number;
+  fx_rate_date?:
+    | /**
+     * Actual date of the FX rate used for conversion
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  fx_days_back?:
+    | /**
+     * Days back for the FX rate (0 = same-day, None = no conversion)
+     */
+    ((number | null) | Array<number | null>)
+    | undefined;
 };
 type FAPricePoint_Output = {
   /**
@@ -2258,11 +2276,17 @@ type FAPricePoint_Output = {
    * Currency code (ISO 4217)
    */
   currency: string;
+  original_currency?:
+    | /**
+     * Original currency before FX conversion (None = no conversion)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
   backward_fill_info?:
     | /**
-     * Backward-fill info (only in query results)
+     * Backward-fill + FX staleness info (only in query results)
      */
-    ((BackwardFillInfo | null) | Array<BackwardFillInfo | null>)
+    ((AssetBackwardFillInfo | null) | Array<AssetBackwardFillInfo | null>)
     | undefined;
 };
 type FAPriceQueryItem = {
@@ -2283,6 +2307,12 @@ type FAPriceQueryItem = {
    * @default false
    */
   boolean | undefined;
+  target_currency?:
+    | /**
+     * Convert prices to this currency via FX rates (None = native currency)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
 };
 type FAPriceQueryResponse = Partial<{
   /**
@@ -2303,6 +2333,10 @@ type FAPriceQueryResult = {
    * Asset events (if requested)
    */
   Array<FAAssetEventPoint_Output> | undefined;
+  errors?: /**
+   * Non-fatal warnings (e.g. FX pair missing)
+   */
+  Array<string> | undefined;
 };
 type FAProviderAssignmentReadItem = {
   /**
@@ -2969,6 +3003,16 @@ type FXConversionResult = {
      */
     ((BackwardFillInfo | null) | Array<BackwardFillInfo | null>)
     | undefined;
+};
+type BackwardFillInfo = {
+  /**
+   * ISO date of actual data used (YYYY-MM-DD)
+   */
+  actual_rate_date: string;
+  /**
+   * Number of days back from requested date
+   */
+  days_back: number;
 };
 type FXConversionRouteItem = {
   /**
@@ -4806,6 +4850,27 @@ const identifier_contains = z
   .union([z.string(), z.null()])
   .describe("Partial match in any identifier field")
   .optional();
+const AssetBackwardFillInfo: z.ZodType<AssetBackwardFillInfo> = z
+  .object({
+    actual_rate_date: z
+      .string()
+      .describe("ISO date of actual data used (YYYY-MM-DD)"),
+    days_back: z
+      .number()
+      .int()
+      .describe("Number of days back from requested date"),
+    fx_rate_date: z
+      .union([z.string(), z.null()])
+      .describe("Actual date of the FX rate used for conversion")
+      .optional(),
+    fx_days_back: z
+      .union([z.number(), z.null()])
+      .describe(
+        "Days back for the FX rate (0 = same-day, None = no conversion)"
+      )
+      .optional(),
+  })
+  .passthrough();
 const FAPricePoint_Input: z.ZodType<FAPricePoint_Input> = z.object({
   date: z.string().describe("Price date"),
   open: z
@@ -4826,9 +4891,13 @@ const FAPricePoint_Input: z.ZodType<FAPricePoint_Input> = z.object({
     .describe("Trading volume")
     .optional(),
   currency: z.string().describe("Currency code (ISO 4217)"),
+  original_currency: z
+    .union([z.string(), z.null()])
+    .describe("Original currency before FX conversion (None = no conversion)")
+    .optional(),
   backward_fill_info: z
-    .union([BackwardFillInfo, z.null()])
-    .describe("Backward-fill info (only in query results)")
+    .union([AssetBackwardFillInfo, z.null()])
+    .describe("Backward-fill + FX staleness info (only in query results)")
     .optional(),
 });
 const FAUpsert: z.ZodType<FAUpsert> = z.object({
@@ -4920,6 +4989,12 @@ Examples:
     .describe("Include asset events in response")
     .optional()
     .default(false),
+  target_currency: z
+    .union([z.string(), z.null()])
+    .describe(
+      "Convert prices to this currency via FX rates (None = native currency)"
+    )
+    .optional(),
 });
 const FAPricePoint_Output: z.ZodType<FAPricePoint_Output> = z.object({
   date: z.string().describe("Price date"),
@@ -4932,9 +5007,13 @@ const FAPricePoint_Output: z.ZodType<FAPricePoint_Output> = z.object({
     .describe("Closing price (required)"),
   volume: z.union([z.string(), z.null()]).describe("Trading volume").optional(),
   currency: z.string().describe("Currency code (ISO 4217)"),
+  original_currency: z
+    .union([z.string(), z.null()])
+    .describe("Original currency before FX conversion (None = no conversion)")
+    .optional(),
   backward_fill_info: z
-    .union([BackwardFillInfo, z.null()])
-    .describe("Backward-fill info (only in query results)")
+    .union([AssetBackwardFillInfo, z.null()])
+    .describe("Backward-fill + FX staleness info (only in query results)")
     .optional(),
 });
 const FAAssetEventPoint_Output: z.ZodType<FAAssetEventPoint_Output> = z.object({
@@ -4978,6 +5057,10 @@ const FAPriceQueryResult: z.ZodType<FAPriceQueryResult> = z.object({
   events: z
     .array(FAAssetEventPoint_Output)
     .describe("Asset events (if requested)")
+    .optional(),
+  errors: z
+    .array(z.string())
+    .describe("Non-fatal warnings (e.g. FX pair missing)")
     .optional(),
 });
 const FAPriceQueryResponse: z.ZodType<FAPriceQueryResponse> = z
@@ -6868,6 +6951,7 @@ export const schemas = {
   uuid,
   identifier_other,
   identifier_contains,
+  AssetBackwardFillInfo,
   FAPricePoint_Input,
   FAUpsert,
   FAUpsertResult,

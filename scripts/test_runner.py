@@ -21,31 +21,35 @@ Author: LibreFolio Contributors
 """
 
 import argparse
+import inspect
+import os
+import re
 import subprocess
+import sys
 import traceback
-# Ensure project root is in path (file is in scripts/)
 from pathlib import Path
 
 import argcomplete
 
+# Ensure project root is in path (file is in scripts/)
 PROJECT_ROOT = Path(__file__).parent.parent
-import sys
-import os
-
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Change to project root so relative paths work
 os.chdir(PROJECT_ROOT)
 
-from scripts.cli_base import pipenv_prefix
+from scripts.cli_base import auto_build_frontend, pipenv_prefix
+from scripts.coverage_analysis import register_subparser as register_cov_parser, run_analysis as run_coverage_analysis
 
 # Setup test database configuration and get test database path
 from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH, TEST_DATABASE_URL
 # Import test utilities (avoid code duplication)
-from backend.test_scripts.test_utils import (Colors, print_header, print_section, print_success, print_error, print_warning, print_info)
+from backend.test_scripts.test_utils import Colors, print_header, print_section, print_success, print_error, print_warning, print_info
 
 # Global flag for coverage mode (set by main())
 _COVERAGE_MODE = False
+# Coverage source: "backend", "frontend", or None (auto-detect)
+_COVERAGE_SOURCE = None
 
 
 def _run_test_suite(
@@ -222,10 +226,12 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
             if verbose:
                 flags_to_add.append('-s')
             if use_coverage:
+                # Use source-specific HTML directory
+                html_dir = "htmlcov-backend" if _COVERAGE_SOURCE != "frontend" else "htmlcov-frontend"
                 flags_to_add.extend([
                     '--cov=backend/app',
                     '--cov-append',  # Append to existing coverage data
-                    '--cov-report=html',
+                    f'--cov-report=html:{html_dir}',
                     '--cov-report=term-missing:skip-covered',
                     ])
             # Insert after pytest command
@@ -1203,7 +1209,6 @@ def _ensure_frontend_build() -> bool:
     Returns:
         True if build is ready, False if build failed.
     """
-    from scripts.cli_base import auto_build_frontend
 
     result = auto_build_frontend(debug=False)
 
@@ -1271,7 +1276,8 @@ def _run_playwright(
     headed: bool = False,
     debug: bool = False,
     project: str = "desktop",
-    test_names: list = None
+    test_names: list = None,
+    coverage: bool = False,
 ) -> bool:
     """
     Run Playwright tests with given options.
@@ -1283,6 +1289,7 @@ def _run_playwright(
         debug: Run with PWDEBUG=1 for step-by-step debugging
         project: Playwright project (desktop/mobile)
         test_names: List of test name patterns to filter (uses -g/--grep)
+        coverage: If True, enable backend code coverage tracking
     """
     cmd = ["npm", "run"]
 
@@ -1314,10 +1321,15 @@ def _run_playwright(
     print(f"\n{Colors.BLUE}Running: Playwright {spec_file or 'all tests'}{Colors.NC}")
     if test_names:
         print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
+    if coverage:
+        print(f"{Colors.YELLOW}📊 Backend coverage tracking enabled (COVERAGE_BACKEND=1){Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True)
+        env = os.environ.copy() if coverage else None
+        if coverage:
+            env["COVERAGE_BACKEND"] = "1"
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True, env=env)
         if result.returncode == 0:
             print_success(f"Playwright {spec_file or 'all'} - PASSED")
             return True
@@ -1329,77 +1341,77 @@ def _run_playwright(
         return False
 
 
-def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run auth E2E tests."""
     print_section("Frontend Auth Tests")
     if not _ensure_frontend_build():
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run settings E2E tests."""
     print_section("Frontend Settings Tests")
     if not _ensure_frontend_build():
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run files E2E tests."""
     print_section("Frontend Files Tests")
     if not _ensure_frontend_build():
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_brokers(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_brokers(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run brokers E2E tests."""
     print_section("Frontend Brokers Tests")
     if not _ensure_frontend_build():
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("brokers/brokers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("brokers/brokers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run multi-user isolation tests."""
     print_section("Frontend Multi-User Tests")
     if not _ensure_frontend_build():
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("brokers/multi-user.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("brokers/multi-user.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_select(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_select(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run select components E2E tests."""
     print_section("Frontend Select Components Tests")
     if not _ensure_frontend_build():
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("select-components.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("select-components.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_image_crop(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_image_crop(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run image crop & media components E2E tests."""
     print_section("Frontend Image Crop & Media Tests")
     if not _ensure_frontend_build():
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("image-crop.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("image-crop.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run broker sharing E2E tests (requires populated DB with brokers)."""
     print_section("Frontend Broker Sharing Tests")
     if not _ensure_frontend_build():
@@ -1408,10 +1420,10 @@ def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool =
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("brokers/broker-sharing.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("brokers/broker-sharing.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX unit tests (Vitest)."""
     print_section("Frontend FX Unit Tests (Vitest)")
     cmd = ["npm", "run", "test:unit"]
@@ -1430,7 +1442,7 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         return False
 
 
-def front_fx_list(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_list(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX list page E2E tests."""
     print_section("Frontend FX List Page Tests")
     if not _ensure_frontend_build():
@@ -1439,10 +1451,10 @@ def front_fx_list(verbose: bool = False, ui: bool = False, headed: bool = False,
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("fx/fx-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("fx/fx-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX detail page E2E tests."""
     print_section("Frontend FX Detail Page Tests")
     if not _ensure_frontend_build():
@@ -1451,10 +1463,10 @@ def front_fx_detail(verbose: bool = False, ui: bool = False, headed: bool = Fals
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("fx/fx-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("fx/fx-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx_add_pair(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_add_pair(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX add pair modal E2E tests."""
     print_section("Frontend FX Add Pair Tests")
     if not _ensure_frontend_build():
@@ -1463,10 +1475,10 @@ def front_fx_add_pair(verbose: bool = False, ui: bool = False, headed: bool = Fa
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("fx/fx-add-pair.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("fx/fx-add-pair.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx_editor(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_editor(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX data editor E2E tests."""
     print_section("Frontend FX Data Editor Tests")
     if not _ensure_frontend_build():
@@ -1475,10 +1487,10 @@ def front_fx_editor(verbose: bool = False, ui: bool = False, headed: bool = Fals
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("fx/fx-data-editor.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("fx/fx-data-editor.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx_csv_import(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_csv_import(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX CSV import modal E2E tests."""
     print_section("Frontend FX CSV Import Tests")
     if not _ensure_frontend_build():
@@ -1487,10 +1499,10 @@ def front_fx_csv_import(verbose: bool = False, ui: bool = False, headed: bool = 
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("fx/fx-csv-import.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("fx/fx-csv-import.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx_sync(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_sync(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX sync modal E2E tests."""
     print_section("Frontend FX Sync Tests")
     if not _ensure_frontend_build():
@@ -1499,10 +1511,10 @@ def front_fx_sync(verbose: bool = False, ui: bool = False, headed: bool = False,
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("fx/fx-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("fx/fx-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx_api(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_api(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX API route E2E tests."""
     print_section("Frontend FX API Route Tests")
     if not _ensure_frontend_build():
@@ -1511,10 +1523,10 @@ def front_fx_api(verbose: bool = False, ui: bool = False, headed: bool = False, 
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("fx/fx-api.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("fx/fx-api.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX chart settings E2E tests."""
     print_section("Frontend FX Chart Settings Tests")
     if not _ensure_frontend_build():
@@ -1523,22 +1535,22 @@ def front_fx_settings(verbose: bool = False, ui: bool = False, headed: bool = Fa
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("fx/fx-chart-settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("fx/fx-chart-settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all FX tests (unit + E2E)."""
     return _run_test_suite(
         suite_name="All FX Tests (Unit + E2E)",
         tests=[
             ("FX Unit (Vitest)", lambda: front_fx_unit(verbose=verbose)),
-            ("FX List Page", lambda: front_fx_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("FX Add Pair Modal", lambda: front_fx_add_pair(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("FX Detail Page", lambda: front_fx_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("FX Data Editor", lambda: front_fx_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("FX Sync Modal", lambda: front_fx_sync(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("FX API Routes", lambda: front_fx_api(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("FX Chart Settings", lambda: front_fx_settings(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("FX List Page", lambda: front_fx_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("FX Add Pair Modal", lambda: front_fx_add_pair(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("FX Detail Page", lambda: front_fx_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("FX Data Editor", lambda: front_fx_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("FX Sync Modal", lambda: front_fx_sync(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("FX API Routes", lambda: front_fx_api(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("FX Chart Settings", lambda: front_fx_settings(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All FX Tests (Unit + E2E)",
@@ -1551,7 +1563,7 @@ def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debu
 # Frontend Asset Tests (Playwright E2E)
 # =============================================================================
 
-def front_asset_list(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_asset_list(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset list page E2E tests."""
     print_section("Frontend Asset List Page Tests")
     if not _ensure_frontend_build():
@@ -1560,10 +1572,10 @@ def front_asset_list(verbose: bool = False, ui: bool = False, headed: bool = Fal
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("assets/asset-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("assets/asset-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_asset_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_asset_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset detail page E2E tests."""
     print_section("Frontend Asset Detail Page Tests")
     if not _ensure_frontend_build():
@@ -1572,10 +1584,10 @@ def front_asset_detail(verbose: bool = False, ui: bool = False, headed: bool = F
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("assets/asset-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("assets/asset-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_asset_modal(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_asset_modal(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset modal E2E tests."""
     print_section("Frontend Asset Modal Tests")
     if not _ensure_frontend_build():
@@ -1584,10 +1596,10 @@ def front_asset_modal(verbose: bool = False, ui: bool = False, headed: bool = Fa
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("assets/asset-modal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("assets/asset-modal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_asset_data_editor(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_asset_data_editor(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset data editor E2E tests."""
     print_section("Frontend Asset Data Editor Tests")
     if not _ensure_frontend_build():
@@ -1596,18 +1608,18 @@ def front_asset_data_editor(verbose: bool = False, ui: bool = False, headed: boo
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("assets/asset-data-editor.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+    return _run_playwright("assets/asset-data-editor.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset E2E tests."""
     return _run_test_suite(
         suite_name="All Asset Tests (E2E)",
         tests=[
-            ("Asset List Page", lambda: front_asset_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("Asset Detail Page", lambda: front_asset_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("Asset Modal", lambda: front_asset_modal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
-            ("Asset Data Editor", lambda: front_asset_data_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)),
+            ("Asset List Page", lambda: front_asset_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("Asset Detail Page", lambda: front_asset_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("Asset Modal", lambda: front_asset_modal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("Asset Data Editor", lambda: front_asset_data_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Asset Tests (E2E)",
@@ -1616,7 +1628,7 @@ def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = Fals
     )
 
 
-def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
+def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend utility/component E2E tests."""
     print_header("Frontend Utility Tests (Playwright)")
     if not _ensure_frontend_build():
@@ -1626,7 +1638,7 @@ def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = Fa
     specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "select-components.spec.ts", "image-crop.spec.ts"]
     return _run_test_suite(
         suite_name="Frontend Utility Tests",
-        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug)) for spec in specs],
+        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
         verbose=verbose,
         header_msg=None,
         summary_title="Frontend Utility Test Summary",
@@ -1634,7 +1646,7 @@ def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = Fa
     )
 
 
-def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
+def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend user/broker E2E tests."""
     print_header("Frontend User Tests (Playwright)")
     if not _ensure_frontend_build():
@@ -1646,7 +1658,7 @@ def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False
     specs = ["brokers/brokers.spec.ts", "brokers/multi-user.spec.ts", "brokers/broker-sharing.spec.ts"]
     return _run_test_suite(
         suite_name="Frontend User Tests",
-        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug)) for spec in specs],
+        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
         verbose=verbose,
         header_msg=None,
         summary_title="Frontend User Test Summary",
@@ -1662,7 +1674,6 @@ def _list_front_tests(category: str, action: str = None) -> bool:
 
     Returns True always (listing is not a failure).
     """
-    import re
 
     # Map category actions to spec files
     spec_map = {}
@@ -1767,10 +1778,8 @@ def _list_pytest_tests(category: str, action: str = None) -> bool:
         func = info.get("func")
         if func:
             # Inspect function source to find _build_pytest_cmd path
-            import inspect
             try:
                 source = inspect.getsource(func)
-                import re
                 match = re.search(r'_build_pytest_cmd\(["\']([^"\']+)["\']', source)
                 if match:
                     test_path = match.group(1)
@@ -2836,9 +2845,10 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
         ui = kwargs.get("ui", False)
         headed = kwargs.get("headed", False)
         debug = kwargs.get("debug", False)
+        coverage = kwargs.get("coverage", False)
         if accepts_test_names and test_names:
-            return test_func(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)
-        return test_func(verbose=verbose, ui=ui, headed=headed, debug=debug)
+            return test_func(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+        return test_func(verbose=verbose, ui=ui, headed=headed, debug=debug, coverage=coverage)
 
     # Build arguments
     if accepts_test_names and test_names:
@@ -2905,6 +2915,7 @@ def _generate_main_epilog() -> str:
         lines.append(f"  {category:8} - {help_text}")
 
     lines.append(f"  {'all':8} - Run ALL tests in optimal order")
+    lines.append(f"  {'coverage-report':8} - Analyse coverage: find uncovered function bodies")
     lines.append("")
     lines.append("Examples:")
     lines.append("  dev.py test all                 # All tests (optimal order)")
@@ -2915,8 +2926,55 @@ def _generate_main_epilog() -> str:
     lines.append("  # Via dev.sh")
     lines.append("  dev.sh test all                         # Complete test suite")
     lines.append("  dev.sh test api all                     # All API tests")
+    lines.append("")
+    lines.append("Coverage:")
+    lines.append("  dev.py test --coverage api all          # Run with coverage tracking")
+    lines.append("  dev.py test --coverage --cov-clean all  # Clean + fresh coverage run")
+    lines.append("")
+    lines.append("  # Backend coverage during frontend E2E tests:")
+    lines.append("  dev.py test --coverage front-fx all     # Playwright + backend coverage")
+    lines.append("")
+    lines.append("  # After running tests with --coverage:")
+    lines.append("  coverage combine                        # Merge .coverage.<pid> files")
+    lines.append("  coverage report                         # Terminal summary")
+    lines.append("  coverage html && open htmlcov/index.html  # HTML report in browser")
+    lines.append("")
+    lines.append("  # View differentiated reports:")
+    lines.append("  dev.py test coverage show backend       # Backend test coverage")
+    lines.append("  dev.py test coverage show frontend      # Frontend E2E → backend coverage")
+    lines.append("  dev.py test coverage show combined      # Merge all + open")
 
     return "\n".join(lines)
+
+
+def _register_coverage_subparser(subparsers):
+    """Register the 'coverage' sub-command for viewing/combining coverage reports."""
+    cov_parser = subparsers.add_parser(
+        "coverage",
+        help="📊 View or combine coverage reports (backend/frontend/combined)",
+        description="""
+Coverage Report Management
+
+View differentiated coverage reports:
+  show backend     Open backend test coverage (htmlcov-backend/)
+  show frontend    Open frontend E2E → backend coverage (htmlcov-frontend/)
+  show combined    Combine all data + open merged report (htmlcov/)
+  combine          Combine .coverage.* files without opening browser
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    cov_sub = cov_parser.add_subparsers(dest="cov_action", metavar="action")
+
+    show_parser = cov_sub.add_parser("show", help="Open coverage HTML report in browser")
+    show_parser.add_argument(
+        "target",
+        choices=["backend", "frontend", "combined"],
+        help="Which coverage report to show",
+    )
+
+    cov_sub.add_parser("combine", help="Combine .coverage.* files into single .coverage")
+
+    return cov_parser
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -3052,6 +3110,12 @@ Expected time: 3-7 minutes
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
+    # Coverage analysis command
+    register_cov_parser(subparsers)
+
+    # Coverage management command (show, combine)
+    _register_coverage_subparser(subparsers)
+
     return parser
 
 
@@ -3180,6 +3244,12 @@ def register_subparser(parent_subparsers):
         help="Run ALL tests in optimal order"
         )
 
+    # Coverage analysis command
+    register_cov_parser(test_subparsers)
+
+    # Coverage management command (show, combine)
+    _register_coverage_subparser(test_subparsers)
+
     # Set the dispatch function
     test_parser.set_defaults(func=_dispatch_test_command)
 
@@ -3188,7 +3258,7 @@ def register_subparser(parent_subparsers):
 
 def _dispatch_test_command(args):
     """Dispatch test command from dev.py."""
-    global _COVERAGE_MODE
+    global _COVERAGE_MODE, _COVERAGE_SOURCE
 
     if not args.category:
         print("Error: test category required. Use: ./dev.py test --help")
@@ -3200,6 +3270,13 @@ def _dispatch_test_command(args):
     cov_clean = getattr(args, 'cov_clean', False)
 
     _COVERAGE_MODE = coverage
+    # Auto-detect coverage source from category
+    if args.category and args.category.startswith("front-"):
+        _COVERAGE_SOURCE = "frontend"
+    elif args.category and args.category != "all":
+        _COVERAGE_SOURCE = "backend"
+    else:
+        _COVERAGE_SOURCE = None
 
     if coverage:
         print_header("LibreFolio Test Suite - Coverage Mode")
@@ -3207,7 +3284,6 @@ def _dispatch_test_command(args):
         print()
 
         if cov_clean:
-            import subprocess
             result = subprocess.run(
                 [*pipenv_prefix(), "coverage", "erase"],
                 cwd=os.getcwd(),
@@ -3221,12 +3297,115 @@ def _dispatch_test_command(args):
     return dispatch_to_category(args.category, test_names, verbose, args)
 
 
+def _handle_coverage_command(args) -> int:
+    """Handle ./dev.py test coverage show [backend|frontend|combined]."""
+    action = getattr(args, 'cov_action', None)
+    if not action:
+        print_error("Usage: ./dev.py test coverage show [backend|frontend|combined]")
+        return 1
+
+    if action == "show":
+        target = getattr(args, 'target', 'combined')
+        return _coverage_show(target)
+    elif action == "combine":
+        return _coverage_combine()
+    else:
+        print_error(f"Unknown coverage action: {action}")
+        return 1
+
+
+def _coverage_show(target: str) -> int:
+    """Open coverage HTML report for the given target."""
+    dir_map = {
+        "backend": "htmlcov-backend",
+        "frontend": "htmlcov-frontend",
+        "combined": "htmlcov",
+    }
+    title_map = {
+        "backend": "LibreFolio Backend Test Coverage",
+        "frontend": "LibreFolio Frontend E2E → Backend Coverage",
+        "combined": "LibreFolio Combined Coverage (Backend + Frontend)",
+    }
+
+    html_dir = PROJECT_ROOT / dir_map[target]
+    index_file = html_dir / "index.html"
+
+    if target == "combined":
+        # Combine all coverage data first
+        print(f"{Colors.YELLOW}📊 Combining all coverage data...{Colors.NC}")
+        _coverage_combine_internal(html_dir=str(html_dir), title=title_map[target])
+    elif not index_file.exists():
+        print_error(f"No {target} coverage report found at {html_dir}/")
+        print_info(f"Run tests with --coverage first:")
+        if target == "backend":
+            print_info(f"  ./dev.py test --coverage api all")
+        else:
+            print_info(f"  ./dev.py test --coverage front-fx all")
+        return 1
+
+    if index_file.exists():
+        print_success(f"Opening {target} coverage report: {html_dir}/index.html")
+        subprocess.run(["open", str(index_file)])
+        return 0
+    else:
+        print_error(f"Failed to generate {target} coverage report")
+        return 1
+
+
+def _coverage_combine() -> int:
+    """Combine all .coverage.* files and generate combined HTML report."""
+    return _coverage_combine_internal(
+        html_dir="htmlcov",
+        title="LibreFolio Combined Coverage (Backend + Frontend)"
+    )
+
+
+def _coverage_combine_internal(html_dir: str = "htmlcov", title: str = "LibreFolio Coverage") -> int:
+    """Internal: combine coverage data and generate HTML report."""
+    # Step 1: Combine parallel coverage files
+    result = subprocess.run(
+        [*pipenv_prefix(), "coverage", "combine", "--keep"],
+        cwd=os.getcwd(), capture_output=True, text=True
+    )
+    if result.returncode != 0 and "No data to combine" not in result.stderr:
+        print_warning(f"coverage combine: {result.stderr.strip()}")
+
+    # Step 2: Generate HTML report
+    result = subprocess.run(
+        [*pipenv_prefix(), "coverage", "html", "-d", html_dir, "--title", title],
+        cwd=os.getcwd(), capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        print_success(f"Coverage report generated: {html_dir}/index.html")
+    else:
+        print_error(f"Failed to generate report: {result.stderr.strip()}")
+        return 1
+
+    # Step 3: Show terminal summary
+    subprocess.run(
+        [*pipenv_prefix(), "coverage", "report", "--skip-covered"],
+        cwd=os.getcwd(), capture_output=False, text=True
+    )
+    return 0
+
+
 def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
     """Dispatch to the appropriate test handler. Returns 0 on success, 1 on failure."""
     success = False
 
     if category == "all":
         success = run_all_tests(verbose=verbose)
+    elif category == "coverage-report":
+        # Build a namespace with the right attributes
+        cov_args = argparse.Namespace(
+            input=getattr(args, 'input', '/tmp/cov_report.json'),
+            priority=getattr(args, 'priority', None),
+            json=getattr(args, 'json_output', False),
+            summary=getattr(args, 'summary', False),
+        )
+        return run_coverage_analysis(cov_args)
+    elif category == "coverage":
+        return _handle_coverage_command(args)
     elif category in TEST_REGISTRY:
         action = getattr(args, 'action', None)
         if action:
@@ -3243,6 +3422,7 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
                 kwargs['ui'] = getattr(args, 'ui', False)
                 kwargs['headed'] = getattr(args, 'headed', False)
                 kwargs['debug'] = getattr(args, 'debug', False)
+                kwargs['coverage'] = getattr(args, 'coverage', False) or _COVERAGE_MODE
 
             success = run_test_from_registry(
                 category=category,
@@ -3263,7 +3443,7 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
 
 def main():
     """Main entry point."""
-    global _COVERAGE_MODE
+    global _COVERAGE_MODE, _COVERAGE_SOURCE
 
     parser = create_parser()
 
@@ -3283,6 +3463,13 @@ def main():
 
     # Set global coverage flag
     _COVERAGE_MODE = coverage
+    # Auto-detect coverage source from category
+    if args.category and args.category.startswith("front-"):
+        _COVERAGE_SOURCE = "frontend"
+    elif args.category and args.category not in ("all", "coverage-report", "coverage"):
+        _COVERAGE_SOURCE = "backend"
+    else:
+        _COVERAGE_SOURCE = None
 
     # If coverage mode, handle cov-clean and show message
     if coverage:
@@ -3326,12 +3513,29 @@ def main():
         else:
             print_warning("⚠️  Some tests failed, but coverage was still tracked")
 
+        # Determine HTML directory based on test source
+        is_front = _COVERAGE_SOURCE == "frontend"
+        html_dir = "htmlcov-frontend" if is_front else "htmlcov-backend"
+
         print()
         print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
         print()
 
+        if is_front:
+            # Frontend E2E: combine .coverage.<pid> files, then generate HTML
+            print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess...{Colors.NC}")
+            subprocess.run(
+                [*pipenv_prefix(), "coverage", "combine"],
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+            subprocess.run(
+                [*pipenv_prefix(), "coverage", "html", "-d", html_dir,
+                 "--title", "LibreFolio Frontend E2E → Backend Coverage"],
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+
         # Generate final coverage report with table
-        result = subprocess.run(
+        subprocess.run(
             [*pipenv_prefix(), "coverage", "report", "--skip-covered"],
             cwd=os.getcwd(),
             capture_output=False,  # Show output directly
@@ -3340,17 +3544,15 @@ def main():
 
         print()
         print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
-        print(f"   HTML: {Colors.BLUE}htmlcov/index.html{Colors.NC}")
+        print(f"   HTML: {Colors.BLUE}{html_dir}/index.html{Colors.NC}")
         print(f"   Data: {Colors.BLUE}.coverage{Colors.NC}")
         print()
-        print(f"{Colors.YELLOW}💡 View HTML report with:{Colors.NC}")
-        print(f"└─▶ $ open htmlcov/index.html")
+        print(f"{Colors.YELLOW}💡 View HTML report:{Colors.NC}")
+        print(f"└─▶ $ open {html_dir}/index.html")
         print()
-        print(f"{Colors.BLUE}ℹ️  The HTML report shows:{Colors.NC}")
-        print(f"   • Line-by-line coverage (green = covered, red = not covered)")
-        print(f"   • Coverage % for each file")
-        print(f"   • Missing line numbers")
-        print(f"   • Branch coverage")
+        print(f"{Colors.YELLOW}💡 Or use the coverage show command:{Colors.NC}")
+        print(f"└─▶ $ ./dev.py test coverage show {'frontend' if is_front else 'backend'}")
+        print(f"└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
         print()
 
     # Exit with appropriate code

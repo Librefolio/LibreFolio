@@ -654,10 +654,12 @@
         goto(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`);
     }
 
-    /** Handle provider modal save — reload providers after edit */
+    /** Handle provider modal save — reload providers and auto-sync rates */
     async function handleProviderModalCreated(_detail: { base: string; quote: string; hasRealProvider: boolean }) {
         await loadProviders();
         showProviderModal = false;
+        // Auto-sync to fetch rates from the newly added provider
+        await handleSync();
     }
 
     // =========================================================================

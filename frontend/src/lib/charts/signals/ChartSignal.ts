@@ -185,7 +185,7 @@ export abstract class ChartSignal {
     static category: 'indicator' | 'comparison' | 'benchmark' | 'measure' = 'benchmark';
     /** Y-axis index: 0 = primary (same scale as data), 1 = secondary (independent scale). */
     static yAxisIndex: number = 0;
-    /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-indicators/#ema' */
+    /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-analysis/indicators/ema/' */
     static docsPath?: string;
     readonly id: string;
     style: SignalStyle;

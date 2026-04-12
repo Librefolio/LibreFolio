@@ -12,7 +12,7 @@
  * Computed iteratively in O(N).
  * Y-axis: secondary (left, independent scale 0-100) → yAxisIndex = 1
  *
- * See: docs/financial-theory/technical-indicators.md#rsi
+ * See: docs/financial-theory/technical-analysis/indicators/rsi.en.md
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
@@ -24,7 +24,7 @@ export class RsiSignal extends ChartSignal {
     static override icon = '📊';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
     static yAxisIndex = 1;
-    static docsPath = 'financial-theory/technical-indicators/#rsi';
+    static docsPath = 'financial-theory/technical-analysis/indicators/rsi/';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {

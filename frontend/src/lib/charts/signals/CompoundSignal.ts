@@ -14,7 +14,7 @@
  * Unlimited instances per chart.
  *
  * For detailed mathematical theory, see:
- * docs/financial-theory/synthetic-benchmarks.md#compound-growth
+ * docs/financial-theory/technical-analysis/synthetic-benchmarks/compound.en.md
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
@@ -25,7 +25,7 @@ export class CompoundSignal extends ChartSignal {
     static override displayName = 'Compound Growth';           // i18n: 'signals.compound'
     static override icon = '📊';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
-    static docsPath = 'financial-theory/synthetic-benchmarks/#compound-growth';
+    static docsPath = 'financial-theory/technical-analysis/synthetic-benchmarks/compound/';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {

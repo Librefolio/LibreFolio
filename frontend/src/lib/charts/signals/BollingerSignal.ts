@@ -17,7 +17,7 @@
  *
  * Y-axis: primary (same scale as price) → yAxisIndex = 0
  *
- * See: docs/financial-theory/technical-indicators.md#bollinger-bands
+ * See: docs/financial-theory/technical-analysis/indicators/bollinger-bands.en.md
  */
 
 import {ChartSignal, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
@@ -28,7 +28,7 @@ export class BollingerSignal extends ChartSignal {
     static override displayName = 'Bollinger Bands';
     static override icon = '📏';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
-    static docsPath = 'financial-theory/technical-indicators/#bollinger-bands';
+    static docsPath = 'financial-theory/technical-analysis/indicators/bollinger-bands/';
     // yAxisIndex = 0 (default, same scale as price)
 
     static override paramDescriptors: SignalParamDescriptor[] = [

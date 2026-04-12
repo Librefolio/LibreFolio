@@ -168,18 +168,70 @@ class TestFeatureX:
 
 ## 📊 Coverage
 
-```bash
-# Genera report coverage
-./dev.py test api all --coverage
+### Esecuzione con coverage
 
-# Report HTML in htmlcov/
-open htmlcov/index.html
+```bash
+# Backend tests con coverage
+./dev.py test --coverage api all
+./dev.py test --coverage services all
+
+# Clean coverage prima di una nuova sessione
+./dev.py test --coverage --cov-clean api all
+
+# Frontend E2E con backend coverage tracking
+./dev.py test --coverage front-fx all
 ```
 
-Configurazione in `pytest.ini`:
-- `source = backend/app`
-- `concurrency = thread,gevent` → traccia correttamente async/await
-- Server come thread (non subprocess) → coverage completa degli endpoint
+### Report differenziati
+
+I report coverage sono separati per sorgente:
+
+| Report | Directory | Generato da |
+|--------|-----------|-------------|
+| Backend | `htmlcov-backend/` | `--coverage` su test backend (pytest-cov) |
+| Frontend | `htmlcov-frontend/` | `--coverage` su test frontend (sitecustomize.py + coverage combine) |
+| Combined | `htmlcov/` | Merge di tutti i `.coverage.*` files |
+
+```bash
+# Visualizzare i report
+./dev.py test coverage show backend     # Apre htmlcov-backend/
+./dev.py test coverage show frontend    # Apre htmlcov-frontend/
+./dev.py test coverage show combined    # Merge tutto + apre htmlcov/
+
+# Solo merge senza aprire browser
+./dev.py test coverage combine
+```
+
+### Coverage Analysis — Funzioni scoperte
+
+Lo script `scripts/coverage_analysis.py` analizza il JSON coverage per trovare funzioni
+dove il `def` è coperto ma il body non è mai stato eseguito (funzione mai chiamata):
+
+```bash
+# Prima: generare il JSON coverage
+coverage json -o /tmp/cov_report.json
+
+# Poi: analizzare
+./dev.py test coverage-report                  # Report completo
+./dev.py test coverage-report --priority high  # Solo HIGH priority
+./dev.py test coverage-report --summary        # Conteggi rapidi
+./dev.py test coverage-report --json           # Output machine-readable
+```
+
+Classificazione automatica per priorità:
+- **HIGH**: core business logic (asset_source, fx, broker_service, user_service)
+- **MEDIUM**: API endpoints, provider specifici
+- **LOW**: utility, cache, settings
+- **INFRA**: main.py, logging, uploads (non unit-testabile)
+
+Filtri automatici: esclude `abstract` (body=pass), `@property` semplici, `@field_validator`.
+
+### Architettura Coverage
+
+- **`.coveragerc`** — config: `source=backend/app`, `parallel=true`, `concurrency=thread,gevent`
+- **`sitecustomize.py`** — intercetta `COVERAGE_PROCESS_START` env var → `coverage.process_startup()`
+- **`--coverage` su `dev.py server`** — setta `COVERAGE_PROCESS_START=.coveragerc` nell'env del processo uvicorn
+- **Frontend E2E**: `playwright.config.ts` aggiunge `--coverage` al webServer command quando `COVERAGE_BACKEND=1` è nell'env
 
 ---
 

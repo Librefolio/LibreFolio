@@ -159,7 +159,12 @@
     let lineData: LineDataPoint[] = $derived(chartData.map((p: any) => ({
         date: p.date,
         value: Number(p.close ?? 0),
-        staleDays: p.backward_fill_info?.days_back ?? 0,
+        staleDays: Math.max(
+            p.backward_fill_info?.days_back ?? 0,
+            p.backward_fill_info?.fx_days_back ?? 0,
+        ),
+        fxStaleDays: p.backward_fill_info?.fx_days_back ?? 0,
+        originalCurrency: p.original_currency ?? undefined,
     })));
 
     let isScheduledInvestment = $derived(providerAssignment?.provider_code === 'scheduled_investment');
@@ -404,6 +409,21 @@
     }
 
 
+    // Reload chart data when displayCurrency changes (currency conversion)
+    let prevDisplayCurrency = $state('');
+    $effect(() => {
+        const cur = displayCurrency;
+        if (!cur || !prevDisplayCurrency) {
+            // First run or not yet initialized — just track, don't reload
+            prevDisplayCurrency = cur;
+            return;
+        }
+        if (cur !== prevDisplayCurrency) {
+            prevDisplayCurrency = cur;
+            loadChartData().then(() => maybeLoadComparison());
+        }
+    });
+
 
     // =========================================================================
     // Data Loading
@@ -446,6 +466,8 @@
                 asset_id: data.assetId,
                 date_range: {start: dateStart, end: dateEnd},
                 include_events: true,
+                target_currency: (displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency)
+                    ? displayCurrency : undefined,
             }]);
             const result = (response as any)?.items?.[0];
             if (result) {

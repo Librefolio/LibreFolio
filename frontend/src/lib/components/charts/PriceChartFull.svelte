@@ -627,8 +627,12 @@
 
         // Pre-compute stale lookup map for O(1) tooltip access (instead of O(n) data.find per hover)
         const staleLookup = new Map<string, number>();
+        const fxStaleLookup = new Map<string, number>();
+        const originalCurrencyLookup = new Map<string, string>();
         for (const d of data) {
             if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
+            if (d.fxStaleDays && d.fxStaleDays > 0) fxStaleLookup.set(d.date, d.fxStaleDays);
+            if (d.originalCurrency) originalCurrencyLookup.set(d.date, d.originalCurrency);
         }
 
         const option: echarts.EChartsOption = {
@@ -774,10 +778,27 @@
                     }
                     const dataPoint = staleLookup.get(date);
                     if (dataPoint !== undefined) {
-                        const label = staleLabel
-                            ? staleLabel.replace('{days}', String(dataPoint))
-                            : `Stale: ${dataPoint}d`;
-                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
+                        // Show separate price stale and FX stale when applicable
+                        const fxStale = fxStaleLookup.get(date);
+                        if (fxStale !== undefined && fxStale > 0) {
+                            // Price staleness is the staleDays minus FX contribution
+                            // (staleDays = max(price_days_back, fx_days_back), but we show both separately)
+                            const priceDaysBack = dataPoint; // already the combined max
+                            const label = staleLabel
+                                ? staleLabel.replace('{days}', String(priceDaysBack))
+                                : `Stale: ${priceDaysBack}d`;
+                            html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
+                            html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ FX rate: ${fxStale}d old</span>`;
+                        } else {
+                            const label = staleLabel
+                                ? staleLabel.replace('{days}', String(dataPoint))
+                                : `Stale: ${dataPoint}d`;
+                            html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
+                        }
+                    }
+                    const origCur = originalCurrencyLookup.get(date);
+                    if (origCur) {
+                        html += `<br/><span style="color:#8b5cf6;font-size:11px">💱 Converted from ${origCur}</span>`;
                     }
                     return html;
                 },

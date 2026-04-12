@@ -71,11 +71,11 @@
     ];
 
     const eventTypeOptions = [
-        {value: 'DIVIDEND', label: 'DIVIDEND', emoji: '💰', tooltip: $t('assetDetail.eventTypeTooltip.DIVIDEND'), docsPath: 'financial-theory/asset-events/dividend'},
-        {value: 'INTEREST', label: 'INTEREST', emoji: '📈', tooltip: $t('assetDetail.eventTypeTooltip.INTEREST'), docsPath: 'financial-theory/asset-events/interest'},
-        {value: 'SPLIT', label: 'SPLIT', emoji: '✂️', tooltip: $t('assetDetail.eventTypeTooltip.SPLIT'), docsPath: 'financial-theory/asset-events/split'},
-        {value: 'PRICE_ADJUSTMENT', label: 'PRICE_ADJUSTMENT', emoji: '📊', tooltip: $t('assetDetail.eventTypeTooltip.PRICE_ADJUSTMENT'), docsPath: 'financial-theory/asset-events/price-adjustment'},
-        {value: 'MATURITY_SETTLEMENT', label: 'MATURITY_SETTLEMENT', emoji: '🏁', tooltip: $t('assetDetail.eventTypeTooltip.MATURITY_SETTLEMENT'), docsPath: 'financial-theory/asset-events/maturity-settlement'},
+        {value: 'DIVIDEND', label: 'DIVIDEND', emoji: '💰', tooltip: $t('assetDetail.eventTypeTooltip.DIVIDEND'), docsPath: 'financial-theory/instruments/asset-events/dividend'},
+        {value: 'INTEREST', label: 'INTEREST', emoji: '📈', tooltip: $t('assetDetail.eventTypeTooltip.INTEREST'), docsPath: 'financial-theory/instruments/asset-events/interest'},
+        {value: 'SPLIT', label: 'SPLIT', emoji: '✂️', tooltip: $t('assetDetail.eventTypeTooltip.SPLIT'), docsPath: 'financial-theory/instruments/asset-events/split'},
+        {value: 'PRICE_ADJUSTMENT', label: 'PRICE_ADJUSTMENT', emoji: '📊', tooltip: $t('assetDetail.eventTypeTooltip.PRICE_ADJUSTMENT'), docsPath: 'financial-theory/instruments/asset-events/price-adjustment'},
+        {value: 'MATURITY_SETTLEMENT', label: 'MATURITY_SETTLEMENT', emoji: '🏁', tooltip: $t('assetDetail.eventTypeTooltip.MATURITY_SETTLEMENT'), docsPath: 'financial-theory/instruments/asset-events/maturity-settlement'},
     ];
 
     const eventColumns: ColumnDef[] = [

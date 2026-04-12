@@ -1,6 +1,6 @@
 # Phase 6: Assets Management — Progress Summary
 
-**Status**: 🚧 IN CORSO (Step 1–4b completati, Step 4c prossimo)  
+**Status**: 🚧 IN CORSO (Step 1–4d completati, Part C in corso)  
 **Durata stimata**: ~8 giorni  
 **Priorità**: P0 (MVP)  
 **Dipendenze**: Phase 5 (PriceChartFull, Signal Library), Phase 4.8 (user_role)
@@ -13,7 +13,8 @@
 >
 > Sotto-piani di implementazione:
 > - [`plan-phase06Step4AssetDetailPage.prompt.md`](../plan-phase06Step4AssetDetailPage.prompt.md) — Step 4 (Part 0, A, B, C)
-> - [`plan-partBDataEditorUnificato.prompt.md`](../plan-partBDataEditorUnificato.prompt.md) — Part B (Data Editor + CSV Import + Test E2E)
+> - [`plan-partBDataEditorUnificato.prompt.md`](phase-06-subplan/Bugfix-Step4/PlanB/plan-partBDataEditorUnificato.prompt.md) — Part B (Data Editor + CSV Import + Test E2E) ✅
+> - [`plan-partCCurrencyConversion.prompt.md`](../plan-partCCurrencyConversion.prompt.md) — Part C (Currency Conversion + Bugfix + Polish) 🚧
 
 ---
 
@@ -38,9 +39,10 @@ condiviso con Phase 7.
 | **2c** | [**Rientro 2**](phase-06-subplan/plan-phase06Step2cSyncDeleteRefactor.prompt.md): fix chart refresh, stopPropagation azioni tabella, rimuovere edit ridondante + sync/refresh, bulk actions multi-select, blocco 2×2 Assets, fix colonne Δ visibilità | 1g | ✅ |
 | **3** | AssetModal + Search + Probe + ScheduledInvestment Engine (12 round). Sotto-piani in [`phase-06-subplan/`](phase-06-subplan/) | 5g | ✅ |
 | **4** | Asset Detail: PriceChartFull + segnali + Data Editor + CSV Import + Test E2E + Docs Financial Theory | 2g | ✅ |
-| **4b** | [**Part B fix**](../plan-partBDataEditorUnificato.prompt.md): B6 test fix (Apple search), perf fix (chunk fallback), B7 polish, B8 docs reorg, B9 portfolio theory | 1.5g | ✅ |
-| **4c** | Financial Theory docs: traduzione IT/FR/ES via pipeline AI | 0.5g | ⏳ |
+| **4b** | [**Part B fix**](phase-06-subplan/Bugfix-Step4/PlanB/plan-partBDataEditorUnificato.prompt.md): B6 test fix (Apple search), perf fix (chunk fallback), B7 polish, B8 docs reorg, B9 portfolio theory | 1.5g | ✅ |
+| **4c** | Financial Theory docs: traduzione IT/FR/ES via pipeline AI | 0.5g | ✅ |
 | **4d** | [**Infra**] Gallery headless default + traduzioni nav mkdocs (Mutual Fund, Commodities, Other in IT/FR) | - | ✅ |
+| **4e** | [**Part C**](../plan-partCCurrencyConversion.prompt.md): Currency conversion backend+frontend, fix docs links, tooltip/measure mobile, tail banner, docker env warning | 2g | 🚧 |
 | **5** | AssetMatchingWizard 3-step (condiviso Phase 7) | 1g | ⏳ |
 | **6** | i18n (30 keys × 4 lingue), E2E test, gallery, docs MkDocs | 1g | ⏳ |
 

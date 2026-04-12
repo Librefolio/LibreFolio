@@ -96,7 +96,7 @@ export interface SignalTypeInfo {
     icon: string;
     category: 'indicator' | 'comparison' | 'benchmark' | 'measure';
     paramDescriptors: SignalParamDescriptor[];
-    /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-indicators/#ema' */
+    /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-analysis/indicators/ema/' */
     docsPath?: string;
 }
 

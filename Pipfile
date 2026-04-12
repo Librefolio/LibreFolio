@@ -42,7 +42,6 @@ argcomplete = "*"
 pillow = "*"
 PyJWT = "*"
 mkdocs-static-i18n = "*"
-aphra = "*"
 
 [dev-packages]
 pytest = "*"

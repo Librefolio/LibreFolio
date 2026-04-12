@@ -87,7 +87,7 @@ Ogni provider espone `params_schema` (proprietà sulla base class) per descriver
 | `schemas` | Validazione Pydantic |
 | `api` | Endpoint REST (276 test: 70 asset, 28 fx, 22 brokers, 21 auth, …) |
 | `e2e` | End-to-end backend (search→create→assign→sync) |
-| `front` | Playwright E2E frontend (181+ test) |
+| `front` | Playwright E2E frontend (181+ test, 4 categorie: utility/user/fx/asset) |
 
 ---
 
@@ -107,6 +107,8 @@ Ogni provider espone `params_schema` (proprietà sulla base class) per descriver
 | Backup & Restore | `backend/app/api/v1/backup.py` |
 | Test Suite | `backend/test_scripts/` |
 | Test Asset API | `backend/test_scripts/test_api/test_assets_*.py` (5 file, 70 test) |
+| Coverage Analysis | `scripts/coverage_analysis.py` |
+| Coverage Config | `.coveragerc` + `sitecustomize.py` |
 | Dati Produzione | `backend/data/prod/` |
 | Dati Test | `backend/data/test/` |
 

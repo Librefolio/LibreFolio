@@ -16,7 +16,7 @@
  * Unlimited instances per chart.
  *
  * For detailed mathematical theory, see:
- * docs/financial-theory/synthetic-benchmarks.md#sine-wave
+ * docs/financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.en.md
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
@@ -27,7 +27,7 @@ export class SineSignal extends ChartSignal {
     static override displayName = 'Sine Wave';             // i18n: 'signals.sine'
     static override icon = '〰️';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
-    static docsPath = 'financial-theory/synthetic-benchmarks/#sine-wave';
+    static docsPath = 'financial-theory/technical-analysis/synthetic-benchmarks/sine-wave/';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {

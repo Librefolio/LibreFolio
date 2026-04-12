@@ -75,7 +75,7 @@
         open?: boolean;
         editMode?: boolean;
         editData?: AssetData | null;
-        oncreated?: () => void;
+        oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
@@ -774,14 +774,14 @@
                 console.error('Provider assignment failed after asset creation:', assignErr);
                 toasts.warning($t('assets.modal.createSuccessProviderFailed', {values: {name: displayName}}));
                 open = false;
-                oncreated?.();
+                oncreated?.(assetId);
                 return;
             }
         }
 
         toasts.success($t('assets.modal.createSuccess', {values: {name: displayName}}));
         open = false;
-        oncreated?.();
+        oncreated?.(assetId);
     }
 
     async function saveEdit(assetId: number) {
