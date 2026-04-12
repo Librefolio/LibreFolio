@@ -1,16 +1,16 @@
-# 🔌 Configuration des fournisseurs
+# 🔌 Configuration des Fournisseurs
 
-Dans LibreFolio, chaque paire de devises est alimentée par un ou plusieurs **fournisseurs de données** — des banques centrales qui fournissent les taux de change. La Configuration des fournisseurs vous permet d'**afficher** et de modifier les fournisseurs utilisés pour une paire spécifique.
+Chaque paire de devises dans LibreFolio s'appuie sur un ou plusieurs **fournisseurs de données** — des banques centrales qui fournissent les données de taux de change. La Configuration des Fournisseurs vous permet de visualiser et de modifier les fournisseurs utilisés pour une paire spécifique.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Configuration des fournisseurs" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Configuration des Fournisseurs" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
 ## 🔓 Comment y accéder
 
-Cliquez sur le bouton **Fournisseur** (⚙️) dans la barre d'outils du graphique sur la page de détail de la paire. Cela ouvre la **fenêtre modale** de configuration des fournisseurs affichant la configuration actuelle des routes.
+Cliquez sur le bouton **Fournisseur** (⚙️) dans la barre d'outils du graphique sur la page de détails de la paire. Cela ouvre la fenêtre modale de configuration des fournisseurs affichant la configuration actuelle des routes.
 
 ---
 
@@ -18,51 +18,51 @@ Cliquez sur le bouton **Fournisseur** (⚙️) dans la barre d'outils du graphiq
 
 La fenêtre modale affiche :
 
-- 🛤️ **Route(s) actuelle(s)** — La/les source(s) de données active(s) pour cette paire, par ordre de priorité
-- 🔀 **Type de route** — Qu'il s'agisse d'une route **Directe** (un seul fournisseur) ou d'une route **en chaîne** (conversion via une devise intermédiaire)
+- 🛤️ **Route(s) actuelle(s)** — La ou les sources de données actives pour cette paire, par ordre de priorité
+- 🔀 **Type de route** — S'il s'agit d'une route **Directe** (fournisseur unique) ou d'une route en **Chaîne** (multi-sauts via une devise intermédiaire)
 - 🏛️ **Détails du fournisseur** — Nom, icône et devise de base de chaque fournisseur dans la route
 
 ---
 
-## 🔧 Modifier les fournisseurs
+## 🔧 Modifier les Fournisseurs
 
-Vous pouvez configurer **un ou plusieurs** fournisseurs de données pour chaque paire. Plusieurs fournisseurs forment une **chaîne de secours** — si la source principale échoue, le système essaie automatiquement le suivant.
+Vous pouvez configurer **un ou plusieurs** fournisseurs de données pour chaque paire. Plusieurs fournisseurs agissent comme une **chaîne de fallback** — si la source primaire échoue, le système tente automatiquement la route suivante.
 
 Pour modifier ou ajouter des fournisseurs :
 
-1. Ouvrez la fenêtre modale de Configuration des fournisseurs
+1. Ouvrez la fenêtre modale de Configuration des Fournisseurs
 2. **Supprimez** la route actuelle si nécessaire
-3. **Ajoutez une nouvelle route** — le système identifiera automatiquement les routes disponibles (identique à l'[ajout d'une nouvelle paire](../add-pair.md))
-4. **Réordonnez** les routes pour définir les priorités (glisser-déposer ou boutons fléchés)
-5. Cliquez sur **Enregistrer** — la prochaine synchronisation récupérera les données depuis le fournisseur disponible de plus haute priorité
+3. **Ajoutez une nouvelle route** — le système détectera les routes disponibles (comme lors de l' [ajout d'une nouvelle paire](../add-pair.md))
+4. **Réorganisez** les routes pour définir les priorités (glisser-déposer ou boutons fléchés)
+5. Cliquez sur **Enregistrer** — la prochaine synchronisation récupérera les données du fournisseur disponible ayant la priorité la plus élevée
 
 ---
 
-## 🔢 Priorité et itinéraire de secours
+## 🔢 Priorité & Fallback
 
 Lorsque plusieurs routes sont configurées pour une paire :
 
-- **Le système teste les routes** dans l'**ordre de priorité** (en haut = priorité la plus élevée)
-- Si le fournisseur principal échoue (délai d'attente, erreur API), le système bascule automatiquement vers l'**itinéraire de secours** suivant
-- Vous pouvez **réorganiser** les routes pour changer les priorités
+- Les routes sont testées **par ordre de priorité** (le haut = priorité maximale)
+- Si le fournisseur primaire échoue (timeout, erreur API), le système bascule automatiquement vers la route suivante
+- Vous pouvez **réorganiser** les routes pour modifier les priorités
 
-!!! example "Exemple d'itinéraire de secours"
+!!! example "Exemple de fallback"
 
-    EUR/USD configurée avec :
+    EUR/USD configuré avec :
 
-    1. **BCE** (principale) — Banque Centrale Européenne
-    2. **Fed** (secours) — Réserve fédérale
+    1. **ECB** (primaire) — Banque Centrale Européenne
+    2. **FED** (fallback) — Réserve Fédérale
 
-    Si l'API de la BCE est inaccessible pendant la synchronisation, le système utilise automatiquement la Fed à la place.
+    Si l'API de l'ECB est inaccessible pendant la synchronisation, le système utilise automatiquement la FED à la place.
 
 ---
 
-## 📚 Liens associés
+## 📚 Liens connexes
 
-- ➕ **[Ajouter une paire](../add-pair.md)** — Découverte complète des routes (directes + en chaîne)
+- ➕ **[Ajouter une Paire](../add-pair.md)** — Découverte complète des routes (routes directes + en chaîne)
 - 🔄 **[Synchronisation](../sync.md)** — Comment la synchronisation utilise les fournisseurs configurés
-- 📋 **[Liste des fournisseurs FX](../../../developer/backend/fx/providers_list.md)** — Détails techniques sur chaque fournisseur (BCE, Fed, Banque d'Angleterre, BNS)
+- 📋 **[Liste des Fournisseurs FX](../../../developer/backend/fx/providers_list.md)** — Détails techniques sur chaque fournisseur (ECB, FED, BOE, SNB)
 
 !!! tip "🔗 Comment les routes en chaîne sont calculées"
 
-    Pour l'algorithme mathématique derrière les conversions multi-saut, voir [Algorithme de chaîne FX](../../../developer/frontend/fx-chain-algorithm.md).
+    Pour l'algorithme mathématique derrière les chaînes de conversion multi-sauts, voir [FX Chain Algorithm](../../../developer/frontend/fx-chain-algorithm.md).

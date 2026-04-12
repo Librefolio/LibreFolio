@@ -2,44 +2,45 @@
 
 Bienvenue dans la galerie visuelle de LibreFolio ! Ici, vous pouvez explorer toutes les fonctionnalités de notre plateforme de gestion de portefeuille à travers des captures d'écran.
 
-## 👁️ Choisissez votre vue
+## 👁️ Choisissez Votre Vue
 
 <div class="gallery-cards">
  <a href="desktop/" class="gallery-card">
  <span class="gallery-icon">🖥️</span>
- <h3>Vue bureau</h3>
- <p>Expérience complète : tous les contrôles sont visibles</p>
+ <h3>Version Bureau</h3>
+ <p>Expérience complète avec toutes les commandes visibles</p>
  </a>
  <a href="mobile/" class="gallery-card">
  <span class="gallery-icon">📱</span>
- <h3>Vue mobile</h3>
- <p>Design responsive optimisé pour les écrans tactiles</p>
+ <h3>Vue Mobile</h3>
+ <p>Design adaptatif optimisé pour les écrans tactiles</p>
  </a>
 </div>
 
-## ✨ Fonctionnalités présentées
+## ✨ Fonctionnalités mises en avant
 
 !!! tip "Ce que vous verrez"
 
- - **Authentification** : Connexion sécurisée avec jauge de complexité du mot de passe
- - **Tableau de bord** : Aperçu rapide de votre portefeuille
- - **Courtiers** : Gestion de multiples comptes de courtage
- - **Fichiers** : Téléversement et gestion des rapports des courtiers avec vues en grille et en tableau
- - **Paramètres** : Personnalisez votre expérience en 4 langues
- - **Profil** : Gestion de l'avatar et paramètres du compte
- - **Médias & Téléversement** : Recadrage/édition d'image, sélecteur de ressources, renommage de fichiers
- - **Taux de change (FX)** : Paires de devises, graphiques, synchronisation, éditeur de données, import CSV
+    - **Authentification** : Connexion sécurisée avec indicateur de force du mot de passe
+    - **Tableau de bord** : Aperçu rapide de votre portefeuille
+    - **Courtiers** : Gérez plusieurs comptes de courtage
+    - **Fichiers** : Importez et gérez les rapports de courtage avec des vues en grille et en tableau
+    - **Paramètres** : Personnalisez votre expérience en 4 langues
+    - **Profil** : Gestion de l'avatar et paramètres du compte
+    - **Média & Téléversement** : Recadrage/édition d'images, sélecteur d'actifs, renommage de fichiers
+    - **Taux de change** : Paires de devises, graphiques, synchronisation, éditeur de données, import CSV
+    - **Actifs** : Suivez les actions, ETF, obligations, crypto avec graphiques, signaux, mesures & classification
 
-## 🌍 Support linguistique
+## 🌍 Support Linguistique
 
 LibreFolio est disponible en :
 
 | Langue | Drapeau | Statut |
-|----------|---------|-------------|
-| English | 🇬🇧 | ✅ Complet |
-| Italiano | 🇮🇹 | ✅ Complet |
-| Français | 🇫🇷 | ✅ Complet |
-| Español | 🇪🇸 | ✅ Complet |
+|----------|------|------------|
+| English | 🇬🇧 | ✅ Terminé |
+| Italiano | 🇮🇹 | ✅ Terminé |
+| Français | 🇫🇷 | ✅ Terminé |
+| Español | 🇪🇸 | ✅ Terminé |
 
 ---
 

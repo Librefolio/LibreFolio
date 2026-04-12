@@ -1,11 +1,11 @@
 # 🏦 Courtiers
 
-Un **Courtier** dans LibreFolio représente un compte de courtage — l'endroit où se trouvent vos investissements (par ex. Interactive Brokers, Degiro, un compte bancaire).
+Un **Courtier** dans LibreFolio représente un compte de courtage — l'endroit où se trouvent vos investissements (par exemple, Interactive Brokers, Degiro, un compte bancaire).
 
-Toutes les transactions, rapports et données importées sont associés à un courtier. Vous avez besoin d'au moins un courtier pour commencer à suivre votre portefeuille.
+Toutes les transactions, les rapports et les données d'importation sont liés à un courtier. Vous avez besoin d'au moins un courtier pour commencer à suivre votre portefeuille.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="list" alt="Liste des courtiers" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
@@ -14,33 +14,33 @@ Toutes les transactions, rapports et données importées sont associés à un co
 
 1. Accédez à la page **Courtiers** depuis la barre latérale
 2. Cliquez sur **"Nouveau courtier"**
-3. Remplissez les détails : nom, devise de base, et éventuellement une icône
+3. Remplissez les détails : nom, devise de base, et optionnellement une icône
  <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Formulaire d'édition de courtier" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
  </div>
 
-4. Le courtier apparaît dans votre liste, prêt à recevoir transactions et rapports
+4. Le courtier apparaît dans votre liste, prêt à recevoir des transactions et des rapports
  <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="detail" alt="Détails du courtier" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Edit Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
  </div>
 ---
 
-## 🔧 Que peut-on faire avec un courtier ?
+## 🔧 Que pouvez-vous faire avec un courtier ?
 
 | Fonctionnalité | Description | Statut |
 |---------|-------------|--------|
-| **Afficher les détails** | Nom, devise, date de création, icône | ✅ Disponible |
-| **Téléverser des rapports** | Fichiers CSV/Excel provenant de votre courtier | ✅ Disponible |
-| **Partager l'accès** | Inviter d'autres utilisateurs avec des permissions basées sur les rôles | ✅ Disponible |
-| **Importer des transactions** | Analyse automatique des rapports téléversés via BRIM | 🔜 Bientôt disponible |
-| **Afficher les transactions** | Lister, filtrer et gérer les opérations importées | 🔜 Bientôt disponible |
+| **Voir les détails** | Nom, devise, date de création, icône | ✅ Disponible |
+| **Télécharger des rapports** | Fichiers CSV/Excel de votre courtier actuel | ✅ Disponible |
+| **Partager l'accès** | Inviter d'autres utilisateurs avec des permissions basées sur des rôles | ✅ Disponible |
+| **Importer des transactions** | Traitement automatique des rapports téléchargés via BRIM | 🔜 Prochainement |
+| **Voir les transactions** | Lister, filtrer et gérer les transactions importées | 🔜 Prochainement |
 
-!!! note "En cours de développement"
+!!! note "Work in Progress"
 
-    La page de détail du courtier et l'interface de gestion des transactions sont en cours de développement. Actuellement, vous pouvez créer des courtiers, téléverser des rapports et partager l'accès. L'importation et la visualisation complètes des transactions seront ajoutées dans les phases à venir.
+    La page de détails du courtier et l'interface de gestion des transactions sont en cours de développement actif. Actuellement, vous pouvez créer des courtiers, télécharger des rapports et partager l'accès. L'importation et la visualisation complète des transactions seront ajoutées dans les phases suivantes.
 
 ---
 
 ## 📑 Dans cette section
 
-- 🤝 **[Partage de courtier](sharing.md)** — Comment partager l'accès avec d'autres utilisateurs (famille, conseillers, experts-comptables)
+- 🤝 **[Partage de courtier](sharing.md)** — Comment partager l'accès avec d'autres utilisateurs (famille, conseillers, comptables)

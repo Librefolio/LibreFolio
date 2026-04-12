@@ -1,306 +1,373 @@
-# 🖥️ Galerie de l'application
+# 🖥️ Galerie Desktop
 
-Découvrez l'interface complète de LibreFolio en version desktop. Les captures d'écran s'adaptent automatiquement au thème et à la langue que vous avez sélectionnés.
+Découvrez l'interface complète de LibreFolio sur bureau. Les captures d'écran s'adaptent automatiquement au thème et à la langue sélectionnés.
 
 !!! tip "Thème & Langue"
 
-Utilisez le **bouton de changement de thème** dans l'en-tête (☀️/🌙) pour basculer entre le mode clair et le mode sombre.
-Utilisez le **sélecteur de langue** (🇬🇧) dans l'en-tête pour voir les captures d'écran dans différentes langues.
+Utilisez l'**interrupteur de thème** dans l'en-tête (☀️/🌙) pour basculer entre le mode clair et le mode sombre.
+Utilisez le **sélecteur de langue** (🇬🇧) dans l'en-tête pour visualiser les captures d'écran dans différentes langues.
 
 ---
 
 ## 🔐 Authentification
 
-### 🔑 Page de connexion
+### 🔑 Page de Connexion
 
-La page de connexion accueillante avec notre arrière-plan animé signature.
+La page de connexion, avec notre arrière-plan animé caractéristique.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="auth" data-name="01-login" alt="Page de connexion">
+ <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page">
 </div>
 
-### 📝 Inscription - Formulaire vide
+### 📝 Inscription - Formulaire Vide
 
 Les nouveaux utilisateurs peuvent facilement créer un compte.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Modale d'inscription">
+ <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Register Modal">
 </div>
 
-### 🔒 Inscription - Avec robustesse du mot de passe
+### 🔒 Inscription - Avec indicateur de force du mot de passe
 
-Le retour visuel en temps réel sur la robustesse du mot de passe aide les utilisateurs à créer des mots de passe sécurisés.
+Le retour d'information en temps réel sur la force du mot de passe aide les utilisateurs à créer des mots de passe sécurisés.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Inscription avec indicateur de robustesse">
+ <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Register with Password Strength">
 </div>
 
 ---
 
-## 📊 Tableau de bord
+## 📊 Tableau de Bord
 
-### 📈 Tableau de bord principal
+### 📈 Tableau de Bord Principal
 
 Votre portefeuille en un coup d'œil avec des statistiques rapides et la navigation.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="dashboard" data-name="main" alt="Tableau de bord">
+ <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard">
 </div>
 
 ---
 
 ## ⚙️ Paramètres
 
-### 🎛️ Préférences utilisateur
+### 🎛️ Préférences Utilisateur
 
-Personnalisez la langue, la devise et le thème à votre goût.
+Personnalisez la langue, la devise et le thème selon vos préférences.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Préférences utilisateur">
+ <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
 </div>
 
-### 🛡️ Paramètres globaux (Admin)
+### 🛡️ Paramètres Globaux (Admin)
 
-Les administrateurs peuvent configurer les paramètres système.
+Les administrateurs peuvent configurer les paramètres à l'échelle du système.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Paramètres globaux">
+ <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
 </div>
 
-### ℹ️ À propos
+### ℹ️ À Propos
 
-Informations système et détails de version.
+Informations système et détails de la version.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="about" alt="À propos">
+ <img class="gallery-img" data-category="settings" data-name="about" alt="About">
 </div>
 
-### 🔐 Changement de mot de passe
+### 🔐 Changement de Mot de Passe
 
-Changez votre mot de passe de manière sécurisée avec validation de la robustesse.
+Changez votre mot de passe en toute sécurité avec une validation de la force du mot de passe.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Modale de changement de mot de passe">
+ <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Password Change Modal">
 </div>
 
 ### 👤 Profil
 
-Gérez les informations de votre profil, votre avatar et les paramètres de votre compte.
+Gérez vos informations de profil, votre avatar et les paramètres de votre compte.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="profile" alt="Onglet Profil">
+ <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab">
 </div>
 
-### ✏️ Modification du Courtier
+### ✏️ Édition du Courtier
 
-Modifiez les détails du courtier : nom, icône, devise de base et configuration.
+Modifiez les détails du courtier — nom, icône, devise de base et configuration.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Modale de Modification du Courtier">
+ <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Broker Edit Modal">
 </div>
 
 ---
 
 ## 📁 Fichiers
 
-### 📂 Ressources statiques
+### 📂 Ressources Statiques
 
-Téléversez et gérez des images, logos et autres fichiers statiques.
+Téléchargez et gérez des images, des logos et d'autres fichiers statiques.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="files" data-name="static-tab" alt="Ressources statiques">
+ <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab">
 </div>
 
-### 🗂️ Ressources statiques - Vue grille
+### 🗂️ Ressources Statiques - Vue Grille
 
-Parcourez les fichiers visuellement avec des aperçus d'images en disposition grille.
+Parcourez les fichiers visuellement avec des aperçus d'images dans une disposition en grille.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vue grille des ressources statiques">
+ <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View">
 </div>
 
-### 📋 Rapports de courtier (BRIM)
+### 📋 Rapports de Courtier (BRIM)
 
-Importez et gérez les rapports de transactions de votre courtier.
+Importez et gérez les rapports de transactions des courtiers.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Rapports de courtier (BRIM)">
+ <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
 </div>
 
 ---
 
-## 🖼️ Médias & Téléversement
+## 🖼️ Médias & Téléchargement
 
-### ✂️ Éditeur d'image
+### ✂️ Éditeur d'Image
 
-Recadrez, faites pivoter, zoomez et retournez les images avant téléversement. Prend en charge des préréglages pour les avatars et les icônes.
+Recadrez, faites pivoter, zoomez et retournez les images avant le téléchargement. Prise en charge de préréglages pour les avatars et les icônes.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Modale d'édition d'image">
+ <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal">
 </div>
 
-### 🎨 Sélecteur d'actif
+### 🎨 Sélecteur de ressources
 
-Choisissez un fichier existant, entrez une URL ou téléversez une nouvelle image pour les icônes de courtier et les avatars utilisateurs.
+Choisissez un fichier existant, saisissez une URL ou téléchargez une nouvelle image pour les icônes de courtier et les avatars d'utilisateur.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Modale du sélecteur d'actif">
+ <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Asset Picker Modal">
 </div>
 
-### 📤 Téléverseur de fichiers
+### 📤 Téléchargeur de Fichiers
 
-Glissez-déposez ou parcourez pour téléverser des fichiers. Les images ouvrent l'éditeur de recadrage, les autres fichiers peuvent être renommés.
+Glissez-déposez ou parcourez vos dossiers pour télécharger des fichiers. Les images ouvrent l'éditeur de recadrage, les autres fichiers peuvent être renommés.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="Téléverseur de fichiers">
+ <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="File Uploader">
 </div>
 
 ---
 
 ## 🏦 Courtiers
 
-### 📋 Liste des courtiers
+### 📋 Liste des Courtiers
 
-Tous vos comptes de courtage en une seule vue.
-
-<div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="list" alt="Liste des courtiers">
-</div>
-
-### 🔍 Détail du courtier
-
-Vue détaillée d'un courtier unique avec soldes de trésorerie et transactions.
+Tous vos comptes de courtage dans une seule vue.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="detail" alt="Détail du courtier">
+ <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List">
 </div>
 
-### ✏️ Modification du courtier
+### 🔍 Détail du Courtier
+
+Vue détaillée d'un seul courtier avec soldes de trésorerie et transactions.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail">
+</div>
+
+### ✏️ Édition du Courtier
 
 Modifiez les détails du courtier — nom, icône, devise de base et configuration.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Modale de modification du courtier">
+ <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Modal">
 </div>
 
-### 📥 Importation
+### 📥 Modale d'Importation
 
 Importez facilement des transactions à partir des fichiers d'exportation de votre courtier.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Modale d'importation">
+ <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
 </div>
 
-### 🤝 Partage de courtier
+### 🤝 Partage de Courtier
 
-Gérez la copropriété et les rôles d'accès avec un diagramme en demi-camembert visuel montrant la répartition de la propriété.
+Gérez la copropriété et les rôles d'accès avec un graphique en demi-donut visuel montrant la distribution de la propriété.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Modale de partage de courtier">
+ <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal">
 </div>
 
 ---
 
-## 💱 Taux de change
+## 💱 Taux FX
 
-### 📋 Liste
+### 📋 Liste FX
 
 Toutes les paires de devises configurées avec des mini-graphiques montrant les tendances récentes.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="list" alt="Liste des paires de devises">
+ <img class="gallery-img" data-category="fx" data-name="list" alt="FX List Page">
 </div>
 
-### 🔎 Liste filtrée
+### 🔎 Liste FX Filtrée
 
 Paires de devises filtrées par devise de base.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="Liste filtrée des paires de devises">
+ <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="FX List Filtered">
 </div>
 
-### ➕ Ajouter une paire — Routes directes
+### ➕ Ajouter une Paire — Routes Directes
 
-Ajoutez une nouvelle paire de devises avec des routes directes de fournisseur (ex. USD/CHF via FED).
+Ajoutez une nouvelle paire de devises avec des routes de fournisseur directes (ex: USD/CHF via FED).
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Ajouter une paire - Routes directes">
+ <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Add Pair - Direct Routes">
 </div>
 
-### 🔗 Ajouter une paire — Chaîne
+### 🔗 Ajouter une Paire — Chaîne
 
-Ajoutez une paire en utilisant une chaîne de conversion via une devise intermédiaire (ex. NOK/CHF via EUR).
+Ajoutez une paire en utilisant une chaîne de conversion via une devise intermédiaire (ex: NOK/CHF via EUR).
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Ajouter une paire - Chaîne de conversion">
+ <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Add Pair - Chain">
 </div>
 
-### 🔄 Synchroniser tout
+### 🔄 Tout Synchroniser
 
-Synchronisez toutes les paires configurées depuis leurs fournisseurs avec suivi de la progression.
+Synchronisez toutes les paires configurées depuis leurs fournisseurs avec un suivi de la progression.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Progression de la synchronisation">
+ <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Sync All Progress">
 </div>
 
-### 📈 Graphique détaillé
+### 📈 Graphique de Détail
 
-Graphique interactif en taille réelle pour une paire de devises avec bascule ligne/chandelier.
+Graphique interactif plein écran pour une paire de devises avec basculement ligne/chandeliers.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Graphique détaillé">
+ <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="FX Detail Chart">
 </div>
 
-### 📡 Superposition de signaux
+### 📡 Superposition de Signaux
 
-Panneau des signaux des indicateurs techniques (EMA, MACD, RSI, Bollinger) superposé au graphique.
+Panneau de signaux d'indicateurs techniques (EMA, MACD, RSI, Bollinger) superposé au graphique.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Superposition des signaux">
+ <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Detail Signals Overlay">
 </div>
 
-### 📏 Panneau de mesures
+### 📏 Panneau de Mesures
 
-Outil de mesure clic-à-clic avec delta, pourcentage et rendement annualisé.
+Outil de mesure par clic avec delta, pourcentage et rendement annualisé.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Panneau de mesures">
+ <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Detail Measures Panel">
 </div>
 
-### ✏️ Éditeur de données
+### ✏️ Éditeur de Données
 
-Éditeur de données intégré pour visualiser et modifier les valeurs individuelles des taux.
+Éditeur de données en ligne pour visualiser et modifier des valeurs de taux individuelles.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Éditeur de données">
+ <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Data Editor">
 </div>
 
-### 📄 Importation CSV
+### 📄 Import CSV
 
 Modale pour importer des données de taux à partir de fichiers CSV avec aperçu et validation.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Modale d'importation CSV">
+ <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="CSV Import Modal">
 </div>
 
-### ⚙️ Paramètres du graphique
+### ⚙️ Paramètres du Graphique
 
 Paramètres globaux et par graphique pour l'esthétique et la configuration de la superposition des signaux.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Paramètres du graphique">
+ <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
 </div>
 
-### 🔧 Configuration du fournisseur
+### 🔧 Config Fournisseur
 
-Configurez la priorité des fournisseurs et les routes de conversion pour une paire de devises.
+Configurez la priorité du fournisseur et les routes de conversion pour une paire de devises.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Configuration du fournisseur">
+ <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
 </div>
 
 ---
 
+## 💼 Actifs
+
+### 📋 Liste des Actifs
+
+Tous vos instruments financiers suivis — actions, ETF, obligations, crypto — dans une seule vue.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="assets" data-name="list" alt="Asset List Page">
+</div>
+
+### 🔎 Liste des Actifs Filtrée
+
+Filtrez les actifs par nom, type ou texte de recherche.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="assets" data-name="list-filtered" alt="Asset List Filtered">
+</div>
+
+### 📈 Graphique de Détail
+
+Graphique de prix interactif plein écran avec sélecteur de plage de dates et basculement de devise.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Chart">
+</div>
+
+### 📡 Superposition de Signaux
+
+Panneau d'indicateurs techniques (EMA, MACD, RSI, Bandes de Bollinger) superposé au graphique de prix.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Detail Signals">
+</div>
+
+### 📏 Panneau de Mesures
+
+Outil de mesure par clic pour les différences de prix, les variations en pourcentage et les rendements annualisés.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Detail Measures">
+</div>
+
+### 🗂️ Classification
+
+Graphique circulaire de distribution sectorielle et carte mondiale de l'allocation géographique.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Detail Classification">
+</div>
+
+### ✏️ Éditeur de Données
+
+Éditeur de données en ligne pour visualiser et modifier des points de données de prix individuels.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Asset Data Editor">
+</div>
+
+### ➕ Modale de Création d'Actif
+
+Créez un nouvel actif avec nom, type, devise, identifiants, fournisseur et classification.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal">
+</div>
+
+---
 
 <style>
 .screenshot-container {

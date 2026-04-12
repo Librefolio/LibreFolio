@@ -1,16 +1,16 @@
 # 🛠️ Herramientas de Línea de Comandos
 
-LibreFolio proporciona el script `dev.py` para tareas de administración. Esta página cubre los comandos más relevantes para **administradores del sistema**.
+LibreFolio proporciona el script `dev.py` para tareas de administración. Esta página cubre los comandos más relevantes para los **administradores del sistema**.
 
 !!! info "👩‍💻 Para Desarrolladores"
 
-    Para comandos específicos de desarrollo (compilación frontend, ejecutor de pruebas, sincronización de API, auditoría i18n), consulta la [Guía de Instalación para Desarrolladores](../developer/dev-installation.md).
+    Para comandos específicos de desarrollo (construcción del frontend, ejecutor de pruebas, sincronización de API, auditoría de i18n), consulte la [Guía de Instalación para Desarrolladores](../developer/dev-installation.md).
 
 ---
 
 ## 🚀 Instalación
 
-Instala todas las dependencias del proyecto (Python y Node.js):
+Instale todas las dependencias del proyecto (Python y Node.js):
 
 ```bash
 ./dev.py install
@@ -20,86 +20,86 @@ Instala todas las dependencias del proyecto (Python y Node.js):
 
 ## 🖥️ Servidor (Producción)
 
-### ▶️ Iniciar el servidor
+### ▶️ Iniciar el Servidor
 
 ```bash
-# Inicio estándar
+# Standard start
 ./dev.py server
 
-# Con workers calculados automáticamente (2 × (CPU-1))
+# With auto-calculated workers (2 × (CPU-1))
 ./dev.py server --workers N
 
-# Terminar proceso existente en el puerto antes de iniciar
+# Kill existing process on port before starting
 ./dev.py server --force
 ```
 
 !!! tip "Multi-worker"
 
-    Para producción, usa `--workers` para ejecutar múltiples workers de Uvicorn. Esto mejora el rendimiento y se recomienda para cualquier despliegue con más de un núcleo de CPU.
+    Para producción, use `--workers` para ejecutar múltiples workers de Uvicorn. Esto mejora la capacidad de procesamiento y se recomienda para cualquier despliegue con más de 1 núcleo de CPU.
 
 ---
 
 ## 👤 Gestión de Usuarios
 
-La gestión de usuarios se realiza mediante subcomandos `./dev.py user`:
+La gestión de usuarios se realiza a través de los subcomandos `./dev.py user`:
 
 ```bash
-# Crear un usuario (el primer usuario se convierte automáticamente en admin)
-./dev.py user create <nombredeusuario> <email> <contraseña>
+# Create a user (first user becomes admin automatically)
+./dev.py user create <username> <email> <password>
 
-# Listar todos los usuarios
+# List all users
 ./dev.py user list
 
-# Restablecer la contraseña de un usuario
-./dev.py user reset <nombredeusuario> <nueva_contraseña>
+# Reset a user's password
+./dev.py user reset <username> <new_password>
 
-# Promover un usuario a admin
-./dev.py user promote <nombredeusuario>
+# Promote a user to admin
+./dev.py user promote <username>
 
-# Degradar un admin a usuario regular
-./dev.py user demote <nombredeusuario>
+# Demote an admin to regular user
+./dev.py user demote <username>
 ```
 
 ---
 
-## ⚙️ Gestión del sistema
+## ⚙️ Gestión del Sistema
 
-### 🔧 Inicializar configuración global
+### 🔧 Inicializar Configuración Global
 
 ```bash
 ./dev.py user init-settings
 ```
 
-Puebla la base de datos con [Configuración Global](settings.md) predeterminada si aún no existen.
+Puebla la base de datos con la [Configuración Global](settings.md) predeterminada si esta aún no existe.
 
-### 🗄️ Migraciones de base de datos
+### 🗄️ Migraciones de Base de Datos
 
 ```bash
-# Aplicar migraciones pendientes
+# Apply pending migrations
 ./dev.py db upgrade
 ```
 
-!!! warning "🗄️ Restablecimiento de base de datos"
+!!! warning "🗄️ Reinicio de base de datos"
 
-    `./dev.py db create-clean` recrea la base de datos desde cero — **se pierden todos los datos**. Úsalo solo si necesitas reiniciar desde cero.
+    `./dev.py db create-clean` recrea la base de datos desde cero — **se pierden todos los datos**. Úselo solo si necesita empezar desde cero.
 
 ---
 
 ## 📚 Documentación
 
 ```bash
-# Compilar y desplegar documentación de MkDocs en GitHub Pages
+# Build and deploy MkDocs documentation to GitHub Pages
 ./dev.py mkdocs deploy
 
-# Generar capturas de pantalla de la galería (requiere servidor en ejecución + datos de prueba)
+# Generate gallery screenshots (requires running server + test data)
 ./dev.py mkdocs gallery
 ```
 
 ---
 
-## 📋 Árbol completo de comandos
+## 📋 Árbol Completo de Comandos
 
-Para una lista completa de todos los comandos disponibles:
+Para obtener una lista completa de todos los comandos disponibles:
 
 ```bash
 ./dev.py --help
@@ -109,7 +109,7 @@ Para una lista completa de todos los comandos disponibles:
 
     Comandos adicionales para flujos de trabajo de desarrollo:
 
-    - **Frontend**: `./dev.py front build`, `front dev`, `front check` — ver [Desarrollo Frontend](../developer/frontend/index.md)
-    - **Pruebas**: `./dev.py test all` — ver [Recorrido de Pruebas](../developer/test-walkthrough/index.md)
-    - **Cliente API**: `./dev.py api sync` — ver [Visión General de la API](../developer/api/overview.md)
-    - **i18n**: `./dev.py i18n audit` — ver [Internacionalización](../developer/frontend/i18n.md)
+    - **Frontend**: `./dev.py front build`, `front dev`, `front check` — consulte [Desarrollo del Frontend](../developer/frontend/index.md)
+    - **Pruebas**: `./dev.py test all` — consulte [Recorrido de Pruebas](../developer/test-walkthrough/index.md)
+    - **Cliente API**: `./dev.py api sync` — consulte [Descripción General de la API](../developer/api/overview.md)
+    - **i18n**: `./dev.py i18n audit` — consulte [Internacionalización](../developer/frontend/i18n.md)

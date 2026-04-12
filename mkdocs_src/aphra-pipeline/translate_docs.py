@@ -317,6 +317,12 @@ def _clean_translation(text: str) -> str:
     2. "Translator's Notes" / "Note del Traduttore" trailing section
     3. Glossary definitions block at the end ([N] term: definition...)
     4. Inline glossary markers [N] (preserves markdown links [text](url))
+    5. Footnote definitions [^N]: ...
+    6. Inline footnote references [^N]
+    7. Double/triple spaces left by removed markers
+    8. 3+ consecutive blank lines collapsed to 2
+    9. Internal .md links normalized (page.XX.md → page.md)
+    10. Admonition body indentation (1 space → 4 spaces for MkDocs)
     """
     # 1. Strip <translation> / </translation> tags (Aphra wraps output in these)
     text = re.sub(r'</?translation>', '', text)
@@ -383,6 +389,45 @@ def _clean_translation(text: str) -> str:
     #    Matches: .en.md, .it.md, .fr.md, .es.md (and any 2-letter code)
     #    Preserves anchors: page.en.md#section → page.md#section
     text = re.sub(r'(\([^)]*?)\.[a-z]{2}\.md([)#])', r'\1.md\2', text)
+
+    # 10. Fix admonition body indentation
+    #     LLMs frequently produce admonition body lines with 1 space instead
+    #     of the 4 spaces required by MkDocs Material. This scans for the
+    #     pattern: !!! type "title"\n\n <body> and pads to 4 spaces.
+    lines = text.split('\n')
+    in_admonition = False
+    after_blank = False
+    fixed_lines: list[str] = []
+    for line in lines:
+        if re.match(r'^!!! \w+', line):
+            in_admonition = True
+            after_blank = False
+            fixed_lines.append(line)
+            continue
+        if in_admonition and line.strip() == '':
+            after_blank = True
+            fixed_lines.append(line)
+            continue
+        if in_admonition and after_blank:
+            if re.match(r'^ [^ ]', line):
+                # 1 space → 4 spaces
+                fixed_lines.append('   ' + line)
+                continue
+            elif re.match(r'^    ', line) or line.strip() == '':
+                fixed_lines.append(line)
+                continue
+            else:
+                in_admonition = False
+                after_blank = False
+                fixed_lines.append(line)
+                continue
+        if in_admonition and not after_blank:
+            fixed_lines.append(line)
+            continue
+        in_admonition = False
+        after_blank = False
+        fixed_lines.append(line)
+    text = '\n'.join(fixed_lines)
 
     # Ensure file ends with single newline
     text = text.rstrip() + '\n'
@@ -2219,6 +2264,7 @@ def run_diff(args) -> int:
     target_langs = args.lang or _detect_target_languages()
     file_filter = getattr(args, "file", None)
     verbose = getattr(args, "verbose", False)
+    issues_only = getattr(args, "issues_only", False)
 
     # Build list of source files (reuse same logic as run_translate)
     if file_filter:
@@ -2296,7 +2342,8 @@ def run_diff(args) -> int:
                         print(f"       {line}")
                     print()
             else:
-                print(f"  ✅ {cache_key} → {lang}")
+                if not issues_only:
+                    print(f"  ✅ {cache_key} → {lang}")
 
     # Summary
     print(f"\n{'=' * 50}")
@@ -2442,6 +2489,7 @@ def _add_diff_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lang", action="extend", nargs="+", choices=target_langs, metavar="LANG", help=f"Target language(s). Detected from frontend: {target_langs}", )
     parser.add_argument("--file", action="extend", nargs="+", metavar="PATH", help="File(s) or glob pattern(s) to check (e.g. faq.en.md, 'user/**/*.en.md')", )
     parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed structural diff reports", )
+    parser.add_argument("--issues-only", "-w", action="store_true", help="Show only files with issues (hide clean files)", )
 
 
 def _add_inspect_arguments(parser: argparse.ArgumentParser) -> None:

@@ -18,4 +18,4 @@ La maggior parte delle attività amministrative viene gestita attraverso lo stru
 
 ## 🔐 Autenticazione
 
-LibreFolio utilizza JWT (JSON Web Token) per l'autenticazione. Il server genera un segreto di firma casuale all'avvio, condiviso tra tutti i worker. I token scadono dopo un numero configurabile di ore (vedi [Impostazioni Globali](settings.md)). Per i dettagli tecnici, consultare [Architettura di Sicurezza](../developer/architecture/security.md).
+LibreFolio utilizza **JWT (JSON Web Token)** per l'autenticazione. Il server genera un segreto di firma casuale all'avvio, condiviso tra tutti i worker. I token scadono dopo un numero configurabile di ore (vedi [Impostazioni Globali](settings.md)). Per i dettagli tecnici, consultare [Architettura di Sicurezza](../developer/architecture/security.md).

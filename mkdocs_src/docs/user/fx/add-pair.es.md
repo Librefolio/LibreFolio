@@ -1,56 +1,56 @@
 # ➕ Agregar un Par de Divisas
 
-Para agregar un nuevo par de divisas a tu panel de FX:
+Para agregar un nuevo par de divisas a su panel de control de FX:
 
-1. Haz clic en **"Agregar Par"** en la página de la lista de FX
-2. Selecciona las **dos divisas** usando el menú desplegable de búsqueda
-3. El sistema identifica automáticamente las **rutas de datos** disponibles — tanto rutas directas como en cadena
-4. Selecciona la ruta que prefieras y haz clic en **Confirmar** — se crea el par y la sincronización de datos comienza automáticamente
+1. Haga clic en **"Add Pair"** en la página de la lista de FX
+2. Seleccione las **dos divisas** utilizando el menú desplegable de búsqueda
+3. El sistema descubre automáticamente las **rutas de datos** disponibles, tanto rutas directas como en cadena
+4. Seleccione la ruta de su preferencia y haga clic en **Confirmar** — el par se crea y la sincronización de datos comienza automáticamente
 
 ---
 
 ## 🔗 Rutas Directas
 
-Si un proveedor admite ambas divisas directamente (por ejemplo, ECB para EUR→USD), verás una sección **Rutas Directas**:
+Si un proveedor admite ambas divisas directamente (por ejemplo, ECB para EUR→USD), verá una sección de **Rutas Directas**:
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Agregar Par — Rutas Directas" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Add Pair — Direct Routes" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
 ## 🔀 Rutas en Cadena
 
-Para pares exóticos (por ejemplo, RON→JPY) donde ningún proveedor cubre ambas divisas, el sistema construye **rutas en cadena** — caminos de múltiples pasos a través de divisas intermedias:
+Para pares exóticos (por ejemplo, RON→JPY) donde ningún proveedor único cubre ambas divisas, el sistema construye **cadenas de conversión**: rutas de múltiples pasos a través de divisas intermedias:
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Agregar Par — Rutas en Cadena" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Add Pair — Chain Routes" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! example "Ejemplo de Ruta en Cadena"
+!!! example "Chain Example"
 
-    **RON → JPY** a través de ECB:
+    **RON → JPY** vía ECB:
 
     1. RON → EUR (ECB proporciona RON/EUR)
     2. EUR → JPY (ECB proporciona EUR/JPY)
 
-    La tasa final se calcula multiplicando las tasas intermedias.
+    El tipo de cambio final se calcula multiplicando los tipos de cambio intermedios.
 
 ---
 
-## 🧭 Cómo Funciona el Descubrimiento de Rutas
+## 🧭 Cómo funciona el Descubrimiento de Rutas
 
-Cuando seleccionas dos divisas, LibreFolio consulta a todos los proveedores instalados para encontrar:
+Cuando selecciona dos divisas, LibreFolio consulta todos los proveedores instalados para encontrar:
 
 - 🔗 **Rutas directas**: un único proveedor que cubre ambas divisas
 - 🔀 **Rutas en cadena**: dos o más proveedores que juntos pueden conectar las divisas a través de una divisa intermedia (por ejemplo, EUR)
 
 Cada ruta muestra:
 
-- 🏛️ El **nombre** y **icono** del proveedor
+- 🏛️ El nombre y el icono del **proveedor**
 - ➡️ La **dirección** (base → cotización)
-- 🔢 Para rutas en cadena: la **divisa intermedia** y el **número de saltos**
+- 🔢 Para cadenas: la **divisa intermedia** y el **número de saltos**
 
-Puedes elegir cualquier ruta disponible según tu preferencia en cuanto a la fuente de datos, período de datos disponibles o frecuencia de actualización.
+Puede elegir cualquier ruta disponible basándose en su preferencia de fuente de datos, periodo de cobertura o frecuencia de actualización.
 
-Para detalles técnicos sobre el algoritmo de enrutamiento, consulta la documentación para desarrolladores: [Configuración y Enrutamiento FX](../../developer/backend/fx/configuration.md).
+Para obtener detalles técnicos sobre el algoritmo de enrutamiento, consulte la documentación para desarrolladores: [FX Configuration & Routing](../../developer/backend/fx/configuration.md).

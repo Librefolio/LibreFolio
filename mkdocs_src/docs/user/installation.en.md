@@ -93,7 +93,7 @@ Available endpoints:
 
 !!! tip "CLI user management"
 
-    You can also manage users from the command line. See the [Admin Manual — CLI Tools](../admin/cli_tools.en.md) for commands like user creation, promotion, and listing.
+    You can also manage users from the command line. See the [Admin Manual — CLI Tools](../admin/cli_tools.md) for commands like user creation, promotion, and listing.
 
 ## 🔄 Updating LibreFolio
 
@@ -126,11 +126,11 @@ You can start a test server with pre-populated mock data to explore the applicat
 
 Access at **`http://localhost:8001`** with user `e2e_test_user` / `E2eTestPass123!`.
 
-The test server runs alongside the production one, using a separate database. See the [Advanced Docker Guide](../admin/docker_advanced.en.md#test-mode) for details.
+The test server runs alongside the production one, using a separate database. See the [Advanced Docker Guide](../admin/docker_advanced.md#test-mode) for details.
 
 ---
 
 !!! tip "Advanced topics"
 
-    For reverse proxy setup, database backups, custom data paths, and production considerations, see the [🐳 Advanced Docker Guide](../admin/docker_advanced.en.md).
+    For reverse proxy setup, database backups, custom data paths, and production considerations, see the [🐳 Advanced Docker Guide](../admin/docker_advanced.md).
 

@@ -1,69 +1,70 @@
 # ❓ Preguntas Frecuentes (FAQ)
 
-¡Bienvenido/a al FAQ de LibreFolio! Aquí encontrarás respuestas a preguntas comunes.
+Bienvenido a las FAQ de LibreFolio. Aquí encontrarás respuestas a las preguntas más comunes.
 
 ## 💬 Preguntas Generales
 
 ### 🤔 ¿Qué es LibreFolio?
 
-LibreFolio es un rastreador de carteras **autohospedado** y de código abierto diseñado para inversores preocupados por la privacidad. Te permite **seguir** tus inversiones, analizar su rendimiento y mantener el control total de tus datos financieros.
+LibreFolio es un rastreador de carteras open-source y autoalojado, diseñado para inversores que priorizan la privacidad. Te permite realizar un seguimiento de tus inversiones, analizar el rendimiento y mantener el control total de tus datos financieros.
 
 ### 💰 ¿Es LibreFolio gratuito?
 
-¡Sí! LibreFolio es completamente gratuito y de código abierto bajo la licencia [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+¡Sí! LibreFolio es completamente gratuito y open-source bajo la [licencia AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
 
-### 📊 ¿Qué activos puedo seguir?
+### 📊 ¿Qué activos puedo rastrear?
 
 LibreFolio es compatible con:
 
-- **Acciones y ETFs** - Precios obtenidos automáticamente de yfinance
-- **Criptomonedas** - Próximamente
-- **Bonos** - Permite entrada manual
-- **Préstamos P2P** - Activos con rendimientos periódicos
-- **Efectivo y Depósitos** — Sigue tu liquidez
+- **Acciones y ETFs** — Precios obtenidos automáticamente a través de proveedores de datos (ej. yfinance)
+- **Criptomonedas** — Próximamente
+- **Bonos** — Soporte para entrada manual
+- **Préstamos P2P** — Activos con rendimiento pactado
+- **Efectivo y Depósitos** — Rastrea tu liquidez
 
 !!! tip "¿Falta algo? 💡"
 
-    Si hay un tipo de activo o una función que te gustaría ver y en la que no hemos pensado, ¡nos encantaría saberlo! Abre una [solicitud de mejora en GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement).
+    Si hay alguna clase de activo o funcionalidad que te gustaría ver y que aún no hemos considerado, ¡nos encantaría saberlo! Abre una [solicitud de funcionalidad en GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement) y háznoslo saber.
 
 ## 🚀 Primeros Pasos
 
 ### 📦 ¿Cómo instalo LibreFolio?
 
-Consulta nuestra [Guía de Instalación](developer/dev-installation.md) para instrucciones detalladas.
+Consulta nuestra [Guía de Instalación](developer/dev-installation.md) para obtener instrucciones detalladas.
 
 ### 👤 ¿Cómo creo una cuenta?
 
-1. Ve a la página de inicio de sesión
+1. Navega a la página de inicio de sesión
 2. Haz clic en "Registrarse"
 3. Completa tus datos
-4. ¡Tu cuenta está lista para usar!
+4. ¡Tu cuenta ya está lista para usar!
 
-### 🔑 He olvidado mi contraseña, ¿qué hago?
+### 🔑 Olvidé mi contraseña, ¿qué hago?
 
-Actualmente, el restablecimiento de contraseña se realiza mediante la CLI. Contacta al administrador de tu instancia o ejecuta:
+Actualmente, el restablecimiento de la contraseña se realiza a través de la CLI. Contacta con el administrador de tu instancia o ejecuta:
 
 ```bash
-./dev.py user reset <usuario> <nueva_contraseña>
+./dev.py user reset <username> <new_password>
 ```
 
-## 🔧 Solución de Problemas
+## 🔧 Resolución de Problemas
 
 ### 📉 Los precios de mis activos no se actualizan
 
-Verifica que:
+Comprueba que:
 
-1. La sincronización automática esté activada en la configuración global
-2. Tus activos tengan ISINs o símbolos válidos reconocidos por el **proveedor de datos** configurado (ej. [yfinance](https://pypi.org/project/yfinance/) para acciones y ETFs)
-3. El servicio del proveedor esté disponible (revisa los registros del servidor)
+1. La sincronización automática esté activada en la Configuración Global
+2. Tus activos tengan ISINs válidos o símbolos reconocidos por el **proveedor de datos** configurado (ej. [yfinance](https://pypi.org/project/yfinance/) para acciones y ETFs)
+3. El servicio del proveedor esté disponible (revisa los registros del servidor para buscar errores)
 
-### 💱 Mis tipos de cambio no se actualizan
+### 💱 Mis tipos de cambio FX no se actualizan
 
-Verifica que:
+Comprueba que:
 
 1. El par de divisas tenga al menos un [proveedor de datos configurado](user/fx/detail/provider.md)
-2. La API del proveedor sea accesible (BCE, FED, BOE, SNB)
+2. La API del proveedor sea accesible (ECB, FED, BOE, SNB)
 3. Hayas ejecutado una [sincronización](user/fx/sync.md) para el rango de fechas deseado
+4. Revisa la [cadena de suministro del proveedor](user/fx/detail/provider.md) para ver las opciones de fallback
 
 ### 🔐 No puedo iniciar sesión
 
@@ -73,8 +74,6 @@ Verifica que:
 
 ## 🆘 ¿Necesitas más ayuda?
 
-- [Documentación completa](index.md)
-- [Reportar un error](https://github.com/Alfystar/LibreFolio/issues)
-- [Debates en GitHub](https://github.com/Alfystar/LibreFolio/discussions)
-
----
+- [Documentación Completa](index.md)
+- [Informar de un Error](https://github.com/Alfystar/LibreFolio/issues)
+- [Discusiones de GitHub](https://github.com/Alfystar/LibreFolio/discussions)

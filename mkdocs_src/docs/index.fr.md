@@ -2,10 +2,10 @@
 hide:
  - navigation
  - toc
-description: Reprenez possession de vos données financières. LibreFolio est le tableau de bord d'investissement auto-hébergé et axé sur la confidentialité pour l'ensemble de votre portefeuille.
+description: Reprenez le contrôle de vos données financières. LibreFolio est le tableau de bord d'investissement auto-hébergé axé sur la confidentialité pour l'ensemble de votre portefeuille.
 ---
 
-<!-- Arrière-plan animé -->
+<!-- Animated Background -->
 <div class="animated-bg">
  <div class="wave wave-1"></div>
  <div class="wave wave-2"></div>
@@ -20,23 +20,22 @@ description: Reprenez possession de vos données financières. LibreFolio est le
 <div class="home-header">
  <div class="home-logo-container">
  <div class="home-logo">
- <img src="../static/logo.png" alt="Logo LibreFolio"/>
+ <img src="static/logo.png" alt="Logo LibreFolio"/>
  </div>
  <a id="dashboard-link" href="http://localhost:8000" class="md-button md-button--primary md-button--large" style="width: 100%; text-align: center;">
- Accéder au tableau de bord 🚀
+ Lancer le tableau de bord 🚀
  </a>
  </div>
  <div class="home-content">
  <h1>LibreFolio</h1>
- <h2><strong>Votre patrimoine, vos règles.</strong></h2>
+ <h2><strong>Votre Patrimoine, Vos Règles.</strong></h2>
  <p class="mission">
- Découvrez la liberté d'une vraie souveraineté financière.
+ Découvrez la liberté d'une véritable souveraineté financière.
  <br>
  Regroupez tous vos actifs dans un tableau de bord sécurisé et auto-hébergé.
  <br><br>
- Contrôle total, aucun compromis.
+ Contrôle total, sans aucun compromis.
  </p>
-
 
  </div>
 </div>
@@ -49,7 +48,7 @@ description: Reprenez possession de vos données financières. LibreFolio est le
  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M13.13 22.19L11.5 18.36C13.07 17.78 14.54 17 15.9 16.09L13.13 22.19M5.64 12.5L1.81 10.87L7.91 8.1C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39C21.61 2.39 16.66 .29 11 5.96C5.34 11.63 3.23 16.58 3.23 16.58C3.23 16.58 3 16.8 3 17C3 17.2 3.23 17.42 3.23 17.42L9 11.65L12.35 15L6.58 20.77C6.58 20.77 6.8 21 7 21C7.2 21 7.42 20.77 7.42 20.77C7.42 20.77 12.37 18.66 18.04 13C23.71 7.34 21.61 2.39 21.61 2.39M14.5 13.5C14.5 12.67 13.83 12 13.5 12C13.17 12 12.5 12.67 12.5 13.5C12.5 14.33 13.17 15 13.5 15C13.83 15 14.5 14.33 14.5 13.5Z" /></svg>
  </div>
  <div class="card-content">
- <span class="card-title">Pour commencer</span>
+ <span class="card-title">Premiers Pas</span>
  <span class="card-desc">Découvrez ce que LibreFolio peut faire pour vous.</span>
  </div>
  </a>
@@ -59,8 +58,8 @@ description: Reprenez possession de vos données financières. LibreFolio est le
  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M19 2L14 6.5V17.5L19 13V2M6.5 5C4.55 5 2.45 5.4 1 6.5V21.16C1 21.41 1.25 21.66 1.5 21.66C1.6 21.66 1.65 21.59 1.75 21.59C3.1 20.94 5.05 20.5 6.5 20.5C8.45 20.5 10.55 20.9 12 22C13.35 21.15 15.8 20.5 17.5 20.5C19.15 20.5 20.85 20.81 22.25 21.56C22.35 21.61 22.4 21.59 22.5 21.59C22.75 21.59 23 21.34 23 21.09V6.5C22.4 6.05 21.75 5.75 21 5.5V19C19.9 18.65 18.7 18.5 17.5 18.5C15.8 18.5 13.35 19.15 12 20V6.5C10.55 5.4 8.45 5 6.5 5Z" /></svg>
  </div>
  <div class="card-content">
- <span class="card-title">Manuel utilisateur</span>
- <span class="card-desc">Guides pas-à-pas pour gérer votre portefeuille.</span>
+ <span class="card-title">Guide Utilisateur</span>
+ <span class="card-desc">Guides pas à pas pour gérer votre portefeuille.</span>
  </div>
  </a>
 
@@ -70,7 +69,7 @@ description: Reprenez possession de vos données financières. LibreFolio est le
  </div>
  <div class="card-content">
  <span class="card-title">Galerie</span>
- <span class="card-desc">Voir LibreFolio en action sur différents appareils.</span>
+ <span class="card-desc">Voyez LibreFolio en action sur différents appareils.</span>
  </div>
  </a>
 
@@ -79,8 +78,8 @@ description: Reprenez possession de vos données financières. LibreFolio est le
  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M20,19V7H4V19H20M20,3A2,2 0 0,1 22,5V19A2,2 0 0,1 20,21H4A2,2 0 0,1 2,19V5C2,3.89 2.9,3 4,3H20M13,17V15H18V17H13M9.58,13L5.57,9H8.4L11.7,12.3C12.09,12.69 12.09,13.33 11.7,13.72L8.42,17H5.59L9.58,13Z" /></svg>
  </div>
  <div class="card-content">
- <span class="card-title">Manuel d'administration</span>
- <span class="card-desc">Installation, utilisation de Docker et maintenance système.</span>
+ <span class="card-title">Guide Administrateur</span>
+ <span class="card-desc">Installation, Docker et maintenance du système.</span>
  </div>
  </a>
 
@@ -89,8 +88,8 @@ description: Reprenez possession de vos données financières. LibreFolio est le
  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" /></svg>
  </div>
  <div class="card-content">
- <span class="card-title">Manuel du développeur</span>
- <span class="card-desc">Architecture,<br>référence de l'API et guide de contribution.</span>
+ <span class="card-title">Guide Développeur</span>
+ <span class="card-desc">Architecture,<br>référence API et guide de contribution.</span>
  </div>
  </a>
 
@@ -99,8 +98,8 @@ description: Reprenez possession de vos données financières. LibreFolio est le
  <svg xmlns="http://www.w3.org/2000/svg" id="mdi-scale-unbalanced" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M13 20V8.8C13.5 8.6 14 8.3 14.3 7.9L17.8 9.2L14.9 16C14.4 18 15.9 19 18.4 19S22.5 18 21.9 16L19.3 9.7L20.2 10L20.9 8.1L15 6C15 4.8 14.3 3.6 13 3.1C11.8 2.6 10.5 3.1 9.7 4L3.9 2L3.2 3.8L4.8 4.4L2.1 11C1.6 13 3.1 14 5.6 14S9.7 13 9.1 11L6.6 5.1L9 6C9 7.2 9.7 8.4 11 8.9V20H2V22H22V20H13M19.9 16H16.9L18.4 12.2L19.9 16M7.1 11H4.1L5.6 7.2L7.1 11M11.1 5.7C11.3 5.2 11.9 4.9 12.4 5.1S13.2 5.9 13 6.4 12.2 7.2 11.7 7 10.9 6.2 11.1 5.7Z" /></svg>
  </div>
  <div class="card-content">
- <span class="card-title">Mentions légales et crédits</span>
- <span class="card-desc">Licence (AGPL-3.0),<br>membres de l'équipe et remerciements.</span>
+ <span class="card-title">Légal & Crédits</span>
+ <span class="card-desc">Licence (AGPL-3.0),<br>L'équipe et Remerciements.</span>
  </div>
  </a>
 

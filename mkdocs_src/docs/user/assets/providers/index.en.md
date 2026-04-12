@@ -20,7 +20,7 @@ LibreFolio supports multiple pricing providers to automatically fetch current pr
 
 ## 📚 Provider Details
 
-- [📈 Yahoo Finance](yahoo-finance.en.md)
-- [📊 justETF](justetf.en.md)
-- [🔍 CSS Scraper](css-scraper.en.md) — detailed guide for web scraping
-- [🧮 Scheduled Investment](scheduled-investment.en.md)
+- [📈 Yahoo Finance](yahoo-finance.md)
+- [📊 justETF](justetf.md)
+- [🔍 CSS Scraper](css-scraper.md) — detailed guide for web scraping
+- [🧮 Scheduled Investment](scheduled-investment.md)

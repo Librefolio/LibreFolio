@@ -2,10 +2,10 @@
 hide:
  - navigation
  - toc
-description: Recupera el control de tus datos financieros. LibreFolio es el panel de control de inversiones autohospedado con la privacidad como prioridad para toda tu cartera.
+description: Recupera la propiedad de tus datos financieros. LibreFolio es el panel de control de inversiones autoalojado y centrado en la privacidad para toda tu cartera.
 ---
 
-<!-- Fondo Animado -->
+<!-- Animated Background -->
 <div class="animated-bg">
  <div class="wave wave-1"></div>
  <div class="wave wave-2"></div>
@@ -20,23 +20,22 @@ description: Recupera el control de tus datos financieros. LibreFolio es el pane
 <div class="home-header">
  <div class="home-logo-container">
  <div class="home-logo">
- <img src="../static/logo.png" alt="Logo de LibreFolio"/>
+ <img src="static/logo.png" alt="Logo de LibreFolio"/>
  </div>
  <a id="dashboard-link" href="http://localhost:8000" class="md-button md-button--primary md-button--large" style="width: 100%; text-align: center;">
- Abrir el panel de control 🚀
+ Lanzar Panel de Control 🚀
  </a>
  </div>
  <div class="home-content">
  <h1>LibreFolio</h1>
- <h2><strong>Tu Patrimonio, Tus Reglas.</strong></h2>
+ <h2><strong>Tu riqueza, tus reglas.</strong></h2>
  <p class="mission">
- Experimenta la libertad de la verdadera autonomía financiera.
+ Experimenta la libertad de una verdadera soberanía financiera.
  <br>
- Agrupa todos tus activos en un único panel de control seguro y autohospedado.
+ Reúne todos tus activos en un único panel de control seguro y autoalojado.
  <br><br>
  Control total, sin concesiones.
  </p>
-
 
  </div>
 </div>
@@ -70,7 +69,7 @@ description: Recupera el control de tus datos financieros. LibreFolio es el pane
  </div>
  <div class="card-content">
  <span class="card-title">Galería</span>
- <span class="card-desc">Ve LibreFolio en acción en diferentes dispositivos.</span>
+ <span class="card-desc">Mira LibreFolio en acción en diversos dispositivos.</span>
  </div>
  </a>
 
@@ -79,7 +78,7 @@ description: Recupera el control de tus datos financieros. LibreFolio es el pane
  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M20,19V7H4V19H20M20,3A2,2 0 0,1 22,5V19A2,2 0 0,1 20,21H4A2,2 0 0,1 2,19V5C2,3.89 2.9,3 4,3H20M13,17V15H18V17H13M9.58,13L5.57,9H8.4L11.7,12.3C12.09,12.69 12.09,13.33 11.7,13.72L8.42,17H5.59L9.58,13Z" /></svg>
  </div>
  <div class="card-content">
- <span class="card-title">Manual de Administración del Sistema</span>
+ <span class="card-title">Manual de Administrador</span>
  <span class="card-desc">Instalación, Docker y mantenimiento del sistema.</span>
  </div>
  </a>
@@ -100,9 +99,8 @@ description: Recupera el control de tus datos financieros. LibreFolio es el pane
  </div>
  <div class="card-content">
  <span class="card-title">Legal y Créditos</span>
- <span class="card-desc">Licencia (AGPL-3.0),<br>miembros del equipo y agradecimientos.</span>
+ <span class="card-desc">Licencia (AGPL-3.0),<br>miembro del equipo y agradecimientos.</span>
  </div>
  </a>
 
 </div>
-

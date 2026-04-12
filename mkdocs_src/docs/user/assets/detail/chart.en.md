@@ -33,7 +33,7 @@ View prices in:
 
 ### 📅 Event Markers
 
-Dividends, splits, interest payments, and other [asset events](events.en.md) appear as colored markers on the chart:
+Dividends, splits, interest payments, and other [asset events](events.md) appear as colored markers on the chart:
 
 - 💰 **Dividend** — cash distribution
 - 💵 **Interest** — interest payment
@@ -53,7 +53,7 @@ Click the **Settings** (⚙️) button to toggle the aesthetics panel for chart 
 
 ## 🔗 Related
 
-- 📊 **[Signals](signals.en.md)** — Overlay technical indicators
-- 📐 **[Measures](measures.en.md)** — Measure price differences
-- 📅 **[Events](events.en.md)** — Understand event markers
+- 📊 **[Signals](signals.md)** — Overlay technical indicators
+- 📐 **[Measures](measures.md)** — Measure price differences
+- 📅 **[Events](events.md)** — Understand event markers
 

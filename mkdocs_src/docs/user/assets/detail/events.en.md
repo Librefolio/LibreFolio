@@ -18,7 +18,7 @@ For a deep dive into each event type — including market impact, formulas, and 
 
 ## 📈 Event Markers on the Chart
 
-Events appear as **colored markers** on the [price chart](chart.en.md). Each event type has a distinct color and icon. Hover over a marker to see the event details (date, type, value, currency).
+Events appear as **colored markers** on the [price chart](chart.md). Each event type has a distinct color and icon. Hover over a marker to see the event details (date, type, value, currency).
 
 ## ⚙️ Where Events Come From
 
@@ -28,8 +28,8 @@ Events can be generated in two ways:
 
 Some providers produce events during sync:
 
-- **[Scheduled Investment](../providers/scheduled-investment.en.md)**: generates INTEREST and PRICE_ADJUSTMENT events from the interest schedule configuration
-- **[Yahoo Finance](../providers/yahoo-finance.en.md)**: may produce DIVIDEND events from historical data
+- **[Scheduled Investment](../providers/scheduled-investment.md)**: generates INTEREST and PRICE_ADJUSTMENT events from the interest schedule configuration
+- **[Yahoo Finance](../providers/yahoo-finance.md)**: may produce DIVIDEND events from historical data
 
 Provider-generated events have a `provider_assignment_id` and are automatically updated during sync (DELETE + INSERT deduplication on `asset_id, date, type`).
 
@@ -53,8 +53,8 @@ For market-priced assets (Yahoo Finance, justETF), events are informational — 
 
 ## 🔗 Related
 
-- 📈 **[Interactive Chart](chart.en.md)** — Event markers on the chart
-- ✏️ **[Data Editor](data-editor.en.md)** — Manual event management with CSV import
-- 🧮 **[Scheduled Investment](../providers/scheduled-investment.en.md)** — Provider that generates events from interest schedules
+- 📈 **[Interactive Chart](chart.md)** — Event markers on the chart
+- ✏️ **[Data Editor](data-editor.md)** — Manual event management with CSV import
+- 🧮 **[Scheduled Investment](../providers/scheduled-investment.md)** — Provider that generates events from interest schedules
 - 📚 **[Asset Events (Financial Theory)](../../../financial-theory/instruments/asset-events/index.md)** — Detailed analysis of each event type
 - 💸 **[Transaction Types (Financial Theory)](../../../financial-theory/instruments/transaction-types/index.md)** — Transactions vs events

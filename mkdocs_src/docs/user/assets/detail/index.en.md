@@ -12,27 +12,27 @@ The detail page is organized into several features, each accessible from the too
 
 ## 🧭 Features
 
-### 📈 [Interactive Chart](chart.en.md)
+### 📈 [Interactive Chart](chart.md)
 
 The main view — a full ECharts-powered chart with zoom, pan, date range filtering, and currency conversion. Event markers (dividends, splits, interest) are overlaid directly on the price line.
 
-### 📊 [Signals](signals.en.md)
+### 📊 [Signals](signals.md)
 
 Overlay technical indicators (EMA, MACD, RSI, Bollinger Bands, Asset Comparison) on the chart. Each signal is computed in real-time from the price data and can be toggled independently.
 
-### 📐 [Measures](measures.en.md)
+### 📐 [Measures](measures.md)
 
 Click-to-click measurement tool. Select two points on the chart to see the delta, percentage change, and annualized return between them.
 
-### 🗂️ [Classification](classification.en.md)
+### 🗂️ [Classification](classification.md)
 
 Sector pie chart, geographic world map, and country breakdown — when classification data is configured for the asset.
 
-### ✏️ [Data Editor](data-editor.en.md)
+### ✏️ [Data Editor](data-editor.md)
 
 View, add, edit, or delete individual price data points directly on the chart.
 
-### 📅 [Events](events.en.md)
+### 📅 [Events](events.md)
 
 Asset-level events (dividends, interest, splits, price adjustments) shown as markers on the chart.
 
@@ -50,6 +50,6 @@ Asset-level events (dividends, interest, splits, price adjustments) shown as mar
 
 ## 🔗 Related
 
-- ➕ **[Create & Edit](../create-edit.en.md)** — Creating and configuring assets
+- ➕ **[Create & Edit](../create-edit.md)** — Creating and configuring assets
 - 📋 **[Asset Overview](../index.md)** — Back to the asset list page
 

@@ -1,8 +1,8 @@
-# 🖼️ Galleria LibreFolio
+# 🖼️ Galleria di LibreFolio
 
-Benvenuti nella galleria visiva di LibreFolio! Qui puoi esplorare tutte le funzionalità della nostra piattaforma di gestione del portafoglio attraverso screenshot.
+Benvenuti nella galleria visiva di LibreFolio! Qui potete esplorare tutte le funzionalità della nostra piattaforma di gestione del portafoglio attraverso degli screenshot.
 
-## 👁️ Scegli la Vista
+## 👁️ Scegli la vista
 
 <div class="gallery-cards">
  <a href="desktop/" class="gallery-card">
@@ -13,33 +13,34 @@ Benvenuti nella galleria visiva di LibreFolio! Qui puoi esplorare tutte le funzi
  <a href="mobile/" class="gallery-card">
  <span class="gallery-icon">📱</span>
  <h3>Vista Mobile</h3>
- <p>Design responsive ottimizzato per touchscreen</p>
+ <p>Design responsive ottimizzato per schermi touch</p>
  </a>
 </div>
 
 ## ✨ Funzionalità in Evidenza
 
-!!! tip "Cosa Vedrai"
+!!! tip "Cosa vedrai"
 
- - **Autenticazione**: Login sicuro con indicatore di forza della password
- - **Dashboard**: Panoramica rapida del tuo portafoglio
- - **Broker**: Gestisci più conti brokerage
- - **File**: Carica e gestisci report dei broker con viste a griglia e tabella
- - **Impostazioni**: Personalizza la tua esperienza in 4 lingue
- - **Profilo**: Gestione avatar e impostazioni account
- - **File multimediali e caricamento**: Ritaglio/modifica immagini, selettore asset, rinomina file
- - **Tassi di Cambio**: Coppie valutarie, grafici, sincronizzazione, editor dati, importazione CSV
+    - **Autenticazione**: Login sicuro con indicatore della forza della password
+    - **Dashboard**: Panoramica rapida del tuo portafoglio
+    - **Broker**: Gestione di più conti broker
+    - **File**: Caricamento e gestione dei report dei broker con viste a griglia e tabella
+    - **Impostazioni**: Personalizza la tua esperienza in 4 lingue
+    - **Profilo**: Gestione dell'avatar e impostazioni dell'account
+    - **Media e Caricamento**: Ritaglio/modifica immagini, selettore di asset, rinomina file
+    - **Tassi di cambio**: Coppie di valute, grafici, sincronizzazione, editor dati, importazione CSV
+    - **Asset**: Monitoraggio di azioni, ETF, obbligazioni, crypto con grafici, segnali, misure e classificazione
 
 ## 🌍 Supporto Linguistico
 
 LibreFolio è disponibile in:
 
 | Lingua | Bandiera | Stato |
-|--------|----------|-------|
-| Inglese | 🇬🇧 | ✅ Completo |
-| Italiano | 🇮🇹 | ✅ Completo |
-| Francese | 🇫🇷 | ✅ Completo |
-| Spagnolo | 🇪🇸 | ✅ Completo |
+|----------|------|------------|
+| English | 🇬🇧 | ✅ Completa |
+| Italiano | 🇮🇹 | ✅ Completa |
+| Français | 🇫🇷 | ✅ Completa |
+| Español | 🇪🇸 | ✅ Completa |
 
 ---
 

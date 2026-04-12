@@ -1,84 +1,135 @@
 # 🐳 Installation (Utilisateur)
 
-Ce guide explique comment déployer LibreFolio pour **un usage courant** à l'aide de Docker. C'est la méthode recommandée pour les utilisateurs qui n'ont pas l'intention de modifier le code source.
+Ce guide explique comment déployer LibreFolio pour un usage régulier en utilisant Docker. C'est la méthode recommandée pour les utilisateurs qui n'ont pas l'intention de modifier le code source.
 
 ## ✅ Prérequis
 
-- 🐋 **Docker** : [Installer Docker](https://docs.docker.com/get-docker/)
-- 🔗 **Docker Compose** : Généralement inclus avec Docker Desktop.
+- 🐍 **Python 3.13+** : [Installer Python](https://www.python.org/downloads/)
+- 📦 **Node.js 20.19+** : [Installer Node.js](https://nodejs.org/) (inclut npm)
+- 📋 **Pipenv** : `pip install pipenv`
+- 🐋 **Docker** : [Installer Docker](https://docs.docker.com/get-docker/) (inclut Docker Compose)
 
-## 📥 1. Télécharger le projet
+!!! warning "Groupe Docker (Linux)"
 
-Téléchargez la dernière version depuis la page [GitHub Releases](https://github.com/ea-enel/LibreFolio/releases). Décompressez le dossier.
+    Sur Linux, votre utilisateur doit appartenir au groupe `docker` pour exécuter les commandes Docker sans `sudo` :
 
-Alternativement, vous pouvez cloner le dépôt :
+    ```bash
+    sudo usermod -aG docker $USER
+    ```
+
+    Ensuite, **déconnectez-vous et reconnectez-vous**, ou exécutez `newgrp docker` pour activer le groupe dans la session actuelle.
+
+!!! note "Pourquoi Python et Node.js ?"
+
+    LibreFolio utilise une **image Docker d'exécution seule** — le frontend et la documentation sont construits sur l'hôte avant d'être empaquetés dans l'image Docker. Des images pré-construites sur un registre de conteneurs sont prévues pour les prochaines versions.
+
+## 📥 1. Télécharger le Projet
+
+Clonez le dépôt :
 
 ```bash
-git clone https://github.com/ea-enel/LibreFolio.git
+git clone https://github.com/Alfystar/LibreFolio.git
 cd LibreFolio
 ```
 
-## ⚙️ 2. Configurer l'environnement
+Ou téléchargez la dernière version depuis [GitHub Releases](https://github.com/Alfystar/LibreFolio/releases) et dézippez-la.
 
-Le projet utilise un fichier `.env` pour la configuration. Un fichier d'exemple est fourni.
+## ⚙️ 2. Configurer l'Environnement
 
-1. **Copiez le fichier d'exemple** :
+1. **Copiez le fichier d'exemple** (requis — le build refusera de continuer sans `.env`) :
+
  ```bash
  cp .env.example .env
  ```
 
-2. **Éditez `.env`** (Optionnel) :
- - 🔌 `PORT` : Modifiez le port si `8000` est déjà utilisé.
- - 📁 `LIBREFOLIO_DATA_DIR` : Changez l'emplacement de stockage des données (par défaut : `./backend/data/prod`).
+2. **Modifiez `.env`** pour personnaliser :
 
-## 🚀 3. Lancer avec Docker Compose
+ - 🔌 `PORT` : Changez le port si `8000` est déjà utilisé.
+ - 💰 `PORTFOLIO_BASE_CURRENCY` : Votre devise de base du portefeuille (par défaut : `EUR`).
+ - 📊 `LOG_LEVEL` : Verbosité des journaux (par défaut : `INFO`).
 
-**Cette seule commande va générer** les images et démarrer l'application.
-
-```bash
-docker-compose up -d
-```
-
-- 🔄 `-d` exécute l'application **en mode détaché** (en arrière-plan).
-- ⏳ La première fois, Docker téléchargera les images de base nécessaires et générera l'application, ce qui peut prendre quelques minutes.
-
-## 👤 4. Créer un superutilisateur
-
-Pour vous connecter, vous devez créer **un compte admin**. Le premier utilisateur créé devient automatiquement le superutilisateur.
-
-Exécutez la commande suivante (via `docker-compose exec` dans le conteneur `backend` en utilisant le script `dev.py`) :
+## 📦 3. Installer les Dépendances
 
 ```bash
-docker-compose exec backend ./dev.py user create <nom_utilisateur> <email> <mot_de_passe>
+./dev.py install
 ```
 
-Remplacez `<nom_utilisateur>`, `<email>` et `<mot_de_passe>` par vos identifiants.
+Ceci installe les dépendances Python (backend) et Node.js (frontend).
 
-## 🌐 5. Accéder à LibreFolio
+## 🏗️ 4. Construire l'Image Docker
 
-L'application est maintenant en cours d'exécution ! Ouvrez votre navigateur et allez à :
+```bash
+./dev.py docker build
+```
+
+Cette commande effectue automatiquement :
+
+1. La construction du frontend (build de production SvelteKit)
+2. La construction du site de documentation (MkDocs)
+3. L'empaquetage de l'ensemble des composants dans une seule image Docker taguée `librefolio:latest`
+
+## 🚀 5. Démarrer avec Docker Compose
+
+```bash
+docker compose up -d
+```
+
+- 🔄 `-d` exécute l'application en mode détaché (en arrière-plan).
+
+## 🌐 6. Accéder à LibreFolio
+
+Ouvrez votre navigateur et allez à l'adresse :
 
 **`http://localhost:8000`**
 
-(Ou utilisez le port configuré dans `.env`).
+(Ou utilisez le port que vous avez configuré dans `.env`).
+
+La première fois que vous accéderez à LibreFolio, une **page d'inscription** s'affichera — créez votre compte directement depuis le navigateur. Le premier utilisateur enregistré devient automatiquement l'administrateur.
+
+Points de terminaison disponibles :
+
+- 🏠 **Frontend** : `http://localhost:8000/`
+- 📚 **Docs Utilisateur** : `http://localhost:8000/mkdocs/`
+
+!!! tip "Gestion des utilisateurs via CLI"
+
+    Vous pouvez également gérer les utilisateurs depuis la ligne de commande. Consultez le [Manuel Admin — Outils CLI](../admin/cli_tools.md) pour les commandes de création, de promotion et de listage des utilisateurs.
 
 ## 🔄 Mettre à jour LibreFolio
 
-Pour mettre à jour vers une nouvelle version :
+Pour passer à une nouvelle version :
 
-1. **Récupérer la dernière version du code** :
+1. **Récupérez la dernière version du code** :
+
  ```bash
  git pull
  ```
 
-2. **Reconstruire et redémarrer les conteneurs** :
+2. **Reconstruisez l'image Docker** (reconstruit automatiquement le frontend et la doc si modifiés) :
+
  ```bash
- docker-compose up -d --build
+ ./dev.py docker rebuild
  ```
 
-3. **Appliquer les migrations** (le cas échéant) :
- ```bash
- docker-compose exec backend pipenv run alembic upgrade head
- ```
+ Cette commande construit une nouvelle image, arrête les conteneurs en cours et redémarre avec la nouvelle version.
+
+3. Les **migrations de base de données** sont appliquées automatiquement au démarrage.
+
+## 🧪 Essayer avec des Données de Test (Optionnel)
+
+Vous pouvez démarrer un serveur de test avec des données fictives pré-remplies pour explorer l'application avant d'y saisir des données réelles :
+
+```bash
+./dev.py docker exec test db populate --force --with-static
+./dev.py docker exec server --test
+```
+
+Accédez à **`http://localhost:8001`** avec l'utilisateur `e2e_test_user` / `E2eTestPass123!`.
+
+Le serveur de test s'exécute parallèlement au serveur de production, en utilisant une base de données séparée. Voir le [Guide Docker Avancé](../admin/docker_advanced.md#test-mode) pour plus de détails.
 
 ---
+
+!!! tip "Sujets avancés"
+
+    Pour la configuration d'un reverse proxy, les sauvegardes de base de données, les chemins de données personnalisés et les considérations de production, consultez le [🐳 Guide Docker Avancé](../admin/docker_advanced.md).

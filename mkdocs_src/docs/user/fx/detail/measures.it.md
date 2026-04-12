@@ -1,6 +1,6 @@
 # 📐 Misure
 
-Il pannello Misure fornisce uno **strumento di misurazione da clic a clic** per analizzare i movimenti dei tassi tra qualsiasi coppia di punti sul grafico.
+Il pannello Misure fornisce uno **strumento di misurazione click-to-click** per analizzare i movimenti dei tassi tra due punti qualsiasi sul grafico.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Pannello Misure FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -8,44 +8,44 @@ Il pannello Misure fornisce uno **strumento di misurazione da clic a clic** per 
 
 ---
 
-## 🖱️ Come utilizzare
+## 🖱️ Come Usarlo
 
-1. Fai clic sul pulsante **Misure** (📏) nella barra degli strumenti del grafico
-2. Il pannello Misure si apre sotto il grafico
-3. **Fai clic** su un punto iniziale sul grafico — questo imposta la data e il tasso 'da'
-4. **Fai clic** su un punto finale — questo imposta la data e il tasso 'a'
+1. Clicca sull'**interruttore** Misure (📏) nella barra degli strumenti del grafico
+2. Il pannello misure si apre sotto il grafico
+3. **Clicca** su un punto di partenza sul grafico — questo imposta la data e il tasso di partenza
+4. **Clicca** su un punto di arrivo — questo imposta la data e il tasso di arrivo
 5. Il pannello mostra immediatamente le metriche calcolate tra i due punti
 
 ---
 
-## 📊 Metriche calcolate
+## 📊 Metriche Calcolate
 
-Per ogni misurazione, il pannello mostra:
+Per ogni misurazione, il pannello visualizza:
 
 | Metrica | Descrizione | Esempio |
-|---------|-------------|---------|
-| **Intervallo di date** | Da → A date | 15 gen 2024 → 20 mar 2024 |
+|--------|-------------|---------|
+| **Intervallo Date** | Date Da → A | 15 gen 2024 → 20 mar 2024 |
 | **Giorni** | Giorni di calendario tra i due punti | 65 giorni |
 | **Delta (Δ)** | Variazione assoluta del tasso | +0,0342 |
 | **Percentuale (%)** | Variazione relativa in percentuale | +3,12% |
-| **Rendimento annualizzato** | Rendimento annuo proiettato basato sul periodo misurato | +17,8% p.a. |
+| **Rendimento Annualizzato** | Rendimento annuale proiettato in base al periodo misurato | +17,8% p.a. |
 
-!!! info "📚 Rendimento annualizzato"
+!!! info "📚 Rendimento Annualizzato"
 
-    Il rendimento annualizzato utilizza la formula del **Compound Annual Growth Rate (CAGR, tasso di crescita annuo composto)**. Per una spiegazione completa che includa i rendimenti logaritmici, il compounding e quando utilizzare ciascun metodo, vedere:
+    Il rendimento annualizzato utilizza la formula del **Compound Annual Growth Rate (CAGR)**. Per una spiegazione completa che includa i rendimenti logaritmici, la capitalizzazione e quando utilizzare ogni metodo, consulta:
 
-    :material-book-open-variant: **[Rendimenti e tassi di crescita — Teoria finanziaria](../../../financial-theory/fundamentals/returns.md)**
+    :material-book-open-variant: **[Rendimenti e Tassi di Crescita — Teoria Finanziaria](../../../financial-theory/fundamentals/returns.md)**
 
 ---
 
-## 🔁 Misure multiple
+## 🔁 Misurazioni Multiple
 
-Puoi eseguire più misurazioni in sequenza — ogni nuova coppia di clic sostituisce la misurazione precedente. Questo ti permette di confrontare rapidamente i movimenti in diverse finestre temporali.
+È possibile effettuare più misurazioni in sequenza — ogni nuova coppia di click sostituisce la misurazione precedente. Ciò consente di confrontare rapidamente i movimenti su diverse finestre temporali.
 
 ---
 
 ## 💡 Suggerimenti
 
-- 🔍 **Effettua lo zoom** prima di misurare per una maggiore precisione sui punti di clic
-- 📰 Utilizza le misurazioni per confrontare i movimenti dei tassi **prima e dopo l'evento** (ad esempio, prima e dopo un annuncio della banca centrale)
+- 🔍 **Effettua lo zoom** prima di misurare per una migliore precisione sui punti di click
+- 📰 Usa le misurazioni per confrontare i movimenti dei tassi **pre/post evento** (ad esempio, prima e dopo l'annuncio di una banca centrale)
 - ⚠️ Il rendimento annualizzato è più significativo per periodi di **30+ giorni** — periodi molto brevi possono produrre cifre annualizzate fuorvianti

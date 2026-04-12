@@ -1,51 +1,51 @@
 # 💼 Asset
 
-Gli asset sono il cuore di LibreFolio. Rappresentano qualsiasi strumento finanziario che possiedi o monitori: azioni, ETF, obbligazioni, criptovalute o strumenti personalizzati come conti deposito con interessi programmati.
+Gli asset sono il cuore di LibreFolio. Rappresentano qualsiasi strumento finanziario posseduto o monitorato: azioni, ETF, obbligazioni, criptovalute o strumenti personalizzati come conti di risparmio con interessi programmati.
+
+<div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="assets" data-name="list" alt="Pagina elenco Asset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ## 📌 Cos'è un Asset?
 
-Un asset in LibreFolio è uno strumento finanziario con:
+Un asset in LibreFolio è uno strumento finanziario caratterizzato da:
 
 - **Identità**: nome, ISIN, ticker o altri identificativi
-- **Categoria**: azione, ETF, obbligazione, crypto, commodity, ecc.
-- **Provider**: un fornitore di prezzi opzionale che recupera automaticamente prezzi attuali e storici
-- **Transazioni**: operazioni di acquisto, vendita, dividendo, interesse collegate a un portafoglio
+- **Categoria**: azione, ETF, obbligazione, criptovalute, materia prima, ecc.
+- **Valuta**: la valuta in cui l'asset è denominato
+- **Provider**: un provider di prezzi opzionale che recupera automaticamente i prezzi attuali e lo storico
+- **Classificazione**: settore e distribuzione geografica (grafici a torta + mappa del mondo)
+- **Transazioni**: operazioni di acquisto, vendita, dividendi e interessi collegate a un portafoglio
 
-## ➕ Creare un Asset
+## 📋 Elenco Asset
 
-1. Vai alla sezione **Asset** nella barra laterale
-2. Clicca **+ Nuovo Asset**
-3. Compila le informazioni di base:
-    - **Nome** (obbligatorio)
-    - **Categoria** (obbligatorio)
-    - **Valuta** (obbligatorio)
-    - **Identificativi**: ISIN, ticker, CUSIP, SEDOL, ecc.
-4. Configura opzionalmente un **Provider** per il recupero automatico dei prezzi
-5. Clicca **Salva**
+Naviga verso **Asset** nella barra laterale per visualizzare tutti i tuoi asset. La pagina dell'elenco fornisce:
 
-## 🛠️ Gestione degli Asset
+- **Ricerca**: filtra gli asset per nome, ISIN o ticker
+- **Filtro tipo**: mostra solo tipi specifici di asset (ETF, Azioni, Obbligazioni, ecc.)
+- **Interruttore Attivi/Tutti**: mostra solo gli asset attivi o includi quelli archiviati
+- **Sync All**: recupera gli ultimi prezzi per tutti gli asset dotati di provider
+- **Refresh All**: ricarica i dati degli asset dal database
 
-### ✏️ Modifica
+Clicca su qualsiasi scheda asset per navigare alla sua **[pagina di dettaglio](detail/index.md)**.
 
-Clicca su qualsiasi riga asset per aprire il modale di dettaglio. Tutti i campi sono modificabili.
+## 🧭 Funzionalità
 
-### 🗑️ Eliminazione
+### ➕ [Creazione e Modifica](create-edit.md)
 
-Usa il pulsante elimina (🗑️) sulla riga, oppure seleziona più asset e usa l'eliminazione in blocco.
+Guida passo-passo per la creazione di nuovi asset, la configurazione dei provider e la modifica di asset esistenti.
 
-### 🧪 Test Configurazione Provider
+### 📊 [Pagina di Dettaglio Asset](detail/index.md)
 
-Dopo aver configurato un provider, clicca **Test Configurazione** per verificare che i dati di prezzo possano essere recuperati. Il test verifica:
+Il cuore dell'analisi degli asset: grafico interattivo, segnali tecnici, misure, classificazione ed editor dei dati.
 
-- **Prezzo Attuale**: recupera l'ultimo prezzo
-- **Storico**: recupera i dati storici dei prezzi (se supportato)
+### 🔌 [Provider](providers/index.md)
 
-I risultati vengono mostrati inline con i tempi di esecuzione. Un ⚠️ avviso indica che l'operazione non è supportata dal provider (es. CSS Scraper non supporta lo storico).
+Recupero automatico dei prezzi da Yahoo Finance, justETF, CSS Scraper o dal motore di Investimenti Programmati.
 
-## 🔌 Assegnazione Provider
+---
 
-Ogni asset può avere un provider di prezzi assegnato. Vedi [Provider](providers/index.en.md) per dettagli sui provider disponibili e la loro configurazione.
+## 🔗 Correlati
 
-## ⏱️ Intervallo di Fetch
-
-L'intervallo di fetch controlla quanto spesso LibreFolio aggiorna automaticamente i dati di prezzo dell'asset. Il valore predefinito è 24 ore (24:00). Formato: `HH:MM`.
+- 📚 **[Teoria Finanziaria — Tipi di Asset](../../financial-theory/instruments/asset-types/index.md)** — Azioni, ETF, Obbligazioni, Criptovalute, ecc.
+- 💱 **[Tassi di cambio FX](../fx/index.md)** — Tassi di cambio utilizzati per la conversione tra diverse valute

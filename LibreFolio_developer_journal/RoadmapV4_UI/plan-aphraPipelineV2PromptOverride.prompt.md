@@ -656,6 +656,66 @@ BOLD_MARKERS: source=24, translated=23 (Δ-1)
     TR: Vous pouvez activer les **Intérêts de retard** pour définir... Un délai de grâce
 ```
 
+#### Step 8 — Post-pipeline fixes: admonition indentation + bold cleanup + diff CLI
+
+After the full translation run (201 tasks, 67 files × 3 langs), the final structural diff
+flagged 10 files with issues. Investigation revealed **two systemic problems** plus several
+one-off bold mismatches.
+
+##### 8a. Admonition indentation auto-fix (`_clean_translation()` step 10)
+
+**Problem:** LLMs consistently produce admonition body content with **1 space** indentation
+instead of the **4 spaces** required by MkDocs Material. This breaks admonition rendering
+across the entire translated documentation.
+
+**Scale:** 632 lines across 131 files affected.
+
+**Fix — auto-correct in pipeline:** Added step 10 to `_clean_translation()` that runs on
+every translation before writing to disk:
+- Detects `!!! type "title"` → blank line → body starting with 1 space
+- Pads to 4 spaces (`'   ' + line`)
+- Tracks `in_admonition` / `after_blank` state to handle multi-line bodies
+
+**Also retroactively fixed** all existing translations via a one-off batch script.
+
+##### 8b. Bold markers cleanup
+
+Fixed bold markers that differed from EN source across multiple files:
+
+| File | Lang | Fix |
+|------|------|-----|
+| `classification.it.md` | it | `**interruttore** **Classificazione**` → `pulsante interruttore **Classificazione**` |
+| `classification.es.md` | es | `**interruptor** de **Clasificación**` → `botón interruptor **Clasificación**` |
+| `linear.es.md` | es | Removed spurious `**descripción general**` |
+| `portfolio-theory/index.fr.md` | fr | Removed spurious `**Des rendements attendus**` |
+| `credits-legal.es.md` | es | Removed spurious `**open-source**` |
+| `admin/index.it.md` | it | Added missing `**JWT (JSON Web Token)**` |
+| `getting-started.fr.md` | fr | Removed spurious `**barre latérale**` |
+| `sharing.it.md` | it | Removed 10 extra bolds on role names (Proprietario, Editor, etc.) |
+| `sync.es.md` | es | Removed 3 extra bolds on `**fallback**` |
+| `provider.it.md` | it | Removed extra bold on `**fallback**` |
+| `provider.es.md` | es | Removed extra bold on `**arrastre y suelte…**` |
+
+##### 8c. Other fixes
+
+- **`returns.it.md`** — Broken markdown link `'Measures' [url]` → `[Measures](url)`
+- **`day-count.it/fr/es.md`** — Admonition indentation (before auto-fix was added)
+- **`indicators/index.es.md`** — Admonition indentation + expanded body to multi-line
+
+##### 8d. `--issues-only` / `-w` flag for diff CLI
+
+Added `--issues-only` (`-w`) flag to the `translate-diff` command to suppress clean files
+and show only warnings/errors. Essential for global diff runs (270 file checks produce
+too much output without filtering).
+
+```bash
+# Before: floods with 264 ✅ lines
+pipenv run python mkdocs_src/aphra-pipeline/translate_docs.py diff
+
+# After: shows only the 6 issues
+pipenv run python mkdocs_src/aphra-pipeline/translate_docs.py diff --issues-only
+```
+
 ### 📋 Still TODO
 
 - [x] ~~Run full translation suite~~ (done: 59/93 success, 21 failed from rate limits)
@@ -666,5 +726,10 @@ BOLD_MARKERS: source=24, translated=23 (Δ-1)
 - [x] ~~Fix scheduled-investment.fr.md BOLD_MARKERS~~ (missing **délai de grâce**)
 - [x] ~~Fix source files: replace `.en.md` → `.md` in internal links~~
 - [x] ~~Re-run remaining 7 failed translations~~ (2nd run, all succeeded)
+- [x] ~~Full pipeline run (201 tasks, 67 files × 3 langs)~~ — all translations completed
+- [x] ~~Admonition indentation auto-fix~~ (step 10 in `_clean_translation()`, 632 lines / 131 files)
+- [x] ~~Bold markers cleanup~~ (11 files fixed across it/fr/es)
+- [x] ~~`--issues-only` diff flag~~ (`-w` for filtered output)
+- [x] ~~Final structural diff: 270/270 clean~~ ✅
 - [ ] Tune glossary terms based on actual output review
 - [ ] Update `03_documentation.md` knowledge base with new pipeline architecture
