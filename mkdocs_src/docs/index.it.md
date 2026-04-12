@@ -2,7 +2,7 @@
 hide:
  - navigation
  - toc
-description: Riprendi il controllo dei tuoi dati finanziari. LibreFolio è la dashboard di investimento self-hosted, orientata alla privacy, per tutto il tuo portafoglio.
+description: Libero di capire, libero di agire. LibreFolio racchiude tutti i tuoi investimenti in una dashboard privata e sicura con potenti strumenti di analisi.
 ---
 
 <!-- Animated Background -->
@@ -20,21 +20,25 @@ description: Riprendi il controllo dei tuoi dati finanziari. LibreFolio è la da
 <div class="home-header">
  <div class="home-logo-container">
  <div class="home-logo">
- <img src="static/logo.png" alt="LibreFolio Logo"/>
+ <img id="home-logo-img" alt="LibreFolio Logo"/>
+ <script>
+ (function() {
+ var p = window.location.pathname.replace(/\/+$/, '');
+ var base = p.replace(/\/(it|fr|es)$/, '');
+ document.getElementById('home-logo-img').src = base + '/static/logo.png';
+ })();
+ </script>
  </div>
- <a id="dashboard-link" href="http://localhost:8000" class="md-button md-button--primary md-button--large" style="width: 100%; text-align: center;">
- Avvia la Dashboard 🚀
- </a>
  </div>
  <div class="home-content">
  <h1>LibreFolio</h1>
- <h2><strong>La tua ricchezza, le tue regole.</strong></h2>
+ <h2><strong>Libero di capire, libero di agire.</strong></h2>
  <p class="mission">
- Sperimenta la libertà della vera sovranità finanziaria.
+ Racchiudi tutti i tuoi investimenti in una dashboard privata e sicura.
  <br>
- Raccogli tutti i tuoi asset in un'unica dashboard sicura e self-hosted.
+ I tuoi dati prendono voce grazie a strumenti di analisi pensati per te.
  <br><br>
- Controllo totale, zero compromessi.
+ Tutto chiaro, tutto sotto controllo — perché le buone decisioni partono da buone informazioni.
  </p>
 
  </div>

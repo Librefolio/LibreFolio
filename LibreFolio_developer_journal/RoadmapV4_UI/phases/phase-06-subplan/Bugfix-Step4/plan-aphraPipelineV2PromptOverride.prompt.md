@@ -731,5 +731,7 @@ pipenv run python mkdocs_src/aphra-pipeline/translate_docs.py diff --issues-only
 - [x] ~~Bold markers cleanup~~ (11 files fixed across it/fr/es)
 - [x] ~~`--issues-only` diff flag~~ (`-w` for filtered output)
 - [x] ~~Final structural diff: 270/270 clean~~ ✅
-- [ ] Tune glossary terms based on actual output review
-- [ ] Update `03_documentation.md` knowledge base with new pipeline architecture
+- [x] ~~Fix broken `.en.md` links in developer backend docs~~ (5 files, 12 occurrences)
+- [x] ~~Fix missing `#test-mode` anchor in translated docker_advanced~~ (attr_list `{ #test-mode }`)
+- [~] ~~Tune glossary terms~~ — Not needed: output quality sufficient with structural diff + auto-fix pipeline
+- [x] ~~Update `03_documentation.md` knowledge base~~ — Section 6 expanded with full pipeline architecture

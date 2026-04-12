@@ -6,11 +6,22 @@ Benvenuti nelle FAQ di LibreFolio. Qui troverete le risposte alle domande più c
 
 ### 🤔 Cos'è LibreFolio?
 
-LibreFolio è un tracker di portafoglio open-source e self-hosted progettato per investitori attenti alla privacy. Consente di monitorare i propri investimenti, analizzare le performance e mantenere il pieno controllo dei propri dati finanziari.
+LibreFolio è un tracker di portafoglio open-source che ti offre una vista completa e privata di tutti i tuoi investimenti. Potenti strumenti di analisi danno voce ai tuoi dati — così puoi prendere decisioni informate con piena fiducia e pieno controllo.
 
 ### 💰 LibreFolio è gratuito?
 
-Sì! LibreFolio è completamente gratuito e open-source sotto la [licenza AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+Sì! LibreFolio è completamente gratuito e open-source sotto la [licenza AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Puoi installarlo sul tuo server e gestire tutto autonomamente senza alcun costo.
+
+!!! info "Prossimamente: piattaforma online ☁️"
+
+    Stiamo lavorando a una piattaforma online per chi non ha il tempo, l'interesse o le competenze tecniche per installare LibreFolio in autonomia. La versione ospitata offrirà tutte le funzionalità senza alcuna configurazione, con aggiornamenti automatici e supporto dedicato — disponibile in abbonamento.
+
+### 🤖 Sono previste funzionalità AI?
+
+Sì! La nostra roadmap include **assistenti basati sull'intelligenza artificiale** per aiutarti ad analizzare il tuo portafoglio, individuare tendenze e prendere decisioni più informate.
+
+- **Self-hosted**: puoi connettere i tuoi modelli AI e gestire tutto in autonomia
+- **Piattaforma online**: gli assistenti AI saranno completamente integrati — pronti all'uso senza alcuna configurazione, con supporto premium
 
 ### 📊 Quali asset posso monitorare?
 

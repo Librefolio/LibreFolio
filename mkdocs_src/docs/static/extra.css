@@ -606,9 +606,6 @@
 
 /* Home Header Adjustments for Animation */
 .home-header {
-    display: flex;
-    align-items: flex-start; /* Align top */
-    gap: 3rem;
     margin-bottom: 3rem;
     margin-top: 2rem;
     position: relative; /* Ensure z-index works if needed */
@@ -616,14 +613,13 @@
     max-width: 1200px; /* Match grid cards width */
     margin-left: auto;
     margin-right: auto;
+    overflow: hidden; /* Clear floats */
 }
 
 .home-logo-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1.5rem;
-    flex-shrink: 0; /* Prevent shrinking */
+    float: left;
+    margin-right: 3rem;
+    margin-bottom: 1rem;
 }
 
 .home-logo img {
@@ -632,7 +628,6 @@
 }
 
 .home-content {
-    flex-grow: 1;
     padding-top: 1rem;
 }
 
@@ -838,9 +833,21 @@
 /* Responsive Home Header */
 @media screen and (max-width: 768px) {
     .home-header {
-        flex-direction: column;
-        align-items: center;
         text-align: center;
+    }
+
+    .home-logo-container {
+        float: none;
+        margin-right: 0;
+        text-align: center;
+    }
+
+    .home-logo-container .home-logo {
+        display: inline-block;
+    }
+
+    .home-content {
+        overflow: visible;
     }
 
     .home-content h1 {

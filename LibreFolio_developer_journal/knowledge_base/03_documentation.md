@@ -139,8 +139,53 @@ Code block `text` con box-drawing Unicode (`├──`, `└──`, `│`). Max
 - **Strategia**: `mkdocs-static-i18n` con suffix (`index.en.md`, `index.it.md`)
 - **Lingue**: EN (sorgente) → IT, FR, ES
 - **LLM**: Aphra workflow (Analyze → Translate → Critique → Refine)
-- **Scope**: 36 file (user + admin + financial-theory + gallery + root). Developer = EN-only.
-- **Comandi**: `./dev.py mkdocs translate`, `translate-validate`, `translate-diff`, `translate-inspect`
+- **Scope**: 90 file sorgente (user + admin + financial-theory + gallery + root). Developer = EN-only.
+- **EN-only sections**: `Developer Manual`, `POC UX` (configurato in `EN_ONLY_SECTIONS`)
+
+### Comandi CLI
+
+| Comando | Descrizione |
+|---------|-------------|
+| `./dev.py mkdocs translate` | Esegui traduzione (con `--file`, `--lang`, `--workers`) |
+| `./dev.py mkdocs translate-diff` | Structural diff EN vs traduzioni (con `--issues-only`, `-v`) |
+| `./dev.py mkdocs translate-check` | Verifica setup pipeline |
+| `./dev.py mkdocs translate-inspect` | Ispeziona artefatti cache (analysis, critique, diff) |
+| `./dev.py mkdocs translate-validate` | Validazione offline (indentazione, artefatti, LaTeX) |
+
+### Architettura Pipeline v2
+
+```text
+Per ogni file .en.md:
+  [1] Analyze (shared)  ─── 1 chiamata, riusata per tutte le lingue
+  Per ogni lingua (parallelizzabile con --workers N):
+    [2] Search (disabled)  ─── APHRA_WEB_SEARCH=false
+    [3] Translate
+    [4] Critique  ─── riceve structural diff (13 dimensioni) come dati oggettivi
+    [5] Refine
+    → _clean_translation() ─── 10 step di pulizia automatica
+    → write .XX.md
+```
+
+### `_clean_translation()` — 10 step automatici
+
+1. Strip `<translation>` tags
+2. Rimuovi "Translator's Notes" (6+ varianti multilingual)
+3. Rimuovi glossary block `[N] term: definition`
+4. Strip inline `[N]` markers (preserva link markdown)
+5. Rimuovi footnote definitions `[^N]: ...`
+6. Strip inline footnote references `[^N]`
+7. Normalizza doppi spazi
+8. Collassa 3+ blank lines → 2
+9. Normalizza link interni (`.XX.md` → `.md`)
+10. **Fix indentazione admonition** (1 spazio → 4 spazi per MkDocs)
+
+### Structural Diff — 13 dimensioni
+
+Confronto deterministico EN vs traduzione su: heading count/levels, code blocks, link URLs/count, image URLs, admonitions, horizontal rules, bullet lists, numbered lists, table rows, bold markers, line count. Report con dettaglio per-riga (L{n}: src={x} trn={y}).
+
+### Cache
+
+File `.translate-hashes.json`: MD5 del sorgente + lingue tradotte + artefatti (analysis, critique, diff). Skip automatico se MD5 non cambiato.
 
 Per dettagli completi: vedi `mkdocs_src/docs/developer/docs/translation-pipeline.md`.
 
