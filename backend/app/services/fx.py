@@ -21,9 +21,14 @@ from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.refresh import FXSyncPairResult, SyncStatus, FXSyncBulkResponse, FXSyncLegDetail
 from backend.app.services.provider_registry import FXProviderRegistry
+from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.decimal_utils import truncate_fx_rate
 
 logger = get_logger(__name__)
+
+# Cache for FX provider fetch responses — TTL 5min since FX rates update daily.
+# Prevents provider rate-limiting if user triggers repeated syncs.
+_fx_fetch_cache = get_ttl_cache("fx_provider_responses", maxsize=200, ttl=300)
 
 
 # ============================================================================
@@ -362,18 +367,6 @@ def normalize_rate_for_storage(base: str, quote: str, rate: Decimal) -> tuple[st
 
 
 # ============================================================================
-# LEGACY ECB CONSTANTS (TO BE MOVED TO ECBProvider)
-# ============================================================================
-
-# ECB API endpoints
-# For detailed explanation of these parameters, see: docs/fx-implementation.md (ECB API Parameters section)
-ECB_BASE_URL = "https://data-api.ecb.europa.eu/service/data"
-ECB_DATASET = "EXR"  # Exchange Rates
-ECB_FREQUENCY = "D"  # Daily
-ECB_REFERENCE_AREA = "EUR"  # Base currency
-ECB_SERIES = "SP00"  # Series variation (spot rate)
-
-
 # ============================================================================
 # EXCEPTIONS
 # ============================================================================
@@ -805,180 +798,6 @@ async def _count_actual_changes(
     return changed
 
 
-async def sync_pair(
-    session,  # AsyncSession
-    route: "FxConversionRoute",
-    date_range: tuple[date, date],
-    ) -> "FXSyncPairResult":
-    """
-    Sync a single FX pair using its configured route (1-step or multi-step).
-
-    For 1-step routes: fetch + upsert directly (like the old sync_pair).
-    For multi-step routes: fetch each leg sequentially, compute chain rate, upsert.
-
-    Args:
-        session: Database session
-        route: FxConversionRoute with chain_steps
-        date_range: (start_date, end_date) inclusive
-
-    Returns:
-        FXSyncPairResult with status, provider_used, points, message, elapsed_ms
-    """
-    t_start_ns = time.monotonic_ns()
-    pair_slug = f"{route.base}-{route.quote}"
-    steps = route.parsed_steps
-
-    # Check MANUAL-only
-    all_manual = all(s["provider"].upper() == "MANUAL" for s in steps)
-    if all_manual:
-        logger.info(f"Pair {pair_slug}: MANUAL-only, skipping sync")
-        return FXSyncPairResult(
-            pair=pair_slug,
-            status=SyncStatus.SKIPPED,
-            provider_used=None,
-            points_fetched=0,
-            points_changed=0,
-            message="Manual-only pair, nothing to sync",
-            elapsed_ms=None,
-            )
-
-    try:
-        if len(steps) == 1:
-            # 1-step direct route
-            step = steps[0]
-            provider_code = step["provider"]
-            result = await ensure_rates_multi_source(
-                session, date_range,
-                currencies=[step["from"], step["to"]],
-                provider_code=provider_code,
-                )
-            total_fetched = result["total_fetched"]
-            total_changed = result["total_changed"]
-            elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-
-            if total_fetched > 0:
-                return FXSyncPairResult(
-                    pair=pair_slug,
-                    status=SyncStatus.OK,
-                    provider_used=provider_code,
-                    points_fetched=total_fetched,
-                    points_changed=total_changed,
-                    message=None,
-                    elapsed_ms=elapsed_ms,
-                    )
-            else:
-                return FXSyncPairResult(
-                    pair=pair_slug,
-                    status=SyncStatus.PARTIAL,
-                    provider_used=provider_code,
-                    points_fetched=0,
-                    points_changed=0,
-                    message="Provider returned no data for this date range",
-                    elapsed_ms=elapsed_ms,
-                    )
-        else:
-            # Multi-step chain
-            leg_rates: dict[tuple, Decimal] = {}
-            providers_used = []
-
-            for step in steps:
-                provider_code = step["provider"]
-                providers_used.append(provider_code)
-                provider = FXProviderRegistry.get_provider_instance(provider_code)
-                if not provider:
-                    raise FXServiceError(f"Unknown provider: {provider_code}")
-
-                fc, tc = step["from"], step["to"]
-                # Determine target currency from provider's perspective
-                base_cur = provider.base_currency
-                if fc == base_cur:
-                    target_cur = tc
-                elif tc == base_cur:
-                    target_cur = fc
-                else:
-                    raise FXServiceError(f"Neither {fc} nor {tc} is base currency of {provider_code} ({base_cur})")
-
-                rates_by_currency = await provider.fetch_rates(date_range, [target_cur], base_currency=None)
-
-                for currency, observations in rates_by_currency.items():
-                    for obs_date, obs_base, obs_quote, rate in observations:
-                        norm_base, norm_quote, norm_rate = normalize_rate_for_storage(obs_base, obs_quote, rate)
-                        leg_rates[(norm_base, norm_quote, obs_date)] = norm_rate
-
-            # Compute chain rates and upsert
-            start_date, end_date = date_range
-            source = "CHAIN:" + "+".join(providers_used)
-
-            # Collect all dates from leg_rates
-            all_dates = sorted({key[2] for key in leg_rates.keys()})
-            computed_rates = []
-            for d in all_dates:
-                if d < start_date or d > end_date:
-                    continue
-                chain_rate = compute_chain_rate(steps, leg_rates, d)
-                if chain_rate is not None:
-                    norm_base, norm_quote, norm_rate = normalize_rate_for_storage(
-                        route.base, route.quote, chain_rate
-                        )
-                    norm_rate = truncate_fx_rate(norm_rate)
-                    computed_rates.append((d, norm_base, norm_quote, norm_rate))
-
-            if computed_rates:
-                actual_changed = await _count_actual_changes(session, computed_rates)
-
-                values_list = [
-                    {
-                        "date": d,
-                        "base": b,
-                        "quote": q,
-                        "rate": r,
-                        "source": source,
-                        "fetched_at": func.current_timestamp(),
-                        }
-                    for d, b, q, r in computed_rates
-                    ]
-
-                batch_stmt = insert(FxRate).values(values_list)
-                batch_stmt = batch_stmt.on_conflict_do_update(
-                    index_elements=["date", "base", "quote"],
-                    set_={
-                        "rate": batch_stmt.excluded.rate,
-                        "source": batch_stmt.excluded.source,
-                        "fetched_at": func.current_timestamp(),
-                        },
-                    )
-                await session.execute(batch_stmt)
-                await session.commit()
-            else:
-                actual_changed = 0
-
-            elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-
-            return FXSyncPairResult(
-                pair=pair_slug,
-                status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
-                provider_used=source,
-                points_fetched=len(computed_rates),
-                points_changed=actual_changed,
-                message=None,
-                elapsed_ms=elapsed_ms,
-                )
-
-    except Exception as e:
-        elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-        logger.error(f"Pair {pair_slug}: sync failed: {e}")
-        return FXSyncPairResult(
-            pair=pair_slug,
-            status=SyncStatus.FAILED,
-            provider_used=None,
-            points_fetched=0,
-            points_changed=0,
-            message=None,
-            errors=[str(e)],
-            elapsed_ms=elapsed_ms,
-            )
-
-
 async def sync_pairs_bulk(
     session,  # AsyncSession — used only for reading route config
     pairs: list[str],  # ["EUR-USD", "CHF-CNY"]
@@ -1078,7 +897,16 @@ async def sync_pairs_bulk(
             if not provider:
                 raise FXServiceError(f"Unknown provider: {provider_code}")
 
-            rates_by_currency = await provider.fetch_rates(date_range, list(target_currencies), base_currency=None)
+            # Check TTL cache — skip provider fetch if recent data available
+            cache_key = (provider_code, frozenset(target_currencies), date_range)
+            cached_result, cache_hit = _fx_fetch_cache.get(cache_key)
+            if cache_hit:
+                logger.debug("FX provider cache hit, skipping fetch",
+                             provider=provider_code, currencies=len(target_currencies))
+                rates_by_currency = cached_result
+            else:
+                rates_by_currency = await provider.fetch_rates(date_range, list(target_currencies), base_currency=None)
+                _fx_fetch_cache.set(cache_key, rates_by_currency)
 
             for currency, observations in rates_by_currency.items():
                 for obs_date, obs_base, obs_quote, rate in observations:
@@ -1171,7 +999,7 @@ async def sync_pairs_bulk(
                     raise FXServiceError(f"Leg {lk[0]}-{lk[1]} ({lk[2]}) failed: {leg_errors[lk]}")
 
             if len(steps) == 1:
-                # 1-step direct: rates already in leg_rates, just upsert the pair rate
+                # 1-step direct route
                 step = steps[0]
                 provider_code = step["provider"]
                 fc, tc = step["from"], step["to"]
@@ -1358,66 +1186,24 @@ async def sync_pairs_bulk(
                 elapsed_ms=elapsed_ms,
                 )
 
-    # Execute all route coroutines in parallel
-    route_tasks = [_process_route(pair_slug) for pair_slug in pairs]
-    results: list[FXSyncPairResult] = list(await asyncio.gather(*route_tasks))
+    # ── Dispatch all routes and assemble response ──
+    pair_results = await asyncio.gather(*[_process_route(slug) for slug in pairs])
+    result_list = list(pair_results)
 
-    # Build summary
-    success_count = sum(1 for r in results if r.status in (SyncStatus.OK, SyncStatus.PARTIAL))
-    total_points_changed = sum(r.points_changed for r in results)
-    operation_errors = [r.message for r in results if r.status == SyncStatus.FAILED and r.message]
+    success_count = sum(1 for r in result_list if r.status in (SyncStatus.OK, SyncStatus.PARTIAL, SyncStatus.SKIPPED))
+    total_changed = sum(r.points_changed for r in result_list)
 
     return FXSyncBulkResponse(
-        results=results,
+        results=result_list,
         success_count=success_count,
-        errors=operation_errors,
         date_range=DateRangeModel(start=start_date, end=end_date),
-        total_points_changed=total_points_changed,
+        total_points_changed=total_changed,
         )
 
 
 # ============================================================================
 # CURRENCY CONVERSION FUNCTIONS
 # ============================================================================
-
-
-async def convert(
-    session,  # AsyncSession
-    amount: Currency,
-    to_currency: str,
-    as_of_date: date,
-    return_rate_info: bool = False,
-    ) -> Currency | tuple[Currency, date, bool]:
-    """
-    Convert a Currency object to another currency.
-    This is a convenience wrapper around convert_bulk() for single conversions.
-
-    ⚡ BREAKING CHANGE: Now accepts/returns Currency objects instead of Decimal.
-
-    Args:
-        session: Database session
-        amount: Currency object containing amount and source currency code
-        to_currency: Target currency code (ISO 4217)
-        as_of_date: Date for which to use the FX rate
-        return_rate_info: If True, return (Currency, rate_date, backward_fill_applied)
-
-    Returns:
-        If return_rate_info=False: Currency object with converted amount
-        If return_rate_info=True: Tuple of (Currency, rate_date, backward_fill_applied)
-
-    Raises:
-        RateNotFoundError: If no rate is found at all for this currency pair
-    """
-    # Call bulk version with single item (raise_on_error=True for backward compatibility)
-    results, errors = await convert_bulk(
-        session, [(amount, to_currency, as_of_date)], raise_on_error=True
-        )
-
-    converted_currency, rate_date, backward_fill_applied = results[0]
-
-    if return_rate_info:
-        return converted_currency, rate_date, backward_fill_applied
-    return converted_currency
 
 
 async def convert_bulk(

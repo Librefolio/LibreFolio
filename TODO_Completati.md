@@ -92,3 +92,46 @@ Vedi `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-05-subplan/plan-fxT
 
 ---
 
+## 💾 FX Rate Cache a Livello Core (TTL 5 min) ✅
+
+**Data aggiunta**: 13 Aprile 2026
+**Data completamento**: 13 Aprile 2026
+**Status**: ✅ COMPLETATO
+
+### Implementazione
+
+- `_fx_fetch_cache = get_ttl_cache("fx_provider_responses", maxsize=200, ttl=300)` in `fx.py`
+- Cache key: `(provider_code, frozenset(target_currencies), date_range)`
+- Cache hit → skip fetch provider; cache miss → fetch + store
+- Cleanup automatico via `close_all_caches()` nel lifespan shutdown
+
+### Riferimento
+Vedi `plan-partCCurrencyConversion.prompt.md` § C15c.
+
+---
+
+## 📁 Upload Metadata Cache TTL 1h ✅
+
+**Data aggiunta**: 13 Aprile 2026
+**Data completamento**: 13 Aprile 2026
+**Status**: ✅ COMPLETATO
+
+### Implementazione
+
+- `_upload_meta_cache = get_ttl_cache("upload_metadata", maxsize=500, ttl=3600)` in `static_uploads.py`
+- `_load_metadata()` → check cache → disco se miss
+- `_save_metadata()` → aggiorna cache dopo scrittura
+- `delete_upload()` → invalida entry cache
+
+### Riferimento
+Vedi `plan-partCCurrencyConversion.prompt.md` § C15d.
+
+---
+
+## 🔄 Fallback Sync per Global Settings ❄️
+
+**Data aggiunta**: 13 Aprile 2026
+**Status**: ❄️ SCARTATO
+**Nota**: Le funzioni sync `get_session_ttl_hours_sync()`, `get_max_upload_mb_sync()`, `is_registration_enabled_sync()` erano fallback mai usati. Rimosse in C14a. Ricreazione banale se necessario: leggono `GLOBAL_SETTINGS_DEFAULTS[key]["value"]`.
+
+---

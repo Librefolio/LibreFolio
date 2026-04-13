@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/transfer.png" width="32" style="vertical-align: middle;" /> Trasferimenti e Conversione FX
+# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Trasferimenti e Conversione FX
 
 I **Trasferimenti** spostano asset tra portafogli senza una vendita, mentre le **Conversioni FX** scambiano una valuta con un'altra all'interno di un portafoglio.
 

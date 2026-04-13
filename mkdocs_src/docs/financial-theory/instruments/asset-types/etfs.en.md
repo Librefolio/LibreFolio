@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/etf.png" width="32" style="vertical-align: middle;" /> ETFs (Exchange Traded Funds)
+# ![](../../../static/icons/asset-types/etf.png){: width="32" style="vertical-align: middle;" } ETFs (Exchange Traded Funds)
 
 An **ETF** is a basket of securities (stocks, bonds, commodities, or a mix) that trades on an exchange like a single stock. ETFs combine the diversification of mutual funds with the real-time trading flexibility of stocks.
 

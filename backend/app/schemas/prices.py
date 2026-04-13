@@ -92,6 +92,10 @@ class FAPricePoint(BaseModel):
     volume: Optional[Decimal] = Field(None, description="Trading volume")
     currency: str = Field(..., description="Currency code (ISO 4217)")
     original_currency: Optional[str] = Field(None, description="Original currency before FX conversion (None = no conversion)")
+    original_close: Optional[Decimal] = Field(None, description="Close price in original currency before FX conversion")
+    original_open: Optional[Decimal] = Field(None, description="Open price in original currency before FX conversion")
+    original_high: Optional[Decimal] = Field(None, description="High price in original currency before FX conversion")
+    original_low: Optional[Decimal] = Field(None, description="Low price in original currency before FX conversion")
     backward_fill_info: Optional[AssetBackwardFillInfo] = Field(None, description="Backward-fill + FX staleness info (only in query results)")
 
     @field_validator("currency")
@@ -99,7 +103,9 @@ class FAPricePoint(BaseModel):
     def currency_validate(cls, v: str) -> str:
         return Currency.validate_code(v)
 
-    @field_validator("open", "high", "low", "close", "volume", mode="before")
+    @field_validator("open", "high", "low", "close", "volume",
+                     "original_open", "original_high", "original_low", "original_close",
+                     mode="before")
     @classmethod
     def parse_decimal(cls, v):
         if v is None:

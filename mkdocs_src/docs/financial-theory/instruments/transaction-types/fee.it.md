@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/fee.png" width="32" style="vertical-align: middle;" /> Commissioni e Tasse
+# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Commissioni e Tasse
 
 Le **commissioni** e le **tasse** rappresentano costi che riducono il valore del tuo portafoglio. Sono tipi di transazione separati per distinguere tra i costi addebitati dal broker e gli obblighi imposti dallo Stato.
 

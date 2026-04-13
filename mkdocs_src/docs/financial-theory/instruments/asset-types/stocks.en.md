@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/stock.png" width="32" style="vertical-align: middle;" /> Stocks
+# ![](../../../static/icons/asset-types/stock.png){: width="32" style="vertical-align: middle;" } Stocks
 
 A **stock** (or share / equity) represents partial ownership in a publicly traded company. When you buy a stock, you become a shareholder with a proportional claim on the company's assets and earnings.
 

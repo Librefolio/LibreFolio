@@ -11,7 +11,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {ChevronDown, Trash2} from 'lucide-svelte';
+    import {ChevronDown, Plus, Trash2} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {MeasurementResult} from '$lib/charts/signals/MeasureSignal';
@@ -139,6 +139,34 @@
             emitRendered();
             stopMeasureMode();
         }
+    }
+
+    /**
+     * Create a measure using the full chart data range (first → last point).
+     * Useful on mobile where 2-tap interaction is unreliable.
+     */
+    export function addMeasureFromChartData() {
+        if (chartData.length < 2) return;
+        const startDate = chartData[0].date;
+        const endDate = chartData[chartData.length - 1].date;
+        if (startDate === endDate) return;
+
+        const id = `measure-${nextId++}`;
+        const measure = new MeasureSignal(
+            id,
+            {
+                ...MeasureSignal.getDefaultStyle(),
+                color: hslToHex((30 + measures.length * 137.5) % 360, 70, 55),
+            },
+            {startDate, endDate},
+        );
+        measures = [...measures, measure];
+        const next = new Set(expandedIds);
+        next.add(id);
+        expandedIds = next;
+        emitRendered();
+        // Stop measure mode if active
+        if (measureActive) stopMeasureMode();
     }
 
     function removeMeasure(id: string) {
@@ -331,6 +359,22 @@
 </script>
 
 <div class="space-y-3">
+
+    <!-- Add Measure button -->
+    <div class="flex items-center gap-2">
+        <button
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
+                       bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
+                       hover:bg-violet-100 dark:hover:bg-violet-900/50 border border-violet-200 dark:border-violet-800
+                       transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={chartData.length < 2}
+                onclick={() => addMeasureFromChartData()}
+        >
+            <Plus size={14}/>
+            <span class="hidden sm:inline">{$t('measure.addMeasure')}</span>
+        </button>
+    </div>
 
     <!-- Pending indicator -->
     {#if measureActive && pendingStartDate}

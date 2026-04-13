@@ -271,3 +271,163 @@ class TestDeleteUser:
         """Should return False for non-existent user."""
         result = await user_service.delete_user(session, 99999)
         assert result is False
+
+
+# ============================================================================
+# LIST USERS TESTS (C13b)
+# ============================================================================
+
+
+class TestListUsers:
+    """Tests for user_service.list_users()."""
+
+    @pytest.mark.asyncio
+    async def test_list_users_returns_list(self, session: AsyncSession):
+        """Should return a list."""
+        users = await user_service.list_users(session)
+        assert isinstance(users, list)
+
+    @pytest.mark.asyncio
+    async def test_list_users_includes_created(self, session: AsyncSession):
+        """Should include a freshly created user."""
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"listtest_{unique_id}",
+            email=f"listtest_{unique_id}@example.com",
+            password="ListPass123!",
+            )
+        assert error is None
+
+        users = await user_service.list_users(session)
+        usernames = [u.username for u in users]
+        assert f"listtest_{unique_id}" in usernames
+
+    @pytest.mark.asyncio
+    async def test_list_users_multiple(self, session: AsyncSession):
+        """Creating 2 users should increase the list by at least 2."""
+        initial = await user_service.list_users(session)
+        initial_count = len(initial)
+
+        for i in range(2):
+            uid = uuid.uuid4().hex[:8]
+            await user_service.create_user(
+                session=session,
+                username=f"multi_{uid}",
+                email=f"multi_{uid}@example.com",
+                password="MultiPass123!",
+                )
+
+        after = await user_service.list_users(session)
+        assert len(after) >= initial_count + 2
+
+
+# ============================================================================
+# RESET PASSWORD TESTS (C13b)
+# ============================================================================
+
+
+class TestResetPassword:
+    """Tests for user_service.reset_password()."""
+
+    @pytest.mark.asyncio
+    async def test_reset_password_success(self, session: AsyncSession):
+        """Should reset password and return success."""
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"resetpw_{unique_id}",
+            email=f"resetpw_{unique_id}@example.com",
+            password="OldPass123!",
+            )
+        assert error is None
+
+        success, err_msg = await user_service.reset_password(
+            session=session,
+            username=f"resetpw_{unique_id}",
+            new_password="NewPass456!",
+            )
+        assert success is True
+        assert err_msg is None
+
+    @pytest.mark.asyncio
+    async def test_reset_password_nonexistent_user(self, session: AsyncSession):
+        """Should fail for non-existent user."""
+        success, err_msg = await user_service.reset_password(
+            session=session,
+            username="nonexistent_user_xyz",
+            new_password="Whatever123!",
+            )
+        assert success is False
+        assert err_msg is not None
+        assert "not found" in err_msg
+
+
+# ============================================================================
+# SET USER ACTIVE TESTS (C13b)
+# ============================================================================
+
+
+class TestSetUserActive:
+    """Tests for user_service.set_user_active()."""
+
+    @pytest.mark.asyncio
+    async def test_deactivate_user(self, session: AsyncSession):
+        """Should deactivate a user successfully."""
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"deact_{unique_id}",
+            email=f"deact_{unique_id}@example.com",
+            password="DeactPass123!",
+            is_active=True,
+            )
+        assert error is None
+        assert user.is_active is True
+
+        success, err_msg = await user_service.set_user_active(
+            session=session,
+            username=f"deact_{unique_id}",
+            active=False,
+            )
+        assert success is True
+        assert err_msg is None
+
+        # Verify user is deactivated
+        updated_user = await user_service.get_user_by_username(session, f"deact_{unique_id}")
+        assert updated_user.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_reactivate_user(self, session: AsyncSession):
+        """Should reactivate a deactivated user."""
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"react_{unique_id}",
+            email=f"react_{unique_id}@example.com",
+            password="ReactPass123!",
+            is_active=False,
+            )
+        assert error is None
+
+        success, err_msg = await user_service.set_user_active(
+            session=session,
+            username=f"react_{unique_id}",
+            active=True,
+            )
+        assert success is True
+
+        updated_user = await user_service.get_user_by_username(session, f"react_{unique_id}")
+        assert updated_user.is_active is True
+
+    @pytest.mark.asyncio
+    async def test_set_active_nonexistent_user(self, session: AsyncSession):
+        """Should fail for non-existent user."""
+        success, err_msg = await user_service.set_user_active(
+            session=session,
+            username="nonexistent_user_xyz",
+            active=False,
+            )
+        assert success is False
+        assert "not found" in err_msg
+

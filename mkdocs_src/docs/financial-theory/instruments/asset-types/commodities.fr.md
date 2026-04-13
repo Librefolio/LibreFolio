@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/hold.png" width="32" style="vertical-align: middle;" /> Matières premières
+# ![](../../../static/icons/asset-types/hold.png){: width="32" style="vertical-align: middle;" } Matières premières
 
 Les **matières premières** sont des actifs physiques — ressources brutes ou biens primaires — détenus pour la préservation de la valeur à long terme ou comme couverture contre l'inflation. Dans LibreFolio, cette catégorie couvre les métaux précieux, l'énergie et d'autres réserves de valeur tangibles.
 

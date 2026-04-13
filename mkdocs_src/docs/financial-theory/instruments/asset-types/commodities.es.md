@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/hold.png" width="32" style="vertical-align: middle;" /> Materias Primas
+# ![](../../../static/icons/asset-types/hold.png){: width="32" style="vertical-align: middle;" } Materias Primas
 
 Las **Materias Primas** son activos físicos —materias primas o bienes primarios— mantenidos para la preservación del valor a largo plazo o como cobertura contra la inflación. En LibreFolio, esta categoría cubre metales preciosos, energía y otras reservas tangibles de valor.
 

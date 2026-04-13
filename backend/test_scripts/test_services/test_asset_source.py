@@ -37,7 +37,7 @@ from backend.app.db.models import (
     IdentifierType,
     ProviderInputType,
     )
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.asset_source import AssetSourceManager, AssetSourceProvider
 
 from backend.app.services.asset_source_providers.scheduled_investment import (
     calculate_day_count_fraction,
@@ -824,6 +824,8 @@ async def test_get_prices_with_target_currency(fx_asset_ids: int):
         for p in prices:
             assert p.currency == "EUR", f"Expected EUR, got {p.currency}"
             assert p.original_currency == "USD", f"Expected original USD, got {p.original_currency}"
+            # original_close must be present and in native currency
+            assert p.original_close is not None, f"original_close should be set for converted price on {p.date}"
 
         # Day 1: USD 101 / 1.10 = ~91.818 EUR
         p1 = prices[0]
@@ -831,7 +833,9 @@ async def test_get_prices_with_target_currency(fx_asset_ids: int):
         assert abs(float(p1.close) - float(expected_close_1)) < 0.01, (
             f"Day 1 close mismatch: {p1.close} vs expected ~{expected_close_1:.4f}"
         )
-        print_info(f"Day 1: USD 101.00 → EUR {p1.close:.4f} (rate 1.10)")
+        # Verify original values preserved
+        assert float(p1.original_close) == 101.0, f"original_close should be 101.0, got {p1.original_close}"
+        print_info(f"Day 1: USD 101.00 → EUR {p1.close:.4f} (rate 1.10), original_close={p1.original_close}")
 
         # Day 2: USD 102 / 1.12 = ~91.071 EUR
         p2 = prices[1]
@@ -889,6 +893,7 @@ async def test_get_prices_no_target_currency(fx_asset_ids: int):
         for p in prices:
             assert p.currency == "USD", f"Expected native USD, got {p.currency}"
             assert p.original_currency is None, f"original_currency should be None, got {p.original_currency}"
+            assert p.original_close is None, f"original_close should be None without conversion, got {p.original_close}"
         assert prices[0].close == Decimal("101.00")
         print_success("✓ No conversion when target_currency is absent")
 
@@ -999,3 +1004,44 @@ async def test_query_result_errors_field(fx_asset_ids: int):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+# ============================================================================
+# MAP IDENTIFIER TYPE TESTS (C13b)
+# ============================================================================
+
+
+class TestMapIdentifierTypeToInputType:
+    """Tests for AssetSourceProvider.map_identifier_type_to_input_type (reverse mapping)."""
+
+    def test_ticker_maps_to_ticker(self):
+        """TICKER IdentifierType → ProviderInputType.TICKER."""
+        result = AssetSourceProvider.map_identifier_type_to_input_type(IdentifierType.TICKER.value)
+        assert result == ProviderInputType.TICKER
+
+    def test_isin_maps_to_isin(self):
+        """ISIN IdentifierType → ProviderInputType.ISIN."""
+        result = AssetSourceProvider.map_identifier_type_to_input_type(IdentifierType.ISIN.value)
+        assert result == ProviderInputType.ISIN
+
+    def test_other_maps_to_url(self):
+        """OTHER IdentifierType → ProviderInputType.URL."""
+        result = AssetSourceProvider.map_identifier_type_to_input_type(IdentifierType.OTHER.value)
+        assert result == ProviderInputType.URL
+
+    def test_uuid_maps_to_auto_generated(self):
+        """UUID IdentifierType → ProviderInputType.AUTO_GENERATED."""
+        result = AssetSourceProvider.map_identifier_type_to_input_type(IdentifierType.UUID.value)
+        assert result == ProviderInputType.AUTO_GENERATED
+
+    def test_unmapped_returns_none(self):
+        """Unknown identifier type (e.g. CUSIP, SEDOL) → None."""
+        result = AssetSourceProvider.map_identifier_type_to_input_type("CUSIP")
+        assert result is None
+
+    def test_figi_returns_none(self):
+        """FIGI has no provider equivalent → None."""
+        result = AssetSourceProvider.map_identifier_type_to_input_type("FIGI")
+        assert result is None
+
+

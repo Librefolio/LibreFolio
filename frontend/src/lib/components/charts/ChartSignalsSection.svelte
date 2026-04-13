@@ -388,6 +388,7 @@
                     {@const summary = signalSummaries.get(signal.id)}
                     {@const dataStartsLate = summary?.firstDate && dateStart && summary.firstDate > dateStart}
                     {@const hasNoData = summary && summary.pointCount === 0}
+                    {@const conversionFailed = signal.signalType === 'asset-comparison' && Boolean(signal.params._conversionFailed)}
                     <div class="space-y-2">
                         <!-- Signal header -->
                         <div class="flex items-center justify-between gap-1">
@@ -402,6 +403,10 @@
                                 {/if}
                                 {#if hasNoData}
                                     <Tooltip text={$t('chartSettings.noDataAvailable')} position="top">
+                                        <AlertTriangle size={13} class="text-amber-500 shrink-0 cursor-help"/>
+                                    </Tooltip>
+                                {:else if conversionFailed}
+                                    <Tooltip text={signal.params._conversionError ? String(signal.params._conversionError) : $t('chartSettings.conversionFailed')} position="top">
                                         <AlertTriangle size={13} class="text-amber-500 shrink-0 cursor-help"/>
                                     </Tooltip>
                                 {:else if dataStartsLate}

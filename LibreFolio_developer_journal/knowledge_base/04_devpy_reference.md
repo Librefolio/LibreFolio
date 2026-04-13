@@ -19,7 +19,7 @@ dev.py [-h]
 │ ├── build [--debug]
 │ ├── check                        # svelte-check
 │ └── preview
-├─┬─ test [--coverage] [--cov-clean] [-v]
+├─┬─ test [--coverage] [--cov-clean-backend] [--cov-clean-frontend] [-v]
 │ ├── external ACTION
 │ ├── db ACTION                    # include "populate"
 │ ├── services ACTION
@@ -32,6 +32,8 @@ dev.py [-h]
 │ ├── front-fx ACTION              # unit + E2E fx tests
 │ ├── front-asset ACTION           # list, detail, modal, data-editor
 │ ├── all
+│ ├── all-backend                  # all backend categories (external → e2e)
+│ ├── all-frontend                 # all frontend categories (front-*)
 │ ├── coverage-report [--priority] [--json] [--summary]  # Analisi funzioni scoperte
 │ └─┬─ coverage                    # Gestione report coverage
 │   ├── show [backend|frontend|combined]

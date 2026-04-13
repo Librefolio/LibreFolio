@@ -166,6 +166,13 @@
         staleDays: d.backwardFillInfo?.daysBack ?? 0,
     })));
 
+    /** First data point date — used for "no data before" banner */
+    let firstDataDate = $derived(chartData.length > 0 ? chartData[0].date : null);
+    /** True when the selected date range starts before the first available data point */
+    let rangeStartsBeforeData = $derived(
+        firstDataDate != null && dateStart < firstDataDate
+    );
+
     // True when no real provider is configured (MANUAL sentinel is already filtered out)
     let isManualOnly = $derived(providers.length === 0);
 
@@ -627,7 +634,7 @@
     }
 
     function handleDetailPair(slug: string) {
-        goto(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`);
+        window.open(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`, '_blank');
     }
 
     async function handleSyncAsset(assetId: number) {
@@ -651,7 +658,7 @@
     }
 
     function handleDetailAsset(assetId: number) {
-        goto(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`);
+        window.open(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`, '_blank');
     }
 
     /** Handle provider modal save — reload providers and auto-sync rates */
@@ -727,6 +734,14 @@
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
             <span>⚠️</span> <span>{errorMessage}</span>
             <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => error = null}>{$t('common.close')}</button>
+        </div>
+    {/if}
+
+    <!-- Data availability banner: selected range starts before first data point -->
+    {#if rangeStartsBeforeData && !loading && !error}
+        <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2">
+            <span>📊</span>
+            <span>{$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
         </div>
     {/if}
 
@@ -977,6 +992,8 @@
                         editMode={showDataEditor}
                         onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
                         staleLabel={$t('chart.tooltip.stale')}
+                        fxStaleLabel={$t('chart.tooltip.fxStale')}
+                        convertedFromLabel={$t('chart.tooltip.convertedFrom')}
                 />
             </div>
         {:else}

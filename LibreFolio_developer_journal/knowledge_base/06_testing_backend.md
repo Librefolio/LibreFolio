@@ -176,7 +176,8 @@ class TestFeatureX:
 ./dev.py test --coverage services all
 
 # Clean coverage prima di una nuova sessione
-./dev.py test --coverage --cov-clean api all
+./dev.py test --coverage --cov-clean-backend api all
+./dev.py test --coverage --cov-clean-frontend front-fx all
 
 # Frontend E2E con backend coverage tracking
 ./dev.py test --coverage front-fx all

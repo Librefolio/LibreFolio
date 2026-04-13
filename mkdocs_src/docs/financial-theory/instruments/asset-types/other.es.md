@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/other.png" width="32" style="vertical-align: middle;" /> Otros
+# ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Otros
 
 El tipo de activo **Otros** es una categoría general para cualquier clase de activo que no esté cubierta por los tipos estándar. Proporciona la máxima flexibilidad para el seguimiento de inversiones no tradicionales.
 

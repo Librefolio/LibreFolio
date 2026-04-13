@@ -193,3 +193,8 @@ Il piano corrente (`plan-phase06-assets.md`) include ulteriori evoluzioni:
 - **Infra**: Gallery Playwright headless di default (rimossa dipendenza xvfb-run), nuovo flag `--headed` per debug
 - **Traduzioni nav mkdocs.yml**: aggiunte IT/FR per Mutual Fund, Commodities, Other (erano solo in ES)
 
+### Aggiornamento 13 Aprile 2026 (Part C completata + validazione)
+
+- **Part C (C1-C15) completata**: Currency conversion backend+frontend, dead code removal, test coverage, fix infrastrutturali
+- **Part C.1 in corso**: Bug fix + miglioramenti post-validazione → [plan-partC_1_PostValidation.prompt.md](../plan-partC_1_PostValidation.prompt.md)
+

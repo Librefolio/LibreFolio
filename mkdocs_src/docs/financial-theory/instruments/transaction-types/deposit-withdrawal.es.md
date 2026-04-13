@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/deposit.png" width="32" style="vertical-align: middle;" /> Depósitos y Retiros
+# ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Depósitos y Retiros
 
 Los **depósitos** y **retiros** registran las entradas y salidas de efectivo de una cuenta de bróker. No involucran ningún activo; solo cambia el saldo de efectivo.
 
