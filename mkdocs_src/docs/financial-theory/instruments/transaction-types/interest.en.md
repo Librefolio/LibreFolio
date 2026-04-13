@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/interest.png" width="32" style="vertical-align: middle;" /> Interest (Transaction)
+# ![](../../../static/icons/transactions/interest.png){: width="32" style="vertical-align: middle;" } Interest (Transaction)
 
 An **interest transaction** records interest income received from bonds, savings accounts, P2P loans, or other fixed-income instruments. It represents the portfolio-level impact of an [interest event](../asset-events/interest.md).
 

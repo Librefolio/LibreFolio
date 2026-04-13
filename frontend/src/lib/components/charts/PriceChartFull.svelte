@@ -94,6 +94,10 @@
         onEventDblClick?: (date: string, eventType: string) => void;
         /** Translated label for stale indicator in tooltip (e.g. "Stale: {days}d") — receives `{days}` placeholder */
         staleLabel?: string;
+        /** Translated label for FX stale indicator (e.g. "FX rate: {days}d old") — receives `{days}` placeholder */
+        fxStaleLabel?: string;
+        /** Translated label for converted currency (e.g. "Converted from {currency}") — receives `{currency}` placeholder */
+        convertedFromLabel?: string;
     }
 
     let {
@@ -125,6 +129,8 @@
         onDblClick,
         onEventDblClick,
         staleLabel,
+        fxStaleLabel,
+        convertedFromLabel,
     }: Props = $props();
 
     // =========================================================================
@@ -327,8 +333,10 @@
             });
 
             // Long-press handler for mobile (1s hold = double-click equivalent)
+            // + Tap detection for measure mode (short tap = click)
             let longPressTimer: ReturnType<typeof setTimeout> | null = null;
             let touchStartPos: { x: number; y: number } | null = null;
+            let touchStartTime = 0;
 
             function clearLongPress() {
                 if (longPressTimer) {
@@ -345,6 +353,7 @@
                 }
                 const touch = e.touches[0];
                 touchStartPos = {x: touch.clientX, y: touch.clientY};
+                touchStartTime = Date.now();
                 longPressTimer = setTimeout(() => {
                     if (!chartInstance || !chartContainer || !touchStartPos) return;
                     const rect = chartContainer.getBoundingClientRect();
@@ -385,6 +394,26 @@
             }
 
             function onTouchEnd() {
+                // Detect quick tap for measure mode (touchStartPos still alive = movement < 10px)
+                if (measureMode && onMeasureClick && touchStartPos && longPressTimer && (Date.now() - touchStartTime < 400)) {
+                    const pos = touchStartPos;
+                    if (chartInstance && chartContainer) {
+                        const rect = chartContainer.getBoundingClientRect();
+                        const offsetX = pos.x - rect.left;
+                        const offsetY = pos.y - rect.top;
+                        const pointInPixel = [offsetX, offsetY];
+                        if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
+                            const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
+                            if (pointInGrid) {
+                                const dateIdx = Math.round(pointInGrid[0]);
+                                if (dateIdx >= 0 && dateIdx < displayData.length) {
+                                    const point = displayData[dateIdx];
+                                    handlePointClick(point.date, point.value);
+                                }
+                            }
+                        }
+                    }
+                }
                 clearLongPress();
             }
 
@@ -702,7 +731,10 @@
                     const viewW = size.viewSize[0];
                     let x = point[0] - tooltipW / 2;
                     // ALWAYS above the finger/cursor — never below
-                    let y = point[1] - tooltipH - 30; // 30px gap above finger
+                    // Adaptive gap: larger on touch devices to avoid finger obstruction
+                    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+                    const gap = isTouch ? 60 : 30;
+                    let y = point[1] - tooltipH - gap;
                     // Clamp horizontal to chart bounds
                     if (x < 8) x = 8;
                     if (x + tooltipW > viewW - 8) x = viewW - tooltipW - 8;
@@ -788,7 +820,10 @@
                                 ? staleLabel.replace('{days}', String(priceDaysBack))
                                 : `Stale: ${priceDaysBack}d`;
                             html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
-                            html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ FX rate: ${fxStale}d old</span>`;
+                            const fxLabel = fxStaleLabel
+                                ? fxStaleLabel.replace('{days}', String(fxStale))
+                                : `FX rate: ${fxStale}d old`;
+                            html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${fxLabel}</span>`;
                         } else {
                             const label = staleLabel
                                 ? staleLabel.replace('{days}', String(dataPoint))
@@ -798,7 +833,10 @@
                     }
                     const origCur = originalCurrencyLookup.get(date);
                     if (origCur) {
-                        html += `<br/><span style="color:#8b5cf6;font-size:11px">💱 Converted from ${origCur}</span>`;
+                        const cfLabel = convertedFromLabel
+                            ? convertedFromLabel.replace('{currency}', origCur)
+                            : `Converted from ${origCur}`;
+                        html += `<br/><span style="color:#8b5cf6;font-size:11px">💱 ${cfLabel}</span>`;
                     }
                     return html;
                 },

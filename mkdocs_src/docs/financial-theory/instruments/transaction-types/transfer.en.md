@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/transfer.png" width="32" style="vertical-align: middle;" /> Transfer & FX Conversion
+# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transfer & FX Conversion
 
 **Transfers** move assets between portfolios without a sale, while **FX Conversions** exchange one currency for another within a portfolio.
 

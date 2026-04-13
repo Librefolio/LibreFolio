@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/other.png" width="32" style="vertical-align: middle;" /> Altro
+# ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Altro
 
 Il tipo di asset **Altro** è una categoria generica per qualsiasi classe di attività non coperta dai tipi standard. Offre la massima flessibilità per il monitoraggio di investimenti non tradizionali.
 

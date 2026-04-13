@@ -83,6 +83,8 @@ class FARefreshResult(BaseModel):
     points_changed: int = Field(0, description="Number of prices actually inserted/updated in DB")
     inserted_count: int = Field(0, description="Number of prices inserted into DB")
     updated_count: int = Field(0, description="Number of prices updated in DB")
+    events_fetched: int = Field(0, description="Number of events fetched from provider")
+    events_changed: int = Field(0, description="Number of events actually inserted/updated in DB")
     message: Optional[str] = Field(None, description="Optional note/summary (non-error)")
     errors: List[str] = Field(default_factory=list)
     elapsed_ms: Optional[int] = Field(None, ge=0, description="Backend sync time for this asset in ms")

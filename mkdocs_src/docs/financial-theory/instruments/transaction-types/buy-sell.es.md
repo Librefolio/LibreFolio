@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/buy.png" width="32" style="vertical-align: middle;" /> Compra y Venta
+# ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Compra y Venta
 
 Los tipos de transacción más fundamentales: la **compra** aumenta sus posiciones y disminuye el efectivo; la **venta** hace lo contrario y materializa una plusvalía o pérdida.
 

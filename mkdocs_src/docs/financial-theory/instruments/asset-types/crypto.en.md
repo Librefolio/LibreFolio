@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/crypto.png" width="32" style="vertical-align: middle;" /> Crypto
+# ![](../../../static/icons/asset-types/crypto.png){: width="32" style="vertical-align: middle;" } Crypto
 
 **Cryptocurrencies** are digital assets that use cryptographic technology for secure transactions on decentralized blockchain networks. They operate independently of traditional banking systems.
 

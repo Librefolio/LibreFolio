@@ -13,7 +13,6 @@
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
     import {onMount, tick} from 'svelte';
-    import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
@@ -148,6 +147,8 @@
 
     // Live current price (from provider, only when dateEnd = today)
     let currentLivePrice = $state<number | null>(null);
+    /** True when live price conversion to displayCurrency failed (pair exists but rate unavailable) */
+    let livePriceConversionFailed = $state(false);
 
     // =========================================================================
     // Derived
@@ -169,6 +170,13 @@
 
     let isScheduledInvestment = $derived(providerAssignment?.provider_code === 'scheduled_investment');
     let isManualOnly = $derived(!providerAssignment);
+
+    /** First data point date — used for "no data before" banner */
+    let firstDataDate = $derived(chartData.length > 0 ? chartData[0].date : null);
+    /** True when the selected date range starts before the first available data point */
+    let rangeStartsBeforeData = $derived(
+        firstDataDate != null && dateStart < firstDataDate
+    );
 
     /** Effective last price: live from provider when head = today, otherwise last chart close */
     let lastPrice = $derived.by(() => {
@@ -385,23 +393,57 @@
     });
 
     // Live current price polling — only when chart head date includes today
+    // Re-runs when displayCurrency or assetInfo changes (to reconvert)
     $effect(() => {
         const id = assetInfo?.id;
+        const nativeCurrency = assetInfo?.currency;
+        const targetCurrency = displayCurrency;
+        const fxMissing = fxConversionMissing;
         if (!isHeadToday || !id) {
             currentLivePrice = null;
+            livePriceConversionFailed = false;
             return;
         }
         // Fetch immediately, then poll every 30s
-        _fetchLivePrice(id);
-        const timer = setInterval(() => _fetchLivePrice(id), 30_000);
+        _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing);
+        const timer = setInterval(() => _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing), 30_000);
         return () => clearInterval(timer);
     });
 
-    async function _fetchLivePrice(assetId: number) {
+    async function _fetchLivePrice(assetId: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean) {
         try {
             const results = await fetchCurrentPrices([assetId]);
-            if (results.length > 0 && results[0].value != null) {
-                currentLivePrice = results[0].value;
+            if (results.length === 0 || results[0].value == null) return;
+            const nativeValue = results[0].value;
+
+            // No conversion needed
+            if (!targetCurrency || !nativeCurrency || targetCurrency === nativeCurrency || fxMissing) {
+                currentLivePrice = nativeValue;
+                livePriceConversionFailed = false;
+                return;
+            }
+
+            // Convert via FX API
+            try {
+                const today = new Date().toISOString().slice(0, 10);
+                const convResponse = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([{
+                    from_amount: {code: nativeCurrency, amount: String(nativeValue)},
+                    to: targetCurrency,
+                    date_range: {start: today, end: today},
+                }]);
+                const convResults = (convResponse as any)?.results ?? [];
+                if (convResults.length > 0 && convResults[0].to_amount?.amount != null) {
+                    currentLivePrice = parseFloat(convResults[0].to_amount.amount);
+                    livePriceConversionFailed = false;
+                } else {
+                    // Conversion returned no results — fallback to native
+                    currentLivePrice = nativeValue;
+                    livePriceConversionFailed = true;
+                }
+            } catch {
+                // FX conversion failed — fallback to native price
+                currentLivePrice = nativeValue;
+                livePriceConversionFailed = true;
             }
         } catch (e: any) {
             // Non-blocking: keep last known value or chart fallback
@@ -551,6 +593,7 @@
                 allAssets,
                 comparisonEvents,
                 data.assetId,
+                displayCurrency || undefined,
             );
             overlayDataVersion++;
         } catch (e) { console.error('Failed to load comparison asset data:', e); }
@@ -595,10 +638,14 @@
             const r = (response as any)?.results?.[0];
             if (r) {
                 const tr = get(t);
+                const priceInfo = `💰 ${r.points_fetched ?? 0}↓ ${r.points_changed ?? 0}Δ`;
+                const evtFetched = r.events_fetched ?? 0;
+                const evtChanged = r.events_changed ?? 0;
+                const eventInfo = evtFetched > 0 ? `  📅 ${evtFetched}↓ ${evtChanged}Δ` : '';
                 if (r.status === 'ok') {
-                    toasts.success(`${tr('assetDetail.syncPrices')}: ${r.points_fetched ?? 0}↓ ${r.points_changed ?? 0}Δ`);
+                    toasts.success(`${tr('assetDetail.syncPrices')}: ${priceInfo}${eventInfo}`);
                 } else if (r.status === 'partial') {
-                    toasts.warning(`${tr('assetDetail.syncPrices')} (partial): ${r.points_fetched ?? 0}↓ ${r.points_changed ?? 0}Δ`);
+                    toasts.warning(`${tr('assetDetail.syncPrices')} (partial): ${priceInfo}${eventInfo}`);
                 } else if (r.status === 'skipped') {
                     toasts.info(`${tr('assetDetail.syncPrices')} — skipped`);
                 } else {
@@ -660,7 +707,7 @@
     }
 
     function handleDetailAsset(assetId: number) {
-        goto(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`);
+        window.open(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`, '_blank');
     }
 
     async function handleSyncPair(slug: string) {
@@ -694,7 +741,7 @@
     }
 
     function handleDetailPair(slug: string) {
-        goto(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`);
+        window.open(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`, '_blank');
     }
 
     async function handleAssetUpdated() {
@@ -811,6 +858,14 @@
         </div>
     {/if}
 
+    <!-- Data availability banner: selected range starts before first data point -->
+    {#if rangeStartsBeforeData && !loading && !error}
+        <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2">
+            <span>📊</span>
+            <span>{$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
+        </div>
+    {/if}
+
     <!-- ======================================================================= -->
     <!-- Filter bar -->
     <!-- wide:     [ datepicker  price-summary ─── actions-2×2 ]                        -->
@@ -852,6 +907,7 @@
                         {fxPairSlug}
                         layoutMode={layout.layoutMode}
                         onAddFxPair={() => showFxPairAddModal = true}
+                        {livePriceConversionFailed}
                 />
             {/if}
         </div>
@@ -1046,6 +1102,8 @@
                         externalViewMode={viewMode}
                         editMode={showDataEditor}
                         staleLabel={$t('chart.tooltip.stale')}
+                        fxStaleLabel={$t('chart.tooltip.fxStale')}
+                        convertedFromLabel={$t('chart.tooltip.convertedFrom')}
                         onDblClick={(date) => {
                             if (showDataEditor && assetDataEditorRef) {
                                 assetDataEditorRef.scrollToDate(date, 'prices');

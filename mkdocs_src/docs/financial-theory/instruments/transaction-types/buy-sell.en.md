@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/buy.png" width="32" style="vertical-align: middle;" /> Buy & Sell
+# ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Buy & Sell
 
 The most fundamental transaction types: **buying** increases your holdings and decreases cash; **selling** does the reverse and realizes a profit or loss.
 

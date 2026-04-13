@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/transfer.png" width="32" style="vertical-align: middle;" /> Transferts & Conversion de devises
+# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transferts & Conversion de devises
 
 Les **Transferts** déplacent des actifs entre des portefeuilles sans vente, tandis que les **Conversions de devises** échangent une devise contre une autre au sein d'un portefeuille.
 

@@ -847,11 +847,14 @@
       "fxPair": "Sélectionnez une paire FX pour superposer son taux sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%."
     },
     "macdLineColor": "Couleur Ligne MACD",
-    "noDataAvailable": "Aucune donnée disponible. Essayez de synchroniser cet actif/paire."
+    "noDataAvailable": "Aucune donnée disponible. Essayez de synchroniser cet actif/paire.",
+    "conversionFailed": "Conversion de devise échouée — données non affichées (paire FX non configurée)"
   },
   "chart": {
     "tooltip": {
       "stale": "Périmé : {days} jour(s)",
+      "fxStale": "Taux FX : {days}j",
+      "convertedFrom": "Converti depuis {currency}",
       "percentNote": "% par rapport à la date de début",
       "upper": "Supérieure",
       "lower": "Inférieure"
@@ -869,7 +872,8 @@
       "deltaPct": "Δ %",
       "annualized": "Δ%/an"
     },
-    "days": "{days}j"
+    "days": "{days}j",
+    "addMeasure": "Ajouter Mesure"
   },
   "fxDetail": {
     "measures": "Mesures",
@@ -980,7 +984,9 @@
       "SPLIT": "Fractionnement d'actions. La quantité change, pas la valeur totale.",
       "PRICE_ADJUSTMENT": "Changement de valeur non-cash : dépréciation, haircut, réévaluation.",
       "MATURITY_SETTLEMENT": "Remboursement du capital à l'échéance. Plus de prix."
-    }
+    },
+    "livePriceConversionFailed": "Prix live en {currency} — taux FX indisponible pour aujourd'hui",
+    "dataAvailableFrom": "Données disponibles à partir du {date} — dates antérieures sans données"
   },
   "ticker": {
     "noAssets": "Aucun actif suivi",

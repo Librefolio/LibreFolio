@@ -135,6 +135,29 @@ def clear_all_caches() -> int:
     return count
 
 
+def close_all_caches() -> int:
+    """
+    Close all registered caches (stop timer wheel threads) and clear the registry.
+
+    Call this during application shutdown for a clean exit.
+    Each theine.Cache runs a background timer wheel thread; closing stops it.
+
+    Returns:
+        Number of caches closed.
+    """
+    count = len(_cache_registry)
+    for name, cache in list(_cache_registry.items()):
+        try:
+            cache.close()
+            logger.debug("Cache closed", cache_name=name)
+        except Exception as e:
+            logger.warning("Failed to close cache", cache_name=name, error=str(e))
+    _cache_registry.clear()
+    if count:
+        logger.info("All caches closed on shutdown", cache_count=count)
+    return count
+
+
 def get_cache_stats(name: str) -> dict[str, Any] | None:
     """Get statistics for a named cache, or None if not found."""
     if name not in _cache_registry:
@@ -145,4 +168,4 @@ def get_cache_stats(name: str) -> dict[str, Any] | None:
 
 def list_caches() -> list[dict[str, Any]]:
     """List all registered caches with their stats."""
-    return [get_cache_stats(name) for name in _cache_registry]
+    return [s for name in _cache_registry if (s := get_cache_stats(name)) is not None]

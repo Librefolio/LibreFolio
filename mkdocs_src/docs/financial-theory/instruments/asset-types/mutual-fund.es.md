@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/fund.png" width="32" style="vertical-align: middle;" /> Fondo de Inversión
+# ![](../../../static/icons/asset-types/fund.png){: width="32" style="vertical-align: middle;" } Fondo de Inversión
 
 Un **fondo de inversión** es un vehículo de inversión gestionado profesionalmente que agrupa el dinero de muchos inversores para adquirir una cartera diversificada de acciones, bonos u otros valores.
 

@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/fund.png" width="32" style="vertical-align: middle;" /> Fonds Commun de Placement
+# ![](../../../static/icons/asset-types/fund.png){: width="32" style="vertical-align: middle;" } Fonds Commun de Placement
 
 Un **fonds commun de placement** est un véhicule d'investissement géré professionnellement qui regroupe l'argent de nombreux investisseurs pour acheter un portefeuille diversifié d'actions, d'obligations ou d'autres titres.
 

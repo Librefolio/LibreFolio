@@ -1854,6 +1854,18 @@ type FARefreshResult = {
    * @default 0
    */
   number | undefined;
+  events_fetched?: /**
+   * Number of events fetched from provider
+   *
+   * @default 0
+   */
+  number | undefined;
+  events_changed?: /**
+   * Number of events actually inserted/updated in DB
+   *
+   * @default 0
+   */
+  number | undefined;
   message?:
     | /**
      * Optional note/summary (non-error)
@@ -2168,6 +2180,94 @@ type FAPricePoint_Input = {
      */
     ((string | null) | Array<string | null>)
     | undefined;
+  original_close?:
+    | /**
+     * Close price in original currency before FX conversion
+     */
+    (| (
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          )
+        | Array<
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          >
+      )
+    | undefined;
+  original_open?:
+    | /**
+     * Open price in original currency before FX conversion
+     */
+    (| (
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          )
+        | Array<
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          >
+      )
+    | undefined;
+  original_high?:
+    | /**
+     * High price in original currency before FX conversion
+     */
+    (| (
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          )
+        | Array<
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          >
+      )
+    | undefined;
+  original_low?:
+    | /**
+     * Low price in original currency before FX conversion
+     */
+    (| (
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          )
+        | Array<
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          >
+      )
+    | undefined;
   backward_fill_info?:
     | /**
      * Backward-fill + FX staleness info (only in query results)
@@ -2281,6 +2381,70 @@ type FAPricePoint_Output = {
      * Original currency before FX conversion (None = no conversion)
      */
     ((string | null) | Array<string | null>)
+    | undefined;
+  original_close?:
+    | /**
+     * Close price in original currency before FX conversion
+     */
+    (| /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            string | null
+          >
+      )
+    | undefined;
+  original_open?:
+    | /**
+     * Open price in original currency before FX conversion
+     */
+    (| /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            string | null
+          >
+      )
+    | undefined;
+  original_high?:
+    | /**
+     * High price in original currency before FX conversion
+     */
+    (| /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            string | null
+          >
+      )
+    | undefined;
+  original_low?:
+    | /**
+     * Low price in original currency before FX conversion
+     */
+    (| /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            string | null
+          >
+      )
     | undefined;
   backward_fill_info?:
     | /**
@@ -4895,6 +5059,22 @@ const FAPricePoint_Input: z.ZodType<FAPricePoint_Input> = z.object({
     .union([z.string(), z.null()])
     .describe("Original currency before FX conversion (None = no conversion)")
     .optional(),
+  original_close: z
+    .union([z.number(), z.string(), z.null()])
+    .describe("Close price in original currency before FX conversion")
+    .optional(),
+  original_open: z
+    .union([z.number(), z.string(), z.null()])
+    .describe("Open price in original currency before FX conversion")
+    .optional(),
+  original_high: z
+    .union([z.number(), z.string(), z.null()])
+    .describe("High price in original currency before FX conversion")
+    .optional(),
+  original_low: z
+    .union([z.number(), z.string(), z.null()])
+    .describe("Low price in original currency before FX conversion")
+    .optional(),
   backward_fill_info: z
     .union([AssetBackwardFillInfo, z.null()])
     .describe("Backward-fill + FX staleness info (only in query results)")
@@ -5010,6 +5190,22 @@ const FAPricePoint_Output: z.ZodType<FAPricePoint_Output> = z.object({
   original_currency: z
     .union([z.string(), z.null()])
     .describe("Original currency before FX conversion (None = no conversion)")
+    .optional(),
+  original_close: z
+    .union([z.string(), z.null()])
+    .describe("Close price in original currency before FX conversion")
+    .optional(),
+  original_open: z
+    .union([z.string(), z.null()])
+    .describe("Open price in original currency before FX conversion")
+    .optional(),
+  original_high: z
+    .union([z.string(), z.null()])
+    .describe("High price in original currency before FX conversion")
+    .optional(),
+  original_low: z
+    .union([z.string(), z.null()])
+    .describe("Low price in original currency before FX conversion")
     .optional(),
   backward_fill_info: z
     .union([AssetBackwardFillInfo, z.null()])
@@ -5156,6 +5352,18 @@ const FARefreshResult: z.ZodType<FARefreshResult> = z.object({
     .number()
     .int()
     .describe("Number of prices updated in DB")
+    .optional()
+    .default(0),
+  events_fetched: z
+    .number()
+    .int()
+    .describe("Number of events fetched from provider")
+    .optional()
+    .default(0),
+  events_changed: z
+    .number()
+    .int()
+    .describe("Number of events actually inserted/updated in DB")
     .optional()
     .default(0),
   message: z

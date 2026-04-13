@@ -26,8 +26,8 @@ All tests are executed through `dev.py`:
 |------|-------------|
 | `--verbose` / `-v` | Show full pytest output |
 | `--coverage` | Run with code coverage tracking |
-| `--cov-clean` | Clean coverage database before run |
-| `--db-reset` | Reset test database before DB tests |
+| `--cov-clean-backend` | Clean backend coverage data (`htmlcov-backend/` + `.coverage` files) |
+| `--cov-clean-frontend` | Clean frontend coverage data (`htmlcov-frontend/` + `.coverage` files) |
 
 ### 🖥️ Frontend Flags
 
@@ -52,6 +52,14 @@ LibreFolio organizes tests into **10 categories**, grouped by layer:
 | **Front-User** | `./dev.py test front-user all` | Brokers, multi-user, sharing (Playwright) |
 | **Front-FX** | `./dev.py test front-fx all` | FX list, detail, add-pair, editor, sync (Playwright) |
 
+### 🏃 Meta Categories
+
+| Meta Category | Command | What It Runs |
+|---------------|---------|--------------|
+| **All** | `./dev.py test all` | All backend + frontend tests |
+| **All Backend** | `./dev.py test all-backend` | All backend tests (external → e2e) |
+| **All Frontend** | `./dev.py test all-frontend` | All frontend tests (front-utility → front-asset) |
+
 ---
 
 ## 🏗️ Architecture Overview
@@ -60,8 +68,8 @@ LibreFolio organizes tests into **10 categories**, grouped by layer:
 graph TD
     ALL["./dev.py test all"]
 
-    ALL --> BACKEND["Backend Tests"]
-    ALL --> FRONTEND["Frontend Tests (Playwright)"]
+    ALL --> BACKEND["Backend Tests<br/><small>./dev.py test all-backend</small>"]
+    ALL --> FRONTEND["Frontend Tests<br/><small>./dev.py test all-frontend</small>"]
 
     BACKEND --> EXT["External<br/><small>Provider integrations</small>"]
     BACKEND --> DB["Database<br/><small>Schema, CRUD</small>"]

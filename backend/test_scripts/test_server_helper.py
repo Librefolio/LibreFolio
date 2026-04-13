@@ -24,6 +24,9 @@ This is achieved by:
 3. No subprocess complexity or sitecustomize.py needed
 """
 
+import os
+import signal
+import subprocess
 import threading
 import time
 
@@ -124,6 +127,25 @@ class _TestingServerManager:
         except:
             return False
 
+    @staticmethod
+    def _force_kill_port(port: int):
+        """Kill any processes occupying the given port (zombie cleanup)."""
+        try:
+            result = subprocess.run(
+                ["lsof", "-i", f":{port}", "-t"],
+                capture_output=True, text=True,
+            )
+            if result.stdout.strip():
+                pids = [int(p) for p in result.stdout.strip().split('\n') if p]
+                for pid in pids:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                        print(f"  ✗ Killed zombie PID {pid}")
+                    except (ProcessLookupError, PermissionError):
+                        pass
+        except Exception:
+            pass
+
     def _run_server(self):
         """Run uvicorn server in background thread (called by start_server)."""
         # Set test mode using the proper function (updates both env var and global flag)
@@ -150,14 +172,23 @@ class _TestingServerManager:
         """
         Start backend server for testing on TEST_PORT as a background thread.
 
+        Automatically kills zombie processes on the test port (--force behavior).
+
         Returns:
             bool: True if server started successfully
         """
-        # Check if port is available before starting
+        # Force-kill any zombie processes on the test port
         is_available, process_info = check_port_available(TEST_SERVER_PORT)
         if not is_available:
-            print_port_occupied_help(TEST_SERVER_PORT, process_info)
-            return False
+            print(f"\n⚠️  Port {TEST_SERVER_PORT} is occupied — killing zombie process(es)...")
+            self._force_kill_port(TEST_SERVER_PORT)
+            time.sleep(1)
+            # Re-check
+            is_available, process_info = check_port_available(TEST_SERVER_PORT)
+            if not is_available:
+                print_port_occupied_help(TEST_SERVER_PORT, process_info)
+                return False
+            print(f"✅ Port {TEST_SERVER_PORT} is now free")
 
         # Start server in background thread
         self.server_thread = threading.Thread(

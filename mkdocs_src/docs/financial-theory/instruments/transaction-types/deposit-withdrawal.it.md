@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/deposit.png" width="32" style="vertical-align: middle;" /> Depositi e Prelievi
+# ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Depositi e Prelievi
 
 I **depositi** e i **prelievi** registrano i movimenti di liquidità in entrata e in uscita da un conto broker. Non comportano alcun asset: cambia solo il saldo di cassa.
 

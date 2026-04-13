@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/fee.png" width="32" style="vertical-align: middle;" /> Frais et Taxes
+# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Frais et Taxes
 
 Les **frais** et les **taxes** représentent des coûts qui réduisent la valeur de votre portefeuille. Ce sont des types de transactions distincts pour différencier les coûts facturés par le courtier des obligations imposées par le gouvernement.
 

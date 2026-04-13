@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/bond.png" width="32" style="vertical-align: middle;" /> Bonds
+# ![](../../../static/icons/asset-types/bond.png){: width="32" style="vertical-align: middle;" } Bonds
 
 A **bond** is a fixed-income security representing a loan from an investor to a borrower (government or corporation). The borrower pays periodic interest (**coupons**) and returns the principal (**face value**) at maturity.
 

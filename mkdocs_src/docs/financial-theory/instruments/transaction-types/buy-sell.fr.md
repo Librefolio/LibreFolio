@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/buy.png" width="32" style="vertical-align: middle;" /> Achat & Vente
+# ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Achat & Vente
 
 Les types de transactions les plus fondamentaux : l'**achat** augmente vos positions et diminue vos liquidités ; la **vente** fait l'inverse et réalise une plus-value ou une moins-value.
 

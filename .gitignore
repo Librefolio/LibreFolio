@@ -37,8 +37,6 @@ backend/data/**
 
 # Testing
 .pytest_cache/
-.coverage
-htmlcov/
 
 # OS
 .DS_Store
@@ -74,6 +72,8 @@ mkdocs_src/docs/javascripts/vendor/
 
 # Coverage reports
 htmlcov/
+htmlcov-backend/
+htmlcov-frontend/
 .coverage
 .coverage.*
 coverage.xml

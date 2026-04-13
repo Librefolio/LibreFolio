@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/deposit.png" width="32" style="vertical-align: middle;" /> Dépôts & Retraits
+# ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Dépôts & Retraits
 
 Les **dépôts** et les **retraits** suivent les mouvements de liquidités entrant et sortant d'un compte courtier. Ils n'impliquent aucun actif — seul le solde de trésorerie change.
 

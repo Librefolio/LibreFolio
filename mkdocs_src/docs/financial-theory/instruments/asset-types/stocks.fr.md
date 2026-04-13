@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/stock.png" width="32" style="vertical-align: middle;" /> Actions
+# ![](../../../static/icons/asset-types/stock.png){: width="32" style="vertical-align: middle;" } Actions
 
 Une **action** (ou titre de propriété) représente une part du capital d'une société cotée en bourse. Lorsque vous achetez une action, vous devenez actionnaire avec un droit proportionnel sur les actifs et les bénéfices de la société.
 

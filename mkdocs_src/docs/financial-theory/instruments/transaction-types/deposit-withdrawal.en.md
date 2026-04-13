@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/deposit.png" width="32" style="vertical-align: middle;" /> Deposit & Withdrawal
+# ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Deposit & Withdrawal
 
 **Deposits** and **withdrawals** track the movement of cash into and out of a broker account. They do not involve any asset — only the cash balance changes.
 

@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.services.fx import RateNotFoundError, convert, convert_bulk
+from backend.app.services.fx import RateNotFoundError, compute_chain_rate, convert_bulk
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,
@@ -126,6 +126,15 @@ async def setup_mock_fx_rates(session):
         )
 
 
+async def _convert_single(session, amount, to_currency, as_of_date, return_rate_info=False):
+    """Helper: single-item wrapper around convert_bulk (replaces removed convert())."""
+    results, errors = await convert_bulk(session, [(amount, to_currency, as_of_date)], raise_on_error=True)
+    converted, rate_date, backward_filled = results[0]
+    if return_rate_info:
+        return converted, rate_date, backward_filled
+    return converted
+
+
 @pytest.mark.asyncio
 async def test_identity_conversion():
     """Test identity conversion (same currency)."""
@@ -139,7 +148,7 @@ async def test_identity_conversion():
 
         # Test EUR → EUR (using Currency objects)
         amount_eur = Currency(code="EUR", amount=test_amount)
-        result_eur = await convert(session, amount_eur, "EUR", test_date)
+        result_eur = await _convert_single(session, amount_eur, "EUR", test_date)
         assert (
             result_eur.amount == test_amount
         ), f"EUR → EUR: expected {test_amount}, got {result_eur.amount}"
@@ -148,7 +157,7 @@ async def test_identity_conversion():
 
         # Test USD → USD
         amount_usd = Currency(code="USD", amount=test_amount)
-        result_usd = await convert(session, amount_usd, "USD", test_date)
+        result_usd = await _convert_single(session, amount_usd, "USD", test_date)
         assert (
             result_usd.amount == test_amount
         ), f"USD → USD: expected {test_amount}, got {result_usd.amount}"
@@ -182,7 +191,7 @@ async def test_direct_conversion():
 
         # Convert 100 EUR to USD (using Currency)
         amount_eur = Currency(code="EUR", amount=Decimal("100.00"))
-        result_usd = await convert(session, amount_eur, "USD", rate_record.date)
+        result_usd = await _convert_single(session, amount_eur, "USD", rate_record.date)
         expected_usd = amount_eur.amount * rate_record.rate
 
         print_info(f"Conversion: {amount_eur} → {result_usd}")
@@ -223,7 +232,7 @@ async def test_inverse_conversion():
 
         # Convert 100 USD to EUR (inverse operation, using Currency)
         amount_usd = Currency(code="USD", amount=Decimal("100.00"))
-        result_eur = await convert(session, amount_usd, "EUR", rate_record.date)
+        result_eur = await _convert_single(session, amount_usd, "EUR", rate_record.date)
         expected_eur = amount_usd.amount / rate_record.rate
 
         print_info(f"Conversion: {amount_usd} → {result_eur}")
@@ -265,11 +274,11 @@ async def test_roundtrip_conversion():
 
         # Step 1: EUR → USD
         eur_currency = Currency(code="EUR", amount=original_amount)
-        usd_result = await convert(session, eur_currency, "USD", rate_record.date)
+        usd_result = await _convert_single(session, eur_currency, "USD", rate_record.date)
         print_info(f"Step 1: {eur_currency} → {usd_result}")
 
         # Step 2: USD → EUR
-        final_result = await convert(session, usd_result, "EUR", rate_record.date)
+        final_result = await _convert_single(session, usd_result, "EUR", rate_record.date)
         print_info(f"Step 2: {usd_result} → {final_result}")
 
         # Should get back original amount (within rounding error)
@@ -296,17 +305,17 @@ async def test_different_dates():
 
         # Test with today's date
         today = date.today()
-        result_today = await convert(session, test_amount, "USD", today)
+        result_today = await _convert_single(session, test_amount, "USD", today)
         print_success(f"Today ({today}): {test_amount} → {result_today}")
 
         # Test with yesterday's date
         yesterday = today - timedelta(days=1)
-        result_yesterday = await convert(session, test_amount, "USD", yesterday)
+        result_yesterday = await _convert_single(session, test_amount, "USD", yesterday)
         print_success(f"Yesterday ({yesterday}): {test_amount} → {result_yesterday}")
 
         # Test with 7 days ago
         week_ago = today - timedelta(days=7)
-        result_week_ago = await convert(session, test_amount, "USD", week_ago)
+        result_week_ago = await _convert_single(session, test_amount, "USD", week_ago)
         print_success(f"7 days ago ({week_ago}): {test_amount} → {result_week_ago}")
 
         # Verify rates are different (due to daily variation in mock data)
@@ -345,7 +354,7 @@ async def test_backward_fill():
         print_info(f"\nTest 6.1: Exact date match ({rate_record.date})")
         amount = Currency(code="EUR", amount=Decimal("100.00"))
 
-        converted, actual_date, backward_filled = await convert(
+        converted, actual_date, backward_filled = await _convert_single(
             session, amount, "USD", rate_record.date, return_rate_info=True
             )
 
@@ -358,7 +367,7 @@ async def test_backward_fill():
         print_info(f"\nTest 6.2: Future date ({future_date}, +365 days)")
         print_info("Expected: Use unlimited backward-fill")
 
-        converted, actual_date, backward_filled = await convert(
+        converted, actual_date, backward_filled = await _convert_single(
             session, amount, "USD", future_date, return_rate_info=True
             )
 
@@ -381,7 +390,7 @@ async def test_backward_fill():
 
         # Test should raise RateNotFoundError
         with pytest.raises(RateNotFoundError):
-            await convert(session, amount, "USD", very_old_date)
+            await _convert_single(session, amount, "USD", very_old_date)
         print_success("✓ Correctly raised RateNotFoundError for date before any data")
 
         print_success("Backward-fill logic works correctly (unlimited with tracking)")
@@ -418,7 +427,7 @@ async def test_missing_rate_error():
         print_info("Expected: RateNotFoundError")
 
         with pytest.raises(RateNotFoundError) as exc_info:
-            await convert(session, amount, "USD", date_before)
+            await _convert_single(session, amount, "USD", date_before)
 
         error_msg = str(exc_info.value)
         print_success("✓ Correctly raised RateNotFoundError")
@@ -430,7 +439,7 @@ async def test_missing_rate_error():
         print_info("Expected: Success with backward-fill")
 
         try:
-            converted, actual_date, backward_filled = await convert(
+            converted, actual_date, backward_filled = await _convert_single(
                 session, amount, "USD", old_but_valid_date, return_rate_info=True
                 )
 
@@ -660,3 +669,68 @@ async def test_bulk_raise_on_error():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+# ============================================================================
+# COMPUTE CHAIN RATE TESTS (C13b — pure function, no DB)
+# ============================================================================
+
+
+class TestComputeChainRate:
+    """Tests for compute_chain_rate() — pure computation, no DB needed."""
+
+    def test_single_step_direct(self):
+        """Single step GBP→EUR (direct order: GBP < EUR alphabetically is False, EUR < GBP is True)."""
+        # EUR < GBP alphabetically, so norm is (EUR, GBP)
+        # Step from=EUR to=GBP: EUR < GBP → direct → multiply by rate
+        steps = [{"from": "EUR", "to": "GBP"}]
+        leg_rates = {("EUR", "GBP", date(2025, 1, 1)): Decimal("0.84")}
+        result = compute_chain_rate(steps, leg_rates, date(2025, 1, 1))
+        assert result == Decimal("0.84")
+
+    def test_single_step_inverse(self):
+        """Single step GBP→EUR (inverse order: GBP > EUR alphabetically)."""
+        # Stored as (EUR, GBP). Step from=GBP to=EUR: GBP > EUR → inverse → 1/rate
+        steps = [{"from": "GBP", "to": "EUR"}]
+        leg_rates = {("EUR", "GBP", date(2025, 1, 1)): Decimal("0.84")}
+        result = compute_chain_rate(steps, leg_rates, date(2025, 1, 1))
+        expected = Decimal("1") / Decimal("0.84")
+        assert abs(result - expected) < Decimal("0.0001")
+
+    def test_two_step_chain(self):
+        """Two-step chain: GBP→EUR→USD = (1/EUR_GBP) * EUR_USD."""
+        steps = [
+            {"from": "GBP", "to": "EUR"},  # inverse: 1/0.84
+            {"from": "EUR", "to": "USD"},  # direct: 1.07
+            ]
+        d = date(2025, 1, 1)
+        leg_rates = {
+            ("EUR", "GBP", d): Decimal("0.84"),
+            ("EUR", "USD", d): Decimal("1.07"),
+            }
+        result = compute_chain_rate(steps, leg_rates, d)
+        expected = (Decimal("1") / Decimal("0.84")) * Decimal("1.07")
+        assert abs(result - expected) < Decimal("0.0001")
+
+    def test_missing_leg_returns_none(self):
+        """If any leg is missing for the target date, returns None."""
+        steps = [
+            {"from": "EUR", "to": "GBP"},
+            {"from": "GBP", "to": "USD"},
+            ]
+        # Only one leg present
+        leg_rates = {("EUR", "GBP", date(2025, 1, 1)): Decimal("0.84")}
+        result = compute_chain_rate(steps, leg_rates, date(2025, 1, 1))
+        assert result is None
+
+    def test_wrong_date_returns_none(self):
+        """Rates exist for a different date → returns None (strict date matching)."""
+        steps = [{"from": "EUR", "to": "USD"}]
+        leg_rates = {("EUR", "USD", date(2025, 1, 1)): Decimal("1.07")}
+        result = compute_chain_rate(steps, leg_rates, date(2025, 1, 2))
+        assert result is None
+
+    def test_empty_steps(self):
+        """Empty steps list → composite rate = 1 (identity)."""
+        result = compute_chain_rate([], {}, date(2025, 1, 1))
+        assert result == Decimal("1")

@@ -36,6 +36,8 @@
         layoutMode: LayoutMode;
         /** Callback to open FX pair add modal */
         onAddFxPair?: () => void;
+        /** True when live price FX conversion failed (pair exists but rate unavailable for today) */
+        livePriceConversionFailed?: boolean;
     }
 
     let {
@@ -48,6 +50,7 @@
         fxPairSlug,
         layoutMode,
         onAddFxPair,
+        livePriceConversionFailed = false,
     }: Props = $props();
 
     let showFxPairLink = $derived(
@@ -73,6 +76,13 @@
                     {lastPrice.toFixed(2)}
                 </span>
                 <span class="text-xs text-gray-400 dark:text-gray-500">{displayCurrency}</span>
+                {#if livePriceConversionFailed}
+                    <Tooltip text={$t('assetDetail.livePriceConversionFailed', {values: {currency: assetCurrency}})} position="bottom">
+                        <span class="text-amber-500 dark:text-amber-400">
+                            <AlertTriangle size={13}/>
+                        </span>
+                    </Tooltip>
+                {/if}
                 {#if deltaAbs !== null}
                     <span class="text-xs text-gray-400 dark:text-gray-500">
                         ({deltaAbs >= 0 ? '+' : ''}{deltaAbs.toFixed(2)})

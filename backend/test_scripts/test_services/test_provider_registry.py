@@ -7,6 +7,8 @@ Tests provider auto-discovery for Asset and FX providers.
 import pytest
 
 from backend.app.services.provider_registry import AssetProviderRegistry, FXProviderRegistry
+from backend.app.services.fx import FXRateProvider
+from backend.app.services.asset_source import AssetSourceProvider
 
 
 def test_asset_provider_discovery():
@@ -49,3 +51,27 @@ def test_fx_provider_discovery():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+# ============================================================================
+# GENERATE STATIC URL TESTS (C13b)
+# ============================================================================
+
+
+def test_fx_generate_static_url():
+    """FXRateProvider.generate_static_url returns correct URL path."""
+    url = FXRateProvider.generate_static_url("ecb/logo.svg")
+    assert url == "/api/v1/uploads/plugin/fx/ecb/logo.svg"
+
+
+def test_asset_generate_static_url():
+    """AssetSourceProvider.generate_static_url returns correct URL path."""
+    url = AssetSourceProvider.generate_static_url("yfinance/logo.png")
+    assert url == "/api/v1/uploads/plugin/asset/yfinance/logo.png"
+
+
+def test_fx_static_url_nested_path():
+    """generate_static_url handles nested paths correctly."""
+    url = FXRateProvider.generate_static_url("snb/icons/small.png")
+    assert url == "/api/v1/uploads/plugin/fx/snb/icons/small.png"
+

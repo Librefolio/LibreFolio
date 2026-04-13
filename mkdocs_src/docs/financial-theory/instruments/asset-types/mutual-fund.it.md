@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/fund.png" width="32" style="vertical-align: middle;" /> Fondi Comuni di Investimento
+# ![](../../../static/icons/asset-types/fund.png){: width="32" style="vertical-align: middle;" } Fondi Comuni di Investimento
 
 Un **fondo comune di investimento** è un veicolo di investimento gestito professionalmente che raccoglie capitali da numerosi investitori per acquistare un portafoglio diversificato di azioni, obbligazioni o altri titoli.
 

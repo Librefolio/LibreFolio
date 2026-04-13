@@ -32,6 +32,12 @@ from backend.app.utils.version import get_git_version
 from backend.app.services.provider_registry import (
     AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry,
     )
+from backend.app.services.static_uploads import seed_default_avatars
+from backend.app.services.settings_service import initialize_global_settings
+from backend.app.utils.cache_utils import close_all_caches
+from backend.app.db.session import get_async_engine
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Check for test mode via environment variable ONLY
 # NOTE: Do NOT check sys.argv here - it causes issues when this module is imported
@@ -156,7 +162,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     ensure_data_dirs()
 
     # Seed default avatar images on first startup
-    from backend.app.services.static_uploads import seed_default_avatars
     seeded = seed_default_avatars()
     if seeded > 0:
         logger.info(f"Seeded {seeded} default avatar(s) into static resources")
@@ -177,13 +182,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     FXProviderRegistry.shutdown_all_providers()
     BRIMProviderRegistry.shutdown_all_providers()
 
+    # Close all TTL caches (stop timer wheel threads for clean exit)
+    close_all_caches()
+
 
 async def _initialize_global_settings():
     """Initialize global settings with default values if not present."""
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from backend.app.db.session import get_async_engine
-    from backend.app.services.settings_service import initialize_global_settings
-
     engine = get_async_engine()
     async with AsyncSession(engine) as session:
         created = await initialize_global_settings(session)
@@ -194,7 +198,6 @@ async def _initialize_global_settings():
 async def _prewarm_provider_caches():
     """Pre-warm provider instances and their caches in background."""
     try:
-        from backend.app.services.provider_registry import AssetProviderRegistry
         for provider_info in AssetProviderRegistry.list_providers():
             code = provider_info["code"]
             AssetProviderRegistry.get_provider_instance(code)

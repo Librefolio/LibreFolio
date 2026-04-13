@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/interest.png" width="32" style="vertical-align: middle;" /> Interessi (Transazione)
+# ![](../../../static/icons/transactions/interest.png){: width="32" style="vertical-align: middle;" } Interessi (Transazione)
 
 Una **transazione di interessi** registra gli interessi ricevuti da obbligazioni, conti di risparmio, prestiti P2P o altri strumenti a reddito fisso. Rappresenta l'impatto a livello di portafoglio di un [evento di interesse](../asset-events/interest.md).
 

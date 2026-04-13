@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.10-4-g03d9b7a3-dirty"
+    "version": "v0.5.10-5-g09d09819-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -8147,6 +8147,70 @@
             "title": "Original Currency",
             "description": "Original currency before FX conversion (None = no conversion)"
           },
+          "original_close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Close",
+            "description": "Close price in original currency before FX conversion"
+          },
+          "original_open": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Open",
+            "description": "Open price in original currency before FX conversion"
+          },
+          "original_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original High",
+            "description": "High price in original currency before FX conversion"
+          },
+          "original_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Low",
+            "description": "Low price in original currency before FX conversion"
+          },
           "backward_fill_info": {
             "anyOf": [
               {
@@ -8251,6 +8315,58 @@
             ],
             "title": "Original Currency",
             "description": "Original currency before FX conversion (None = no conversion)"
+          },
+          "original_close": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Close",
+            "description": "Close price in original currency before FX conversion"
+          },
+          "original_open": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Open",
+            "description": "Open price in original currency before FX conversion"
+          },
+          "original_high": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original High",
+            "description": "High price in original currency before FX conversion"
+          },
+          "original_low": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Low",
+            "description": "Low price in original currency before FX conversion"
           },
           "backward_fill_info": {
             "anyOf": [
@@ -9086,6 +9202,18 @@
             "type": "integer",
             "title": "Updated Count",
             "description": "Number of prices updated in DB",
+            "default": 0
+          },
+          "events_fetched": {
+            "type": "integer",
+            "title": "Events Fetched",
+            "description": "Number of events fetched from provider",
+            "default": 0
+          },
+          "events_changed": {
+            "type": "integer",
+            "title": "Events Changed",
+            "description": "Number of events actually inserted/updated in DB",
             "default": 0
           },
           "message": {

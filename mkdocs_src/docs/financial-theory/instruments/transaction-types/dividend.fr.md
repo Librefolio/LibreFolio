@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/dividend.png" width="32" style="vertical-align: middle;" /> Dividende (Transaction)
+# ![](../../../static/icons/transactions/dividend.png){: width="32" style="vertical-align: middle;" } Dividende (Transaction)
 
 Une **transaction de dividende** enregistre le paiement en espèces reçu pour la détention d'un actif versant des dividendes (action ou ETF de distribution). Elle représente l'impact au niveau du portefeuille d'un [événement de dividende](../asset-events/dividend.md).
 

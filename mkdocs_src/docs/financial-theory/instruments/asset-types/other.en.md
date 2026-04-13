@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/other.png" width="32" style="vertical-align: middle;" /> Other
+# ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Other
 
 The **Other** asset type is a catch-all category for any asset class not covered by the standard types. It provides maximum flexibility for tracking non-traditional investments.
 

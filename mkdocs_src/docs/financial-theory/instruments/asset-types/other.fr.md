@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/other.png" width="32" style="vertical-align: middle;" /> Autres
+# ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Autres
 
 Le type d'actif **Autres** est une catégorie générique pour toute classe d'actifs non couverte par les types standards. Elle offre une flexibilité maximale pour le suivi d'investissements non traditionnels.
 

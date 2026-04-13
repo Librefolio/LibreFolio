@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/transfer.png" width="32" style="vertical-align: middle;" /> Transferencias y Conversión de FX
+# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transferencias y Conversión de FX
 
 Las **Transferencias** mueven activos entre carteras sin venta, mientras que las **Conversiones de FX** intercambian una moneda por otra dentro de una cartera.
 

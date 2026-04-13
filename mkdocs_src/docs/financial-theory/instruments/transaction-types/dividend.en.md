@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/dividend.png" width="32" style="vertical-align: middle;" /> Dividend (Transaction)
+# ![](../../../static/icons/transactions/dividend.png){: width="32" style="vertical-align: middle;" } Dividend (Transaction)
 
 A **dividend transaction** records the cash payment received from holding a dividend-paying asset (stock or distributing ETF). It represents the portfolio-level impact of a [dividend event](../asset-events/dividend.md).
 
