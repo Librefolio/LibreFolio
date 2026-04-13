@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/fee.png" width="32" style="vertical-align: middle;" /> Comisiones e Impuestos
+# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Comisiones e Impuestos
 
 Las **comisiones** y los **impuestos** representan costes que reducen el valor de su cartera. Son tipos de transacciones independientes para distinguir entre los costes cobrados por el bróker y las obligaciones impuestas por el gobierno.
 

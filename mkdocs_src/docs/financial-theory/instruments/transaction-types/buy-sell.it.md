@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/buy.png" width="32" style="vertical-align: middle;" /> Acquisto e Vendita
+# ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Acquisto e Vendita
 
 I tipi di transazione più fondamentali: l'**acquisto** aumenta le tue posizioni e diminuisce la liquidità; la **vendita** fa l'opposto e realizza un profitto o una perdita.
 

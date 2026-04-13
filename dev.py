@@ -243,31 +243,47 @@ def cmd_server(args):
         env["LIBREFOLIO_TEST_MODE"] = "1"
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
-    if coverage_mode:
-        coveragerc = str(PROJECT_ROOT / ".coveragerc")
-        env["COVERAGE_PROCESS_START"] = coveragerc
-        print(f"{Colors.YELLOW}📊 Coverage tracking enabled via sitecustomize.py{Colors.NC}")
-        print(f"{Colors.YELLOW}   Config: {coveragerc}{Colors.NC}")
-        print(f"{Colors.YELLOW}   Coverage data will be written to .coverage.<pid> on shutdown{Colors.NC}")
-        print(f"{Colors.YELLOW}   After tests: coverage combine && coverage html && open htmlcov/index.html{Colors.NC}")
-        print()
-
     # Generate a shared JWT secret for all workers.
     # On macOS, Python uses 'spawn' (not fork) for multiprocessing, so each
     # uvicorn worker is a fresh process. Without a shared env var, each worker
     # would generate its own random secret → tokens invalid across workers.
     env.setdefault("JWT_SECRET", secrets.token_urlsafe(64))
 
-    uvicorn_cmd = [
-        *pipenv_prefix(), "uvicorn",
-        "backend.app.main:app",
-        "--host", host,
-        "--port", str(port),
-    ]
-    if workers > 1:
-        uvicorn_cmd.extend(["--workers", str(workers)])
+    if coverage_mode:
+        # Use 'coverage run --parallel-mode -m uvicorn' to track backend code
+        # coverage during E2E tests. This replaces the old sitecustomize.py
+        # approach, which didn't work because Python's system-level
+        # sitecustomize.py shadows the project one.
+        #
+        # NOTE: --reload is NOT used in coverage mode because 'coverage run'
+        # tracks only the direct process; reloader child processes would need
+        # sitecustomize.py (which doesn't work). Without --reload, there's a
+        # single uvicorn process that 'coverage run' tracks directly.
+        coveragerc = str(PROJECT_ROOT / ".coveragerc")
+        uvicorn_cmd = [
+            *pipenv_prefix(), "coverage", "run",
+            "--parallel-mode",
+            f"--rcfile={coveragerc}",
+            "-m", "uvicorn",
+            "backend.app.main:app",
+            "--host", host,
+            "--port", str(port),
+        ]
+        print(f"{Colors.YELLOW}📊 Coverage tracking enabled via 'coverage run'{Colors.NC}")
+        print(f"{Colors.YELLOW}   Config: {coveragerc}{Colors.NC}")
+        print(f"{Colors.YELLOW}   Coverage data will be written to .coverage.<pid> on shutdown{Colors.NC}")
+        print()
     else:
-        uvicorn_cmd.append("--reload")
+        uvicorn_cmd = [
+            *pipenv_prefix(), "uvicorn",
+            "backend.app.main:app",
+            "--host", host,
+            "--port", str(port),
+        ]
+        if workers > 1:
+            uvicorn_cmd.extend(["--workers", str(workers)])
+        else:
+            uvicorn_cmd.append("--reload")
 
     return run_command_live(uvicorn_cmd, env=env)
 
@@ -506,7 +522,7 @@ def _check_admonition_empty_lines():
     for md_file in sorted(docs_dir.rglob("*.md")):
         lines = md_file.read_text().splitlines()
         for i, line in enumerate(lines):
-            if admre.match(line):
+            if adm_re.match(line):
                 if i + 1 < len(lines) and lines[i + 1].strip() != '':
                     if lines[i + 1].startswith('    '):
                         rel = md_file.relative_to(docs_dir)
@@ -527,12 +543,59 @@ def _check_admonition_empty_lines():
         ))
         print()
 
+def _check_image_paths_in_built_site():
+    """Check that all <img src> paths in built HTML resolve to existing files.
+
+    Scans the built site for relative image paths under static/icons/ and
+    verifies each one exists on disk.  Prints a visible warning if broken.
+    """
+    site_dir = PROJECT_ROOT / "mkdocs_src" / "site"
+    if not site_dir.exists():
+        return
+
+    img_re = re.compile(r'<img[^>]+src="([^"]+)"')
+    broken = []
+
+    for html_file in sorted(site_dir.rglob("*.html")):
+        html_dir = html_file.parent
+        content = html_file.read_text(errors="ignore")
+        for match in img_re.finditer(content):
+            src = match.group(1)
+            # Only check relative paths to static/icons
+            if src.startswith(("http://", "https://", "data:", "/")) or "static/icons" not in src:
+                continue
+            resolved = (html_dir / src).resolve()
+            if not resolved.exists():
+                rel_html = html_file.relative_to(site_dir)
+                broken.append((str(rel_html), src))
+
+    if broken:
+        print()
+        print(Colors.warning(
+            f"⚠️  {len(broken)} broken icon path(s) found in built site:"
+        ))
+        for html_path, img_src in broken[:20]:
+            print(f"  ❌ {html_path}")
+            print(f"     → {img_src}")
+        if len(broken) > 20:
+            print(f"  ... and {len(broken) - 20} more")
+        print(Colors.info(
+            "  Fix: use Markdown image syntax ![](path) instead of raw <img> for path auto-adjustment."
+        ))
+        print()
+    else:
+        print(Colors.success("✅ All static icon paths in built site verified"))
+
+
 def cmd_mkdocs_build(args):
     """Build MkDocs documentation."""
     print(Colors.success("Building MkDocs site..."))
     _check_admonition_empty_lines()
     copy_docs_assets()
-    return run_pipenv(["mkdocs", "build", "-f", "mkdocs_src/mkdocs.yml"])
+    result = run_pipenv(["mkdocs", "build", "-f", "mkdocs_src/mkdocs.yml"])
+    if result == 0:
+        _check_image_paths_in_built_site()
+    return result
 
 
 def cmd_mkdocs_serve(args):
@@ -881,7 +944,11 @@ def _get_docker_tag(override: str | None = None) -> str:
 
 
 def _check_env_file():
-    """Check that .env exists; if not, abort with helpful instructions."""
+    """Check that .env exists; if not, abort with helpful instructions.
+
+    Also warns when terminal environment variables override .env values
+    for Docker-relevant variables (PORT, TEST_PORT).
+    """
     env_file = PROJECT_ROOT / ".env"
     if not env_file.exists():
         print_error("❌ .env file not found!")
@@ -893,6 +960,28 @@ def _check_env_file():
         print(f"    $EDITOR {env_file}")
         print()
         return False
+
+    # Check for shell env vars that override .env values
+    DOCKER_VARS = ("PORT", "TEST_PORT")
+    try:
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key in DOCKER_VARS:
+                shell_value = os.environ.get(key)
+                if shell_value is not None and shell_value != value:
+                    print_warning(
+                        f"⚠ env variable {key} is set in terminal ({shell_value}) "
+                        f"but differs from .env ({value})"
+                    )
+                    print(Colors.info(f"  Terminal value takes priority. To use .env value: unset {key}"))
+    except Exception:
+        pass  # Non-blocking: if .env parsing fails, just skip the check
+
     return True
 
 

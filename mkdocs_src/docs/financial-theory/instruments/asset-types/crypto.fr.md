@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/crypto.png" width="32" style="vertical-align: middle;" /> Crypto
+# ![](../../../static/icons/asset-types/crypto.png){: width="32" style="vertical-align: middle;" } Crypto
 
 Les **cryptomonnaies** sont des actifs numériques qui utilisent la technologie cryptographique pour sécuriser les transactions sur des réseaux blockchain décentralisés. Elles fonctionnent indépendamment des systèmes bancaires traditionnels.
 

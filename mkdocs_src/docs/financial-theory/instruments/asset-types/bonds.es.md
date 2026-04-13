@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/bond.png" width="32" style="vertical-align: middle;" /> Bonos
+# ![](../../../static/icons/asset-types/bond.png){: width="32" style="vertical-align: middle;" } Bonos
 
 Un **bono** es un valor de renta fija que representa un préstamo de un inversor a un prestatario (gobierno o corporación). El prestatario paga intereses periódicos (**cupones**) y devuelve el principal (**valor nominal**) al vencimiento.
 

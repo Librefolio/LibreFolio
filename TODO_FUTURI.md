@@ -83,7 +83,8 @@ Il riordinamento colonne nella DataTable funziona con drag & drop su desktop, ma
 **Data aggiunta**: 20 Febbraio 2026  
 **Status**: ⏳ IN ATTESA (richiede API backend)  
 **Priorità**: Media  
-**Dipendenza**: Endpoint `/api/v1/users` o `/api/v1/admin/users`
+**Dipendenza**: Endpoint `/api/v1/users` o `/api/v1/admin/users`  
+**Codice correlato**: `get_upload_by_user()` in `backend/app/services/static_uploads.py` (predisposta per colonna "Uploaded by" + filtro)
 
 ### Contesto
 L'UploadedFile ha il campo `uploaded_by_user_id` ma non esiste un endpoint per risolvere gli ID utente in username/email. Serve per:
@@ -519,4 +520,54 @@ Per ora solo FULL_RESET è implementato.
 Il late interest ora supporta `generate_interest=True`. Genera INTEREST periodici + MATURITY_SETTLEMENT finale.
 Il late interest NON è una "opportunità" ma una penale — tuttavia il flag unifica il pattern: l'utente decide se auto-generare eventi o meno, indipendentemente dalla natura del tasso.
 Se l'utente non vuole auto-generare eventi di penale, lascia `generate_interest=False` sul late interest e usa eventi manuali.
+
+---
+
+## 🌍 Normalizzazione Paese Multilingua (endpoint user-facing)
+
+**Data aggiunta**: 13 Aprile 2026
+**Status**: 📋 PIANIFICATO
+**Priorità**: Bassa
+
+### Contesto
+
+La funzione `normalize_country_to_iso3()` in `backend/app/utils/geo_utils.py` gestisce la normalizzazione ISO-2 → ISO-3, ISO-3 → ISO-3, e nomi paese → ISO-3 (fuzzy search). È già usata internamente per il parsing dei dati asset.
+
+Se in futuro servisse un endpoint API `/api/v1/utilities/normalize-country` per consentire agli utenti di cercare paesi in lingue diverse, la funzione base è già pronta. Basterebbe estenderla con un parametro `language` per il matching multilingua (la vecchia `normalize_country_multilang()` è stata rimossa in C14a come dead code — da riscrivere se necessario).
+
+### Azione Futura
+
+1. Se il TODO viene implementato: estendere `normalize_country_to_iso3()` con supporto multilingua
+2. Se il TODO viene scartato: nessuna azione necessaria, la funzione attuale è comunque in uso
+
+---
+
+## ⚙️ Default Language/Currency per Nuovi Utenti (Registrazione)
+
+**Data aggiunta**: 13 Aprile 2026
+**Status**: 📋 PIANIFICATO
+**Priorità**: Bassa (richiede refactoring registrazione)
+
+### Contesto
+
+Architetturalmente ha senso che il sistema assegni lingua e valuta di default ai nuovi utenti alla registrazione, leggendole dalle global settings. Le funzioni `get_default_language()` e `get_default_currency()` sono state rimosse da `global_settings_service.py` come dead code in C14a.
+
+Quando la registrazione utenti verrà arricchita con defaults personalizzabili dall'admin:
+
+1. Ricreare `get_default_language(session)` e `get_default_currency(session)` — sono one-liner che chiamano `get_setting_value()`
+2. Usarle nel flusso di registrazione utente per inizializzare `UserSettings`
+
+### Funzioni rimosse (riferimento per ricreazione)
+
+```python
+async def get_default_language(session: AsyncSession) -> str:
+    value = await get_setting_value(session, "default_language", "en")
+    return str(value) if value else "en"
+
+async def get_default_currency(session: AsyncSession) -> str:
+    value = await get_setting_value(session, "default_currency", "EUR")
+    return str(value) if value else "EUR"
+```
+
+---
 

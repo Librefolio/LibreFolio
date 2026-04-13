@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/bond.png" width="32" style="vertical-align: middle;" /> Obligations
+# ![](../../../static/icons/asset-types/bond.png){: width="32" style="vertical-align: middle;" } Obligations
 
 Une **obligation** est un titre à revenu fixe représentant un prêt d'un investisseur à un emprunteur (gouvernement ou entreprise). L'emprunteur verse des intérêts périodiques (**coupons**) et rembourse le principal (**valeur nominale**) à l'échéance.
 

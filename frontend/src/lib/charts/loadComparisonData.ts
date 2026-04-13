@@ -26,6 +26,7 @@ export interface ComparisonAssetMeta {
  * @param allAssets - Full asset list (for metadata lookup)
  * @param existingEvents - Current comparison events map (merged into)
  * @param excludeAssetId - Asset ID to exclude from loading (the page's own asset)
+ * @param targetCurrency - Target currency for FX conversion (when display currency differs from asset native)
  * @returns Updated comparison events map
  */
 export async function loadComparisonAssetsData(
@@ -34,6 +35,7 @@ export async function loadComparisonAssetsData(
     allAssets: ComparisonAssetMeta[],
     existingEvents: Map<number, any[]>,
     excludeAssetId?: number,
+    targetCurrency?: string,
 ): Promise<Map<number, any[]>> {
     const idsToLoad = compSignals
         .map(s => Number(s.params.assetId))
@@ -44,6 +46,7 @@ export async function loadComparisonAssetsData(
         asset_id: id,
         date_range: {start: dateRange.start, end: dateRange.end},
         include_events: true,
+        target_currency: targetCurrency || undefined,
     }));
     const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries);
     const items = (response as any)?.items ?? [];
@@ -51,13 +54,18 @@ export async function loadComparisonAssetsData(
 
     for (const result of items) {
         const aid = result.asset_id;
-        const prices = (result.prices ?? []).map((p: any) => ({date: p.date, value: Number(p.close ?? 0)}));
+        const hasConversionError = Array.isArray(result.errors) && result.errors.length > 0;
+        const prices = hasConversionError
+            ? [] // Don't overlay data when currency conversion failed (different currencies = misleading)
+            : (result.prices ?? []).map((p: any) => ({date: p.date, value: Number(p.close ?? 0)}));
         const assetMeta = allAssets.find(a => a.id === aid);
         for (const cfg of compSignals) {
             if (Number(cfg.params.assetId) === aid) {
-                cfg.params._resolvedData = prices;
+                cfg.params._resolvedData = prices.length > 0 ? prices : undefined;
                 cfg.params._assetIconUrl = assetMeta?.icon_url ?? null;
                 cfg.params._assetType = assetMeta?.asset_type ?? null;
+                cfg.params._conversionFailed = hasConversionError;
+                cfg.params._conversionError = hasConversionError ? result.errors[0] : undefined;
             }
         }
         newCompEvents.set(aid, result.events ?? []);

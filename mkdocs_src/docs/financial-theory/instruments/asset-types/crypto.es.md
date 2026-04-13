@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/crypto.png" width="32" style="vertical-align: middle;" /> Cripto
+# ![](../../../static/icons/asset-types/crypto.png){: width="32" style="vertical-align: middle;" } Cripto
 
 Las **criptomonedas** son activos digitales que utilizan tecnología criptográfica para realizar transacciones seguras en redes de blockchain descentralizadas. Operan de forma independiente a los sistemas bancarios tradicionales.
 

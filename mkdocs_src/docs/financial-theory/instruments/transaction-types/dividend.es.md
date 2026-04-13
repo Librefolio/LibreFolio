@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/transactions/dividend.png" width="32" style="vertical-align: middle;" /> Dividendo (Transacción)
+# ![](../../../static/icons/transactions/dividend.png){: width="32" style="vertical-align: middle;" } Dividendo (Transacción)
 
 Una **transacción de dividendo** registra el pago en efectivo recibido por mantener una posición en un activo que paga dividendos (acción o ETF de distribución). Representa el impacto a nivel de cartera de un [evento de dividendo](../asset-events/dividend.md).
 

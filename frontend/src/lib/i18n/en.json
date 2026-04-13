@@ -847,11 +847,14 @@
       "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%."
     },
     "macdLineColor": "MACD Line Color",
-    "noDataAvailable": "No data available. Try syncing this asset/pair."
+    "noDataAvailable": "No data available. Try syncing this asset/pair.",
+    "conversionFailed": "Currency conversion failed — data not shown (FX pair not configured)"
   },
   "chart": {
     "tooltip": {
       "stale": "Stale: {days} day(s) old",
+      "fxStale": "FX rate: {days}d old",
+      "convertedFrom": "Converted from {currency}",
       "percentNote": "% relative to range start date",
       "upper": "Upper",
       "lower": "Lower"
@@ -869,7 +872,8 @@
       "deltaPct": "Δ %",
       "annualized": "Δ%/yr"
     },
-    "days": "{days}d"
+    "days": "{days}d",
+    "addMeasure": "Add Measure"
   },
   "fxDetail": {
     "measures": "Measures",
@@ -980,7 +984,9 @@
       "SPLIT": "Stock/unit split. Quantity changes, total value unchanged.",
       "PRICE_ADJUSTMENT": "Non-cash value change: write-down, haircut, re-rating.",
       "MATURITY_SETTLEMENT": "Final capital return at maturity. No further pricing."
-    }
+    },
+    "livePriceConversionFailed": "Live price shown in {currency} — FX rate unavailable for today",
+    "dataAvailableFrom": "Data available from {date} — earlier dates have no data"
   },
   "ticker": {
     "noAssets": "No tracked assets",

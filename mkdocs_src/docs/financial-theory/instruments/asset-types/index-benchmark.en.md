@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/other.png" width="32" style="vertical-align: middle;" /> Index & Benchmark
+# ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Index & Benchmark
 
 An **index** is a statistical measure of a section of the financial market. It tracks the performance of a group of assets and serves as a **benchmark** against which investors measure their own portfolio performance.
 

@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/bond.png" width="32" style="vertical-align: middle;" /> Obbligazioni
+# ![](../../../static/icons/asset-types/bond.png){: width="32" style="vertical-align: middle;" } Obbligazioni
 
 Un'**obbligazione** è un titolo a reddito fisso che rappresenta un prestito da parte di un investitore a un ente mutuatario (governo o società). Il mutuatario paga interessi periodici (**cedole**) e restituisce il capitale (**valore nominale**) alla scadenza.
 

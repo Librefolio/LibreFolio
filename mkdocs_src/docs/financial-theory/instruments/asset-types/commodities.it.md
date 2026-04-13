@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/hold.png" width="32" style="vertical-align: middle;" /> Materie Prime
+# ![](../../../static/icons/asset-types/hold.png){: width="32" style="vertical-align: middle;" } Materie Prime
 
 Le **Materie Prime** (Commodities) sono asset fisici — materie prime o beni di base — detenuti per la preservazione del valore a lungo termine o come copertura contro l'inflazione. In LibreFolio, questa categoria comprende metalli preziosi, energia e altri depositi di valore tangibili.
 

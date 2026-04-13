@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/etf.png" width="32" style="vertical-align: middle;" /> ETF (Exchange Traded Funds)
+# ![](../../../static/icons/asset-types/etf.png){: width="32" style="vertical-align: middle;" } ETF (Exchange Traded Funds)
 
 Un **ETF** è un paniere di titoli (azioni, obbligazioni, materie prime o un mix) che viene scambiato in borsa come se fosse una singola azione. Gli ETF combinano la diversificazione dei fondi comuni di investimento con la flessibilità di negoziazione in tempo reale delle azioni.
 

@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/crypto.png" width="32" style="vertical-align: middle;" /> Crypto
+# ![](../../../static/icons/asset-types/crypto.png){: width="32" style="vertical-align: middle;" } Crypto
 
 Le **criptovalute** sono asset digitali che utilizzano la tecnologia crittografica per transazioni sicure su reti blockchain decentralizzate. Operano indipendentemente dai sistemi bancari tradizionali.
 

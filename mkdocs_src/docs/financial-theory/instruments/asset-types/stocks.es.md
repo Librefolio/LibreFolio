@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/stock.png" width="32" style="vertical-align: middle;" /> Acciones
+# ![](../../../static/icons/asset-types/stock.png){: width="32" style="vertical-align: middle;" } Acciones
 
 Una **acción** (o participación / capital) representa la propiedad parcial de una empresa que cotiza en bolsa. Cuando compras una acción, te conviertes en accionista con un derecho proporcional sobre los activos y las ganancias de la empresa.
 

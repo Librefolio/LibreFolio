@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/other.png" width="32" style="vertical-align: middle;" /> Indice & Benchmark
+# ![](../../../static/icons/asset-types/other.png){: width="32" style="vertical-align: middle;" } Indice & Benchmark
 
 Un **indice** è una misura statistica di una sezione del mercato finanziario. Traccia l'andamento di un gruppo di asset e funge da **benchmark** rispetto al quale gli investitori misurano la performance del proprio portafoglio.
 

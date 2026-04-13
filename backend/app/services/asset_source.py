@@ -91,8 +91,8 @@ from backend.app.schemas.provider import (
     ProbeMetadataResult,
     FAProviderProbeResponse,
     )
-from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.services.fx import convert_bulk
+from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
 
@@ -1471,71 +1471,6 @@ class AssetSourceManager:
         return {}
 
     @staticmethod
-    async def _fetch_provider_history(
-        assignment: AssetProviderAssignment,
-        asset_id: int,
-        start_date: date_type,
-        end_date: date_type,
-        ) -> Optional[list[FAPricePoint]]:
-        """Delegate to provider history fetch, returning FAPricePoint list or None on failure.
-
-        Logs warnings with context when provider fetch fails for diagnostics.
-        """
-        provider_code = assignment.provider_code
-        provider = AssetProviderRegistry.get_provider_instance(provider_code)
-
-        if not provider:
-            logger.warning(
-                "Provider not registered in registry, falling back to DB",
-                provider_code=provider_code,
-                asset_id=asset_id,
-                start_date=str(start_date),
-                end_date=str(end_date),
-                )
-            return None
-
-        params = AssetSourceManager._parse_provider_params(assignment.provider_params)
-
-        try:
-            historical = await provider.get_history_value(
-                str(asset_id), params, start_date, end_date
-                )
-            # historical expected FAHistoricalData with prices: List[FAPricePoint]
-            return historical.prices
-        except Exception as e:
-            logger.warning(
-                "Provider fetch failed with exception, falling back to DB",
-                provider_code=provider_code,
-                asset_id=asset_id,
-                start_date=str(start_date),
-                end_date=str(end_date),
-                exception_type=type(e).__name__,
-                exception_message=str(e),
-                )
-            return None
-
-    @staticmethod
-    async def _fetch_db_price_map(
-        session: AsyncSession,
-        asset_id: int,
-        start_date: date_type,
-        end_date: date_type,
-        ) -> dict[date_type, PriceHistory]:
-        stmt = (
-            select(PriceHistory)
-            .where(
-                and_(
-                    PriceHistory.asset_id == asset_id,
-                    PriceHistory.date >= start_date,
-                    PriceHistory.date <= end_date,
-                    )
-                )
-            .order_by(PriceHistory.date)
-        )
-        db_result = await session.execute(stmt)
-        return {p.date: p for p in db_result.scalars().all()}
-
-    @staticmethod
     def _build_backward_filled_series(
         price_map: dict[date_type, PriceHistory],
         start_date: date_type,
@@ -1755,6 +1690,10 @@ class AssetSourceManager:
                     volume=original_point.volume,
                     currency=target,
                     original_currency=original_currency,
+                    original_close=original_close,
+                    original_open=original_point.open,
+                    original_high=original_point.high,
+                    original_low=original_point.low,
                     backward_fill_info=new_bfi,
                     )
                 conv_idx += 1
@@ -2050,6 +1989,8 @@ class AssetSourceManager:
             fetched_count = len(prices)
             inserted_count = 0
             updated_count = 0
+            events_fetched_count = len(remote_data.get("events", []))
+            events_changed_count = 0
 
             # Isolated session for this asset's DB writes
             try:
@@ -2076,10 +2017,10 @@ class AssetSourceManager:
                     if events_list:
                         try:
                             assignment_id = prep["assignment"].id
-                            await AssetSourceManager._upsert_asset_events(
+                            events_changed_count = await AssetSourceManager._upsert_asset_events(
                                 persist_session, asset_id, events_list, assignment_id,
                                 prep["asset"].currency,
-                                )
+                                ) or 0
                         except Exception as e:
                             errors.append(f"Event upsert failed: {str(e)}")
 
@@ -2125,6 +2066,8 @@ class AssetSourceManager:
                 points_changed=points_changed,
                 inserted_count=inserted_count,
                 updated_count=updated_count,
+                events_fetched=events_fetched_count,
+                events_changed=events_changed_count,
                 message=message,
                 errors=errors,
                 elapsed_ms=elapsed_ms,
@@ -3051,93 +2994,6 @@ class AssetMetadataService:
 
         # Validate and return merged model
         return FAClassificationParams(**current_dict)
-
-    @staticmethod
-    async def update_asset_metadata(
-        asset_id: int, patch: FAClassificationParams, session: "AsyncSession"
-        ) -> "FAMetadataRefreshResult":
-        """
-        Update asset metadata with PATCH semantics.
-
-        Loads asset, applies PATCH update, validates, persists to database,
-        and computes changes for tracking.
-
-        Args:
-            asset_id: Asset ID to update
-            patch: PATCH request with fields to update
-            session: Database session
-
-        Returns:
-            FAMetadataRefreshResult with success status and changes
-
-        Raises:
-            ValueError: If asset not found or validation fails
-
-        Examples:
-            >>> from backend.app.schemas.assets import FAClassificationParams
-            >>> patch = FAClassificationParams(sector="Technology")
-            >>> result = await AssetMetadataService.update_asset_metadata(1, patch, session)
-            >>> result.success
-            True
-            >>> result.changes
-            [FAMetadataChangeDetail(field='sector', old=None, new='"Technology"')]
-        """
-
-        # Load asset from DB
-        result = await session.execute(select(Asset).where(Asset.id == asset_id))
-        asset = result.scalar_one_or_none()
-
-        if not asset:
-            raise ValueError(f"Asset {asset_id} not found")
-
-        # Parse current classification_params
-        current_params = None
-        if asset.classification_params:
-            try:
-                current_params = FAClassificationParams.model_validate_json(
-                    asset.classification_params
-                    )
-            except Exception as e:
-                logger.error(
-                    "Failed to parse classification_params from database",
-                    asset_id=asset_id,
-                    error=str(e),
-                    classification_params=(
-                        asset.classification_params[:200]
-                        if len(asset.classification_params) > 200
-                        else asset.classification_params
-                    ),
-                    )
-                pass  # Treat invalid JSON as None
-
-        # Apply PATCH update
-        try:
-            updated_params = AssetMetadataService.apply_partial_update(current_params, patch)
-        except ValueError as e:
-            # Re-raise validation errors (will become 422 in API layer)
-            raise ValueError(f"Validation failed: {e}")
-
-        # Compute changes before persisting
-        changes = AssetMetadataService.compute_metadata_diff(current_params, updated_params)
-
-        # Serialize back to JSON
-        asset.classification_params = (
-            updated_params.model_dump_json(exclude_none=True) if updated_params else None
-        )
-
-        # Commit transaction
-        await session.commit()
-
-        # Refresh to get updated data
-        await session.refresh(asset)
-
-        # Build response with changes
-        return FAMetadataRefreshResult(
-            asset_id=asset.id,
-            success=True,
-            message="Metadata updated successfully",
-            changes=changes,
-            )
 
 
 # ============================================================================

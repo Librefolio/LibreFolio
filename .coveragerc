@@ -1,6 +1,11 @@
 [run]
 source = backend/app
 parallel = true
+# Handle SIGTERM to save coverage data before process exits.
+# Without this, SIGTERM kills the process without running atexit handlers,
+# so no .coverage.<pid> file is written. Required for E2E test coverage
+# where Playwright sends SIGTERM to kill the webServer after tests.
+sigterm = true
 # Support async/await coverage in FastAPI endpoints
 # - thread: for uvicorn running in background thread
 # - gevent: for asyncio event loop context switches

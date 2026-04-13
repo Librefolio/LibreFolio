@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/fund.png" width="32" style="vertical-align: middle;" /> Mutual Fund
+# ![](../../../static/icons/asset-types/fund.png){: width="32" style="vertical-align: middle;" } Mutual Fund
 
 A **mutual fund** is a professionally managed investment vehicle that pools money from many investors to purchase a diversified portfolio of stocks, bonds, or other securities.
 

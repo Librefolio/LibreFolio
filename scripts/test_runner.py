@@ -1886,6 +1886,46 @@ def _list_pytest_tests(category: str, action: str = None) -> bool:
 
 
 # ============================================================================
+# COVERAGE CLEAN HELPERS
+# ============================================================================
+
+_BACKEND_CATEGORIES = ("external", "db", "services", "utils", "schemas", "api", "e2e")
+_FRONTEND_CATEGORIES = ("front-utility", "front-user", "front-fx", "front-asset")
+
+
+def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
+    """Remove coverage data directories selectively."""
+    import shutil
+    cwd = Path(os.getcwd())
+
+    if clean_backend:
+        be_dir = cwd / "htmlcov-backend"
+        if be_dir.exists():
+            shutil.rmtree(be_dir)
+            print(f"{Colors.GREEN}🗑️  Removed htmlcov-backend/{Colors.NC}")
+
+    if clean_frontend:
+        fe_dir = cwd / "htmlcov-frontend"
+        if fe_dir.exists():
+            shutil.rmtree(fe_dir)
+            print(f"{Colors.GREEN}🗑️  Removed htmlcov-frontend/{Colors.NC}")
+
+    if clean_backend or clean_frontend:
+        # Also erase .coverage database
+        result = subprocess.run(
+            [*pipenv_prefix(), "coverage", "erase"],
+            cwd=os.getcwd(),
+            capture_output=True,
+            text=True
+            )
+        if result.returncode == 0:
+            print(f"{Colors.GREEN}✅ Coverage database reset{Colors.NC}\n")
+        else:
+            print(f"{Colors.RED}❌ Failed to reset coverage database{Colors.NC}")
+            print(f"{Colors.RED}   Error: {result.stderr}{Colors.NC}\n")
+
+
+# ============================================================================
 # GLOBAL ALL TESTS
 # ============================================================================
 
@@ -1914,7 +1954,11 @@ def run_all_tests(verbose: bool = False) -> bool:
         func = all_info.get("func")
         name = all_info.get("name", f"{category.title()} Tests")
         if func:
-            tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
+            # Front-* categories accept coverage kwarg; pass it when --coverage is active
+            if category.startswith("front-") and 'coverage' in inspect.signature(func).parameters:
+                tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
+            else:
+                tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 
     return _run_test_suite(
         suite_name="Complete Test Suite",
@@ -1925,6 +1969,57 @@ def run_all_tests(verbose: bool = False) -> bool:
             "This will take a few minutes...\n",
             ],
         success_msg="\n🎉 ALL TESTS PASSED! 🎉\nYour LibreFolio instance is working correctly!",
+        )
+
+
+def run_all_backend_tests(verbose: bool = False) -> bool:
+    """Run all backend tests (external, db, services, utils, schemas, api, e2e)."""
+    tests = []
+    for category in _BACKEND_CATEGORIES:
+        if category not in TEST_REGISTRY:
+            continue
+        all_info = TEST_REGISTRY[category].get("all", {})
+        func = all_info.get("func")
+        name = all_info.get("name", f"{category.title()} Tests")
+        if func:
+            tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
+
+    return _run_test_suite(
+        suite_name="Backend Test Suite",
+        tests=tests,
+        verbose=verbose,
+        info_msgs=[
+            "Running all backend test categories",
+            "This may take a few minutes...\n",
+            ],
+        success_msg="\n🎉 ALL BACKEND TESTS PASSED! 🎉",
+        )
+
+
+def run_all_frontend_tests(verbose: bool = False) -> bool:
+    """Run all frontend tests (front-utility, front-user, front-fx, front-asset)."""
+    tests = []
+    for category in _FRONTEND_CATEGORIES:
+        if category not in TEST_REGISTRY:
+            continue
+        all_info = TEST_REGISTRY[category].get("all", {})
+        func = all_info.get("func")
+        name = all_info.get("name", f"{category.title()} Tests")
+        if func:
+            if 'coverage' in inspect.signature(func).parameters:
+                tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
+            else:
+                tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
+
+    return _run_test_suite(
+        suite_name="Frontend Test Suite",
+        tests=tests,
+        verbose=verbose,
+        info_msgs=[
+            "Running all frontend test categories",
+            "This may take a few minutes...\n",
+            ],
+        success_msg="\n🎉 ALL FRONTEND TESTS PASSED! 🎉",
         )
 
 
@@ -2929,7 +3024,8 @@ def _generate_main_epilog() -> str:
     lines.append("")
     lines.append("Coverage:")
     lines.append("  dev.py test --coverage api all          # Run with coverage tracking")
-    lines.append("  dev.py test --coverage --cov-clean all  # Clean + fresh coverage run")
+    lines.append("  dev.py test --coverage --cov-clean-backend api all   # Clean backend coverage + run")
+    lines.append("  dev.py test --coverage --cov-clean-frontend front-fx all  # Clean frontend coverage + run")
     lines.append("")
     lines.append("  # Backend coverage during frontend E2E tests:")
     lines.append("  dev.py test --coverage front-fx all     # Playwright + backend coverage")
@@ -3001,18 +3097,19 @@ def create_parser() -> argparse.ArgumentParser:
         )
 
     parser.add_argument(
-        "--cov-clean",
+        "--cov-clean-backend",
         action="store_true",
-        help="Clean coverage database before running tests",
+        help="Clean backend coverage data (htmlcov-backend/ + .coverage files)",
         default=False
         )
 
     parser.add_argument(
-        "--db-reset",
+        "--cov-clean-frontend",
         action="store_true",
-        help="Reset test database before running db tests",
+        help="Clean frontend coverage data (htmlcov-frontend/ + .coverage files)",
         default=False
         )
+
 
     subparsers = parser.add_subparsers(
         dest="category",
@@ -3110,6 +3207,41 @@ Expected time: 3-7 minutes
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
+    # "all-backend" category
+    subparsers.add_parser(
+        "all-backend",
+        help="Run all backend tests (external, db, schemas, utils, services, api, e2e)",
+        description="""
+Backend Test Suite
+
+Runs all backend test categories:
+  1. External Services
+  2. Database Layer
+  3. Schema Validation
+  4. Utility Modules
+  5. Services Layer
+  6. API Endpoints
+  7. E2E Tests
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
+    # "all-frontend" category
+    subparsers.add_parser(
+        "all-frontend",
+        help="Run all frontend tests (front-utility, front-user, front-fx, front-asset)",
+        description="""
+Frontend Test Suite
+
+Runs all frontend test categories:
+  1. Front-utility (Vitest unit tests)
+  2. Front-user (Playwright E2E)
+  3. Front-fx (Playwright E2E)
+  4. Front-asset (Playwright E2E)
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
     # Coverage analysis command
     register_cov_parser(subparsers)
 
@@ -3129,7 +3261,7 @@ def register_subparser(parent_subparsers):
     # Create the "test" subparser under dev.py
     test_parser = parent_subparsers.add_parser(
         "test",
-        help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-user, front-fx, all)",
+        help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-user, front-fx, all, all-backend, all-frontend)",
         description="LibreFolio Test Runner"
         )
 
@@ -3149,16 +3281,16 @@ def register_subparser(parent_subparsers):
         )
 
     test_parser.add_argument(
-        "--cov-clean",
+        "--cov-clean-backend",
         action="store_true",
-        help="Clean coverage database before running tests",
+        help="Clean backend coverage data (htmlcov-backend/ + .coverage files)",
         default=False
         )
 
     test_parser.add_argument(
-        "--db-reset",
+        "--cov-clean-frontend",
         action="store_true",
-        help="Reset test database before running db tests",
+        help="Clean frontend coverage data (htmlcov-frontend/ + .coverage files)",
         default=False
         )
 
@@ -3244,6 +3376,18 @@ def register_subparser(parent_subparsers):
         help="Run ALL tests in optimal order"
         )
 
+    # "all-backend" category
+    test_subparsers.add_parser(
+        "all-backend",
+        help="Run all backend tests (external, db, schemas, utils, services, api, e2e)"
+        )
+
+    # "all-frontend" category
+    test_subparsers.add_parser(
+        "all-frontend",
+        help="Run all frontend tests (front-utility, front-user, front-fx, front-asset)"
+        )
+
     # Coverage analysis command
     register_cov_parser(test_subparsers)
 
@@ -3267,13 +3411,16 @@ def _dispatch_test_command(args):
     verbose = getattr(args, 'verbose', False)
     test_names = getattr(args, 'test_names', None)
     coverage = getattr(args, 'coverage', False)
-    cov_clean = getattr(args, 'cov_clean', False)
+    cov_clean_be = getattr(args, 'cov_clean_backend', False)
+    cov_clean_fe = getattr(args, 'cov_clean_frontend', False)
 
     _COVERAGE_MODE = coverage
     # Auto-detect coverage source from category
     if args.category and args.category.startswith("front-"):
         _COVERAGE_SOURCE = "frontend"
-    elif args.category and args.category != "all":
+    elif args.category == "all-frontend":
+        _COVERAGE_SOURCE = "frontend"
+    elif args.category and args.category not in ("all",):
         _COVERAGE_SOURCE = "backend"
     else:
         _COVERAGE_SOURCE = None
@@ -3283,18 +3430,99 @@ def _dispatch_test_command(args):
         print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
         print()
 
-        if cov_clean:
-            result = subprocess.run(
-                [*pipenv_prefix(), "coverage", "erase"],
-                cwd=os.getcwd(),
-                capture_output=True,
-                text=True
-                )
-            if result.returncode == 0:
-                print(f"{Colors.GREEN}✅ Coverage database reset{Colors.NC}\n")
+        _clean_coverage_dirs(cov_clean_be, cov_clean_fe)
 
     # Dispatch to appropriate handler
-    return dispatch_to_category(args.category, test_names, verbose, args)
+    result = dispatch_to_category(args.category, test_names, verbose, args)
+    success = result == 0
+
+    # Coverage finalization: combine .coverage.* files and generate HTML report
+    if _COVERAGE_MODE:
+        is_front = _COVERAGE_SOURCE == "frontend"
+        is_all = _COVERAGE_SOURCE is None  # category "all"
+        html_dir = "htmlcov-frontend" if is_front else "htmlcov-backend"
+
+        print()
+        print_header("Coverage Report Summary")
+        if success:
+            print_success("✅ All tests passed with coverage tracking!")
+        else:
+            print_warning("⚠️  Some tests failed, but coverage was still tracked")
+
+        print()
+        print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
+        print()
+
+        if is_front or is_all:
+            # Erase stale .coverage file before combining fresh subprocess data
+            # (old .coverage may reference deleted source files → "No source for code" errors)
+            stale_cov = Path(os.getcwd()) / ".coverage"
+            if stale_cov.exists():
+                stale_cov.unlink()
+
+            # Combine .coverage.<pid> files from server subprocesses
+            cov_files = list(Path(os.getcwd()).glob(".coverage.*"))
+            cov_files = [f for f in cov_files if f.name != ".coveragerc"]
+            print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
+            if cov_files:
+                print(f"   Found {len(cov_files)} coverage data file(s): {', '.join(f.name for f in cov_files[:5])}")
+            else:
+                print_warning("   No .coverage.* files found! Server may not have written coverage data.")
+                print(f"   {Colors.YELLOW}Hint: check that './dev.py server --coverage' starts the server with 'coverage run'{Colors.NC}")
+
+            r_combine = subprocess.run(
+                [*pipenv_prefix(), "coverage", "combine"],
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+            if r_combine.returncode != 0:
+                # Filter out dotenv noise from stderr
+                err_lines = [l for l in r_combine.stderr.strip().splitlines()
+                             if "Loading .env" not in l and l.strip()]
+                if err_lines:
+                    print_warning(f"   coverage combine: {' '.join(err_lines)}")
+
+        if is_all:
+            r = subprocess.run(
+                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov",
+                 "--title", "LibreFolio Combined Coverage", "--ignore-errors"],
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+            if r.returncode != 0:
+                print_warning(f"coverage html failed: {r.stderr.strip()}")
+            html_dir = "htmlcov"
+        elif is_front:
+            r = subprocess.run(
+                [*pipenv_prefix(), "coverage", "html", "-d", html_dir,
+                 "--title", "LibreFolio Frontend E2E → Backend Coverage",
+                 "--ignore-errors"],
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+            if r.returncode != 0:
+                print_warning(f"coverage html failed: {r.stderr.strip()}")
+        else:
+            # Backend — report already generated by pytest-cov, just show summary
+            pass
+
+        # Generate final coverage report with table
+        subprocess.run(
+            [*pipenv_prefix(), "coverage", "report", "--skip-covered",
+             "--ignore-errors"],
+            cwd=os.getcwd(), capture_output=False, text=True
+        )
+
+        print()
+        print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
+        print(f"   HTML: {Colors.BLUE}{html_dir}/index.html{Colors.NC}")
+        print(f"   Data: {Colors.BLUE}.coverage{Colors.NC}")
+        print()
+        print(f"{Colors.YELLOW}💡 View HTML report:{Colors.NC}")
+        if is_all:
+            print(f"└─▶ $ ./dev.py test coverage show combined")
+        else:
+            print(f"└─▶ $ ./dev.py test coverage show {'frontend' if is_front else 'backend'}")
+        print()
+
+    return result
 
 
 def _handle_coverage_command(args) -> int:
@@ -3395,6 +3623,10 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
 
     if category == "all":
         success = run_all_tests(verbose=verbose)
+    elif category == "all-backend":
+        success = run_all_backend_tests(verbose=verbose)
+    elif category == "all-frontend":
+        success = run_all_frontend_tests(verbose=verbose)
     elif category == "coverage-report":
         # Build a namespace with the right attributes
         cov_args = argparse.Namespace(
@@ -3459,14 +3691,17 @@ def main():
     verbose = getattr(args, 'verbose', False)
     test_names = getattr(args, 'test_names', None)
     coverage = getattr(args, 'coverage', False)
-    cov_clean = getattr(args, 'cov_clean', False)
+    cov_clean_be = getattr(args, 'cov_clean_backend', False)
+    cov_clean_fe = getattr(args, 'cov_clean_frontend', False)
 
     # Set global coverage flag
     _COVERAGE_MODE = coverage
     # Auto-detect coverage source from category
     if args.category and args.category.startswith("front-"):
         _COVERAGE_SOURCE = "frontend"
-    elif args.category and args.category not in ("all", "coverage-report", "coverage"):
+    elif args.category == "all-frontend":
+        _COVERAGE_SOURCE = "frontend"
+    elif args.category and args.category not in ("all", "all-backend", "coverage-report", "coverage"):
         _COVERAGE_SOURCE = "backend"
     else:
         _COVERAGE_SOURCE = None
@@ -3479,26 +3714,7 @@ def main():
         print(f"{Colors.BLUE}Final report: htmlcov/index.html{Colors.NC}")
         print()
 
-        # If --cov-clean flag, erase coverage database
-        if cov_clean:
-            print(f"{Colors.YELLOW}🗑️  Resetting coverage database...{Colors.NC}")
-            result = subprocess.run(
-                [*pipenv_prefix(), "coverage", "erase"],
-                cwd=os.getcwd(),
-                capture_output=True,
-                text=True
-                )
-            if result.returncode == 0:
-                print(f"{Colors.GREEN}✅ Coverage database reset{Colors.NC}\n")
-            else:
-                print(f"{Colors.RED}❌ Failed to reset coverage database{Colors.NC}")
-                print(f"{Colors.RED}   Error: {result.stderr}{Colors.NC}\n")
-        else:
-            # Just clear old .coverage file (legacy behavior)
-            coverage_file = Path(__file__).parent / '.coverage'
-            if coverage_file.exists():
-                coverage_file.unlink()
-                print(f"{Colors.YELLOW}🗑️  Cleared previous coverage data{Colors.NC}\n")
+        _clean_coverage_dirs(cov_clean_be, cov_clean_fe)
 
     # Run tests
     result = dispatch_to_category(args.category, test_names, verbose, args)
@@ -3515,28 +3731,59 @@ def main():
 
         # Determine HTML directory based on test source
         is_front = _COVERAGE_SOURCE == "frontend"
+        is_all = _COVERAGE_SOURCE is None  # category "all"
         html_dir = "htmlcov-frontend" if is_front else "htmlcov-backend"
 
         print()
         print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
         print()
 
-        if is_front:
-            # Frontend E2E: combine .coverage.<pid> files, then generate HTML
-            print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess...{Colors.NC}")
-            subprocess.run(
+        if is_front or is_all:
+            # Erase stale .coverage file before combining fresh subprocess data
+            stale_cov = Path(os.getcwd()) / ".coverage"
+            if stale_cov.exists():
+                stale_cov.unlink()
+
+            # Combine .coverage.<pid> files from server subprocesses
+            cov_files = list(Path(os.getcwd()).glob(".coverage.*"))
+            cov_files = [f for f in cov_files if f.name != ".coveragerc"]
+            print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
+            if cov_files:
+                print(f"   Found {len(cov_files)} coverage data file(s): {', '.join(f.name for f in cov_files[:5])}")
+            else:
+                print_warning("   No .coverage.* files found! Server may not have written coverage data.")
+                print(f"   {Colors.YELLOW}Hint: check that './dev.py server --coverage' starts the server with 'coverage run'{Colors.NC}")
+
+            r_combine = subprocess.run(
                 [*pipenv_prefix(), "coverage", "combine"],
                 cwd=os.getcwd(), capture_output=True, text=True
             )
+            if r_combine.returncode != 0:
+                err_lines = [l for l in r_combine.stderr.strip().splitlines()
+                             if "Loading .env" not in l and l.strip()]
+                if err_lines:
+                    print_warning(f"   coverage combine: {' '.join(err_lines)}")
+
+        if is_all:
+            # Generate all three reports: backend, frontend, combined
+            subprocess.run(
+                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov",
+                 "--title", "LibreFolio Combined Coverage", "--ignore-errors"],
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+            html_dir = "htmlcov"
+        elif is_front:
             subprocess.run(
                 [*pipenv_prefix(), "coverage", "html", "-d", html_dir,
-                 "--title", "LibreFolio Frontend E2E → Backend Coverage"],
+                 "--title", "LibreFolio Frontend E2E → Backend Coverage",
+                 "--ignore-errors"],
                 cwd=os.getcwd(), capture_output=True, text=True
             )
 
         # Generate final coverage report with table
         subprocess.run(
-            [*pipenv_prefix(), "coverage", "report", "--skip-covered"],
+            [*pipenv_prefix(), "coverage", "report", "--skip-covered",
+             "--ignore-errors"],
             cwd=os.getcwd(),
             capture_output=False,  # Show output directly
             text=True
@@ -3551,7 +3798,10 @@ def main():
         print(f"└─▶ $ open {html_dir}/index.html")
         print()
         print(f"{Colors.YELLOW}💡 Or use the coverage show command:{Colors.NC}")
-        print(f"└─▶ $ ./dev.py test coverage show {'frontend' if is_front else 'backend'}")
+        if is_all:
+            print(f"└─▶ $ ./dev.py test coverage show combined")
+        else:
+            print(f"└─▶ $ ./dev.py test coverage show {'frontend' if is_front else 'backend'}")
         print(f"└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
         print()
 

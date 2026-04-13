@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/hold.png" width="32" style="vertical-align: middle;" /> Commodities
+# ![](../../../static/icons/asset-types/hold.png){: width="32" style="vertical-align: middle;" } Commodities
 
 **Commodities** are physical assets — raw materials or primary goods — held for long-term value preservation or as an inflation hedge. In LibreFolio, this category covers precious metals, energy, and other tangible stores of value.
 

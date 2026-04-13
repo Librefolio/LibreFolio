@@ -1,4 +1,4 @@
-# <img src="../../../static/icons/asset-types/stock.png" width="32" style="vertical-align: middle;" /> Azioni
+# ![](../../../static/icons/asset-types/stock.png){: width="32" style="vertical-align: middle;" } Azioni
 
 Un'**azione** (o quota / equity) rappresenta la proprietà parziale di una società quotata in borsa. Quando acquisti un'azione, diventi un azionista con un diritto proporzionale agli asset e agli utili della società.
 

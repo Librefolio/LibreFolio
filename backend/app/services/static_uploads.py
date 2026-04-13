@@ -44,9 +44,13 @@ except ImportError:
 
 from backend.app.config import get_data_dir
 from backend.app.schemas.uploads import UploadFileInfo
+from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
+
+# Cache for upload metadata JSON sidecar reads — TTL 1h, avoids repeated disk I/O
+_upload_meta_cache = get_ttl_cache("upload_metadata", maxsize=500, ttl=3600)
 
 
 def get_uploads_dir() -> Path:
@@ -133,21 +137,28 @@ def _get_file_url(file_id: str) -> str:
 
 
 def _load_metadata(file_id: str) -> Optional[dict]:
-    """Load metadata from JSON sidecar."""
+    """Load metadata from JSON sidecar (cached via TTL cache)."""
+    cached, ok = _upload_meta_cache.get(file_id)
+    if ok:
+        return cached
+
     meta_path = get_uploads_dir() / f"{file_id}.json"
     if not meta_path.exists():
         return None
     try:
-        return json.loads(meta_path.read_text())
+        data = json.loads(meta_path.read_text())
+        _upload_meta_cache.set(file_id, data)
+        return data
     except (json.JSONDecodeError, IOError) as e:
         logger.warning("Failed to load metadata", file_id=file_id, error=str(e))
         return None
 
 
 def _save_metadata(file_id: str, metadata: dict) -> None:
-    """Save metadata to JSON sidecar."""
+    """Save metadata to JSON sidecar and update cache."""
     meta_path = get_uploads_dir() / f"{file_id}.json"
     meta_path.write_text(json.dumps(metadata, indent=2, default=str))
+    _upload_meta_cache.set(file_id, metadata)
 
 
 def _metadata_to_info(metadata: dict) -> UploadFileInfo:
@@ -439,6 +450,9 @@ def delete_upload(file_id: str) -> bool:
     meta_path = uploads_dir / f"{file_id}.json"
     if meta_path.exists():
         meta_path.unlink()
+
+    # Invalidate cache entry
+    _upload_meta_cache.delete(file_id)
 
     logger.info("File deleted", file_id=file_id)
     return True
