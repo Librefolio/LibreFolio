@@ -775,6 +775,15 @@ def utils_currency_utils(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "Currency utils tests", verbose=verbose)
 
 
+def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
+    """Test NamedCache wrapper, TTL expiration, and global cache registry."""
+    print_section("Utils: Cache Utils")
+    print_info("Testing: backend/app/utils/cache_utils.py")
+    print_info("Tests: NamedCache set/get/delete/clear, TTL, registry, stats")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_cache_utils.py", test_names)
+    return run_command(cmd, "Cache utils tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     return _run_test_suite(
@@ -2329,6 +2338,14 @@ These tests verify utility modules and helper functions:
             "desc": "Test currency listing, flag mapping, validation consistency",
             "prereq": "pycountry, babel installed",
             "tests": "list_currencies (pycountry), flag_emoji, crypto, no historic currencies",
+            },
+        "cache-utils": {
+            "func": utils_cache_utils,
+            "test_names": True,
+            "name": "Cache Utils",
+            "desc": "Test NamedCache, TTL expiration, global registry, stats",
+            "prereq": "theine installed",
+            "tests": "set/get/delete/clear, TTL expiration, registry, stats, list_caches",
             },
         "all": {
             "func": utils_all,

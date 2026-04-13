@@ -10,7 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {ArrowLeftRight, BarChart3, ExternalLink, Info, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
+    import {ArrowLeftRight, BarChart3, Coins, ExternalLink, Info, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -41,7 +41,7 @@
         /** Available FX pairs for FxPairSignal (slug format: 'EUR-GBP') */
         availablePairs?: string[];
         /** Available assets for AssetComparisonSignal */
-        availableAssets?: Array<{id: number, display_name: string, icon_url?: string | null, asset_type?: string | null}>;
+        availableAssets?: Array<{id: number, display_name: string, icon_url?: string | null, asset_type?: string | null, currency?: string}>;
         /** Slug of the main chart pair (for crown emoji in dropdown) */
         mainPairSlug?: string;
         /** Called when signals change */
@@ -58,6 +58,14 @@
         signalSummaries?: Map<string, SignalDataSummary>;
         /** Current chart date range start (for "data missing before" warning) */
         dateStart?: string;
+        /** Current display currency (for FX pair status on comparison signals) */
+        displayCurrency?: string;
+        /** All configured FX pair slugs (for FX pair existence check) */
+        configuredFxSlugs?: string[];
+        /** Called when user clicks "Create FX pair" on a comparison signal */
+        oncreatefxpair?: (slug: string) => void;
+        /** Called when user clicks "Sync FX pair" on a comparison signal */
+        onsyncfxpair?: (slug: string) => void;
     }
 
     let {
@@ -72,6 +80,10 @@
         ondetailasset,
         signalSummaries = new Map(),
         dateStart = '',
+        displayCurrency = '',
+        configuredFxSlugs = [],
+        oncreatefxpair,
+        onsyncfxpair,
     }: Props = $props();
 
     // =========================================================================
@@ -601,6 +613,46 @@
                                                         >
                                                             <ExternalLink size={12}/>
                                                         </button>
+                                                    {/if}
+                                                    {#if assetIdStr}
+                                                        {@const currencyInfo = findAssetInfo(assetIdStr)}
+                                                        {#if currencyInfo?.currency}
+                                                            <span class="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded font-mono">
+                                                                {getCurrencyInfo(currencyInfo.currency).flag_emoji} {currencyInfo.currency}
+                                                            </span>
+                                                            <!-- FX pair controls for comparison signal -->
+                                                            {#if displayCurrency && currencyInfo.currency !== displayCurrency}
+                                                                {@const fxBase = currencyInfo.currency < displayCurrency ? currencyInfo.currency : displayCurrency}
+                                                                {@const fxQuote = currencyInfo.currency < displayCurrency ? displayCurrency : currencyInfo.currency}
+                                                                {@const fxSlug = `${fxBase}-${fxQuote}`}
+                                                                {@const fxExists = configuredFxSlugs.includes(fxSlug)}
+                                                                {#if !fxExists && oncreatefxpair}
+                                                                    <Tooltip text={$t('assetDetail.fxPairMissing', {values: {base: fxBase, quote: fxQuote}})} position="top">
+                                                                        <button
+                                                                            type="button"
+                                                                            class="p-0.5 rounded text-amber-500 hover:text-amber-600 transition-colors"
+                                                                            onclick={() => oncreatefxpair?.(fxSlug)}
+                                                                        >
+                                                                            <AlertTriangle size={12}/>
+                                                                        </button>
+                                                                    </Tooltip>
+                                                                {:else if fxExists && conversionFailed && onsyncfxpair}
+                                                                    <Tooltip text={$t('chartSettings.conversionFailed')} position="top">
+                                                                        <button
+                                                                            type="button"
+                                                                            class="p-0.5 rounded text-amber-500 hover:text-amber-600 transition-colors"
+                                                                            onclick={() => onsyncfxpair?.(fxSlug)}
+                                                                        >
+                                                                            <RotateCw size={11}/>
+                                                                        </button>
+                                                                    </Tooltip>
+                                                                {:else if fxExists}
+                                                                    <a href="/fx/{fxSlug}" class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors" title="FX {fxSlug.replace('-','/')}">
+                                                                        <Coins size={11}/>
+                                                                    </a>
+                                                                {/if}
+                                                            {/if}
+                                                        {/if}
                                                     {/if}
                                                 </div>
                                             {:else}

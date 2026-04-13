@@ -854,7 +854,6 @@
     "tooltip": {
       "stale": "Périmé : {days} jour(s)",
       "fxStale": "Taux FX : {days}j",
-      "convertedFrom": "Converti depuis {currency}",
       "percentNote": "% par rapport à la date de début",
       "upper": "Supérieure",
       "lower": "Inférieure"
@@ -916,7 +915,21 @@
   "dataEditor": {
     "clearSelection": "Effacer la sélection",
     "deleteSelected": "Supprimer la sélection",
-    "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche."
+    "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",
+    "col": {
+      "currency": "Devise",
+      "close": "Clôture",
+      "open": "Ouverture",
+      "high": "Haut",
+      "low": "Bas",
+      "volume": "Volume",
+      "type": "Type",
+      "amount": "Montant",
+      "notes": "Notes"
+    },
+    "save": "Enregistrer ({count})",
+    "saving": "Enregistrement…",
+    "cancel": "Annuler"
   },
   "sharedResource": {
     "syncAll": "Sync. Tout",
@@ -986,7 +999,10 @@
       "MATURITY_SETTLEMENT": "Remboursement du capital à l'échéance. Plus de prix."
     },
     "livePriceConversionFailed": "Prix live en {currency} — taux FX indisponible pour aujourd'hui",
-    "dataAvailableFrom": "Données disponibles à partir du {date} — dates antérieures sans données"
+    "dataAvailableFrom": "Données disponibles à partir du {date} — dates antérieures sans données",
+    "originalValue": "Valeur Originale",
+    "fxDataAvailableFrom": "Taux FX disponibles à partir du {date} — dates antérieures affichent les prix non convertis",
+    "fxPairNoRates": "La paire FX {pair} n'a aucun taux dans cette période — synchronisez-la pour activer la conversion"
   },
   "ticker": {
     "noAssets": "Aucun actif suivi",

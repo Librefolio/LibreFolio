@@ -61,29 +61,29 @@
     // Column definitions
     // =========================================================================
 
-    const priceColumns: ColumnDef[] = [
-        {key: 'currency', label: 'Currency', type: 'currency', editable: true, required: true, placeholder: 'USD'},
-        {key: 'close', label: 'Close', type: 'number', editable: true, required: true, step: 0.01, min: 0, placeholder: '145.50'},
-        {key: 'open', label: 'Open', type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '144.00'},
-        {key: 'high', label: 'High', type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '146.20'},
-        {key: 'low', label: 'Low', type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '143.80'},
-        {key: 'volume', label: 'Volume', type: 'number', editable: true, required: false, step: 1, min: 0, placeholder: '1500000'},
-    ];
+    let priceColumns: ColumnDef[] = $derived([
+        {key: 'currency', label: $t('dataEditor.col.currency'), type: 'currency', editable: true, required: true, placeholder: 'USD'},
+        {key: 'close', label: $t('dataEditor.col.close'), type: 'number', editable: true, required: true, step: 0.01, min: 0, placeholder: '145.50'},
+        {key: 'open', label: $t('dataEditor.col.open'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '144.00'},
+        {key: 'high', label: $t('dataEditor.col.high'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '146.20'},
+        {key: 'low', label: $t('dataEditor.col.low'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '143.80'},
+        {key: 'volume', label: $t('dataEditor.col.volume'), type: 'number', editable: true, required: false, step: 1, min: 0, placeholder: '1500000'},
+    ]);
 
-    const eventTypeOptions = [
-        {value: 'DIVIDEND', label: 'DIVIDEND', emoji: '💰', tooltip: $t('assetDetail.eventTypeTooltip.DIVIDEND'), docsPath: 'financial-theory/instruments/asset-events/dividend'},
-        {value: 'INTEREST', label: 'INTEREST', emoji: '📈', tooltip: $t('assetDetail.eventTypeTooltip.INTEREST'), docsPath: 'financial-theory/instruments/asset-events/interest'},
-        {value: 'SPLIT', label: 'SPLIT', emoji: '✂️', tooltip: $t('assetDetail.eventTypeTooltip.SPLIT'), docsPath: 'financial-theory/instruments/asset-events/split'},
-        {value: 'PRICE_ADJUSTMENT', label: 'PRICE_ADJUSTMENT', emoji: '📊', tooltip: $t('assetDetail.eventTypeTooltip.PRICE_ADJUSTMENT'), docsPath: 'financial-theory/instruments/asset-events/price-adjustment'},
-        {value: 'MATURITY_SETTLEMENT', label: 'MATURITY_SETTLEMENT', emoji: '🏁', tooltip: $t('assetDetail.eventTypeTooltip.MATURITY_SETTLEMENT'), docsPath: 'financial-theory/instruments/asset-events/maturity-settlement'},
-    ];
+    let eventTypeOptions = $derived([
+        {value: 'DIVIDEND', label: $t('assetDetail.eventType.DIVIDEND'), emoji: '💰', tooltip: $t('assetDetail.eventTypeTooltip.DIVIDEND'), docsPath: 'financial-theory/instruments/asset-events/dividend'},
+        {value: 'INTEREST', label: $t('assetDetail.eventType.INTEREST'), emoji: '📈', tooltip: $t('assetDetail.eventTypeTooltip.INTEREST'), docsPath: 'financial-theory/instruments/asset-events/interest'},
+        {value: 'SPLIT', label: $t('assetDetail.eventType.SPLIT'), emoji: '✂️', tooltip: $t('assetDetail.eventTypeTooltip.SPLIT'), docsPath: 'financial-theory/instruments/asset-events/split'},
+        {value: 'PRICE_ADJUSTMENT', label: $t('assetDetail.eventType.PRICE_ADJUSTMENT'), emoji: '📊', tooltip: $t('assetDetail.eventTypeTooltip.PRICE_ADJUSTMENT'), docsPath: 'financial-theory/instruments/asset-events/price-adjustment'},
+        {value: 'MATURITY_SETTLEMENT', label: $t('assetDetail.eventType.MATURITY_SETTLEMENT'), emoji: '🏁', tooltip: $t('assetDetail.eventTypeTooltip.MATURITY_SETTLEMENT'), docsPath: 'financial-theory/instruments/asset-events/maturity-settlement'},
+    ]);
 
-    const eventColumns: ColumnDef[] = [
-        {key: 'currency', label: 'Currency', type: 'currency', editable: true, required: false, placeholder: 'USD'},
-        {key: 'type', label: 'Type', type: 'enum', editable: true, required: true, enumOptions: eventTypeOptions},
-        {key: 'amount', label: 'Amount', type: 'number', editable: true, required: true, step: 0.01, placeholder: '1.25'},
-        {key: 'notes', label: 'Notes', type: 'string', editable: true, required: false, placeholder: 'Q1 payout'},
-    ];
+    let eventColumns: ColumnDef[] = $derived([
+        {key: 'currency', label: $t('dataEditor.col.currency'), type: 'currency', editable: true, required: false, placeholder: 'USD'},
+        {key: 'type', label: $t('dataEditor.col.type'), type: 'enum', editable: true, required: true, enumOptions: eventTypeOptions},
+        {key: 'amount', label: $t('dataEditor.col.amount'), type: 'number', editable: true, required: true, step: 0.01, placeholder: '1.25'},
+        {key: 'notes', label: $t('dataEditor.col.notes'), type: 'string', editable: true, required: false, placeholder: 'Q1 payout'},
+    ]);
 
     // =========================================================================
     // State
@@ -478,14 +478,14 @@
                 disabled={saving || _dirtyCount === 0}
                 onclick={handleSave}
         >
-            <Save size={15}/> {saving ? 'Saving...' : `Save (${_dirtyCount})`}
+            <Save size={15}/> {saving ? $t('dataEditor.saving') : $t('dataEditor.save', {values: {count: _dirtyCount}})}
         </button>
         <button
                 class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
                 onclick={handleCancel}
         >
             <X size={15}/>
-            Cancel
+            {$t('dataEditor.cancel')}
         </button>
     </div>
 </div>

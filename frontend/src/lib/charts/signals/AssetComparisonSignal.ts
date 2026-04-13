@@ -13,6 +13,7 @@
 
 import {ChartSignal, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+import {getCurrencyInfo} from '$lib/stores/currencyStore';
 
 export class AssetComparisonSignal extends ChartSignal {
     static override signalType = 'asset-comparison';
@@ -72,6 +73,15 @@ export class AssetComparisonSignal extends ChartSignal {
             }
         }
 
+        // Determine effective currency: if conversion happened → target currency,
+        // otherwise → asset's native currency
+        const resolvedData = this.params._resolvedData as LineDataPoint[] | undefined;
+        const hasOriginals = resolvedData?.some(d => d.originalValue !== undefined) ?? false;
+        const nativeCurrency = (this.params._assetCurrency as string | undefined) ?? '';
+        const targetCurrency = (this.params._targetCurrency as string | undefined);
+        const currency = hasOriginals && targetCurrency ? targetCurrency : nativeCurrency;
+        const currencyFlag = currency ? getCurrencyInfo(currency).flag_emoji : '';
+
         return {
             id: this.id,
             label: this.getLabel(),
@@ -84,7 +94,78 @@ export class AssetComparisonSignal extends ChartSignal {
             yAxisIndex: 0,
             iconUrl: (this.params._assetIconUrl as string | undefined) ?? null,
             assetType: (this.params._assetType as string | undefined) ?? null,
+            currency,
+            currencyFlag,
         };
+    }
+
+    /**
+     * Override renderMulti: produce a ghost signal showing original (unconverted)
+     * values when FX conversion is active.
+     *
+     * - Abs mode: ghost = raw original values on yAxisIndex 0
+     * - % mode: ghost = normalized to own p0 on yAxisIndex 0
+     *
+     * The ghost uses opacity 0.4 and dashed lines with 💱 label.
+     */
+    override renderMulti(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
+        const main = this.render(baseData, viewMode);
+        if (main.data.length === 0) return [];
+
+        const results: RenderedSignal[] = [main];
+
+        // Ghost: when original values are present (FX conversion active)
+        const resolvedData = this.params._resolvedData as LineDataPoint[] | undefined;
+        if (resolvedData?.length) {
+            const hasOriginals = resolvedData.some(d => d.originalValue !== undefined);
+            if (hasOriginals) {
+                // Build aligned original points using the same date alignment as computePoints
+                const lookup = new Map(resolvedData.map(d => [d.date, d]));
+                const origPoints: LineDataPoint[] = [];
+                for (const bd of baseData) {
+                    const rd = lookup.get(bd.date);
+                    if (rd?.originalValue !== undefined && rd.originalValue !== 0) {
+                        origPoints.push({date: bd.date, value: rd.originalValue});
+                    }
+                }
+
+                if (origPoints.length > 0) {
+                    let ghostData: LineDataPoint[];
+                    if (viewMode === 'percentage') {
+                        // Normalize to own p0
+                        const origP0 = origPoints[0].value;
+                        ghostData = origP0 !== 0
+                            ? origPoints.map(d => ({...d, value: ((d.value - origP0) / origP0) * 100}))
+                            : origPoints;
+                    } else {
+                        // Abs mode: raw original values
+                        ghostData = origPoints;
+                    }
+
+                    const origCurrency = resolvedData.find(d => d.originalCurrency)?.originalCurrency ?? '';
+                    const origFlag = resolvedData.find(d => (d as any).originalCurrencyFlag)?.originalCurrencyFlag ?? '';
+                    const ghostLabelText = origFlag
+                        ? `💱 ${this.getLabel()} (${origFlag} ${origCurrency})`
+                        : `💱 ${this.getLabel()} (${origCurrency})`;
+                    results.push({
+                        id: `${this.id}__ghost`,
+                        label: ghostLabelText,
+                        data: ghostData,
+                        color: this.style.color,
+                        lineWidth: 1,
+                        lineType: 'dashed',
+                        markerStart: null,
+                        markerEnd: null,
+                        yAxisIndex: 0,
+                        opacity: 0.4,
+                        currency: origCurrency,
+                        currencyFlag: origFlag,
+                    });
+                }
+            }
+        }
+
+        return results;
     }
 
     getLabel(): string {

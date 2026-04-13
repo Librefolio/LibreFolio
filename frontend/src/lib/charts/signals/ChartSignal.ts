@@ -155,6 +155,12 @@ export interface RenderedSignal {
     iconUrl?: string | null;
     /** Asset type code for PNG icon fallback (e.g. "CRYPTO", "ETF") — used by MeasurePanel and tooltip */
     assetType?: string | null;
+    /** Line/fill opacity override (0-1). Used for ghost/watermark series. Default 1. */
+    opacity?: number;
+    /** Currency code the signal values are denominated in (e.g. "EUR", "RON") */
+    currency?: string;
+    /** Flag emoji for the currency (e.g. "🇪🇺") */
+    currencyFlag?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

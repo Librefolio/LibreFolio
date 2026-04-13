@@ -11,8 +11,8 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {_ as t} from '$lib/i18n';
-    import {TrendingUp, TrendingDown, AlertTriangle, Coins} from 'lucide-svelte';
+    import {_  as t} from '$lib/i18n';
+    import {TrendingUp, TrendingDown, AlertTriangle, Coins, RotateCw} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/responsiveLayout.svelte';
@@ -38,6 +38,10 @@
         onAddFxPair?: () => void;
         /** True when live price FX conversion failed (pair exists but rate unavailable for today) */
         livePriceConversionFailed?: boolean;
+        /** Callback to trigger FX pair sync */
+        onsyncfx?: () => void;
+        /** True when FX sync is in progress */
+        fxSyncing?: boolean;
     }
 
     let {
@@ -51,6 +55,8 @@
         layoutMode,
         onAddFxPair,
         livePriceConversionFailed = false,
+        onsyncfx,
+        fxSyncing = false,
     }: Props = $props();
 
     let showFxPairLink = $derived(
@@ -59,23 +65,15 @@
 </script>
 
 <div class="flex {layoutMode === 'wide' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
-    <!-- Price row: [Δ%  |  Price (Δ$)] -->
+    <!-- Price row: [Price (Δ$)  |  Δ%] -->
     {#if lastPrice !== null}
         <div class="flex items-center gap-3 {layoutMode === 'wide' ? '' : 'justify-center w-full'}">
-            <!-- Left half: delta % -->
-            {#if deltaPercent !== null}
-                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                    {#if deltaPercent >= 0}<TrendingUp size={12}/>{:else}<TrendingDown size={12}/>{/if}
-                    {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
-                </span>
-            {/if}
-
-            <!-- Right half: price + delta abs -->
+            <!-- Left half: price + delta abs -->
             <div class="flex items-center gap-1.5">
                 <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
                     {lastPrice.toFixed(2)}
                 </span>
-                <span class="text-xs text-gray-400 dark:text-gray-500">{displayCurrency}</span>
+                <span class="text-xs text-gray-400 dark:text-gray-500">{(livePriceConversionFailed || fxConversionMissing) ? assetCurrency : displayCurrency}</span>
                 {#if livePriceConversionFailed}
                     <Tooltip text={$t('assetDetail.livePriceConversionFailed', {values: {currency: assetCurrency}})} position="bottom">
                         <span class="text-amber-500 dark:text-amber-400">
@@ -89,6 +87,14 @@
                     </span>
                 {/if}
             </div>
+
+            <!-- Right half: delta % -->
+            {#if deltaPercent !== null}
+                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                    {#if deltaPercent >= 0}<TrendingUp size={12}/>{:else}<TrendingDown size={12}/>{/if}
+                    {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                </span>
+            {/if}
         </div>
     {/if}
 
@@ -101,6 +107,7 @@
             <CurrencySearchSelect
                     bind:value={displayCurrency}
                     compact={true}
+                    originalCurrency={assetCurrency}
                     placeholder={$t('assetDetail.displayCurrency')}
             />
         </div>
@@ -129,6 +136,16 @@
             >
                 <Coins size={14}/>
             </a>
+            {#if onsyncfx}
+                <button
+                    class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors disabled:opacity-50"
+                    disabled={fxSyncing}
+                    onclick={onsyncfx}
+                    title={$t('common.sync') + ' FX'}
+                >
+                    <RotateCw size={13} class={fxSyncing ? 'animate-spin' : ''}/>
+                </button>
+            {/if}
         {/if}
     </div>
 </div>
