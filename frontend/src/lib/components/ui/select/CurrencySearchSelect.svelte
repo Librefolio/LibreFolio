@@ -42,6 +42,8 @@
         onchange?: (value: string) => void;
         /** Compact mode: single-line display, smaller height to match other selects */
         compact?: boolean;
+        /** Asset's native currency — when set and differs from value, shows "Original Value" shortcut */
+        originalCurrency?: string;
     }
 
     let {
@@ -56,6 +58,7 @@
         dropdownPosition = 'auto',
         onchange,
         compact = false,
+        originalCurrency,
     }: Props = $props();
 
     let allCurrencies = $state<CurrencyInfo[]>([]);
@@ -83,6 +86,16 @@
                 label: $_('fx.filter.allCurrencies'),
                 icon: '💱',
                 searchText: $_('fx.filter.allCurrencies'),
+            });
+        }
+
+        // "Original Value" shortcut — visible when converting away from native currency
+        if (originalCurrency && value !== originalCurrency) {
+            options.push({
+                value: originalCurrency,
+                label: $_('assetDetail.originalValue') + ' (' + originalCurrency + ')',
+                icon: '🔙',
+                searchText: $_('assetDetail.originalValue') + ' ' + originalCurrency,
             });
         }
 

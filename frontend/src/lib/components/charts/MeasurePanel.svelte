@@ -11,13 +11,14 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {ChevronDown, Plus, Trash2} from 'lucide-svelte';
+    import {ChevronDown, Trash2} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {MeasurementResult} from '$lib/charts/signals/MeasureSignal';
     import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
     import {hslToHex} from '$lib/utils/colors';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
+    import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -36,6 +37,14 @@
         viewMode?: 'absolute' | 'percentage';
         /** Label info for the main/primary series (replaces old pairLabel string) */
         mainSignalInfo?: SignalLabelInfo;
+        /** Display currency code when FX conversion is active (e.g. "EUR") */
+        displayCurrency?: string;
+        /** Display currency flag emoji when FX conversion is active (e.g. "🇪🇺") */
+        displayCurrencyFlag?: string;
+        /** Main asset native currency code (e.g. "USD") — shown when no conversion */
+        mainCurrency?: string;
+        /** Main asset native currency flag emoji (e.g. "🇺🇸") */
+        mainCurrencyFlag?: string;
     }
 
     let {
@@ -45,6 +54,10 @@
         onmeasuremodechange,
         viewMode = 'absolute',
         mainSignalInfo = {label: 'Main', isCrown: true},
+        displayCurrency: displayCurrencyProp,
+        displayCurrencyFlag: displayCurrencyFlagProp,
+        mainCurrency: mainCurrencyProp,
+        mainCurrencyFlag: mainCurrencyFlagProp,
     }: Props = $props();
 
     // =========================================================================
@@ -323,11 +336,36 @@
         },
     ];
 
+    /** Original (unconverted) chart data derived from chartData's originalValue field */
+    let originalChartData: LineDataPoint[] = $derived.by(() => {
+        if (!chartData.some(d => d.originalValue !== undefined)) return [];
+        return chartData
+            .filter(d => d.originalValue !== undefined)
+            .map(d => ({date: d.date, value: d.originalValue!}));
+    });
+
+    /** Original currency code (from first point with originalCurrency) */
+    let originalCurrencyCode = $derived(
+        chartData.find(d => d.originalCurrency)?.originalCurrency ?? ''
+    );
+
     function buildSummaryRows(result: MeasurementResult, measureObj: MeasureSignal): MeasureSummaryRow[] {
+        // When FX conversion is active, add 💱(target currency) suffix to main label
+        // When no conversion, add (native currency) suffix
+        const conversionActive = originalChartData.length > 0 && displayCurrencyProp && displayCurrencyFlagProp;
+        let mainLabel: string;
+        if (conversionActive) {
+            mainLabel = `${mainSignalInfo.label ?? 'Main'} 💱(${displayCurrencyFlagProp} ${displayCurrencyProp})`;
+        } else if (mainCurrencyProp) {
+            mainLabel = `${mainSignalInfo.label ?? 'Main'} (${mainCurrencyFlagProp || ''} ${mainCurrencyProp})`;
+        } else {
+            mainLabel = mainSignalInfo.label ?? 'Main';
+        }
+
         const rows: MeasureSummaryRow[] = [
             {
                 id: 'main',
-                signalInfo: mainSignalInfo,
+                signalInfo: {...mainSignalInfo, label: mainLabel},
                 valueStart: result.startValue,
                 valueEnd: result.endValue,
                 deltaAbs: result.deltaAbs,
@@ -335,16 +373,45 @@
                 annualizedPct: result.annualizedPct,
             },
         ];
+
+        // Original currency row (when FX conversion is active)
+        if (originalChartData.length > 0 && originalCurrencyCode) {
+            const origFlag = getCurrencyInfo(originalCurrencyCode).flag_emoji;
+            const origResult = measureObj.getMeasurementForSignal(originalChartData);
+            if (origResult) {
+                rows.push({
+                    id: 'main-original',
+                    signalInfo: {
+                        label: `${mainSignalInfo.label ?? 'Main'} (${origFlag} ${originalCurrencyCode})`,
+                        isCrown: false,
+                        color: mainSignalInfo.color,
+                    },
+                    valueStart: origResult.startValue,
+                    valueEnd: origResult.endValue,
+                    deltaAbs: origResult.deltaAbs,
+                    deltaPct: origResult.deltaPct,
+                    annualizedPct: origResult.annualizedPct,
+                });
+            }
+        }
+
         for (const signal of overlaySignals.filter(s => s.data.length > 0 && (s.yAxisIndex ?? 0) === 0)) {
+            // Ghost overlay signals (opacity < 1) get 💱 label — they show original currency data
+            const isGhost = signal.opacity != null && signal.opacity < 1;
             const sigResult = measureObj.getMeasurementForSignal(signal.data);
             if (sigResult) {
+                // Build label with currency suffix (ghost labels already include currency)
+                let sigLabel = signal.label;
+                if (!isGhost && signal.currency) {
+                    sigLabel = `${signal.label} (${signal.currencyFlag || ''} ${signal.currency})`;
+                }
                 rows.push({
                     id: `sig-${signal.label}`,
                     signalInfo: {
-                        label: signal.label,
+                        label: sigLabel,
                         color: signal.color,
-                        iconUrl: signal.iconUrl,
-                        assetType: signal.assetType,
+                        iconUrl: isGhost ? undefined : signal.iconUrl,
+                        assetType: isGhost ? undefined : signal.assetType,
                     },
                     valueStart: sigResult.startValue,
                     valueEnd: sigResult.endValue,
@@ -360,21 +427,6 @@
 
 <div class="space-y-3">
 
-    <!-- Add Measure button -->
-    <div class="flex items-center gap-2">
-        <button
-                type="button"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
-                       bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
-                       hover:bg-violet-100 dark:hover:bg-violet-900/50 border border-violet-200 dark:border-violet-800
-                       transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={chartData.length < 2}
-                onclick={() => addMeasureFromChartData()}
-        >
-            <Plus size={14}/>
-            <span class="hidden sm:inline">{$t('measure.addMeasure')}</span>
-        </button>
-    </div>
 
     <!-- Pending indicator -->
     {#if measureActive && pendingStartDate}

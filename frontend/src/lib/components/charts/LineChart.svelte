@@ -31,6 +31,10 @@
         staleDays?: number;
         fxStaleDays?: number;
         originalCurrency?: string;
+        /** Flag emoji for the original currency (e.g. 🇺🇸) — pre-computed by parent */
+        originalCurrencyFlag?: string;
+        /** Original (unconverted) value — from original_close when FX conversion is active */
+        originalValue?: number;
     }
 
 

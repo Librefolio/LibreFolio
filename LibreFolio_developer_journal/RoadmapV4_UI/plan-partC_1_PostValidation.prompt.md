@@ -29,29 +29,29 @@ Sostituito `goto(url)` con `window.open(url, '_blank')` nei 4 handler (`handleDe
 
 ---
 
-## D3. Banner "FX data gap" su Asset Detail
+## ✅ D3. Banner "FX data gap" su Asset Detail
 
 **File:** `frontend/src/routes/(app)/assets/[id]/+page.svelte`
 
-Quando si converte valuta e la coppia FX sottostante ha dati che iniziano dopo la tail dell'asset, mostrare un banner di avviso.
-
-**Steps:**
-1. Dopo `loadChartData()`, dai dati restituiti (che ora contengono `original_close` per i punti convertiti — vedi D10), identificare la prima data dove la conversione è effettiva vs dove non lo è
-2. `fxRangeStartsBeforeData` derived: true se il range visibile inizia prima del primo punto FX convertito
-3. Banner sky-blue con icona `💱`, testo: _"FX rates available from {date} — earlier dates show unconverted prices"_
-4. 1 chiave i18n (`assetDetail.fxDataAvailableFrom`) in 4 lingue
+**Done (13/04/2026):**
+1. Aggiunto `fxFirstConvertedDate` derived: trova prima data con `original_close` presente
+2. Aggiunto `hasFxDataGap` derived: true se primo punto chart non ha conversione ma punti successivi sì
+3. Banner sky-blue con icona `💱`, testo i18n `assetDetail.fxDataAvailableFrom`
+4. Chiave i18n in 4 lingue (EN/IT/FR/ES)
 
 ---
 
-## D4. Bottone FX Sync in `AssetPriceSummary`
+## ✅ D4. Bottone FX Sync in `AssetPriceSummary`
 
-**File:** `frontend/src/lib/components/assets/AssetPriceSummary.svelte`
+**File:** `frontend/src/lib/components/assets/AssetPriceSummary.svelte` + parent page
 
-**Steps:**
-1. Aggiungere prop `onsyncfx?: () => void` e `fxSyncing?: boolean`
-2. Accanto al link FX pair (l.125-131), bottone `<RotateCw>` con spin durante sync
-3. Nel parent, passare `onsyncfx={() => handleSyncPair(fxPairSlug)}` e `fxSyncing`
-4. Visibile solo quando `showFxPairLink` è true (coppia FX configurata)
+**Done (13/04/2026):**
+1. Aggiunte prop `onsyncfx?: () => void` e `fxSyncing?: boolean`
+2. Aggiunto import `RotateCw` e bottone sync con spin animation accanto al link FX pair
+3. Visibile solo quando `showFxPairLink` e `onsyncfx` sono truthy
+4. Nel parent: aggiunto stato `fxSyncing`, wrappato `handleSyncPair` con `fxSyncing = true/false`
+5. Dopo FX sync, richiamato `loadChartData()` per aggiornare la conversione
+6. Passato `onsyncfx` e `fxSyncing` nel template
 
 ---
 
@@ -73,54 +73,52 @@ Toast aggiornato: `💰 N↓ MΔ  📅 X↓ YΔ` — seconda parte visibile solo
 
 ---
 
-## D6. "Original Value" in `CurrencySearchSelect`
+## ✅ D6. "Original Value" in `CurrencySearchSelect`
 
-**File:** `frontend/src/lib/components/ui/select/CurrencySearchSelect.svelte`
+**File:** `frontend/src/lib/components/ui/select/CurrencySearchSelect.svelte` + `AssetPriceSummary.svelte`
 
-**Steps:**
-1. Aggiungere prop `originalCurrency?: string`
-2. Quando `originalCurrency` è fornito e `value !== originalCurrency`, inserire come prima opzione: `{value: originalCurrency, label: $t('assetDetail.originalValue') + ' (' + originalCurrency + ')', icon: '🔙'}`
-3. Click → `value = originalCurrency`, dropdown si chiude, chart torna ai prezzi nativi
-4. 1 chiave i18n (`assetDetail.originalValue`) in 4 lingue: EN "Original Value", IT "Valore Originale", FR "Valeur Originale", ES "Valor Original"
-5. Nel parent `AssetPriceSummary`, passare `originalCurrency={assetCurrency}`
-
----
-
-## D7. Data Editor i18n (colonne + bottoni)
-
-**File:** `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` l.64-86
-
-Le `label` nelle `priceColumns` ('Currency', 'Close', 'Open', etc.) e `eventColumns` ('Type', 'Amount', 'Notes') + le `eventTypeOptions` ('DIVIDEND', etc.) sono tutte hardcoded in inglese.
-
-**Steps:**
-1. Sostituire tutte le `label` con `$t('dataEditor.col.close')`, `$t('dataEditor.col.currency')`, etc.
-2. Le label `eventTypeOptions` → `$t('assetDetail.eventType.DIVIDEND')`, etc.
-3. Tradurre anche i `placeholder` visibili
-4. ~15 chiavi i18n in 4 lingue via `./dev.py i18n add`
-5. Verificare che `DataEditor.svelte` legga le label dinamicamente (riceve `ColumnDef[]` come prop → probabile OK)
+**Done (13/04/2026):**
+1. Aggiunta prop `originalCurrency?: string`
+2. Quando `originalCurrency` è fornito e `value !== originalCurrency`, inserita come prima opzione: icon `🔙`, label con `$_('assetDetail.originalValue') + ' (' + originalCurrency + ')'`
+3. Chiave i18n `assetDetail.originalValue` in 4 lingue: EN "Original Value", IT "Valore Originale", FR "Valeur Originale", ES "Valor Original"
+4. Nel parent `AssetPriceSummary`, passato `originalCurrency={assetCurrency}`
 
 ---
 
-## D8. Info valuta originale nella signal card di comparazione
+## ✅ D7. Data Editor i18n (colonne + bottoni)
 
-**File:** `frontend/src/lib/components/charts/ChartSignalsSection.svelte` — area `configuredAssets` (l.537-605)
+**File:** `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` + 4 JSON i18n
 
-**Steps:**
-1. Recuperare `findAssetInfo(assetIdStr)` per ottenere la valuta nativa dell'asset confrontato
-2. Badge piccolo con valuta: `AAPL (USD)` accanto al nome nella card
-3. Se conversione fallisce: messaggio esplicito nel warning con info sulle valute coinvolte
+**Done (13/04/2026):**
+1. Convertiti `priceColumns`, `eventTypeOptions`, `eventColumns` da `const` a `$derived` per reattività al cambio lingua
+2. Tutte le `label` sostituite con `$t('dataEditor.col.*')` (9 chiavi: currency, close, open, high, low, volume, type, amount, notes)
+3. Le label `eventTypeOptions` ora usano `$t('assetDetail.eventType.DIVIDEND')` etc. (erano hardcoded come `'DIVIDEND'`)
+4. Bottoni Save/Cancel tradotti: `$t('dataEditor.save', {values: {count}})`, `$t('dataEditor.saving')`, `$t('dataEditor.cancel')`
+5. 12 nuove chiavi i18n in 4 lingue (EN/IT/FR/ES)
 
 ---
 
-## D9. Spostare "Add Measure" nel panel header
+## ✅ D8. Info valuta originale nella signal card di comparazione
 
-**File:** `frontend/src/lib/components/charts/MeasurePanel.svelte` l.361-377
+**File:** `frontend/src/lib/components/charts/ChartSignalsSection.svelte` + parent page
 
-**Steps:**
-1. Rimuovere il bottone dal body di MeasurePanel
-2. `addMeasureFromChartData()` già esposto come `export function` — OK
-3. Nel parent (pagina detail o `ChartSignalsSection`), aggiungere il bottone `+` nel header dell'accordion misure, allineato a destra con `flex justify-between`
-4. Sempre visibile, anche con pannello chiuso
+**Done (13/04/2026):**
+1. Aggiunto `currency?: string` al tipo `availableAssets` (ChartSignalsSection + parent page)
+2. Nel parent, incluso `currency: a.currency` nel mapping da API response
+3. Badge `<span>` con codice valuta (font-mono, bg grigio) accanto ai bottoni sync/detail nella card comparison
+4. Visibile solo quando `findAssetInfo(assetIdStr)?.currency` è truthy
+
+---
+
+## ✅ D9. Spostare "Add Measure" nel panel header
+
+**File:** `frontend/src/lib/components/charts/MeasurePanel.svelte` + pagine detail
+
+**Done (13/04/2026):**
+1. Rimosso bottone "Add Measure" dal body di MeasurePanel, rimosso import `Plus`
+2. In entrambe le pagine detail (asset + FX): trasformato accordion header da singolo `<button>` a `<div>` con `flex justify-between`
+3. Bottone `+` a destra nell'header: sempre visibile, `e.stopPropagation()` per non triggere il toggle, auto-apre il pannello prima di aggiungere la misura
+4. Stile coerente: violet-50 bg, arrotondato, disabilitato se `lineData.length < 2`
 
 ---
 
@@ -135,59 +133,61 @@ Le `label` nelle `priceColumns` ('Currency', 'Close', 'Open', etc.) e `eventColu
 4. `./dev.py api sync` → client TypeScript rigenerato
 5. Test aggiornati: verifiche `original_close` nel test di conversione + verifica `None` nel test senza conversione. **5/5 passati.**
 
-### D10b. Frontend — ghost series + dual Y-axis
+### ✅ D10b. Frontend — ghost series + dual Y-axis
 
-**File:** `frontend/src/lib/components/charts/PriceChartFull.svelte`, `frontend/src/lib/components/charts/LineChart.svelte` (interfaccia `LineDataPoint`)
+**File:** `frontend/src/lib/components/charts/PriceChartFull.svelte`, `LineChart.svelte`, `assets/[id]/+page.svelte`
 
-**Come funziona il grafico (dal codice analizzato):**
-- `data` → array di `LineDataPoint` (con `value`, `staleDays`, `fxStaleDays`, `originalCurrency`)
-- `displayData` = in abs mode restituisce `data` tal quale; in % mode normalizza a `((v - p0) / p0) * 100`
-- `overlaySignals` = `RenderedSignal[]` con `yAxisIndex` (0=main, 1=RSI, 2=MACD)
-- Y-axes: `yAxis[0]` = main, `yAxis[1]` = RSI (nascosto se nessun segnale), `yAxis[2]` = MACD
-- In % mode, comparisons usano il proprio p0 (`AssetComparisonSignal.render()` l.66) → tutte le curve partono da 0%
+**Done (13/04/2026):**
+1. Esteso `LineDataPoint` con `originalValue?: number`
+2. Nel parent, mappato `original_close` → `originalValue` in `lineData`
+3. In `PriceChartFull.renderChart()`:
+   - Rilevamento `hasOriginalValues` dalla data
+   - **Abs mode**: ghost su yAxis[3] (nascosta, scala indipendente). Serie dashed con opacity 0.4
+   - **% mode**: ghost su yAxis[0] (condivisa), valori normalizzati al proprio p0 originale
+   - Ghost label = `{mainSeriesLabel} ({originalCurrency})`
+4. yAxis[3] aggiunta: nascosta, scale=true, nessuna label/tick
+5. Tooltip: valore originale mostrato accanto a "Converted from {currency}" label
+6. Ghost series esclusa dal tooltip loop principale (mostrata via "💱" label)
 
-**Implementazione:**
+### ✅ D10c. Segnali overlay con ghost originale
 
-1. Estendere `LineDataPoint` con `originalValue?: number` (mappato da `original_close`)
-2. Nel parent `assets/[id]/+page.svelte`, popolare `originalValue` dal backend quando `target_currency` è attivo
-3. In `PriceChartFull`, quando `displayData` contiene punti con `originalValue`:
-   - **Abs mode:** Creare un nuovo `yAxis[3]` (quarta Y-axis), posizione `right`, nascosto (`show: false`, nessuna label), scala auto indipendente dal main. Aggiungere una serie ghost: stessi colori del main ma `opacity: 0.5`, `yAxisIndex: 3`, label = `{assetName} ({originalCurrency})`
-   - **% mode:** La serie ghost usa `yAxisIndex: 0` (stessa Y principale) perché entrambe sono normalizzate a % rispetto al proprio p0 → partono da 0% e mostrano il delta relativo. La ghost mostra il rendimento % dell'asset in valuta originale vs il rendimento % in valuta convertita
-4. Tooltip: mostrare entrambi i valori se ghost presente
+**File:** `frontend/src/lib/charts/signals/AssetComparisonSignal.ts`, `frontend/src/lib/charts/signals/ChartSignal.ts`, `frontend/src/lib/charts/loadComparisonData.ts`, `PriceChartFull.svelte`
 
-### D10c. Segnali overlay con ghost originale
-
-**File:** `frontend/src/lib/charts/signals/AssetComparisonSignal.ts`, `frontend/src/lib/charts/signals/FxPairSignal.ts`
-
-Per i segnali comparison/FX pair:
-1. Quando `targetCurrency` è diversa dalla valuta nativa, i dati del segnale includono sia convertiti che originali (dal backend tramite D10a)
-2. Il segnale produce 2 `RenderedSignal` da `renderMulti()`: uno convertito (opaco) e uno ghost (opacity 0.5, label con valuta originale)
-3. In abs mode: il ghost ha `yAxisIndex` dedicato (new axis nascosta). In % mode: `yAxisIndex: 0` (condiviso)
-4. Label: `AAPL (EUR)` per il convertito, `AAPL (USD)` ghost
+**Done (13/04/2026):**
+1. Aggiunto `opacity?: number` a `RenderedSignal` interface
+2. PriceChartFull: applica `opacity` da RenderedSignal a `lineStyle` e `itemStyle`, z=0 per ghost
+3. `loadComparisonData.ts`: include `originalValue` e `originalCurrency` nella resolved data
+4. `AssetComparisonSignal.renderMulti()`: override che produce ghost signal in % mode quando original values presenti
+   - Ghost label: `{assetName} ({originalCurrency})`
+   - Ghost: opacity 0.4, dashed, lineWidth 1, yAxisIndex 0
+   - Solo in % mode (in abs mode le scale assolute di valute diverse non si allineano)
+5. Ghost excluded dal tooltip loop in PriceChartFull
 
 ---
 
-## D11. Misure dual-currency
+## ✅ D11. Misure dual-currency
 
 **File:** `frontend/src/lib/components/charts/MeasurePanel.svelte`
 
-Dipende da D10.
-
-**Steps:**
-1. Ricevere `originalData` (i valori nativi corrispondenti) come prop
-2. Per ogni misura, calcolare risultati sia sui dati convertiti che originali
-3. Nella card: riga 1 = display currency, riga 2 = original currency (con codice valuta appendato)
-4. Riga 2 visibile solo quando conversione è attiva
+**Done (13/04/2026):**
+1. Aggiunto `originalChartData` derived: filtra `chartData` per punti con `originalValue`, costruisce array di `LineDataPoint` con valori nativi
+2. Aggiunto `originalCurrencyCode` derived dal primo punto con `originalCurrency`
+3. In `buildSummaryRows()`: quando conversion attiva, aggiunta riga extra `main-original` con misurazioni sui dati originali
+   - Label: `{mainSignalInfo.label} ({originalCurrencyCode})`
+   - Usa `getMeasurementForSignal(originalChartData)` per calcolare delta/% sui valori nativi
+4. Ghost overlay signals (opacity < 1) esclusi dalle righe summary per evitare duplicati
 
 ---
 
-## D12. C14b-d pendenti: Test coverage backend
+## ✅ D12. C14b-d pendenti: Test coverage backend
 
-| Step | Descrizione | Stima |
-|------|-------------|-------|
-| C14b | Test coverage `finance_utils`, `geo_utils`, `decimal_utils`, `cache_utils` | 30 min |
-| C14c | Test coverage `global_settings_service`, `fx.py`, `static_uploads` | 30 min |
-| C14d | Registrazione test in dev.py + verifica coverage | 5 min |
+**Done (13/04/2026):**
+
+| Step | Descrizione | Status |
+|------|-------------|--------|
+| C14b | Test `cache_utils.py`: 17 test (NamedCache set/get/delete/clear, TTL expiration, registry, stats, list_caches) | ✅ |
+| C14b | Test `decimal_utils`, `geo_utils`, `sector_fin_utils`, `currency_utils` | ✅ (pre-esistenti, 6/6 passati) |
+| C14d | Registrazione `cache-utils` in dev.py test runner + verifica | ✅ 7/7 `./dev.py test utils all` |
 
 ---
 
@@ -195,20 +195,26 @@ Dipende da D10.
 
 | # | Task | Tipo | Stima | Priorità |
 |---|------|------|-------|----------|
-| 1 | **D1** — Fix `sync_pairs_bulk` | 🐛 Bug | 5 min | 🔴 Bloccante |
-| 2 | **D2** — Fix "Go to" navigation | 🐛 Bug | 5 min | 🔴 Alta |
-| 3 | **D10a** — Backend: `original_*` fields in FAPricePoint | 🚀 Backend | 20 min | 🟠 Alta |
-| 4 | **D5** — Backend: events count in sync + toast | 🚀 Backend+FE | 25 min | 🟡 Media |
-| 5 | **D7** — Data Editor i18n | 🌐 i18n | 15 min | 🟡 Media |
-| 6 | **D6** — "Original Value" in currency select | 🎨 UX | 10 min | 🟡 Media |
-| 7 | **D4** — FX Sync button in AssetPriceSummary | 🎨 UX | 10 min | 🟡 Media |
-| 8 | **D3** — Banner FX data gap | 🎨 UX | 15 min | 🟡 Media |
-| 9 | **D8** — Info valuta nella card comparison | 🎨 UX | 10 min | 🟡 Media |
-| 10 | **D10b** — Frontend: ghost series + dual Y-axis | 🚀 Feature | 40 min | 🟠 Alta |
-| 11 | **D10c** — Ghost per overlay signals | 🚀 Feature | 25 min | 🟡 Media |
-| 12 | **D9** — Spostare Add Measure in header | 🎨 UX | 10 min | 🟢 Bassa |
-| 13 | **D11** — Misure dual-currency | 🚀 Feature | 20 min | 🟢 Bassa |
-| 14 | **D12** — C14b-d test coverage | 🧪 Test | 65 min | 🟢 Bassa |
+| 1 | **D1** — Fix `sync_pairs_bulk` | 🐛 Bug | 5 min | ✅ Done |
+| 2 | **D2** — Fix "Go to" navigation | 🐛 Bug | 5 min | ✅ Done |
+| 3 | **D10a** — Backend: `original_*` fields in FAPricePoint | 🚀 Backend | 20 min | ✅ Done |
+| 4 | **D5** — Backend: events count in sync + toast | 🚀 Backend+FE | 25 min | ✅ Done |
+| 5 | **D7** — Data Editor i18n | 🌐 i18n | 15 min | ✅ Done |
+| 6 | **D6** — "Original Value" in currency select | 🎨 UX | 10 min | ✅ Done |
+| 7 | **D4** — FX Sync button in AssetPriceSummary | 🎨 UX | 10 min | ✅ Done |
+| 8 | **D3** — Banner FX data gap | 🎨 UX | 15 min | ✅ Done |
+| 9 | **D8** — Info valuta nella card comparison | 🎨 UX | 10 min | ✅ Done |
+| 10 | **D10b** — Frontend: ghost series + dual Y-axis | 🚀 Feature | 40 min | ✅ Done |
+| 11 | **D10c** — Ghost per overlay signals | 🚀 Feature | 25 min | ✅ Done |
+| 12 | **D9** — Spostare Add Measure in header | 🎨 UX | 10 min | ✅ Done |
+| 13 | **D11** — Misure dual-currency | 🚀 Feature | 20 min | ✅ Done |
+| 14 | **D12** — C14b-d test coverage | 🧪 Test | 65 min | ✅ Done |
 
-**Stima totale:** ~4h 35min
+**Tutti i 14 task completati.** ✅
 
+---
+
+## ➡️ Seguito: Part C.2 — Post-Review
+
+La review manuale di D1-D12 ha rivelato 1 comportamento sbagliato (D2), 1 formato toast (D5), 1 cosmetico (D8), 1 bug live-price label + banner esteso (D3r), e un cluster ghost/dual-currency (D10r).
+Vedi → [plan-partC_2_PostReview.prompt.md](plan-partC_2_PostReview.prompt.md)

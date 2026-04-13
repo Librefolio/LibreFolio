@@ -29,6 +29,10 @@ export interface SignalLabelInfo {
     color?: string | null;
     /** Show crown emoji for the main/primary series */
     isCrown?: boolean;
+    /** Currency code the signal values are denominated in (e.g. "EUR") */
+    currency?: string;
+    /** Flag emoji for the currency (e.g. "🇪🇺") */
+    currencyFlag?: string;
 }
 
 // =============================================================================
@@ -97,7 +101,7 @@ export function signalLabelToText(info: SignalLabelInfo): string {
  * to build a consistent lookup map keyed by signal label.
  */
 export function buildOverlaySignalInfoMap(
-    overlaySignals: ReadonlyArray<{ label: string; color: string; iconUrl?: string | null; assetType?: string | null }>,
+    overlaySignals: ReadonlyArray<{ label: string; color: string; iconUrl?: string | null; assetType?: string | null; currency?: string; currencyFlag?: string }>,
 ): Map<string, SignalLabelInfo> {
     const map = new Map<string, SignalLabelInfo>();
     for (const sig of overlaySignals) {
@@ -106,6 +110,8 @@ export function buildOverlaySignalInfoMap(
             color: sig.color,
             iconUrl: sig.iconUrl,
             assetType: sig.assetType,
+            currency: sig.currency,
+            currencyFlag: sig.currencyFlag,
         });
     }
     return map;

@@ -47,6 +47,7 @@
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {parseDateRangeFromUrl} from '$lib/utils/dateRangeFromUrl';
+    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/syncToastHelpers';
 
     // =========================================================================
     // Page data
@@ -506,33 +507,9 @@
             });
             const r = (response as any)?.results?.[0];
             if (r) {
-                const label = data.canonicalSlug.replace('-', '/');
                 const tr = get(t);
-                if (r.status === 'ok') {
-                    toasts.success(tr('fx.sync.toastOk', {
-                        values: {
-                            pair: label,
-                            fetched: r.points_fetched ?? 0,
-                            changed: r.points_changed ?? 0,
-                            provider: formatProviderText(r.provider_used)
-                        }
-                    }));
-                } else if (r.status === 'partial') {
-                    let msg = tr('fx.sync.toastPartial', {
-                        values: {
-                            pair: label,
-                            fetched: r.points_fetched ?? 0,
-                            changed: r.points_changed ?? 0,
-                            provider: formatProviderText(r.provider_used)
-                        }
-                    });
-                    msg += formatSyncDetail(r, tr);
-                    toasts.warning(msg);
-                } else if (r.status === 'skipped') {
-                    toasts.info(tr('fx.sync.toastSkipped', {values: {pair: label}}));
-                } else {
-                    toasts.error(tr('fx.sync.toastFailed', {values: {pair: label}}) + (r.message ? ': ' + r.message : ''));
-                }
+                const toast = buildFxSyncToast(r, data.canonicalSlug, tr, formatProviderText, formatSyncDetail);
+                toasts[toast.variant](toast.message);
             }
             await handleRefresh();
         } catch (e: any) {
@@ -575,35 +552,9 @@
             });
             const r = (response as any)?.results?.[0];
             if (r) {
-                const label = slug.replace('-', '/');
                 const tr = get(t);
-                if (r.status === 'ok') {
-                    toasts.success(tr('fx.sync.toastOk', {
-                        values: {
-                            pair: label,
-                            fetched: r.points_fetched ?? 0,
-                            changed: r.points_changed ?? 0,
-                            provider: formatProviderText(r.provider_used)
-                        }
-                    }));
-                } else if (r.status === 'partial') {
-                    let msg = tr('fx.sync.toastPartial', {
-                        values: {
-                            pair: label,
-                            fetched: r.points_fetched ?? 0,
-                            changed: r.points_changed ?? 0,
-                            provider: formatProviderText(r.provider_used)
-                        }
-                    });
-                    msg += formatSyncDetail(r, tr);
-                    toasts.warning(msg);
-                } else if (r.status === 'skipped') {
-                    toasts.info(tr('fx.sync.toastSkipped', {values: {pair: label}}));
-                } else {
-                    let msg = tr('fx.sync.toastFailed', {values: {pair: label}});
-                    if (r.message) msg += ': ' + r.message;
-                    toasts.error(msg);
-                }
+                const toast = buildFxSyncToast(r, slug, tr, formatProviderText, formatSyncDetail);
+                toasts[toast.variant](toast.message);
             }
             // Invalidate store + refresh if it's our pair, also reload overlay data
             const store = getFxStore(slug);
@@ -634,7 +585,7 @@
     }
 
     function handleDetailPair(slug: string) {
-        window.open(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`, '_blank');
+        goto(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`);
     }
 
     async function handleSyncAsset(assetId: number) {
@@ -645,10 +596,11 @@
             }]);
             const r = (response as any)?.results?.[0];
             const tr = get(t);
-            if (r?.status === 'ok') {
-                toasts.success(`${tr('common.sync')}: ${r.points_fetched ?? 0}↓ ${r.points_changed ?? 0}Δ`);
+            if (r) {
+                const toast = buildAssetSyncToast(r, tr('common.sync'));
+                toasts[toast.variant](toast.message);
             } else {
-                toasts.error(`${tr('common.sync')} — ${r?.message || 'failed'}`);
+                toasts.error(`${tr('common.sync')} — no response`);
             }
         } catch (e: any) {
             toasts.error('Sync failed: ' + (e?.message || 'unknown'));
@@ -658,7 +610,7 @@
     }
 
     function handleDetailAsset(assetId: number) {
-        window.open(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`, '_blank');
+        goto(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`);
     }
 
     /** Handle provider modal save — reload providers and auto-sync rates */
@@ -993,7 +945,6 @@
                         onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
                         staleLabel={$t('chart.tooltip.stale')}
                         fxStaleLabel={$t('chart.tooltip.fxStale')}
-                        convertedFromLabel={$t('chart.tooltip.convertedFrom')}
                 />
             </div>
         {:else}
@@ -1093,20 +1044,32 @@
     <!-- Foldable Panel: Measures (below DataEditor, above Signals) -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <button
-                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                data-testid="fx-detail-measures-toggle"
-                onclick={() => showMeasures = !showMeasures}
-        >
-            <span class="flex items-center gap-2">
+        <div class="flex items-center justify-between px-4 py-2.5">
+            <button
+                    class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    data-testid="fx-detail-measures-toggle"
+                    onclick={() => showMeasures = !showMeasures}
+            >
                 <Ruler class="text-violet-500" size={15}/>
                 {$t('fxDetail.measures')}
                 {#if measureMode}
                     <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
-            </span>
-            <ChevronDown class="transition-transform {showMeasures ? 'rotate-180' : ''}" size={15}/>
-        </button>
+                <ChevronDown class="transition-transform {showMeasures ? 'rotate-180' : ''}" size={15}/>
+            </button>
+            <button
+                    type="button"
+                    class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
+                           bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
+                           hover:bg-violet-100 dark:hover:bg-violet-900/50
+                           transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={lineData.length < 2}
+                    onclick={(e) => { e.stopPropagation(); showMeasures = true; measurePanel?.addMeasureFromChartData(); }}
+                    title={$t('fxDetail.addMeasure')}
+            >
+                <span class="text-sm leading-none">+</span>
+            </button>
+        </div>
         <!-- Single MeasurePanel instance — always mounted, hidden via CSS to preserve state -->
         <div class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"} data-testid="fx-detail-measures-panel">
             <MeasurePanel

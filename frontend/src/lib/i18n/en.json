@@ -854,7 +854,6 @@
     "tooltip": {
       "stale": "Stale: {days} day(s) old",
       "fxStale": "FX rate: {days}d old",
-      "convertedFrom": "Converted from {currency}",
       "percentNote": "% relative to range start date",
       "upper": "Upper",
       "lower": "Lower"
@@ -916,7 +915,21 @@
   "dataEditor": {
     "clearSelection": "Clear selection",
     "deleteSelected": "Delete selected",
-    "staleTooltip": "Hide backward-filled rows (⚠️ stale). These are gap-fill points copied from the nearest real data point."
+    "staleTooltip": "Hide backward-filled rows (⚠️ stale). These are gap-fill points copied from the nearest real data point.",
+    "col": {
+      "currency": "Currency",
+      "close": "Close",
+      "open": "Open",
+      "high": "High",
+      "low": "Low",
+      "volume": "Volume",
+      "type": "Type",
+      "amount": "Amount",
+      "notes": "Notes"
+    },
+    "save": "Save ({count})",
+    "saving": "Saving…",
+    "cancel": "Cancel"
   },
   "sharedResource": {
     "syncAll": "Sync All",
@@ -986,7 +999,10 @@
       "MATURITY_SETTLEMENT": "Final capital return at maturity. No further pricing."
     },
     "livePriceConversionFailed": "Live price shown in {currency} — FX rate unavailable for today",
-    "dataAvailableFrom": "Data available from {date} — earlier dates have no data"
+    "dataAvailableFrom": "Data available from {date} — earlier dates have no data",
+    "originalValue": "Original Value",
+    "fxDataAvailableFrom": "FX rates available from {date} — earlier dates show unconverted prices",
+    "fxPairNoRates": "FX pair {pair} has no rates in this date range — sync it to enable conversion"
   },
   "ticker": {
     "noAssets": "No tracked assets",

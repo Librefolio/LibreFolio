@@ -14,6 +14,7 @@
      */
     import {onMount, tick} from 'svelte';
     import {page} from '$app/stores';
+    import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
@@ -36,6 +37,7 @@
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import PageSyncModal from '$lib/components/ui/PageSyncModal.svelte';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
@@ -54,6 +56,7 @@
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {parseDateRangeFromUrl} from '$lib/utils/dateRangeFromUrl';
     import {fetchCurrentPrices} from '$lib/services/livePriceService';
+    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/syncToastHelpers';
 
     // =========================================================================
     // Page data
@@ -79,6 +82,7 @@
     /** Stores either a raw message or an i18n key prefixed with `_i18n:` for reactive translation */
     let error: string | null = $state(null);
     let syncing = $state(false);
+    let fxSyncing = $state(false);
 
     /** Reactively resolved error message — translates i18n keys when language changes */
     let errorMessage = $derived.by(() => {
@@ -132,7 +136,7 @@
 
     // Cross-domain data for signals
     let allConfiguredFxSlugs: string[] = $state([]);
-    let allAssets: Array<{ id: number; display_name: string; icon_url?: string | null; asset_type?: string | null }> = $state([]);
+    let allAssets: Array<{ id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string }> = $state([]);
 
     // Classification data (loaded when has_metadata)
     let sectorDistribution: Record<string, number> | null = $state(null);
@@ -142,8 +146,10 @@
     // Provider icon for header badge
     let providerIconUrl = $state<string | null>(null);
 
-    // FX pair add modal (opened from FX warning)
+    // FX pair add modal (opened from FX warning or banner)
     let showFxPairAddModal = $state(false);
+    /** Pre-filled slug for FxPairAddModal (e.g. "EUR-RON" from banner) */
+    let fxPairCreateSlug = $state('');
 
     // Live current price (from provider, only when dateEnd = today)
     let currentLivePrice = $state<number | null>(null);
@@ -166,6 +172,8 @@
         ),
         fxStaleDays: p.backward_fill_info?.fx_days_back ?? 0,
         originalCurrency: p.original_currency ?? undefined,
+        originalCurrencyFlag: p.original_currency ? getCurrencyInfo(p.original_currency).flag_emoji : undefined,
+        originalValue: p.original_close != null ? Number(p.original_close) : undefined,
     })));
 
     let isScheduledInvestment = $derived(providerAssignment?.provider_code === 'scheduled_investment');
@@ -177,6 +185,27 @@
     let rangeStartsBeforeData = $derived(
         firstDataDate != null && dateStart < firstDataDate
     );
+
+    /** First date with FX-converted data (original_close present) — null if no conversion active */
+    let fxFirstConvertedDate = $derived.by(() => {
+        if (!displayCurrency || !assetInfo || displayCurrency === assetInfo.currency) return null;
+        for (const p of chartData) {
+            if (p.original_close != null) return p.date as string;
+        }
+        return null;
+    });
+
+    /** True when conversion is active but earliest chart points lack FX rates */
+    let hasFxDataGap = $derived.by(() => {
+        if (!displayCurrency || !assetInfo || displayCurrency === assetInfo.currency) return false;
+        if (fxConversionMissing) return false; // FX pair doesn't exist at all → different warning
+        if (chartData.length === 0) return false;
+        // Case 1: first chart point has no conversion but later points do (partial gap)
+        if (fxFirstConvertedDate && chartData[0].original_close == null && fxFirstConvertedDate > chartData[0].date) return true;
+        // Case 2: FX pair exists but NO chart point has original_close at all (0 rates, or all rates after window)
+        // (chartData.length > 0 already guaranteed by the guard above)
+        return !fxFirstConvertedDate;
+    });
 
     /** Effective last price: live from provider when head = today, otherwise last chart close */
     let lastPrice = $derived.by(() => {
@@ -223,6 +252,86 @@
         const a = assetInfo.currency < displayCurrency ? assetInfo.currency : displayCurrency;
         const b = assetInfo.currency < displayCurrency ? displayCurrency : assetInfo.currency;
         return `${a}-${b}`;
+    });
+
+    /**
+     * All FX pairs required by the page (main + comparison signals).
+     * Each entry has slug, label, forAsset, and status.
+     */
+    interface RequiredFxPairInfo {
+        slug: string;
+        label: string;
+        forAsset: string;
+        status: 'ok' | 'missing' | 'no-data' | 'partial-gap';
+        firstDate?: string;
+    }
+
+    let requiredFxPairs: RequiredFxPairInfo[] = $derived.by(() => {
+        if (!displayCurrency) return [];
+        const pairs: RequiredFxPairInfo[] = [];
+        const seenSlugs = new Set<string>();
+
+        // Helper to compute canonical slug
+        const toSlug = (a: string, b: string) => {
+            const [lo, hi] = a < b ? [a, b] : [b, a];
+            return `${lo}-${hi}`;
+        };
+
+        // Main asset FX pair
+        if (assetInfo && displayCurrency !== assetInfo.currency) {
+            const slug = toSlug(assetInfo.currency, displayCurrency);
+            const missing = !allConfiguredFxSlugs.includes(slug);
+            let status: RequiredFxPairInfo['status'];
+            if (missing) {
+                status = 'missing';
+            } else if (!fxFirstConvertedDate && chartData.length > 0) {
+                status = 'no-data';
+            } else if (hasFxDataGap && fxFirstConvertedDate) {
+                status = 'partial-gap';
+            } else {
+                status = 'ok';
+            }
+            pairs.push({
+                slug,
+                label: slug.replace('-', '/'),
+                forAsset: assetInfo.display_name,
+                status,
+                firstDate: fxFirstConvertedDate ?? undefined,
+            });
+            seenSlugs.add(slug);
+        }
+
+        // Comparison signal FX pairs
+        for (const cfg of signals) {
+            if (cfg.signalType !== 'asset-comparison') continue;
+            const targetId = Number(cfg.params.assetId);
+            if (!targetId || targetId === data.assetId) continue;
+            const targetAsset = allAssets.find(a => a.id === targetId);
+            if (!targetAsset?.currency || targetAsset.currency === displayCurrency) continue;
+            const slug = toSlug(targetAsset.currency, displayCurrency);
+            if (seenSlugs.has(slug)) continue;
+            seenSlugs.add(slug);
+
+            const missing = !allConfiguredFxSlugs.includes(slug);
+            const convFailed = Boolean(cfg.params._conversionFailed);
+            const hasData = Boolean(cfg.params._resolvedData);
+            let status: RequiredFxPairInfo['status'];
+            if (missing) {
+                status = 'missing';
+            } else if (convFailed || !hasData) {
+                status = 'no-data';
+            } else {
+                status = 'ok';
+            }
+            pairs.push({
+                slug,
+                label: slug.replace('-', '/'),
+                forAsset: targetAsset.display_name,
+                status,
+            });
+        }
+
+        return pairs;
     });
 
     let identifiersList = $derived.by((): [string, string][] => {
@@ -361,7 +470,23 @@
     // Lifecycle
     // =========================================================================
 
-    onMount(async () => {
+    /** Full page reload: fetches all data for the current assetId */
+    async function reloadPage() {
+        loading = true;
+        error = null;
+        // Reset state for new asset
+        assetInfo = null;
+        providerAssignment = null;
+        chartData = [];
+        events = [];
+        comparisonEvents = new Map();
+        currentLivePrice = null;
+        livePriceConversionFailed = false;
+        sectorDistribution = null;
+        geographicDistribution = null;
+        classificationLoaded = false;
+        providerIconUrl = null;
+
         await Promise.all([
             ensureCurrenciesLoaded(get(currentLanguage)),
             ensureAssetProvidersCached(),
@@ -371,18 +496,36 @@
             loadFxPairSlugs(),
             loadAssetList(),
         ]);
-        // Resolve provider icon after data loads
-        if (assetInfo?.provider_code) {
-            providerIconUrl = getAssetProviderIconUrl(assetInfo.provider_code);
+        // Resolve provider icon after data loads (use local ref to avoid TS narrowing)
+        const info = assetInfo as AssetDetail | null;
+        if (info?.provider_code) {
+            providerIconUrl = getAssetProviderIconUrl(info.provider_code);
         }
         // Load classification data if available
-        if (assetInfo?.has_metadata) {
+        if (info?.has_metadata) {
             await loadClassificationData();
         } else {
             classificationLoaded = true;
         }
         // Load comparison asset data after initial data is ready
         await maybeLoadComparison();
+    }
+
+    // Track previous asset id for same-route navigation detection (plain var — not $state)
+    let _prevAssetId: number | undefined;
+
+    onMount(() => {
+        _prevAssetId = data.assetId;
+        reloadPage();
+    });
+
+    // Re-load everything when navigating to a different asset (same route pattern)
+    $effect(() => {
+        const newId = data.assetId;
+        if (_prevAssetId !== undefined && newId !== _prevAssetId) {
+            _prevAssetId = newId;
+            reloadPage();
+        }
     });
 
     $effect(() => {
@@ -551,6 +694,7 @@
             allAssets = (response as any[]).map((a: any) => ({
                 id: a.id, display_name: a.display_name,
                 icon_url: a.icon_url ?? null, asset_type: a.asset_type ?? null,
+                currency: a.currency ?? undefined,
             }));
         } catch (e) { console.error('Failed to load asset list:', e); }
     }
@@ -628,38 +772,43 @@
         }
     }
 
-    async function handleSync() {
-        syncing = true;
-        try {
-            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{
-                asset_id: data.assetId,
-                date_range: {start: dateStart, end: dateEnd},
-            }]);
-            const r = (response as any)?.results?.[0];
-            if (r) {
-                const tr = get(t);
-                const priceInfo = `💰 ${r.points_fetched ?? 0}↓ ${r.points_changed ?? 0}Δ`;
-                const evtFetched = r.events_fetched ?? 0;
-                const evtChanged = r.events_changed ?? 0;
-                const eventInfo = evtFetched > 0 ? `  📅 ${evtFetched}↓ ${evtChanged}Δ` : '';
-                if (r.status === 'ok') {
-                    toasts.success(`${tr('assetDetail.syncPrices')}: ${priceInfo}${eventInfo}`);
-                } else if (r.status === 'partial') {
-                    toasts.warning(`${tr('assetDetail.syncPrices')} (partial): ${priceInfo}${eventInfo}`);
-                } else if (r.status === 'skipped') {
-                    toasts.info(`${tr('assetDetail.syncPrices')} — skipped`);
-                } else {
-                    toasts.error(`${tr('assetDetail.syncPrices')} — ${r.message || 'failed'}`);
-                }
-            }
-            await handleRefresh();
-            await reloadMetadata();
-        } catch (e: any) {
-            console.error('Sync failed:', e);
-            toasts.error('Sync failed: ' + (e?.message || 'unknown'));
-        } finally {
-            syncing = false;
+    // Page sync modal state
+    let showPageSyncModal = $state(false);
+
+    /** Collect all assets and FX pairs for sync-all modal */
+    let syncAllAssets = $derived.by(() => {
+        const items: Array<{id: number; display_name: string; icon_url?: string | null; provider_code?: string | null}> = [];
+        // Main asset
+        if (assetInfo?.provider_code) {
+            items.push({id: data.assetId, display_name: assetInfo.display_name, icon_url: assetInfo.icon_url, provider_code: assetInfo.provider_code});
         }
+        // Comparison assets with provider
+        for (const cfg of signals) {
+            if (cfg.signalType !== 'asset-comparison') continue;
+            const aid = Number(cfg.params.assetId);
+            if (!aid || aid === data.assetId) continue;
+            const meta = allAssets.find(a => a.id === aid);
+            if (meta) {
+                // We don't know provider_code from allAssets, but sync endpoint handles it gracefully
+                items.push({id: aid, display_name: meta.display_name, icon_url: meta.icon_url ?? undefined, provider_code: 'unknown'});
+            }
+        }
+        return items;
+    });
+
+    let syncAllFxPairs = $derived(
+        requiredFxPairs.filter(p => p.status !== 'missing').map(p => p.slug)
+    );
+
+    function handleSync() {
+        showPageSyncModal = true;
+    }
+
+    async function handlePageSyncComplete() {
+        await handleRefresh();
+        await reloadMetadata();
+        await maybeLoadComparison();
+        overlayDataVersion++;
     }
 
     async function handleDateRangeChange(newStart: string, newEnd: string) {
@@ -694,25 +843,28 @@
             }]);
             const r = (response as any)?.results?.[0];
             const tr = get(t);
-            if (r?.status === 'ok') {
-                toasts.success(`${tr('common.sync')}: ${r.points_fetched ?? 0}↓ ${r.points_changed ?? 0}Δ`);
+            if (r) {
+                const toast = buildAssetSyncToast(r, tr('common.sync'));
+                toasts[toast.variant](toast.message);
             } else {
-                toasts.error(`${tr('common.sync')} — ${r?.message || 'failed'}`);
+                toasts.error(`${tr('common.sync')} — no response`);
             }
         } catch (e: any) {
             toasts.error('Sync failed: ' + (e?.message || 'unknown'));
         }
-        // Reload comparison data for the synced asset
+        // Reload comparison data for the synced asset, then trigger UI update
         await maybeLoadComparison();
+        overlayDataVersion++;
     }
 
     function handleDetailAsset(assetId: number) {
-        window.open(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`, '_blank');
+        goto(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`);
     }
 
     async function handleSyncPair(slug: string) {
+        fxSyncing = true;
         try {
-            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+            const syncResponse = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
                 pairs: [slug],
                 start: dateStart,
                 end: dateEnd,
@@ -733,15 +885,21 @@
                 store.merge(points);
             } catch { /* convert may fail if no data yet */ }
             overlayDataVersion++;
+            // Reload asset chart data to apply updated FX conversion
+            await loadChartData();
             const tr = get(t);
-            toasts.success(`${tr('common.sync')} FX ${slug.replace('-', '/')} ✓`);
+            const r = (syncResponse as any)?.results?.[0];
+            const toast = buildFxSyncToast(r, slug, tr);
+            toasts[toast.variant](toast.message);
         } catch (e: any) {
             toasts.error('FX sync failed: ' + (e?.message || 'unknown'));
+        } finally {
+            fxSyncing = false;
         }
     }
 
     function handleDetailPair(slug: string) {
-        window.open(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`, '_blank');
+        goto(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`);
     }
 
     async function handleAssetUpdated() {
@@ -866,6 +1024,52 @@
         </div>
     {/if}
 
+    <!-- FX pair status banners: one per problematic FX pair (main + comparison) -->
+    {#if !loading && !error}
+        {#each requiredFxPairs.filter(p => p.status !== 'ok') as pair (pair.slug)}
+            {#if pair.status === 'missing'}
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2 flex-wrap">
+                    <span>💱</span>
+                    <span class="font-medium">{pair.label}</span>
+                    <span class="opacity-80">— {$t('assetDetail.fxPairMissing', {values: {base: pair.slug.split('-')[0], quote: pair.slug.split('-')[1]}})}</span>
+                    <span class="text-[10px] opacity-60">({pair.forAsset})</span>
+                    <button
+                        class="ml-auto px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40 transition-colors font-medium"
+                        onclick={() => { fxPairCreateSlug = pair.slug; showFxPairAddModal = true; }}
+                    >➕ {$t('assetDetail.addFxPair')}</button>
+                </div>
+            {:else if pair.status === 'no-data'}
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2 flex-wrap">
+                    <span>💱</span>
+                    <span class="font-medium">{pair.label}</span>
+                    <span class="opacity-80">— {$t('assetDetail.fxPairNoRates', {values: {pair: pair.label}})}</span>
+                    <span class="text-[10px] opacity-60">({pair.forAsset})</span>
+                    <div class="ml-auto flex items-center gap-1">
+                        <button
+                            class="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40 transition-colors font-medium"
+                            onclick={() => handleSyncPair(pair.slug)}
+                        >🔄 {$t('common.sync')}</button>
+                        <a href="/fx/{pair.slug}" class="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40 transition-colors">↗</a>
+                    </div>
+                </div>
+            {:else if pair.status === 'partial-gap'}
+                <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2 flex-wrap">
+                    <span>💱</span>
+                    <span class="font-medium">{pair.label}</span>
+                    <span class="opacity-80">— {$t('assetDetail.fxDataAvailableFrom', {values: {date: pair.firstDate ?? ''}})}</span>
+                    <span class="text-[10px] opacity-60">({pair.forAsset})</span>
+                    <div class="ml-auto flex items-center gap-1">
+                        <button
+                            class="px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40 transition-colors font-medium"
+                            onclick={() => handleSyncPair(pair.slug)}
+                        >🔄 {$t('common.sync')}</button>
+                        <a href="/fx/{pair.slug}" class="px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40 transition-colors">↗</a>
+                    </div>
+                </div>
+            {/if}
+        {/each}
+    {/if}
+
     <!-- ======================================================================= -->
     <!-- Filter bar -->
     <!-- wide:     [ datepicker  price-summary ─── actions-2×2 ]                        -->
@@ -906,8 +1110,10 @@
                         {fxConversionMissing}
                         {fxPairSlug}
                         layoutMode={layout.layoutMode}
-                        onAddFxPair={() => showFxPairAddModal = true}
+                        onAddFxPair={() => { fxPairCreateSlug = ''; showFxPairAddModal = true; }}
                         {livePriceConversionFailed}
+                        onsyncfx={fxPairSlug ? () => handleSyncPair(fxPairSlug) : undefined}
+                        {fxSyncing}
                 />
             {/if}
         </div>
@@ -991,6 +1197,10 @@
                         ondetailasset={handleDetailAsset}
                         {signalSummaries}
                         {dateStart}
+                        {displayCurrency}
+                        configuredFxSlugs={allConfiguredFxSlugs}
+                        oncreatefxpair={(slug) => { fxPairCreateSlug = slug; showFxPairAddModal = true; }}
+                        onsyncfxpair={handleSyncPair}
                 />
             </div>
         {/if}
@@ -1103,7 +1313,10 @@
                         editMode={showDataEditor}
                         staleLabel={$t('chart.tooltip.stale')}
                         fxStaleLabel={$t('chart.tooltip.fxStale')}
-                        convertedFromLabel={$t('chart.tooltip.convertedFrom')}
+                        displayCurrency={displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
+                        displayCurrencyFlag={displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
+                        mainCurrency={assetInfo?.currency ?? undefined}
+                        mainCurrencyFlag={assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
                         onDblClick={(date) => {
                             if (showDataEditor && assetDataEditorRef) {
                                 assetDataEditorRef.scrollToDate(date, 'prices');
@@ -1189,20 +1402,32 @@
     <!-- Foldable Panel: Measures -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <button
-                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                data-testid="asset-detail-measures-toggle"
-                onclick={() => showMeasures = !showMeasures}
-        >
-            <span class="flex items-center gap-2">
+        <div class="flex items-center justify-between px-4 py-2.5">
+            <button
+                    class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    data-testid="asset-detail-measures-toggle"
+                    onclick={() => showMeasures = !showMeasures}
+            >
                 <Ruler class="text-violet-500" size={15}/>
                 {$t('assetDetail.measures')}
                 {#if measureMode}
                     <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
-            </span>
-            <ChevronDown class="transition-transform {showMeasures ? 'rotate-180' : ''}" size={15}/>
-        </button>
+                <ChevronDown class="transition-transform {showMeasures ? 'rotate-180' : ''}" size={15}/>
+            </button>
+            <button
+                    type="button"
+                    class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
+                           bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
+                           hover:bg-violet-100 dark:hover:bg-violet-900/50
+                           transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={lineData.length < 2}
+                    onclick={(e) => { e.stopPropagation(); showMeasures = true; measurePanel?.addMeasureFromChartData(); }}
+                    title={$t('assetDetail.addMeasure')}
+            >
+                <span class="text-sm leading-none">+</span>
+            </button>
+        </div>
         <div class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"} data-testid="asset-detail-measures-panel">
             <MeasurePanel
                     bind:this={measurePanel}
@@ -1212,6 +1437,10 @@
                     overlaySignals={overlaySignals}
                     {mainSignalInfo}
                     {viewMode}
+                    displayCurrency={displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
+                    displayCurrencyFlag={displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}
+                    mainCurrency={assetInfo?.currency ?? undefined}
+                    mainCurrencyFlag={assetInfo?.currency ? getCurrencyInfo(assetInfo.currency).flag_emoji : undefined}
             />
         </div>
     </div>
@@ -1333,30 +1562,49 @@
                 onclose={() => editModalOpen = false}
         />
 
-        <!-- FX Pair Add Modal (opened from FX warning) -->
+        <!-- FX Pair Add Modal (opened from FX warning or banner) -->
+        {@const createParts = fxPairCreateSlug ? fxPairCreateSlug.split('-') : []}
+        {@const createBase = createParts.length === 2 ? createParts[0] : assetInfo.currency}
+        {@const createQuote = createParts.length === 2 ? createParts[1] : (displayCurrency !== assetInfo.currency ? displayCurrency : '')}
         <FxPairAddModal
                 bind:open={showFxPairAddModal}
-                readonlyBase={true}
-                initialBase={assetInfo.currency}
-                initialQuote={displayCurrency !== assetInfo.currency ? displayCurrency : ''}
+                readonlyBase={!fxPairCreateSlug}
+                initialBase={createBase}
+                initialQuote={createQuote}
                 dateStart={dateStart}
                 dateEnd={dateEnd}
                 oncreated={async ({ base, quote, hasRealProvider }) => {
                     showFxPairAddModal = false;
+                    fxPairCreateSlug = '';
                     await loadFxPairSlugs();
-                    // Update display currency to the quote of the created pair
-                    const assetCur = assetInfo?.currency ?? '';
-                    const newQuote = assetCur === base ? quote : base;
-                    if (newQuote !== assetCur) {
-                        displayCurrency = newQuote;
+                    // Only update display currency when creating the main asset's FX pair
+                    if (!fxPairCreateSlug) {
+                        const assetCur = assetInfo?.currency ?? '';
+                        const newQuote = assetCur === base ? quote : base;
+                        if (newQuote !== assetCur) {
+                            displayCurrency = newQuote;
+                        }
                     }
                     if (hasRealProvider) {
                         toasts.success($t('assetDetail.fxPairCreatedSynced'));
                     }
                     await handleRefresh();
+                    await maybeLoadComparison();
+                    overlayDataVersion++;
                 }}
-                onclose={() => showFxPairAddModal = false}
+                onclose={() => { showFxPairAddModal = false; fxPairCreateSlug = ''; }}
         />
     {/if}
+
+    <!-- Page Sync Modal (sync all assets + FX pairs) -->
+    <PageSyncModal
+            bind:open={showPageSyncModal}
+            {dateStart}
+            {dateEnd}
+            assets={syncAllAssets}
+            fxPairs={syncAllFxPairs}
+            onsynced={handlePageSyncComplete}
+            onclose={() => showPageSyncModal = false}
+    />
 </div>
 

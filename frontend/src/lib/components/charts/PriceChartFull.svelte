@@ -31,13 +31,6 @@
         signalColor?: string; // color of the overlay signal for comparison events
     }
 
-    const EVENT_COLORS: Record<string, string> = {
-        INTEREST: '#10b981',           // emerald-500
-        DIVIDEND: '#3b82f6',           // blue-500
-        PRICE_ADJUSTMENT: '#f59e0b',   // amber-500
-        MATURITY_SETTLEMENT: '#ef4444', // red-500
-        SPLIT: '#8b5cf6',             // violet-500
-    };
 
     const EVENT_SYMBOLS: Record<string, string> = {
         INTEREST: 'diamond',
@@ -96,8 +89,14 @@
         staleLabel?: string;
         /** Translated label for FX stale indicator (e.g. "FX rate: {days}d old") — receives `{days}` placeholder */
         fxStaleLabel?: string;
-        /** Translated label for converted currency (e.g. "Converted from {currency}") — receives `{currency}` placeholder */
-        convertedFromLabel?: string;
+        /** Display currency code (e.g. "EUR") — used for main label suffix when FX conversion active */
+        displayCurrency?: string;
+        /** Display currency flag emoji (e.g. "🇪🇺") — pre-computed by parent */
+        displayCurrencyFlag?: string;
+        /** Main asset native currency code (e.g. "USD") — shown in tooltip when no conversion */
+        mainCurrency?: string;
+        /** Main asset native currency flag emoji (e.g. "🇺🇸") */
+        mainCurrencyFlag?: string;
     }
 
     let {
@@ -130,7 +129,10 @@
         onEventDblClick,
         staleLabel,
         fxStaleLabel,
-        convertedFromLabel,
+        displayCurrency: displayCurrencyProp,
+        displayCurrencyFlag,
+        mainCurrency: mainCurrencyProp,
+        mainCurrencyFlag: mainCurrencyFlagProp,
     }: Props = $props();
 
     // =========================================================================
@@ -187,6 +189,7 @@
             void showGridLines;
             void showGradient;
             void viewMode;
+            void displayData;
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
@@ -444,6 +447,57 @@
         );
         series.push(...mainSeriesList);
 
+        // Ghost series — original (unconverted) values — inserted right after main, before overlays
+        const hasOriginalValues = data.some(d => d.originalValue !== undefined);
+        let ghostSeriesData: (number | null)[] = [];
+        let ghostLabel = '';
+
+        if (hasOriginalValues) {
+            const origCur = data.find(d => d.originalCurrency)?.originalCurrency ?? '';
+            const origFlag = data.find(d => d.originalCurrencyFlag)?.originalCurrencyFlag ?? '';
+            ghostLabel = mainSeriesLabel
+                ? `💱 ${mainSeriesLabel} (${origFlag} ${origCur})`.trim()
+                : `💱 ${origCur}`;
+
+            if (isPercentage) {
+                // % mode: normalize original values to their own p0
+                const firstOrigIdx = data.findIndex(d => d.originalValue !== undefined);
+                const origP0 = firstOrigIdx >= 0 ? data[firstOrigIdx].originalValue! : 1;
+                ghostSeriesData = data.map(d => {
+                    if (d.originalValue === undefined) return null;
+                    return origP0 !== 0 ? ((d.originalValue - origP0) / origP0) * 100 : 0;
+                });
+            } else {
+                // Abs mode: use raw original values on shared yAxis[0]
+                ghostSeriesData = data.map(d => d.originalValue ?? null);
+            }
+
+            series.push({
+                type: 'line',
+                name: ghostLabel,
+                data: ghostSeriesData,
+                connectNulls: true,
+                smooth: false,
+                symbol: 'none',
+                showSymbol: false,
+                sampling: 'lttb',
+                xAxisIndex: 0,
+                yAxisIndex: 0,
+                lineStyle: {
+                    color: isDark ? COLORS.lineDark : COLORS.lineLight,
+                    width: 1.5,
+                    type: 'dashed',
+                    opacity: 0.4,
+                },
+                itemStyle: {
+                    color: isDark ? COLORS.lineDark : COLORS.lineLight,
+                    opacity: 0.4,
+                },
+                emphasis: {focus: 'none'},
+                z: 0,
+            });
+        }
+
 
         // Overlay signals
         if (overlaySignals && overlaySignals.length > 0) {
@@ -473,9 +527,9 @@
                     connectNulls: true, smooth: false, symbol: 'none', showSymbol: false,
                     sampling: 'lttb',
                     xAxisIndex: 0, yAxisIndex: signal.yAxisIndex ?? 0,
-                    lineStyle: {color: signal.color, width: signal.lineWidth, type: signal.lineType},
-                    itemStyle: {color: signal.color},
-                    emphasis: {focus: 'none'}, z: 1,
+                    lineStyle: {color: signal.color, width: signal.lineWidth, type: signal.lineType, opacity: signal.opacity ?? 1},
+                    itemStyle: {color: signal.color, opacity: signal.opacity ?? 1},
+                    emphasis: {focus: 'none'}, z: signal.opacity != null && signal.opacity < 1 ? 0 : 1,
                 };
 
                 if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
@@ -630,6 +684,7 @@
         const hasTertiaryAxis = overlaySignals.some(s => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
         const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
 
+
         // Y-axis configuration
         const isCustom = yAxisMode === 'custom';
         const isInclude0 = yAxisMode === 'include0';
@@ -658,10 +713,12 @@
         const staleLookup = new Map<string, number>();
         const fxStaleLookup = new Map<string, number>();
         const originalCurrencyLookup = new Map<string, string>();
+        const originalValueLookup = new Map<string, number>();
         for (const d of data) {
             if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
             if (d.fxStaleDays && d.fxStaleDays > 0) fxStaleLookup.set(d.date, d.fxStaleDays);
             if (d.originalCurrency) originalCurrencyLookup.set(d.date, d.originalCurrency);
+            if (d.originalValue !== undefined) originalValueLookup.set(d.date, d.originalValue);
         }
 
         const option: echarts.EChartsOption = {
@@ -765,6 +822,8 @@
                     }
                     const shownNames = new Set<string>();
                     const firstValue = displayData.length > 0 ? displayData[0].value : null;
+                    // Determine if FX conversion is active (for main label suffix)
+                    const conversionActive = hasOriginalValues && displayCurrencyProp && displayCurrencyFlag;
                     for (const p of items) {
                         if (p.seriesName === 'Pending' || p.seriesName === '__baseline__' || p.seriesName === '__overview__') continue;
                         if (bandHelperNames.has(p.seriesName)) continue;
@@ -774,29 +833,52 @@
                         if (shownNames.has(p.seriesName)) continue;
                         shownNames.add(p.seriesName);
                         const suffix = isPercentage ? '%' : '';
-                        const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
+                        const isGhost = hasOriginalValues && p.seriesName === ghostLabel;
+                        const axisIdx = isGhost ? 0 : (signalAxisMap.get(p.seriesName) ?? 0);
                         const valueSuffix = axisIdx === 0 ? suffix : '';
                         const axisNote = axisIdx === 1 ? ' <span style="font-size:10px;color:#94a3b8">[RSI]</span>' : axisIdx === 2 ? ' <span style="font-size:10px;color:#a78bfa">[MACD]</span>' : '';
 
                         // Use signalLabelToHtml for proper icon rendering
                         let labelHtml: string;
-                        const sigInfo = overlaySignalInfoMap?.get(p.seriesName);
-                        if (sigInfo) {
-                            labelHtml = signalLabelToHtml(sigInfo);
-                        } else if (p.seriesName === mainSeriesName) {
-                            labelHtml = signalLabelToHtml({
-                                label: mainSeriesName,
-                                iconUrl: mainIconUrl,
-                                assetType: mainAssetType,
-                                isCrown: true,
-                            });
+                        if (isGhost) {
+                            // Ghost label is already formatted as "💱 Name (🇺🇸 USD)"
+                            const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;opacity:0.4"></span>`;
+                            labelHtml = `${ghostDot}${ghostLabel}`;
                         } else {
-                            const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                            labelHtml = `${colorDot}${p.seriesName}`;
+                            const sigInfo = overlaySignalInfoMap?.get(p.seriesName);
+                            if (sigInfo) {
+                                // Append (flag currency) to overlay signal labels
+                                const currSuffix = sigInfo.currency
+                                    ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${sigInfo.currency})</span>`
+                                    : '';
+                                labelHtml = signalLabelToHtml(sigInfo) + currSuffix;
+                            } else if (p.seriesName === mainSeriesName) {
+                                // Main signal: 💱(flag currency) when conversion active, (flag currency) when not
+                                let mainLabel: string;
+                                let currSuffix = '';
+                                if (conversionActive) {
+                                    mainLabel = mainSeriesName;
+                                    currSuffix = ` <span style="font-size:10px;opacity:0.7">💱(${displayCurrencyFlag} ${displayCurrencyProp})</span>`;
+                                } else if (mainCurrencyProp) {
+                                    mainLabel = mainSeriesName;
+                                    currSuffix = ` <span style="font-size:10px;opacity:0.7">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                                } else {
+                                    mainLabel = mainSeriesName;
+                                }
+                                labelHtml = signalLabelToHtml({
+                                    label: mainLabel,
+                                    iconUrl: mainIconUrl,
+                                    assetType: mainAssetType,
+                                    isCrown: true,
+                                }) + currSuffix;
+                            } else {
+                                const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
+                                labelHtml = `${colorDot}${p.seriesName}`;
+                            }
                         }
                         html += `<br/>${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
                         // Show delta from first visible point for the main axis (yAxisIndex 0)
-                        if (axisIdx === 0 && firstValue !== null) {
+                        if (axisIdx === 0 && firstValue !== null && !isGhost) {
                             const numVal = Number(value);
                             if (isPercentage) {
                                 // In % mode, value IS already the delta %
@@ -830,13 +912,6 @@
                                 : `Stale: ${dataPoint}d`;
                             html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
                         }
-                    }
-                    const origCur = originalCurrencyLookup.get(date);
-                    if (origCur) {
-                        const cfLabel = convertedFromLabel
-                            ? convertedFromLabel.replace('{currency}', origCur)
-                            : `Converted from ${origCur}`;
-                        html += `<br/><span style="color:#8b5cf6;font-size:11px">💱 ${cfLabel}</span>`;
                     }
                     return html;
                 },

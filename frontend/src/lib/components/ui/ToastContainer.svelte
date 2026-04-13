@@ -38,7 +38,7 @@
                 <div class="flex flex-col items-center gap-1 px-4 py-3 text-sm leading-snug text-center">
                     <div class="flex items-start gap-1.5">
                         <Icon size={15} class="shrink-0 mt-0.5"/>
-                        <span class="flex-1 whitespace-pre-line text-left">{toast.message}</span>
+                        <span class="flex-1 whitespace-pre-line text-left">{@html toast.message}</span>
                     </div>
                     <button
                             class="shrink-0 p-0.5 rounded hover:bg-white/20 transition-colors absolute top-1.5 right-1.5"
