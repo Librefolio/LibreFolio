@@ -6,7 +6,6 @@ Uses the justetf-scraping library to fetch ETF data from justetf.com.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Dict, List, Optional
@@ -231,7 +230,7 @@ class JustETFProvider(AssetSourceProvider):
 
             # 2. Fallback: one-shot fetch (first call before WS delivers)
             if quote is None:
-                quote = await asyncio.to_thread(load_live_quote, identifier)
+                quote = load_live_quote(identifier)
 
             if quote is None:
                 raise AssetSourceError(
@@ -301,7 +300,7 @@ class JustETFProvider(AssetSourceProvider):
             cached_df, ok = _chart_cache.get(cache_key)
 
             if not ok:
-                df = await asyncio.to_thread(load_chart, identifier, "EUR", add_current)
+                df = load_chart(identifier, "EUR", add_current)
                 _chart_cache.set(cache_key, df)
             else:
                 df = cached_df
@@ -364,7 +363,7 @@ class JustETFProvider(AssetSourceProvider):
         """Search for ETFs in the cached ETF list."""
         self._check_availability()
         try:
-            df_all = await asyncio.to_thread(JustETFProvider.etf_list)
+            df_all = JustETFProvider.etf_list()
             # Define only the normal columns (exclude index 'isin' from here)
             cols_only = ["name", "ticker", "wkn"]
             # Search in columns (Vectorized)
@@ -413,9 +412,7 @@ class JustETFProvider(AssetSourceProvider):
             cached, ok = _overview_cache.get(cache_key)
 
             if not ok:
-                overview = await asyncio.to_thread(
-                    get_etf_overview, identifier, include_gettex=False
-                    )
+                overview = get_etf_overview(identifier, include_gettex=False)
                 _overview_cache.set(cache_key, overview)
             else:
                 overview = cached

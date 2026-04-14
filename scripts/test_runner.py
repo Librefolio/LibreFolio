@@ -715,6 +715,42 @@ def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Transaction edge cases tests", verbose=verbose)
 
 
+def services_global_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test GlobalSettingsService: _convert_value, get_setting_value, typed getters.
+    """
+    print_section("Services: Global Settings Service")
+    print_info("Testing: backend/app/services/global_settings_service.py")
+    print_info("Tests: Type conversion, DB reads with defaults, TTL/upload/registration getters")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_global_settings_service.py", test_names)
+    return run_command(cmd, "Global settings service tests", verbose=verbose)
+
+
+def services_fx_core(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test FX core helpers: normalize_rate_for_storage, upsert/delete bulk, count changes.
+    """
+    print_section("Services: FX Core Helpers")
+    print_info("Testing: backend/app/services/fx.py (core functions not covered by fx-conversion)")
+    print_info("Tests: normalize_rate, upsert_rates_bulk, delete_rates_bulk, _count_actual_changes")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_core.py", test_names)
+    return run_command(cmd, "FX core helpers tests", verbose=verbose)
+
+
+def services_static_uploads(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test static uploads service: save, list, get, delete, security validation.
+    """
+    print_section("Services: Static Uploads")
+    print_info("Testing: backend/app/services/static_uploads.py")
+    print_info("Tests: File save/list/get/delete, security validation, user filtering")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_uploads.py", test_names)
+    return run_command(cmd, "Static uploads service tests", verbose=verbose)
+
+
 # ============================================================================
 # UTILS TESTS
 # ============================================================================
@@ -782,6 +818,15 @@ def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Tests: NamedCache set/get/delete/clear, TTL, registry, stats")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_cache_utils.py", test_names)
     return run_command(cmd, "Cache utils tests", verbose=verbose)
+
+
+def utils_provider_core_cache(verbose: bool = False, test_names: list = None) -> bool:
+    """Test provider core cache & thread isolation infrastructure."""
+    print_section("Utils: Provider Core Cache & Thread Isolation")
+    print_info("Testing: backend/app/services/asset_source.py (core cache + _run_provider_in_thread)")
+    print_info("Tests: Thread isolation, timeout, caches (history/current/metadata/search), probe bypass")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_provider_core_cache.py", test_names)
+    return run_command(cmd, "Provider core cache tests", verbose=verbose)
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -2272,6 +2317,30 @@ These tests verify business logic in service layer:
             "prereq": "Database created",
             "tests": "Error paths, boundary conditions",
             },
+        "global-settings": {
+            "func": services_global_settings,
+            "test_names": True,
+            "name": "Global Settings Service",
+            "desc": "Test global settings service",
+            "prereq": "Database created",
+            "tests": "Type conversion, DB reads, typed getters",
+            },
+        "fx-core": {
+            "func": services_fx_core,
+            "test_names": True,
+            "name": "FX Core Helpers",
+            "desc": "Test FX core helpers (normalize, upsert, delete, count)",
+            "prereq": "Database created",
+            "tests": "Rate normalization, bulk upsert/delete, change counting",
+            },
+        "static-uploads": {
+            "func": services_static_uploads,
+            "test_names": True,
+            "name": "Static Uploads Service",
+            "desc": "Test static uploads service",
+            "prereq": "None",
+            "tests": "Save, list, get, delete, security validation",
+            },
         "all": {
             "func": services_all,
             "test_names": False,
@@ -2346,6 +2415,14 @@ These tests verify utility modules and helper functions:
             "desc": "Test NamedCache, TTL expiration, global registry, stats",
             "prereq": "theine installed",
             "tests": "set/get/delete/clear, TTL expiration, registry, stats, list_caches",
+            },
+        "provider-core-cache": {
+            "func": utils_provider_core_cache,
+            "test_names": True,
+            "name": "Provider Core Cache",
+            "desc": "Test core cache + thread isolation for asset providers",
+            "prereq": "theine installed",
+            "tests": "Thread isolation, timeout, history/current/metadata/search caches, probe bypass",
             },
         "all": {
             "func": utils_all,
