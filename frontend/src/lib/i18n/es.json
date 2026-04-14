@@ -984,6 +984,7 @@
     "addFxPair": "Añadir par FX",
     "goToFxPair": "Ir al detalle del par FX",
     "fxPairCreatedSynced": "Par FX creado y sincronizado",
+    "pageSyncDescription": "Sincronizar precios de activos y tasas de cambio para esta página.",
     "eventType": {
       "DIVIDEND": "Dividendo",
       "INTEREST": "Interés",
@@ -1000,6 +1001,7 @@
     },
     "livePriceConversionFailed": "Precio en vivo en {currency} — tipo de cambio FX no disponible para hoy",
     "dataAvailableFrom": "Datos disponibles desde {date} — fechas anteriores sin datos",
+    "weekendHint": "la fecha de inicio cae en fin de semana — intenta ajustarla",
     "originalValue": "Valor Original",
     "fxDataAvailableFrom": "Tasas FX disponibles desde {date} — fechas anteriores muestran precios sin convertir",
     "fxPairNoRates": "El par FX {pair} no tiene tasas en este rango — sincronízalo para habilitar la conversión"

@@ -93,6 +93,10 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     # httpx/httpcore log every TCP connection, TLS handshake, request header etc.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    # yfinance logs every HTTP request, cookie/crumb negotiation, and response at DEBUG
+    logging.getLogger("yfinance").setLevel(logging.WARNING)
+    # peewee (used internally by yfinance) logs DB operations
+    logging.getLogger("peewee").setLevel(logging.WARNING)
 
     # Configure handlers
     handlers = []

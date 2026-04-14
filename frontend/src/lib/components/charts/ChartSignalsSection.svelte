@@ -16,6 +16,7 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
@@ -335,11 +336,12 @@
             {#if comparisonOptions.length > 0}
                 <div>
                     <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">💱 {$t('chartSettings.categories.comparison')}</span>
-                    <SimpleSelect
+                    <SearchSelect
                             bind:value={comparisonSelect}
                             options={comparisonOptions}
                             placeholder={$t('common.select')}
                             dropdownPosition="auto"
+                            maxVisibleItems={8}
                             onchange={(v) => { addSignal(v); comparisonSelect = ''; }}
                     >
                         {#snippet item(option)}
@@ -352,7 +354,7 @@
                                 </span>
                             {/if}
                         {/snippet}
-                    </SimpleSelect>
+                    </SearchSelect>
                 </div>
             {/if}
             {#if benchmarkOptions.length > 0}
@@ -488,13 +490,12 @@
                                             {#if desc.dynamicOptionsKey === 'configuredFxPairs'}
                                                 {@const currentPairSlug = getParamString(signal, desc.key)}
                                                 <div class="flex items-center gap-1">
-                                                    <div class="w-48">
-                                                        <SimpleSelect
+                                                    <div class="w-44">
+                                                        <SearchSelect
                                                                 value={currentPairSlug}
                                                                 options={resolveDynamicOptions('configuredFxPairs').map(o => {
                                                                 const parts = o.value.split('-');
                                                                 const isCurrent = o.value === currentPairSlug;
-                                                                // When this card's signal is inverted, swap display order for the selected pair
                                                                 const showInverted = isCurrent && Boolean(signal.params._inverted);
                                                                 const base = showInverted ? parts[1] : parts[0];
                                                                 const quote = showInverted ? parts[0] : parts[1];
@@ -502,17 +503,24 @@
                                                                 const quoteFlag = getCurrencyInfo(quote).flag_emoji;
                                                                 const isUsedElsewhere = !isCurrent && usedPairSlugs.has(o.value);
                                                                 const isMain = !!mainPairSlug && o.value === mainPairSlug;
-                                                                // Suffix: 👑 always on the main chart pair, ✓ on this card's selection, 📌 on other overlay signals
                                                                 const suffix = isMain ? ' 👑' : isCurrent ? ' ✓' : isUsedElsewhere ? ' 📌' : '';
-                                                                return {value: o.value, label: `${baseFlag} ${base} → ${quoteFlag} ${quote}${suffix}`};
+                                                                return {value: o.value, label: `${baseFlag} ${base} ↔ ${quoteFlag} ${quote}${suffix}`, searchText: `${base} ${quote}`};
                                                             })}
                                                                 placeholder="— {$t('chartSettings.params.currencyPair')}"
                                                                 dropdownPosition="auto"
+                                                                maxVisibleItems={8}
                                                                 onchange={(v) => {
                                                                 updateSignalParam(signal.id, desc.key, v);
                                                                 updateSignalParam(signal.id, '_inverted', false);
                                                             }}
-                                                        />
+                                                        >
+                                                            {#snippet item(option)}
+                                                                <span class="flex items-center gap-1 text-xs whitespace-nowrap">{option.label}</span>
+                                                            {/snippet}
+                                                            {#snippet selectedItem(option)}
+                                                                <span class="flex items-center gap-1 text-xs whitespace-nowrap">{option.label}</span>
+                                                            {/snippet}
+                                                        </SearchSelect>
                                                     </div>
                                                     <button
                                                             type="button"
@@ -550,7 +558,7 @@
                                                 {@const assetIdStr = getParamString(signal, desc.key)}
                                                 <div class="flex items-center gap-1">
                                                     <div class="w-48">
-                                                        <SimpleSelect
+                                                        <SearchSelect
                                                                 value={assetIdStr}
                                                                 options={resolveDynamicOptions('configuredAssets').map(o => {
                                                                     const aid = Number(o.value);
@@ -562,6 +570,7 @@
                                                                 })}
                                                                 placeholder="— Select asset"
                                                                 dropdownPosition="auto"
+                                                                maxVisibleItems={8}
                                                                 onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
                                                         >
                                                             {#snippet item(option)}
@@ -590,7 +599,7 @@
                                                                     <span class="text-xs">{option.label}</span>
                                                                 </span>
                                                             {/snippet}
-                                                        </SimpleSelect>
+                                                        </SearchSelect>
                                                     </div>
                                                     {#if onsyncasset && assetIdStr}
                                                         {@const aid = Number(assetIdStr)}
