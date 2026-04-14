@@ -1,14 +1,15 @@
 /**
- * Shared sync helpers — used by SyncModalBase, FxSyncModal, AssetSyncModal.
+ * Shared sync helpers — used by SyncModalBase, FxSyncModal, AssetSyncModal, PageSyncAllModal.
  *
  * Centralises:
  *  - SyncResult interface (common fields for FX and Asset sync results)
+ *  - SyncSection interface (multi-section sync modal support)
  *  - SyncStatus type
  *  - Status icons and colors
  *  - Time formatting utilities
  */
 
-import type {Component} from 'svelte';
+import type {Component, Snippet} from 'svelte';
 import {AlertCircle, AlertTriangle, Check, SkipForward} from 'lucide-svelte';
 import type {LegDetail} from '$lib/utils/providerHelpers';
 
@@ -32,6 +33,33 @@ export interface SyncResult {
     // FA-specific (OHLCV granularity):
     inserted_count?: number;
     updated_count?: number;
+    // Corporate events:
+    events_fetched?: number;
+    events_changed?: number;
+}
+
+// =========================================================================
+// Sync section — multi-section sync modal support
+// =========================================================================
+
+/**
+ * A sync section defines one group of items to sync in SyncModalBase.
+ * SyncModalBase renders one titled section per SyncSection and runs
+ * all sections in parallel with a unified countdown.
+ */
+export interface SyncSection {
+    /** Section identifier (e.g. 'assets', 'fx') */
+    id: string;
+    /** Section title displayed as header (e.g. '📊 Assets') */
+    title: string;
+    /** Callback to perform the actual sync — returns results */
+    doSyncFn: (targetIds: string[]) => Promise<SyncResult[]>;
+    /** All target IDs to sync in this section */
+    targetIds: string[];
+    /** Snippet for rendering each result row (specialization-specific) */
+    resultRow: Snippet<[SyncResult, boolean]>;
+    /** Count label for summary footer (e.g. 'assets', 'pairs') */
+    countLabel: string;
 }
 
 // =========================================================================

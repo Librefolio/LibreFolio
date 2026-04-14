@@ -290,47 +290,48 @@
         deltaAbs: number;
         deltaPct: number;
         annualizedPct: number | null;
+        isGhost?: boolean;
     }
 
     function colorClass(v: number): string {
         return v >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
     }
 
-    function htmlNum(v: number, formatter: (n: number) => string): HtmlCell {
-        return {type: 'html', html: `<span class="font-mono ${colorClass(v)}">${formatter(v)}</span>`};
+    function wrapGhost(html: string, isGhost?: boolean): HtmlCell {
+        return {type: 'html', html: isGhost ? `<span style="opacity:0.7">${html}</span>` : html};
     }
 
     const summaryColumns: ColumnDef<MeasureSummaryRow>[] = [
         {
             id: 'signal', header: () => $t('measure.table.signal'), type: 'text',
-            cell: (r) => ({type: 'html', html: signalLabelToHtml(r.signalInfo)}),
+            cell: (r) => wrapGhost(signalLabelToHtml(r.signalInfo), r.isGhost),
             sortable: false, filterable: false, width: 100,
         },
         {
             id: 'valueStart', header: () => $t('common.start'), type: 'number',
-            cell: (r) => ({type: 'html', html: `<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueStart)}</span>`}),
+            cell: (r) => wrapGhost(`<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueStart)}</span>`, r.isGhost),
             getValue: (r) => r.valueStart, sortable: true, filterable: true, width: 90,
         },
         {
             id: 'valueEnd', header: () => $t('common.end'), type: 'number',
-            cell: (r) => ({type: 'html', html: `<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueEnd)}</span>`}),
+            cell: (r) => wrapGhost(`<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueEnd)}</span>`, r.isGhost),
             getValue: (r) => r.valueEnd, sortable: true, filterable: true, width: 90,
         },
         {
             id: 'deltaAbs', header: () => $t('measure.table.deltaAbs'), type: 'number',
-            cell: (r) => htmlNum(r.deltaAbs, fmtDelta),
+            cell: (r) => wrapGhost(`<span class="font-mono ${colorClass(r.deltaAbs)}">${fmtDelta(r.deltaAbs)}</span>`, r.isGhost),
             getValue: (r) => r.deltaAbs, sortable: true, filterable: true, width: 80,
         },
         {
             id: 'deltaPct', header: () => $t('measure.table.deltaPct'), type: 'number',
-            cell: (r) => htmlNum(r.deltaPct, fmtPct),
+            cell: (r) => wrapGhost(`<span class="font-mono ${colorClass(r.deltaPct)}">${fmtPct(r.deltaPct)}</span>`, r.isGhost),
             getValue: (r) => r.deltaPct, sortable: true, filterable: true, width: 80,
         },
         {
             id: 'annualizedPct', header: () => $t('measure.table.annualized'), type: 'number',
             headerTooltip: '$\\large (1 + \\Delta\\%)^{\\frac{365}{d}} - 1$',
             cell: (r) => r.annualizedPct !== null
-                ? htmlNum(r.annualizedPct, fmtPct)
+                ? wrapGhost(`<span class="font-mono ${colorClass(r.annualizedPct)}">${fmtPct(r.annualizedPct)}</span>`, r.isGhost)
                 : ({type: 'html', html: '<span class="text-gray-400">—</span>'}),
             getValue: (r) => r.annualizedPct ?? 0, sortable: true, filterable: true, width: 80,
         },
@@ -385,12 +386,15 @@
                         label: `${mainSignalInfo.label ?? 'Main'} (${origFlag} ${originalCurrencyCode})`,
                         isCrown: false,
                         color: mainSignalInfo.color,
+                        iconUrl: mainSignalInfo.iconUrl,
+                        assetType: mainSignalInfo.assetType,
                     },
                     valueStart: origResult.startValue,
                     valueEnd: origResult.endValue,
                     deltaAbs: origResult.deltaAbs,
                     deltaPct: origResult.deltaPct,
                     annualizedPct: origResult.annualizedPct,
+                    isGhost: true,
                 });
             }
         }
@@ -418,6 +422,7 @@
                     deltaAbs: sigResult.deltaAbs,
                     deltaPct: sigResult.deltaPct,
                     annualizedPct: sigResult.annualizedPct,
+                    isGhost,
                 });
             }
         }
