@@ -8,7 +8,6 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
-import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
@@ -54,14 +53,10 @@ class YahooFinanceProvider(AssetSourceProvider):
 
     def __init__(self):
         super().__init__()
-        # TTLCache for search results (10 min TTL, max 1000 entries)
-        self._search_cache = get_ttl_cache("yfinance_search", maxsize=1000, ttl=600)
         # TTLCache for currency lookups (24h TTL — currency doesn't change)
+        # This is a sub-operation cache (currency discovery), NOT a pricing cache.
+        # The core handles caching for get_current_value/get_history_value/search.
         self._currency_cache = get_ttl_cache("yfinance_currency", maxsize=2000, ttl=86400)
-        # TTLCache for current values (120s TTL).
-        # Frontend polls every 30s → 3 out of 4 polls are cache hits.
-        # Yahoo is called at most once per ticker every 2 minutes.
-        self._current_value_cache = get_ttl_cache("yfinance_current_value", maxsize=200, ttl=120)
 
     def _fetch_currency(self, symbol: str) -> str | None:
         """
@@ -131,13 +126,9 @@ class YahooFinanceProvider(AssetSourceProvider):
         """
         Fetch current price from Yahoo Finance.
 
-        Uses a 120-second TTL cache to avoid repeated API calls during polling.
-        Strategy: cache → ticker.info (quoteSummary endpoint).
-
-        ticker.info returns regularMarketPrice + currency in a single call
-        WITHOUT triggering any history() download.  This keeps the backend log
-        clean and avoids the heavy chart-API calls that history() or fast_info
-        would produce.
+        The core runs this method in a dedicated thread with its own event loop,
+        so sync yfinance calls are safe here. The core also caches the result
+        (TTL 2min), so we don't need our own cache.
 
         Args:
             identifier: Yahoo Finance ticker symbol (e.g., "AAPL", "BTC-USD")
@@ -165,18 +156,10 @@ class YahooFinanceProvider(AssetSourceProvider):
                 {"identifier": identifier},
                 )
 
-        # Check cache first (avoids hitting Yahoo API on every 30s frontend poll)
-        cached, ok = self._current_value_cache.get(identifier)
-        if ok:
-            logger.debug(f"current_value cache hit for {identifier}")
-            return cached
-
         try:
-            # IMPORTANT: yfinance uses the sync `requests` library internally.
-            # Calling it directly in an async def would block the uvicorn event
-            # loop and stall ALL concurrent responses (including StaticFiles).
-            # We offload to a thread via asyncio.to_thread().
-            info = await asyncio.to_thread(lambda: yf.Ticker(identifier).info)
+            # The core executes this entire method in a dedicated thread,
+            # so sync yfinance calls are safe — no asyncio.to_thread needed.
+            info = yf.Ticker(identifier).info
 
             price = info.get("regularMarketPrice")
             if price is None:
@@ -203,7 +186,6 @@ class YahooFinanceProvider(AssetSourceProvider):
                 as_of_date=as_of_date,
                 source=self.provider_name,
                 )
-            self._current_value_cache.set(identifier, result)
             logger.debug(f"current_value for {identifier}: {price} {currency}")
             return result
 
@@ -256,31 +238,28 @@ class YahooFinanceProvider(AssetSourceProvider):
                 )
 
         try:
-            # Offload ALL yfinance I/O to a thread so the event loop stays free.
+            # The core executes this method in a dedicated thread,
+            # so sync yfinance calls are safe — no asyncio.to_thread needed.
             _start = start_date.isoformat()
             _end = (end_date + timedelta(days=1)).isoformat()
 
-            def _sync_fetch_history():
-                t = yf.Ticker(identifier)
-                hist = t.history(start=_start, end=_end)
-                # Currency (separate API call)
-                cur = "USD"
-                try:
-                    cur = t.info.get("currency", "USD")
-                except Exception:
-                    pass
-                # Dividends & splits (may trigger additional requests)
-                try:
-                    divs = t.dividends
-                except Exception:
-                    divs = None
-                try:
-                    spls = t.splits
-                except Exception:
-                    spls = None
-                return hist, cur, divs, spls
-
-            hist, currency, dividends, splits = await asyncio.to_thread(_sync_fetch_history)
+            t = yf.Ticker(identifier)
+            hist = t.history(start=_start, end=_end)
+            # Currency (separate API call)
+            currency = "USD"
+            try:
+                currency = t.info.get("currency", "USD")
+            except Exception:
+                pass
+            # Dividends & splits (may trigger additional requests)
+            try:
+                dividends = t.dividends
+            except Exception:
+                dividends = None
+            try:
+                splits = t.splits
+            except Exception:
+                splits = None
 
             if hist.empty:
                 raise AssetSourceError(
@@ -375,7 +354,8 @@ class YahooFinanceProvider(AssetSourceProvider):
         Search Yahoo Finance for matching tickers.
 
         Uses yfinance.Search for real search functionality.
-        Results are cached for 10 minutes.
+        The core caches results (Layer 2 query cache, 15min TTL)
+        and runs this in a dedicated thread.
 
         Args:
             query: Search query (e.g., "Apple", "Microsoft", "AAPL")
@@ -398,29 +378,11 @@ class YahooFinanceProvider(AssetSourceProvider):
         if len(query) < self._MIN_SEARCH_CHARS:
             return []
 
-        # Check cache (theine handles expiration automatically)
-        cache_key = query.lower()
-        cached_results, ok = self._search_cache.get(cache_key)
-        if ok:
-            logger.debug(f"Cache hit for '{query}'")
-            return cached_results
-
         try:
-            # Offload yf.Search and per-symbol currency lookups to a thread.
-            # _fetch_currency also calls yf.Ticker(symbol).fast_info (sync HTTP).
-            def _sync_search():
-                search_result = yf.Search(query)
-                raw_quotes = getattr(search_result, "quotes", []) or []
-                fetched = []
-                for quote in raw_quotes[:20]:
-                    if not quote.get("isYahooFinance", True):
-                        continue
-                    symbol = quote.get("symbol", "")
-                    currency = self._fetch_currency(symbol) if symbol else None
-                    fetched.append((quote, symbol, currency))
-                return fetched
-
-            fetched = await asyncio.to_thread(_sync_search)
+            # The core executes this method in a dedicated thread,
+            # so sync yfinance calls are safe — no asyncio.to_thread needed.
+            search_result = yf.Search(query)
+            raw_quotes = getattr(search_result, "quotes", []) or []
 
             results = []
 
@@ -436,7 +398,12 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "index": "INDEX",
             }
 
-            for quote, symbol, currency in fetched:
+            for quote in raw_quotes[:20]:
+                if not quote.get("isYahooFinance", True):
+                    continue
+                symbol = quote.get("symbol", "")
+                currency = self._fetch_currency(symbol) if symbol else None
+
                 # Normalize quoteType using the same map as fetch_asset_metadata
                 raw_type = (quote.get("quoteType", "Unknown") or "").lower()
                 normalized_type = search_type_map.get(raw_type, "OTHER")
@@ -451,15 +418,11 @@ class YahooFinanceProvider(AssetSourceProvider):
                     }
                 )
 
-            # Cache result (theine handles expiration)
-            self._search_cache.set(cache_key, results)
             logger.info(f"Search for '{query}': found {len(results)} results")
             return results
 
         except Exception as e:
             logger.warning(f"Search failed for '{query}': {e}")
-            # Cache empty result to avoid repeated failures
-            self._search_cache.set(cache_key, [])
             return []
 
     def validate_params(self, params: Dict | None) -> None:
@@ -511,21 +474,18 @@ class YahooFinanceProvider(AssetSourceProvider):
             return None
 
         try:
-            # Offload all yfinance I/O to a thread (sync `requests` library).
-            def _sync_fetch_metadata():
-                t = yf.Ticker(identifier)
-                _info = t.info
-                # Also attempt ISIN lookup (may not be available for all markets)
-                _isin = None
-                try:
-                    isin_val = t.isin
-                    if isin_val and isin_val != "-" and len(isin_val) == 12:
-                        _isin = isin_val
-                except Exception:
-                    pass
-                return _info, _isin
-
-            info, identifier_isin = await asyncio.to_thread(_sync_fetch_metadata)
+            # The core executes this method in a dedicated thread,
+            # so sync yfinance calls are safe — no asyncio.to_thread needed.
+            t = yf.Ticker(identifier)
+            info = t.info
+            # Also attempt ISIN lookup (may not be available for all markets)
+            identifier_isin = None
+            try:
+                isin_val = t.isin
+                if isin_val and isin_val != "-" and len(isin_val) == 12:
+                    identifier_isin = isin_val
+            except Exception:
+                pass
 
             if not info:
                 logger.warning(f"No info data returned from yfinance for {identifier}")

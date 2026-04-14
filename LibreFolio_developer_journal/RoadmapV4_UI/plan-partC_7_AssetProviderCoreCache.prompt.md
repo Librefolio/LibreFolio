@@ -22,7 +22,7 @@ Tutte le operazioni passano per il thread isolation. La `search()` ha una cache 
 
 ---
 
-## Step 1 — Thread Isolation: `_run_provider_in_thread()`
+## Step 1 — Thread Isolation: `_run_provider_in_thread()` ✅
 
 **File:** `backend/app/services/asset_source.py` (modulo-level, nuova funzione utility)
 
@@ -70,7 +70,7 @@ async def _run_provider_in_thread(coro_factory, *, timeout: float = 60.0):
 
 ---
 
-## Step 2 — Cache Core: struttura dati
+## Step 2 — Cache Core: struttura dati ✅
 
 **File:** `backend/app/services/asset_source.py` (modulo-level)
 
@@ -119,7 +119,7 @@ Chiave: `(provider_code, identifier, identifier_type_str)` → valore: `FAAssetP
 
 ---
 
-## Step 3 — Integrare in `_fetch_single()` dentro `bulk_refresh_prices()`
+## Step 3 — Integrare in `_fetch_single()` dentro `bulk_refresh_prices()` ✅
 
 **File:** `backend/app/services/asset_source.py` (~riga 1831)
 
@@ -133,7 +133,7 @@ Dopo la modifica:
 
 ---
 
-## Step 4 — Search: thread isolation + cache a due livelli
+## Step 4 — Search: thread isolation + cache a due livelli ✅
 
 **File:** `backend/app/services/asset_source.py` (~riga 3016)
 
@@ -187,7 +187,7 @@ Questo garantisce:
 
 ---
 
-## Step 5 — Integrare in `refresh_assets_from_provider()` (cache metadata)
+## Step 5 — Integrare in `refresh_assets_from_provider()` (cache metadata) ✅
 
 **File:** `backend/app/services/asset_source.py` (~riga 944)
 
@@ -212,7 +212,7 @@ else:
 
 ---
 
-## Step 6 — Integrare in `probe_provider_config()` (solo thread isolation, NO cache)
+## Step 6 — Integrare in `probe_provider_config()` (solo thread isolation, NO cache) ✅
 
 **File:** `backend/app/services/asset_source.py` (~riga 1348)
 
@@ -229,7 +229,13 @@ value = await _run_provider_in_thread(
 
 ---
 
-## Step 7 — Migrare i provider esistenti
+## Step 7 — Migrare i provider esistenti ✅
+
+**Done (14/04/2026):**
+- **yahoo_finance.py**: Rimossi `_search_cache`, `_current_value_cache`, tutti i `asyncio.to_thread()` (4 callsite), rimosso import `asyncio`. Mantenuto `_currency_cache` (sub-operazione interna).
+- **justetf.py**: Rimossi tutti i `asyncio.to_thread()` (4 callsite), rimosso import `asyncio`. Mantenuti `_overview_cache`, `_chart_cache`, `_etf_list_cache` (sub-operazioni interne).
+- **css_scraper.py**: Nessuna modifica (nativamente async, il core lo esegue in thread comunque).
+- **scheduled_investment.py**: Nessuna modifica (dati sintetici, la cache core li cachea).
 
 ### 7a. yahoo_finance.py
 - **Rimuovere** `_current_value_cache` (riga 64) e relativi get/set → sostituita dalla cache core
@@ -251,7 +257,29 @@ value = await _run_provider_in_thread(
 
 ---
 
-## Step 8 — Test: analisi impatto e aggiornamenti
+## Step 8 — Test: analisi impatto e aggiornamenti ✅
+
+**Done (14/04/2026):**
+
+### Test esistenti — nessuna regressione
+
+- `./dev.py test services all` → 14/14 ✅
+- `./dev.py test utils all` → 8/8 ✅
+
+### Nuovi test creati
+
+**File:** `test_utilities/test_provider_core_cache.py` — 20 test
+
+| Classe | Test | Copertura |
+|--------|------|-----------|
+| `TestRunProviderInThread` | 5 test | blocking non blocca main loop, timeout, exception propagation, return value, sync-in-async |
+| `TestHistoryCache` | 5 test | full hit, partial gap detection, full miss, merge updates, events stored |
+| `TestCurrentCache` | 3 test | hit, miss, miss→populate→hit cycle |
+| `TestMetadataCache` | 2 test | hit, None value cached |
+| `TestSearchQueryCache` | 4 test | exact hit, different query miss, different provider miss, case sensitivity |
+| `TestProbeBypassesCache` | 1 test | verifica codice probe non referenzia cache (inspect source) |
+
+Registrato in `TEST_REGISTRY["utils"]["provider-core-cache"]` → `./dev.py test utils provider-core-cache`
 
 ### Test esistenti da aggiornare
 
@@ -308,14 +336,11 @@ value = await _run_provider_in_thread(
 
 ---
 
-## Step 10 — Documentazione
+## Step 10 — Documentazione ✅
 
-1. **Docstring `AssetSourceProvider`** → aggiungere sezione "Core Infrastructure":
-   - "Il core esegue i vostri metodi in un thread dedicato — non dovete preoccuparvi di asyncio.to_thread()"
-   - "Il core cachea automaticamente i risultati di get_history_value/get_current_value/fetch_asset_metadata/search"
-   - "Se avete sotto-operazioni costose (es. currency discovery), usate le vostre cache interne"
-
-2. **Knowledge base** → aggiornare `01_backend.md` con la sezione "Provider Core Cache & Thread Isolation"
+**Done (14/04/2026):**
+1. Docstring `AssetSourceProvider` → aggiunta sezione "CORE INFRASTRUCTURE: Thread Isolation & Cache"
+2. Knowledge base `01_backend.md` → aggiunta sezione "Provider Core Cache & Thread Isolation"
 
 ---
 
@@ -332,6 +357,52 @@ value = await _run_provider_in_thread(
 5. **Backward compatibility interfaccia:** L'interfaccia dei provider (metodi astratti) NON cambia. I provider sono ignari del wrapping thread — i loro `async def` vengono eseguiti in un event loop dedicato. Nessuna modifica all'interfaccia richiesta per plugin esterni.
 
 6. **`asyncio.to_thread()` rimosso dai provider:** Dopo la migrazione, i provider interni (yahoo, justetf) possono semplificare enormemente il loro codice rimuovendo tutti i `asyncio.to_thread()` — il core si occupa di tutto.
+
+---
+
+## Step 0 — Completamento C14c pendente (pre-requisito) ✅
+
+Prima di iniziare il lavoro core cache/thread isolation, completare gli item C14c rimasti dal piano principale:
+
+### 0a. Test `global_settings_service.py` ✅
+
+**File:** `backend/test_scripts/test_services/test_global_settings_service.py` — 19 test
+
+- `_convert_value`: int (valid/invalid/None), bool (truthy/falsy), json (valid/invalid/None), string
+- `get_setting_value`: from DB, param default, global default, None default
+- Typed getters: `get_session_ttl_hours`, `get_max_upload_mb`, `is_registration_enabled` — default + custom
+
+### 0b. Test `fx.py` — funzioni core non coperte ✅
+
+**File:** `backend/test_scripts/test_services/test_fx_core.py` — 17 test
+
+- `normalize_rate_for_storage`: base<quote (no-op), base>quote (invert), base==quote
+- `upsert_rates_bulk`: insert, update, empty, validation (same currency, negative rate), auto-normalize
+- `delete_rates_bulk`: single day, range, not found, empty
+- `_count_actual_changes`: all new, no change, mixed, empty
+
+### 0c. Test `static_uploads.py` ✅
+
+**File:** `backend/test_scripts/test_services/test_static_uploads.py` — 20 test
+
+- `save_upload`: basic, blocked extension (.exe, .py)
+- `get_upload_info`: exists, not found, missing actual file
+- `get_upload_path`: exists, not found
+- `list_uploads`: empty, with files, filter by user
+- `delete_upload`: exists, not found, removed from list
+- `get_upload_by_user`: owner, not owner
+- `validate_upload_security`: safe file, blocked extension, unknown extension
+
+### 0d. Registrazione test in dev.py + knowledge base ✅
+
+- `services_global_settings()`, `services_fx_core()`, `services_static_uploads()` registrati in `test_runner.py`
+- Entry nel `TEST_REGISTRY["services"]`: `"global-settings"`, `"fx-core"`, `"static-uploads"`
+- `01_backend.md` aggiornata con i nuovi file test
+- `plan-partCCurrencyConversion.prompt.md` → C14c, C14d marcati ✅
+
+### 0e. Verifica finale ✅
+
+**Done (14/04/2026):** `./dev.py test services all` → 14/14 suite, 56 nuovi test, zero regressioni.
 
 ---
 

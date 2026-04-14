@@ -532,60 +532,32 @@ Dead code rimosso + documentazione in `TODO_FUTURI.md`:
 
 **Done (13/04/2026):** 68 file heading + 8 file index = 76 file modificati, 120+ sostituzioni. `./dev.py mkdocs build` OK, `./dev.py mkdocs check-links` 26/26 ✅.
 
-### C14b. Test coverage — Utilities core
+### ✅ C14b. Test coverage — Utilities core
 
-**Status:** 📋 PIANIFICATO — non ancora implementato.
+**Status:** ✅ COMPLETATO — Implementato in D12 (plan-partC_1_PostValidation).
 
-**Target file:**
+- Test `cache_utils.py`: 17 test (NamedCache set/get/delete/clear, TTL expiration, registry, stats, list_caches)
+- Test `decimal_utils`, `geo_utils`, `sector_fin_utils`, `currency_utils`: pre-esistenti, 6/6 passati
 
-#### `backend/app/utils/finance_utils.py`
-- Test `calculate_compound_values()`: verifica accumulo con diversi compound frequency (daily, monthly, quarterly)
-- Test `calculate_compound_values()` edge case: period con 0 giorni, tasso 0%, tasso negativo
-- Test funzioni helper per calcolo interest (se presenti)
+### ✅ C14c. Test coverage — Services core
 
-#### `backend/app/utils/geo_utils.py`
-- Test `normalize_country_to_iso3()`: ISO-2 → ISO-3, ISO-3 → ISO-3, name → ISO-3
-- Test `normalize_country_to_iso3()` edge case: input vuoto, input invalido → `ValueError`
-- Test `normalize_country_keys()`: dict con chiavi ISO-2 miste → normalizzato a ISO-3
-- Test `is_region()` + `expand_region()`: "EU" → lista paesi europei
-- Test `iso2_to_flag_emoji()`: "IT" → 🇮🇹
+**Status:** ✅ COMPLETATO (14/04/2026)
 
-#### `backend/app/utils/decimal_utils.py`
-- Test `truncate_fx_rate()`: verifica troncamento a precisione DB
-- Test edge case: Decimal("0"), valori molto piccoli, valori molto grandi
+**Done:**
+- `test_global_settings_service.py`: 19 test — `_convert_value` (int/bool/json/string), `get_setting_value` (DB/default/global), typed getters (TTL, upload MB, registration) con e senza DB row
+- `test_fx_core.py`: 17 test — `normalize_rate_for_storage`, `upsert_rates_bulk` (insert/update/validation/normalize), `delete_rates_bulk` (single/range/not found/empty), `_count_actual_changes` (new/same/mixed/empty)
+- `test_static_uploads.py`: 20 test — `save_upload` (basic/blocked ext), `get_upload_info` (exists/not found/missing file), `list_uploads` (empty/with files/filter user), `delete_upload` (exists/not found/from list), `get_upload_by_user` (owner/not owner), `validate_upload_security` (safe/blocked/unknown)
+- Tutti registrati in `TEST_REGISTRY` di `test_runner.py`
+- `./dev.py test services all` → 14/14 suite passate ✅
 
-#### `backend/app/utils/cache_utils.py` (dopo cleanup C14a)
-- Test `NamedCache`: set/get/delete/clear/len
-- Test `get_ttl_cache()`: singleton per nome, parametri rispettati
-- Test TTL: set con TTL custom, verifica expiry (se testabile senza sleep)
+### ✅ C14d. Registrazione test in dev.py
 
-### C14c. Test coverage — Services core
+**Status:** ✅ COMPLETATO (14/04/2026)
 
-**Status:** 📋 PIANIFICATO — non ancora implementato.
-
-#### `backend/app/services/global_settings_service.py` (dopo cleanup C14a)
-- Test `get_setting_value()`: chiave presente in DB, chiave assente con default
-- Test `_convert_value()`: conversione int, bool, json, string
-- Test `get_session_ttl_hours()`, `get_max_upload_mb()`, `is_registration_enabled()`: con e senza dati in DB
-
-#### `backend/app/services/fx.py` (funzioni non coperte da C13b)
-- Test `normalize_rate_for_storage()`: base < quote (no-op), base > quote (invert)
-- Test `upsert_rates_bulk()`: insert singolo, insert multiplo, upsert (update valore)
-- Test `delete_rates_bulk()`: singolo giorno, range, coppia inesistente
-- Test `_count_actual_changes()`: rates identiche (0 changes), rates diverse (N changes)
-
-#### `backend/app/services/static_uploads.py`
-- Test `get_upload_info()`: file esistente, file inesistente
-- Test `list_uploads()`: directory vuota, con file
-- Test `delete_upload()`: file esistente, file inesistente
-
-### C14d. Registrazione test in dev.py
-
-**Status:** 📋 PIANIFICATO — non ancora implementato.
-
-- Registrare nuovi test file in `dev.py test` con nomi appropriati
-- Verificare che `./dev.py test services all` esegua tutti i nuovi test
-- Run coverage backend e verificare incremento su file target
+- `services_global_settings()`, `services_fx_core()`, `services_static_uploads()` registrati in `test_runner.py`
+- Entry `"global-settings"`, `"fx-core"`, `"static-uploads"` aggiunte a `TEST_REGISTRY["services"]`
+- `./dev.py test services all` → 14/14 suite (include le 3 nuove)
+- Knowledge base `01_backend.md` aggiornata con i nuovi file test
 
 ### ✅ C14g. Verifica runtime fix coverage frontend
 
@@ -607,12 +579,12 @@ Dead code rimosso + documentazione in `TODO_FUTURI.md`:
 ### Ordine C14
 
 1. **C14a** — ✅ cleanup dead code residuo
-2. **C14e** — ✅ fix frontend coverage pipeline (codice applicato, ⚠️ verifica runtime pendente → C14g)
+2. **C14e** — ✅ fix frontend coverage pipeline
 3. **C14f** — ✅ fix icone MkDocs
-4. **C14g** — ⏳ verifica runtime fix coverage frontend (5 min)
-5. **C14b** — 📋 test utilities core (30 min)
-6. **C14c** — 📋 test services core (30 min)
-7. **C14d** — 📋 registrazione + verifica coverage (5 min)
+4. **C14g** — ✅ verifica runtime fix coverage frontend
+5. **C14b** — ✅ test utilities core (completato in D12)
+6. **C14c** — ✅ test services core (14/04/2026): 56 test in 3 file
+7. **C14d** — ✅ registrazione + verifica (14/04/2026): 14/14 suite services
 
 ---
 

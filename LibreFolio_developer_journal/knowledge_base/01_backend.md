@@ -15,7 +15,8 @@ backend/
 │   ├── config.py              # get_data_dir(), paths, env vars
 │   └── utils/                 # Utilities condivise
 ├── alembic/                   # Migrazioni database (001_initial.py)
-├── test_scripts/              # Test suite completa (800+ test, 8 categorie)
+├── test_scripts/              # Test suite completa (850+ test, 8 categorie)
+│   └── ...
 └── data/
     ├── prod/                  # sqlite/app.db, broker_reports/, logs/
     └── test/                  # Stessa struttura, isolati
@@ -59,6 +60,24 @@ Tutti i provider usano **auto-discovery** tramite Registry Pattern.
 
 Ogni provider espone `params_schema` (proprietà sulla base class) per descrivere i campi `provider_params` necessari → il frontend genera form dinamici.
 
+### Provider Core Cache & Thread Isolation
+
+Tutte le chiamate ai provider asset passano per un layer centralizzato in `asset_source.py`:
+
+1. **Thread Isolation**: `_run_provider_in_thread()` esegue ogni chiamata provider in un thread dedicato con event loop proprio. I provider non devono più usare `asyncio.to_thread()`.
+
+2. **Cache Core** (5 cache, auto-registrate in `cache_utils` → visibili in admin):
+
+| Cache | TTL | Scope |
+|-------|-----|-------|
+| `asset_history_fetch` | 15 min | Smart range per-date granularity |
+| `asset_current_fetch` | 2 min | Polling frontend ogni 30s |
+| `asset_metadata_fetch` | 30 min | Refresh esplicito |
+| `search_queries` | 15 min | Query esatte ripetute |
+| `search_results` | 24h | Item individuali |
+
+3. **Probe bypassa la cache**: `probe_provider_config()` usa solo thread isolation, niente cache.
+
 ### BRIM Providers (`brim_providers/`)
 
 11 plugin: IBKR, Degiro, Directa, eToro, Coinbase, Revolut, Trading212, Bitpanda, Bitvavo, Schwab, Parqet.
@@ -76,7 +95,7 @@ Ogni provider espone `params_schema` (proprietà sulla base class) per descriver
 
 ## 🧪 Test
 
-8 categorie via `./dev.py test <category> <action>` — **800+ test** totali:
+8 categorie via `./dev.py test <category> <action>` — **850+ test** totali:
 
 | Categoria | Cosa testa |
 |-----------|-----------|

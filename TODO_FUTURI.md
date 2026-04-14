@@ -571,3 +571,57 @@ async def get_default_currency(session: AsyncSession) -> str:
 
 ---
 
+## 🗄️ Cache Server Centralizzato per Multi-Worker Uvicorn
+
+**Data aggiunta**: 14 Aprile 2026  
+**Status**: 📋 PIANIFICATO (quando si passerà a multi-worker)  
+**Priorità**: Bassa (oggi 1 worker è sufficiente con SQLite)
+
+### Contesto
+
+Le cache in-memory (theine) sono per-processo. Con `--workers 1` (default attuale) funzionano perfettamente. Con `--workers N` (N > 1), ogni worker ha la propria cache isolata: un cache miss su worker 2 non beneficia di un cache hit su worker 1. Uvicorn non garantisce sticky sessions.
+
+### Soluzione Proposta
+
+Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa theine internamente e espone un'interfaccia socket Unix ai worker via `multiprocessing.managers.BaseManager`:
+
+```
+┌─────────────────────────────────────────────────┐
+│  uvicorn master process                          │
+│  └── lifespan() spawna CacheServer process       │
+│       ├── theine Cache instances (in-memory)     │
+│       └── Unix socket /tmp/librefolio-cache.sock │
+├──────────────────────────────────────────────────┤
+│  Worker 1 ──proxy──┐                             │
+│  Worker 2 ──proxy──┼──► Unix socket ──► CacheServer
+│  Worker N ──proxy──┘                             │
+└──────────────────────────────────────────────────┘
+```
+
+### Implementazione (~100 righe)
+
+1. **`backend/app/utils/cache_server.py`** (nuovo): `CacheManager(BaseManager)` con metodi `cache_get/set/delete/clear/get_or_create` registrati. Il server process usa theine direttamente.
+
+2. **`cache_utils.py`**: `NamedCache` riceve un flag `_remote_manager`. Se attivo, delega get/set/delete via proxy al cache server. Se non attivo (single-worker), usa theine locale come oggi. Zero cambiamenti nei callsite (`get_ttl_cache()` API invariata).
+
+3. **`main.py` `lifespan()`**: Se `workers > 1`, spawna il cache server subprocess prima di avviare l'app. Passa l'indirizzo socket via env var. Shutdown: termina il subprocess.
+
+### Trade-off
+
+- **Latenza**: ~200-500μs per op (vs ~1μs theine locale). Irrilevante per cache di API call da 1-5s.
+- **Serializzazione**: Valori devono essere pickleable (Pydantic model, dict, list — tutti OK).
+- **Fault tolerance**: Se il cache server crasha, i worker perdono solo la cache (no data loss). Restart automatico possibile.
+- **Alternativa**: `diskcache` (SQLite+filesystem, process-safe, ~50μs, ma persistente — non necessario).
+
+### Prerequisiti
+
+- Passaggio a **PostgreSQL** (SQLite non supporta bene multi-writer)
+- Necessità reale di N > 1 worker (>50 utenti concorrenti)
+
+### File coinvolti
+
+- `backend/app/utils/cache_server.py` (nuovo)
+- `backend/app/utils/cache_utils.py` (adattare `NamedCache`)
+- `backend/app/main.py` (spawn/shutdown cache process)
+
+---
