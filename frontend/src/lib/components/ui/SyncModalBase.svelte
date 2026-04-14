@@ -1,27 +1,31 @@
 <!--
-  SyncModalBase — Generic sync modal for both FX and Asset sync.
+  SyncModalBase — Generic multi-section sync modal.
   Provides the common structure: header, date range bar, timeout setting,
-  progress bar with countdown, result list via snippet, retry logic, summary.
-  Specializations (FxSyncModal, AssetSyncModal) define doSyncFn and resultRow snippet.
+  progress bar with countdown, per-section result lists via snippets,
+  retry logic (single item + all-failed), and aggregated summary.
+
+  Specializations (FxSyncModal, AssetSyncModal, PageSyncAllModal) build
+  SyncSection[] and pass them here. Each section has its own doSyncFn
+  and resultRow snippet. Sections with empty targetIds are hidden.
+  All sections are synced in parallel with a unified countdown.
+
+  Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import type {Snippet} from 'svelte';
     import {Clock, Info, RefreshCw, SkipForward, Timer, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
-    import type {SyncResult} from '$lib/utils/syncHelpers';
+    import type {SyncResult, SyncSection} from '$lib/utils/syncHelpers';
     import {formatTime} from '$lib/utils/syncHelpers';
 
     interface Props {
         open: boolean;
         dateStart: string;
         dateEnd: string;
-        itemCount: number;
         title: string;
         description: string;
-        countLabel: string;
         testId: string;
         /** Icon component for the header badge */
         headerIcon?: typeof RefreshCw;
@@ -29,12 +33,8 @@
         headerIconBg?: string;
         /** Color classes for the header badge icon */
         headerIconColor?: string;
-        /** Callback to perform the actual sync — returns results */
-        doSyncFn: (targetIds: string[]) => Promise<SyncResult[]>;
-        /** All target IDs to sync */
-        targetIds: string[];
-        /** Snippet for rendering each result row (specialization-specific) */
-        resultRow: Snippet<[SyncResult, boolean]>;
+        /** Sync sections — each rendered as a titled group with its own results */
+        sections: SyncSection[];
         onsynced: () => void;
         onclose: () => void;
     }
@@ -43,50 +43,77 @@
         open = $bindable(),
         dateStart,
         dateEnd,
-        itemCount,
         title,
         description,
-        countLabel,
         testId,
         headerIcon: HeaderIcon = RefreshCw,
         headerIconBg = 'bg-amber-100 dark:bg-amber-900/30',
         headerIconColor = 'text-amber-600 dark:text-amber-400',
-        doSyncFn,
-        targetIds,
-        resultRow,
+        sections,
         onsynced,
         onclose,
     }: Props = $props();
 
+    // =========================================================================
+    // State
+    // =========================================================================
+
     let syncing = $state(false);
-    let results = $state<SyncResult[]>([]);
+    /** Results keyed by section id */
+    let sectionResults = $state<Map<string, SyncResult[]>>(new Map());
     let error = $state<string | null>(null);
     let isTimeout = $state(false);
     let timeoutSec = $state(20);
     let elapsedMs = $state(0);
     let countdownInterval: ReturnType<typeof setInterval> | null = null;
-    let hasResults = $derived(results.length > 0);
     let wasOpen = $state(false);
 
+    // =========================================================================
+    // Derived
+    // =========================================================================
+
+    /** Only sections with items to sync */
+    let activeSections = $derived(sections.filter(s => s.targetIds.length > 0));
+
+    /** Total item count across all sections */
+    let itemCount = $derived(activeSections.reduce((sum, s) => sum + s.targetIds.length, 0));
+
+    /** Count label combining all section labels */
+    let countLabel = $derived(
+        activeSections.map(s => `${s.targetIds.length} ${s.countLabel}`).join(' · ')
+    );
+
+    /** All results flattened */
+    let allResults = $derived(Array.from(sectionResults.values()).flat());
+
+    let hasResults = $derived(allResults.length > 0);
     let remainingSec = $derived(Math.max(0, timeoutSec - Math.floor(elapsedMs / 1000)));
     let progressPct = $derived(Math.min(100, (elapsedMs / (timeoutSec * 1000)) * 100));
-    let failedItems = $derived(results.filter(r => r.status === 'failed' || r.status === 'partial'));
-    let successCount = $derived(results.filter(r => r.status === 'ok').length);
-    let totalPointsFetched = $derived(results.reduce((sum, r) => sum + (r.points_fetched ?? 0), 0));
-    let totalPointsChanged = $derived(results.reduce((sum, r) => sum + (r.points_changed ?? 0), 0));
+    let failedItems = $derived(allResults.filter(r => r.status === 'failed' || r.status === 'partial'));
+    let successCount = $derived(allResults.filter(r => r.status === 'ok').length);
+    let totalPointsFetched = $derived(allResults.reduce((sum, r) => sum + (r.points_fetched ?? 0), 0));
+    let totalPointsChanged = $derived(allResults.reduce((sum, r) => sum + (r.points_changed ?? 0), 0));
+
+    // =========================================================================
+    // Effects
+    // =========================================================================
 
     // Reset state on open transition
     $effect(() => {
         const isOpen = open;
         if (isOpen && !wasOpen) {
-            results = [];
+            sectionResults = new Map();
             error = null;
             isTimeout = false;
             elapsedMs = 0;
-            timeoutSec = Math.max(20, Math.ceil(itemCount * 1));
+            timeoutSec = Math.max(20, itemCount);
         }
         wasOpen = isOpen;
     });
+
+    // =========================================================================
+    // Countdown
+    // =========================================================================
 
     function startCountdown() {
         elapsedMs = 0;
@@ -103,22 +130,20 @@
         }
     }
 
-    async function doSync(ids: string[]) {
-        syncing = true;
-        error = null;
-        isTimeout = false;
-        startCountdown();
+    // =========================================================================
+    // Sync logic
+    // =========================================================================
+
+    /** Find which section owns a given result ID */
+    function findSectionForId(id: string): SyncSection | undefined {
+        return activeSections.find(s => s.targetIds.includes(id));
+    }
+
+    /** Sync specific IDs within a single section */
+    async function doSyncSection(section: SyncSection, ids: string[]): Promise<SyncResult[]> {
         try {
-            const newResults = await doSyncFn(ids);
-            // Merge: replace results for retried ids, keep existing for others
-            const retriedIds = new Set(ids);
-            results = [
-                ...results.filter(r => !retriedIds.has(r.id)),
-                ...newResults,
-            ];
-            onsynced();
+            return await section.doSyncFn(ids);
         } catch (e: any) {
-            const elapsed = Date.now();
             let errMsg: string;
             if (e?.code === 'ECONNABORTED' || e?.message?.includes('timeout')) {
                 isTimeout = true;
@@ -128,36 +153,97 @@
                 errMsg = e?.response?.data?.detail || e?.message || 'Sync failed';
                 error = errMsg;
             }
-            // Generate failed results for all targeted IDs
-            const failedResults: SyncResult[] = ids.map(id => ({
+            return ids.map(id => ({
                 id,
                 status: 'failed' as const,
                 points_fetched: 0,
                 points_changed: 0,
                 message: errMsg,
             }));
-            const retriedIds = new Set(ids);
-            results = [
-                ...results.filter(r => !retriedIds.has(r.id)),
-                ...failedResults,
-            ];
+        }
+    }
+
+    /** Merge new results into sectionResults for a given section */
+    function mergeResults(sectionId: string, newResults: SyncResult[], retriedIds: Set<string>) {
+        const existing = sectionResults.get(sectionId) ?? [];
+        const merged = [
+            ...existing.filter(r => !retriedIds.has(r.id)),
+            ...newResults,
+        ];
+        // Trigger reactivity by creating a new Map
+        const updated = new Map(sectionResults);
+        updated.set(sectionId, merged);
+        sectionResults = updated;
+    }
+
+    /** Sync all sections in parallel */
+    async function handleSyncAll() {
+        syncing = true;
+        error = null;
+        isTimeout = false;
+        sectionResults = new Map();
+        startCountdown();
+
+        try {
+            await Promise.all(activeSections.map(async (section) => {
+                const results = await doSyncSection(section, section.targetIds);
+                mergeResults(section.id, results, new Set(section.targetIds));
+            }));
+            onsynced();
         } finally {
             syncing = false;
             stopCountdown();
         }
     }
 
-    function handleSyncAll() {
-        results = [];
-        doSync(targetIds);
+    /** Retry all failed items across all sections */
+    async function handleRetryFailed() {
+        syncing = true;
+        error = null;
+        isTimeout = false;
+        startCountdown();
+
+        try {
+            // Group failed items by section
+            const failedBySection = new Map<string, string[]>();
+            for (const r of failedItems) {
+                const section = findSectionForId(r.id);
+                if (!section) continue;
+                const list = failedBySection.get(section.id) ?? [];
+                list.push(r.id);
+                failedBySection.set(section.id, list);
+            }
+
+            await Promise.all(Array.from(failedBySection.entries()).map(async ([sectionId, ids]) => {
+                const section = activeSections.find(s => s.id === sectionId);
+                if (!section) return;
+                const results = await doSyncSection(section, ids);
+                mergeResults(sectionId, results, new Set(ids));
+            }));
+            onsynced();
+        } finally {
+            syncing = false;
+            stopCountdown();
+        }
     }
 
-    function handleRetryFailed() {
-        doSync(failedItems.map(r => r.id));
-    }
+    /** Retry a single item (called from result row snippet) */
+    export async function handleRetrySingle(id: string) {
+        const section = findSectionForId(id);
+        if (!section) return;
 
-    export function handleRetrySingle(id: string) {
-        doSync([id]);
+        syncing = true;
+        error = null;
+        startCountdown();
+
+        try {
+            const results = await doSyncSection(section, [id]);
+            mergeResults(section.id, results, new Set([id]));
+            onsynced();
+        } finally {
+            syncing = false;
+            stopCountdown();
+        }
     }
 </script>
 
@@ -191,7 +277,7 @@
             <span>→</span>
             <span class="font-medium text-gray-700 dark:text-gray-300">{dateEnd}</span>
             <span class="mx-1">·</span>
-            <span>{itemCount} {countLabel}</span>
+            <span>{countLabel}</span>
         </div>
 
         <!-- Timeout setting -->
@@ -247,17 +333,30 @@
                 </button>
             {/if}
 
-            <!-- Per-item results (delegated to snippet) -->
-            <div class="space-y-1.5">
-                {#each results as item (item.id)}
-                    {@render resultRow(item, syncing)}
-                {/each}
-            </div>
+            <!-- Per-section results -->
+            {#each activeSections as section (section.id)}
+                {@const sResults = sectionResults.get(section.id) ?? []}
+                {#if activeSections.length > 1}
+                    <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-2">
+                        {section.title} ({sResults.length}/{section.targetIds.length})
+                    </h4>
+                {/if}
+                <div class="space-y-1.5">
+                    {#each sResults as item (item.id)}
+                        {@render section.resultRow(item, syncing)}
+                    {/each}
+                    {#if syncing && sResults.length === 0}
+                        <div class="flex items-center gap-2 text-xs text-gray-400">
+                            <RefreshCw size={12} class="animate-spin"/> {$t('common.syncing') ?? 'Syncing'}…
+                        </div>
+                    {/if}
+                </div>
+            {/each}
 
             <!-- Summary -->
-            <InfoBanner variant={successCount === results.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
+            <InfoBanner variant={successCount === allResults.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
                 <span class="text-sm font-medium flex items-center gap-1 flex-wrap">
-                    {$t('fx.sync.synced') ?? 'Synced'} {successCount}/{results.length} {countLabel}
+                    {$t('fx.sync.synced') ?? 'Synced'} {successCount}/{allResults.length}
                     ·
                     <span>{totalPointsFetched}↓</span>
                     <Tooltip text={$t('fx.sync.tooltipFetched')} position="top">

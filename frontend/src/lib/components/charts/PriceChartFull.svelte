@@ -487,11 +487,11 @@
                     color: isDark ? COLORS.lineDark : COLORS.lineLight,
                     width: 1.5,
                     type: 'dashed',
-                    opacity: 0.4,
+                    opacity: 0.8,
                 },
                 itemStyle: {
                     color: isDark ? COLORS.lineDark : COLORS.lineLight,
-                    opacity: 0.4,
+                    opacity: 0.8,
                 },
                 emphasis: {focus: 'none'},
                 z: 0,
@@ -840,18 +840,22 @@
 
                         // Use signalLabelToHtml for proper icon rendering
                         let labelHtml: string;
+                        let isGhostRow = false;
                         if (isGhost) {
                             // Ghost label is already formatted as "💱 Name (🇺🇸 USD)"
-                            const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;opacity:0.4"></span>`;
+                            const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                             labelHtml = `${ghostDot}${ghostLabel}`;
+                            isGhostRow = true;
                         } else {
                             const sigInfo = overlaySignalInfoMap?.get(p.seriesName);
                             if (sigInfo) {
                                 // Append (flag currency) to overlay signal labels
-                                const currSuffix = sigInfo.currency
+                                // Skip for ghost signals — currency is already embedded in their label
+                                const currSuffix = sigInfo.currency && !sigInfo.isGhost
                                     ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${sigInfo.currency})</span>`
                                     : '';
                                 labelHtml = signalLabelToHtml(sigInfo) + currSuffix;
+                                if (sigInfo.isGhost) isGhostRow = true;
                             } else if (p.seriesName === mainSeriesName) {
                                 // Main signal: 💱(flag currency) when conversion active, (flag currency) when not
                                 let mainLabel: string;
@@ -876,7 +880,11 @@
                                 labelHtml = `${colorDot}${p.seriesName}`;
                             }
                         }
-                        html += `<br/>${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                        let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                        if (isGhostRow) {
+                            rowHtml = `<span style="opacity:0.7">${rowHtml}</span>`;
+                        }
+                        html += `<br/>${rowHtml}`;
                         // Show delta from first visible point for the main axis (yAxisIndex 0)
                         if (axisIdx === 0 && firstValue !== null && !isGhost) {
                             const numVal = Number(value);

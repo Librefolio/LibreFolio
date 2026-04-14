@@ -114,3 +114,11 @@ Se una coppia FX per un comparison non esiste, il bottone [➕] apre `FxPairAddM
 4. **Controllo utente**: Confermato — nessun auto-sync. L'utente decide quando creare/sincronizzare.
 
 5. **Ordine di implementazione consigliato**: Step 1 (staircase) → Step 2 (currency labels) → Step 3 (banner + card controls) → Step 4 (sync-all modal) → Step 5 (create pair). Step 1 e 2 sono indipendenti e possono essere paralleli.
+
+---
+
+## ➡️ Seguito: Part C.5 — Rifinitura UX post-review completa
+
+La review completa di C.4 ha rivelato: errore Svelte (`}}`), necessità di SearchSelect per comparison, stili linea differenziati per categoria, banner FX con bandiere/icone Lucide, SyncModal da riarchitettare su sezioni, fix pannello misure e allineamento tabella.
+Vedi → [plan-partC_5_UxRefinement.prompt.md](plan-partC_5_UxRefinement.prompt.md)
+

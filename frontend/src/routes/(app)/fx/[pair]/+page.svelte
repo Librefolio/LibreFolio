@@ -21,6 +21,7 @@
     import {goBack} from '$lib/stores/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
+    import PageSyncModal from '$lib/components/ui/PageSyncModal.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
@@ -48,6 +49,7 @@
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {parseDateRangeFromUrl} from '$lib/utils/dateRangeFromUrl';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/syncToastHelpers';
+    import {COLORS} from '$lib/components/charts/lineChartHelpers';
 
     // =========================================================================
     // Page data
@@ -137,6 +139,39 @@
 
     /** Incremented to force overlay signals recomputation after store data changes */
     let overlayDataVersion = $state(0);
+
+    // Page sync modal state
+    let showPageSyncModal = $state(false);
+
+    /** All FX pairs to sync: main pair + overlay FX pair signals */
+    let syncAllFxPairs = $derived.by(() => {
+        const slugs = new Set<string>();
+        slugs.add(data.canonicalSlug);
+        for (const cfg of signals) {
+            if (cfg.signalType === 'fx-pair') {
+                const pairSlug = String(cfg.params.pairSlug || '');
+                if (pairSlug) slugs.add(pairSlug);
+            }
+        }
+        return Array.from(slugs);
+    });
+
+    /** All assets to sync from comparison signals */
+    let syncAllAssets = $derived.by(() => {
+        const items: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; provider_code?: string | null}> = [];
+        const seenIds = new Set<number>();
+        for (const cfg of signals) {
+            if (cfg.signalType !== 'asset-comparison') continue;
+            const aid = Number(cfg.params.assetId);
+            if (!aid || seenIds.has(aid)) continue;
+            seenIds.add(aid);
+            const meta = allAssets.find(a => a.id === aid);
+            if (meta) {
+                items.push({id: aid, display_name: meta.display_name, icon_url: meta.icon_url ?? undefined, asset_type: meta.asset_type ?? null, provider_code: 'unknown'});
+            }
+        }
+        return items;
+    });
 
     // =========================================================================
     // Derived
@@ -243,6 +278,7 @@
     let mainSignalInfo: SignalLabelInfo = $derived({
         label: `${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`,
         isCrown: true,
+        color: COLORS.lineLight,
     });
 
     let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
@@ -497,32 +533,24 @@
         await maybeLoadComparison();
     }
 
-    async function handleSync() {
-        syncing = true;
-        try {
-            const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                pairs: [data.canonicalSlug],
-                start: dateStart,
-                end: dateEnd,
-            });
-            const r = (response as any)?.results?.[0];
-            if (r) {
-                const tr = get(t);
-                const toast = buildFxSyncToast(r, data.canonicalSlug, tr, formatProviderText, formatSyncDetail);
-                toasts[toast.variant](toast.message);
-            }
-            await handleRefresh();
-        } catch (e: any) {
-            console.error('Sync failed:', e);
-            error = 'Sync failed: ' + (e?.message || 'unknown error');
-        } finally {
-            syncing = false;
-        }
+    function handleSync() {
+        showPageSyncModal = true;
+    }
+
+    async function handlePageSyncComplete() {
+        await handleRefresh();
+        await maybeLoadComparison();
+        overlayDataVersion++;
     }
 
     async function handleDateRangeChange(newStart: string, newEnd: string) {
         dateStart = newStart;
         dateEnd = newEnd;
+        // Sync URL so browser back/forward preserves the date range
+        const url = new URL(window.location.href);
+        url.searchParams.set('start', dateStart);
+        url.searchParams.set('end', dateEnd);
+        history.replaceState(history.state, '', url.toString());
         await loadChartData();
         await maybeLoadComparison();
     }
@@ -693,7 +721,12 @@
     {#if rangeStartsBeforeData && !loading && !error}
         <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2">
             <span>📊</span>
-            <span>{$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
+            <span class="font-medium inline-flex items-center gap-0.5">
+                <span class="emoji-flag">{baseFlag}</span> {displayBase}
+                <ArrowLeftRight size={10} class="shrink-0 opacity-60"/>
+                <span class="emoji-flag">{quoteFlag}</span> {displayQuote}
+            </span>
+            <span class="opacity-80">— {$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
         </div>
     {/if}
 
@@ -772,12 +805,12 @@
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
                            {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
                     data-testid="fx-detail-sync-btn"
-                    disabled={syncing || isManualOnly}
+                    disabled={isManualOnly}
                     onclick={handleSync}
                     title={isManualOnly ? $t('fxDetail.syncDisabledManual') : ''}
             >
-                <RotateCw class={syncing ? 'animate-spin' : ''} size={14}/>
-                {#if layout.showActionLabels}<span>{syncing ? $t('fx.syncing') : $t('common.sync')}</span>{/if}
+                <RotateCw size={14}/>
+                {#if layout.showActionLabels}<span>{$t('common.sync')}</span>{/if}
             </button>
             <!-- Row 2, Col 2: Refresh -->
             <button
@@ -965,9 +998,8 @@
                         <button
                                 class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
                                 onclick={handleSync}
-                                disabled={syncing}
                         >
-                            {syncing ? $t('fx.syncing') : $t('fxDetail.syncRates')}
+                            {$t('fxDetail.syncRates')}
                         </button>
                     {/if}
                 </div>
@@ -1113,6 +1145,17 @@
             open={showSwapConfirm}
             title={$t('fxDetail.swapConfirmTitle')}
             warning={true}
+    />
+
+    <!-- Page Sync Modal (sync all FX pairs + assets present on page) -->
+    <PageSyncModal
+            bind:open={showPageSyncModal}
+            {dateStart}
+            {dateEnd}
+            assets={syncAllAssets}
+            fxPairs={syncAllFxPairs}
+            onsynced={handlePageSyncComplete}
+            onclose={() => showPageSyncModal = false}
     />
 </div>
 

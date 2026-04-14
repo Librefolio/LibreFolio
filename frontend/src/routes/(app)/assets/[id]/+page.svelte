@@ -20,7 +20,7 @@
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/navigationStore';
     import {
-        ArrowLeft, ChevronDown, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
+        ArrowLeft, ArrowLeftRight, ChevronDown, Coins, ExternalLink, Info, Pencil, RefreshCw, RotateCw,
         Ruler, Settings, TrendingUp, X
     } from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
@@ -57,6 +57,7 @@
     import {parseDateRangeFromUrl} from '$lib/utils/dateRangeFromUrl';
     import {fetchCurrentPrices} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/syncToastHelpers';
+    import {COLORS} from '$lib/components/charts/lineChartHelpers';
 
     // =========================================================================
     // Page data
@@ -262,6 +263,8 @@
         slug: string;
         label: string;
         forAsset: string;
+        forAssetIconUrl?: string | null;
+        forAssetType?: string | null;
         status: 'ok' | 'missing' | 'no-data' | 'partial-gap';
         firstDate?: string;
     }
@@ -295,6 +298,8 @@
                 slug,
                 label: slug.replace('-', '/'),
                 forAsset: assetInfo.display_name,
+                forAssetIconUrl: assetInfo.icon_url,
+                forAssetType: assetInfo.asset_type,
                 status,
                 firstDate: fxFirstConvertedDate ?? undefined,
             });
@@ -327,6 +332,8 @@
                 slug,
                 label: slug.replace('-', '/'),
                 forAsset: targetAsset.display_name,
+                forAssetIconUrl: targetAsset.icon_url,
+                forAssetType: targetAsset.asset_type,
                 status,
             });
         }
@@ -386,6 +393,7 @@
         iconUrl: assetInfo?.icon_url,
         assetType: assetInfo?.asset_type,
         isCrown: true,
+        color: COLORS.lineLight,
     });
 
     let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
@@ -751,6 +759,23 @@
 
     async function handleRefresh() {
         await loadChartData();
+        // Invalidate FX overlay stores so they refetch updated rates
+        for (const pair of requiredFxPairs) {
+            if (pair.status === 'missing') continue;
+            const store = getFxStore(pair.slug);
+            store.invalidateAll();
+            const parts = pair.slug.split('-');
+            try {
+                const resp = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([{
+                    from_amount: {code: parts[0], amount: 1},
+                    to: parts[1],
+                    date_range: {start: dateStart, end: dateEnd},
+                }]);
+                const results = (resp as any)?.results || [];
+                const points = results.map((r: any) => apiResultToFxDataPoint(r));
+                store.merge(points);
+            } catch { /* best effort */ }
+        }
         overlayDataVersion++;
         await maybeLoadComparison();
     }
@@ -777,10 +802,10 @@
 
     /** Collect all assets and FX pairs for sync-all modal */
     let syncAllAssets = $derived.by(() => {
-        const items: Array<{id: number; display_name: string; icon_url?: string | null; provider_code?: string | null}> = [];
+        const items: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; provider_code?: string | null}> = [];
         // Main asset
         if (assetInfo?.provider_code) {
-            items.push({id: data.assetId, display_name: assetInfo.display_name, icon_url: assetInfo.icon_url, provider_code: assetInfo.provider_code});
+            items.push({id: data.assetId, display_name: assetInfo.display_name, icon_url: assetInfo.icon_url, asset_type: assetInfo.asset_type ?? null, provider_code: assetInfo.provider_code});
         }
         // Comparison assets with provider
         for (const cfg of signals) {
@@ -789,8 +814,7 @@
             if (!aid || aid === data.assetId) continue;
             const meta = allAssets.find(a => a.id === aid);
             if (meta) {
-                // We don't know provider_code from allAssets, but sync endpoint handles it gracefully
-                items.push({id: aid, display_name: meta.display_name, icon_url: meta.icon_url ?? undefined, provider_code: 'unknown'});
+                items.push({id: aid, display_name: meta.display_name, icon_url: meta.icon_url ?? undefined, asset_type: (meta as any).asset_type ?? null, provider_code: 'unknown'});
             }
         }
         return items;
@@ -811,9 +835,35 @@
         overlayDataVersion++;
     }
 
+    async function handleFxPairCreated({ base, quote, hasRealProvider }: { base: string; quote: string; hasRealProvider: boolean }) {
+        const wasForComparison = !!fxPairCreateSlug;
+        showFxPairAddModal = false;
+        fxPairCreateSlug = '';
+        await loadFxPairSlugs();
+        // Only update display currency when creating the main asset's FX pair
+        if (!wasForComparison) {
+            const assetCur = assetInfo?.currency ?? '';
+            const newQuote = assetCur === base ? quote : base;
+            if (newQuote !== assetCur) {
+                displayCurrency = newQuote;
+            }
+        }
+        if (hasRealProvider) {
+            toasts.success($t('assetDetail.fxPairCreatedSynced'));
+        }
+        await handleRefresh();
+        await maybeLoadComparison();
+        overlayDataVersion++;
+    }
+
     async function handleDateRangeChange(newStart: string, newEnd: string) {
         dateStart = newStart;
         dateEnd = newEnd;
+        // Sync URL so browser back/forward preserves the date range
+        const url = new URL(window.location.href);
+        url.searchParams.set('start', dateStart);
+        url.searchParams.set('end', dateEnd);
+        history.replaceState(history.state, '', url.toString());
         await loadChartData();
         await maybeLoadComparison();
     }
@@ -1017,56 +1067,82 @@
     {/if}
 
     <!-- Data availability banner: selected range starts before first data point -->
-    {#if rangeStartsBeforeData && !loading && !error}
-        <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2">
+    {#if rangeStartsBeforeData && !loading && !error && assetInfo}
+        {@const startDow = new Date(dateStart + 'T00:00:00').getDay()}
+        {@const isWeekendStart = startDow === 0 || startDow === 6}
+        <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2 flex-wrap">
             <span>📊</span>
-            <span>{$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
+            {#if assetInfo.icon_url}
+                <img src={assetInfo.icon_url} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0"/>
+            {:else if assetInfo.asset_type}
+                <img src={getAssetTypeIconUrl(assetInfo.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0"/>
+            {/if}
+            <span class="font-medium">{assetInfo.display_name}</span>
+            <span class="opacity-80">— {$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
+            {#if isWeekendStart}
+                <span class="text-sky-500 dark:text-sky-300 italic">({$t('assetDetail.weekendHint') ?? 'selected start date falls on a weekend — try adjusting'})</span>
+            {/if}
         </div>
     {/if}
 
     <!-- FX pair status banners: one per problematic FX pair (main + comparison) -->
     {#if !loading && !error}
         {#each requiredFxPairs.filter(p => p.status !== 'ok') as pair (pair.slug)}
-            {#if pair.status === 'missing'}
-                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2 flex-wrap">
-                    <span>💱</span>
-                    <span class="font-medium">{pair.label}</span>
-                    <span class="opacity-80">— {$t('assetDetail.fxPairMissing', {values: {base: pair.slug.split('-')[0], quote: pair.slug.split('-')[1]}})}</span>
-                    <span class="text-[10px] opacity-60">({pair.forAsset})</span>
-                    <button
-                        class="ml-auto px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40 transition-colors font-medium"
-                        onclick={() => { fxPairCreateSlug = pair.slug; showFxPairAddModal = true; }}
-                    >➕ {$t('assetDetail.addFxPair')}</button>
+            {@const parts = pair.slug.split('-')}
+            {@const baseFlag = getCurrencyInfo(parts[0]).flag_emoji}
+            {@const quoteFlag = getCurrencyInfo(parts[1]).flag_emoji}
+            {@const isMissing = pair.status === 'missing'}
+            {@const isAmber = isMissing || pair.status === 'no-data'}
+            <div class="{isAmber ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400' : 'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-400'} border rounded-xl px-4 py-2.5 text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                <!-- Left: icon + pair slug + message + asset -->
+                <div class="flex items-center gap-2 flex-wrap min-w-0">
+                    <Coins size={14} class="shrink-0"/>
+                    <span class="font-medium inline-flex items-center gap-1">
+                        <span class="emoji-flag">{baseFlag}</span> {parts[0]}
+                        <ArrowLeftRight size={10} class="shrink-0"/>
+                        <span class="emoji-flag">{quoteFlag}</span> {parts[1]}
+                    </span>
+                    <span class="opacity-80">—
+                        {#if isMissing}
+                            {$t('assetDetail.fxPairMissing', {values: {base: parts[0], quote: parts[1]}})}
+                        {:else if pair.status === 'no-data'}
+                            {$t('assetDetail.fxPairNoRates', {values: {pair: pair.label}})}
+                        {:else}
+                            {$t('assetDetail.fxDataAvailableFrom', {values: {date: pair.firstDate ?? ''}})}
+                        {/if}
+                    </span>
+                    <span class="inline-flex items-center gap-1 text-[10px] opacity-60">
+                        {#if pair.forAssetIconUrl}
+                            <img src={pair.forAssetIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain"/>
+                        {:else if pair.forAssetType}
+                            <img src={getAssetTypeIconUrl(pair.forAssetType)} alt="" class="w-3.5 h-3.5 object-contain"/>
+                        {/if}
+                        ({pair.forAsset})
+                    </span>
                 </div>
-            {:else if pair.status === 'no-data'}
-                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2 flex-wrap">
-                    <span>💱</span>
-                    <span class="font-medium">{pair.label}</span>
-                    <span class="opacity-80">— {$t('assetDetail.fxPairNoRates', {values: {pair: pair.label}})}</span>
-                    <span class="text-[10px] opacity-60">({pair.forAsset})</span>
-                    <div class="ml-auto flex items-center gap-1">
+                <!-- Right: action buttons (bottom-right in mobile, inline-right in desktop) -->
+                <div class="flex items-center gap-1 self-end sm:self-auto sm:ml-auto">
+                    {#if isMissing}
                         <button
-                            class="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40 transition-colors font-medium"
-                            onclick={() => handleSyncPair(pair.slug)}
-                        >🔄 {$t('common.sync')}</button>
-                        <a href="/fx/{pair.slug}" class="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40 transition-colors">↗</a>
-                    </div>
-                </div>
-            {:else if pair.status === 'partial-gap'}
-                <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2 flex-wrap">
-                    <span>💱</span>
-                    <span class="font-medium">{pair.label}</span>
-                    <span class="opacity-80">— {$t('assetDetail.fxDataAvailableFrom', {values: {date: pair.firstDate ?? ''}})}</span>
-                    <span class="text-[10px] opacity-60">({pair.forAsset})</span>
-                    <div class="ml-auto flex items-center gap-1">
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {isAmber ? 'bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40' : 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40'} transition-colors font-medium"
+                            onclick={() => { fxPairCreateSlug = pair.slug; showFxPairAddModal = true; }}
+                        >
+                            <Coins size={13}/> {$t('assetDetail.addFxPair')}
+                        </button>
+                    {:else}
+                        <a href="/fx/{pair.slug}?start={dateStart}&end={dateEnd}"
+                           class="inline-flex items-center gap-1 px-2 py-0.5 rounded {isAmber ? 'bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40' : 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40'} transition-colors">
+                            <Coins size={13}/>
+                        </a>
                         <button
-                            class="px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40 transition-colors font-medium"
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {isAmber ? 'bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40' : 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40'} transition-colors font-medium"
                             onclick={() => handleSyncPair(pair.slug)}
-                        >🔄 {$t('common.sync')}</button>
-                        <a href="/fx/{pair.slug}" class="px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40 transition-colors">↗</a>
-                    </div>
+                        >
+                            <RotateCw size={13} class={fxSyncing ? 'animate-spin' : ''}/> {$t('common.sync')}
+                        </button>
+                    {/if}
                 </div>
-            {/if}
+            </div>
         {/each}
     {/if}
 
@@ -1402,31 +1478,37 @@
     <!-- Foldable Panel: Measures -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <div class="flex items-center justify-between px-4 py-2.5">
-            <button
-                    class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white transition-colors"
-                    data-testid="asset-detail-measures-toggle"
-                    onclick={() => showMeasures = !showMeasures}
-            >
+        <div
+                class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors rounded-t-xl"
+                role="button"
+                tabindex="0"
+                data-testid="asset-detail-measures-toggle"
+                onclick={() => showMeasures = !showMeasures}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showMeasures = !showMeasures; } }}
+        >
+            <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
                 <Ruler class="text-violet-500" size={15}/>
                 {$t('assetDetail.measures')}
                 {#if measureMode}
                     <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
-                <ChevronDown class="transition-transform {showMeasures ? 'rotate-180' : ''}" size={15}/>
-            </button>
-            <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
-                           bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
-                           hover:bg-violet-100 dark:hover:bg-violet-900/50
-                           transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={lineData.length < 2}
-                    onclick={(e) => { e.stopPropagation(); showMeasures = true; measurePanel?.addMeasureFromChartData(); }}
-                    title={$t('assetDetail.addMeasure')}
-            >
-                <span class="text-sm leading-none">+</span>
-            </button>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <button
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
+                               bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
+                               hover:bg-violet-100 dark:hover:bg-violet-900/50
+                               transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={lineData.length < 2}
+                        onclick={(e) => { e.stopPropagation(); showMeasures = true; measurePanel?.addMeasureFromChartData(); }}
+                        title={$t('assetDetail.addMeasure')}
+                >
+                    <span class="text-sm leading-none">+</span>
+                    <span class="hidden sm:inline">{$t('measure.addMeasure')}</span>
+                </button>
+                <ChevronDown class="transition-transform text-gray-400 {showMeasures ? 'rotate-180' : ''}" size={15}/>
+            </div>
         </div>
         <div class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"} data-testid="asset-detail-measures-panel">
             <MeasurePanel
@@ -1573,38 +1655,22 @@
                 initialQuote={createQuote}
                 dateStart={dateStart}
                 dateEnd={dateEnd}
-                oncreated={async ({ base, quote, hasRealProvider }) => {
-                    showFxPairAddModal = false;
-                    fxPairCreateSlug = '';
-                    await loadFxPairSlugs();
-                    // Only update display currency when creating the main asset's FX pair
-                    if (!fxPairCreateSlug) {
-                        const assetCur = assetInfo?.currency ?? '';
-                        const newQuote = assetCur === base ? quote : base;
-                        if (newQuote !== assetCur) {
-                            displayCurrency = newQuote;
-                        }
-                    }
-                    if (hasRealProvider) {
-                        toasts.success($t('assetDetail.fxPairCreatedSynced'));
-                    }
-                    await handleRefresh();
-                    await maybeLoadComparison();
-                    overlayDataVersion++;
-                }}
+                oncreated={handleFxPairCreated}
                 onclose={() => { showFxPairAddModal = false; fxPairCreateSlug = ''; }}
         />
     {/if}
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->
-    <PageSyncModal
-            bind:open={showPageSyncModal}
-            {dateStart}
-            {dateEnd}
-            assets={syncAllAssets}
-            fxPairs={syncAllFxPairs}
-            onsynced={handlePageSyncComplete}
-            onclose={() => showPageSyncModal = false}
-    />
+    {#if assetInfo}
+        <PageSyncModal
+                bind:open={showPageSyncModal}
+                {dateStart}
+                {dateEnd}
+                assets={syncAllAssets}
+                fxPairs={syncAllFxPairs}
+                onsynced={handlePageSyncComplete}
+                onclose={() => showPageSyncModal = false}
+        />
+    {/if}
 </div>
 

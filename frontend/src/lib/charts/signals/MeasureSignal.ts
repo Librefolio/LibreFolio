@@ -46,8 +46,8 @@ export class MeasureSignal extends ChartSignal {
     static getDefaultStyle(): SignalStyle {
         return {
             color: '#f97316', // orange
-            lineWidth: 2,
-            lineType: 'solid',
+            lineWidth: 1,
+            lineType: 'dotted',
             markerStart: 'pin',
             markerEnd: 'arrow',
         };

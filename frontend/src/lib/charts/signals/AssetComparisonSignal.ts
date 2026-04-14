@@ -157,7 +157,7 @@ export class AssetComparisonSignal extends ChartSignal {
                         markerStart: null,
                         markerEnd: null,
                         yAxisIndex: 0,
-                        opacity: 0.4,
+                        opacity: 0.8,
                         currency: origCurrency,
                         currencyFlag: origFlag,
                     });

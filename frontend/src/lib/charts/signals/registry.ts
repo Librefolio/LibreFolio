@@ -126,16 +126,25 @@ export function createSignal(
     if (!Cls) return null;
 
     const id = generateUUID();
-    // Technical indicators get thinner lines (1px) by default — they are auxiliary.
-    // Benchmarks and comparisons get 2px.
-    const defaultWidth = Cls.category === 'indicator' ? 1 : 2;
+    // Line width: indicator=1, benchmark=1, fx-pair=1, asset-comparison=2
+    const defaultWidth =
+        Cls.category === 'indicator' ? 1
+        : Cls.category === 'benchmark' ? 1
+        : Cls.signalType === 'fx-pair' ? 1
+        : 2;  // asset-comparison
+    // Line type: indicator=dotted, benchmark=dashed, comparison=solid, MACD=solid
+    const defaultLineType: 'solid' | 'dashed' | 'dotted' =
+        Cls.signalType === 'macd' ? 'solid'
+        : Cls.category === 'indicator' ? 'dotted'
+        : Cls.category === 'benchmark' ? 'dashed'
+        : 'solid';  // comparison
     const color = usedColors.length > 0
         ? pickBestColor(usedColors)
         : DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length];
     const style: SignalStyle = {
         color,
         lineWidth: defaultWidth,
-        lineType: Cls.signalType === 'macd' ? 'solid' : 'dashed',
+        lineType: defaultLineType,
         markerStart: null,
         markerEnd: null,
     };

@@ -33,6 +33,8 @@ export interface SignalLabelInfo {
     currency?: string;
     /** Flag emoji for the currency (e.g. "🇪🇺") */
     currencyFlag?: string;
+    /** True for ghost/watermark signals (opacity < 1) — currency already in label */
+    isGhost?: boolean;
 }
 
 // =============================================================================
@@ -57,9 +59,10 @@ export function signalLabelToHtml(info: SignalLabelInfo): string {
     }
 
     // Color dot (fixed-width slot — same width as crown for table alignment)
-    if (info.color) {
+    // Skip dot when crown is shown — crown already serves as the visual identifier
+    if (info.color && !info.isCrown) {
         parts.push(
-            `<span style="display:inline-block;width:16px;text-align:center;margin-right:2px;vertical-align:middle;line-height:0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${info.color}"></span></span>`
+            `<span style="display:inline-block;width:16px;text-align:center;margin-right:2px;vertical-align:middle;line-height:0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${info.color};"></span></span>`
         );
     }
 
@@ -101,10 +104,11 @@ export function signalLabelToText(info: SignalLabelInfo): string {
  * to build a consistent lookup map keyed by signal label.
  */
 export function buildOverlaySignalInfoMap(
-    overlaySignals: ReadonlyArray<{ label: string; color: string; iconUrl?: string | null; assetType?: string | null; currency?: string; currencyFlag?: string }>,
+    overlaySignals: ReadonlyArray<{ label: string; color: string; iconUrl?: string | null; assetType?: string | null; currency?: string; currencyFlag?: string; opacity?: number }>,
 ): Map<string, SignalLabelInfo> {
     const map = new Map<string, SignalLabelInfo>();
     for (const sig of overlaySignals) {
+        const isGhost = sig.opacity != null && sig.opacity < 1;
         map.set(sig.label, {
             label: sig.label,
             color: sig.color,
@@ -112,6 +116,7 @@ export function buildOverlaySignalInfoMap(
             assetType: sig.assetType,
             currency: sig.currency,
             currencyFlag: sig.currencyFlag,
+            isGhost,
         });
     }
     return map;

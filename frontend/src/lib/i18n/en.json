@@ -984,6 +984,7 @@
     "addFxPair": "Add FX pair",
     "goToFxPair": "Go to FX pair detail",
     "fxPairCreatedSynced": "FX pair created and synced",
+    "pageSyncDescription": "Synchronize asset prices and FX rates for this page.",
     "eventType": {
       "DIVIDEND": "Dividend",
       "INTEREST": "Interest",
@@ -1000,6 +1001,7 @@
     },
     "livePriceConversionFailed": "Live price shown in {currency} — FX rate unavailable for today",
     "dataAvailableFrom": "Data available from {date} — earlier dates have no data",
+    "weekendHint": "selected start date falls on a weekend — try adjusting",
     "originalValue": "Original Value",
     "fxDataAvailableFrom": "FX rates available from {date} — earlier dates show unconverted prices",
     "fxPairNoRates": "FX pair {pair} has no rates in this date range — sync it to enable conversion"

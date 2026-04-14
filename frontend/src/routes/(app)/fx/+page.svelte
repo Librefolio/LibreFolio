@@ -32,6 +32,7 @@
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
+    import {buildFxSyncToast} from '$lib/utils/syncToastHelpers';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
 
     // =========================================================================
@@ -607,35 +608,9 @@
             });
             const r = (response as any)?.results?.[0];
             if (r) {
-                const label = slug.replace('-', '/');
                 const t = get(_);
-                if (r.status === 'ok') {
-                    toasts.success(t('fx.sync.toastOk', {
-                        values: {
-                            pair: label,
-                            fetched: r.points_fetched ?? 0,
-                            changed: r.points_changed ?? 0,
-                            provider: formatProviderText(r.provider_used)
-                        }
-                    }));
-                } else if (r.status === 'partial') {
-                    let msg = t('fx.sync.toastPartial', {
-                        values: {
-                            pair: label,
-                            fetched: r.points_fetched ?? 0,
-                            changed: r.points_changed ?? 0,
-                            provider: formatProviderText(r.provider_used)
-                        }
-                    });
-                    msg += formatSyncDetail(r, t);
-                    toasts.warning(msg);
-                } else if (r.status === 'skipped') {
-                    toasts.info(t('fx.sync.toastSkipped', {values: {pair: label}}));
-                } else {
-                    let msg = t('fx.sync.toastFailed', {values: {pair: label}});
-                    if (r.message) msg += '\n' + r.message;
-                    toasts.error(msg);
-                }
+                const toast = buildFxSyncToast(r, slug, t, formatProviderText, formatSyncDetail);
+                toasts[toast.variant](toast.message);
             }
             // After sync, refresh the pair
             const store = getFxStore(slug);
