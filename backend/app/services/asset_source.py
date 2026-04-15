@@ -826,11 +826,10 @@ class AssetSourceManager:
                     if asset:
                         # Try to fetch metadata (returns None if not supported)
                         try:
-                            patch_item = await provider.fetch_asset_metadata(
-                                assignment.identifier,
-                                AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type),
-                                assignment.provider_params,
-                                )
+                            _id = assignment.identifier
+                            _id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
+                            _params = assignment.provider_params
+                            patch_item = await _run_provider_in_thread(lambda: provider.fetch_asset_metadata(_id, _id_type, _params),timeout=30.0,)
 
                             if patch_item:
                                 # Set correct asset_id
@@ -2304,14 +2303,28 @@ class AssetSourceManager:
                     mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(
                         assignment.identifier_type
                         )
+
+                    # Check core cache first (TTL 2min)
+                    cache_key = (assignment.provider_code, assignment.identifier, str(assignment.identifier_type))
+                    cached_cv, cache_ok = _asset_current_cache.get(cache_key)
+                    if cache_ok:
+                        logger.debug(f"Current-price cache HIT for asset {asset_id}")
+                        return FACurrentPriceItem(
+                            asset_id=asset_id,
+                            value=cached_cv.value,
+                            currency=cached_cv.currency,
+                            as_of_date=cached_cv.as_of_date,
+                            source=f"provider:{assignment.provider_code}",
+                            )
+
                     try:
+                        # Capture variables for lambda (avoid late-binding)
+                        _id = assignment.identifier
+                        _id_type = mapped_id_type
+                        _params = params
                         async with sem:
-                            cv = await asyncio.wait_for(
-                                provider.get_current_value(
-                                    assignment.identifier, mapped_id_type, params
-                                    ),
-                                timeout=10.0,
-                                )
+                            cv = await _run_provider_in_thread(lambda: provider.get_current_value(_id, _id_type, _params),timeout=10.0,)
+                        _asset_current_cache.set(cache_key, cv)
                         return FACurrentPriceItem(
                             asset_id=asset_id,
                             value=cv.value,

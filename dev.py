@@ -259,6 +259,24 @@ def cmd_server(args):
         # tracks only the direct process; reloader child processes would need
         # sitecustomize.py (which doesn't work). Without --reload, there's a
         # single uvicorn process that 'coverage run' tracks directly.
+        #
+        # CRITICAL — SIGTERM propagation chain (3 levels of exec):
+        #
+        #   When Playwright finishes E2E tests, it sends SIGTERM to the webServer
+        #   process. For 'coverage run' to write .coverage.<pid> files, SIGTERM
+        #   must reach it directly. The process chain uses exec at every level:
+        #
+        #   1. playwright.config.ts: 'exec ./dev.py ...' → /bin/sh replaces itself
+        #   2. dev.py (here): os.execvpe(pipenv, ...) → dev.py replaces itself
+        #   3. pipenv run: os.execvpe(coverage, ...) → pipenv replaces itself
+        #
+        #   Result: single PID from Playwright → coverage run -m uvicorn.
+        #   SIGTERM arrives directly, .coveragerc sigterm=true handles it,
+        #   .coverage.<pid> file is written on graceful shutdown.
+        #
+        #   Without exec at ANY level, subprocess.run() creates a child process,
+        #   SIGTERM only reaches the parent, the child becomes an orphan, and
+        #   no coverage data is ever written.
         coveragerc = str(PROJECT_ROOT / ".coveragerc")
         uvicorn_cmd = [
             *pipenv_prefix(), "coverage", "run",
@@ -273,6 +291,13 @@ def cmd_server(args):
         print(f"{Colors.YELLOW}   Config: {coveragerc}{Colors.NC}")
         print(f"{Colors.YELLOW}   Coverage data will be written to .coverage.<pid> on shutdown{Colors.NC}")
         print()
+
+        # Replace this process with coverage run (execvpe never returns)
+        full_env = os.environ.copy()
+        full_env.update(env)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.execvpe(uvicorn_cmd[0], uvicorn_cmd, full_env)
     else:
         uvicorn_cmd = [
             *pipenv_prefix(), "uvicorn",
@@ -285,7 +310,7 @@ def cmd_server(args):
         else:
             uvicorn_cmd.append("--reload")
 
-    return run_command_live(uvicorn_cmd, env=env)
+        return run_command_live(uvicorn_cmd, env=env)
 
 
 # =============================================================================

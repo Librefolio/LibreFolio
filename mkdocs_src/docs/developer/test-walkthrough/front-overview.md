@@ -60,6 +60,7 @@ Frontend test categories (`front-utility`, `front-user`, `front-fx`) support the
 | `--debug` | Enables **Playwright Inspector** — pauses before each action | Step through actions one by one, inspect selectors, set breakpoints |
 | `--ui` | Opens **Playwright UI Mode** — a full interactive test runner | Explore tests interactively, view timeline/trace, re-run selectively |
 | `--list` | Lists available test files without running them | Discover tests, verify naming, plan what to run |
+| `--coverage` | Tracks backend code coverage during E2E tests | Generate `htmlcov-frontend/` report |
 
 ### 🎨 Playwright UI Mode (`--ui`)
 

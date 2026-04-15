@@ -112,10 +112,77 @@ graph TD
 
 ## 📊 Coverage
 
-Generate a code coverage report:
+### Running with Coverage
 
 ```bash
-./dev.py test all --coverage
+# Backend coverage (via pytest-cov, inline)
+./dev.py test --coverage api all
+./dev.py test --coverage services all
+
+# Frontend → Backend coverage (via coverage run + Playwright SIGTERM)
+./dev.py test --coverage front-fx all
+./dev.py test --coverage all-frontend
+
+# Clean stale data before a fresh run
+./dev.py test --coverage --cov-clean-frontend all-frontend
 ```
 
-This generates an HTML report in `htmlcov/index.html` showing which lines of code are covered by tests.
+Reports are generated in:
+
+| Command | HTML Report |
+|---------|------------|
+| `--coverage api all` | `htmlcov-backend/` |
+| `--coverage front-fx all` | `htmlcov-frontend/` |
+| `--coverage all` | `htmlcov/` (combined) |
+
+```bash
+# View reports
+./dev.py test coverage show backend
+./dev.py test coverage show frontend
+./dev.py test coverage show combined
+```
+
+### Frontend Coverage Architecture
+
+Backend coverage during Playwright E2E tests requires a precise signal chain so that
+`coverage run` receives SIGTERM (not SIGKILL) and can write `.coverage.<pid>` data.
+
+**4 required elements:**
+
+1. **`gracefulShutdown`** in `playwright.config.ts` — sends SIGTERM instead of SIGKILL
+2. **`exec`** in the shell command — shell replaces itself with `dev.py`
+3. **`os.execvpe()`** in `dev.py` — replaces itself with `pipenv run coverage run`
+4. **`sigterm = true`** in `.coveragerc` — coverage catches SIGTERM and writes data
+
+```mermaid
+graph LR
+    PW["Playwright<br/><small>gracefulShutdown<br/>sends SIGTERM</small>"]
+    SH["/bin/sh<br/><small>exec (level 1)</small>"]
+    DP["dev.py<br/><small>os.execvpe (level 2)</small>"]
+    PP["pipenv<br/><small>os.execvpe (level 3)</small>"]
+    CR["coverage run<br/><small>-m uvicorn</small>"]
+
+    PW -->|SIGTERM| SH
+    SH -->|"replaces itself"| DP
+    DP -->|"replaces itself"| PP
+    PP -->|"replaces itself"| CR
+
+    style CR fill:#4caf50,color:#fff
+```
+
+All four steps share the **same PID**. When Playwright sends SIGTERM, it reaches
+`coverage run` directly. The `.coveragerc` option `sigterm = true` catches it and
+writes `.coverage.<pid>` before the process exits.
+
+!!! danger "Without `gracefulShutdown`"
+
+    By default, Playwright sends **SIGKILL** to terminate the webServer.
+    SIGKILL cannot be caught or handled — the process is killed instantly
+    and no coverage data is ever written. This is the most common cause of
+    missing `htmlcov-frontend/`.
+
+!!! warning "Without `exec` at any level"
+
+    If any level uses `subprocess.run()` instead of exec, SIGTERM only reaches
+    the parent process. The child (`coverage run`) becomes an **orphan** and no
+    coverage data is written.
