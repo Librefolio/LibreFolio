@@ -63,7 +63,20 @@
     "date": "Date",
     "value": "Value",
     "notes": "Notes",
-    "syncing": "Syncing..."
+    "syncing": "Syncing...",
+    "measures": "Measures",
+    "signals": "Signals",
+    "addMeasure": "Add measurement",
+    "closeEditor": "Close editor",
+    "exitMeasure": "Exit measure mode",
+    "classification": "Classification",
+    "identifiers": "Identifiers",
+    "geoDistribution": "Geographic Distribution",
+    "sectorDistribution": "Sector Distribution",
+    "allCurrencies": "All currencies",
+    "noMatchesTitle": "No Matches",
+    "documentation": "Documentation",
+    "deleteSelected": "Delete Selected"
   },
   "table": {
     "columns": "Columns",
@@ -148,7 +161,6 @@
   "help": {
     "helpAndSupport": "Help & Support",
     "faq": "FAQ",
-    "documentation": "Documentation",
     "reportBug": "Report Bug"
   },
   "dashboard": {
@@ -168,7 +180,6 @@
     "deleteBroker": "Delete Broker",
     "noBrokers": "No Brokers Yet",
     "noBrokersMessage": "Add your first broker to start tracking your investments.",
-    "name": "Name",
     "namePlaceholder": "e.g., Interactive Brokers, Degiro",
     "description": "Description",
     "descriptionPlaceholder": "Optional notes about this broker...",
@@ -247,22 +258,17 @@
   "assets": {
     "title": "Assets",
     "subtitle": "View and manage your investment assets",
-    "addAsset": "Add Asset",
     "searchPlaceholder": "Search assets...",
     "allTypes": "All types",
-    "allCurrencies": "All currencies",
     "showActive": "Active only",
     "showAll": "Show all",
     "table": {
-      "name": "Name",
-      "currency": "Currency",
       "lastPrice": "Last Price",
       "provider": "Provider"
     },
     "empty": {
       "noAssets": "No assets yet",
       "noAssetsDesc": "Add your first asset to start tracking prices.",
-      "noMatchesTitle": "No Matches",
       "noMatchesDesc": "No assets match the current filters."
     },
     "sync": {
@@ -301,7 +307,6 @@
       "titleEdit": "Edit Asset",
       "searchOnline": "Search Online",
       "assetDetails": "Asset Details",
-      "identifiers": "Identifiers",
       "createAsset": "Create Asset",
       "saveChanges": "Save Changes",
       "autoAssignInfo": "Provider \"{provider}\" will be auto-assigned on create",
@@ -311,9 +316,6 @@
       "createSuccess": "\"{name}\" created successfully",
       "saveSuccess": "\"{name}\" updated successfully",
       "moreInfo": "More Info",
-      "classification": "Classification",
-      "sectorDistribution": "Sector Distribution",
-      "geographicDistribution": "Geographic Distribution",
       "createSuccessProviderFailed": "Asset \"{name}\" created, but provider assignment failed. Assign it manually."
     },
     "provider": {
@@ -328,35 +330,26 @@
       "identifierType": "Identifier Type",
       "fetchInterval": "Fetch Interval",
       "lastFetch": "Last Fetch",
-      "neverFetched": "Never fetched",
-      "documentation": "Documentation"
+      "neverFetched": "Never fetched"
     },
     "schedule": {
       "title": "Interest Schedule",
       "period": "Period",
       "rate": "Rate %",
-      "compounding": "Compounding",
-      "compFreq": "Comp. Freq.",
       "dayCount": "Day Count",
       "periodHint": "Start and end date of this interest period.\nBoth dates are inclusive (the end date is the last day of the period).",
       "rateHint": "Annual interest rate as percentage.\nExample: 5.00 = 5% per year.",
-      "compoundingHint": "Simple: interest on principal only.\nCompound: interest accrues on accumulated interest too.",
-      "freqHint": "How often compound interest is calculated.\nOnly applies when compounding is set to Compound.",
-      "dayCountHint": "Convention for counting days in the interest period.\nACT/365 and ACT/360 are the most common.",
       "addPeriod": "Add Period",
       "addFirstPeriod": "Add First Period",
       "split": "Split",
       "merge": "Merge",
-      "deleteSelected": "Delete Selected",
       "deletePeriodTitle": "Delete Period",
       "splitPeriodTitle": "Split Period",
       "deleteBoundaryHint": "Choose the boundary date to redistribute this period's range between its neighbors.",
       "splitBoundaryHint": "Choose the date where this period will be split into two.",
       "boundaryDate": "Boundary Date",
-      "confirmDelete": "Confirm Delete",
       "confirmSplit": "Confirm Split",
       "lateInterest": "Late Interest",
-      "empty": "No interest periods defined",
       "emptyTitle": "No interest periods defined",
       "emptyHint": "Add at least one period to configure the investment schedule.",
       "periods": "periods",
@@ -391,19 +384,12 @@
     "probe": {
       "currentPrice": "Current Price",
       "history": "History",
-      "metadata": "Metadata",
       "notTested": "Not tested",
-      "passed": "Passed",
-      "failed": "Failed",
-      "executionTime": "Execution time",
-      "totalTime": "Total",
-      "cacheInfo": "Price data may be up to 15 minutes delayed."
+      "totalTime": "Total"
     },
     "identifiers": {
       "askProvider": "Ask Provider",
       "askProviderHint": "Fetch identifiers from the assigned provider",
-      "autoFilled": "Auto-filled from provider",
-      "conflictWarning": "Provider suggests a different value",
       "addIdentifier": "Add identifier",
       "deleteSelected": "Delete selected identifiers",
       "deleteConfirmMessage": "Delete {count} identifiers?"
@@ -419,7 +405,6 @@
     "search": {
       "placeholder": "Search by name, ticker, ISIN...",
       "providers": "Providers",
-      "noResults": "No results found",
       "searching": "Searching..."
     },
     "comparison": {
@@ -463,13 +448,11 @@
       "noPairsTitle": "No FX Pairs Configured",
       "noPairsDesc": "Add your first currency pair to start tracking exchange rates.",
       "addFirstPair": "Add First Pair",
-      "noMatchesTitle": "No Matches",
       "noMatchesDesc": "No pairs match the current filter."
     },
     "filter": {
       "filterCurrency": "Filter currency",
       "secondCurrency": "Second currency",
-      "allCurrencies": "All currencies",
       "resetFilters": "Reset filters"
     },
     "addPair": {
@@ -492,9 +475,6 @@
       "timeout": "Timeout",
       "tooltipFetched": "Rate data points downloaded from the provider",
       "tooltipChanged": "Data points actually inserted or updated in the database",
-      "toastOk": "{pair} synced\n{fetched}↓ {changed}Δ ({provider})",
-      "toastPartial": "{pair} — partial\n{fetched}↓ {changed}Δ ({provider})",
-      "toastSkipped": "{pair} — manual only, nothing to sync",
       "toastFailed": "{pair} sync failed",
       "legBreakdown": "Per-leg breakdown",
       "legNoData": "0 dates — no data",
@@ -515,7 +495,6 @@
       "addRoute": "Add conversion route",
       "hideRoutes": "Hide available routes"
     },
-    "syncing": "Syncing...",
     "providers": "Providers",
     "deletePair": "Delete pair",
     "deletePairTitle": "Delete FX Pair",
@@ -640,14 +619,10 @@
     "themeHint": "Choose your preferred color scheme",
     "category": "Category",
     "avatarHint": "Click to upload a profile picture",
-    "removeAvatarTitle": "Remove avatar?",
-    "removeAvatarMessage": "Are you sure you want to remove your avatar?",
     "selectAvatar": "Select Avatar"
   },
   "uploads": {
     "dropOrClick": "Drop file here or click to browse",
-    "maxSize": "Max size: {size}MB",
-    "imageSize": "Image size",
     "upload": "Upload",
     "title": "Files",
     "staticResources": "Static Resources",
@@ -697,8 +672,7 @@
     "imageUrl": "Image URL",
     "useSelected": "Use Selected",
     "selectIcon": "Select Icon",
-    "urlHint": "Enter a remote URL or a local path from Files",
-    "removeImage": "Remove Image"
+    "urlHint": "Enter a remote URL or a local path from Files"
   },
   "datePicker": {
     "from": "From",
@@ -871,20 +845,14 @@
       "deltaPct": "Δ %",
       "annualized": "Δ%/yr"
     },
-    "days": "{days}d",
-    "addMeasure": "Add Measure"
+    "days": "{days}d"
   },
   "fxDetail": {
-    "measures": "Measures",
-    "signals": "Signals",
     "editRates": "Edit Rates",
     "loadingRates": "Loading rates...",
     "noData": "No rate data available for this range.",
     "syncRates": "Sync Rates",
     "backToList": "Back to FX list",
-    "exitMeasure": "Exit measure mode",
-    "addMeasure": "Add measurement",
-    "closeEditor": "Close editor",
     "swapConfirmTitle": "Unsaved changes",
     "swapConfirmMessage": "You have unsaved changes in the rate editor. Swapping direction will discard them. Continue?",
     "noDataManual": "No data available — insert rates manually",
@@ -914,22 +882,17 @@
   },
   "dataEditor": {
     "clearSelection": "Clear selection",
-    "deleteSelected": "Delete selected",
     "staleTooltip": "Hide backward-filled rows (⚠️ stale). These are gap-fill points copied from the nearest real data point.",
     "col": {
-      "currency": "Currency",
       "close": "Close",
       "open": "Open",
       "high": "High",
       "low": "Low",
       "volume": "Volume",
-      "type": "Type",
-      "amount": "Amount",
-      "notes": "Notes"
+      "amount": "Amount"
     },
     "save": "Save ({count})",
-    "saving": "Saving…",
-    "cancel": "Cancel"
+    "saving": "Saving…"
   },
   "sharedResource": {
     "syncAll": "Sync All",
@@ -958,28 +921,15 @@
     "editData": "Edit Prices & Events",
     "pricesTab": "Prices",
     "eventsTab": "Events",
-    "closeEditor": "Close editor",
-    "exitMeasure": "Exit measure mode",
-    "addMeasure": "Add measurement",
     "metadata": "Metadata & Classification",
     "editViaModal": "Edit in asset modal",
     "displayCurrency": "Convert to",
     "noIdentifiers": "No identifiers configured",
     "noClassification": "No classification data",
-    "measures": "Measures",
-    "signals": "Signals",
     "noDataScheduled": "Configure interest schedule via Edit to generate prices",
     "syncPrices": "Sync Prices",
     "recalculate": "Recalculate",
     "syncDisabledManual": "Sync disabled — no provider configured",
-    "identifiers": "Identifiers",
-    "classification": "Classification",
-    "sectorDistribution": "Sector Distribution",
-    "geoDistribution": "Geographic Distribution",
-    "eventMarkers": "Event Markers",
-    "syncSuccess": "Prices synced: {fetched} fetched, {changed} changed",
-    "syncFailed": "Sync failed",
-    "syncPartial": "Partial sync: {fetched} fetched, {changed} changed",
     "fxPairMissing": "FX pair {base}/{quote} not configured — conversion not available",
     "addFxPair": "Add FX pair",
     "goToFxPair": "Go to FX pair detail",

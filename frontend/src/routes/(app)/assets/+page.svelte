@@ -782,7 +782,7 @@
                     onclick={handleAddAsset}
             >
                 <Plus size={16}/>
-                {$t('assets.addAsset')}
+                {$t('assets.modal.title')}
             </button>
         </div>
     </div>
@@ -930,7 +930,7 @@
                                     filterCurrencies = new Set([...filterCurrencies, v]);
                                 }
                             }}
-                                placeholder={$t('assets.allCurrencies')}
+                                placeholder={$t('common.allCurrencies')}
                                 value=""
                         />
                     </div>
@@ -1034,10 +1034,10 @@
                         onclick={handleAddAsset}
                 >
                     <Plus size={16} class="inline mr-1"/>
-                    {$t('assets.addAsset')}
+                    {$t('assets.modal.title')}
                 </button>
             {:else}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$t('assets.empty.noMatchesTitle')}</h3>
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$t('common.noMatchesTitle')}</h3>
                 <p class="text-gray-500 dark:text-gray-400">{$t('assets.empty.noMatchesDesc')}</p>
             {/if}
         </div>

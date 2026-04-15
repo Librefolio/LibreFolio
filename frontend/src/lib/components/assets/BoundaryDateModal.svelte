@@ -253,7 +253,7 @@
                                ? 'bg-red-500 hover:bg-red-600 text-white'
                                : 'bg-libre-green hover:bg-libre-green-dark text-white'}"
                 >
-                    {mode === 'delete' ? $t('assets.schedule.confirmDelete') : $t('assets.schedule.confirmSplit')}
+                    {mode === 'delete' ? $t('common.confirmDelete') : $t('assets.schedule.confirmSplit')}
                 </button>
             </div>
         </div>

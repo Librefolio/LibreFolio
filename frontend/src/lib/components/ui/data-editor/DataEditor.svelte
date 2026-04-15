@@ -626,7 +626,7 @@
                         type="button"
                         class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                         onclick={() => { handleBulkDelete(selectedIds); dataTableRef?.clearSelection(); selectedIds = []; }}
-                        title={$t('dataEditor.deleteSelected')}
+                        title={$t('common.deleteSelected')}
                 >
                     <Trash2 size={14}/>
                 </button>

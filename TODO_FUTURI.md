@@ -392,33 +392,34 @@ Ogni provider (ECB, FED, BOE, SNB) dovrebbe avere una **pagina dedicata** nella 
 
 ---
 
-## 📊 CandlestickChart / VolumeBar — Phase 6 (Assets)
+## 📊 CandlestickChart / VolumeBar — Visualizzazione OHLCV
 
-**Data aggiunta**: 16 Marzo 2026
-**Status**: 📋 PIANIFICATO
-**Priorità**: Media (Phase 6)
+**Data aggiunta**: 16 Marzo 2026  
+**Aggiornato**: 15 Aprile 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Media
 
 ### Contesto
-Per FX si hanno solo close rate giornalieri — non esiste OHLC reale.
-CandlestickChart e VolumeBar saranno implementati quando avremo dati OHLC
-reali dagli asset source provider (yfinance, JustETF).
+I dati OHLCV (Open/High/Low/Close/Volume) sono già salvati nel DB e modificabili
+dal Data Editor nella detail page degli asset. Manca solo la **visualizzazione
+grafica** con candele giapponesi e barre di volume.
 
-### File
-- `frontend/src/lib/components/charts/CandlestickChart.svelte` (stub)
-- `frontend/src/lib/components/charts/VolumeBar.svelte` (stub)
+Per FX si hanno solo close rate giornalieri — non esiste OHLC reale.
+
+### Da implementare
+- `frontend/src/lib/components/charts/CandlestickChart.svelte` — grafico candlestick ECharts
+- `frontend/src/lib/components/charts/VolumeBar.svelte` — barre volume sotto il chart
+- Aggiungere i componenti al barrel export `charts/index.ts`
+- Togliere il flag `disableCandlestick` in `ChartToolbar.svelte` per gli asset
+- Per FX il toggle Line/Candlestick resta disabilitato (`disableCandlestick={true}`)
 
 ### Note
-- Per FX il toggle Line/Candlestick resta disabilitato (`disableCandlestick={true}`)
+- Gli stub placeholder sono stati rimossi nella cleanup Phase 6 Step 6
+- I dati OHLCV arrivano da yfinance e JustETF (già implementati nei provider)
 - L'OHLC sintetizzato (O=prev close) non ha valore informativo per FX
 
 
 
-## ~~Ripulire tutte le traduzioni non usate con i18n prima di aggiungere nuove lingue~~
-
-**Status**: ✅ COMPLETATO (20 Marzo 2026)  
-**Nota**: Completato durante `plan-fxTestingCleanup.prompt.md` Step 9. Risultato: 724→590 chiavi, 0 inutilizzate, 100% coverage 4 lingue, ~20 duplicati residui intenzionali. Vedi `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-05-subplan/plan-fxTestingCleanup.prompt.md`.
-
----
 
 ## 🔗 Link Transazioni in Asset Delete Modal (Phase 7)
 
@@ -511,17 +512,6 @@ Per ora solo FULL_RESET è implementato.
 
 ---
 
-## 🕐 Late interest con generate_interest
-
-**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)
-**Status**: ✅ IMPLEMENTATO
-**Priorità**: N/A
-
-Il late interest ora supporta `generate_interest=True`. Genera INTEREST periodici + MATURITY_SETTLEMENT finale.
-Il late interest NON è una "opportunità" ma una penale — tuttavia il flag unifica il pattern: l'utente decide se auto-generare eventi o meno, indipendentemente dalla natura del tasso.
-Se l'utente non vuole auto-generare eventi di penale, lascia `generate_interest=False` sul late interest e usa eventi manuali.
-
----
 
 ## 🌍 Normalizzazione Paese Multilingua (endpoint user-facing)
 

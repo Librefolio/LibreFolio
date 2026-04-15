@@ -836,7 +836,7 @@
         >
             <span class="flex items-center gap-2">
                 <TrendingUp class="text-blue-500" size={15}/>
-                {$t('fxDetail.signals')}
+                {$t('common.signals')}
             </span>
             <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15}/>
         </button>
@@ -911,7 +911,7 @@
                                 measurePanel?.startMeasureMode();
                             }
                         }}
-                            title={measureMode ? $t('fxDetail.exitMeasure') : $t('fxDetail.addMeasure')}
+                            title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
                     >
                         <Ruler size={16}/>
                     </button>
@@ -938,7 +938,7 @@
                                 showDataEditor = true;
                             }
                         }}
-                            title={showDataEditor ? $t('fxDetail.closeEditor') : $t('fxDetail.editRates')}
+                            title={showDataEditor ? $t('common.closeEditor') : $t('fxDetail.editRates')}
                     >
                         <Pencil size={16}/>
                     </button>
@@ -1029,7 +1029,7 @@
                             savedPanelStates = null;
                         }
                     }}
-                        title={$t('fxDetail.closeEditor')}
+                        title={$t('common.closeEditor')}
                 >✕
                 </button>
             </div>
@@ -1083,7 +1083,7 @@
                     onclick={() => showMeasures = !showMeasures}
             >
                 <Ruler class="text-violet-500" size={15}/>
-                {$t('fxDetail.measures')}
+                {$t('common.measures')}
                 {#if measureMode}
                     <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
@@ -1097,7 +1097,7 @@
                            transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={lineData.length < 2}
                     onclick={(e) => { e.stopPropagation(); showMeasures = true; measurePanel?.addMeasureFromChartData(); }}
-                    title={$t('fxDetail.addMeasure')}
+                    title={$t('common.addMeasure')}
             >
                 <span class="text-sm leading-none">+</span>
             </button>

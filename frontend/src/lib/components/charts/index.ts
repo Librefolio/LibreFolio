@@ -20,9 +20,6 @@ export {default as PriceChartFull} from './PriceChartFull.svelte';
 // Specialized charts
 export {default as SemiDonutChart} from './SemiDonutChart.svelte';
 
-// Stubs — TODO Phase 6 (Assets): Implement for OHLC data. Not applicable to daily FX close rates.
-export {default as CandlestickChart} from './CandlestickChart.svelte';
-export {default as VolumeBar} from './VolumeBar.svelte';
 
 // Re-export types
 export type {LineDataPoint} from './LineChart.svelte';

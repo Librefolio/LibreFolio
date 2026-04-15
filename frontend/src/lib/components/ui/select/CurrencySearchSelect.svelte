@@ -83,9 +83,9 @@
         if (includeAll) {
             options.push({
                 value: '',
-                label: $_('fx.filter.allCurrencies'),
+                label: $_('common.allCurrencies'),
                 icon: '💱',
-                searchText: $_('fx.filter.allCurrencies'),
+                searchText: $_('common.allCurrencies'),
             });
         }
 

@@ -52,7 +52,7 @@
         matchPrefix?: boolean;
     }> = [
         {
-            titleKey: 'assets.modal.identifiers',
+            titleKey: 'common.identifiers',
             fields: ['identifier_'],
             matchPrefix: true,
         },
@@ -61,7 +61,7 @@
             fields: ['display_name', 'asset_type', 'currency'],
         },
         {
-            titleKey: 'assets.modal.classification',
+            titleKey: 'common.classification',
             fields: ['short_description', 'sector_area', 'geographic_area'],
         },
     ];

@@ -1,95 +1,69 @@
 <!--
-  SettingNumber.svelte - Svelte 5
+  SettingNumber.svelte — Svelte 5
 
   Numeric input setting with inline actions (save, undo, reset).
   Supports int/float types, min/max, step, and unit display.
-  Extracts the number input pattern from GlobalSettingsTab.
+  Follows same API as SettingSelect/SettingToggle for consistency.
+  Reusable in GlobalSettingsTab and future UserSettingsTab.
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {AlertCircle, RotateCcw, Save, Undo} from 'lucide-svelte';
-    import type {Component, Snippet} from 'svelte';
+    import type {Component} from 'svelte';
 
     interface Props {
-        /** Current value */
-        value: number;
-        /** Field label */
+        value: string;
         label: string;
-        /** Value type (int or float) */
-        type?: 'int' | 'float';
-        /** Minimum value */
-        min?: number;
-        /** Maximum value */
-        max?: number;
-        /** Step increment */
-        step?: number;
-        /** Unit label (e.g., "hours", "MB") */
-        unit?: string;
-        /** Optional hint text */
         hint?: string;
-        /** Optional icon component */
         icon?: Component | null;
-        /** Whether field has been modified */
+        type?: 'int' | 'float';
+        min?: number;
+        max?: number;
+        step?: number;
+        unit?: string;
+        /** Warning threshold — show warning if numeric value exceeds this */
+        warnAbove?: number;
+        warnMessage?: string;
         isModified?: boolean;
-        /** Whether value differs from default */
         isNonDefault?: boolean;
-        /** Whether field is locked/read-only */
         isLocked?: boolean;
-        /** Saving in progress */
         isSaving?: boolean;
-        /** Warning threshold - show warning if value exceeds this */
-        warningThreshold?: number;
-        /** Warning message snippet */
-        warningMessage?: Snippet;
-        /** Save callback */
         onsave?: () => void;
-        /** Undo callback */
         onundo?: () => void;
-        /** Reset to default callback */
         onreset?: () => void;
-        /** Change callback */
-        onchange?: (value: number) => void;
+        onchange?: (value: string) => void;
     }
 
     let {
-        value = $bindable(0),
+        value = $bindable('0'),
         label,
+        hint = '',
+        icon = null,
         type = 'int',
-        min,
+        min = 0,
         max,
         step,
         unit = '',
-        hint = '',
-        icon = null,
+        warnAbove,
+        warnMessage = '',
         isModified = false,
         isNonDefault = false,
         isLocked = false,
         isSaving = false,
-        warningThreshold,
-        warningMessage,
         onsave,
         onundo,
         onreset,
-        onchange
+        onchange,
     }: Props = $props();
 
-    // Compute effective step
     let effectiveStep = $derived(step ?? (type === 'float' ? 0.01 : 1));
-
-    // Show warning if value exceeds threshold
-    let showWarning = $derived(
-        warningThreshold !== undefined && value > warningThreshold
-    );
+    let numericValue = $derived(parseFloat(value) || 0);
+    let showWarning = $derived(warnAbove !== undefined && numericValue > warnAbove);
 
     function handleInput(e: Event) {
         const target = e.target as HTMLInputElement;
-        const inputVal = target.value.replace(',', '.');
-        const newVal = type === 'float' ? parseFloat(inputVal) : parseInt(inputVal, 10);
-
-        if (!isNaN(newVal)) {
-            value = newVal;
-            onchange?.(newVal);
-        }
+        value = target.value;
+        onchange?.(value);
     }
 </script>
 
@@ -109,8 +83,8 @@
     </div>
 
     <!-- Right: Actions + Input -->
-    <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto">
-        <!-- Action buttons (only when unlocked and modified/non-default) -->
+    <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
+        <!-- Action buttons -->
         {#if !isLocked}
             <div class="flex items-center space-x-1">
                 {#if isModified}
@@ -145,34 +119,34 @@
             </div>
         {/if}
 
-        <!-- Number input with unit -->
+        <!-- Number input with optional unit -->
         <div class="flex flex-col items-end space-y-1">
             <div class="flex items-center space-x-2">
                 <input
-                        class="w-20 px-3 py-2 border rounded-lg text-sm text-right
-                           {isLocked
-                               ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-700'
-                               : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
-                        disabled={isLocked}
-                        {max}
-                        {min}
-                        oninput={handleInput}
-                        step={effectiveStep}
                         type="number"
+                        step={effectiveStep}
+                        {min}
+                        max={max}
                         {value}
+                        oninput={handleInput}
+                        disabled={isLocked}
+                        class="w-20 px-3 py-2 border rounded-lg text-sm text-right
+                        {isLocked
+                            ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-600'
+                            : 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
                 />
                 {#if unit}
                     <span class="text-sm text-gray-500 dark:text-gray-400">{unit}</span>
                 {/if}
             </div>
-
-            <!-- Warning message -->
-            {#if showWarning && warningMessage}
-                <div class="flex items-center text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 px-2 py-1 rounded">
-                    <AlertCircle size={12} class="mr-1"/>
-                    {@render warningMessage()}
+            <!-- Warning -->
+            {#if showWarning && warnMessage}
+                <div class="flex items-center text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded">
+                    <AlertCircle size={12} class="mr-1 flex-shrink-0"/>
+                    <span>{warnMessage}</span>
                 </div>
             {/if}
         </div>
     </div>
 </div>
+

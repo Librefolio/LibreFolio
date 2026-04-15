@@ -1255,7 +1255,7 @@
         >
             <span class="flex items-center gap-2">
                 <TrendingUp class="text-blue-500" size={15}/>
-                {$t('assetDetail.signals')}
+                {$t('common.signals')}
             </span>
             <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15}/>
         </button>
@@ -1329,7 +1329,7 @@
                             if (measureMode) { measurePanel?.stopMeasureMode(); }
                             else { showMeasures = true; await tick(); measurePanel?.startMeasureMode(); }
                         }}
-                            title={measureMode ? $t('assetDetail.exitMeasure') : $t('assetDetail.addMeasure')}
+                            title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
                     >
                         <Ruler size={16}/>
                     </button>
@@ -1348,7 +1348,7 @@
                                 showAesthetics = false; showMeasures = false; showSignals = false; showDataEditor = true;
                             }
                         }}
-                            title={showDataEditor ? $t('assetDetail.closeEditor') : $t('assetDetail.editData')}
+                            title={showDataEditor ? $t('common.closeEditor') : $t('assetDetail.editData')}
                     >
                         <Pencil size={16}/>
                     </button>
@@ -1446,7 +1446,7 @@
                 </span>
                 <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                         onclick={() => { showDataEditor = false; pendingPreviewSignal = null; if (savedPanelStates) { showAesthetics = savedPanelStates.aesthetics; showMeasures = savedPanelStates.measures; showSignals = savedPanelStates.signals; savedPanelStates = null; } }}
-                        title={$t('assetDetail.closeEditor')}>✕</button>
+                        title={$t('common.closeEditor')}>✕</button>
             </div>
             <div class="px-4 py-4">
                 <AssetDataEditorSection
@@ -1488,7 +1488,7 @@
         >
             <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
                 <Ruler class="text-violet-500" size={15}/>
-                {$t('assetDetail.measures')}
+                {$t('common.measures')}
                 {#if measureMode}
                     <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
@@ -1502,10 +1502,10 @@
                                transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={lineData.length < 2}
                         onclick={(e) => { e.stopPropagation(); showMeasures = true; measurePanel?.addMeasureFromChartData(); }}
-                        title={$t('assetDetail.addMeasure')}
+                        title={$t('common.addMeasure')}
                 >
                     <span class="text-sm leading-none">+</span>
-                    <span class="hidden sm:inline">{$t('measure.addMeasure')}</span>
+                    <span class="hidden sm:inline">{$t('common.addMeasure')}</span>
                 </button>
                 <ChevronDown class="transition-transform text-gray-400 {showMeasures ? 'rotate-180' : ''}" size={15}/>
             </div>
@@ -1558,19 +1558,19 @@
                     <!-- Classification Charts -->
                     {#if classificationLoaded && (sectorDistribution || geographicDistribution)}
                         <div class="space-y-3">
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('assetDetail.classification')}</h4>
+                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('common.classification')}</h4>
 
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {#if geographicDistribution && Object.keys(geographicDistribution).length > 0}
                                     <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                        <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('assetDetail.geoDistribution')}</h5>
+                                        <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.geoDistribution')}</h5>
                                         <GeographyMap data={geographicDistribution} height="280px" language={$currentLanguage}/>
                                     </div>
                                 {/if}
 
                                 {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
                                     <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                        <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('assetDetail.sectorDistribution')}</h5>
+                                        <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.sectorDistribution')}</h5>
                                         <SectorPieChart data={sectorDistribution} height="280px"/>
                                     </div>
                                 {/if}
@@ -1578,7 +1578,7 @@
                         </div>
                     {:else if !classificationLoaded}
                         <div class="text-sm text-gray-500 dark:text-gray-400 italic">
-                            {$t('assetDetail.classification')} — {$t('common.loading')}...
+                            {$t('common.classification')} — {$t('common.loading')}...
                         </div>
                     {:else}
                         <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noClassification')}</p>
@@ -1587,7 +1587,7 @@
                     <!-- Identifiers -->
                     {#if identifiersList.length > 0}
                         <div>
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assetDetail.identifiers')}</h4>
+                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.identifiers')}</h4>
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 {#each identifiersList as [label, value]}
                                     <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">

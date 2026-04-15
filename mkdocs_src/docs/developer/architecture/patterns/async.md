@@ -60,3 +60,29 @@ class YahooFinanceProvider(AssetSourceProvider):
 ```
 
 This allows the system to fetch data from multiple providers in parallel using `asyncio.gather`, significantly speeding up data refresh operations.
+
+### 🧵 Thread Isolation for Synchronous Providers
+
+Some external libraries (notably **yfinance**) are fully synchronous and block the event loop when called directly from an `async` context. This prevents other requests from being handled during the call.
+
+**Solution**: `_run_provider_in_thread()` in `asset_source.py` runs synchronous provider code in a separate thread via `asyncio.get_event_loop().run_in_executor()`:
+
+```python
+async def _run_provider_in_thread(provider, method, *args):
+    """Run a synchronous provider method without blocking the event loop."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,  # uses default ThreadPoolExecutor
+        lambda: getattr(provider, method)(*args)
+    )
+```
+
+!!! warning "Event Loop Blocking Rule"
+    **Never call synchronous I/O** (HTTP requests, file reads, `time.sleep()`) directly inside an `async def` endpoint or service method. Always use `run_in_executor()` or an async-native library.
+
+    Symptoms of event loop blocking:
+    
+    - Other API calls hang until the blocking call completes
+    - E2E tests time out intermittently
+    - Health checks fail during provider sync operations
+

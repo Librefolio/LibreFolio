@@ -135,3 +135,34 @@ Vedi `plan-partCCurrencyConversion.prompt.md` § C15d.
 **Nota**: Le funzioni sync `get_session_ttl_hours_sync()`, `get_max_upload_mb_sync()`, `is_registration_enabled_sync()` erano fallback mai usati. Rimosse in C14a. Ricreazione banale se necessario: leggono `GLOBAL_SETTINGS_DEFAULTS[key]["value"]`.
 
 ---
+
+## 🌐 Ripulire tutte le traduzioni non usate (i18n) ✅
+
+**Data aggiunta**: Marzo 2026  
+**Data completamento**: 20 Marzo 2026 (prima passata), 15 Aprile 2026 (consolidamento duplicati)  
+**Status**: ✅ COMPLETATO
+
+### Completato
+- **Prima passata** (Phase 5 Step 9): 724→590 chiavi, 0 inutilizzate, 100% coverage 4 lingue, ~20 duplicati residui intenzionali
+- **Seconda passata** (Phase 6 Step 6): 875→825 chiavi, 22 unused rimossi, 50 duplicati consolidati sotto `common.*`, 42 gruppi duplicati accettati con rationale documentato
+
+### Riferimenti
+- `plan-fxTestingCleanup.prompt.md` Step 9
+- `plan-phase06Step6-i18n-dedup.prompt.md`
+- `knowledge_base/08_i18n_duplicates.md`
+
+---
+
+## 🕐 Late interest con generate_interest ✅
+
+**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)  
+**Data completamento**: 3 Aprile 2026  
+**Status**: ✅ COMPLETATO
+
+### Completato
+Il late interest ora supporta `generate_interest=True`. Genera INTEREST periodici + MATURITY_SETTLEMENT finale.
+Il late interest NON è una "opportunità" ma una penale — tuttavia il flag unifica il pattern: l'utente decide se auto-generare eventi o meno, indipendentemente dalla natura del tasso.
+Se l'utente non vuole auto-generare eventi di penale, lascia `generate_interest=False` sul late interest e usa eventi manuali.
+
+---
+

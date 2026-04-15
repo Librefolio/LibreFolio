@@ -849,7 +849,7 @@
                     {$_('fx.empty.addFirstPair')}
                 </button>
             {:else}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noMatchesTitle')}</h3>
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('common.noMatchesTitle')}</h3>
                 <p class="text-gray-500 dark:text-gray-400">{$_('fx.empty.noMatchesDesc')}</p>
             {/if}
         </div>
