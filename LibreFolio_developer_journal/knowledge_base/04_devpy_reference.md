@@ -61,7 +61,7 @@ dev.py [-h]
 │ ├── client                       # Genera TypeScript client
 │ └── sync                         # schema + client
 ├─┬─ i18n
-│ ├── audit [--format xlsx|md|both]
+│ ├── audit [--format xlsx|md|both] [--duplicates]
 │ ├── add KEY --en --it --fr --es
 │ ├── remove KEY [-f]
 │ ├── update KEY [--en] [--it] [--fr] [--es]

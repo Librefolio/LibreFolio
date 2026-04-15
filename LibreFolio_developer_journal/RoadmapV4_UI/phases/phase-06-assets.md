@@ -14,7 +14,7 @@
 > Sotto-piani di implementazione:
 > - [`plan-phase06Step4AssetDetailPage.prompt.md`](../plan-phase06Step4AssetDetailPage.prompt.md) — Step 4 (Part 0, A, B, C)
 > - [`plan-partBDataEditorUnificato.prompt.md`](phase-06-subplan/Bugfix-Step4/PlanB/plan-partBDataEditorUnificato.prompt.md) — Part B (Data Editor + CSV Import + Test E2E) ✅
-> - [`plan-partCCurrencyConversion.prompt.md`](../plan-partCCurrencyConversion.prompt.md) — Part C (Currency Conversion + Bugfix + Polish) 🚧
+> - [`plan-partCCurrencyConversion.prompt.md`](../phases/phase-06-subplan/Bugfix-Step4/PlanC/plan-partCCurrencyConversion.prompt.md) — Part C (Currency Conversion + Bugfix + Polish) ✅
 
 ---
 
@@ -42,7 +42,7 @@ condiviso con Phase 7.
 | **4b** | [**Part B fix**](phase-06-subplan/Bugfix-Step4/PlanB/plan-partBDataEditorUnificato.prompt.md): B6 test fix (Apple search), perf fix (chunk fallback), B7 polish, B8 docs reorg, B9 portfolio theory | 1.5g | ✅ |
 | **4c** | Financial Theory docs: traduzione IT/FR/ES via pipeline AI | 0.5g | ✅ |
 | **4d** | [**Infra**] Gallery headless default + traduzioni nav mkdocs (Mutual Fund, Commodities, Other in IT/FR) | - | ✅ |
-| **4e** | [**Part C**](../plan-partCCurrencyConversion.prompt.md): Currency conversion backend+frontend, fix docs links, tooltip/measure mobile, tail banner, docker env warning | 2g | 🚧 |
+ **4e**  [**Part C**](../phases/phase-06-subplan/Bugfix-Step4/PlanC/plan-partCCurrencyConversion.prompt.md): Currency conversion backend+frontend, fix docs links, tooltip/measure mobile, tail banner, docker env warning  2g  ✅ 
 | **5** | AssetMatchingWizard 3-step (condiviso Phase 7) | 1g | ⏳ |
 | **6** | i18n (30 keys × 4 lingue), E2E test, gallery, docs MkDocs | 1g | ⏳ |
 
@@ -196,5 +196,5 @@ Il piano corrente (`plan-phase06-assets.md`) include ulteriori evoluzioni:
 ### Aggiornamento 13 Aprile 2026 (Part C completata + validazione)
 
 - **Part C (C1-C15) completata**: Currency conversion backend+frontend, dead code removal, test coverage, fix infrastrutturali
-- **Part C.1 in corso**: Bug fix + miglioramenti post-validazione → [plan-partC_1_PostValidation.prompt.md](../plan-partC_1_PostValidation.prompt.md)
+- **Part C completata**: Currency conversion + post-validation + UX polish + provider core cache → [PlanC/](../phases/phase-06-subplan/Bugfix-Step4/PlanC/)
 
