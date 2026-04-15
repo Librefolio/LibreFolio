@@ -68,6 +68,15 @@ backend/test_scripts/
 # Verbose
 ./dev.py test api all -v
 
+# Filtrare provider esterni (utile quando un servizio è in down)
+./dev.py test external asset-providers --exclude-providers yfinance
+./dev.py test external fx-providers --providers ECB FED
+./dev.py test external brim-providers --exclude-providers broker_coinbase
+
+# I filtri funzionano anche con all e all-backend
+./dev.py test all --exclude-providers yfinance
+./dev.py test all-backend --providers justetf ECB
+
 # Singolo file (bypass dev.py, direttamente pytest)
 cd /path/to/LibreFolio
 pipenv run pytest backend/test_scripts/test_api/test_assets_crud.py -v
@@ -233,6 +242,94 @@ Filtri automatici: esclude `abstract` (body=pass), `@property` semplici, `@field
 - **`coverage run --parallel-mode -m uvicorn`** — dev.py in coverage mode usa `os.execvpe()` per avviare uvicorn sotto `coverage run`
 - **`gracefulShutdown`** — `playwright.config.ts` configura `{signal: 'SIGTERM', timeout: 5000}` per permettere a `coverage run` di scrivere i dati prima della terminazione
 - **Frontend E2E**: `playwright.config.ts` aggiunge `--coverage` al webServer command quando `COVERAGE_BACKEND=1` è nell'env
+
+---
+
+## 🔍 Provider Filtering (--providers / --exclude-providers)
+
+Quando un servizio esterno è in down (es. Yahoo Finance), puoi escludere i suoi test
+senza toccare il codice. I flag `--providers` e `--exclude-providers` sono disponibili
+per la categoria `external`, `all` e `all-backend`.
+
+### Come funziona
+
+I flag traducono in espressioni pytest `-k`:
+
+| Flag | Pytest equivalente |
+|------|-------------------|
+| `--providers yfinance justetf` | `-k "yfinance or justetf"` |
+| `--exclude-providers yfinance` | `-k "not yfinance"` |
+
+I codici provider sono scoperti automaticamente via **regex parsing dei file sorgente**
+(nessun import dei moduli provider, nessun side-effect come cache TTL).
+
+### Provider disponibili
+
+Visualizzabili in help dinamico:
+
+```bash
+./dev.py test external -h
+# Mostra: Asset: css_scraper, justetf, mockprov, scheduled_investment, yfinance
+#         FX: BOE, ECB, FED, MANUAL, SNB
+#         BRIM: broker_coinbase, broker_degiro, broker_directa, ...
+```
+
+### Discovery leggera
+
+La funzione `_discover_provider_codes()` in `test_runner.py` scansiona i file `.py`
+nelle cartelle `asset_source_providers/`, `fx_providers/` e `brim_providers/` e
+cerca il pattern:
+
+```python
+def provider_code(self) -> str:
+    return "yfinance"      # ← estratto con regex
+
+def code(self) -> str:     # fallback per FX providers
+    return "ECB"           # ← estratto con _CODE_RE
+```
+
+Questo evita di importare i moduli (che creerebbero cache TTL, logger, ecc.)
+e mantiene `./dev.py test -h` istantaneo e senza side-effect.
+
+---
+
+## 🔄 Retry Logic nei Provider (yahoo_finance.py)
+
+Il provider Yahoo Finance include retry con backoff esponenziale per gestire
+errori transitori di rete (Yahoo API instabile, rate limiting, timeout).
+
+### Implementazione
+
+```python
+# Costanti
+_YF_MAX_RETRIES = 3
+_YF_BASE_DELAY = 1.5  # seconds → 1.5s, 3s, 6s
+
+# Keyword per riconoscere errori transitori
+_TRANSIENT_KEYWORDS = frozenset([
+    "curl", "connection", "timeout", "timed out", "reset", "abruptly",
+    "nonetype", "temporary", "503", "429", "too many requests",
+    "rate limit", "ssl", "eof", "broken pipe", "gaierror",
+])
+```
+
+La funzione `_yf_with_retry(fn, label)` avvolge le chiamate yfinance:
+- `get_current_value` → `_yf_with_retry(lambda: yf.Ticker(id).info)`
+- `get_history_value` → `_yf_with_retry(lambda: t.history(start=..., end=...))`
+- `search` → `_yf_with_retry(lambda: yf.Search(query))`
+- `fetch_asset_metadata` → `_yf_with_retry(lambda: t.info)`
+
+### Difese aggiuntive
+
+- **Guard None su DataFrame**: dopo `t.history()`, controlla `hist is None or not hasattr(hist, "empty")`
+- **Validazione colonne**: verifica che `["Open", "High", "Low", "Close"]` siano presenti
+- **Guard info None**: `info.get("currency", "USD")` protetto da `if info:`
+
+### Perché sync sleep è sicuro
+
+Le chiamate yfinance girano in **thread dedicati** (via `_run_provider_in_thread()`
+nel core `asset_source.py`), quindi `time.sleep()` blocca solo quel thread
+senza interferire con l'event loop asyncio.
 
 ---
 

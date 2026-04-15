@@ -8,6 +8,7 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+import time as _time_mod
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
@@ -43,6 +44,58 @@ from backend.app.utils.sector_fin_utils import validate_sector
 from datetime import datetime as _dt, timezone as _tz
 
 logger = get_logger(__name__)
+
+# ── Retry helpers for transient yfinance errors ─────────────────────────
+
+# Keywords that indicate transient network/API errors worth retrying
+_TRANSIENT_KEYWORDS = frozenset([
+    "curl", "connection", "timeout", "timed out", "reset", "abruptly",
+    "nonetype", "temporary", "503", "429", "too many requests",
+    "rate limit", "ssl", "eof", "broken pipe", "gaierror",
+])
+
+_YF_MAX_RETRIES = 3
+_YF_BASE_DELAY = 1.5  # seconds
+
+
+def _is_transient(exc: Exception) -> bool:
+    """Return True if the exception looks like a transient network error."""
+    err = str(exc).lower()
+    return any(kw in err for kw in _TRANSIENT_KEYWORDS)
+
+
+def _yf_with_retry(fn, *, label: str = "yfinance"):
+    """
+    Execute a yfinance operation with retry on transient errors.
+
+    Uses simple exponential backoff (1.5s → 3s → 6s).
+    Non-transient errors are raised immediately.
+
+    Args:
+        fn: Zero-arg callable that performs the yfinance operation
+        label: Human-readable label for logging
+
+    Returns:
+        Result of fn()
+
+    Raises:
+        The last exception if all retries are exhausted or non-transient
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, _YF_MAX_RETRIES + 1):
+        try:
+            return fn()
+        except Exception as e:
+            last_exc = e
+            if not _is_transient(e) or attempt == _YF_MAX_RETRIES:
+                raise
+            delay = _YF_BASE_DELAY * (2 ** (attempt - 1))
+            logger.warning(
+                f"{label} transient error (attempt {attempt}/{_YF_MAX_RETRIES}): {e}, "
+                f"retrying in {delay:.1f}s"
+            )
+            _time_mod.sleep(delay)
+    raise last_exc  # pragma: no cover – safety net
 
 
 @register_provider(AssetProviderRegistry)
@@ -159,7 +212,12 @@ class YahooFinanceProvider(AssetSourceProvider):
         try:
             # The core executes this entire method in a dedicated thread,
             # so sync yfinance calls are safe — no asyncio.to_thread needed.
-            info = yf.Ticker(identifier).info
+            # Wrapped in _yf_with_retry to handle transient network errors
+            # (e.g., curl 56, connection reset, 429 rate limits).
+            info = _yf_with_retry(
+                lambda: yf.Ticker(identifier).info,
+                label=f"current_value({identifier})",
+            )
 
             price = info.get("regularMarketPrice")
             if price is None:
@@ -244,11 +302,28 @@ class YahooFinanceProvider(AssetSourceProvider):
             _end = (end_date + timedelta(days=1)).isoformat()
 
             t = yf.Ticker(identifier)
-            hist = t.history(start=_start, end=_end)
+
+            # Wrap history fetch in retry for transient network errors
+            # (e.g., curl 56, NoneType from empty responses).
+            hist = _yf_with_retry(
+                lambda: t.history(start=_start, end=_end),
+                label=f"history({identifier})",
+            )
+
+            # Defensive: handle None or non-DataFrame return (yfinance edge-case)
+            if hist is None or not hasattr(hist, "empty"):
+                raise AssetSourceError(
+                    f"yfinance returned invalid data for {identifier} (got {type(hist).__name__})",
+                    "FETCH_ERROR",
+                    {"identifier": identifier},
+                )
+
             # Currency (separate API call)
             currency = "USD"
             try:
-                currency = t.info.get("currency", "USD")
+                info = t.info
+                if info:
+                    currency = info.get("currency", "USD") or "USD"
             except Exception:
                 pass
             # Dividends & splits (may trigger additional requests)
@@ -270,6 +345,15 @@ class YahooFinanceProvider(AssetSourceProvider):
 
             # Convert DataFrame to FAPricePoint list (pure CPU, no I/O)
             prices = []
+            required_cols = {"Open", "High", "Low", "Close", "Volume"}
+            actual_cols = set(hist.columns)
+            if not required_cols.issubset(actual_cols):
+                raise AssetSourceError(
+                    f"Unexpected DataFrame columns for {identifier}: {list(hist.columns)}",
+                    "FETCH_ERROR",
+                    {"identifier": identifier, "columns": list(hist.columns)},
+                )
+
             for idx, row in hist.iterrows():
                 # yfinance returns DatetimeIndex with market timezone.
                 # Convert to UTC for consistent backend date handling.
@@ -381,7 +465,10 @@ class YahooFinanceProvider(AssetSourceProvider):
         try:
             # The core executes this method in a dedicated thread,
             # so sync yfinance calls are safe — no asyncio.to_thread needed.
-            search_result = yf.Search(query)
+            search_result = _yf_with_retry(
+                lambda: yf.Search(query),
+                label=f"search({query})",
+            )
             raw_quotes = getattr(search_result, "quotes", []) or []
 
             results = []
@@ -477,7 +564,10 @@ class YahooFinanceProvider(AssetSourceProvider):
             # The core executes this method in a dedicated thread,
             # so sync yfinance calls are safe — no asyncio.to_thread needed.
             t = yf.Ticker(identifier)
-            info = t.info
+            info = _yf_with_retry(
+                lambda: t.info,
+                label=f"metadata({identifier})",
+            )
             # Also attempt ISIN lookup (may not be available for all markets)
             identifier_isin = None
             try:

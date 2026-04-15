@@ -465,6 +465,17 @@ B6 (BRIM core parsing)    ← 1.5h, mock filesystem
 
 ## 8. Note Tecniche
 
+### Integrazione con test_runner.py
+
+Ogni nuovo file di test DEVE essere registrato in `scripts/test_runner.py`:
+
+1. Aggiungere una funzione wrapper (es. `def services_provider_contracts(...)`)
+2. Aggiungerla al `TEST_REGISTRY` nella sezione appropriata (`db`, `services`, `api`, etc.)
+3. Se è un test DB, aggiungerlo anche all'ordine in `db_all()`
+4. Verificare con `./dev.py test <category> <action>` che funzioni
+
+Senza questa registrazione, il test non viene incluso in `./dev.py test --coverage all-backend`.
+
 ### Pattern: Provider Contract Test
 
 ```python
