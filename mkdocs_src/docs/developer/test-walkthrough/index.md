@@ -29,6 +29,26 @@ All tests are executed through `dev.py`:
 | `--cov-clean-backend` | Clean backend coverage data (`htmlcov-backend/` + `.coverage` files) |
 | `--cov-clean-frontend` | Clean frontend coverage data (`htmlcov-frontend/` + `.coverage` files) |
 
+### 🔍 Provider Filter Flags (external, all, all-backend)
+
+| Flag | Description |
+|------|-------------|
+| `--providers CODE [CODE ...]` | Only test these provider(s) |
+| `--exclude-providers CODE [CODE ...]` | Exclude these provider(s) from testing |
+
+```bash
+# Skip yfinance when Yahoo Finance is down
+./dev.py test external asset-providers --exclude-providers yfinance
+
+# The same flags work with all and all-backend
+./dev.py test all --exclude-providers yfinance
+./dev.py test all-backend --providers ECB justetf
+```
+
+!!! tip "See available provider codes"
+
+    Run `./dev.py test external -h` to see all available provider codes (Asset, FX, BRIM), dynamically discovered from the source tree.
+
 ### 🖥️ Frontend Flags
 
 Frontend test categories support additional flags (`--headed`, `--debug`, `--ui`). See the [Frontend Tests Overview](front-overview.md) for details.
@@ -37,7 +57,7 @@ Frontend test categories support additional flags (`--headed`, `--debug`, `--ui`
 
 ## 📋 Test Categories
 
-LibreFolio organizes tests into **10 categories**, grouped by layer:
+LibreFolio organizes tests into **11 categories**, grouped by layer:
 
 | Category | Command | What It Tests |
 |----------|---------|---------------|
@@ -51,6 +71,7 @@ LibreFolio organizes tests into **10 categories**, grouped by layer:
 | **Front-Utility** | `./dev.py test front-utility all` | Auth, settings, files, select, image-crop (Playwright) |
 | **Front-User** | `./dev.py test front-user all` | Brokers, multi-user, sharing (Playwright) |
 | **Front-FX** | `./dev.py test front-fx all` | FX list, detail, add-pair, editor, sync (Playwright) |
+| **Front-Asset** | `./dev.py test front-asset all` | Asset list, detail, modal, data editor (Playwright) |
 
 ### 🏃 Meta Categories
 
@@ -82,6 +103,7 @@ graph TD
     FRONTEND --> FU["Front-Utility<br/><small>Auth, settings, files,<br/>select, image-crop</small>"]
     FRONTEND --> FUSR["Front-User<br/><small>Brokers, multi-user,<br/>sharing</small>"]
     FRONTEND --> FFX["Front-FX<br/><small>FX list, detail,<br/>add-pair, editor, sync</small>"]
+    FRONTEND --> FA["Front-Asset<br/><small>Asset list, detail,<br/>modal, data editor</small>"]
 ```
 
 ---
@@ -103,6 +125,7 @@ graph TD
 - **[Front-Utility](front-utility.md)** — Tests UI components: authentication flow, settings tabs, file upload, search selects, image cropping.
 - **[Front-User](front-user.md)** — Tests user-facing features: broker CRUD, multi-user scenarios, broker sharing with RBAC.
 - **[Front-FX](front-fx.md)** — Tests the FX module: pair list, detail chart, add-pair modal, data editor, sync, and FX-specific API calls.
+- **[Front-Asset](front-overview.md)** — Tests the Asset module: asset list, detail page, create/edit modal, data editor.
 
 !!! info "Frontend tests require a running server"
 
