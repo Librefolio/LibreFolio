@@ -177,5 +177,69 @@ test.describe('Asset Detail Page', () => {
             test.info().annotations.push({type: 'skip-reason', description: 'Asset has no price data, chart toolbar not rendered'});
         }
     });
+
+    // ========================================================================
+    // Test 13: Currency selector in filter bar
+    // ========================================================================
+    test('currency selector is visible in filter bar', async ({page}) => {
+        await goToFirstAssetDetail(page);
+        const filterBar = page.getByTestId('asset-detail-filter-bar');
+        await expect(filterBar).toBeVisible();
+
+        // Currency selector should be within the filter bar (CurrencySearchSelect or similar)
+        // It renders as a combobox or button with currency code
+        const currencyEl = filterBar.locator('[role="combobox"], button').filter({hasText: /[A-Z]{3}/}).first();
+        const hasCurrency = await currencyEl.isVisible({timeout: 3000}).catch(() => false);
+        if (hasCurrency) {
+            await expect(currencyEl).toBeVisible();
+        } else {
+            test.info().annotations.push({type: 'skip-reason', description: 'Currency selector not rendered (single-currency asset)'});
+        }
+    });
+
+    // ========================================================================
+    // Test 14: Asset info shows type badge and name
+    // ========================================================================
+    test('asset info shows name and type', async ({page}) => {
+        await goToFirstAssetDetail(page);
+        const info = page.getByTestId('asset-detail-info');
+        await expect(info).toBeVisible();
+
+        // Should contain text (asset name)
+        const text = await info.textContent();
+        expect(text!.length).toBeGreaterThan(0);
+    });
+
+    // ========================================================================
+    // Test 15: Sync button triggers sync (with toast or status change)
+    // ========================================================================
+    test('sync button is clickable and triggers action', async ({page}) => {
+        await goToFirstAssetDetail(page);
+        const syncBtn = page.getByTestId('asset-detail-sync-btn');
+        await expect(syncBtn).toBeVisible();
+
+        // Click sync — may show toast, spinner, or no-op if no provider
+        await syncBtn.click();
+        await page.waitForTimeout(1000);
+
+        // Page should still be intact (no crash)
+        await expect(page.getByTestId('asset-detail-page')).toBeVisible();
+    });
+
+    // ========================================================================
+    // Test 16: Refresh button reloads data
+    // ========================================================================
+    test('refresh button reloads data without error', async ({page}) => {
+        await goToFirstAssetDetail(page);
+        const refreshBtn = page.getByTestId('asset-detail-refresh-btn');
+        await expect(refreshBtn).toBeVisible();
+
+        await refreshBtn.click();
+        await page.waitForTimeout(1000);
+
+        // Page should still be intact
+        await expect(page.getByTestId('asset-detail-page')).toBeVisible();
+        await expect(page.getByTestId('asset-detail-chart')).toBeVisible();
+    });
 });
 

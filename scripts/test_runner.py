@@ -130,7 +130,7 @@ def _run_test_suite(
         print_info("Merging coverage from test server subprocess...")
         try:
             result = subprocess.run(
-                ["coverage", "combine"],
+                ["coverage", "combine", "--keep"],
                 capture_output=True,
                 text=True,
                 cwd=Path(__file__).parent
@@ -1957,12 +1957,22 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
         if be_dir.exists():
             shutil.rmtree(be_dir)
             print(f"{Colors.GREEN}🗑️  Removed htmlcov-backend/{Colors.NC}")
+        # Also remove saved backend snapshot
+        be_snapshot = cwd / ".coverage.backend"
+        if be_snapshot.exists():
+            be_snapshot.unlink()
+            print(f"{Colors.GREEN}🗑️  Removed .coverage.backend{Colors.NC}")
 
     if clean_frontend:
         fe_dir = cwd / "htmlcov-frontend"
         if fe_dir.exists():
             shutil.rmtree(fe_dir)
             print(f"{Colors.GREEN}🗑️  Removed htmlcov-frontend/{Colors.NC}")
+        # Also remove saved frontend snapshot
+        fe_snapshot = cwd / ".coverage.frontend"
+        if fe_snapshot.exists():
+            fe_snapshot.unlink()
+            print(f"{Colors.GREEN}🗑️  Removed .coverage.frontend{Colors.NC}")
 
     if clean_backend or clean_frontend:
         # Also erase .coverage database
@@ -3534,7 +3544,6 @@ def _dispatch_test_command(args):
     if _COVERAGE_MODE:
         is_front = _COVERAGE_SOURCE == "frontend"
         is_all = _COVERAGE_SOURCE is None  # category "all"
-        html_dir = "htmlcov-frontend" if is_front else "htmlcov-backend"
 
         print()
         print_header("Coverage Report Summary")
@@ -3547,76 +3556,139 @@ def _dispatch_test_command(args):
         print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
         print()
 
-        if is_front or is_all:
-            # Erase stale .coverage file before combining fresh subprocess data
-            # (old .coverage may reference deleted source files → "No source for code" errors)
-            stale_cov = Path(os.getcwd()) / ".coverage"
-            if stale_cov.exists():
-                stale_cov.unlink()
+        _finalize_coverage(is_front, is_all)
 
-            # Combine .coverage.<pid> files from server subprocesses
-            cov_files = list(Path(os.getcwd()).glob(".coverage.*"))
-            cov_files = [f for f in cov_files if f.name != ".coveragerc"]
-            print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
-            if cov_files:
-                print(f"   Found {len(cov_files)} coverage data file(s): {', '.join(f.name for f in cov_files[:5])}")
-            else:
-                print_warning("   No .coverage.* files found! Server may not have written coverage data.")
-                print(f"   {Colors.YELLOW}Hint: check that './dev.py server --coverage' starts the server with 'coverage run'{Colors.NC}")
+    return result
 
+
+def _finalize_coverage(is_front: bool, is_all: bool) -> str:
+    """
+    Finalize coverage data after test runs.
+
+    Handles combining parallel coverage files from server subprocesses,
+    generating HTML reports, and preserving coverage snapshots.
+
+    IMPORTANT: Backend .coverage data is NEVER deleted without explicit
+    --cov-clean-backend flag. When running frontend tests, the existing
+    backend .coverage is preserved as .coverage.backend so that
+    `coverage show combined` can merge both data sources.
+
+    Returns the html_dir used for the report.
+    """
+    import shutil
+    cwd = Path(os.getcwd())
+    main_cov = cwd / ".coverage"
+    backend_cov = cwd / ".coverage.backend"
+    frontend_cov = cwd / ".coverage.frontend"
+    html_dir = "htmlcov-frontend" if is_front else "htmlcov-backend"
+
+    # Names that are NOT server PID files (they are config or saved snapshots)
+    SAVED_NAMES = frozenset({".coveragerc", ".coverage.backend", ".coverage.frontend"})
+
+    if is_front or is_all:
+        # --- Preserve backend .coverage data ---
+        if main_cov.exists():
+            if not backend_cov.exists():
+                # First time: save backend data as .coverage.backend
+                shutil.copy2(str(main_cov), str(backend_cov))
+                print(f"   {Colors.GREEN}💾 Preserved backend coverage → .coverage.backend{Colors.NC}")
+            # Remove .coverage so frontend combine creates a clean file
+            main_cov.unlink()
+
+        # --- Collect only server PID files (not saved snapshots) ---
+        pid_files = [f for f in cwd.glob(".coverage.*") if f.name not in SAVED_NAMES]
+
+        print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
+        if pid_files:
+            print(f"   Found {len(pid_files)} coverage data file(s): "
+                  f"{', '.join(f.name for f in pid_files[:5])}")
+            # Combine ONLY PID files (specify them explicitly to exclude saved snapshots)
             r_combine = subprocess.run(
-                [*pipenv_prefix(), "coverage", "combine"],
+                [*pipenv_prefix(), "coverage", "combine", "--keep"] + [str(f) for f in pid_files],
                 cwd=os.getcwd(), capture_output=True, text=True
             )
             if r_combine.returncode != 0:
-                # Filter out dotenv noise from stderr
                 err_lines = [l for l in r_combine.stderr.strip().splitlines()
                              if "Loading .env" not in l and l.strip()]
                 if err_lines:
                     print_warning(f"   coverage combine: {' '.join(err_lines)}")
 
-        if is_all:
-            r = subprocess.run(
-                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov",
-                 "--title", "LibreFolio Combined Coverage", "--ignore-errors"],
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
-            if r.returncode != 0:
-                print_warning(f"coverage html failed: {r.stderr.strip()}")
-            html_dir = "htmlcov"
-        elif is_front:
-            r = subprocess.run(
-                [*pipenv_prefix(), "coverage", "html", "-d", html_dir,
-                 "--title", "LibreFolio Frontend E2E → Backend Coverage",
-                 "--ignore-errors"],
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
-            if r.returncode != 0:
-                print_warning(f"coverage html failed: {r.stderr.strip()}")
+            # Save frontend coverage snapshot
+            if main_cov.exists():
+                shutil.copy2(str(main_cov), str(frontend_cov))
+                print(f"   {Colors.GREEN}💾 Saved frontend coverage → .coverage.frontend{Colors.NC}")
         else:
-            # Backend — report already generated by pytest-cov, just show summary
-            pass
+            print_warning("   No .coverage.* files found! Server may not have written coverage data.")
+            print(f"   {Colors.YELLOW}Hint: check that './dev.py server --coverage' starts the server "
+                  f"with 'coverage run'{Colors.NC}")
 
-        # Generate final coverage report with table
-        subprocess.run(
-            [*pipenv_prefix(), "coverage", "report", "--skip-covered",
-             "--ignore-errors"],
-            cwd=os.getcwd(), capture_output=False, text=True
+    if is_all:
+        # Re-combine backend + frontend snapshots into .coverage for the combined report
+        combine_srcs = [str(f) for f in (backend_cov, frontend_cov) if f.exists()]
+        if combine_srcs:
+            if main_cov.exists():
+                main_cov.unlink()
+            print(f"{Colors.YELLOW}📊 Merging backend + frontend snapshots for combined report...{Colors.NC}")
+            r_merge = subprocess.run(
+                [*pipenv_prefix(), "coverage", "combine", "--keep"] + combine_srcs,
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+            if r_merge.returncode != 0:
+                err_lines = [l for l in r_merge.stderr.strip().splitlines()
+                             if "Loading .env" not in l and l.strip()]
+                if err_lines:
+                    print_warning(f"   coverage combine: {' '.join(err_lines)}")
+
+        # Generate combined report in htmlcov/
+        r = subprocess.run(
+            [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov",
+             "--title", "LibreFolio Combined Coverage", "--ignore-errors"],
+            cwd=os.getcwd(), capture_output=True, text=True
         )
+        if r.returncode != 0:
+            print_warning(f"coverage html failed: {r.stderr.strip()}")
+        html_dir = "htmlcov"
+    elif is_front:
+        r = subprocess.run(
+            [*pipenv_prefix(), "coverage", "html", "-d", html_dir,
+             "--title", "LibreFolio Frontend E2E → Backend Coverage",
+             "--ignore-errors"],
+            cwd=os.getcwd(), capture_output=True, text=True
+        )
+        if r.returncode != 0:
+            print_warning(f"coverage html failed: {r.stderr.strip()}")
+    else:
+        # Backend — report already generated by pytest-cov
+        # Save .coverage as .coverage.backend for future combining
+        if main_cov.exists() and not backend_cov.exists():
+            shutil.copy2(str(main_cov), str(backend_cov))
+            print(f"   {Colors.GREEN}💾 Saved backend coverage → .coverage.backend{Colors.NC}")
 
-        print()
-        print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
-        print(f"   HTML: {Colors.BLUE}{html_dir}/index.html{Colors.NC}")
-        print(f"   Data: {Colors.BLUE}.coverage{Colors.NC}")
-        print()
-        print(f"{Colors.YELLOW}💡 View HTML report:{Colors.NC}")
-        if is_all:
-            print(f"└─▶ $ ./dev.py test coverage show combined")
-        else:
-            print(f"└─▶ $ ./dev.py test coverage show {'frontend' if is_front else 'backend'}")
-        print()
+    # Generate terminal summary
+    subprocess.run(
+        [*pipenv_prefix(), "coverage", "report", "--skip-covered", "--ignore-errors"],
+        cwd=os.getcwd(), capture_output=False, text=True
+    )
 
-    return result
+    # Print hints
+    print()
+    print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
+    print(f"   HTML: {Colors.BLUE}{html_dir}/index.html{Colors.NC}")
+    print(f"   Data: {Colors.BLUE}.coverage{Colors.NC}")
+    if backend_cov.exists():
+        print(f"   Backend snapshot: {Colors.BLUE}.coverage.backend{Colors.NC}")
+    if frontend_cov.exists():
+        print(f"   Frontend snapshot: {Colors.BLUE}.coverage.frontend{Colors.NC}")
+    print()
+    print(f"{Colors.YELLOW}💡 View HTML report:{Colors.NC}")
+    if is_all:
+        print(f"└─▶ $ ./dev.py test coverage show combined")
+    else:
+        print(f"└─▶ $ ./dev.py test coverage show {'frontend' if is_front else 'backend'}")
+        print(f"└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
+    print()
+
+    return html_dir
 
 
 def _handle_coverage_command(args) -> int:
@@ -3683,14 +3755,49 @@ def _coverage_combine() -> int:
 
 
 def _coverage_combine_internal(html_dir: str = "htmlcov", title: str = "LibreFolio Coverage") -> int:
-    """Internal: combine coverage data and generate HTML report."""
-    # Step 1: Combine parallel coverage files
-    result = subprocess.run(
-        [*pipenv_prefix(), "coverage", "combine", "--keep"],
-        cwd=os.getcwd(), capture_output=True, text=True
-    )
-    if result.returncode != 0 and "No data to combine" not in result.stderr:
-        print_warning(f"coverage combine: {result.stderr.strip()}")
+    """Internal: combine coverage data and generate HTML report.
+
+    Prefers saved snapshots (.coverage.backend, .coverage.frontend) over raw
+    PID files to avoid double-counting. Falls back to all .coverage.* files
+    if no snapshots exist.
+    """
+    cwd = Path(os.getcwd())
+    backend_cov = cwd / ".coverage.backend"
+    frontend_cov = cwd / ".coverage.frontend"
+
+    # Step 1: Determine which files to combine
+    # Prefer saved snapshots; fall back to all .coverage.* files
+    combine_files = []
+    if backend_cov.exists() or frontend_cov.exists():
+        if backend_cov.exists():
+            combine_files.append(str(backend_cov))
+        if frontend_cov.exists():
+            combine_files.append(str(frontend_cov))
+        print(f"   Using saved snapshots: {', '.join(f.name for f in [backend_cov, frontend_cov] if f.exists())}")
+    else:
+        # Fallback: use all .coverage.* files
+        combine_files = [str(f) for f in cwd.glob(".coverage.*") if f.name != ".coveragerc"]
+        if combine_files:
+            print(f"   Using {len(combine_files)} parallel data file(s)")
+
+    if not combine_files:
+        # Nothing to combine, just use existing .coverage if it exists
+        main_cov = cwd / ".coverage"
+        if not main_cov.exists():
+            print_warning("No coverage data found to combine")
+            return 1
+    else:
+        # Remove existing .coverage before combine to avoid stale data
+        main_cov = cwd / ".coverage"
+        if main_cov.exists():
+            main_cov.unlink()
+
+        result = subprocess.run(
+            [*pipenv_prefix(), "coverage", "combine", "--keep"] + combine_files,
+            cwd=os.getcwd(), capture_output=True, text=True
+        )
+        if result.returncode != 0 and "No data to combine" not in result.stderr:
+            print_warning(f"coverage combine: {result.stderr.strip()}")
 
     # Step 2: Generate HTML report
     result = subprocess.run(
@@ -3726,6 +3833,8 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
         cov_args = argparse.Namespace(
             input=getattr(args, 'input', '/tmp/cov_report.json'),
             priority=getattr(args, 'priority', None),
+            category=getattr(args, 'category', None),
+            threshold=getattr(args, 'threshold', 0.0),
             json=getattr(args, 'json_output', False),
             summary=getattr(args, 'summary', False),
         )
@@ -3823,81 +3932,14 @@ def main():
         else:
             print_warning("⚠️  Some tests failed, but coverage was still tracked")
 
-        # Determine HTML directory based on test source
         is_front = _COVERAGE_SOURCE == "frontend"
         is_all = _COVERAGE_SOURCE is None  # category "all"
-        html_dir = "htmlcov-frontend" if is_front else "htmlcov-backend"
 
         print()
         print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
         print()
 
-        if is_front or is_all:
-            # Erase stale .coverage file before combining fresh subprocess data
-            stale_cov = Path(os.getcwd()) / ".coverage"
-            if stale_cov.exists():
-                stale_cov.unlink()
-
-            # Combine .coverage.<pid> files from server subprocesses
-            cov_files = list(Path(os.getcwd()).glob(".coverage.*"))
-            cov_files = [f for f in cov_files if f.name != ".coveragerc"]
-            print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
-            if cov_files:
-                print(f"   Found {len(cov_files)} coverage data file(s): {', '.join(f.name for f in cov_files[:5])}")
-            else:
-                print_warning("   No .coverage.* files found! Server may not have written coverage data.")
-                print(f"   {Colors.YELLOW}Hint: check that './dev.py server --coverage' starts the server with 'coverage run'{Colors.NC}")
-
-            r_combine = subprocess.run(
-                [*pipenv_prefix(), "coverage", "combine"],
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
-            if r_combine.returncode != 0:
-                err_lines = [l for l in r_combine.stderr.strip().splitlines()
-                             if "Loading .env" not in l and l.strip()]
-                if err_lines:
-                    print_warning(f"   coverage combine: {' '.join(err_lines)}")
-
-        if is_all:
-            # Generate all three reports: backend, frontend, combined
-            subprocess.run(
-                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov",
-                 "--title", "LibreFolio Combined Coverage", "--ignore-errors"],
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
-            html_dir = "htmlcov"
-        elif is_front:
-            subprocess.run(
-                [*pipenv_prefix(), "coverage", "html", "-d", html_dir,
-                 "--title", "LibreFolio Frontend E2E → Backend Coverage",
-                 "--ignore-errors"],
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
-
-        # Generate final coverage report with table
-        subprocess.run(
-            [*pipenv_prefix(), "coverage", "report", "--skip-covered",
-             "--ignore-errors"],
-            cwd=os.getcwd(),
-            capture_output=False,  # Show output directly
-            text=True
-            )
-
-        print()
-        print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
-        print(f"   HTML: {Colors.BLUE}{html_dir}/index.html{Colors.NC}")
-        print(f"   Data: {Colors.BLUE}.coverage{Colors.NC}")
-        print()
-        print(f"{Colors.YELLOW}💡 View HTML report:{Colors.NC}")
-        print(f"└─▶ $ open {html_dir}/index.html")
-        print()
-        print(f"{Colors.YELLOW}💡 Or use the coverage show command:{Colors.NC}")
-        if is_all:
-            print(f"└─▶ $ ./dev.py test coverage show combined")
-        else:
-            print(f"└─▶ $ ./dev.py test coverage show {'frontend' if is_front else 'backend'}")
-        print(f"└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
-        print()
+        _finalize_coverage(is_front, is_all)
 
     # Exit with appropriate code
     return 0 if success else 1
