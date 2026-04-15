@@ -807,7 +807,7 @@ ALL_CHECKS = [
     ("latex", check_latex, True),
     ("file-size", check_file_size, True),
     ("artifacts", check_artifacts, False),                  # only needs translated
-    ("admonition-indent", check_admonition_indent, False),  # only needs translated
+    ("admonition-indent", check_admonition_indent, True),   # uses source for title comparison
 ]
 
 
