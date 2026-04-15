@@ -195,6 +195,133 @@ test.describe('Settings', () => {
         });
     });
 
+    test.describe('Global Settings — Toggle & Number Interaction', () => {
+        test.beforeEach(async ({page}) => {
+            await login(page, TEST_ADMIN);
+            await navigateTo(page, '/settings');
+            await page.getByTestId('settings-tab-admin').click();
+            await expect(page.getByTestId('global-settings-tab')).toBeVisible();
+            // Wait for settings to load (async API call)
+            await page.waitForSelector('[data-testid="global-settings-tab"] .setting-row', {timeout: 10_000});
+        });
+
+        /** Helper: scope all locators within global-settings-tab */
+        function gs(page: import('@playwright/test').Page) {
+            return page.getByTestId('global-settings-tab');
+        }
+
+        test('admin can unlock global settings for editing', async ({page}) => {
+            const unlockBtn = gs(page).locator('button[title="Click to unlock and edit"]');
+            await expect(unlockBtn).toBeVisible();
+            await unlockBtn.click();
+            await expect(gs(page).locator('button[title*="Click to lock"]')).toBeVisible();
+        });
+
+        test('toggle switch changes value when clicked (SettingToggle)', async ({page}) => {
+            // Unlock
+            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await page.waitForTimeout(300);
+
+            // Find toggle within global-settings-tab (excludes mobile menu toggle)
+            const toggleBtn = gs(page).locator('button[aria-label^="Toggle"]').first();
+            await expect(toggleBtn).toBeVisible();
+            await expect(toggleBtn).toBeEnabled();
+
+            // Read ON/OFF state from sibling span
+            const toggleContainer = toggleBtn.locator('xpath=..');
+            const stateText = toggleContainer.locator('span').filter({hasText: /^(ON|OFF)$/});
+            const initialState = await stateText.textContent();
+
+            // Click toggle
+            await toggleBtn.click();
+
+            // State should have changed
+            const newState = await stateText.textContent();
+            expect(newState).not.toBe(initialState);
+        });
+
+        test('save and undo buttons appear after toggling', async ({page}) => {
+            // Unlock
+            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await page.waitForTimeout(300);
+
+            // Click a toggle
+            await gs(page).locator('button[aria-label^="Toggle"]').first().click();
+
+            // Save/Undo should appear within the setting row
+            const settingRow = gs(page).locator('.setting-row').filter({has: page.locator('button[aria-label^="Toggle"]')}).first();
+            await expect(settingRow.locator('button[title="Save"]')).toBeVisible();
+            await expect(settingRow.locator('button[title="Undo"]')).toBeVisible();
+        });
+
+        test('undo reverts toggle to original value', async ({page}) => {
+            // Unlock
+            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await page.waitForTimeout(300);
+
+            // Find first toggle setting-row
+            const settingRow = gs(page).locator('.setting-row').filter({has: page.locator('button[aria-label^="Toggle"]')}).first();
+            const toggleBtn = settingRow.locator('button[aria-label^="Toggle"]');
+            const stateText = toggleBtn.locator('xpath=..').locator('span').filter({hasText: /^(ON|OFF)$/});
+            const initialState = await stateText.textContent();
+
+            // Toggle
+            await toggleBtn.click();
+            expect(await stateText.textContent()).not.toBe(initialState);
+
+            // Undo
+            await settingRow.locator('button[title="Undo"]').click();
+            await expect(stateText).toHaveText(initialState!);
+        });
+
+        test('number input can be edited and undone (SettingNumber)', async ({page}) => {
+            // Unlock
+            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await page.waitForTimeout(300);
+
+            const numberInput = gs(page).locator('.setting-row input[type="number"]').first();
+            await expect(numberInput).toBeVisible();
+            await expect(numberInput).toBeEnabled();
+
+            const originalValue = await numberInput.inputValue();
+            await numberInput.fill('99');
+
+            // Save button should appear
+            const settingRow = numberInput.locator('xpath=ancestor::div[contains(@class, "setting-row")]');
+            await expect(settingRow.locator('button[title="Save"]')).toBeVisible();
+
+            // Undo
+            await settingRow.locator('button[title="Undo"]').click();
+            await expect(numberInput).toHaveValue(originalValue);
+        });
+
+        test('toggles are disabled when locked', async ({page}) => {
+            const toggleBtn = gs(page).locator('button[aria-label^="Toggle"]').first();
+            await expect(toggleBtn).toBeVisible();
+            await expect(toggleBtn).toBeDisabled();
+        });
+
+        test('number inputs are disabled when locked', async ({page}) => {
+            const numberInput = gs(page).locator('.setting-row input[type="number"]').first();
+            await expect(numberInput).toBeVisible();
+            await expect(numberInput).toBeDisabled();
+        });
+    });
+
+    test.describe('Global Settings — Non-Admin Read-Only', () => {
+        test('non-admin sees disabled toggles and inputs', async ({page}) => {
+            await login(page, TEST_USER);
+            await navigateTo(page, '/settings');
+            await page.getByTestId('settings-tab-admin').click();
+            await expect(page.getByTestId('global-settings-tab')).toBeVisible();
+            await page.waitForSelector('[data-testid="global-settings-tab"] .setting-row', {timeout: 10_000});
+
+            const gs = page.getByTestId('global-settings-tab');
+            await expect(gs.locator('button[aria-label^="Toggle"]').first()).toBeDisabled();
+            await expect(gs.locator('.setting-row input[type="number"]').first()).toBeDisabled();
+        });
+    });
+
     test.describe('About Tab', () => {
         test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);

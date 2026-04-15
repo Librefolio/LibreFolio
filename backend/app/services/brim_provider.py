@@ -213,35 +213,6 @@ class BRIMProvider(ABC):
 
         return ""
 
-    @staticmethod
-    def _detect_separator(content: str) -> str:
-        """
-        Auto-detect CSV separator from file content.
-
-        Checks for common separators: semicolon, comma, tab.
-        Returns the most likely separator based on frequency in first line.
-
-        Args:
-            content: File content (first few lines)
-
-        Returns:
-            Detected separator character (default: ',')
-        """
-        if not content:
-            return ","
-
-        first_line = content.split("\n")[0] if "\n" in content else content
-
-        # Count occurrences of each separator
-        separators = {
-            ";": first_line.count(";"),
-            ",": first_line.count(","),
-            "\t": first_line.count("\t"),
-            }
-
-        # Return the one with most occurrences (minimum 1)
-        best = max(separators, key=separators.get)
-        return best if separators[best] > 0 else ","
 
     @property
     def icon_url(self) -> Optional[str]:
