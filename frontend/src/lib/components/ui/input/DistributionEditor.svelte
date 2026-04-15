@@ -268,7 +268,7 @@
         // Key / Name column — SearchSelect when not readonly
         cols.push({
             id: 'key',
-            header: () => kind === 'sector' ? $t('assets.modal.sectorDistribution') : $t('assets.modal.geographicDistribution'),
+            header: () => kind === 'sector' ? $t('common.sectorDistribution') : $t('common.geoDistribution'),
             type: 'custom' as const,
             cell: (row) => {
                 if (isReadonly || disabled) {
@@ -374,7 +374,7 @@
     <!-- Section header with +Add, bulk toolbar, and Ask Provider buttons -->
     <div class="flex items-center justify-between mb-1">
         <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-            {kind === 'sector' ? $t('assets.modal.sectorDistribution') : $t('assets.modal.geographicDistribution')}
+            {kind === 'sector' ? $t('common.sectorDistribution') : $t('common.geoDistribution')}
         </div>
         <div class="flex items-center gap-1.5">
             {#if !isReadonly && !disabled && selectedIds.length > 0}

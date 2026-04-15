@@ -143,6 +143,111 @@
       "it": "visualizzatore",
       "fr": "lecteur",
       "es": "visor"
+    },
+    "price sync": {
+      "it": "sincronizzazione prezzi",
+      "fr": "synchronisation des prix",
+      "es": "sincronización de precios"
+    },
+    "bulk assign": {
+      "it": "assegnazione in blocco",
+      "fr": "assignation en masse",
+      "es": "asignación masiva"
+    },
+    "currency conversion": {
+      "it": "conversione valutaria",
+      "fr": "conversion de devise",
+      "es": "conversión de divisa"
+    },
+    "OHLCV": {
+      "it": "OHLCV",
+      "fr": "OHLCV",
+      "es": "OHLCV"
+    },
+    "classification": {
+      "it": "classificazione",
+      "fr": "classification",
+      "es": "clasificación"
+    },
+    "geographic breakdown": {
+      "it": "distribuzione geografica",
+      "fr": "répartition géographique",
+      "es": "distribución geográfica"
+    },
+    "sector distribution": {
+      "it": "distribuzione settoriale",
+      "fr": "distribution sectorielle",
+      "es": "distribución sectorial"
+    },
+    "scheduled investment": {
+      "it": "investimento programmato",
+      "fr": "investissement programmé",
+      "es": "inversión programada"
+    },
+    "asset provider": {
+      "it": "provider asset",
+      "fr": "fournisseur d'actif",
+      "es": "proveedor de activo"
+    },
+    "data editor": {
+      "it": "editor dati",
+      "fr": "éditeur de données",
+      "es": "editor de datos"
+    },
+    "measure": {
+      "it": "misura",
+      "fr": "mesure",
+      "es": "medida"
+    },
+    "smart search": {
+      "it": "ricerca intelligente",
+      "fr": "recherche intelligente",
+      "es": "búsqueda inteligente"
+    },
+    "auto-fill": {
+      "it": "compilazione automatica",
+      "fr": "remplissage automatique",
+      "es": "autocompletado"
+    },
+    "split": {
+      "it": "frazionamento",
+      "fr": "division",
+      "es": "división"
+    },
+    "maturity": {
+      "it": "scadenza",
+      "fr": "échéance",
+      "es": "vencimiento"
+    },
+    "interest": {
+      "it": "interesse",
+      "fr": "intérêt",
+      "es": "interés"
+    },
+    "event": {
+      "it": "evento",
+      "fr": "événement",
+      "es": "evento"
+    },
+    "coverage": {
+      "it": "copertura",
+      "fr": "couverture",
+      "es": "cobertura"
+    },
+    "cache": {
+      "it": "cache",
+      "fr": "cache",
+      "es": "caché"
+    },
+    "live ticker": {
+      "it": "ticker in tempo reale",
+      "fr": "ticker en temps réel",
+      "es": "ticker en tiempo real"
+    },
+    "scraper": {
+      "it": "scraper",
+      "fr": "scraper",
+      "es": "scraper"
     }
   }
 }

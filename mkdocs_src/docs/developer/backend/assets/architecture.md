@@ -159,6 +159,8 @@ If a price is requested for a date where no data exists (e.g., Sunday), the syst
 
 ## ⚡ Cache & Performance
 
+- **`NamedCache`**: generic TTL-based in-memory cache used across services. Each cache instance has a name, max TTL, and automatic eviction. Used by `_asset_current_cache` for current-price lookups.
+- **`_asset_current_cache`**: caches `get_current_prices_bulk()` results keyed by `(asset_id, provider_id)`. Prevents redundant provider calls during UI refresh storms (e.g., scrolling through the asset list).
 - **Provider Pre-warm**: `_prewarm_provider_caches()` runs asynchronously in `main.py` lifespan — instantiates all registered providers at startup to prime internal caches (JustETF ETF list, yfinance search cache, etc.).
 - **`supports_search` check**: Uses `test_search_query is not None` (local property), avoiding cold-start HTTP calls on `GET /assets/provider`.
 - **Bulk queries**: `get_prices_bulk()` uses a single SQL query for all requested assets, not N+1.

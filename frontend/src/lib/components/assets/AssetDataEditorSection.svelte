@@ -485,7 +485,7 @@
                 onclick={handleCancel}
         >
             <X size={15}/>
-            {$t('dataEditor.cancel')}
+            {$t('common.cancel')}
         </button>
     </div>
 </div>

@@ -612,18 +612,18 @@
             if (scope === 'all' || scope === 'sector') {
                 if (cpData?.sector_area) {
                     const provDist = cpData.sector_area.distribution ?? cpData.sector_area;
-                    compareDistribution('sector_area', $t('assets.modal.sectorDistribution'), sectorDistribution, provDist);
+                    compareDistribution('sector_area', $t('common.sectorDistribution'), sectorDistribution, provDist);
                 } else {
-                    missingFields.push($t('assets.modal.sectorDistribution'));
+                    missingFields.push($t('common.sectorDistribution'));
                 }
             }
 
             if (scope === 'all' || scope === 'geographic') {
                 if (cpData?.geographic_area) {
                     const provDist = cpData.geographic_area.distribution ?? cpData.geographic_area;
-                    compareDistribution('geographic_area', $t('assets.modal.geographicDistribution'), geographicDistribution, provDist);
+                    compareDistribution('geographic_area', $t('common.geoDistribution'), geographicDistribution, provDist);
                 } else {
-                    missingFields.push($t('assets.modal.geographicDistribution'));
+                    missingFields.push($t('common.geoDistribution'));
                 }
             }
 
@@ -1059,7 +1059,7 @@
                     <div class="space-y-2">
                         <div class="flex items-center justify-between">
                             <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                                {$t('assets.modal.identifiers')}
+                                {$t('common.identifiers')}
                             </div>
                             <div class="flex items-center gap-1.5">
                                 {#if identifierSelectedIds.length > 0}
@@ -1117,7 +1117,7 @@
                     <!-- Sub-section: Classification -->
                     <div class="space-y-3">
                         <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                            {$t('assets.modal.classification')}
+                            {$t('common.classification')}
                         </div>
 
                         <!-- Sector Distribution -->

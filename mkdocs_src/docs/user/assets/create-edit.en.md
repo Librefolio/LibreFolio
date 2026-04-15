@@ -3,14 +3,16 @@
 ## Creating a New Asset
 
 1. Click **+ New Asset** on the assets page
-2. Fill in the basic information:
+2. Use **Smart Search** to find your asset: type a name, ISIN, or ticker and LibreFolio searches across multiple providers (Yahoo Finance, justETF, CSS Scraper) in parallel
+3. Select a result to **auto-fill** name, identifiers, currency, sector/geographic distributions, and provider configuration
+4. Or fill in manually:
     - **Name** (required)
     - **Category** (required): Stock, ETF, Bond, Crypto, Commodity, P2P, Index, etc.
     - **Currency** (required): the currency the asset is denominated in
     - **Identifiers**: ISIN, ticker, CUSIP, SEDOL, etc.
-3. Optionally configure a **[Provider](providers/index.md)** for automatic price fetching
-4. Optionally add **Sector** and **Geographic** distributions
-5. Click **Save**
+5. Optionally configure a **[Provider](providers/index.md)** for automatic price fetching
+6. Optionally add **Sector** and **Geographic** distributions
+7. Click **Save**
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

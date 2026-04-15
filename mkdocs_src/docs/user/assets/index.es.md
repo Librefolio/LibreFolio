@@ -21,9 +21,11 @@ Un activo en LibreFolio es un instrumento financiero con:
 
 Navegue a **Activos** en la barra lateral para ver todos sus activos. La página de la lista proporciona:
 
+- **Cuadrícula / Tabla**: alternar entre la vista de tarjetas y la tabla ordenable (la elección se guarda)
 - **Búsqueda**: filtrar activos por nombre, ISIN o ticker
 - **Filtro de tipo**: mostrar solo tipos de activos específicos (ETF, Acción, Bono, etc.)
 - **Interruptor Activos/Todos**: mostrar solo los activos vigentes o incluir los archivados
+- **Periodo de variación**: seleccionar el intervalo de variación de precio (Δ) mostrado (1D, 1S, 1M, 3M, 6M, 1A, YTD, TODO)
 - **Sincronizar Todo**: obtener los últimos precios para todos los activos que tengan un proveedor
 - **Actualizar Todo**: recargar los datos de los activos desde la base de datos
 

@@ -480,7 +480,7 @@
             >
                 {#if syncing}
                     <RotateCcw size={14} class="animate-spin"/>
-                    {$_('fx.syncing')}
+                    {$_('common.syncing')}
                 {:else if saving}
                     {$_('common.saving')}
                 {:else}

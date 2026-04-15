@@ -4,12 +4,14 @@
     import {isAxiosError} from 'axios';
     import {onDestroy, onMount} from 'svelte';
     import {debug} from '$lib/debug';
-    import {AlertCircle, ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
     import {CurrencySearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/globalSettings';
     import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import SettingToggle from '$lib/components/settings/SettingToggle.svelte';
+    import SettingNumber from '$lib/components/settings/SettingNumber.svelte';
 
     // Props
     export let canEdit: boolean = false;
@@ -51,10 +53,6 @@
     let success: string | null = null;
     let selectedCategory: string = 'all';
 
-    // File size unit selector state (for max_file_upload_mb)
-    let fileSizeUnit: 'MB' | 'GB' = 'MB';
-    let fileSizeDisplayValue: number = 10;
-
 
     // Language options for dropdown
     const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map(l => ({
@@ -80,15 +78,6 @@
             editedValues = {};
             for (const setting of settings) {
                 editedValues[setting.key] = setting.value;
-            }
-            // Initialize file size display (convert MB to appropriate unit)
-            const mbValue = parseInt(editedValues['max_file_upload_mb'] || '10', 10);
-            if (mbValue >= 1024) {
-                fileSizeUnit = 'GB';
-                fileSizeDisplayValue = Math.round(mbValue / 1024 * 10) / 10;
-            } else {
-                fileSizeUnit = 'MB';
-                fileSizeDisplayValue = mbValue;
             }
         } catch (e) {
             if (isAxiosError(e)) {
@@ -149,18 +138,6 @@
         if (SETTING_DEFAULTS[key] !== undefined) {
             editedValues[key] = SETTING_DEFAULTS[key];
             editedValues = {...editedValues}; // Trigger reactivity
-
-            // Update file size display if resetting max_file_upload_mb
-            if (key === 'max_file_upload_mb') {
-                const mbValue = parseInt(SETTING_DEFAULTS[key], 10);
-                if (mbValue >= 1024) {
-                    fileSizeUnit = 'GB';
-                    fileSizeDisplayValue = Math.round(mbValue / 1024 * 10) / 10;
-                } else {
-                    fileSizeUnit = 'MB';
-                    fileSizeDisplayValue = mbValue;
-                }
-            }
         }
     }
 
@@ -273,6 +250,12 @@
 
     function getSettingUnit(key: string): string {
         const localizedKey = `settings.globalSettingUnits.${key}`;
+        const localized = $_(localizedKey);
+        return localized !== localizedKey ? localized : '';
+    }
+
+    function getSettingHint(key: string): string {
+        const localizedKey = `settings.globalSettingDescriptions.${key}`;
         const localized = $_(localizedKey);
         return localized !== localizedKey ? localized : '';
     }
@@ -534,323 +517,200 @@
             <div class="space-y-4">
                 {#each filteredSettings as setting (setting.key)}
                     {@const category = getCategoryForSetting(setting.key)}
-                    <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
-                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                            <div class="flex-1 min-w-0">
-                                <label for={setting.key} class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    {#if category}
-                                        <svelte:component this={category.icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
-                                    {/if}
-                                    {getSettingLabel(setting.key)}
-                                </label>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {$_(`settings.globalSettingDescriptions.${setting.key}`) !== `settings.globalSettingDescriptions.${setting.key}`
-                                        ? $_(`settings.globalSettingDescriptions.${setting.key}`)
-                                        : ''}
-                                </p>
-                            </div>
-                            <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
-                                {#if setting.value_type === 'bool'}
-                                    <!-- Action buttons BEFORE the field -->
-                                    {#if !isLocked}
-                                        <div class="flex items-center space-x-1">
-                                            {#if changedKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => saveSetting(setting.key)}
-                                                        disabled={isSaving}
-                                                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                                                        title={$_('common.save')}
-                                                >
-                                                    <Save size={14}/>
-                                                </button>
-                                                <button
-                                                        on:click={() => undoSetting(setting.key)}
-                                                        class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('common.undo')}
-                                                >
-                                                    <Undo size={14}/>
-                                                </button>
-                                            {/if}
-                                            {#if nonDefaultKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => resetSettingToDefault(setting.key)}
-                                                        class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('common.reset')}
-                                                >
-                                                    <RotateCcw size={14}/>
-                                                </button>
-                                            {/if}
-                                        </div>
-                                    {/if}
-                                    <!-- Toggle Switch for boolean -->
-                                    <button
-                                            type="button"
-                                            disabled={isLocked}
-                                            aria-label="Toggle {setting.key}"
-                                            on:click={() => {
-                                                if (!isLocked) {
-                                                    editedValues[setting.key] = editedValues[setting.key] === 'true' ? 'false' : 'true';
-                                                    editedValues = {...editedValues};
-                                                }
-                                            }}
-                                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-                                            {editedValues[setting.key] === 'true' ? 'bg-libre-green' : 'bg-gray-300'}
-                                            {isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
-                                    >
-                                        <span
-                                                class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                                                {editedValues[setting.key] === 'true' ? 'translate-x-6' : 'translate-x-1'}"
-                                        ></span>
-                                    </button>
-                                    <span class="text-sm text-gray-600 w-10">
-                                        {editedValues[setting.key] === 'true' ? 'ON' : 'OFF'}
-                                    </span>
-                                {:else if setting.value_type === 'int' || setting.value_type === 'float'}
-                                    <!-- Action buttons BEFORE the field -->
-                                    {#if !isLocked}
-                                        <div class="flex items-center space-x-1">
-                                            {#if changedKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => saveSetting(setting.key)}
-                                                        disabled={isSaving}
-                                                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                                                        title={$_('common.save')}
-                                                >
-                                                    <Save size={14}/>
-                                                </button>
-                                                <button
-                                                        on:click={() => undoSetting(setting.key)}
-                                                        class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('common.undo')}
-                                                >
-                                                    <Undo size={14}/>
-                                                </button>
-                                            {/if}
-                                            {#if nonDefaultKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => resetSettingToDefault(setting.key)}
-                                                        class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('common.reset')}
-                                                >
-                                                    <RotateCcw size={14}/>
-                                                </button>
-                                            {/if}
-                                        </div>
-                                    {/if}
-                                    <!-- Number input with unit -->
-                                    <div class="flex flex-col items-end space-y-1">
-                                        <div class="flex items-center space-x-2">
-                                            {#if setting.key === 'max_file_upload_mb'}
-                                                <!-- Special case: file size with unit selector -->
-                                                <!-- Accepts decimals, rounds to nearest MB for storage -->
-                                                <input
-                                                        id={setting.key}
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0.1"
-                                                        value={fileSizeDisplayValue}
-                                                        on:input={(e) => {
-                                                            // Parse value, supporting both . and , as decimal separator
-                                                            const inputVal = e.currentTarget.value.replace(',', '.');
-                                                            const newVal = parseFloat(inputVal) || 0.1;
-                                                            fileSizeDisplayValue = newVal;
-                                                            // Convert to MB for storage (round to nearest integer)
-                                                            const mbValue = fileSizeUnit === 'GB' ? newVal * 1024 : newVal;
-                                                            editedValues[setting.key] = String(Math.round(mbValue));
-                                                            editedValues = {...editedValues};
-                                                        }}
-                                                        disabled={isLocked}
-                                                        class="w-20 px-3 py-2 border rounded-lg text-sm text-right
-                                                        {isLocked
-                                                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                            : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
-                                                />
-                                                <select
-                                                        bind:value={fileSizeUnit}
-                                                        on:change={() => {
-                                                            // Recalculate MB value when unit changes
-                                                            const mbValue = fileSizeUnit === 'GB' ? fileSizeDisplayValue * 1024 : fileSizeDisplayValue;
-                                                            editedValues[setting.key] = String(Math.round(mbValue));
-                                                            editedValues = {...editedValues};
-                                                        }}
-                                                        disabled={isLocked}
-                                                        class="px-2 py-2 border rounded-lg text-sm
-                                                        {isLocked
-                                                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                            : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green'}"
-                                                >
-                                                    <option value="MB">{$_('common.megabytes') || 'MB'}</option>
-                                                    <option value="GB">{$_('common.gigabytes') || 'GB'}</option>
-                                                </select>
-                                            {:else}
-                                                <input
-                                                        id={setting.key}
-                                                        type="number"
-                                                        step={setting.value_type === 'float' ? '0.01' : '1'}
-                                                        min="0"
-                                                        value={editedValues[setting.key]}
-                                                        on:input={(e) => {
-                                                            editedValues[setting.key] = e.currentTarget.value;
-                                                            editedValues = {...editedValues};
-                                                        }}
-                                                        disabled={isLocked}
-                                                        class="w-20 px-3 py-2 border rounded-lg text-sm text-right
-                                                        {isLocked
-                                                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                            : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
-                                                />
-                                                {#if getSettingUnit(setting.key)}
-                                                    <span class="text-sm text-gray-500">{getSettingUnit(setting.key)}</span>
+                    {#if setting.value_type === 'bool'}
+                        <!-- Boolean toggle (self-contained component) -->
+                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4">
+                            <SettingToggle
+                                    value={editedValues[setting.key] === 'true'}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val ? 'true' : 'false';
+                                        editedValues = {...editedValues};
+                                    }}
+                            />
+                        </div>
+                    {:else if setting.value_type === 'int' || setting.value_type === 'float'}
+                        <!-- Numeric input (self-contained component) -->
+                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4">
+                            <SettingNumber
+                                    value={editedValues[setting.key]}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    type={setting.value_type === 'float' ? 'float' : 'int'}
+                                    unit={getSettingUnit(setting.key)}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                            />
+                        </div>
+                    {:else}
+                        <!-- Language / Currency / Text (inline) -->
+                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
+                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                <div class="flex-1 min-w-0">
+                                    <label for={setting.key} class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        {#if category}
+                                            <svelte:component this={category.icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                                        {/if}
+                                        {getSettingLabel(setting.key)}
+                                    </label>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        {getSettingHint(setting.key)}
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
+                                    {#if setting.key === 'default_language'}
+                                        {#if !isLocked}
+                                            <div class="flex items-center space-x-1">
+                                                {#if changedKeys.includes(setting.key)}
+                                                    <button
+                                                            on:click={() => saveSetting(setting.key)}
+                                                            disabled={isSaving}
+                                                            class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                                                            title={$_('common.save')}
+                                                    >
+                                                        <Save size={14}/>
+                                                    </button>
+                                                    <button
+                                                            on:click={() => undoSetting(setting.key)}
+                                                            class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                                                            title={$_('common.undo')}
+                                                    >
+                                                        <Undo size={14}/>
+                                                    </button>
                                                 {/if}
-                                            {/if}
-                                        </div>
-                                        <!-- Warning for large file upload size -->
-                                        {#if setting.key === 'max_file_upload_mb' && parseInt(editedValues[setting.key] || '0', 10) > 500}
-                                            <div class="flex items-center text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
-                                                <AlertCircle size={12} class="mr-1"/>
-                                                <span>{$_('settings.largeFileSizeWarning')}</span>
+                                                {#if nonDefaultKeys.includes(setting.key)}
+                                                    <button
+                                                            on:click={() => resetSettingToDefault(setting.key)}
+                                                            class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
+                                                            title={$_('common.reset')}
+                                                    >
+                                                        <RotateCcw size={14}/>
+                                                    </button>
+                                                {/if}
                                             </div>
                                         {/if}
-                                    </div>
-                                {:else if setting.key === 'default_language'}
-                                    <!-- Action buttons BEFORE the field -->
-                                    {#if !isLocked}
-                                        <div class="flex items-center space-x-1">
-                                            {#if changedKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => saveSetting(setting.key)}
-                                                        disabled={isSaving}
-                                                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                                                        title={$_('common.save')}
-                                                >
-                                                    <Save size={14}/>
-                                                </button>
-                                                <button
-                                                        on:click={() => undoSetting(setting.key)}
-                                                        class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('common.undo')}
-                                                >
-                                                    <Undo size={14}/>
-                                                </button>
-                                            {/if}
-                                            {#if nonDefaultKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => resetSettingToDefault(setting.key)}
-                                                        class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('common.reset')}
-                                                >
-                                                    <RotateCcw size={14}/>
-                                                </button>
-                                            {/if}
+                                        <div class="w-40 sm:w-48">
+                                            <SimpleSelect
+                                                    bind:value={editedValues[setting.key]}
+                                                    options={languageOptions}
+                                                    placeholder={$_('settings.selectLanguage')}
+                                                    disabled={isLocked}
+                                                    onchange={() => { editedValues = {...editedValues}; }}
+                                            />
                                         </div>
-                                    {/if}
-                                    <!-- Language SimpleSelect dropdown -->
-                                    <div class="w-40 sm:w-48">
-                                        <SimpleSelect
-                                                bind:value={editedValues[setting.key]}
-                                                options={languageOptions}
-                                                placeholder={$_('settings.selectLanguage')}
+                                    {:else if setting.key === 'default_currency'}
+                                        {#if !isLocked}
+                                            <div class="flex items-center space-x-1">
+                                                {#if changedKeys.includes(setting.key)}
+                                                    <button
+                                                            on:click={() => saveSetting(setting.key)}
+                                                            disabled={isSaving}
+                                                            class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                                                            title={$_('common.save')}
+                                                    >
+                                                        <Save size={14}/>
+                                                    </button>
+                                                    <button
+                                                            on:click={() => undoSetting(setting.key)}
+                                                            class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                                                            title={$_('common.undo')}
+                                                    >
+                                                        <Undo size={14}/>
+                                                    </button>
+                                                {/if}
+                                                {#if nonDefaultKeys.includes(setting.key)}
+                                                    <button
+                                                            on:click={() => resetSettingToDefault(setting.key)}
+                                                            class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
+                                                            title={$_('common.reset')}
+                                                    >
+                                                        <RotateCcw size={14}/>
+                                                    </button>
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                        <div class="w-48 sm:w-64">
+                                            <CurrencySearchSelect
+                                                    bind:value={editedValues[setting.key]}
+                                                    placeholder={$_('settings.selectCurrency')}
+                                                    disabled={isLocked}
+                                                    onchange={() => { editedValues = {...editedValues}; }}
+                                            />
+                                        </div>
+                                    {:else}
+                                        {#if !isLocked}
+                                            <div class="flex items-center space-x-1">
+                                                {#if changedKeys.includes(setting.key)}
+                                                    <button
+                                                            on:click={() => saveSetting(setting.key)}
+                                                            disabled={isSaving}
+                                                            class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                                                            title={$_('common.save')}
+                                                    >
+                                                        <Save size={14}/>
+                                                    </button>
+                                                    <button
+                                                            on:click={() => undoSetting(setting.key)}
+                                                            class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                                                            title={$_('common.undo')}
+                                                    >
+                                                        <Undo size={14}/>
+                                                    </button>
+                                                {/if}
+                                                {#if nonDefaultKeys.includes(setting.key)}
+                                                    <button
+                                                            on:click={() => resetSettingToDefault(setting.key)}
+                                                            class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
+                                                            title={$_('common.reset')}
+                                                    >
+                                                        <RotateCcw size={14}/>
+                                                    </button>
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                        <input
+                                                id={setting.key}
+                                                type="text"
+                                                value={editedValues[setting.key]}
+                                                on:input={(e) => {
+                                                    editedValues[setting.key] = e.currentTarget.value;
+                                                    editedValues = {...editedValues};
+                                                }}
                                                 disabled={isLocked}
-                                                onchange={() => { editedValues = {...editedValues}; }}
+                                                class="w-32 px-3 py-2 border rounded-lg text-sm
+                                                {isLocked
+                                                    ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                                                    : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
                                         />
-                                    </div>
-                                {:else if setting.key === 'default_currency'}
-                                    <!-- Action buttons BEFORE the field -->
-                                    {#if !isLocked}
-                                        <div class="flex items-center space-x-1">
-                                            {#if changedKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => saveSetting(setting.key)}
-                                                        disabled={isSaving}
-                                                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                                                        title={$_('common.save')}
-                                                >
-                                                    <Save size={14}/>
-                                                </button>
-                                                <button
-                                                        on:click={() => undoSetting(setting.key)}
-                                                        class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('common.undo')}
-                                                >
-                                                    <Undo size={14}/>
-                                                </button>
-                                            {/if}
-                                            {#if nonDefaultKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => resetSettingToDefault(setting.key)}
-                                                        class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('common.reset')}
-                                                >
-                                                    <RotateCcw size={14}/>
-                                                </button>
-                                            {/if}
-                                        </div>
                                     {/if}
-                                    <!-- Currency CurrencySearchSelect - responsive width -->
-                                    <div class="w-48 sm:w-64">
-                                        <CurrencySearchSelect
-                                                bind:value={editedValues[setting.key]}
-                                                placeholder={$_('settings.selectCurrency')}
-                                                disabled={isLocked}
-                                                onchange={() => { editedValues = {...editedValues}; }}
-                                        />
-                                    </div>
-                                {:else}
-                                    <!-- Action buttons BEFORE the field -->
-                                    {#if !isLocked}
-                                        <div class="flex items-center space-x-1">
-                                            {#if changedKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => saveSetting(setting.key)}
-                                                        disabled={isSaving}
-                                                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                                                        title={$_('common.save')}
-                                                >
-                                                    <Save size={14}/>
-                                                </button>
-                                                <button
-                                                        on:click={() => undoSetting(setting.key)}
-                                                        class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                                                        title={$_('common.undo')}
-                                                >
-                                                    <Undo size={14}/>
-                                                </button>
-                                            {/if}
-                                            {#if nonDefaultKeys.includes(setting.key)}
-                                                <button
-                                                        on:click={() => resetSettingToDefault(setting.key)}
-                                                        class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
-                                                        title={$_('common.reset')}
-                                                >
-                                                    <RotateCcw size={14}/>
-                                                </button>
-                                            {/if}
-                                        </div>
-                                    {/if}
-                                    <!-- Text input for string -->
-                                    <input
-                                            id={setting.key}
-                                            type="text"
-                                            value={editedValues[setting.key]}
-                                            on:input={(e) => {
-                                                editedValues[setting.key] = e.currentTarget.value;
-                                                editedValues = {...editedValues};
-                                            }}
-                                            disabled={isLocked}
-                                            class="w-32 px-3 py-2 border rounded-lg text-sm
-                                            {isLocked
-                                                ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
-                                    />
-                                {/if}
+                                </div>
                             </div>
+                            {#if setting.updated_at && typeof setting.updated_at === 'string'}
+                                <p class="text-xs text-gray-400 mt-2">
+                                    Last updated: {new Date(setting.updated_at).toLocaleString()}
+                                </p>
+                            {/if}
                         </div>
-                        {#if setting.updated_at && typeof setting.updated_at === 'string'}
-                            <p class="text-xs text-gray-400 mt-2">
-                                Last updated: {new Date(setting.updated_at).toLocaleString()}
-                            </p>
-                        {/if}
-                    </div>
+                    {/if}
                 {/each}
             </div>
         {/if}

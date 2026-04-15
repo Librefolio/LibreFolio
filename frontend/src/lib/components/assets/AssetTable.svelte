@@ -146,7 +146,7 @@
                 },
                 {
                     id: 'currency',
-                    header: () => $t('assets.table.currency'),
+                    header: () => $t('common.currency'),
                     cell: (row) => {
                         const info = getCurrencyInfo(row.currency);
                         return {type: 'html', html: `<span class="emoji-flag">${info.flag_emoji}</span> ${row.currency}`};

@@ -21,9 +21,11 @@ An asset in LibreFolio is a financial instrument with:
 
 Navigate to **Assets** in the sidebar to see all your assets. The list page provides:
 
+- **Grid / Table toggle**: switch between card grid and sortable data table (choice is persisted)
 - **Search**: filter assets by name, ISIN, or ticker
 - **Type filter**: show only specific asset types (ETF, Stock, Bond, etc.)
 - **Active/All toggle**: show only active assets or include archived ones
+- **Price change period**: select the time window for price change (Δ) display (1D, 1W, 1M, 3M, 6M, 1Y, YTD, ALL)
 - **Sync All**: fetch latest prices for all assets with a provider
 - **Refresh All**: reload asset data from the database
 

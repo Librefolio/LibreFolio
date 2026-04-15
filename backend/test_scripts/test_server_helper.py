@@ -21,7 +21,7 @@ With `concurrency = thread,gevent` in .coveragerc:
 This is achieved by:
 1. Running uvicorn.run() in a daemon thread (same process as pytest)
 2. Using gevent for asyncio event loop instrumentation
-3. No subprocess complexity or sitecustomize.py needed
+3. No subprocess complexity needed
 """
 
 import os

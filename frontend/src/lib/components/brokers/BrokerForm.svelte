@@ -203,7 +203,7 @@
     <!-- Name -->
     <div>
         <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-name">
-            {$_('brokers.name')} *
+            {$_('common.name')} *
         </label>
         <input
                 bind:value={name}

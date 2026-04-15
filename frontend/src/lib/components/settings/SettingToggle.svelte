@@ -1,8 +1,9 @@
 <!--
-  SettingToggle.svelte - Svelte 5
+  SettingToggle.svelte — Svelte 5
 
   Boolean toggle setting with inline actions (save, undo, reset).
-  Extracts the toggle pattern from GlobalSettingsTab for reuse.
+  Follows same API as SettingSelect for consistency.
+  Reusable in GlobalSettingsTab and future UserSettingsTab.
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
@@ -10,29 +11,17 @@
     import type {Component} from 'svelte';
 
     interface Props {
-        /** Current value as boolean */
         value: boolean;
-        /** Field label */
         label: string;
-        /** Optional hint text */
         hint?: string;
-        /** Optional icon component */
         icon?: Component | null;
-        /** Whether field has been modified */
         isModified?: boolean;
-        /** Whether value differs from default */
         isNonDefault?: boolean;
-        /** Whether field is locked/read-only */
         isLocked?: boolean;
-        /** Saving in progress */
         isSaving?: boolean;
-        /** Save callback */
         onsave?: () => void;
-        /** Undo callback */
         onundo?: () => void;
-        /** Reset to default callback */
         onreset?: () => void;
-        /** Change callback */
         onchange?: (value: boolean) => void;
     }
 
@@ -48,7 +37,7 @@
         onsave,
         onundo,
         onreset,
-        onchange
+        onchange,
     }: Props = $props();
 
     function toggle() {
@@ -75,7 +64,7 @@
 
     <!-- Right: Actions + Toggle -->
     <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
-        <!-- Action buttons (only when unlocked and modified/non-default) -->
+        <!-- Action buttons -->
         {#if !isLocked}
             <div class="flex items-center space-x-1">
                 {#if isModified}
@@ -110,19 +99,19 @@
             </div>
         {/if}
 
-        <!-- Toggle Switch -->
+        <!-- Toggle switch -->
         <button
-                aria-label="Toggle {label}"
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-                   {value ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
-                   {isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
-                disabled={isLocked}
-                onclick={toggle}
                 type="button"
+                disabled={isLocked}
+                aria-label="Toggle {label}"
+                onclick={toggle}
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                {value ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
+                {isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
         >
             <span
                     class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                       {value ? 'translate-x-6' : 'translate-x-1'}"
+                    {value ? 'translate-x-6' : 'translate-x-1'}"
             ></span>
         </button>
         <span class="text-sm text-gray-600 dark:text-gray-400 w-10">
@@ -130,3 +119,4 @@
         </span>
     </div>
 </div>
+

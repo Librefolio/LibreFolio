@@ -62,7 +62,7 @@
                     class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             >
                 <MessageCircle size={18} class="text-gray-500"/>
-                <span>{$_('help.documentation')}</span>
+                <span>{$_('common.documentation')}</span>
             </a>
 
             <div class="border-t border-gray-100 my-1"></div>

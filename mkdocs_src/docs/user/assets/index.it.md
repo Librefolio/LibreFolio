@@ -21,9 +21,11 @@ Un asset in LibreFolio è uno strumento finanziario caratterizzato da:
 
 Naviga verso **Asset** nella barra laterale per visualizzare tutti i tuoi asset. La pagina dell'elenco fornisce:
 
+- **Griglia / Tabella**: passa dalla vista a schede alla tabella ordinabile (la scelta viene salvata)
 - **Ricerca**: filtra gli asset per nome, ISIN o ticker
 - **Filtro tipo**: mostra solo tipi specifici di asset (ETF, Azioni, Obbligazioni, ecc.)
 - **Interruttore Attivi/Tutti**: mostra solo gli asset attivi o includi quelli archiviati
+- **Periodo variazione prezzo**: seleziona il periodo per la variazione di prezzo (Δ) visualizzata (1G, 1S, 1M, 3M, 6M, 1A, YTD, TUTTO)
 - **Sync All**: recupera gli ultimi prezzi per tutti gli asset dotati di provider
 - **Refresh All**: ricarica i dati degli asset dal database
 

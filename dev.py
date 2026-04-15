@@ -251,14 +251,10 @@ def cmd_server(args):
 
     if coverage_mode:
         # Use 'coverage run --parallel-mode -m uvicorn' to track backend code
-        # coverage during E2E tests. This replaces the old sitecustomize.py
-        # approach, which didn't work because Python's system-level
-        # sitecustomize.py shadows the project one.
+        # coverage during E2E tests.
         #
         # NOTE: --reload is NOT used in coverage mode because 'coverage run'
-        # tracks only the direct process; reloader child processes would need
-        # sitecustomize.py (which doesn't work). Without --reload, there's a
-        # single uvicorn process that 'coverage run' tracks directly.
+        # tracks only the direct process; reloader child processes bypass it.
         #
         # CRITICAL — SIGTERM propagation chain (3 levels of exec):
         #

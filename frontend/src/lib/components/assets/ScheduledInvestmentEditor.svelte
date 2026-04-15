@@ -287,7 +287,7 @@
 
     /** Status banner info */
     let statusBanner = $derived.by(() => {
-        if (normalRows.length === 0) return {icon: '📅', text: $t('assets.schedule.empty'), ok: false};
+        if (normalRows.length === 0) return {icon: '📅', text: $t('assets.schedule.emptyTitle'), ok: false};
         const first = normalRows[0];
         const last = normalRows[normalRows.length - 1];
         const days = daysBetween(first.start_date, last.end_date);
@@ -1001,7 +1001,7 @@
         {
             id: 'delete',
             icon: Trash2,
-            label: () => $t('assets.schedule.deleteSelected'),
+            label: () => $t('common.deleteSelected'),
             variant: 'danger' as const,
             onClick: () => handleBulkDelete(),
         },

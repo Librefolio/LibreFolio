@@ -322,7 +322,7 @@
                 </div>
             {:else if !hasResults && !loading}
                 <div class="py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
-                    {$t('assets.search.noResults')}
+                    {$t('common.noResults')}
                 </div>
             {:else}
                 <!-- Loading banner (streaming partial results) -->
