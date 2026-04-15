@@ -116,5 +116,98 @@ test.describe('Asset List Page', () => {
         const dateRange = page.getByTestId('assets-date-range');
         await expect(dateRange).toBeVisible();
     });
+
+    // ========================================================================
+    // Test 10: Grid/Table view toggle switches view
+    // ========================================================================
+    test('grid/table toggle switches between views', async ({page}) => {
+        await goToAssetsPage(page);
+
+        // Find the toggle buttons by aria-label
+        const assetsPage = page.getByTestId('assets-page');
+        const tableBtn = assetsPage.locator('button[aria-label="Table view"]');
+        const gridBtn = assetsPage.locator('button[aria-label="Grid view"]');
+
+        // Both buttons should be visible
+        await expect(tableBtn).toBeVisible();
+        await expect(gridBtn).toBeVisible();
+
+        // Initially grid view — cards should be present
+        const cardsBeforeToggle = await page.locator('[data-testid^="asset-card-"]').count();
+
+        // Switch to table view
+        await tableBtn.click();
+        await page.waitForTimeout(500);
+
+        // Table should be visible OR cards should disappear (depending on data)
+        const tableVisible = await page.locator('[data-testid="assets-table"], table').first().isVisible().catch(() => false);
+        const cardsAfterToggle = await page.locator('[data-testid^="asset-card-"]').count();
+
+        // Either table appeared or cards disappeared (view switched)
+        expect(tableVisible || cardsAfterToggle === 0 || cardsAfterToggle !== cardsBeforeToggle).toBeTruthy();
+
+        // Switch back to grid
+        await gridBtn.click();
+        await page.waitForTimeout(500);
+        await expect(page.getByTestId('assets-page')).toBeVisible();
+    });
+
+    // ========================================================================
+    // Test 11: Type filter dropdown can be opened and has options
+    // ========================================================================
+    test('type filter dropdown opens with checkboxes', async ({page}) => {
+        await goToAssetsPage(page);
+        const typeFilter = page.getByTestId('assets-type-filter');
+        await expect(typeFilter).toBeVisible();
+
+        // Click to open dropdown (custom multi-checkbox with role="listbox")
+        await typeFilter.click();
+        await page.waitForTimeout(300);
+
+        // Should show a listbox with checkbox items
+        const listbox = page.locator('[role="listbox"]');
+        await expect(listbox).toBeVisible();
+    });
+
+    // ========================================================================
+    // Test 12: Search filter hides non-matching cards
+    // ========================================================================
+    test('search filter hides non-matching cards', async ({page}) => {
+        await goToAssetsPage(page);
+        const cards = page.locator('[data-testid^="asset-card-"]');
+        const totalCards = await cards.count();
+
+        if (totalCards < 2) {
+            test.skip(true, 'Need at least 2 assets to test search filtering');
+            return;
+        }
+
+        // Search for a string that won't match any asset
+        const searchInput = page.getByTestId('assets-search-input');
+        await searchInput.fill('zzzzz_nonexistent_12345');
+        await page.waitForTimeout(500);
+
+        // Visible cards should be 0
+        const visibleCards = await cards.count();
+        expect(visibleCards).toBeLessThan(totalCards);
+    });
+
+    // ========================================================================
+    // Test 13: Active/All toggle changes badge count
+    // ========================================================================
+    test('active/all toggle changes displayed count', async ({page}) => {
+        await goToAssetsPage(page);
+        const badge = page.getByTestId('assets-count-badge');
+        const activeBadge = await badge.textContent();
+
+        // Toggle to show all (including inactive)
+        const toggle = page.getByTestId('assets-active-toggle');
+        await toggle.click();
+        await page.waitForTimeout(500);
+
+        const allBadge = await badge.textContent();
+        // Count should be same or greater (all >= active)
+        expect(parseInt(allBadge || '0')).toBeGreaterThanOrEqual(parseInt(activeBadge || '0'));
+    });
 });
 

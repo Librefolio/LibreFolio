@@ -664,3 +664,147 @@ async def test_bulk_sync_multi_asset(test_server):
         # Cleanup
         await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
 
+
+# ============================================================
+# Test 11: POST /assets/prices/current - Get current prices (with DB data)
+# ============================================================
+@pytest.mark.asyncio
+async def test_get_current_prices_with_db_data(test_server):
+    """Test 11: POST /assets/prices/current - Asset with manual prices returns db:last_known."""
+    print_section("Test 11: POST /assets/prices/current - with DB data")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Create asset and insert manual prices
+        create_item = FAAssetCreateItem(
+            display_name=f"Current Price DB {unique_id('CUR1')}", currency="EUR"
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert create_resp.status_code == 201
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+
+        # Insert 3 days of prices
+        today = date.today()
+        prices = [
+            FAPricePoint(date=today - timedelta(days=2), close=Decimal("50.00"), currency="EUR"),
+            FAPricePoint(date=today - timedelta(days=1), close=Decimal("51.00"), currency="EUR"),
+            FAPricePoint(date=today, close=Decimal("52.25"), currency="EUR"),
+        ]
+        upsert_item = FAUpsert(asset_id=asset_id, prices=prices)
+        upsert_resp = await client.post(
+            f"{API_BASE}/assets/prices", json=[upsert_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert upsert_resp.status_code == 200
+        print_info(f"  Inserted {len(prices)} prices for asset {asset_id}")
+
+        # Now call current prices endpoint
+        current_resp = await client.post(
+            f"{API_BASE}/assets/prices/current", json=[asset_id], timeout=TIMEOUT
+            )
+        assert current_resp.status_code == 200
+        data = current_resp.json()
+        assert "results" in data
+        assert "success_count" in data
+        assert data["success_count"] == 1
+
+        result = data["results"][0]
+        assert result["asset_id"] == asset_id
+        assert result["value"] is not None
+        assert Decimal(result["value"]) == Decimal("52.25")
+        assert result["source"] == "db:last_known"
+        assert result["error"] is None
+        print_success(f"  ✓ Current price returned: {result['value']} ({result['source']})")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================
+# Test 12: POST /assets/prices/current - Asset with no data
+# ============================================================
+@pytest.mark.asyncio
+async def test_get_current_prices_no_data(test_server):
+    """Test 12: POST /assets/prices/current - Asset without prices returns error."""
+    print_section("Test 12: POST /assets/prices/current - no data")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Create asset with no prices
+        create_item = FAAssetCreateItem(
+            display_name=f"Current Price Empty {unique_id('CUR2')}", currency="USD"
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
+        assert create_resp.status_code == 201
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+
+        # Call current prices endpoint
+        current_resp = await client.post(
+            f"{API_BASE}/assets/prices/current", json=[asset_id], timeout=TIMEOUT
+            )
+        assert current_resp.status_code == 200
+        data = current_resp.json()
+        assert data["success_count"] == 0
+
+        result = data["results"][0]
+        assert result["asset_id"] == asset_id
+        assert result["value"] is None
+        assert result["error"] is not None
+        print_success(f"  ✓ No data: error='{result['error']}'")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================
+# Test 13: POST /assets/prices/current - Nonexistent asset
+# ============================================================
+@pytest.mark.asyncio
+async def test_get_current_prices_nonexistent(test_server):
+    """Test 13: POST /assets/prices/current - Nonexistent asset ID returns error."""
+    print_section("Test 13: POST /assets/prices/current - nonexistent")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        current_resp = await client.post(
+            f"{API_BASE}/assets/prices/current", json=[999999], timeout=TIMEOUT
+            )
+        assert current_resp.status_code == 200
+        data = current_resp.json()
+        assert data["success_count"] == 0
+
+        result = data["results"][0]
+        assert result["asset_id"] == 999999
+        assert result["value"] is None
+        assert result["error"] is not None
+        print_success(f"  ✓ Nonexistent asset: error='{result['error']}'")
+
+
+# ============================================================
+# Test 14: POST /assets/prices/current - Empty list
+# ============================================================
+@pytest.mark.asyncio
+async def test_get_current_prices_empty_list(test_server):
+    """Test 14: POST /assets/prices/current - Empty list returns empty results."""
+    print_section("Test 14: POST /assets/prices/current - empty list")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        current_resp = await client.post(
+            f"{API_BASE}/assets/prices/current", json=[], timeout=TIMEOUT
+            )
+        assert current_resp.status_code == 200
+        data = current_resp.json()
+        assert data["results"] == []
+        assert data["success_count"] == 0
+        print_success("  ✓ Empty list returns empty results")
+
