@@ -127,7 +127,7 @@ Tutte le chiamate ai provider asset passano per un layer centralizzato in `asset
 | Test Suite | `backend/test_scripts/` |
 | Test Asset API | `backend/test_scripts/test_api/test_assets_*.py` (5 file, 70 test) |
 | Coverage Analysis | `scripts/coverage_analysis.py` |
-| Coverage Config | `.coveragerc` + `sitecustomize.py` |
+| Coverage Config | `.coveragerc` |
 | Dati Produzione | `backend/data/prod/` |
 | Dati Test | `backend/data/test/` |
 

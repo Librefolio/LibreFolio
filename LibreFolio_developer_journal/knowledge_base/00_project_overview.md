@@ -85,6 +85,7 @@ LibreFolio/
 | [`05_project_conventions.md`](LibreFolio_developer_journal/knowledge_base/05_project_conventions.md) | Convenzioni: lingua, naming, test users, dark mode, async I/O rule |
 | [`06_testing_backend.md`](LibreFolio_developer_journal/knowledge_base/06_testing_backend.md) | Creare/eseguire test backend: pytest, API tests, mock data, coverage |
 | [`07_testing_frontend.md`](LibreFolio_developer_journal/knowledge_base/07_testing_frontend.md) | Creare/eseguire test frontend: Playwright E2E, fixtures, gallery |
+| [`08_i18n_duplicates.md`](LibreFolio_developer_journal/knowledge_base/08_i18n_duplicates.md) | Duplicati i18n: strategia, gruppi accettati, regole per nuove chiavi |
 
 ---
 

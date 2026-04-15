@@ -439,7 +439,7 @@
                     {#if selectedProvider?.provider_help_url}
                         <a href={selectedProvider.provider_help_url} target="_blank" rel="noopener noreferrer"
                            class="shrink-0 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
-                           title={$t('assets.provider.documentation')}
+                           title={$t('common.documentation')}
                         >
                             <CircleHelp size={18}/>
                         </a>

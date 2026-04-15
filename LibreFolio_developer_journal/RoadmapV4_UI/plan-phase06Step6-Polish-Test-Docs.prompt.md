@@ -1,7 +1,7 @@
 # Plan: Phase 06 Step 6 — Polish, Test, Documentation & Coverage
 
 **Data creazione**: 15 Aprile 2026  
-**Status**: 📋 DA FARE  
+**Status**: 🚧 IN CORSO (S1 ✅, S5-partial ✅, S2-partial ✅, S5d ✅)  
 **Durata stimata**: ~2 giorni  
 **Dipendenze**: Step 1–4 completati, Part C (C.1–C.7) completata  
 **Coverage attuale**: Backend 41.7% (via E2E frontend), Backend-only (via pytest) disponibile in `htmlcov-backend/`
@@ -63,18 +63,10 @@ Per l'analisi dei duplicati abbiamo un flag dedicato nel comando audit:
 ./dev.py i18n audit --duplicates --format md -o i18n-duplicates-report.md
 ```
 
-Se servono indagini manuali aggiuntive:
-
-```bash
-# Albero per trovare pattern ripetuti
-./dev.py i18n tree assets --counts
-./dev.py i18n tree fx --counts
-./dev.py i18n tree common --counts
-
-# Cercare valori specifici per conferma
-./dev.py i18n search "No data" --values
-./dev.py i18n search "Loading" --values
-```
+> 📋 **Piano di rientro duplicati**: il dettaglio completo di 60 gruppi analizzati, con
+> 5 batch di consolidazione e lista dei ~30 gruppi accettabili, è in
+> **[plan-phase06Step6-i18n-dedup.prompt.md](plan-phase06Step6-i18n-dedup.prompt.md)**.
+> Impatto stimato: 843 → ~813 chiavi, 60 → ~30 gruppi duplicati.
 
 Consolidare chiavi con valori identici sotto `common.*` quando ha senso.
 
@@ -84,9 +76,9 @@ Pattern atteso: `{feature}.{section}.{key}` — verificare che tutte le chiavi s
 
 #### Tasks S1
 
-- [ ] Verificare le 22 chiavi unused una per una
-- [ ] Rimuovere quelle confermate inutili
-- [ ] Cercare e consolidare duplicati sotto `common.*`
+- [x] Verificare le 22 chiavi unused una per una → **tutte rimosse** (875→845)
+- [x] Rimuovere quelle confermate inutili → **+2 rimosse** (`uploads.imageSize`, `uploads.maxSize`) → 843
+- [x] Eseguire [plan-phase06Step6-i18n-dedup.prompt.md](plan-phase06Step6-i18n-dedup.prompt.md) → **completato** (875→825, 60→42 gruppi)
 - [ ] Verificare consistenza namespace
 
 ---
@@ -337,7 +329,7 @@ grep -rn "def " backend/app/services/ --include="*.py" | wc -l
 Confrontare con coverage: funzioni con 0% coverage E2E + 0% coverage backend = dead code candidato.
 
 **Aree sospette:**
-- `sitecustomize.py` — vecchio approccio coverage, ora sostituito da `coverage run`. **Verificare se ancora necessario** (probabilmente no → rimuovere).
+- ~~`sitecustomize.py`~~ — **rimosso** (vecchio approccio coverage, sostituito da `coverage run`)
 - Funzioni `_legacy_*` in servizi
 - Import inutilizzati (verificare con `ruff`)
 
@@ -380,14 +372,49 @@ black backend/ --diff
 > Le regole di formattazione vanno calibrate per ottenere un aspetto simile
 > a quello attuale del codice.
 
+#### S5d) Ricreazione SettingToggle / SettingNumber + Refactoring GlobalSettingsTab
+
+Nella pulizia dead code (S5b), 7 componenti Svelte stub/inutilizzati sono stati rimossi.
+Tra questi, `SettingNumber.svelte` e `SettingToggle.svelte` erano stati estratti da
+`GlobalSettingsTab` per renderli riutilizzabili in futuro (UserSettingsTab), ma non erano
+mai stati collegati. Sono stati ricreati in Svelte 5 e `GlobalSettingsTab` è stato
+refactored per usarli come componenti self-contained:
+
+**Componenti ricreati** (Svelte 5, stessa API di `SettingSelect`):
+- `SettingToggle.svelte` — toggle booleano con label, hint, icon, azioni inline
+- `SettingNumber.svelte` — input numerico con type int/float, unit, warnAbove, azioni inline
+
+**GlobalSettingsTab refactoring**:
+- Template ristrutturato: `bool` → `<SettingToggle>`, `int`/`float` → `<SettingNumber>`
+- Eliminati 5 blocchi duplicati di action buttons inline (−60 righe, 787→727)
+- Rimosso dead code script: `fileSizeUnit`, `fileSizeDisplayValue`, import `AlertCircle`
+- Aggiunta helper `getSettingHint()` per ridurre ripetizione template
+- Conversione string↔boolean gestita via callback `onchange`
+
+**Dead code correlato rimosso**:
+- `CandlestickChart.svelte`, `VolumeBar.svelte` → spostati in `TODO_FUTURI.md`
+- `SettingField.svelte`, `SettingText.svelte` (Svelte 4, pattern superato)
+- `ImageUploader.svelte` (sostituito da pipeline ImagePicker)
+- Barrel exports aggiornati: `charts/index.ts`, `ui/media/index.ts`
+- 2 TODO completati spostati da `TODO_FUTURI.md` → `TODO_Completati.md`
+
+**Verifica**:
+- `svelte-check`: 0 errori
+- `./dev.py test front-utility settings`: **29 test passed** (45.2s)
+  - I test coprono rendering GlobalSettingsTab (admin + non-admin), tab switching,
+    preferenze persistence, profilo lock/unlock/undo. Confermano zero regressioni
+    sul refactoring. Test specifici per interazione toggle/number da sviluppare in S3.
+
 #### Tasks S5
 
 - [ ] Analizzare dead code backend (funzioni 0% coverage)
-- [ ] Verificare se `sitecustomize.py` è ancora necessario
-- [ ] Analizzare dead code frontend (componenti non importati)
+- [x] Verificare se `sitecustomize.py` è ancora necessario → **rimosso**
+- [x] Analizzare dead code frontend (componenti non importati) → **7 componenti rimossi**
+- [x] Ricreare SettingToggle/SettingNumber, refactoring GlobalSettingsTab → **29 test passed**
+- [x] Spostare TODO completati da `TODO_FUTURI.md` → `TODO_Completati.md`
 - [ ] Concordare regole lint/format (dry-run → review diff → calibrare config)
 - [ ] Applicare lint/format solo dopo aver concordato le regole
-- [ ] `svelte-check` senza errori
+- [x] `svelte-check` senza errori → **0 errori**
 
 ---
 

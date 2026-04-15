@@ -3,14 +3,16 @@
 ## Creazione di un Nuovo Asset
 
 1. Fare clic su **+ New Asset** nella pagina degli asset
-2. Compilare le informazioni di base:
- - **Name** (richiesto)
- - **Category** (richiesto): Stock, ETF, Bond, Crypto, Commodity, P2P, Index, ecc.
- - **Currency** (richiesto): la valuta in cui l'asset è denominato
- - **Identifiers**: ISIN, ticker, CUSIP, SEDOL, ecc.
-3. Configurare opzionalmente un **[Provider](providers/index.md)** per il recupero automatico dei prezzi
-4. Aggiungere opzionalmente le distribuzioni **Sector** e **Geographic**
-5. Fare clic su **Save**
+2. Usare la **Ricerca Intelligente** per trovare il proprio asset: digitare un nome, ISIN o ticker e LibreFolio cerca tra più provider (Yahoo Finance, justETF, CSS Scraper) in parallelo
+3. Selezionare un risultato per **auto-compilare** nome, identificativi, valuta, distribuzione settoriale/geografica e configurazione del provider
+4. Oppure compilare manualmente:
+    - **Name** (richiesto)
+    - **Category** (richiesto): Stock, ETF, Bond, Crypto, Commodity, P2P, Index, ecc.
+    - **Currency** (richiesto): la valuta in cui l'asset è denominato
+    - **Identifiers**: ISIN, ticker, CUSIP, SEDOL, ecc.
+5. Configurare opzionalmente un **[Provider](providers/index.md)** per il recupero automatico dei prezzi
+6. Aggiungere opzionalmente le distribuzioni **Sector** e **Geographic**
+7. Fare clic su **Save**
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Finestra modale di creazione asset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

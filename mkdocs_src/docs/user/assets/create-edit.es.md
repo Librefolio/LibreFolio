@@ -3,14 +3,16 @@
 ## Crear un Nuevo Activo
 
 1. Haga clic en **+ Nuevo Activo** en la página de activos
-2. Complete la información básica:
- - **Nombre** (requerido)
- - **Categoría** (requerido): Stock, ETF, Bond, Crypto, Commodity, P2P, Index, etc.
- - **Moneda** (requerido): la moneda en la que está denominado el activo
- - **Identificadores**: ISIN, ticker, CUSIP, SEDOL, etc.
-3. Opcionalmente, configure un **[Proveedor](providers/index.md)** para la obtención automática de precios
-4. Opcionalmente, añada distribuciones **sectoriales** y **geográficas**
-5. Haga clic en **Guardar**
+2. Use la **Búsqueda Inteligente** para encontrar su activo: escriba un nombre, ISIN o ticker y LibreFolio buscará en paralelo entre múltiples proveedores (Yahoo Finance, justETF, CSS Scraper)
+3. Seleccione un resultado para **autocompletar** nombre, identificadores, moneda, distribución sectorial/geográfica y configuración del proveedor
+4. O complete manualmente:
+    - **Nombre** (requerido)
+    - **Categoría** (requerido): Stock, ETF, Bond, Crypto, Commodity, P2P, Index, etc.
+    - **Moneda** (requerido): la moneda en la que está denominado el activo
+    - **Identificadores**: ISIN, ticker, CUSIP, SEDOL, etc.
+5. Opcionalmente, configure un **[Proveedor](providers/index.md)** para la obtención automática de precios
+6. Opcionalmente, añada distribuciones **sectoriales** y **geográficas**
+7. Haga clic en **Guardar**
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Modal de Creación de Activo" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

@@ -190,7 +190,7 @@ I report coverage sono separati per sorgente:
 | Report | Directory | Generato da |
 |--------|-----------|-------------|
 | Backend | `htmlcov-backend/` | `--coverage` su test backend (pytest-cov) |
-| Frontend | `htmlcov-frontend/` | `--coverage` su test frontend (sitecustomize.py + coverage combine) |
+| Frontend | `htmlcov-frontend/` | `--coverage` su test frontend (`coverage run` + gracefulShutdown + coverage combine) |
 | Combined | `htmlcov/` | Merge di tutti i `.coverage.*` files |
 
 ```bash
@@ -229,9 +229,9 @@ Filtri automatici: esclude `abstract` (body=pass), `@property` semplici, `@field
 
 ### Architettura Coverage
 
-- **`.coveragerc`** — config: `source=backend/app`, `parallel=true`, `concurrency=thread,gevent`
-- **`sitecustomize.py`** — intercetta `COVERAGE_PROCESS_START` env var → `coverage.process_startup()`
-- **`--coverage` su `dev.py server`** — setta `COVERAGE_PROCESS_START=.coveragerc` nell'env del processo uvicorn
+- **`.coveragerc`** — config: `source=backend/app`, `parallel=true`, `concurrency=thread,gevent`, `sigterm=true`
+- **`coverage run --parallel-mode -m uvicorn`** — dev.py in coverage mode usa `os.execvpe()` per avviare uvicorn sotto `coverage run`
+- **`gracefulShutdown`** — `playwright.config.ts` configura `{signal: 'SIGTERM', timeout: 5000}` per permettere a `coverage run` di scrivere i dati prima della terminazione
 - **Frontend E2E**: `playwright.config.ts` aggiunge `--coverage` al webServer command quando `COVERAGE_BACKEND=1` è nell'env
 
 ---

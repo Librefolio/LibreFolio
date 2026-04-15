@@ -63,7 +63,20 @@
     "date": "Date",
     "value": "Valeur",
     "notes": "Notes",
-    "syncing": "Synchronisation..."
+    "syncing": "Synchronisation...",
+    "measures": "Mesures",
+    "signals": "Signaux",
+    "addMeasure": "Ajouter une mesure",
+    "closeEditor": "Fermer éditeur",
+    "exitMeasure": "Quitter le mode mesure",
+    "classification": "Classification",
+    "identifiers": "Identifiants",
+    "geoDistribution": "Distribution géographique",
+    "sectorDistribution": "Distribution sectorielle",
+    "allCurrencies": "Toutes les devises",
+    "noMatchesTitle": "Aucun Résultat",
+    "documentation": "Documentation",
+    "deleteSelected": "Supprimer la sélection"
   },
   "table": {
     "columns": "Colonnes",
@@ -148,7 +161,6 @@
   "help": {
     "helpAndSupport": "Aide et Support",
     "faq": "FAQ",
-    "documentation": "Documentation",
     "reportBug": "Signaler un Bug"
   },
   "dashboard": {
@@ -168,7 +180,6 @@
     "deleteBroker": "Supprimer le Courtier",
     "noBrokers": "Aucun Courtier",
     "noBrokersMessage": "Ajoutez votre premier courtier pour commencer à suivre vos investissements.",
-    "name": "Nom",
     "namePlaceholder": "ex. Interactive Brokers, Degiro",
     "description": "Description",
     "descriptionPlaceholder": "Notes optionnelles sur ce courtier...",
@@ -247,22 +258,17 @@
   "assets": {
     "title": "Actifs",
     "subtitle": "Visualisez et gérez vos investissements",
-    "addAsset": "Ajouter un Actif",
     "searchPlaceholder": "Rechercher des actifs...",
     "allTypes": "Tous les types",
-    "allCurrencies": "Toutes les devises",
     "showActive": "Actifs seulement",
     "showAll": "Tout afficher",
     "table": {
-      "name": "Nom",
-      "currency": "Devise",
       "lastPrice": "Dernier Prix",
       "provider": "Fournisseur"
     },
     "empty": {
       "noAssets": "Aucun actif",
       "noAssetsDesc": "Ajoutez votre premier actif pour commencer à suivre les prix.",
-      "noMatchesTitle": "Aucun Résultat",
       "noMatchesDesc": "Aucun actif ne correspond aux filtres actuels."
     },
     "sync": {
@@ -301,7 +307,6 @@
       "titleEdit": "Modifier l'Actif",
       "searchOnline": "Rechercher en Ligne",
       "assetDetails": "Détails de l'Actif",
-      "identifiers": "Identifiants",
       "createAsset": "Créer l'Actif",
       "saveChanges": "Enregistrer",
       "autoAssignInfo": "Le fournisseur \"{provider}\" sera attribué automatiquement à la création",
@@ -311,9 +316,6 @@
       "createSuccess": "\"{name}\" créé avec succès",
       "saveSuccess": "\"{name}\" mis à jour avec succès",
       "moreInfo": "Plus d'infos",
-      "classification": "Classification",
-      "sectorDistribution": "Distribution Sectorielle",
-      "geographicDistribution": "Distribution Géographique",
       "createSuccessProviderFailed": "Actif \"{name}\" créé, mais attribution du fournisseur échouée. Assignez-le manuellement."
     },
     "provider": {
@@ -328,35 +330,26 @@
       "identifierType": "Type d'Identifiant",
       "fetchInterval": "Intervalle de mise a jour",
       "lastFetch": "Derniere mise a jour",
-      "neverFetched": "Jamais execute",
-      "documentation": "Documentation"
+      "neverFetched": "Jamais execute"
     },
     "schedule": {
       "title": "Calendrier d'intérêts",
       "period": "Période",
       "rate": "Taux %",
-      "compounding": "Capitalisation",
-      "compFreq": "Fréq. Comp.",
       "dayCount": "Décompte Jours",
       "periodHint": "Date de début et de fin de cette période d'intérêt.\nLes deux dates sont inclusives (la date de fin est le dernier jour de la période).",
       "rateHint": "Taux d'intérêt annuel en pourcentage.\nExemple : 5.00 = 5% par an.",
-      "compoundingHint": "Simple : intérêt sur le capital uniquement.\nComposé : les intérêts s'accumulent aussi sur les intérêts.",
-      "freqHint": "Fréquence de calcul des intérêts composés.\nS'applique uniquement si la capitalisation est Composée.",
-      "dayCountHint": "Convention de calcul des jours dans la période.\nACT/365 et ACT/360 sont les plus courantes.",
       "addPeriod": "Ajouter une période",
       "addFirstPeriod": "Ajouter la première période",
       "split": "Diviser",
       "merge": "Fusionner",
-      "deleteSelected": "Supprimer la sélection",
       "deletePeriodTitle": "Supprimer la période",
       "splitPeriodTitle": "Diviser la période",
       "deleteBoundaryHint": "Choisissez la date limite pour redistribuer la plage entre les périodes voisines.",
       "splitBoundaryHint": "Choisissez la date où cette période sera divisée en deux.",
       "boundaryDate": "Date limite",
-      "confirmDelete": "Confirmer la suppression",
       "confirmSplit": "Confirmer la division",
       "lateInterest": "Intérêts de retard",
-      "empty": "Aucune période d'intérêt définie",
       "emptyTitle": "Aucune période d'intérêt définie",
       "emptyHint": "Ajoutez au moins une période pour configurer le calendrier d'investissement.",
       "periods": "périodes",
@@ -391,19 +384,12 @@
     "probe": {
       "currentPrice": "Prix Actuel",
       "history": "Historique",
-      "metadata": "Métadonnées",
       "notTested": "Non testé",
-      "passed": "Réussi",
-      "failed": "Échoué",
-      "executionTime": "Temps d'exécution",
-      "totalTime": "Total",
-      "cacheInfo": "Les donnees de prix peuvent avoir un retard de 15 minutes."
+      "totalTime": "Total"
     },
     "identifiers": {
       "askProvider": "Demander au Fournisseur",
       "askProviderHint": "Récupérer les identifiants du fournisseur attribué",
-      "autoFilled": "Rempli automatiquement par le fournisseur",
-      "conflictWarning": "Le fournisseur suggère une valeur différente",
       "addIdentifier": "Ajouter identifiant",
       "deleteSelected": "Supprimer les identifiants sélectionnés",
       "deleteConfirmMessage": "Supprimer {count} identifiants ?"
@@ -419,7 +405,6 @@
     "search": {
       "placeholder": "Rechercher par nom, ticker, ISIN...",
       "providers": "Fournisseurs",
-      "noResults": "Aucun résultat trouvé",
       "searching": "Recherche en cours..."
     },
     "comparison": {
@@ -463,13 +448,11 @@
       "noPairsTitle": "Aucune Paire FX Configurée",
       "noPairsDesc": "Ajoutez votre première paire de devises pour commencer à suivre les taux de change.",
       "addFirstPair": "Ajouter la Première Paire",
-      "noMatchesTitle": "Aucun Résultat",
       "noMatchesDesc": "Aucune paire ne correspond au filtre actuel."
     },
     "filter": {
       "filterCurrency": "Filtrer devise",
       "secondCurrency": "Deuxième devise",
-      "allCurrencies": "Toutes les devises",
       "resetFilters": "Réinitialiser filtres"
     },
     "addPair": {
@@ -492,9 +475,6 @@
       "timeout": "Délai d'attente",
       "tooltipFetched": "Points de données téléchargés du fournisseur",
       "tooltipChanged": "Points de données réellement insérés ou mis à jour dans la base",
-      "toastOk": "{pair} synchronisé\n{fetched}↓ {changed}Δ ({provider})",
-      "toastPartial": "{pair} — partiel\n{fetched}↓ {changed}Δ ({provider})",
-      "toastSkipped": "{pair} — manuel uniquement, rien à synchroniser",
       "toastFailed": "{pair} échec de la synchronisation",
       "legBreakdown": "Détail par étape",
       "legNoData": "0 dates — aucune donnée",
@@ -515,7 +495,6 @@
       "addRoute": "Ajouter une route de conversion",
       "hideRoutes": "Masquer les routes disponibles"
     },
-    "syncing": "Synchronisation...",
     "providers": "Fournisseurs",
     "deletePair": "Supprimer la paire",
     "deletePairTitle": "Supprimer la Paire FX",
@@ -640,14 +619,10 @@
     "themeHint": "Choisissez votre thème préféré",
     "category": "Catégorie",
     "avatarHint": "Cliquez pour télécharger une photo de profil",
-    "removeAvatarTitle": "Supprimer l'avatar ?",
-    "removeAvatarMessage": "Êtes-vous sûr de vouloir supprimer votre avatar ?",
     "selectAvatar": "Sélectionner un Avatar"
   },
   "uploads": {
     "dropOrClick": "Déposer un fichier ici ou cliquer pour parcourir",
-    "maxSize": "Taille max: {size}Mo",
-    "imageSize": "Taille de l'image",
     "upload": "Téléverser",
     "title": "Fichiers",
     "staticResources": "Ressources Statiques",
@@ -697,8 +672,7 @@
     "imageUrl": "URL de l'Image",
     "useSelected": "Utiliser la Sélection",
     "selectIcon": "Sélectionner une Icône",
-    "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers",
-    "removeImage": "Supprimer l'image"
+    "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers"
   },
   "datePicker": {
     "from": "Du",
@@ -871,20 +845,14 @@
       "deltaPct": "Δ %",
       "annualized": "Δ%/an"
     },
-    "days": "{days}j",
-    "addMeasure": "Ajouter Mesure"
+    "days": "{days}j"
   },
   "fxDetail": {
-    "measures": "Mesures",
-    "signals": "Signaux",
     "editRates": "Modifier les taux",
     "loadingRates": "Chargement des taux...",
     "noData": "Aucune donnée de taux disponible pour cette plage.",
     "syncRates": "Synchroniser les taux",
     "backToList": "Retour à la liste FX",
-    "exitMeasure": "Quitter le mode mesure",
-    "addMeasure": "Ajouter une mesure",
-    "closeEditor": "Fermer l'éditeur",
     "swapConfirmTitle": "Modifications non enregistrées",
     "swapConfirmMessage": "Vous avez des modifications non enregistrées dans l'éditeur de taux. Inverser la direction les supprimera. Continuer ?",
     "noDataManual": "Aucune donnée disponible — insérez les taux manuellement",
@@ -914,22 +882,17 @@
   },
   "dataEditor": {
     "clearSelection": "Effacer la sélection",
-    "deleteSelected": "Supprimer la sélection",
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",
     "col": {
-      "currency": "Devise",
       "close": "Clôture",
       "open": "Ouverture",
       "high": "Haut",
       "low": "Bas",
       "volume": "Volume",
-      "type": "Type",
-      "amount": "Montant",
-      "notes": "Notes"
+      "amount": "Montant"
     },
     "save": "Enregistrer ({count})",
-    "saving": "Enregistrement…",
-    "cancel": "Annuler"
+    "saving": "Enregistrement…"
   },
   "sharedResource": {
     "syncAll": "Sync. Tout",
@@ -958,28 +921,15 @@
     "editData": "Modifier prix et événements",
     "pricesTab": "Prix",
     "eventsTab": "Événements",
-    "closeEditor": "Fermer éditeur",
-    "exitMeasure": "Quitter le mode mesure",
-    "addMeasure": "Ajouter une mesure",
     "metadata": "Métadonnées et classification",
     "editViaModal": "Modifier dans la modale",
     "displayCurrency": "Convertir en",
     "noIdentifiers": "Aucun identifiant configuré",
     "noClassification": "Aucune donnée de classification",
-    "measures": "Mesures",
-    "signals": "Signaux",
     "noDataScheduled": "Configurez le calendrier des intérêts via Modifier pour générer les prix",
     "syncPrices": "Synchroniser les prix",
     "recalculate": "Recalculer",
     "syncDisabledManual": "Synchronisation désactivée — aucun fournisseur configuré",
-    "identifiers": "Identifiants",
-    "classification": "Classification",
-    "sectorDistribution": "Distribution sectorielle",
-    "geoDistribution": "Distribution géographique",
-    "eventMarkers": "Marqueurs d'événements",
-    "syncSuccess": "Prix synchronisés : {fetched} récupérés, {changed} modifiés",
-    "syncFailed": "Échec de la synchronisation",
-    "syncPartial": "Synchronisation partielle : {fetched} récupérés, {changed} modifiés",
     "fxPairMissing": "Paire FX {base}/{quote} non configurée — conversion non disponible",
     "addFxPair": "Ajouter une paire FX",
     "goToFxPair": "Voir le détail de la paire FX",
