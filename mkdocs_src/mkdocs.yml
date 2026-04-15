@@ -355,20 +355,6 @@ nav:
       - Brokers:
           - Overview: user/brokers/index.md
           - Broker Sharing: user/brokers/sharing.md
-      - Files:
-          - Overview: user/files/index.md
-      - FX Rates:
-          - Overview: user/fx/index.md
-          - Adding a Pair: user/fx/add-pair.md
-          - Synchronization: user/fx/sync.md
-          - Pair Detail:
-              - Overview: user/fx/detail/index.md
-              - Interactive Chart: user/fx/detail/chart.md
-              - Signals: user/fx/detail/signals.md
-              - Measures: user/fx/detail/measures.md
-              - Data Editor: user/fx/detail/data-editor.md
-              - Provider Config: user/fx/detail/provider.md
-          - Chart Settings: user/fx/chart-settings.md
       - Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md
@@ -386,6 +372,20 @@ nav:
               - justETF: user/assets/providers/justetf.md
               - CSS Scraper: user/assets/providers/css-scraper.md
               - Scheduled Investment: user/assets/providers/scheduled-investment.md
+      - FX Rates:
+          - Overview: user/fx/index.md
+          - Adding a Pair: user/fx/add-pair.md
+          - Synchronization: user/fx/sync.md
+          - Pair Detail:
+              - Overview: user/fx/detail/index.md
+              - Interactive Chart: user/fx/detail/chart.md
+              - Signals: user/fx/detail/signals.md
+              - Measures: user/fx/detail/measures.md
+              - Data Editor: user/fx/detail/data-editor.md
+              - Provider Config: user/fx/detail/provider.md
+          - Chart Settings: user/fx/chart-settings.md
+      - Files:
+          - Overview: user/files/index.md
       - Misc:
           - Image Crop: user/misc/image-crop.md
   - Admin Manual:

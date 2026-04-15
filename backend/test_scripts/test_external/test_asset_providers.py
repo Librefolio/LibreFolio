@@ -3,6 +3,9 @@ Generic test suite for ALL asset pricing providers.
 
 Tests all registered asset providers (yfinance, cssscraper, etc.) with uniform test suite.
 Similar pattern to test_fx_providers.py.
+
+Provider filtering is handled by test_runner.py via --providers / --exclude-providers flags,
+which translate to pytest -k expressions at the CLI level.
 """
 
 import sys

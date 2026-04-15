@@ -24,6 +24,7 @@ import argparse
 import inspect
 import os
 import re
+import shutil
 import subprocess
 import sys
 import traceback
@@ -280,7 +281,124 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
 # EXTERNAL SERVICES TESTS
 # ============================================================================
 
-def external_fx_providers(verbose: bool = False, test_names: list = None) -> bool:
+# ── Provider discovery for dynamic CLI help & filtering ─────────────────
+
+# Regex to extract provider_code from property definitions like:
+#   @property
+#   def provider_code(self) -> str:
+#       return "yfinance"
+_PROVIDER_CODE_RE = re.compile(
+    r'def\s+provider_code\s*\(self\).*?\n\s+(?:"""[^"]*"""\n\s+)?return\s+["\']([^"\']+)["\']',
+    re.MULTILINE,
+)
+
+# Fallback regex for FX providers where provider_code delegates to code property:
+#   def code(self) -> str:
+#       return "ECB"
+_CODE_RE = re.compile(
+    r'def\s+code\s*\(self\).*?\n\s+return\s+["\']([^"\']+)["\']',
+    re.MULTILINE,
+)
+
+# Provider folder mapping (relative to PROJECT_ROOT/backend/app/services/)
+_PROVIDER_FOLDERS = {
+    "asset": "asset_source_providers",
+    "fx":    "fx_providers",
+    "brim":  "brim_providers",
+}
+
+
+def _discover_provider_codes(registry_type: str) -> list[str]:
+    """
+    Discover provider codes by scanning source files with regex.
+
+    This avoids importing provider modules (which would trigger heavy side-effects
+    like TTL cache creation, logging, and network client initialisation).
+
+    Uses two patterns:
+      1. ``def provider_code(self): return "literal"``
+      2. ``def code(self): return "literal"`` (FX providers delegate provider_code → code)
+
+    Args:
+        registry_type: "asset", "fx", or "brim"
+
+    Returns:
+        Sorted list of provider code strings (e.g. ['css_scraper', 'justetf', 'yfinance'])
+    """
+    folder_name = _PROVIDER_FOLDERS.get(registry_type)
+    if not folder_name:
+        return []
+
+    target_dir = PROJECT_ROOT / "backend" / "app" / "services" / folder_name
+    if not target_dir.exists():
+        return []
+
+    codes: list[str] = []
+    for py in target_dir.glob("*.py"):
+        if py.name == "__init__.py":
+            continue
+        try:
+            text = py.read_text(encoding="utf-8")
+            match = _PROVIDER_CODE_RE.search(text)
+            if not match:
+                # Fallback: try the `def code(self)` pattern (used by FX providers)
+                match = _CODE_RE.search(text)
+            if match:
+                codes.append(match.group(1))
+        except Exception:
+            continue
+    return sorted(codes)
+
+
+# Cache at module level (discovered once per run)
+_ASSET_PROVIDER_CODES: list[str] | None = None
+_FX_PROVIDER_CODES: list[str] | None = None
+_BRIM_PROVIDER_CODES: list[str] | None = None
+
+
+def get_asset_provider_codes() -> list[str]:
+    """Get available asset provider codes (cached)."""
+    global _ASSET_PROVIDER_CODES
+    if _ASSET_PROVIDER_CODES is None:
+        _ASSET_PROVIDER_CODES = _discover_provider_codes("asset")
+    return _ASSET_PROVIDER_CODES
+
+
+def get_fx_provider_codes() -> list[str]:
+    """Get available FX provider codes (cached)."""
+    global _FX_PROVIDER_CODES
+    if _FX_PROVIDER_CODES is None:
+        _FX_PROVIDER_CODES = _discover_provider_codes("fx")
+    return _FX_PROVIDER_CODES
+
+
+def get_brim_provider_codes() -> list[str]:
+    """Get available BRIM provider codes (cached)."""
+    global _BRIM_PROVIDER_CODES
+    if _BRIM_PROVIDER_CODES is None:
+        _BRIM_PROVIDER_CODES = _discover_provider_codes("brim")
+    return _BRIM_PROVIDER_CODES
+
+
+def _build_provider_filter_expr(providers: list[str] | None, exclude_providers: list[str] | None) -> str | None:
+    """
+    Build a pytest -k expression to include/exclude providers.
+
+    Args:
+        providers: If set, ONLY these providers will be tested
+        exclude_providers: If set, these providers will be EXCLUDED
+
+    Returns:
+        A pytest -k expression string, or None if no filtering
+    """
+    if providers:
+        return " or ".join(providers)
+    elif exclude_providers:
+        return " and ".join(f"not {p}" for p in exclude_providers)
+    return None
+
+def external_fx_providers(verbose: bool = False, test_names: list = None,
+                          providers: list = None, exclude_providers: list = None) -> bool:
     """
     Run FX providers external tests (network-dependent).
 
@@ -296,11 +414,24 @@ def external_fx_providers(verbose: bool = False, test_names: list = None) -> boo
     print_info("⚠️  WARNING: Requires internet connection")
     print_info("⚠️  WARNING: May be slow due to API rate limiting")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_fx_providers.py", test_names)
+    if providers:
+        print_info(f"🔍 Filter: ONLY providers → {', '.join(providers)}")
+    if exclude_providers:
+        print_info(f"🚫 Filter: EXCLUDING providers → {', '.join(exclude_providers)}")
+
+    # Merge provider filter into test_names (both use pytest -k)
+    effective_names = list(test_names) if test_names else []
+    provider_expr = _build_provider_filter_expr(providers, exclude_providers)
+    if provider_expr:
+        effective_names.append(provider_expr)
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_fx_providers.py",
+                            effective_names or None)
     return run_command(cmd, "FX providers external tests", verbose=verbose)
 
 
-def external_asset_providers(verbose: bool = False, test_names: list = None) -> bool:
+def external_asset_providers(verbose: bool = False, test_names: list = None,
+                             providers: list = None, exclude_providers: list = None) -> bool:
     """
     Test all registered asset pricing providers (yfinance, cssscraper, etc.).
 
@@ -313,11 +444,24 @@ def external_asset_providers(verbose: bool = False, test_names: list = None) -> 
     print_info("⚠️  WARNING: Requires internet connection")
     print_info("⚠️  WARNING: May be slow due to API rate limiting")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_asset_providers.py", test_names)
+    if providers:
+        print_info(f"🔍 Filter: ONLY providers → {', '.join(providers)}")
+    if exclude_providers:
+        print_info(f"🚫 Filter: EXCLUDING providers → {', '.join(exclude_providers)}")
+
+    # Merge provider filter into test_names (both use pytest -k)
+    effective_names = list(test_names) if test_names else []
+    provider_expr = _build_provider_filter_expr(providers, exclude_providers)
+    if provider_expr:
+        effective_names.append(provider_expr)
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_asset_providers.py",
+                            effective_names or None)
     return run_command(cmd, "Asset providers tests", verbose=verbose)
 
 
-def external_brim_providers(verbose: bool = False, test_names: list = None) -> bool:
+def external_brim_providers(verbose: bool = False, test_names: list = None,
+                            providers: list = None, exclude_providers: list = None) -> bool:
     """
     Test BRIM (Broker Report Import Manager) providers.
 
@@ -329,15 +473,42 @@ def external_brim_providers(verbose: bool = False, test_names: list = None) -> b
     print_info("Tests: Plugin discovery, file parsing, auto-detection, sample coverage")
     print_info("Brokers: Directa, DEGIRO, Trading212, IBKR, eToro, Revolut, Schwab, etc.")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_providers.py", test_names)
+    if providers:
+        print_info(f"🔍 Filter: ONLY providers → {', '.join(providers)}")
+    if exclude_providers:
+        print_info(f"🚫 Filter: EXCLUDING providers → {', '.join(exclude_providers)}")
+
+    # Merge provider filter into test_names (both use pytest -k)
+    effective_names = list(test_names) if test_names else []
+    provider_expr = _build_provider_filter_expr(providers, exclude_providers)
+    if provider_expr:
+        effective_names.append(provider_expr)
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_providers.py",
+                            effective_names or None)
     return run_command(cmd, "BRIM providers tests", verbose=verbose)
 
 
-def external_all(verbose: bool = False) -> bool:
+def external_all(verbose: bool = False,
+                 providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
+    # Build test list, forwarding provider filters to functions that accept them
+    tests = []
+    for action, info in TEST_REGISTRY.get("external", {}).items():
+        if action in ("_meta", "all"):
+            continue
+        func = info["func"]
+        name = info.get("name", action)
+        func_params = inspect.signature(func).parameters
+        if "providers" in func_params:
+            tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers:
+                          f(verbose=v, providers=p, exclude_providers=ep)))
+        else:
+            tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
+
     return _run_test_suite(
         suite_name="External Tests",
-        tests=_get_category_tests_for_all("external", verbose),
+        tests=tests,
         verbose=verbose,
         info_msgs=[
             "Testing external provider integrations",
@@ -531,6 +702,17 @@ def db_test_referential_integrity(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Database referential integrity tests", verbose=verbose)
 
 
+def db_model_validators(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test Pydantic/SQLModel field validators on DB models.
+    Validates currency, ISIN, ticker normalization and rejection of invalid data.
+    """
+    print_section("DB Test: Model Validators")
+    print_info("Testing: Currency validation, ISIN/ticker normalization, FxRoute properties")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_model_validators.py", test_names)
+    return run_command(cmd, "Model validator tests", verbose=verbose)
+
+
 def db_all(verbose: bool = False) -> bool:
     """
     Run all database tests in sequence.
@@ -547,7 +729,7 @@ def db_all(verbose: bool = False) -> bool:
     # DB tests have critical ordering - define explicitly
     db_order = [
         "create", "validate", "numeric-truncation", "populate",
-        "referential-integrity", "fx-rates", "brim"
+        "referential-integrity", "fx-rates", "brim", "model-validators"
         ]
 
     tests = []
@@ -638,6 +820,17 @@ def services_provider_registry(verbose: bool = False, test_names: list = None) -
     print_info("Testing: backend/app/services/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry.py", test_names)
     return run_command(cmd, "Provider registry tests", verbose=verbose)
+
+
+def services_provider_contracts(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test provider interface contracts (FX, Asset, BRIM).
+    Offline parametrized tests that validate ABC compliance for ALL registered providers.
+    """
+    print_section("Services: Provider Contract Tests")
+    print_info("Testing: Interface compliance for ALL registered providers (offline, no HTTP)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_contracts.py", test_names)
+    return run_command(cmd, "Provider contract tests", verbose=verbose)
 
 
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
@@ -1949,7 +2142,6 @@ _FRONTEND_CATEGORIES = ("front-utility", "front-user", "front-fx", "front-asset"
 
 def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
     """Remove coverage data directories selectively."""
-    import shutil
     cwd = Path(os.getcwd())
 
     if clean_backend:
@@ -1993,7 +2185,8 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
 # GLOBAL ALL TESTS
 # ============================================================================
 
-def run_all_tests(verbose: bool = False) -> bool:
+def run_all_tests(verbose: bool = False,
+                  providers: list = None, exclude_providers: list = None) -> bool:
     """
     Run ALL tests in the optimal order.
 
@@ -2018,9 +2211,14 @@ def run_all_tests(verbose: bool = False) -> bool:
         func = all_info.get("func")
         name = all_info.get("name", f"{category.title()} Tests")
         if func:
+            func_params = inspect.signature(func).parameters
             # Front-* categories accept coverage kwarg; pass it when --coverage is active
-            if category.startswith("front-") and 'coverage' in inspect.signature(func).parameters:
+            if category.startswith("front-") and 'coverage' in func_params:
                 tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
+            # External category: forward provider filter flags
+            elif "providers" in func_params:
+                tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers:
+                              f(verbose=v, providers=p, exclude_providers=ep)))
             else:
                 tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 
@@ -2036,7 +2234,8 @@ def run_all_tests(verbose: bool = False) -> bool:
         )
 
 
-def run_all_backend_tests(verbose: bool = False) -> bool:
+def run_all_backend_tests(verbose: bool = False,
+                          providers: list = None, exclude_providers: list = None) -> bool:
     """Run all backend tests (external, db, services, utils, schemas, api, e2e)."""
     tests = []
     for category in _BACKEND_CATEGORIES:
@@ -2046,7 +2245,13 @@ def run_all_backend_tests(verbose: bool = False) -> bool:
         func = all_info.get("func")
         name = all_info.get("name", f"{category.title()} Tests")
         if func:
-            tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
+            func_params = inspect.signature(func).parameters
+            # External category: forward provider filter flags
+            if "providers" in func_params:
+                tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers:
+                              f(verbose=v, providers=p, exclude_providers=ep)))
+            else:
+                tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 
     return _run_test_suite(
         suite_name="Backend Test Suite",
@@ -2220,6 +2425,14 @@ These tests verify SQLite database operations:
             "prereq": "Database created",
             "tests": "FK constraints, cascades",
             },
+        "model-validators": {
+            "func": db_model_validators,
+            "test_names": True,
+            "name": "Model Validators",
+            "desc": "Test Pydantic field validators on DB models",
+            "prereq": "None",
+            "tests": "Currency, ISIN, ticker validation",
+            },
         "all": {
             "func": db_all,
             "test_names": False,
@@ -2278,6 +2491,14 @@ These tests verify business logic in service layer:
             "desc": "Test provider auto-discovery",
             "prereq": "None",
             "tests": "Registry pattern, plugin loading",
+            },
+        "provider-contracts": {
+            "func": services_provider_contracts,
+            "test_names": True,
+            "name": "Provider Contracts",
+            "desc": "Test ABC interface compliance for ALL providers (offline)",
+            "prereq": "None",
+            "tests": "Metadata, static URLs, test_cases, params_schema",
             },
         "synthetic-yield": {
             "func": services_synthetic_yield,
@@ -3044,16 +3265,81 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
         ui = kwargs.get("ui", False)
         headed = kwargs.get("headed", False)
         debug = kwargs.get("debug", False)
-        coverage = kwargs.get("coverage", False)
+        coverage = kwargs.get("coverage", False) or _COVERAGE_MODE
         if accepts_test_names and test_names:
             return test_func(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
         return test_func(verbose=verbose, ui=ui, headed=headed, debug=debug, coverage=coverage)
+
+    # Special case for external category (has --providers / --exclude-providers)
+    if category == "external":
+        providers = kwargs.get("providers", None)
+        exclude_providers = kwargs.get("exclude_providers", None)
+        # Only pass provider filters to functions that accept them (fx-providers, asset-providers)
+        func_params = inspect.signature(test_func).parameters
+        extra_kw = {}
+        if "providers" in func_params:
+            extra_kw["providers"] = providers
+        if "exclude_providers" in func_params:
+            extra_kw["exclude_providers"] = exclude_providers
+        if accepts_test_names and test_names:
+            return test_func(verbose=verbose, test_names=test_names, **extra_kw)
+        return test_func(verbose=verbose, **extra_kw)
 
     # Build arguments
     if accepts_test_names and test_names:
         return test_func(verbose=verbose, test_names=test_names)
     else:
         return test_func(verbose=verbose)
+
+
+def _get_external_extra_args() -> list[tuple]:
+    """
+    Generate --providers / --exclude-providers argparse arguments for the external category.
+
+    Dynamic help text lists all currently registered provider codes,
+    so users see available choices directly in --help output.
+
+    Provider codes are discovered via lightweight filesystem regex parsing
+    (no module imports, no side-effects).
+
+    Shared between create_parser() and register_subparser() to avoid duplication.
+    """
+    asset_codes = get_asset_provider_codes()
+    fx_codes = get_fx_provider_codes()
+    brim_codes = get_brim_provider_codes()
+    provider_help = (
+        "Only test these provider(s). "
+        f"Asset: {', '.join(asset_codes) or '(none)'}. "
+        f"FX: {', '.join(fx_codes) or '(none)'}. "
+        f"BRIM: {', '.join(brim_codes) or '(none)'}. "
+        "If omitted, ALL providers are tested."
+    )
+    exclude_help = (
+        "Exclude these provider(s) from testing. "
+        f"Asset: {', '.join(asset_codes) or '(none)'}. "
+        f"FX: {', '.join(fx_codes) or '(none)'}. "
+        f"BRIM: {', '.join(brim_codes) or '(none)'}."
+    )
+    return [
+        (
+            "--providers", {
+            "nargs": "+",
+            "dest": "providers",
+            "metavar": "CODE",
+            "help": provider_help,
+            "default": None,
+            }
+            ),
+        (
+            "--exclude-providers", {
+            "nargs": "+",
+            "dest": "exclude_providers",
+            "metavar": "CODE",
+            "help": exclude_help,
+            "default": None,
+            }
+            ),
+    ]
 
 
 def create_subparser_from_registry(subparsers, category: str, extra_args: list = None):
@@ -3264,6 +3550,8 @@ def create_parser() -> argparse.ArgumentParser:
                 "default": False,
                 }
                 ))
+        elif category == "external":
+            extra_args.extend(_get_external_extra_args())
         elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
             extra_args.extend([
                 (
@@ -3290,8 +3578,8 @@ def create_parser() -> argparse.ArgumentParser:
                 ])
         create_subparser_from_registry(subparsers, category, extra_args)
 
-    # Special "all" category
-    subparsers.add_parser(
+    # Special "all" category – also accepts provider filter flags
+    all_parser = subparsers.add_parser(
         "all",
         help="Run ALL tests in optimal order",
         description="""
@@ -3310,9 +3598,11 @@ Expected time: 3-7 minutes
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
+    for arg_name, arg_kwargs in _get_external_extra_args():
+        all_parser.add_argument(arg_name, **arg_kwargs)
 
-    # "all-backend" category
-    subparsers.add_parser(
+    # "all-backend" category – also accepts provider filter flags
+    all_be_parser = subparsers.add_parser(
         "all-backend",
         help="Run all backend tests (external, db, schemas, utils, services, api, e2e)",
         description="""
@@ -3329,6 +3619,8 @@ Runs all backend test categories:
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
+    for arg_name, arg_kwargs in _get_external_extra_args():
+        all_be_parser.add_argument(arg_name, **arg_kwargs)
 
     # "all-frontend" category
     subparsers.add_parser(
@@ -3448,6 +3740,8 @@ def register_subparser(parent_subparsers):
                 "default": False,
                 }
                 ))
+        elif category == "external":
+            extra_args.extend(_get_external_extra_args())
         elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
             extra_args.extend([
                 (
@@ -3474,17 +3768,21 @@ def register_subparser(parent_subparsers):
                 ])
         create_subparser_from_registry(test_subparsers, category, extra_args)
 
-    # "all" category
-    test_subparsers.add_parser(
+    # "all" category – also accepts provider filter flags
+    all_parser = test_subparsers.add_parser(
         "all",
         help="Run ALL tests in optimal order"
         )
+    for arg_name, arg_kwargs in _get_external_extra_args():
+        all_parser.add_argument(arg_name, **arg_kwargs)
 
-    # "all-backend" category
-    test_subparsers.add_parser(
+    # "all-backend" category – also accepts provider filter flags
+    all_be_parser = test_subparsers.add_parser(
         "all-backend",
         help="Run all backend tests (external, db, schemas, utils, services, api, e2e)"
         )
+    for arg_name, arg_kwargs in _get_external_extra_args():
+        all_be_parser.add_argument(arg_name, **arg_kwargs)
 
     # "all-frontend" category
     test_subparsers.add_parser(
@@ -3524,27 +3822,27 @@ def _dispatch_test_command(args):
         _COVERAGE_SOURCE = "frontend"
     elif args.category == "all-frontend":
         _COVERAGE_SOURCE = "frontend"
-    elif args.category and args.category not in ("all",):
+    elif args.category and args.category not in ("all", "all-backend", "coverage-report", "coverage"):
         _COVERAGE_SOURCE = "backend"
     else:
         _COVERAGE_SOURCE = None
 
+    # If coverage mode, handle cov-clean and show message
     if coverage:
         print_header("LibreFolio Test Suite - Coverage Mode")
         print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
+        print(f"{Colors.BLUE}Coverage will accumulate across all test runs{Colors.NC}")
+        print(f"{Colors.BLUE}Final report: htmlcov/index.html{Colors.NC}")
         print()
 
         _clean_coverage_dirs(cov_clean_be, cov_clean_fe)
 
-    # Dispatch to appropriate handler
+    # Run tests
     result = dispatch_to_category(args.category, test_names, verbose, args)
     success = result == 0
 
-    # Coverage finalization: combine .coverage.* files and generate HTML report
+    # If coverage mode, show final summary
     if _COVERAGE_MODE:
-        is_front = _COVERAGE_SOURCE == "frontend"
-        is_all = _COVERAGE_SOURCE is None  # category "all"
-
         print()
         print_header("Coverage Report Summary")
         if success:
@@ -3552,13 +3850,17 @@ def _dispatch_test_command(args):
         else:
             print_warning("⚠️  Some tests failed, but coverage was still tracked")
 
+        is_front = _COVERAGE_SOURCE == "frontend"
+        is_all = _COVERAGE_SOURCE is None  # category "all"
+
         print()
         print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
         print()
 
         _finalize_coverage(is_front, is_all)
 
-    return result
+    # Exit with appropriate code
+    return 0 if success else 1
 
 
 def _finalize_coverage(is_front: bool, is_all: bool) -> str:
@@ -3575,7 +3877,6 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
 
     Returns the html_dir used for the report.
     """
-    import shutil
     cwd = Path(os.getcwd())
     main_cov = cwd / ".coverage"
     backend_cov = cwd / ".coverage.backend"
@@ -3823,9 +4124,13 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
     success = False
 
     if category == "all":
-        success = run_all_tests(verbose=verbose)
+        providers = getattr(args, 'providers', None)
+        exclude_providers = getattr(args, 'exclude_providers', None)
+        success = run_all_tests(verbose=verbose, providers=providers, exclude_providers=exclude_providers)
     elif category == "all-backend":
-        success = run_all_backend_tests(verbose=verbose)
+        providers = getattr(args, 'providers', None)
+        exclude_providers = getattr(args, 'exclude_providers', None)
+        success = run_all_backend_tests(verbose=verbose, providers=providers, exclude_providers=exclude_providers)
     elif category == "all-frontend":
         success = run_all_frontend_tests(verbose=verbose)
     elif category == "coverage-report":
@@ -3853,6 +4158,9 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
                 kwargs['clean'] = getattr(args, 'clean', False)
                 kwargs['with_static'] = getattr(args, 'with_static', False)
                 kwargs['with_reports'] = getattr(args, 'with_reports', False)
+            elif category == "external":
+                kwargs['providers'] = getattr(args, 'providers', None)
+                kwargs['exclude_providers'] = getattr(args, 'exclude_providers', None)
             elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
                 kwargs['ui'] = getattr(args, 'ui', False)
                 kwargs['headed'] = getattr(args, 'headed', False)
@@ -3873,7 +4181,7 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
         print_error(f"Unknown category: {category}")
         return 1
 
-    return 0 if success else 1
+    return 0
 
 
 def main():
