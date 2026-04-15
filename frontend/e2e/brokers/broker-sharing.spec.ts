@@ -102,7 +102,7 @@ test.describe('Broker Sharing', () => {
         });
 
         test('S9: close modal with Escape key', async ({page}) => {
-            await page.keyboard.press('Escape');
+            await page.getByTestId('broker-sharing-modal').press('Escape');
             await expect(page.getByTestId('broker-sharing-modal')).not.toBeVisible({timeout: 3000});
         });
 

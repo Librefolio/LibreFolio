@@ -329,6 +329,86 @@ const VALIDATION_RULES = {
 
 ---
 
+## 7.2.5 Mapping con asset esistenti
+In vista anche dell'import da broker, è importante che il form di add/edit transazione supporti il mapping con asset esistenti. Questo permette di evitare duplicati e di collegare correttamente le transazioni agli asset già presenti nel portafoglio.
+Si era inizialmente pianificata una modale durante lo step 6, ma ci si è resi conto che non aveva senso svilupparlo in quel momento.
+Ecco il piano originale, che rimane valido nelle intenzioni ma necessita di un aggiornamento operativo alla luce degli sviluppi attuali:
+
+### Step 5  importato da Phase 06 — `AssetMatchingWizard.svelte` (condiviso Phase 7) (~1 giorno)
+
+
+Creare `src/lib/components/assets/AssetMatchingWizard.svelte`. (forse da rinominare in `AssetSearchOrCreateWizard.svelte` per chiarezza). Questo componente è un wizard a 3 step per trovare o creare un asset durante l'importazione di una transazione:
+
+#### Layout
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  ✕               Find or Create Asset                    │
+├──────────────────────────────────────────────────────────┤
+│  Step: [① Search DB] → [② Search Online] → [③ Create]   │
+│         ━━━━━━━━━━━    ─────────────────   ───────────   │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  ── Step 1: Search Existing Assets ──────────────────    │
+│  🔍 [Search by name, ticker, ISIN...              ]      │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ Name            │ Type │ Ccy │ Identifiers        │  │
+│  ├─────────────────┼──────┼─────┼────────────────────┤  │
+│  │ Apple Inc.      │ STK  │ USD │ AAPL               │  │
+│  │ Apple Corp.     │ STK  │ USD │ APCX               │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  [Select "Apple Inc."]     [→ Not found, search online]  │
+│                                                          │
+├──────────────────── (Step 2 se cliccato) ────────────────┤
+│                                                          │
+│  ── Step 2: Search Online Providers ─────────────────    │
+│  🔍 [Apple                                        ]      │
+│  (risultati da GET /assets/provider/search)              │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ 🍎 Apple Inc.  AAPL · USD · STOCK  via yfinance   │  │
+│  │ 🍎 Apple Inc.  AAPL · USD · STOCK  via justetf    │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  [Select & Create]         [→ Not found, create manual]  │
+│                                                          │
+├──────────────────── (Step 3 se cliccato) ────────────────┤
+│                                                          │
+│  ── Step 3: Create Manually ─────────────────────────    │
+│  (stesso form di AssetModal in create mode)               │
+│  Display Name * [                    ]                    │
+│  Asset Type *   [         ▾]                              │
+│  Currency *     [         ▾]                              │
+│                          [Cancel]  [Create & Select]      │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### Specifiche
+
+- **Step 1**: `DataTable` con `GET /assets/query?search=...&identifier_contains=...`
+  Ricerca per nome, ticker, ISIN. Selezione → emette `onselect(asset_id)`.
+- **Step 2**: `GET /assets/provider/search?q=...` su tutti i provider con search.
+  Selezione → crea asset + assegna provider (stesso flusso Step 3) → emette `onselect(asset_id)`.
+- **Step 3**: form manuale (stesso di `AssetModal` create) → emette `onselect(asset_id)`.
+- Pulsanti "Not found" per avanzare allo step successivo.
+- Progress bar visuale (step indicator).
+- Embeddabile standalone (dentro `ModalBase`) E inline (senza ModalBase, per Phase 7 import wizard).
+
+#### Tasks
+
+- [ ] Creare `AssetMatchingWizard.svelte` con 3 step
+- [ ] Step 1: DataTable search DB esistente
+- [ ] Step 2: Search provider online con risultati
+- [ ] Step 3: Form manuale (riuso logica AssetModal)
+- [ ] Emissione `onselect(asset_id: number)` in tutti e 3 gli step
+- [ ] Step indicator visuale
+- [ ] Supporto standalone (ModalBase) e inline (senza)
+- [ ] i18n keys (assets.matching.*)
+
+
+---
+
 ## 7.3 Broker Report Import Flow (2 giorni)
 
 ### Tasks

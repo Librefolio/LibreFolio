@@ -226,23 +226,74 @@ I test Playwright possono tracciare la coverage del codice backend eseguito dura
 ```bash
 # Eseguire test frontend con backend coverage
 ./dev.py test --coverage front-fx all
-./dev.py test --coverage front-asset all
+./dev.py test --coverage front-user all
+./dev.py test --coverage all-frontend
 
 # Il report viene generato in htmlcov-frontend/
 ./dev.py test coverage show frontend
 ```
 
-**Come funziona:**
+### Come funziona — Architettura SIGTERM a 3 livelli
 
-1. `./dev.py test --coverage front-fx all` setta `COVERAGE_BACKEND=1` nell'env
-2. `playwright.config.ts` rileva `COVERAGE_BACKEND` e aggiunge `--coverage` al webServer command
-3. `dev.py server --coverage` setta `COVERAGE_PROCESS_START=.coveragerc` per uvicorn
-4. `sitecustomize.py` intercetta l'env var → `coverage.process_startup()` → tracking attivo
-5. Alla chiusura del server (SIGTERM da Playwright), coverage scrive `.coverage.<pid>`
-6. Il test runner fa `coverage combine` → `htmlcov-frontend/`
+Il tracciamento della coverage richiede che `coverage run` riceva **SIGTERM** alla fine dei test
+per scrivere il file `.coverage.<pid>`. Senza configurazione specifica, Playwright invia
+**SIGKILL** (non intercettabile) al webServer, rendendo impossibile il salvataggio dei dati.
 
-> **Nota**: il server deve chiudersi con SIGTERM (non SIGKILL) per fare il flush dei dati.
-> Playwright manda SIGTERM automaticamente quando i test finiscono.
+La soluzione richiede **4 elementi**, tutti necessari:
+
+1. **`gracefulShutdown`** in `playwright.config.ts`: configura Playwright per inviare SIGTERM
+   (invece di SIGKILL) al webServer, con fallback a SIGKILL dopo 5s
+2. **`exec`** nel comando webServer: `/bin/sh` si sostituisce con `dev.py` (elimina la shell intermedia)
+3. **`os.execvpe()`** in `dev.py`: dev.py si sostituisce con `pipenv run coverage run`
+4. **`os.execvpe()`** in `pipenv run`: pipenv si sostituisce con `coverage run` (comportamento POSIX standard)
+
+```text
+Playwright gracefulShutdown SIGTERM ──────────────────────────→ SIGTERM
+        │                                                          │
+        ▼                                                          ▼
+   /bin/sh -c "cd .. && exec ./dev.py server --coverage"     coverage run
+        │  exec (livello 1: shell si sostituisce)            riceve SIGTERM
+        ▼                                                    scrive .coverage.*
+   dev.py → os.execvpe(pipenv, ...)
+        │  exec (livello 2: dev.py si sostituisce)
+        ▼
+   pipenv run → os.execvpe(coverage, ...)
+        │  exec (livello 3: pipenv si sostituisce)
+        ▼
+   coverage run -m uvicorn   ← STESSO PID di /bin/sh!
+```
+
+**Flusso completo:**
+
+1. `./dev.py test --coverage front-fx all` setta `_COVERAGE_MODE=True`
+2. `_run_playwright()` setta `COVERAGE_BACKEND=1` nell'env di Playwright
+3. `playwright.config.ts` rileva `COVERAGE_BACKEND`:
+   - Aggiunge `--coverage` al webServer command
+   - Setta `reuseExistingServer: false` (forza un server fresco, non riutilizza uno non-coverage)
+4. Il webServer command usa `exec`: `cd .. && exec ./dev.py server --test --force --coverage`
+5. `dev.py` in coverage mode usa `os.execvpe()` per sostituirsi con `pipenv run coverage run ...`
+6. `pipenv run` (su POSIX) usa `os.execvpe()` per sostituirsi con `coverage run -m uvicorn`
+7. Alla fine dei test, Playwright manda SIGTERM al PID del webServer
+8. Grazie alla catena di exec, quel PID **è** `coverage run`
+9. `.coveragerc` ha `sigterm = true` → coverage intercetta SIGTERM e scrive `.coverage.<pid>`
+10. Il test runner fa `coverage combine` + `coverage html -d htmlcov-frontend/`
+
+> ⚠️ **CRITICO**: Senza `gracefulShutdown` nella config di Playwright, il webServer viene
+> terminato con SIGKILL (non intercettabile) — nessun dato di coverage viene scritto.
+> Senza `exec` a qualsiasi livello, SIGTERM raggiunge solo il processo padre
+> e il figlio (`coverage run`) diventa orfano.
+
+> **Garanzia**: La coverage viene catturata sia in caso di successo che di fallimento dei test.
+> L'unico caso di perdita è un crash totale del server (segfault, OOM, SIGKILL manuale).
+
+### File chiave
+
+| File | Ruolo nella pipeline |
+|------|---------------------|
+| `playwright.config.ts` | `gracefulShutdown: {signal: 'SIGTERM', timeout: 5000}` + `exec` nel command + `reuseExistingServer: false` |
+| `dev.py` (cmd_server) | `os.execvpe()` in coverage mode (sostituisce dev.py con pipenv) |
+| `.coveragerc` | `sigterm = true` + `parallel = true` + `source = backend/app` |
+| `scripts/test_runner.py` | `_dispatch_test_command()` fa `coverage combine` + `coverage html` |
 
 ---
 

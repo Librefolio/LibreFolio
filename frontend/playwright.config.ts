@@ -63,10 +63,21 @@ export default defineConfig({
     // Server avviato automaticamente in test mode (--force kills stale servers)
     // GALLERY_SERVER_WORKERS env var controls uvicorn worker count (set by dev.py mkdocs gallery)
     // COVERAGE_BACKEND=1 enables backend code coverage tracking during E2E tests
+    //
+    // SIGTERM chain for coverage (all 3 levels use exec/execvpe):
+    //   Playwright gracefulShutdown SIGTERM → /bin/sh 'exec' → dev.py os.execvpe()
+    //   → pipenv os.execvpe() → coverage run receives SIGTERM → writes .coverage.*
+    //
+    // Without gracefulShutdown, Playwright sends SIGKILL (uncatchable) — no coverage data.
     webServer: {
-        command: `cd .. && ./dev.py server --test --force --workers ${process.env.GALLERY_SERVER_WORKERS || '1'}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
+        command: `cd .. && exec ./dev.py server --test --force --workers ${process.env.GALLERY_SERVER_WORKERS || '1'}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
         url: `${BASE_URL}/api/v1/system/health`,
-        reuseExistingServer: !process.env.CI,
+        // In coverage mode, always start a fresh server (don't reuse a
+        // non-coverage server that may already be running on the port).
+        reuseExistingServer: process.env.COVERAGE_BACKEND ? false : !process.env.CI,
         timeout: 120 * 1000,
+        // Send SIGTERM instead of SIGKILL so coverage run can flush .coverage.<pid>.
+        // Falls back to SIGKILL after 5s if the server doesn't shut down.
+        gracefulShutdown: {signal: 'SIGTERM', timeout: 5000},
     },
 });
