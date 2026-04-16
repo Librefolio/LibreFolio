@@ -1,12 +1,13 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {onMount} from 'svelte';
-    import {Book, Bug, ChevronDown, ExternalLink, HelpCircle, MessageCircle} from 'lucide-svelte';
+    import {Book, Bug, ChevronDown, Coffee, ExternalLink, HelpCircle, MessageCircle} from 'lucide-svelte';
 
     let isOpen = false;
     let menuRef: HTMLDivElement;
 
     const githubIssuesUrl = 'https://github.com/Alfystar/LibreFolio/issues';
+    const bmcUrl = 'https://www.buymeacoffee.com/librefolio';
 
     /** Build a MkDocs URL with locale prefix matching the app's current language. */
     function mkdocsUrl(path: string = ''): string {
@@ -45,7 +46,7 @@
         <div class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
             <!-- FAQ -->
             <a
-                    href={mkdocsUrl('faq/')}
+                    href={mkdocsUrl('community/faq/')}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -80,7 +81,22 @@
                 </div>
                 <ExternalLink size={14} class="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"/>
             </a>
+
+            <div class="border-t border-gray-100 my-1"></div>
+
+            <!-- Buy Me a Coffee -->
+            <a
+                    href={bmcUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors group"
+            >
+                <div class="flex items-center space-x-3">
+                    <Coffee size={18} class="text-amber-600"/>
+                    <span>{$_('help.buyMeACoffee')}</span>
+                </div>
+                <ExternalLink size={14} class="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"/>
+            </a>
         </div>
     {/if}
 </div>
-

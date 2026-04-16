@@ -23,7 +23,7 @@ restano separate.
 | Gruppi consolidati | 18 (eliminati dal cleanup) |
 | Gruppi accettati | ~30 (documentati sotto) |
 
-Piano di consolidamento: [`plan-phase06Step6-i18n-dedup.prompt.md`](../RoadmapV4_UI/plan-phase06Step6-i18n-dedup.prompt.md)
+Piano di consolidamento: [`plan-phase06Step6-i18n-dedup.prompt.md`](../RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step6/plan-phase06Step6-i18n-dedup.prompt.md)
 
 ---
 

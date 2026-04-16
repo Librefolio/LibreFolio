@@ -41,7 +41,7 @@ LibreFolio supports:
 
 ### 📦 How do I install LibreFolio?
 
-See our [Installation Guide](developer/dev-installation.md) for detailed instructions.
+See our [Installation Guide](../developer/dev-installation.md) for detailed instructions.
 
 ### 👤 How do I create an account?
 
@@ -72,10 +72,10 @@ Check that:
 
 Check that:
 
-1. The currency pair has at least one [data provider configured](user/fx/detail/provider.md)
+1. The currency pair has at least one [data provider configured](../user/fx/detail/provider.md)
 2. The provider's API is reachable (ECB, FED, BOE, SNB)
-3. You've run a [sync](user/fx/sync.md) for the desired date range
-4. Check the [provider supply chain](user/fx/detail/provider.md) for fallback options
+3. You've run a [sync](../user/fx/sync.md) for the desired date range
+4. Check the [provider supply chain](../user/fx/detail/provider.md) for fallback options
 
 ### 🔐 I can't login
 
@@ -85,6 +85,6 @@ Check that:
 
 ## 🆘 Need More Help?
 
-- [Full Documentation](index.md)
+- [Full Documentation](../index.md)
 - [Report a Bug](https://github.com/Alfystar/LibreFolio/issues)
 - [GitHub Discussions](https://github.com/Alfystar/LibreFolio/discussions)

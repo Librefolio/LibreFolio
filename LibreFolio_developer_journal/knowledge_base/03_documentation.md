@@ -31,7 +31,7 @@ mkdocs_src/
 var knownSegments = [
     '/gallery/', '/developer/', '/user/', '/admin/',
     '/getting-started/', '/tutorials/', '/financial-theory/',
-    '/POC_UX/', '/credits-legal/', '/faq/'
+    '/POC_UX/', '/community/'
 ];
 ```
 

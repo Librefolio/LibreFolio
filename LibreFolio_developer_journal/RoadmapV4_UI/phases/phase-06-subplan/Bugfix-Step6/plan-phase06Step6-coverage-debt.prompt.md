@@ -134,7 +134,7 @@ Struttura: 3 sezioni parametrizzate — una per tipo provider.
 
 ---
 
-### Batch 2 — Frontend E2E: Utility & Presentazione (~2h) 🟦 BACKEND COMPLETATO (16 Apr)
+### Batch 2 — Frontend E2E: Utility & Presentazione (~2h) ✅ COMPLETATO (16 Apr)
 
 **Impatto stimato**: +60 stmts backend coverage + validazione UI rendering
 **Stato**: test API backend (`test_api/test_utilities.py`) completato con endpoint `list_currencies` coperto.

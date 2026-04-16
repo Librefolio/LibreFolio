@@ -1,14 +1,14 @@
 # Plan: Phase 06 — Asset Management (Grafico & Analisi Tecnica)
 
 **Data creazione**: 23 Marzo 2026  
-**Ultimo aggiornamento**: 13 Aprile 2026  
-**Status**: 🚧 IN CORSO (Step 1–4 completati, Part C completata, Step 6 prossimo)  
+**Ultimo aggiornamento**: 16 Aprile 2026  
+**Status**: ✅ COMPLETATA (Step 1–4 ✅, Part C ✅, Step 6 ✅)  
 **Durata stimata**: ~8 giorni  
 **Dipendenze**: Phase 5 (PriceChartFull, Signal Library, DataEditor), Phase 4 (DataTable, ModalBase, component library), Phase 4.8 (user_role)
 
 **Piani collegati:**
 - [plan-phase06Step4AssetDetailPage.prompt.md](plan-phase06Step4AssetDetailPage.prompt.md) — Step 4 detail page
-- [plan-phase06Step6-Polish-Test-Docs.prompt.md](plan-phase06Step6-Polish-Test-Docs.prompt.md) — Step 6: i18n, test, docs, coverage (📋 prossimo)
+- [plan-phase06Step6-Polish-Test-Docs.prompt.md](phases/phase-06-subplan/Bugfix-Step6/plan-phase06Step6-Polish-Test-Docs.prompt.md) — Step 6: i18n, test, docs, coverage (✅ completato)
 - [plan-partCCurrencyConversion.prompt.md](phases/phase-06-subplan/Bugfix-Step4/PlanC/plan-partCCurrencyConversion.prompt.md) — Part C: Currency conversion (✅ completata)
 - [plan-partC_1_PostValidation.prompt.md](phases/phase-06-subplan/Bugfix-Step4/PlanC/plan-partC_1_PostValidation.prompt.md) — Part C.1: Post-validation fixes (✅ completata)
 - [plan-partC_2–7](phases/phase-06-subplan/Bugfix-Step4/PlanC/) — Part C.2–C.7: Review, UX polish, test fixes, provider core cache (✅ completate)

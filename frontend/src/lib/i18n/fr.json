@@ -161,7 +161,9 @@
   "help": {
     "helpAndSupport": "Aide et Support",
     "faq": "FAQ",
-    "reportBug": "Signaler un Bug"
+    "reportBug": "Signaler un Bug",
+    "supportProject": "Soutenir le Projet",
+    "buyMeACoffee": "Offrez-moi un Café"
   },
   "dashboard": {
     "welcomeBack": "Bienvenue",

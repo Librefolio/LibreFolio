@@ -41,7 +41,7 @@ LibreFolio es compatible con:
 
 ### 📦 ¿Cómo instalo LibreFolio?
 
-Consulta nuestra [Guía de Instalación](developer/dev-installation.md) para obtener instrucciones detalladas.
+Consulta nuestra [Guía de Instalación](../developer/dev-installation.md) para obtener instrucciones detalladas.
 
 ### 👤 ¿Cómo creo una cuenta?
 
@@ -72,10 +72,10 @@ Comprueba que:
 
 Comprueba que:
 
-1. El par de divisas tenga al menos un [proveedor de datos configurado](user/fx/detail/provider.md)
+1. El par de divisas tenga al menos un [proveedor de datos configurado](../user/fx/detail/provider.md)
 2. La API del proveedor sea accesible (ECB, FED, BOE, SNB)
-3. Hayas ejecutado una [sincronización](user/fx/sync.md) para el rango de fechas deseado
-4. Revisa la [cadena de suministro del proveedor](user/fx/detail/provider.md) para ver las opciones de fallback
+3. Hayas ejecutado una [sincronización](../user/fx/sync.md) para el rango de fechas deseado
+4. Revisa la [cadena de suministro del proveedor](../user/fx/detail/provider.md) para ver las opciones de fallback
 
 ### 🔐 No puedo iniciar sesión
 
@@ -85,6 +85,6 @@ Comprueba que:
 
 ## 🆘 ¿Necesitas más ayuda?
 
-- [Documentación Completa](index.md)
+- [Documentación Completa](../index.md)
 - [Informar de un Error](https://github.com/Alfystar/LibreFolio/issues)
 - [Discusiones de GitHub](https://github.com/Alfystar/LibreFolio/discussions)

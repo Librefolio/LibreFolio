@@ -67,7 +67,7 @@ LibreFolio/
 | Phase 0-3 | ✅ | Setup, Auth, Layout, Settings |
 | Phase 4 | ✅ | Brokers, Files, Component Library |
 | Phase 5 | ✅ | FX Management, Charts, Signals, i18n Docs |
-| Phase 6 | 🚧 | Asset Management (Step 1-4 completati, detail page + test + docs in corso) |
+| Phase 6 | ✅ | Asset Management (Steps 1-6, Part C, BMC integration) |
 | Phase 7 | 📋 | Transactions + BRIM Import UI |
 | Phase 8 | 📋 | Dashboard con KPI |
 | Phase 9 | 📋 | Polish & Responsive finale |

@@ -1754,6 +1754,16 @@ def front_image_crop(verbose: bool = False, ui: bool = False, headed: bool = Fal
     return _run_playwright("image-crop.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_utilities(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run utilities API E2E tests (currencies, countries, sectors)."""
+    print_section("Frontend Utilities API Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("utilities.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run broker sharing E2E tests (requires populated DB with brokers)."""
     print_section("Frontend Broker Sharing Tests")
@@ -3137,6 +3147,14 @@ Options: --ui, --headed, --debug
             "desc": "ImageEditModal, AssetPicker, FileGrid, avatar (42 tests)",
             "prereq": "Login working, uploaded files",
             "tests": "image-crop.spec.ts",
+            },
+        "utilities": {
+            "func": front_utilities,
+            "test_names": True,
+            "name": "Utilities API E2E",
+            "desc": "Test currencies, countries, sectors API via Playwright",
+            "prereq": "Login working",
+            "tests": "utilities.spec.ts",
             },
         "all": {
             "func": front_utility_all,

@@ -1,7 +1,7 @@
 # Plan: Phase 06 Step 6 — Polish, Test, Documentation & Coverage
 
 **Data creazione**: 15 Aprile 2026  
-**Status**: 🚧 IN CORSO (S1 ✅, S2 ✅, S3 ✅, S4 ✅, S5 ✅, S6 🚧)  
+**Status**: ✅ COMPLETATO (S1 ✅, S2 ✅, S3 ✅, S4 ✅, S5 ✅, S6 ✅)  
 **Durata stimata**: ~2 giorni  
 **Dipendenze**: Step 1–4 completati, Part C (C.1–C.7) completata  
 **Coverage attuale**: Backend 82.27% | Frontend E2E 49.78% | Combined **84.76%** (10621 stmts)
@@ -519,10 +519,10 @@ Documentare i numeri di coverage come baseline per Phase 7:
 
 #### S6c) Aggiornare status
 
-- [ ] Aggiornare `plan-phase06-assets.md` → Step 6: ✅
-- [ ] Aggiornare `plan-phase06Assets.prompt.md` → Status: ✅ COMPLETATA
-- [ ] Aggiornare `phases/phase-06-assets.md` → Status: ✅
-- [ ] Aggiornare `00_project_overview.md` → Phase 6: ✅
+- [x] Aggiornare `plan-phase06-assets.md` → Step 6: ✅
+- [x] Aggiornare `plan-phase06Assets.prompt.md` → Status: ✅ COMPLETATA
+- [x] Aggiornare `phases/phase-06-assets.md` → Status: ✅
+- [x] Aggiornare `00_project_overview.md` → Phase 6: ✅
 
 ---
 
@@ -564,7 +564,7 @@ Documentare i numeri di coverage come baseline per Phase 7:
 | **S3-settings** | 29→37 test E2E settings (+8 nuovi). Test coprono: admin unlock/lock, SettingToggle click+value change, save/undo button visibility, undo revert, SettingNumber edit+undo, disabled when locked, non-admin read-only. Tutti passano in 53s. |
 | **S3-assets** | asset-list: 9→13 (+4: grid/table toggle, type filter listbox, search hides cards, active/all count). asset-detail: 12→16 (+4: currency selector, asset info, sync click, refresh click). asset-modal: 6→10 (+4: smart search input, search triggers, edit fields, form scrollable). Tutti passano. |
 | **S4 — Backend test** | Coverage: **82.27%** (10621 stmts, 1883 miss). 57 test suite, tutti passed. `coverage-report --priority high` → 37 HIGH uncovered (ma molte coperti indirettamente via API tests). +4 test aggiunti in `test_assets_prices.py` per endpoint `POST /assets/prices/current` (copre `get_current_prices_bulk`). Analisi integrativa completata: user_service (skip, wrapper DB), fx (skip, 80.82% reale), broker (skip, 37 test broker), transaction (skip, helper interno). |
-| **S6 — Coverage finale** | Report combinato generato: Backend **82.27%**, Frontend E2E **49.78%**, Combined **84.76%** (10621 stmts, 1619 miss). Tutti i target superati (60%/45%/65%). Fix: `_finalize_coverage()` ora ri-combina correttamente `.coverage.backend` + `.coverage.frontend` per il report `htmlcov/`. Fix: hint print duplicato rimosso. Report in `htmlcov/`, `htmlcov-backend/`. |
+| **S6 — Coverage finale** | Report combinato generato: Backend **82.27%**, Frontend E2E **49.78%**, Combined **84.76%** (10621 stmts, 1619 miss). Tutti i target superati (60%/45%/65%). Fix: `_finalize_coverage()` ora ri-combina correttamente `.coverage.backend` + `.coverage.frontend` per il report `htmlcov/`. Fix: hint print duplicato rimosso. Report in `htmlcov/`, `htmlcov-backend/`. **Coverage debt plan completato**: B1-B12 + B2.1 (utilities E2E con 23 test: 8 currencies, 8 countries, 3 sectors, 2 UI rendering + 2 test settings). `plan-phase06Step6-coverage-debt.prompt.md` → ✅ COMPLETATO. |
 | **Housekeeping** | 2 TODO completati spostati da `TODO_FUTURI.md` → `TODO_Completati.md`. CandlestickChart/VolumeBar aggiunti a `TODO_FUTURI.md`. |
 
 ### ⏳ Da fare
@@ -582,6 +582,7 @@ Documentare i numeri di coverage come baseline per Phase 7:
 - `frontend/src/lib/components/settings/SettingToggle.svelte` — ricreato (Svelte 5)
 - `frontend/src/lib/components/settings/SettingNumber.svelte` — ricreato (Svelte 5)
 - `frontend/e2e/settings.spec.ts` — +8 test per GlobalSettingsTab interaction
+- `frontend/e2e/utilities.spec.ts` — B2.1 coverage debt: 23 test (currencies, countries, sectors, UI rendering)
 - `frontend/e2e/assets/asset-list.spec.ts` — +4 test (grid/table, type filter, search, active/all)
 - `frontend/e2e/assets/asset-detail.spec.ts` — +4 test (currency, info, sync, refresh)
 - `frontend/e2e/assets/asset-modal.spec.ts` — +4 test (smart search, triggers, edit fields, scrollable)
@@ -630,3 +631,88 @@ Al termine di tutto implementare il "buy me a coffee" per supportare il progetto
 sia nel readme che nella home della documentazione, in tutte le lingue. Link a BuyMeACoffee, con messaggio di ringraziamento e invito a supportare il progetto se si trova utile. Posizionarlo in modo discreto ma visibile (footer docs, sidebar, ecc.).
 
 terminale creando tag `phase-06-completed` , ricreando gli screen della gallery e deployando il 
+
+bottone generato:
+<a href="https://www.buymeacoffee.com/librefolio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+
+
+widget:
+
+<script data-name="BMC-Widget" data-cfasync="false" src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js" data-id="librefolio" data-description="Support me on Buy me a coffee!" data-message="" data-color="#5F7FFF" data-position="Right" data-x_margin="18" data-y_margin="18"></script>
+
+---
+
+### BMC Integration — Dettaglio implementazione
+
+#### Iterazione 1 — Struttura base
+
+1. **MkDocs: sezione "Community"** — raggruppate FAQ + Credits & Legal + nuova pagina "Contribute" sotto `community/` nella nav.
+   - File spostati: `faq.{en,it,fr,es}.md`, `credits-legal.{en,it,fr,es}.md` → `community/`
+   - Nuovi file: `community/contribute.{en,it,fr,es}.md`
+   - Nav translations aggiunte: Community (Comunità / Communauté / Comunidad), Support the Project (Supporta il Progetto / Soutenir le Projet / Apoyar el Proyecto)
+   - Link relativi nei FAQ fixati con `../` prefix per nuova profondità
+
+2. **Homepage MkDocs (4 lingue)** — card "Credits & Legal" sostituita con card "Community" (icona cuore) → linka a `community/contribute/`
+
+3. **Frontend Header** — bottone Heart (poi Coffee) + HelpMenu entry per BMC
+
+4. **BMC Widget** — script iniettato nel layout app `(app)/+layout.svelte` al login
+
+5. **Aggiornati tutti i riferimenti** ai vecchi URL (`faq/`, `credits-legal/`) in:
+   - `HelpMenu.svelte` (FAQ → `community/faq/`)
+   - `site-lang-selector.js`, `gallery-img-loader.js` (segment detection)
+   - `index.{en,it,fr,es}.md` (homepage cards)
+   - `03_documentation.md` (knowledge base)
+
+6. **i18n** — chiave `help.supportProject` in EN/IT/FR/ES
+
+#### Iterazione 2 — Contenuto e tono
+
+1. **Pagine Contribute riscritte** — nuovo tono: non enfatizzare "gratuito", enfatizzare open-source AGPL-3.0, chiunque con competenze può installarlo. Invito a supportare tramite codice, idee o donazione.
+2. **Nuova sezione "LibreFolio Cloud"** in tutte le contribute pages — piattaforma SaaS in roadmap per chi non ha tempo/competenze per self-host, con abbonamento (prezzo TBD), future AI-powered analytics.
+3. **Icona Coffee (ambra)** al posto di Heart in Header + HelpMenu — più coerente col tema BMC.
+4. **MkDocs header: bottone ☕** — iniettato via `bmc-widget.js`, con icona coffee SVG + hover animation, click apre widget.
+5. **MkDocs widget** — iniettato via `bmc-widget.js` con floating button bottom-right.
+6. **CSS** per bottone header BMC in MkDocs (`bmc-header-btn` con colore amber, hover scale).
+
+#### Iterazione 3 — Fix interazione + label + footer
+
+**Problemi riscontrati:**
+- Il bottone ☕ nell'header frontend non funzionava: il widget BMC si carica asincronamente e `#bmc-wbtn` potrebbe non esistere quando si clicca.
+- Il bottone nel HelpMenu portava alla pagina esterna invece di aprire il widget.
+- Nell'header MkDocs, il bottone coffee non funzionava per lo stesso motivo (async load).
+- Mancava una label testuale "Buy Me a Coffee" su desktop (visibile solo su desktop, nascosta su mobile).
+- In MkDocs mobile: la barra header scompare col burger menu → serviva un bottone BMC image in fondo alla pagina.
+
+**Fix applicati:**
+1. **Header.svelte** — `openBmc()` con retry+fallback: tenta `#bmc-wbtn.click()`, se non esiste riprova dopo 500ms, se ancora non c'è apre `window.open(BMC_URL)`. Label `{$_('help.buyMeACoffee')}` visibile da breakpoint `md` (768px) in su (`hidden md:inline`). Title aggiornato a `buyMeACoffee`.
+2. **HelpMenu.svelte** — entry "Support the Project" cambiata da `<a>` a `<button>` che chiama `openBmc()` (chiude menu, apre widget con retry o fallback).
+3. **bmc-widget.js** — `openBmc()` con retry 500ms + fallback. Ordine invertito: **label prima, icona dopo** nell'header MkDocs. Label nascosta su mobile via CSS (`bmc-header-label`). Aggiunto `addFooterBmc()` che inserisce l'immagine BMC `default-green.png` prima del footer MkDocs (visibile su mobile quando l'header scompare).
+4. **CSS** — `.bmc-header-label` con `display: none` su mobile. `.bmc-footer-container` centrato con padding e border-top.
+5. **i18n** — nuova chiave `help.buyMeACoffee`: "Buy Me a Coffee" / "Offrimi un Caffè" / "Offrez-moi un Café" / "Invítame a un Café"
+
+#### Iterazione 4 — Via widget, tutto link diretti + allineamento
+
+**Problema**: il widget BMC (script CDN) non crea `#bmc-wbtn` su localhost né in dev — probabilmente richiede account attivo o dominio configurato. Il bottone risultava non cliccabile ovunque.
+
+**Decisione**: rimuovere completamente il widget BMC floating. Usare ovunque **link diretti** alla pagina `https://www.buymeacoffee.com/librefolio`.
+
+**Fix applicati:**
+1. **Header.svelte** — cambiato da `<button>` a `<a href>` con `target="_blank"`. Ordine: **label prima, icona dopo**. `gap-2` per spaziatura. Label con `leading-5` per allinearsi verticalmente all'icona SVG 20px.
+2. **HelpMenu.svelte** — rimossa funzione `openBmc()`, tornato a semplice `<a>` con ExternalLink icon. Label cambiata a `help.buyMeACoffee`.
+3. **bmc-widget.js** — rimossa injection widget script. Ora crea un `<a>` (non `<button>`) nell'header MkDocs. Label prima, icona dopo. `line-height: 20px` sulla label per match altezza SVG.
+4. **CSS** — aggiunto `text-decoration: none !important` al link, `flex-shrink: 0` su SVG, `line-height: 20px` su `.bmc-header-label`.
+5. **App layout** — rimossa injection `BMC-Widget` script dal `(app)/+layout.svelte`.
+
+#### Iterazione 5 — Allineamento, label visibilità, login page
+
+**Problemi:**
+- MkDocs: gap/alignment non applicati perché `.md-header__button` di Material li sovrascrive.
+- Frontend Header: label non visibile — breakpoint `md` (768px) non raggiunto con sidebar presente.
+- Nessun link BMC sulla pagina di login.
+
+**Fix:**
+1. **MkDocs CSS** — forzato `display: inline-flex !important`, `gap: 0.5rem !important`, `align-items: center !important`, `color: #fbbf24 !important` su `.bmc-header-btn`. Aggiunto `vertical-align: middle` su SVG e label.
+2. **Header.svelte** — breakpoint label abbassato da `md` a `sm` (640px) → `hidden sm:inline`.
+3. **Login page (+page.svelte)** — aggiunto link BMC con icona ☕ + label (stesso stile header) nel gruppo top-right accanto a LanguageSelector e ThemeToggle.
+
