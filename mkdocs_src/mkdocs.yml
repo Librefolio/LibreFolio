@@ -153,6 +153,8 @@ plugins:
             Desktop: Desktop
             Mobile: Mobile
             POC UX: POC UX
+            Community: Comunità
+            "Support the Project": "Supporta il Progetto"
             "Credits & Legal": "Crediti & Note Legali"
         - locale: fr
           name: Français
@@ -241,6 +243,8 @@ plugins:
             Desktop: Bureau
             Mobile: Mobile
             POC UX: POC UX
+            Community: Communauté
+            "Support the Project": "Soutenir le Projet"
             "Credits & Legal": "Crédits & Mentions Légales"
         - locale: es
           name: Español
@@ -329,6 +333,8 @@ plugins:
             Desktop: Escritorio
             Mobile: Móvil
             POC UX: POC UX
+            Community: Comunidad
+            "Support the Project": "Apoyar el Proyecto"
             "Credits & Legal": "Créditos & Aviso Legal"
 
 extra_javascript:
@@ -344,10 +350,11 @@ extra_javascript:
   - javascripts/site-lang-selector.js
   # Gallery image loader - auto-resolves screenshot paths on any page
   - javascripts/gallery-img-loader.js
+  # Buy Me a Coffee widget + header button
+  - javascripts/bmc-widget.js
 
 nav:
   - Home: index.md
-  - FAQ: faq.md
   - User Manual:
       - Overview: user/index.md
       - Getting Started: user/getting-started.md
@@ -549,7 +556,10 @@ nav:
       - Desktop: gallery/desktop.md
       - Mobile: gallery/mobile.md
   - POC UX: POC_UX/index.md
-  - Credits & Legal: credits-legal.md
+  - Community:
+      - FAQ: community/faq.md
+      - Support the Project: community/contribute.md
+      - Credits & Legal: community/credits-legal.md
 
 extra_css:
   - static/extra.css

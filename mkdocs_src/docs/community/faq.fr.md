@@ -41,7 +41,7 @@ LibreFolio prend en charge :
 
 ### 📦 Comment installer LibreFolio ?
 
-Consultez notre [Guide d'Installation](developer/dev-installation.md) pour des instructions détaillées.
+Consultez notre [Guide d'Installation](../developer/dev-installation.md) pour des instructions détaillées.
 
 ### 👤 Comment créer un compte ?
 
@@ -72,10 +72,10 @@ Vérifiez que :
 
 Vérifiez que :
 
-1. La paire de devises possède au moins un [fournisseur de données configuré](user/fx/detail/provider.md)
+1. La paire de devises possède au moins un [fournisseur de données configuré](../user/fx/detail/provider.md)
 2. L'API du fournisseur est joignable (ECB, FED, BOE, SNB)
-3. Vous avez lancé une [synchronisation](user/fx/sync.md) pour la plage de dates souhaitée
-4. Vérifiez la [chaîne d'approvisionnement du fournisseur](user/fx/detail/provider.md) pour les options de fallback
+3. Vous avez lancé une [synchronisation](../user/fx/sync.md) pour la plage de dates souhaitée
+4. Vérifiez la [chaîne d'approvisionnement du fournisseur](../user/fx/detail/provider.md) pour les options de fallback
 
 ### 🔐 Je ne peux pas me connecter
 
@@ -85,6 +85,6 @@ Vérifiez que :
 
 ## 🆘 Besoin de plus d'aide ?
 
-- [Documentation Complète](index.md)
+- [Documentation Complète](../index.md)
 - [Signaler un Bug](https://github.com/Alfystar/LibreFolio/issues)
 - [Discussions GitHub](https://github.com/Alfystar/LibreFolio/discussions)

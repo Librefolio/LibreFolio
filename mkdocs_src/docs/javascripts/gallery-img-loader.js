@@ -49,7 +49,7 @@
         var knownSegments = [
             '/gallery/', '/developer/', '/user/', '/admin/',
             '/getting-started/', '/tutorials/', '/financial-theory/',
-            '/POC_UX/', '/credits-legal/', '/faq/'
+            '/POC_UX/', '/community/'
         ];
 
         for (var i = 0; i < knownSegments.length; i++) {

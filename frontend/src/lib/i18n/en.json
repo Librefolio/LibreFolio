@@ -161,7 +161,9 @@
   "help": {
     "helpAndSupport": "Help & Support",
     "faq": "FAQ",
-    "reportBug": "Report Bug"
+    "reportBug": "Report Bug",
+    "supportProject": "Support the Project",
+    "buyMeACoffee": "Buy Me a Coffee"
   },
   "dashboard": {
     "welcomeBack": "Welcome back",

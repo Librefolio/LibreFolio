@@ -97,13 +97,13 @@ description: Libre de comprendre, libre d'agir. LibreFolio rassemble tous vos in
  </div>
  </a>
 
- <a href="credits-legal/" class="card-link">
+ <a href="community/contribute/" class="card-link">
  <div class="card-icon">
- <svg xmlns="http://www.w3.org/2000/svg" id="mdi-scale-unbalanced" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M13 20V8.8C13.5 8.6 14 8.3 14.3 7.9L17.8 9.2L14.9 16C14.4 18 15.9 19 18.4 19S22.5 18 21.9 16L19.3 9.7L20.2 10L20.9 8.1L15 6C15 4.8 14.3 3.6 13 3.1C11.8 2.6 10.5 3.1 9.7 4L3.9 2L3.2 3.8L4.8 4.4L2.1 11C1.6 13 3.1 14 5.6 14S9.7 13 9.1 11L6.6 5.1L9 6C9 7.2 9.7 8.4 11 8.9V20H2V22H22V20H13M19.9 16H16.9L18.4 12.2L19.9 16M7.1 11H4.1L5.6 7.2L7.1 11M11.1 5.7C11.3 5.2 11.9 4.9 12.4 5.1S13.2 5.9 13 6.4 12.2 7.2 11.7 7 10.9 6.2 11.1 5.7Z" /></svg>
+ <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z" /></svg>
  </div>
  <div class="card-content">
- <span class="card-title">Légal & Crédits</span>
- <span class="card-desc">Licence (AGPL-3.0),<br>L'équipe et Remerciements.</span>
+ <span class="card-title">Communauté</span>
+ <span class="card-desc">Soutenir le projet,<br>FAQ, Crédits & Mentions Légales.</span>
  </div>
  </a>
 
