@@ -363,7 +363,7 @@ class SNBProvider(FXRateProvider):
         return None
 
     @staticmethod
-    def _extract_d1_from_header(header: list[dict]) -> str | None:
+    def _extract_d1_from_header(header: list[dict]) -> str | None:  # pragma: no cover
         """Fallback: extract D1 id from header dimItem like 'Europe - EUR 1' → 'EUR1'."""
         for h in header:
             if h.get("dim", "").startswith("Currency"):

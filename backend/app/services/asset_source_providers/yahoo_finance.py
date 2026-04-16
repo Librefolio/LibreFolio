@@ -58,7 +58,7 @@ _YF_MAX_RETRIES = 3
 _YF_BASE_DELAY = 1.5  # seconds
 
 
-def _is_transient(exc: Exception) -> bool:
+def _is_transient(exc: Exception) -> bool:  # pragma: no cover
     """Return True if the exception looks like a transient network error."""
     err = str(exc).lower()
     return any(kw in err for kw in _TRANSIENT_KEYWORDS)

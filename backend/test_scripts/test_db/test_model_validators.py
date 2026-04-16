@@ -23,6 +23,7 @@ from pydantic import ValidationError
 
 from backend.app.db.models import (
     Asset,
+    AssetEvent,
     FxConversionRoute,
     FxRate,
     PriceHistory,
@@ -245,3 +246,72 @@ class TestFxConversionRouteProperties:
             chain_steps='[{"from":"CHF","to":"EUR","provider":"SNB"},{"from":"EUR","to":"USD","provider":"ECB"}]'
             )
         assert r.providers_used == {"SNB", "ECB"}
+
+
+# ============================================================================
+# Asset VALIDATE_CLASSIFICATION_PARAMS
+# ============================================================================
+
+
+class TestAssetValidateClassificationParams:
+    """Tests for Asset.validate_classification_params (6 stmts at 0%)."""
+
+    def test_none_passthrough(self):
+        result = Asset.validate_classification_params(None)
+        assert result is None
+
+    def test_dict_serialized_to_json(self):
+        result = Asset.validate_classification_params({"short_description": "Test"})
+        assert isinstance(result, str)
+        assert "Test" in result
+
+    def test_empty_dict_serialized(self):
+        result = Asset.validate_classification_params({})
+        assert isinstance(result, str)
+
+    def test_fa_classification_params_object(self):
+        from backend.app.schemas.assets import FAClassificationParams
+        params = FAClassificationParams(short_description="Hello")
+        result = Asset.validate_classification_params(params)
+        assert isinstance(result, str)
+        assert "Hello" in result
+
+
+# ============================================================================
+# AssetEvent VALIDATE_CURRENCY
+# ============================================================================
+
+
+class TestAssetEventValidateCurrency:
+    """Tests for AssetEvent.validate_currency (1 stmt at 0%)."""
+
+    def test_valid_currency(self):
+        event = AssetEvent.model_validate(dict(
+            asset_id=1,
+            type="DIVIDEND",
+            date="2025-01-15",
+            value="1.5",
+            currency="EUR",
+        ))
+        assert event.currency == "EUR"
+
+    def test_lowercase_normalized(self):
+        event = AssetEvent.model_validate(dict(
+            asset_id=1,
+            type="DIVIDEND",
+            date="2025-01-15",
+            value="1.5",
+            currency="eur",
+        ))
+        assert event.currency == "EUR"
+
+    def test_invalid_currency_rejected(self):
+        with pytest.raises(ValidationError):
+            AssetEvent.model_validate(dict(
+                asset_id=1,
+                type="DIVIDEND",
+                date="2025-01-15",
+                value="1.5",
+                currency="X",
+            ))
+

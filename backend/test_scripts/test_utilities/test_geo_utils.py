@@ -10,7 +10,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas import FAGeographicArea
-from backend.app.utils.geo_utils import normalize_country_to_iso3
+from backend.app.utils.geo_utils import normalize_country_to_iso3, expand_region
 
 
 def test_normalize_country_to_iso3():
@@ -165,6 +165,36 @@ def test_geographic_area_edge_cases():
     result = FAGeographicArea(distribution=data)
     assert result.distribution["ITA"] == Decimal("0.0000")
     assert sum(result.distribution.values()) == Decimal("1.0")
+
+
+# ============================================================================
+# EXPAND_REGION
+# ============================================================================
+
+
+class TestExpandRegion:
+    def test_g7_returns_7_countries(self):
+        result = expand_region("G7")
+        assert len(result) == 7
+        assert "USA" in result
+        assert "JPN" in result
+
+    def test_case_insensitive(self):
+        assert expand_region("g7") == expand_region("G7")
+
+    def test_unknown_region_empty_list(self):
+        result = expand_region("NONEXISTENT")
+        assert result == []
+
+    def test_country_code_not_a_region(self):
+        result = expand_region("USA")
+        assert result == []
+
+    def test_eu_has_members(self):
+        result = expand_region("EU")
+        assert len(result) > 20
+        assert "DEU" in result
+        assert "FRA" in result
 
 
 if __name__ == "__main__":

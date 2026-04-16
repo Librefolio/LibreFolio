@@ -309,3 +309,71 @@ class TestValidateUploadSecurity:
         assert mime is not None
         print_success(f"Unknown ext → {mime}")
 
+    def test_safe_csv_file(self):
+        """CSV file accepted with text MIME type."""
+        print_section("validate_upload_security: CSV file")
+        mime = validate_upload_security(b"col1,col2\nval1,val2", "data.csv")
+        assert mime is not None
+        print_success(f"CSV → {mime}")
+
+    def test_safe_json_file(self):
+        """JSON file accepted."""
+        print_section("validate_upload_security: JSON file")
+        mime = validate_upload_security(b'{"key": "value"}', "config.json")
+        assert mime is not None
+        print_success(f"JSON → {mime}")
+
+    def test_safe_png_file(self):
+        """PNG-like file accepted."""
+        print_section("validate_upload_security: PNG file")
+        mime = validate_upload_security(SAMPLE_PNG_HEADER, "photo.png")
+        assert mime is not None
+        print_success(f"PNG → {mime}")
+
+    def test_blocked_js_extension(self):
+        """JavaScript extension blocked."""
+        print_section("validate_upload_security: .js blocked")
+        with pytest.raises(UploadSecurityError):
+            validate_upload_security(b"console.log('xss')", "script.js")
+        print_success("JS extension rejected")
+
+    def test_blocked_mjs_extension(self):
+        """ES Module extension blocked."""
+        print_section("validate_upload_security: .mjs blocked")
+        with pytest.raises(UploadSecurityError):
+            validate_upload_security(b"export default {}", "module.mjs")
+        print_success("MJS extension rejected")
+
+    def test_blocked_jar_extension(self):
+        """JAR extension blocked."""
+        print_section("validate_upload_security: .jar blocked")
+        with pytest.raises(UploadSecurityError):
+            validate_upload_security(b"PK\x03\x04", "app.jar")
+        print_success("JAR extension rejected")
+
+    def test_declared_mime_octet_stream(self):
+        """Declared octet-stream is always accepted (generic)."""
+        print_section("validate_upload_security: declared octet-stream")
+        mime = validate_upload_security(
+            b"binary data", "file.bin",
+            declared_mime_type="application/octet-stream"
+        )
+        assert mime is not None
+        print_success(f"octet-stream declared → {mime}")
+
+    def test_declared_mime_text_match(self):
+        """Declared text/* matches actual text/* → accepted."""
+        print_section("validate_upload_security: text/* declared match")
+        mime = validate_upload_security(
+            b"col1,col2\nval1,val2", "data.csv",
+            declared_mime_type="text/csv"
+        )
+        assert mime is not None
+        print_success(f"text/csv declared → {mime}")
+
+    def test_empty_content(self):
+        """Empty file content → still returns MIME type."""
+        print_section("validate_upload_security: empty content")
+        mime = validate_upload_security(b"", "empty.txt")
+        assert mime is not None
+        print_success(f"Empty → {mime}")

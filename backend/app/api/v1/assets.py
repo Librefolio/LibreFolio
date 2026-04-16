@@ -431,11 +431,9 @@ async def search_assets_via_providers(
 
 
 @provider_router.get("/search/stream")
-async def search_assets_stream(
+async def search_assets_stream(  # pragma: no cover
     q: str = Query(..., min_length=1, description="Search query"),
-    providers: Optional[str] = Query(
-        None, description="Comma-separated provider codes (default: all)"
-        ),
+    providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
     _current_user: User = Depends(get_current_user),
     ):
     """

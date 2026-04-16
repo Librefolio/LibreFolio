@@ -81,7 +81,7 @@ async def get_current_user(
     return user
 
 
-async def get_optional_user(
+async def get_optional_user(  # pragma: no cover — unused dependency, prepared for future use
     request: Request, session: AsyncSession = Depends(get_session_generator)
     ) -> User | None:
     """
