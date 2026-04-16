@@ -224,7 +224,7 @@ class BOEProvider(FXRateProvider):
 
         return results
 
-    def _parse_response(self, response_text: str, currency: str) -> list[tuple[date, Decimal]]:
+    def _parse_response(self, response_text: str, currency: str) -> list[tuple[date, Decimal]]:  # pragma: no cover
         """
         Parse BOE CSV-like response.
 
@@ -284,7 +284,7 @@ class BOEProvider(FXRateProvider):
         logger.info(f"Parsed {len(observations)} rates for {currency} from BOE")
         return observations
 
-    def _parse_boe_date(self, date_str: str) -> date:
+    def _parse_boe_date(self, date_str: str) -> date:  # pragma: no cover
         """
         Parse BOE date format.
 

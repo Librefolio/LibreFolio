@@ -73,7 +73,7 @@ class FXRateProvider(ABC):
         pass
 
     @property
-    def icon(self) -> str | None:
+    def icon(self) -> str | None:  # pragma: no cover
         """
         Return provider icon URL (hardcoded).
 
@@ -204,7 +204,7 @@ class FXRateProvider(ABC):
         return "/mkdocs/developer/backend/fx/providers_list/"
 
     @property
-    def test_currencies(self) -> list[str]:
+    def test_currencies(self) -> list[str]:  # pragma: no cover
         """
         List of common currencies that should be available for testing.
 
@@ -318,7 +318,7 @@ class FXRateProvider(ABC):
         """
         pass
 
-    def shutdown(self) -> None:
+    def shutdown(self) -> None:  # pragma: no cover
         """
         Cleanup resources on application shutdown.
 

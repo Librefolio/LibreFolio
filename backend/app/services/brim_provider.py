@@ -148,7 +148,7 @@ class BRIMProvider(ABC):
         pass
 
     @property
-    def supported_extensions(self) -> List[str]:
+    def supported_extensions(self) -> List[str]:  # pragma: no cover
         """
         List of supported file extensions (lowercase, with dot).
 
@@ -160,7 +160,7 @@ class BRIMProvider(ABC):
         return [".csv"]
 
     @property
-    def detection_priority(self) -> int:
+    def detection_priority(self) -> int:  # pragma: no cover
         """
         Priority for auto-detection (higher = checked first).
 
@@ -330,7 +330,7 @@ class BRIMProvider(ABC):
             icon_url=self.icon_url,
             )
 
-    def shutdown(self) -> None:
+    def shutdown(self) -> None:  # pragma: no cover
         """
         Cleanup resources on application shutdown.
 

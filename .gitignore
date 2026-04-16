@@ -79,6 +79,7 @@ htmlcov-frontend/
 coverage.xml
 *.cover
 .hypothesis/
+.coverage_data/
 
 # Development stuff
 _backup_docs/

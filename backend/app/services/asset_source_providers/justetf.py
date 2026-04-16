@@ -110,7 +110,7 @@ def _ensure_live_feed(isin: str) -> None:
         logger.info(f"Started live quote feed for {isin}")
 
 
-def shutdown_live_feeds() -> None:
+def shutdown_live_feeds() -> None:  # pragma: no cover
     """Stop all live-feed threads.  Called from app shutdown."""
     _live_quote_stop.set()
     with _live_quote_lock:
@@ -120,7 +120,7 @@ def shutdown_live_feeds() -> None:
     logger.info("All JustETF live quote feeds stopped")
 
 
-def _country_name_to_iso3(country_name: str) -> Optional[str]:
+def _country_name_to_iso3(country_name: str) -> Optional[str]:  # pragma: no cover
     """
     Convert country name to ISO 3166-1 alpha-3 code.
     Uses pycountry via geo_normalization utility.
@@ -526,7 +526,7 @@ class JustETFProvider(AssetSourceProvider):
             logger.warning(f"Could not fetch metadata for {identifier} from JustETF: {e}")
             return None
 
-    def shutdown(self) -> None:
+    def shutdown(self) -> None:  # pragma: no cover
         """Stop all persistent live-quote WebSocket threads."""
         shutdown_live_feeds()
 

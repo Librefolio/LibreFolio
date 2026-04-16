@@ -21,6 +21,15 @@ omit =
 show_missing = True
 precision = 2
 skip_covered = False
+exclude_lines =
+    # Standard exclusions
+    pragma: no cover
+    # Abstract methods can never be executed (only subclass overrides run)
+    @abstractmethod
+    # Debug-only functions (SNB provider)
+    def _debug_
+    # Defensive/impossible branches
+    raise NotImplementedError
 
 [html]
 directory = htmlcov

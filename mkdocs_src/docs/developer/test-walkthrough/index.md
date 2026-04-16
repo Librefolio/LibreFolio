@@ -135,35 +135,108 @@ graph TD
 
 ## 📊 Coverage
 
+### File Architecture
+
+Coverage data is stored in SQLite databases and HTML reports:
+
+```text
+LibreFolio/
+├── .coveragerc                 # Coverage configuration (parallel=true, sigterm=true)
+├── .coverage                   # Working copy — swapped in/out by test_runner.py
+├── .coverage_data/
+│   ├── backend                 # Accumulated backend-only coverage DB
+│   ├── frontend                # Accumulated frontend-only coverage DB
+│   └── archive/                # Previous versions (timestamped)
+│       ├── backend_20260416_0930
+│       ├── backend_20260416_0951
+│       └── frontend_20260415_1420
+├── htmlcov-backend/            # HTML report: backend tests only
+├── htmlcov-frontend/           # HTML report: frontend E2E → backend coverage
+└── htmlcov/                    # HTML report: combined (backend + frontend merged)
+```
+
+| File | Updated by | Contains |
+|------|-----------|----------|
+| `.coverage` | pytest-cov (working copy) | Temporary — swapped in before pytest, swapped out after |
+| `.coverage_data/backend` | `run_command()` finally block | Accumulated backend-only coverage, grows with each backend test run |
+| `.coverage_data/frontend` | `_finalize_coverage()` | Server subprocess coverage from Playwright E2E |
+| `htmlcov-backend/` | `_finalize_coverage()` | HTML report from `.coverage_data/backend` |
+| `htmlcov-frontend/` | `_finalize_coverage()` | HTML report from `.coverage_data/frontend` |
+| `htmlcov/` | `_finalize_coverage()` | HTML report from merged backend + frontend |
+
 ### Running with Coverage
 
-```bash
-# Backend coverage (via pytest-cov, inline)
-./dev.py test --coverage api all
-./dev.py test --coverage services all
+#### Full Run (clean baseline)
 
-# Frontend → Backend coverage (via coverage run + Playwright SIGTERM)
-./dev.py test --coverage front-fx all
-./dev.py test --coverage all-frontend
+```bash
+# Full test suite with coverage — generates all 3 reports
+./dev.py test --coverage all
 
 # Clean stale data before a fresh run
-./dev.py test --coverage --cov-clean-frontend all-frontend
+./dev.py test --coverage --cov-clean-backend --cov-clean-frontend all
 ```
 
-Reports are generated in:
+#### Incremental Runs (append to existing)
 
-| Command | HTML Report |
-|---------|------------|
-| `--coverage api all` | `htmlcov-backend/` |
-| `--coverage front-fx all` | `htmlcov-frontend/` |
-| `--coverage all` | `htmlcov/` (combined) |
+After a full run, you can run individual test files and the coverage **accumulates**
+in the existing `.coverage` database thanks to `--cov-append`:
 
 ```bash
-# View reports
-./dev.py test coverage show backend
-./dev.py test coverage show frontend
-./dev.py test coverage show combined
+# Run only specific tests — coverage is added to the existing DB
+./dev.py test --coverage services static-uploads
+./dev.py test --coverage services fx-core
+./dev.py test --coverage utils day-count
+
+# The HTML report (htmlcov-backend/) is regenerated after each run
+# The .coverage.backend snapshot is updated automatically
 ```
+
+!!! tip "Incremental coverage workflow"
+
+    1. Run `./dev.py test --coverage all` once to establish a baseline
+    2. Write new tests
+    3. Run only the new test file with `--coverage` — it appends to the existing DB
+    4. Check the updated report with `./dev.py test coverage show backend`
+
+#### Viewing Reports
+
+```bash
+./dev.py test coverage show backend    # open htmlcov-backend/
+./dev.py test coverage show frontend   # open htmlcov-frontend/
+./dev.py test coverage show combined   # open htmlcov/ (merged)
+```
+
+### Coverage Isolation
+
+The `.coveragerc` uses `parallel = true` (required for frontend subprocess coverage).
+This causes `coverage combine` to pick up **all** `.coverage.*` files and delete them.
+
+To keep backend and frontend coverage properly isolated, the test runner uses a
+**swap-in/swap-out** pattern with a dedicated `.coverage_data/` folder:
+
+```text
+Before pytest (run_command):
+  .coverage_data/backend ──copy──▶ .coverage    (restore accumulated DB)
+
+During pytest:
+  pytest-cov runs with --cov-append → appends to .coverage
+  parallel=true writes .coverage.HOST.PID, then combines → .coverage
+  (.coverage_data/ folder is safe — combine only looks in root)
+
+After pytest (finally block):
+  .coverage ──copy──▶ .coverage_data/backend    (save accumulated DB)
+
+After all tests (_finalize_coverage):
+  .coverage_data/backend → htmlcov-backend/     (generate HTML report)
+  .coverage_data/frontend → htmlcov-frontend/
+  merge both → htmlcov/                          (combined report)
+```
+
+!!! tip "Why `.coverage_data/` instead of `.coverage.backend`?"
+
+    With `parallel = true`, `coverage combine` picks up **all** files matching
+    `.coverage.*` in the current directory. A file named `.coverage.backend` would
+    be consumed and deleted. Files in a subdirectory are safe.
 
 ### Frontend Coverage Architecture
 

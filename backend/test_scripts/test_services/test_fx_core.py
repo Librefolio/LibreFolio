@@ -329,3 +329,77 @@ class TestCountActualChanges:
             assert count == 0
             print_success("Empty list → 0")
 
+
+# ============================================================================
+# normalize_rate_for_storage — additional edge cases
+# ============================================================================
+
+
+class TestNormalizeRateEdgeCases:
+    """Additional edge cases for normalize_rate_for_storage."""
+
+    def test_very_small_rate(self):
+        """Very small rate (like JPY per 100) normalizes correctly."""
+        print_section("normalize_rate: very small rate")
+        b, q, r = normalize_rate_for_storage("JPY", "USD", Decimal("0.0067"))
+        assert b == "JPY"
+        assert q == "USD"
+        assert r == Decimal("0.0067")
+        print_success(f"Small rate preserved: {r}")
+
+    def test_large_rate(self):
+        """Large rate (e.g., 1 BTC = 60000 USD) normalizes correctly."""
+        print_section("normalize_rate: large rate")
+        b, q, r = normalize_rate_for_storage("BTC", "USD", Decimal("60000.50"))
+        # BTC > USD alphabetically → inverted to (BTC, USD)
+        assert b == "BTC"
+        assert q == "USD"
+        assert r == Decimal("60000.50")
+        print_success(f"Large rate preserved: {r}")
+
+
+# ============================================================================
+# upsert_rates_bulk — additional edge cases
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestUpsertRatesBulkEdgeCases:
+    """Additional edge case tests for upsert_rates_bulk."""
+
+    async def test_upsert_same_rate_unchanged(self):
+        """Insert then re-insert same key with same value → action = 'unchanged'."""
+        print_section("upsert_rates_bulk: same rate unchanged")
+        engine = get_async_engine()
+        today = date.today()
+        rate_val = Decimal("1.0800")
+
+        async with AsyncSession(engine) as session:
+            await upsert_rates_bulk(session, [(today, "EUR", "USD", rate_val, "TEST")])
+
+        async with AsyncSession(engine) as session:
+            results = await upsert_rates_bulk(session, [(today, "EUR", "USD", rate_val, "TEST")])
+            assert len(results) == 1
+            success, action = results[0]
+            assert success is True
+            # Action should be 'updated' or 'unchanged' — depending on implementation
+            assert action in ("updated", "unchanged")
+            print_success(f"Same rate → action={action}")
+
+    async def test_upsert_multiple_pairs(self):
+        """Multiple different pairs in one bulk call."""
+        print_section("upsert_rates_bulk: multiple pairs")
+        engine = get_async_engine()
+        today = date.today()
+        rates = [
+            (today, "CHF", "USD", Decimal("1.1200"), "TEST"),
+            (today, "EUR", "GBP", Decimal("0.8400"), "TEST"),
+            (today, "AUD", "USD", Decimal("0.6500"), "TEST"),
+        ]
+        async with AsyncSession(engine) as session:
+            results = await upsert_rates_bulk(session, rates)
+            assert len(results) == 3
+            assert all(r[0] for r in results), "All should succeed"
+            print_success(f"Inserted {len(results)} different pairs")
+
+

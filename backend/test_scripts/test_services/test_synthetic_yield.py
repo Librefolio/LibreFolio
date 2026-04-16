@@ -458,5 +458,69 @@ async def test_late_interest_default_is_compound():
     assert li.interest_type == InterestType.COMPOUND
 
 
+@pytest.mark.asyncio
+async def test_validate_params_missing_required():
+    """Test that missing required params raise validation error."""
+    from pydantic import ValidationError
+    # Empty schedule with no initial_value → should raise
+    with pytest.raises(ValidationError):
+        FAScheduledInvestmentSchedule(
+            initial_value=None,  # required, not nullable
+            schedule=[],
+        )
+
+
+@pytest.mark.asyncio
+async def test_validate_params_invalid_day_count():
+    """Test that invalid day count convention is rejected by Pydantic."""
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        FAScheduledInvestmentSchedule(
+            initial_value=Currency(code="EUR", amount=Decimal("1000")),
+            day_count="INVALID_CONVENTION",
+            schedule=[
+                FAInterestRatePeriod(
+                    annual_rate=Decimal("0.05"),
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 12, 31),
+                )
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_late_interest_within_grace_period():
+    """Late interest within grace period → value = maturity value (no penalty)."""
+    params = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("1000")),
+        schedule=[
+            FAInterestRatePeriod(
+                annual_rate=Decimal("0.05"),
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 3, 31),
+                maturation_frequency=MaturationFrequency.DAILY,
+            )
+        ],
+        late_interest=FALateInterestConfig(
+            annual_rate=Decimal("0.12"),
+            grace_period_days=30,
+            interest_type=InterestType.SIMPLE,
+        ),
+    )
+    cached, _ = _generate_schedule_values(params)
+    maturity = date(2025, 3, 31)
+    maturity_value = cached[maturity]
+
+    # Within grace period (5 days after maturity)
+    # Grace period means regular rate continues (not the late penalty rate)
+    target = date(2025, 4, 5)
+    late_value = _compute_late_interest_value(params, target, maturity_value, maturity)
+    # Value should be >= maturity (interest still accruing at regular rate)
+    assert late_value >= maturity_value, "Within grace period → value should not decrease"
+    # Value should be less than what late penalty rate would give
+    # (we just verify it's reasonable and different from maturity)
+    assert late_value > maturity_value, "Within grace period → regular interest still accrues"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

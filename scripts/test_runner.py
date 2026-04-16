@@ -243,6 +243,21 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
     print(f"\n{Colors.BLUE}Running: {description}{Colors.NC}")
     print(f"Command:\n└─▶ $ {' '.join(cmd)}")
 
+    # --- Coverage isolation: swap-in the correct accumulated DB ---
+    # Persistent DBs live in .coverage_data/ (safe from pytest-cov's combine).
+    # Before pytest: copy the right DB → .coverage (so --cov-append appends to it).
+    # After pytest: copy .coverage back → .coverage_data/ (accumulate).
+    if use_coverage:
+        cwd_p = Path(os.getcwd())
+        data_dir = cwd_p / ".coverage_data"
+        data_dir.mkdir(exist_ok=True)
+        source = _COVERAGE_SOURCE or "backend"  # default to backend for non-meta categories
+        accumulated_db = data_dir / source
+        main_cov = cwd_p / ".coverage"
+        # Swap-in: restore accumulated DB so pytest-cov appends to it
+        if accumulated_db.exists():
+            shutil.copy2(str(accumulated_db), str(main_cov))
+
     try:
         # Ensure test subprocesses run in test mode when invoking test scripts
         env = None
@@ -275,6 +290,17 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
     except Exception as e:
         print_error(f"{description} - ERROR: {e}")
         return False
+
+    finally:
+        # --- Swap-out: save .coverage back to .coverage_data/ ---
+        # No archiving here — archive happens once at session end in _finalize_coverage
+        if use_coverage:
+            cwd_p = Path(os.getcwd())
+            main_cov = cwd_p / ".coverage"
+            if main_cov.exists():
+                data_dir = cwd_p / ".coverage_data"
+                source = _COVERAGE_SOURCE or "backend"
+                shutil.copy2(str(main_cov), str(data_dir / source))
 
 
 # ============================================================================
@@ -944,6 +970,27 @@ def services_static_uploads(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Static uploads service tests", verbose=verbose)
 
 
+def services_brim_parse_error(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test BRIMParseError exception class: message, details, inheritance.
+    """
+    print_section("Services: BRIM Parse Error")
+    print_info("Testing: backend/app/services/brim_provider.py (BRIMParseError)")
+    print_info("Tests: Constructor, message/details attributes, exception hierarchy")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error.py", test_names)
+    return run_command(cmd, "BRIM parse error tests", verbose=verbose)
+
+
+def services_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test settings service: get_session_ttl_sync."""
+    print_section("Services: Settings Service")
+    print_info("Testing: backend/app/services/settings_service.py")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_settings_service.py", test_names)
+    return run_command(cmd, "Settings service tests", verbose=verbose)
+
+
 # ============================================================================
 # UTILS TESTS
 # ============================================================================
@@ -984,6 +1031,14 @@ def utils_geo_utils(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Tests: ISO-3166-A3 normalization, weight parsing, validation pipeline")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_geo_utils.py", test_names)
     return run_command(cmd, "Geographic area normalization tests", verbose=verbose)
+
+
+def utils_version(verbose: bool = False, test_names: list = None) -> bool:
+    """Test version utilities: get_git_version, get_version_info."""
+    print_section("Utils: Version")
+    print_info("Testing: backend/app/utils/version.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_version.py", test_names)
+    return run_command(cmd, "Version utility tests", verbose=verbose)
 
 
 def utils_sector_normalization(verbose: bool = False, test_names: list = None) -> bool:
@@ -1035,6 +1090,15 @@ def utils_all(verbose: bool = False) -> bool:
 # ============================================================================
 # SCHEMAS TESTS
 # ============================================================================
+
+def schemas_computed_fields(verbose: bool = False, test_names: list = None) -> bool:
+    """Test computed properties across all schemas (BRSummary, FAPricePoint, etc.)."""
+    print_section("Schemas: Computed Fields")
+    print_info("Testing: computed properties at 0% across brokers, common, fx, prices, transactions schemas")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_schema_computed_fields.py", test_names)
+    return run_command(cmd, "Schema computed fields tests", verbose=verbose)
+
 
 def schemas_common(verbose: bool = False, test_names: list = None) -> bool:
     """Test common Pydantic schemas (Currency, DateRangeModel, OldNew)."""
@@ -1129,6 +1193,20 @@ def api_fx(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_api.py", test_names)
     return run_command(cmd, "FX API tests", verbose=verbose)
+
+
+def api_fx_compress_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Run tests for _compress_convert_errors utility in FX API."""
+    print_section("FX Compress Errors Tests")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_compress_errors.py", test_names)
+    return run_command(cmd, "FX compress errors tests", verbose=verbose)
+
+
+def api_preview_cache(verbose: bool = False, test_names: list = None) -> bool:
+    """Run tests for PreviewCache in uploads API."""
+    print_section("Preview Cache Tests")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_preview_cache.py", test_names)
+    return run_command(cmd, "Preview cache tests", verbose=verbose)
 
 
 def api_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
@@ -1228,6 +1306,24 @@ def api_utilities(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_utilities.py", test_names)
     return run_command(cmd, "Utilities API tests", verbose=verbose)
+
+
+def api_system(verbose: bool = False, test_names: list = None) -> bool:
+    """Test system API: parse_pipfile, get_backend_deps, get_frontend_deps, get_display_name."""
+    print_section("System API Tests")
+    print_info("Testing: system.py utility functions (parse_pipfile, deps)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_api.py", test_names)
+    return run_command(cmd, "System API tests", verbose=verbose)
+
+
+def api_backup(verbose: bool = False, test_names: list = None) -> bool:
+    """Test backup API: formats, status, export (501), restore (501)."""
+    print_section("Backup API Tests")
+    print_info("Testing: backup.py placeholder endpoints")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_api.py", test_names)
+    return run_command(cmd, "Backup API tests", verbose=verbose)
 
 
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
@@ -2141,33 +2237,37 @@ _FRONTEND_CATEGORIES = ("front-utility", "front-user", "front-fx", "front-asset"
 
 
 def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
-    """Remove coverage data directories selectively."""
+    """Remove coverage data directories selectively, archiving DBs first."""
     cwd = Path(os.getcwd())
+    data_dir = cwd / ".coverage_data"
+
+    def _archive_and_remove(db_path: Path, label: str):
+        """Archive a coverage DB before removing it."""
+        if db_path.exists():
+            archive_dir = data_dir / "archive"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            from datetime import datetime as _dt
+            ts = _dt.now().strftime("%Y%m%d_%H%M")
+            archive_name = f"{label}_{ts}_clean"
+            shutil.move(str(db_path), str(archive_dir / archive_name))
+            print(f"{Colors.GREEN}📦 Archived .coverage_data/{label} → archive/{archive_name}{Colors.NC}")
 
     if clean_backend:
         be_dir = cwd / "htmlcov-backend"
         if be_dir.exists():
             shutil.rmtree(be_dir)
             print(f"{Colors.GREEN}🗑️  Removed htmlcov-backend/{Colors.NC}")
-        # Also remove saved backend snapshot
-        be_snapshot = cwd / ".coverage.backend"
-        if be_snapshot.exists():
-            be_snapshot.unlink()
-            print(f"{Colors.GREEN}🗑️  Removed .coverage.backend{Colors.NC}")
+        _archive_and_remove(data_dir / "backend", "backend")
 
     if clean_frontend:
         fe_dir = cwd / "htmlcov-frontend"
         if fe_dir.exists():
             shutil.rmtree(fe_dir)
             print(f"{Colors.GREEN}🗑️  Removed htmlcov-frontend/{Colors.NC}")
-        # Also remove saved frontend snapshot
-        fe_snapshot = cwd / ".coverage.frontend"
-        if fe_snapshot.exists():
-            fe_snapshot.unlink()
-            print(f"{Colors.GREEN}🗑️  Removed .coverage.frontend{Colors.NC}")
+        _archive_and_remove(data_dir / "frontend", "frontend")
 
     if clean_backend or clean_frontend:
-        # Also erase .coverage database
+        # Also erase .coverage database in root
         result = subprocess.run(
             [*pipenv_prefix(), "coverage", "erase"],
             cwd=os.getcwd(),
@@ -2179,6 +2279,11 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
         else:
             print(f"{Colors.RED}❌ Failed to reset coverage database{Colors.NC}")
             print(f"{Colors.RED}   Error: {result.stderr}{Colors.NC}\n")
+        # Clean up legacy files if they exist
+        for legacy in (".coverage.backend", ".coverage.frontend"):
+            lf = cwd / legacy
+            if lf.exists():
+                lf.unlink()
 
 
 # ============================================================================
@@ -2572,6 +2677,22 @@ These tests verify business logic in service layer:
             "prereq": "None",
             "tests": "Save, list, get, delete, security validation",
             },
+        "brim-parse-error": {
+            "func": services_brim_parse_error,
+            "test_names": True,
+            "name": "BRIM Parse Error",
+            "desc": "Test BRIMParseError exception class",
+            "prereq": "None",
+            "tests": "Constructor, attributes, exception hierarchy",
+            },
+        "settings": {
+            "func": services_settings,
+            "test_names": True,
+            "name": "Settings Service",
+            "desc": "Test settings service (session TTL)",
+            "prereq": "None",
+            "tests": "get_session_ttl_sync",
+            },
         "all": {
             "func": services_all,
             "test_names": False,
@@ -2621,7 +2742,15 @@ These tests verify utility modules and helper functions:
             "name": "Geo Normalization",
             "desc": "Test geographic area normalization",
             "prereq": "pycountry installed",
-            "tests": "ISO-3166-A3 conversion, weight validation",
+            "tests": "ISO-3166-A3 conversion, weight validation, expand_region",
+            },
+        "version": {
+            "func": utils_version,
+            "test_names": True,
+            "name": "Version Utils",
+            "desc": "Test version utilities (git version, version info)",
+            "prereq": "git installed",
+            "tests": "get_git_version, get_version_info",
             },
         "sector-normalization": {
             "func": utils_sector_normalization,
@@ -2681,6 +2810,14 @@ These tests verify Pydantic schema validation rules:
             "desc": "Test common schemas (Currency, DateRangeModel)",
             "prereq": "None",
             "tests": "Creation, validation, arithmetic, serialization",
+            },
+        "computed-fields": {
+            "func": schemas_computed_fields,
+            "test_names": True,
+            "name": "Schema Computed Fields",
+            "desc": "Test computed properties across schemas (BRSummary, FAPricePoint, etc.)",
+            "prereq": "None",
+            "tests": "Computed properties, tag helpers, date formatters",
             },
         "assets": {
             "func": schemas_assets,
@@ -2767,6 +2904,22 @@ These tests verify REST API endpoints:
             "prereq": "FX rates populated",
             "tests": "GET /currencies, POST /sync, GET /convert",
             },
+        "fx-compress-errors": {
+            "func": api_fx_compress_errors,
+            "test_names": True,
+            "name": "FX Compress Errors",
+            "desc": "Test _compress_convert_errors utility",
+            "prereq": "None",
+            "tests": "Error compression logic",
+            },
+        "preview-cache": {
+            "func": api_preview_cache,
+            "test_names": True,
+            "name": "Preview Cache",
+            "desc": "Test PreviewCache LRU cache",
+            "prereq": "None",
+            "tests": "Cache get/put/evict/invalidate",
+            },
         "fx-sync": {
             "func": api_fx_sync,
             "test_names": True,
@@ -2822,6 +2975,22 @@ These tests verify REST API endpoints:
             "desc": "Test utility endpoints",
             "prereq": "None",
             "tests": "GET /utilities/sectors, /countries/normalize",
+            },
+        "system": {
+            "func": api_system,
+            "test_names": True,
+            "name": "System API",
+            "desc": "Test system info endpoints (parse_pipfile, deps)",
+            "prereq": "None",
+            "tests": "parse_pipfile, get_backend_deps, get_frontend_deps",
+            },
+        "backup": {
+            "func": api_backup,
+            "test_names": True,
+            "name": "Backup API",
+            "desc": "Test backup placeholder endpoints",
+            "prereq": "Database created",
+            "tests": "GET /formats, /status, POST /export (501), /restore (501)",
             },
         "transactions": {
             "func": api_transactions,
@@ -3867,45 +4036,62 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
     """
     Finalize coverage data after test runs.
 
-    Handles combining parallel coverage files from server subprocesses,
-    generating HTML reports, and preserving coverage snapshots.
+    Coverage DBs are persisted in ``.coverage_data/backend`` and
+    ``.coverage_data/frontend``.  The active ``.coverage`` in root is
+    a working copy that pytest-cov writes to; it is swapped in/out by
+    ``run_command`` before/after each pytest invocation.
 
-    IMPORTANT: Backend .coverage data is NEVER deleted without explicit
-    --cov-clean-backend flag. When running frontend tests, the existing
-    backend .coverage is preserved as .coverage.backend so that
-    `coverage show combined` can merge both data sources.
+    Flow:
+      - Backend-only: ``.coverage`` already saved by run_command's finally block.
+        Generate ``htmlcov-backend/`` from it.
+      - Frontend-only: combine server PID files → ``.coverage``, save to
+        ``.coverage_data/frontend``, generate ``htmlcov-frontend/``.
+      - All: backend DB already saved.  Combine PID files for frontend.
+        Then merge both for ``htmlcov/`` combined report.
 
-    Returns the html_dir used for the report.
+    Returns the html_dir used for the final report.
     """
     cwd = Path(os.getcwd())
     main_cov = cwd / ".coverage"
-    backend_cov = cwd / ".coverage.backend"
-    frontend_cov = cwd / ".coverage.frontend"
+    data_dir = cwd / ".coverage_data"
+    data_dir.mkdir(exist_ok=True)
+    backend_db = data_dir / "backend"
+    frontend_db = data_dir / "frontend"
     html_dir = "htmlcov-frontend" if is_front else "htmlcov-backend"
 
-    # Names that are NOT server PID files (they are config or saved snapshots)
-    SAVED_NAMES = frozenset({".coveragerc", ".coverage.backend", ".coverage.frontend"})
+    def _archive_db(db_path: Path, label: str):
+        """Archive previous version of a coverage DB before overwriting."""
+        if db_path.exists():
+            archive_dir = data_dir / "archive"
+            archive_dir.mkdir(exist_ok=True)
+            from datetime import datetime as _dt
+            ts = _dt.now().strftime("%Y%m%d_%H%M")
+            shutil.copy2(str(db_path), str(archive_dir / f"{label}_{ts}"))
+            print(f"   {Colors.GREEN}📦 Archived {label} → archive/{label}_{ts}{Colors.NC}")
 
     if is_front or is_all:
-        # --- Preserve backend .coverage data ---
+        # --- Save backend DB (run_command already saved it, but for "all"
+        #     the backend tests wrote to .coverage which was saved as
+        #     .coverage_data/backend by run_command's finally block) ---
+        # Remove .coverage so frontend combine creates a clean file
         if main_cov.exists():
-            if not backend_cov.exists():
-                # First time: save backend data as .coverage.backend
-                shutil.copy2(str(main_cov), str(backend_cov))
-                print(f"   {Colors.GREEN}💾 Preserved backend coverage → .coverage.backend{Colors.NC}")
-            # Remove .coverage so frontend combine creates a clean file
+            # Ensure backend DB is up-to-date (run_command already did this,
+            # but in "all" mode _COVERAGE_SOURCE is None so it may not have)
+            if is_all and not backend_db.exists():
+                shutil.copy2(str(main_cov), str(backend_db))
             main_cov.unlink()
 
-        # --- Collect only server PID files (not saved snapshots) ---
+        # --- Collect only server PID files ---
+        SAVED_NAMES = frozenset({".coveragerc"})
         pid_files = [f for f in cwd.glob(".coverage.*") if f.name not in SAVED_NAMES]
 
         print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
         if pid_files:
             print(f"   Found {len(pid_files)} coverage data file(s): "
-                  f"{', '.join(f.name for f in pid_files[:5])}")
-            # Combine ONLY PID files (specify them explicitly to exclude saved snapshots)
+                  f"{', '.join(f.name for f in pid_files[:5])}"
+                  f"{'...' if len(pid_files) > 5 else ''}")
             r_combine = subprocess.run(
-                [*pipenv_prefix(), "coverage", "combine", "--keep"] + [str(f) for f in pid_files],
+                [*pipenv_prefix(), "coverage", "combine"] + [str(f) for f in pid_files],
                 cwd=os.getcwd(), capture_output=True, text=True
             )
             if r_combine.returncode != 0:
@@ -3914,22 +4100,47 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
                 if err_lines:
                     print_warning(f"   coverage combine: {' '.join(err_lines)}")
 
-            # Save frontend coverage snapshot
+            # Save frontend coverage
             if main_cov.exists():
-                shutil.copy2(str(main_cov), str(frontend_cov))
-                print(f"   {Colors.GREEN}💾 Saved frontend coverage → .coverage.frontend{Colors.NC}")
+                _archive_db(frontend_db, "frontend")
+                shutil.copy2(str(main_cov), str(frontend_db))
+                print(f"   {Colors.GREEN}💾 Saved frontend coverage → .coverage_data/frontend{Colors.NC}")
         else:
             print_warning("   No .coverage.* files found! Server may not have written coverage data.")
             print(f"   {Colors.YELLOW}Hint: check that './dev.py server --coverage' starts the server "
                   f"with 'coverage run'{Colors.NC}")
 
     if is_all:
-        # Re-combine backend + frontend snapshots into .coverage for the combined report
-        combine_srcs = [str(f) for f in (backend_cov, frontend_cov) if f.exists()]
+        # --- Generate htmlcov-backend/ from backend DB ---
+        if backend_db.exists():
+            shutil.copy2(str(backend_db), str(main_cov))
+            subprocess.run(
+                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-backend",
+                 "--title", "LibreFolio Backend Coverage", "--ignore-errors"],
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+            print(f"   {Colors.GREEN}📊 Generated htmlcov-backend/{Colors.NC}")
+
+        # --- Generate htmlcov-frontend/ from frontend DB ---
+        if frontend_db.exists():
+            shutil.copy2(str(frontend_db), str(main_cov))
+            r_fe = subprocess.run(
+                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-frontend",
+                 "--title", "LibreFolio Frontend E2E → Backend Coverage",
+                 "--ignore-errors"],
+                cwd=os.getcwd(), capture_output=True, text=True
+            )
+            if r_fe.returncode != 0:
+                print_warning(f"coverage html (frontend) failed: {r_fe.stderr.strip()}")
+            else:
+                print(f"   {Colors.GREEN}📊 Generated htmlcov-frontend/{Colors.NC}")
+
+        # --- Merge backend + frontend for combined report ---
+        combine_srcs = [str(f) for f in (backend_db, frontend_db) if f.exists()]
         if combine_srcs:
             if main_cov.exists():
                 main_cov.unlink()
-            print(f"{Colors.YELLOW}📊 Merging backend + frontend snapshots for combined report...{Colors.NC}")
+            print(f"{Colors.YELLOW}📊 Merging backend + frontend for combined report...{Colors.NC}")
             r_merge = subprocess.run(
                 [*pipenv_prefix(), "coverage", "combine", "--keep"] + combine_srcs,
                 cwd=os.getcwd(), capture_output=True, text=True
@@ -3960,10 +4171,11 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
             print_warning(f"coverage html failed: {r.stderr.strip()}")
     else:
         # Backend — report already generated by pytest-cov
-        # Save .coverage as .coverage.backend for future combining
-        if main_cov.exists() and not backend_cov.exists():
-            shutil.copy2(str(main_cov), str(backend_cov))
-            print(f"   {Colors.GREEN}💾 Saved backend coverage → .coverage.backend{Colors.NC}")
+        # Archive previous DB, then save new one
+        if main_cov.exists():
+            _archive_db(backend_db, "backend")
+            shutil.copy2(str(main_cov), str(backend_db))
+            print(f"   {Colors.GREEN}💾 Saved backend coverage → .coverage_data/backend{Colors.NC}")
 
     # Generate terminal summary
     subprocess.run(
@@ -3976,10 +4188,10 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
     print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
     print(f"   HTML: {Colors.BLUE}{html_dir}/index.html{Colors.NC}")
     print(f"   Data: {Colors.BLUE}.coverage{Colors.NC}")
-    if backend_cov.exists():
-        print(f"   Backend snapshot: {Colors.BLUE}.coverage.backend{Colors.NC}")
-    if frontend_cov.exists():
-        print(f"   Frontend snapshot: {Colors.BLUE}.coverage.frontend{Colors.NC}")
+    if backend_db.exists():
+        print(f"   Backend DB: {Colors.BLUE}.coverage_data/backend{Colors.NC}")
+    if frontend_db.exists():
+        print(f"   Frontend DB: {Colors.BLUE}.coverage_data/frontend{Colors.NC}")
     print()
     print(f"{Colors.YELLOW}💡 View HTML report:{Colors.NC}")
     if is_all:

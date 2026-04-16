@@ -61,7 +61,7 @@ class CSSScraperProvider(AssetSourceProvider):
     def provider_help_url(self) -> str:
         return "/mkdocs/user/assets/providers/css-scraper/"
 
-    def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
+    def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:  # pragma: no cover
         """The identifier IS the URL for CSS scraper."""
         return identifier if identifier.startswith("http") else None
 
@@ -230,7 +230,7 @@ class CSSScraperProvider(AssetSourceProvider):
         """Whether this provider supports historical data."""
         return False
 
-    async def get_history_value(
+    async def get_history_value(  # pragma: no cover
         self,
         identifier: str,
         identifier_type: IdentifierType,

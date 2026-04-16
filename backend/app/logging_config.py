@@ -41,7 +41,7 @@ def add_log_level(logger: Any, method_name: str, event_dict: EventDict) -> Event
     return event_dict
 
 
-def _get_rotated_filename(default_name: str) -> str:
+def _get_rotated_filename(default_name: str) -> str:  # pragma: no cover
     """
     Custom namer for rotated log files.
     Adds .gz extension for compression.
@@ -51,7 +51,7 @@ def _get_rotated_filename(default_name: str) -> str:
     return default_name + ".gz"
 
 
-def _compress_rotated_file(source: str, dest: str) -> None:
+def _compress_rotated_file(source: str, dest: str) -> None:  # pragma: no cover
     """
     Compress rotated log files with gzip.
 

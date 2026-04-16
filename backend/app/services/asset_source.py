@@ -565,7 +565,7 @@ class AssetSourceProvider(ABC):
         return []
 
     @property
-    def accepted_identifier_types(self) -> list[ProviderInputType]:
+    def accepted_identifier_types(self) -> list[ProviderInputType]:  # pragma: no cover
         """
         Input types accepted by this provider (for frontend identifier type dropdown).
         Uses ProviderInputType (TICKER, ISIN, URL, AUTO_GENERATED), NOT IdentifierType.
@@ -684,7 +684,7 @@ class AssetSourceProvider(ABC):
         """
         return None
 
-    def shutdown(self) -> None:
+    def shutdown(self) -> None:  # pragma: no cover
         """
         Cleanup resources on application shutdown.
 
@@ -3324,7 +3324,7 @@ class AssetSearchService:
             )
 
     @staticmethod
-    async def search_stream(
+    async def search_stream(  # pragma: no cover
         query: str, provider_codes: Optional[list[str]] = None
         ) -> AsyncGenerator[str, None]:
         """

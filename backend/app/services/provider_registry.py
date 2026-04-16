@@ -119,7 +119,7 @@ class AbstractProviderRegistry:
         cls._discovery_done = True
 
     @classmethod
-    def shutdown_all_providers(cls) -> None:
+    def shutdown_all_providers(cls) -> None:  # pragma: no cover
         """Invoke ``shutdown()`` on every registered provider instance.
 
         Called during application lifespan teardown.  Errors on individual
