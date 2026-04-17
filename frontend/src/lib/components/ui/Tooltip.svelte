@@ -37,6 +37,25 @@
     let fixedTop = $state(0);
     let fixedLeft = $state(0);
 
+    /** Auto-dismiss timer for mobile (touch) interactions */
+    let autoDismissTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+    /** Whether the current interaction is touch-based */
+    let isTouchInteraction = $state(false);
+
+    function clearAutoDismiss() {
+        if (autoDismissTimer) {
+            clearTimeout(autoDismissTimer);
+            autoDismissTimer = null;
+        }
+    }
+
+    function startAutoDismiss() {
+        clearAutoDismiss();
+        autoDismissTimer = setTimeout(() => {
+            hide();
+        }, 5000);
+    }
+
     function show() {
         visible = true;
         // Defer position calculation to next frame (tooltip must be in DOM first)
@@ -45,6 +64,8 @@
 
     function hide() {
         visible = false;
+        clearAutoDismiss();
+        isTouchInteraction = false;
     }
 
     function toggle(event: MouseEvent) {
@@ -53,6 +74,17 @@
             hide();
         } else {
             show();
+        }
+    }
+
+    function handleTouchStart(event: TouchEvent) {
+        event.stopPropagation();
+        isTouchInteraction = true;
+        if (visible) {
+            hide();
+        } else {
+            show();
+            startAutoDismiss();
         }
     }
 
@@ -169,13 +201,33 @@
     $effect(() => {
         if (visible) {
             document.addEventListener('click', handleClickOutside);
-            return () => document.removeEventListener('click', handleClickOutside);
+            document.addEventListener('touchstart', handleTouchOutside);
+            return () => {
+                document.removeEventListener('click', handleClickOutside);
+                document.removeEventListener('touchstart', handleTouchOutside);
+            };
         }
     });
+
+    function handleTouchOutside(event: TouchEvent) {
+        if (visible && triggerElement && !triggerElement.contains(event.target as Node)) {
+            hide();
+        }
+    }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div bind:this={triggerElement} class="tooltip-wrapper" onclick={toggle} onkeydown={handleKeydown} onmouseenter={show} onmouseleave={hide} role="button" tabindex="0">
+<div
+        bind:this={triggerElement}
+        class="tooltip-wrapper"
+        onclick={(e) => { if (!isTouchInteraction) toggle(e); }}
+        onkeydown={handleKeydown}
+        onmouseenter={() => { if (!isTouchInteraction) show(); }}
+        onmouseleave={() => { if (!isTouchInteraction) hide(); }}
+        ontouchstart={handleTouchStart}
+        role="button"
+        tabindex="0"
+    >
     {#if children}
         {@render children()}
     {/if}
