@@ -2,7 +2,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {onMount} from 'svelte';
-    import {Check, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Monitor, Scale, Tag} from 'lucide-svelte';
+    import {Check, ChevronDown, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Monitor, Scale, Tag} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
 
     const githubUrl = 'https://github.com/Alfystar/LibreFolio';
@@ -23,19 +23,52 @@
         frontend_dependencies: DependencyInfo[];
     }
 
+    interface ProviderInfo {
+        code: string;
+        name: string;
+        description?: string;
+        icon_url?: string | null;
+        provider_help_url?: string | null;  // asset providers
+        docs_url?: string | null;           // fx providers
+    }
+
     let systemInfo: SystemInfo | null = null;
     let isLoading = true;
     let copied = false;
 
+    let assetProviders: ProviderInfo[] = [];
+    let fxProviders: ProviderInfo[] = [];
+    let importPlugins: ProviderInfo[] = [];
+
     onMount(async () => {
         try {
-            systemInfo = await zodiosApi.get_system_info_api_v1_system_info_get() as SystemInfo;
+            const [sysInfo, assetProv, fxProv, brimPlugins] = await Promise.all([
+                zodiosApi.get_system_info_api_v1_system_info_get(),
+                zodiosApi.list_providers_api_v1_assets_provider_get().catch(() => []),
+                zodiosApi.list_providers_api_v1_fx_providers_get().catch(() => []),
+                zodiosApi.list_plugins_api_v1_brokers_import_plugins_get().catch(() => []),
+            ]);
+            systemInfo = sysInfo as SystemInfo;
+            assetProviders = assetProv as ProviderInfo[];
+            fxProviders = fxProv as ProviderInfo[];
+            importPlugins = brimPlugins as ProviderInfo[];
         } catch (e) {
             console.error('Failed to load system info', e);
         } finally {
             isLoading = false;
         }
     });
+
+    function getDocsUrl(p: ProviderInfo): string | null {
+        if (!p.code) return null;
+        const lang = localStorage.getItem('librefolio-locale') || 'en';
+        const prefix = lang !== 'en' ? `${lang}/` : '';
+        return `/mkdocs/${prefix}user-guide/import/${p.code}/`;
+    }
+
+    function getProviderUrl(p: ProviderInfo): string | null {
+        return p.provider_help_url || p.docs_url || null;
+    }
 
     async function copySystemInfo() {
         if (!systemInfo) return;
@@ -46,12 +79,22 @@ App Version: ${systemInfo.app_version}
 Python: ${systemInfo.python_version}
 OS: ${systemInfo.os_name} ${systemInfo.os_version}
 Platform: ${systemInfo.platform}
+========================
 
 Backend Dependencies:
 ${systemInfo.backend_dependencies.map(d => `  - ${d.name}: ${d.version}`).join('\n')}
 
 Frontend Dependencies:
 ${systemInfo.frontend_dependencies.map(d => `  - ${d.name}: ${d.version}`).join('\n')}
+
+Asset Providers:
+${assetProviders.map(p => `  - ${p.name}`).join('\n')}
+
+FX Providers:
+${fxProviders.map(p => `  - ${p.name}`).join('\n')}
+
+Import Plugins:
+${importPlugins.map(p => `  - ${p.name}`).join('\n')}
 
 Generated: ${new Date().toISOString()}
 `;
@@ -190,37 +233,149 @@ Generated: ${new Date().toISOString()}
         {/if}
     </div>
 
-    <!-- Credits with detailed dependencies -->
+    <!-- Installed Plugins -->
+    {#if !isLoading}
+        <div class="pt-6 border-t border-gray-200">
+            <h4 class="text-md font-medium text-gray-700 mb-4">{$_('settings.installedPlugins')}</h4>
+
+            <!-- Asset Providers -->
+            {#if assetProviders.length > 0}
+                <details class="mb-3 group">
+                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <span class="text-sm font-medium text-gray-700">{$_('settings.assetProviders')} ({assetProviders.length})</span>
+                        <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180"/>
+                    </summary>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
+                        {#each assetProviders as p}
+                            <svelte:element
+                                    this={getProviderUrl(p) ? 'a' : 'div'}
+                                    href={getProviderUrl(p) || undefined}
+                                    target={getProviderUrl(p) ? '_blank' : undefined}
+                                    rel={getProviderUrl(p) ? 'noopener noreferrer' : undefined}
+                                    class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-libre-green hover:shadow-md cursor-pointer transition-all' : ''}"
+                            >
+                                {#if p.icon_url}
+                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5"/>
+                                {:else}
+                                    <div class="w-8 h-8 rounded bg-libre-green/10 text-libre-green flex items-center justify-center text-xs font-bold shrink-0">
+                                        {p.code.slice(0, 2).toUpperCase()}
+                                    </div>
+                                {/if}
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-gray-800 truncate">{p.name}</p>
+                                    <p class="text-xs text-gray-400 truncate">{p.code}</p>
+                                </div>
+                            </svelte:element>
+                        {/each}
+                    </div>
+                </details>
+            {/if}
+
+            <!-- FX Providers -->
+            {#if fxProviders.length > 0}
+                <details class="mb-3 group">
+                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <span class="text-sm font-medium text-gray-700">{$_('settings.fxProviders')} ({fxProviders.length})</span>
+                        <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180"/>
+                    </summary>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
+                        {#each fxProviders as p}
+                            <svelte:element
+                                    this={getProviderUrl(p) ? 'a' : 'div'}
+                                    href={getProviderUrl(p) || undefined}
+                                    target={getProviderUrl(p) ? '_blank' : undefined}
+                                    rel={getProviderUrl(p) ? 'noopener noreferrer' : undefined}
+                                    class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-blue-400 hover:shadow-md cursor-pointer transition-all' : ''}"
+                            >
+                                {#if p.icon_url}
+                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5"/>
+                                {:else}
+                                    <div class="w-8 h-8 rounded bg-blue-500/10 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
+                                        {p.code.slice(0, 3).toUpperCase()}
+                                    </div>
+                                {/if}
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-gray-800 truncate">{p.name}</p>
+                                    <p class="text-xs text-gray-400 truncate">{p.code}</p>
+                                </div>
+                            </svelte:element>
+                        {/each}
+                    </div>
+                </details>
+            {/if}
+
+            <!-- Import Plugins -->
+            {#if importPlugins.length > 0}
+                <details class="mb-3 group">
+                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <span class="text-sm font-medium text-gray-700">{$_('settings.importPlugins')} ({importPlugins.length})</span>
+                        <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180"/>
+                    </summary>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
+                        {#each importPlugins as p}
+                            <svelte:element
+                                    this={getDocsUrl(p) ? 'a' : 'div'}
+                                    href={getDocsUrl(p) || undefined}
+                                    target={getDocsUrl(p) ? '_blank' : undefined}
+                                    rel={getDocsUrl(p) ? 'noopener noreferrer' : undefined}
+                                    class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getDocsUrl(p) ? 'hover:border-amber-400 hover:shadow-md cursor-pointer transition-all' : ''}"
+                            >
+                                {#if p.icon_url}
+                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5"/>
+                                {:else}
+                                    <div class="w-8 h-8 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center text-xs font-bold shrink-0">
+                                        {p.code.slice(0, 2).toUpperCase()}
+                                    </div>
+                                {/if}
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-gray-800 truncate">{p.name}</p>
+                                    <p class="text-xs text-gray-400 truncate">{p.code}</p>
+                                </div>
+                            </svelte:element>
+                        {/each}
+                    </div>
+                </details>
+            {/if}
+        </div>
+    {/if}
+
+    <!-- Credits with foldable dependencies -->
     <div class="pt-6 border-t border-gray-200">
         <h4 class="text-md font-medium text-gray-700 mb-4">{$_('settings.credits')}</h4>
 
-        <!-- Backend Libraries -->
         {#if systemInfo}
-            <div class="mb-4">
-                <p class="text-sm text-gray-500 mb-2">{$_('settings.backendLibraries')}</p>
-                <div class="flex flex-wrap gap-2">
+            <!-- Backend Libraries (foldable) -->
+            <details class="mb-3 group">
+                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <span class="text-sm font-medium text-gray-700">{$_('settings.backendLibraries')} ({systemInfo.backend_dependencies.length})</span>
+                    <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180"/>
+                </summary>
+                <div class="flex flex-wrap gap-2 mt-3 pl-1">
                     {#each systemInfo.backend_dependencies as dep}
                         <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
                             {dep.name} <span class="text-gray-400">{dep.version}</span>
                         </span>
                     {/each}
                 </div>
-            </div>
+            </details>
 
-            <!-- Frontend Libraries -->
-            <div class="mb-6">
-                <p class="text-sm text-gray-500 mb-2">{$_('settings.frontendLibraries')}</p>
-                <div class="flex flex-wrap gap-2">
+            <!-- Frontend Libraries (foldable) -->
+            <details class="mb-3 group">
+                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <span class="text-sm font-medium text-gray-700">{$_('settings.frontendLibraries')} ({systemInfo.frontend_dependencies.length})</span>
+                    <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180"/>
+                </summary>
+                <div class="flex flex-wrap gap-2 mt-3 pl-1">
                     {#each systemInfo.frontend_dependencies as dep}
                         <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
                             {dep.name} <span class="text-gray-400">{dep.version}</span>
                         </span>
                     {/each}
                 </div>
-            </div>
+            </details>
         {/if}
 
-        <!-- Made with love - at the bottom -->
+        <!-- Made with love -->
         <div class="flex items-center justify-center space-x-2 text-gray-500 pt-4 border-t border-gray-100">
             <span>{$_('settings.madeWith')}</span>
             <Heart class="text-red-500" size={16}/>

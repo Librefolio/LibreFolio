@@ -7,8 +7,27 @@ import {type Language, TEST_USER} from './test-users';
 export async function login(page: Page, user = TEST_USER) {
     await page.goto('/');
 
-    // Wait for auth check to complete and login form to appear
-    await expect(page.getByTestId('login-page')).toBeVisible({timeout: 10_000});
+    // Wait for auth check to complete — either login form appears or we're already logged in
+    const loginPage = page.getByTestId('login-page');
+    const appLayout = page.getByTestId('logout-button');
+
+    // Race: login page vs app layout (already authenticated)
+    const visible = await Promise.race([
+        loginPage.waitFor({state: 'visible', timeout: 10_000}).then(() => 'login' as const),
+        appLayout.waitFor({state: 'visible', timeout: 10_000}).then(() => 'app' as const),
+    ]).catch(() => 'timeout' as const);
+
+    if (visible === 'app') {
+        // Already logged in — nothing to do
+        return;
+    }
+
+    if (visible === 'timeout') {
+        // Neither appeared — force a retry with a fresh context
+        await page.goto('/');
+        await expect(loginPage).toBeVisible({timeout: 10_000});
+    }
+
     await expect(page.getByTestId('login-form')).toBeVisible();
 
     // Fill and submit using data-testid
@@ -18,7 +37,7 @@ export async function login(page: Page, user = TEST_USER) {
 
     // Wait for login to complete: login form disappears and app layout loads
     // (more robust than checking URL, which varies by redirect timing)
-    await expect(page.getByTestId('login-page')).not.toBeVisible({timeout: 20_000});
+    await expect(loginPage).not.toBeVisible({timeout: 20_000});
     await page.waitForLoadState('domcontentloaded');
 }
 

@@ -652,6 +652,7 @@ def cmd_mkdocs_gallery(args):
     mobile_only = getattr(args, 'mobile_only', False)
     no_populate = getattr(args, 'no_populate', False)
     test_port = getattr(args, 'test_port', None)
+    force = getattr(args, 'force', False)
 
     # --list: show available test names and exit
     if list_tests:
@@ -721,11 +722,34 @@ def cmd_mkdocs_gallery(args):
     effective_port = test_port or os.environ.get('TEST_PORT') or get_test_server_port()
     processes_using_port = check_port_in_use(int(effective_port))
     if processes_using_port:
-        print_error(f"Port {effective_port} is already in use!")
-        _print_port_help(int(effective_port), processes_using_port)
-        print(f"\n{Colors.YELLOW}💡 You can use a different port:{Colors.NC}")
-        print(f"   ./dev.py mkdocs gallery --test-port 8099\n")
-        return 1
+        if force:
+            # --force: kill blocking processes and continue
+            pids = [pid for pid, _ in processes_using_port]
+            print_warning(f"Port {effective_port} is in use — killing {len(pids)} blocking process(es)...")
+            for pid, proc_name in processes_using_port:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    print(f"  ✗ Killed PID {pid} ({proc_name})")
+                except ProcessLookupError:
+                    pass  # already dead
+                except PermissionError:
+                    print_error(f"  Cannot kill PID {pid} ({proc_name}) — permission denied")
+                    return 1
+            # Wait briefly for port to be released
+            time.sleep(1)
+            still_in_use = check_port_in_use(int(effective_port))
+            if still_in_use:
+                print_error(f"Port {effective_port} still in use after killing processes!")
+                _print_port_help(int(effective_port), still_in_use)
+                return 1
+            print_success(f"Port {effective_port} is now free")
+        else:
+            print_error(f"Port {effective_port} is already in use!")
+            _print_port_help(int(effective_port), processes_using_port)
+            print(f"\n{Colors.YELLOW}💡 Use --force to kill zombie processes, or use a different port:{Colors.NC}")
+            print(f"   ./dev.py mkdocs gallery --force")
+            print(f"   ./dev.py mkdocs gallery --test-port 8099\n")
+            return 1
 
     # --- Headless by default (screenshots are pixel-perfect in headless mode) ---
     use_headed = getattr(args, 'headed', False)
@@ -760,18 +784,60 @@ def cmd_mkdocs_gallery(args):
     run_cmd = cmd
 
     try:
-        result = subprocess.run(run_cmd, cwd=PROJECT_ROOT / "frontend", env=gallery_env)
+        # Use Popen to stream output live AND capture it for failure parsing
+        proc = subprocess.Popen(
+            run_cmd, cwd=PROJECT_ROOT / "frontend", env=gallery_env,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        output_lines = []
+        for line in proc.stdout:
+            print(line, end='')
+            output_lines.append(line)
+        proc.wait()
+        returncode = proc.returncode
     except KeyboardInterrupt:
         print(f"\n{Colors.YELLOW}⚠️  Gallery interrupted by user (Ctrl+C){Colors.NC}")
         print(f"{Colors.YELLOW}Partial screenshots may have been saved to mkdocs_src/docs/gallery/{Colors.NC}")
         return 1
-    if result.returncode != 0:
+
+    # Parse failed test names from Playwright output
+    # Playwright prints lines like:
+    #   [desktop] › e2e/gallery.spec.ts:330:9 › Gallery Screenshots › Files › static resources grid view - all languages and themes
+    failed_tests = []
+    if returncode != 0:
         failures = [v[0] for v in viewports]
+        in_failures_block = False
+        for line in output_lines:
+            stripped = line.strip()
+            # Detect the failures summary block (e.g. "  1 failed")
+            if re.match(r'^\d+ failed$', stripped):
+                in_failures_block = True
+                continue
+            if in_failures_block:
+                # Lines like: [desktop] › e2e/gallery.spec.ts:330:9 › Gallery Screenshots › Files › test name
+                m = re.match(r'\[[\w]+\]\s+›\s+\S+\s+›\s+Gallery Screenshots\s+›\s+(.+)', stripped)
+                if m:
+                    failed_tests.append(m.group(1).strip())
+                elif stripped and not stripped.startswith('['):
+                    # End of failures block (e.g. "X passed", empty line, etc.)
+                    in_failures_block = False
         print_error(f"Gallery generation had failures (see above)")
 
     if failures:
         print(f"\n{Colors.YELLOW}⚠️  Gallery generation completed with failures in: {', '.join(failures)}{Colors.NC}")
-        print(f"{Colors.YELLOW}Some screenshots may be missing or outdated. Run with --filter to retry specific tests.{Colors.NC}")
+        if failed_tests:
+            print(f"\n{Colors.YELLOW}Failed tests:{Colors.NC}")
+            for t in failed_tests:
+                print(f"  ✗ {t}")
+            print(f"\n{Colors.CYAN}💡 Retry failed tests with:{Colors.NC}")
+            for t in failed_tests:
+                # Extract the last part (test name) for --filter
+                parts = t.split(' › ')
+                test_name = parts[-1] if parts else t
+                print(f"   ./dev.py mkdocs gallery --no-populate -f \"{test_name}\"")
+            print()
+        else:
+            print(f"{Colors.YELLOW}Some screenshots may be missing or outdated. Run with --filter to retry specific tests.{Colors.NC}")
     else:
         print_success("\n✅ Gallery screenshots generated successfully!")
     print(f"{Colors.GREEN}Output: mkdocs_src/docs/gallery/{Colors.NC}")
@@ -955,11 +1021,18 @@ def _get_docker_tag(override: str | None = None) -> str:
       - After commits:  librefolio:v1.2.3-5-gabcdef
       - Dirty tree:     librefolio:v1.2.3-dirty
       - No tags:        librefolio:v0.0.0-gabcdef
+
+    Note: We call get_git_version() fresh (bypassing lru_cache) because
+    _docker_ensure_assets_built() may have dirtied the tree after a prior
+    cached call.  The on-exact-tag dirty suppression in get_git_version()
+    already handles build-artifact false positives.
     """
     if override:
         return override
 
     from backend.app.utils.version import get_git_version
+    # Clear lru_cache so that asset-build artefacts don't produce a stale result
+    get_git_version.cache_clear()
     version = get_git_version()  # e.g. "v0.5.0" or "v0.5.0-3-gabcdef-dirty"
     return f"librefolio:{version}"
 
@@ -1545,6 +1618,8 @@ Examples:
                        help="Port for the test server (default: TEST_PORT env or 8001)")
     mk_p.add_argument("--headed", action="store_true",
                        help="Run browser in headed mode (visible window) instead of headless")
+    mk_p.add_argument("--force", action="store_true",
+                       help="Kill zombie processes blocking the test port instead of failing")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
     mk_p = mk_sub.add_parser("check-links", help="Validate cross-boundary links (frontend/backend → docs)")
