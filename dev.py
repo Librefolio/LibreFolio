@@ -1034,8 +1034,7 @@ def _get_docker_tag(override: str | None = None) -> str:
 
     Note: We call get_git_version() fresh (bypassing lru_cache) because
     _docker_ensure_assets_built() may have dirtied the tree after a prior
-    cached call.  The on-exact-tag dirty suppression in get_git_version()
-    already handles build-artifact false positives.
+    cached call.
     """
     if override:
         return override
