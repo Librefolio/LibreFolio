@@ -154,3 +154,5 @@ cat /tmp/ruff_stats.txt
 
 5. **black line-length 300**: With this setting, black almost never wraps lines. Its main effect is **normalizing closing parenthesis indentation** (PyCharm `    )` → PEP8 `)`) and **enforcing blank lines** between functions/classes.
 
+6. **Black vs PyCharm closing parens**: Black uses dedented `)` everywhere (PEP 8 style). PyCharm uses continuation indent (`)` aligned with args). **Decision: use Black style** — it's the industry standard and better for team collaboration. Do NOT reformat with PyCharm after Black.
+
