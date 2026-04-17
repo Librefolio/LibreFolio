@@ -199,7 +199,7 @@
     </div>
 
     <!-- Bottom Section -->
-    <div class="border-t border-white/10 p-4 space-y-2">
+    <div class="border-t border-white/10 {collapsed ? 'p-2' : 'p-4'} space-y-2">
         <!-- User Avatar & Info -->
         <a
             class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition-colors
