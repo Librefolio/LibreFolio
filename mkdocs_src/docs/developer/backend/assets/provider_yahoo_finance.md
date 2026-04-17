@@ -20,11 +20,13 @@ The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using th
 4. **No `history()` call at all** — current value polling never touches the chart API.
 
 !!! warning "Avoid `history()` and `fast_info` for current price"
+
     - `ticker.history()` calls the chart API and logs noisy `Entering history()` lines.
     - `ticker.fast_info` internally triggers **2 heavy HTTP calls** (`range=1y` + `range=5d`).
     - `ticker.info` uses the `quoteSummary` endpoint — lighter, returns price + currency together.
 
 !!! tip "Cache TTL vs Polling Interval"
+
     Frontend polls every **30s** for responsive UI, but the backend cache has a **120s TTL**. This means 3 out of 4 polls return instantly from cache; Yahoo Finance is called at most once per ticker every **2 minutes**.
 
 ### 📈 Historical Data (`get_history_value`)
