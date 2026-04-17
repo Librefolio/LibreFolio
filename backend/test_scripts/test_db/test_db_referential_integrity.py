@@ -58,8 +58,8 @@ from backend.app.db.session import get_sync_engine
 @pytest.fixture(scope="module", autouse=True)
 def populate_test_data():
     """Auto-populate mock data before running any tests in this module."""
-    import subprocess
-    import sys
+    import subprocess  # noqa: PLC0415 — test setup — imports after sys.path/db config
+    import sys  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     # Run populate_mock_data script to ensure database has data
     result = subprocess.run(

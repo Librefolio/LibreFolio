@@ -29,7 +29,7 @@ and update price/rate data from external providers.
 from __future__ import annotations
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -41,7 +41,7 @@ from backend.app.schemas.common import BaseBulkResponse, Currency, DateRangeMode
 # ============================================================================
 
 
-class SyncStatus(str, Enum):
+class SyncStatus(StrEnum):
     """Status of a single sync operation (shared by FA and FX)."""
 
     OK = "ok"  # Provider returned data, inserted/updated in DB

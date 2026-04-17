@@ -13,7 +13,7 @@ import json
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Optional
 
 from pydantic import field_validator
@@ -47,7 +47,7 @@ def _validate_currency_field(v: Any) -> Optional[str]:
     if v is None:
         return v
     # Import here to avoid circular imports
-    from backend.app.schemas.common import Currency
+    from backend.app.schemas.common import Currency  # noqa: PLC0415 — avoid circular import
 
     return Currency.validate_code(v)
 
@@ -57,7 +57,7 @@ def _validate_currency_field(v: Any) -> Optional[str]:
 # ============================================================================
 
 
-class ProviderInputType(str, Enum):
+class ProviderInputType(StrEnum):
     """
     Describes the kind of identifier input a provider expects.
 
@@ -82,7 +82,7 @@ class ProviderInputType(str, Enum):
     AUTO_GENERATED = "AUTO_GENERATED"
 
 
-class IdentifierType(str, Enum):
+class IdentifierType(StrEnum):
     """
     Asset identifier type.
 
@@ -140,7 +140,7 @@ class IdentifierType(str, Enum):
     OTHER = "OTHER"
 
 
-class AssetType(str, Enum):
+class AssetType(StrEnum):
     """
     Asset type classification.
 
@@ -177,7 +177,7 @@ class AssetType(str, Enum):
     OTHER = "OTHER"
 
 
-class AssetEventType(str, Enum):
+class AssetEventType(StrEnum):
     """
     Types of asset-level events that affect price or generate distributions.
 
@@ -196,7 +196,7 @@ class AssetEventType(str, Enum):
     MATURITY_SETTLEMENT = "MATURITY_SETTLEMENT"
 
 
-class TransactionType(str, Enum):
+class TransactionType(StrEnum):
     """
     Unified transaction types for all asset and cash operations.
 
@@ -273,7 +273,7 @@ class TransactionType(str, Enum):
     ADJUSTMENT = "ADJUSTMENT"
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     """
     User role for broker access control.
 
@@ -533,7 +533,7 @@ class Asset(SQLModel, table=True):
     @field_validator("classification_params")
     def validate_classification_params(cls, v):
         # Lazy import to avoid circular dependency
-        from backend.app.schemas.assets import FAClassificationParams
+        from backend.app.schemas.assets import FAClassificationParams  # noqa: PLC0415 — avoid circular import
 
         if v is None:
             return v

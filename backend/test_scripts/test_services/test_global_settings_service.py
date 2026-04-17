@@ -45,7 +45,7 @@ def _clean_settings():
     async def _purge():
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            from sqlmodel import delete
+            from sqlmodel import delete  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
             await session.execute(delete(GlobalSetting))
             await session.commit()

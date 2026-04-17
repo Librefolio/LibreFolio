@@ -106,7 +106,7 @@ class BrokerService:
                         error_msg = f"You already have a broker named '{item.name}'"
                     elif owner_access:
                         # Get owner username
-                        from backend.app.db.models import User
+                        from backend.app.db.models import User  # noqa: PLC0415 — lazy import / avoid circular
 
                         user_stmt = select(User).where(User.id == owner_access.user_id)
                         user_result = await self.session.execute(user_stmt)
@@ -696,7 +696,7 @@ class BrokerService:
                 return []
 
         # Import here to avoid circular import
-        from backend.app.db.models import User, UserSettings
+        from backend.app.db.models import User, UserSettings  # noqa: PLC0415 — avoid circular import
 
         stmt = select(BrokerUserAccess, User, UserSettings).join(User, BrokerUserAccess.user_id == User.id).outerjoin(UserSettings, UserSettings.user_id == User.id).where(BrokerUserAccess.broker_id == broker_id).order_by(BrokerUserAccess.role, User.username)
         result = await self.session.execute(stmt)
@@ -772,7 +772,7 @@ class BrokerService:
             return False, "Duplicate user IDs in request", []
 
         # 3d. All users exist
-        from backend.app.db.models import User
+        from backend.app.db.models import User  # noqa: PLC0415 — lazy import / avoid circular
 
         for uid in user_ids:
             user = await self.session.get(User, uid)

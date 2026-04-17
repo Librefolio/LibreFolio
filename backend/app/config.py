@@ -62,7 +62,7 @@ def set_test_mode(enabled: bool = True):
 
 def _reset_engine_singletons():
     """Reset engine singletons to allow recreation with new settings."""
-    from backend.app.db import session as session_module
+    from backend.app.db import session as session_module  # noqa: PLC0415 — lazy import / avoid circular
 
     session_module.sync_engine = None
     session_module.async_engine = None
@@ -155,7 +155,7 @@ def get_version() -> str:
     Get application version from git tags.
     Same logic as ./dev.py info version and frontend APP_VERSION.
     """
-    from backend.app.utils.version import get_git_version
+    from backend.app.utils.version import get_git_version  # noqa: PLC0415 — lazy import / avoid circular
 
     return get_git_version()
 

@@ -29,9 +29,9 @@ class TestGetSessionTTL:
     @pytest.mark.asyncio
     async def test_returns_positive_integer(self):
         """get_session_ttl returns a positive int from DB."""
-        from sqlalchemy.ext.asyncio import AsyncSession
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
-        from backend.app.db.session import get_async_engine
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
@@ -42,9 +42,9 @@ class TestGetSessionTTL:
     @pytest.mark.asyncio
     async def test_returns_default_when_no_setting(self):
         """Falls back to default when setting not in DB."""
-        from sqlalchemy.ext.asyncio import AsyncSession
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
-        from backend.app.db.session import get_async_engine
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         engine = get_async_engine()
         async with AsyncSession(engine) as session:

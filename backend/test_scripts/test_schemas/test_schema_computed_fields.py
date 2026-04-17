@@ -22,15 +22,15 @@ from backend.app.schemas.transactions import TXCreateItem, TXUpdateItem
 
 # Helper for creating BRSummary with all required fields
 _NOW = datetime.now(UTC)
-_BR_BASE = dict(
-    id=1,
-    name="Test",
-    allow_cash_overdraft=False,
-    allow_asset_shorting=False,
-    is_active=True,
-    created_at=_NOW,
-    updated_at=_NOW,
-)
+_BR_BASE = {
+    "id": 1,
+    "name": "Test",
+    "allow_cash_overdraft": False,
+    "allow_asset_shorting": False,
+    "is_active": True,
+    "created_at": _NOW,
+    "updated_at": _NOW,
+}
 
 
 # ============================================================================
@@ -42,7 +42,7 @@ class TestBRSummaryComputed:
     """Test BRSummary computed properties (currencies, total_cash, total_asset)."""
 
     def test_currencies_from_cash_balances(self):
-        from backend.app.schemas.brokers import BRSummary
+        from backend.app.schemas.brokers import BRSummary  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         summary = BRSummary(
             **_BR_BASE,
@@ -55,13 +55,13 @@ class TestBRSummaryComputed:
         assert summary.currencies == ["EUR", "USD"]
 
     def test_currencies_empty(self):
-        from backend.app.schemas.brokers import BRSummary
+        from backend.app.schemas.brokers import BRSummary  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         summary = BRSummary(**_BR_BASE, cash_balances=[], holdings=[])
         assert summary.currencies == []
 
     def test_total_cash_positions(self):
-        from backend.app.schemas.brokers import BRSummary
+        from backend.app.schemas.brokers import BRSummary  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         summary = BRSummary(
             **_BR_BASE,
@@ -75,7 +75,7 @@ class TestBRSummaryComputed:
         assert summary.total_cash_positions == 3
 
     def test_total_asset_positions(self):
-        from backend.app.schemas.brokers import BRAssetHolding, BRSummary
+        from backend.app.schemas.brokers import BRAssetHolding, BRSummary  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         summary = BRSummary(
             **_BR_BASE,
@@ -164,11 +164,11 @@ class TestFXUpsertResult:
 
 class TestFAPricePointCur:
     def _make_price(self, **kwargs):
-        defaults = dict(
-            date=date(2025, 1, 1),
-            currency="EUR",
-            close=Decimal("100.50"),
-        )
+        defaults = {
+            "date": date(2025, 1, 1),
+            "currency": "EUR",
+            "close": Decimal("100.50"),
+        }
         defaults.update(kwargs)
         return FAPricePoint(**defaults)
 

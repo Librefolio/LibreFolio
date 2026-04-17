@@ -47,7 +47,7 @@ async def async_session():
 @pytest_asyncio.fixture
 async def test_broker(async_session: AsyncSession) -> int:
     """Create a test broker for transactions and return its ID."""
-    import uuid
+    import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     unique_name = f"Test Broker BRIM {uuid.uuid4().hex[:8]}"
     broker = Broker(name=unique_name, description="Test broker for BRIM tests")
@@ -57,7 +57,7 @@ async def test_broker(async_session: AsyncSession) -> int:
     broker_id = broker.id
     yield broker_id
     # Cleanup - need to re-fetch the broker
-    from sqlalchemy import select
+    from sqlalchemy import select  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     result = await async_session.execute(select(Broker).where(Broker.id == broker_id))
     broker_to_delete = result.scalars().first()
@@ -69,7 +69,7 @@ async def test_broker(async_session: AsyncSession) -> int:
 @pytest_asyncio.fixture
 async def test_assets(async_session: AsyncSession) -> List[Asset]:
     """Create test assets with identifiers directly on Asset model."""
-    import uuid
+    import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     suffix = uuid.uuid4().hex[:6]
 
@@ -400,7 +400,7 @@ class TestDuplicateDetection:
         Expected: Not flagged as duplicate.
         """
         # Create another broker
-        import uuid
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         other_broker = Broker(name=f"Other Broker {uuid.uuid4().hex[:8]}", description="Another broker")
         async_session.add(other_broker)

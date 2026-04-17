@@ -131,7 +131,7 @@ def _country_name_to_iso3(country_name: str) -> Optional[str]:  # pragma: no cov
         return "Other"
 
     try:
-        from backend.app.utils.geo_utils import normalize_country_to_iso3
+        from backend.app.utils.geo_utils import normalize_country_to_iso3  # noqa: PLC0415 — lazy import / avoid circular
 
         return normalize_country_to_iso3(country_name)
     except (ValueError, ImportError) as e:

@@ -353,7 +353,7 @@ def test_validate_params(provider_code: str):
         try:
             provider.validate_params({})
             print_success(f"  ✓ {provider_code} accepts empty dict params")
-            empty_accepted = True
+            _empty_accepted = True
         except Exception as e:
             print_info(f"  {provider_code} rejects empty dict: {str(e)[:80]}")
             _empty_accepted = False
@@ -409,7 +409,7 @@ async def test_error_handling(provider_code: str):
         invalid_identifier = "INVALID_NONEXISTENT_SYMBOL_12345"
         print_info(f"Testing with invalid identifier: {invalid_identifier}")
 
-        from backend.app.db.models import IdentifierType
+        from backend.app.db.models import IdentifierType  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         error_raised = False
         try:

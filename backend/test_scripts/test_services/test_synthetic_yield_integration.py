@@ -88,11 +88,11 @@ async def test_e2e_p2p_loan_two_periods_late_interest():
 # regardless of frequency (interest accrues identically).
 @pytest.mark.asyncio
 async def test_e2e_maturation_frequencies():
-    base = dict(
-        start_date=date(2025, 1, 1),
-        end_date=date(2025, 12, 31),
-        annual_rate=Decimal("0.04"),
-    )
+    base = {
+        "start_date": date(2025, 1, 1),
+        "end_date": date(2025, 12, 31),
+        "annual_rate": Decimal("0.04"),
+    }
 
     # Collect end-of-year value for each frequency — must be identical
     end_values = {}

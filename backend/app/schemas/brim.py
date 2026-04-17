@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -59,7 +59,7 @@ def is_fake_asset_id(asset_id: Optional[int]) -> bool:
 # =============================================================================
 
 
-class BRIMFileStatus(str, Enum):
+class BRIMFileStatus(StrEnum):
     """Status of an uploaded broker report file.
 
     Flow: UPLOADED → PARSED (success) or FAILED (error)
@@ -72,7 +72,7 @@ class BRIMFileStatus(str, Enum):
     FAILED = "failed"  # Processing failed with error
 
 
-class BRIMMatchConfidence(str, Enum):
+class BRIMMatchConfidence(StrEnum):
     """Confidence level for asset candidate matching.
 
     Criteria:
@@ -88,7 +88,7 @@ class BRIMMatchConfidence(str, Enum):
     LOW = "low"
 
 
-class BRIMDuplicateLevel(str, Enum):
+class BRIMDuplicateLevel(StrEnum):
     """Confidence level for duplicate detection (ascending order).
 
     Levels (from lowest to highest confidence):

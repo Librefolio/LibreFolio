@@ -276,7 +276,7 @@ class TestAssetValidateClassificationParams:
         assert isinstance(result, str)
 
     def test_fa_classification_params_object(self):
-        from backend.app.schemas.assets import FAClassificationParams
+        from backend.app.schemas.assets import FAClassificationParams  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         params = FAClassificationParams(short_description="Hello")
         result = Asset.validate_classification_params(params)
@@ -294,36 +294,36 @@ class TestAssetEventValidateCurrency:
 
     def test_valid_currency(self):
         event = AssetEvent.model_validate(
-            dict(
-                asset_id=1,
-                type="DIVIDEND",
-                date="2025-01-15",
-                value="1.5",
-                currency="EUR",
-            )
+            {
+                "asset_id": 1,
+                "type": "DIVIDEND",
+                "date": "2025-01-15",
+                "value": "1.5",
+                "currency": "EUR",
+            }
         )
         assert event.currency == "EUR"
 
     def test_lowercase_normalized(self):
         event = AssetEvent.model_validate(
-            dict(
-                asset_id=1,
-                type="DIVIDEND",
-                date="2025-01-15",
-                value="1.5",
-                currency="eur",
-            )
+            {
+                "asset_id": 1,
+                "type": "DIVIDEND",
+                "date": "2025-01-15",
+                "value": "1.5",
+                "currency": "eur",
+            }
         )
         assert event.currency == "EUR"
 
     def test_invalid_currency_rejected(self):
         with pytest.raises(ValidationError):
             AssetEvent.model_validate(
-                dict(
-                    asset_id=1,
-                    type="DIVIDEND",
-                    date="2025-01-15",
-                    value="1.5",
-                    currency="X",
-                )
+                {
+                    "asset_id": 1,
+                    "type": "DIVIDEND",
+                    "date": "2025-01-15",
+                    "value": "1.5",
+                    "currency": "X",
+                }
             )

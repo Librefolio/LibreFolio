@@ -4,14 +4,14 @@ Sector normalization utilities.
 Provides ENUM-based sector classification and validation for financial assets.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 import structlog
 
 logger = structlog.get_logger(__name__)
 
 
-class FinancialSector(str, Enum):
+class FinancialSector(StrEnum):
     """
     Standard financial sector classification.
 
