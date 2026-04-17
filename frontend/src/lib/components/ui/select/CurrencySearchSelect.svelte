@@ -75,7 +75,8 @@
         }
 
         // "Original Value" shortcut — visible when converting away from native currency
-        if (originalCurrency && value !== originalCurrency) {
+        const showOriginalShortcut = !!(originalCurrency && value !== originalCurrency);
+        if (showOriginalShortcut) {
             options.push({
                 value: originalCurrency,
                 label: $_('assetDetail.originalValue') + ' (' + originalCurrency + ')',
@@ -85,6 +86,8 @@
         }
 
         for (const c of filteredCurrencies) {
+            // Skip currency already added as "Original Value" shortcut to avoid duplicate keys
+            if (showOriginalShortcut && c.code === originalCurrency) continue;
             // Include symbol in searchText so users can search by € $ £ etc.
             const symbolPart = c.symbol && c.symbol !== c.code ? c.symbol : '';
             // Include country codes (ISO-2) for search
