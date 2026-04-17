@@ -51,11 +51,9 @@ class TestRegister:
                 f"{API_BASE}/auth/register",
                 json={"username": username, "email": email, "password": "testpassword123"},
                 timeout=TIMEOUT,
-                )
+            )
 
-            assert (
-                response.status_code == 201
-            ), f"Expected 201, got {response.status_code}: {response.text}"
+            assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
             data = response.json()
             assert "user" in data
             assert data["user"]["username"] == username
@@ -87,9 +85,9 @@ class TestRegister:
                     "username": username,
                     "email": f"first_{timestamp}@example.com",
                     "password": "password123",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             # Try duplicate username
             response = await client.post(
@@ -98,9 +96,9 @@ class TestRegister:
                     "username": username,
                     "email": f"second_{timestamp}@example.com",
                     "password": "password123",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 400
             assert "username" in response.json()["detail"].lower()
@@ -120,14 +118,14 @@ class TestRegister:
                 f"{API_BASE}/auth/register",
                 json={"username": f"user1_{timestamp}", "email": email, "password": "password123"},
                 timeout=TIMEOUT,
-                )
+            )
 
             # Try duplicate email
             response = await client.post(
                 f"{API_BASE}/auth/register",
                 json={"username": f"user2_{timestamp}", "email": email, "password": "password123"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 400
             assert "email" in response.json()["detail"].lower()
@@ -147,9 +145,9 @@ class TestRegister:
                     "username": f"shortpw_{timestamp}",
                     "email": f"shortpw_{timestamp}@example.com",
                     "password": "short",  # Less than 8 chars
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 422  # Validation error
             print_success("Short password correctly rejected")
@@ -171,7 +169,7 @@ class TestLogin:
                 f"{API_BASE}/auth/register",
                 json={"username": username, "email": email, "password": password},
                 timeout=TIMEOUT,
-                )
+            )
             assert response.status_code == 201, f"Setup failed: {response.text}"
 
             return {"username": username, "email": email, "password": password}
@@ -186,11 +184,9 @@ class TestLogin:
                 f"{API_BASE}/auth/login",
                 json={"username": test_user["username"], "password": test_user["password"]},
                 timeout=TIMEOUT,
-                )
+            )
 
-            assert (
-                response.status_code == 200
-            ), f"Expected 200, got {response.status_code}: {response.text}"
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
             assert "user" in data
             assert data["user"]["username"] == test_user["username"]
@@ -210,9 +206,9 @@ class TestLogin:
                 json={
                     "username": test_user["email"],  # Using email in username field
                     "password": test_user["password"],
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             assert "session" in response.cookies
@@ -228,7 +224,7 @@ class TestLogin:
                 f"{API_BASE}/auth/login",
                 json={"username": test_user["username"], "password": "wrongpassword"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 401
             assert "session" not in response.cookies
@@ -244,7 +240,7 @@ class TestLogin:
                 f"{API_BASE}/auth/login",
                 json={"username": "nonexistent_user_12345", "password": "anypassword"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 401
             print_success("Non-existent user correctly rejected")
@@ -269,15 +265,15 @@ class TestLogout:
                     "username": username,
                     "email": f"logout_{timestamp}@example.com",
                     "password": "password123",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "password123"},
                 timeout=TIMEOUT,
-                )
+            )
             assert "session" in login_resp.cookies
 
             # Set cookies on client instance (not per-request)
@@ -310,15 +306,15 @@ class TestMe:
                     "username": username,
                     "email": f"me_{timestamp}@example.com",
                     "password": "password123",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "password123"},
                 timeout=TIMEOUT,
-                )
+            )
 
             # Set cookies on client instance (not per-request)
             client.cookies.update(login_resp.cookies)
@@ -375,15 +371,15 @@ class TestSessionPersistence:
                     "username": username,
                     "email": f"cookie_{timestamp}@example.com",
                     "password": "password123",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             response = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "password123"},
                 timeout=TIMEOUT,
-                )
+            )
 
             # Check Set-Cookie header for HttpOnly flag
             set_cookie = response.headers.get("set-cookie", "")
@@ -405,15 +401,15 @@ class TestSessionPersistence:
                     "username": username,
                     "email": f"persist_{timestamp}@example.com",
                     "password": "password123",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "password123"},
                 timeout=TIMEOUT,
-                )
+            )
 
             # Set cookies on client instance (not per-request)
             client.cookies.update(login_resp.cookies)
@@ -447,16 +443,16 @@ class TestChangePassword:
                     "username": username,
                     "email": f"chpwd_{timestamp}@example.com",
                     "password": old_password,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             # Login
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": old_password},
                 timeout=TIMEOUT,
-                )
+            )
             client.cookies.update(login_resp.cookies)
 
             # Change password
@@ -464,11 +460,9 @@ class TestChangePassword:
                 f"{API_BASE}/auth/change-password",
                 json={"current_password": old_password, "new_password": new_password},
                 timeout=TIMEOUT,
-                )
+            )
 
-            assert (
-                response.status_code == 200
-            ), f"Expected 200, got {response.status_code}: {response.text}"
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
             assert "message" in data
             assert "success" in data["message"].lower()
@@ -479,7 +473,7 @@ class TestChangePassword:
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": old_password},
                 timeout=TIMEOUT,
-                )
+            )
             assert old_login.status_code == 401, "Old password should not work"
 
             # Verify new password works
@@ -487,7 +481,7 @@ class TestChangePassword:
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": new_password},
                 timeout=TIMEOUT,
-                )
+            )
             assert new_login.status_code == 200, "New password should work"
 
             print_success("Password changed successfully")
@@ -508,15 +502,15 @@ class TestChangePassword:
                     "username": username,
                     "email": f"chpwd_wrong_{timestamp}@example.com",
                     "password": "correctpassword123",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "correctpassword123"},
                 timeout=TIMEOUT,
-                )
+            )
             client.cookies.update(login_resp.cookies)
 
             # Try to change with wrong current password
@@ -524,7 +518,7 @@ class TestChangePassword:
                 f"{API_BASE}/auth/change-password",
                 json={"current_password": "wrongpassword", "new_password": "newpassword456"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 400, f"Expected 400, got {response.status_code}"
             assert "incorrect" in response.json()["detail"].lower()
@@ -548,15 +542,15 @@ class TestChangePassword:
                     "username": username,
                     "email": f"chpwd_same_{timestamp}@example.com",
                     "password": password,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": password},
                 timeout=TIMEOUT,
-                )
+            )
             client.cookies.update(login_resp.cookies)
 
             # Try to change to same password
@@ -564,7 +558,7 @@ class TestChangePassword:
                 f"{API_BASE}/auth/change-password",
                 json={"current_password": password, "new_password": password},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 400, f"Expected 400, got {response.status_code}"
             assert "different" in response.json()["detail"].lower()
@@ -581,7 +575,7 @@ class TestChangePassword:
                 f"{API_BASE}/auth/change-password",
                 json={"current_password": "oldpass", "new_password": "newpass123"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 401, f"Expected 401, got {response.status_code}"
 
@@ -603,15 +597,15 @@ class TestChangePassword:
                     "username": username,
                     "email": f"chpwd_short_{timestamp}@example.com",
                     "password": "longpassword123",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "longpassword123"},
                 timeout=TIMEOUT,
-                )
+            )
             client.cookies.update(login_resp.cookies)
 
             # Try short password
@@ -619,7 +613,7 @@ class TestChangePassword:
                 f"{API_BASE}/auth/change-password",
                 json={"current_password": "longpassword123", "new_password": "short"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 422, f"Expected 422, got {response.status_code}"
 

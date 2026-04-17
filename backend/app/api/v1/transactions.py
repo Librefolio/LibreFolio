@@ -25,17 +25,17 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.transactions import (
+    TX_TYPE_METADATA,
+    TXBulkCreateResponse,
+    TXBulkDeleteResponse,
+    TXBulkUpdateResponse,
     TXCreateItem,
-    TXReadItem,
-    TXUpdateItem,
     TXDeleteItem,
     TXQueryParams,
-    TXBulkCreateResponse,
-    TXBulkUpdateResponse,
-    TXBulkDeleteResponse,
+    TXReadItem,
     TXTypeMetadata,
-    TX_TYPE_METADATA,
-    )
+    TXUpdateItem,
+)
 from backend.app.services.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
 
@@ -54,7 +54,7 @@ async def create_transactions(
     items: List[TXCreateItem],
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
-    ) -> TXBulkCreateResponse:
+) -> TXBulkCreateResponse:
     """
     Create multiple transactions.
 
@@ -78,7 +78,7 @@ async def create_transactions(
             response.success_count,
             len(response.errors),
             user_id=current_user.id,
-            )
+        )
 
         # Commit if all succeeded
         if response.success_count > 0 and not response.errors:
@@ -87,13 +87,11 @@ async def create_transactions(
                 "Created %d transactions successfully",
                 response.success_count,
                 user_id=current_user.id,
-                )
+            )
         else:
             await session.rollback()
             if response.errors:
-                logger.warning(
-                    "Transaction creation had errors: %s", response.errors, user_id=current_user.id
-                    )
+                logger.warning("Transaction creation had errors: %s", response.errors, user_id=current_user.id)
 
         return response
     except Exception as e:
@@ -106,9 +104,7 @@ async def create_transactions(
             await session.rollback()
         except Exception as rollback_error:
             print(f"[CRITICAL] Rollback error: {rollback_error}", file=sys.stderr)
-        return TXBulkCreateResponse(
-            results=[], success_count=0, errors=[f"Unexpected error: {str(e)}"]
-            )
+        return TXBulkCreateResponse(results=[], success_count=0, errors=[f"Unexpected error: {str(e)}"])
 
 
 # =============================================================================
@@ -129,7 +125,7 @@ async def query_transactions(
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ) -> List[TXReadItem]:
+) -> List[TXReadItem]:
     """
     Query transactions with filters.
 
@@ -165,7 +161,7 @@ async def query_transactions(
         currency=currency,
         limit=limit,
         offset=offset,
-        )
+    )
 
     service = TransactionService(session)
     return await service.query(params)
@@ -190,7 +186,7 @@ async def get_transaction(
     tx_id: int,
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ) -> TXReadItem:
+) -> TXReadItem:
     """
     Get a single transaction by ID.
 
@@ -222,7 +218,7 @@ async def update_transactions(
     items: List[TXUpdateItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ) -> TXBulkUpdateResponse:
+) -> TXBulkUpdateResponse:
     """
     Update multiple transactions.
 
@@ -260,7 +256,7 @@ async def delete_transactions(
     ids: List[int] = Query(..., description="Transaction IDs to delete"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ) -> TXBulkDeleteResponse:
+) -> TXBulkDeleteResponse:
     """
     Delete multiple transactions.
 

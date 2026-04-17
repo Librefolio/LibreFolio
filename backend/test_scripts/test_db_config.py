@@ -113,10 +113,10 @@ def initialize_test_database(print_func=None):
     is_test, db_url = verify_test_database()
 
     if not is_test:
-        print_func(f"⚠️  DANGER: Not using test database!")
+        print_func("⚠️  DANGER: Not using test database!")
         print_func(f"Current DATABASE_URL: {db_url}")
-        print_func(f"Expected to contain: test_app.db")
-        print_func(f"Aborting for safety - tests should only modify test database.")
+        print_func("Expected to contain: test_app.db")
+        print_func("Aborting for safety - tests should only modify test database.")
         return False
 
     # Print confirmation
@@ -124,5 +124,6 @@ def initialize_test_database(print_func=None):
 
     # Ensure database exists and is migrated (lazy import to avoid side effects)
     from backend.app.main import ensure_database_exists
+
     ensure_database_exists()
     return True

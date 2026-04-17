@@ -1,7 +1,5 @@
 """Tests for _compress_convert_errors in fx.py API module."""
 
-import pytest
-
 from backend.app.api.v1.fx import _compress_convert_errors
 
 
@@ -12,9 +10,7 @@ class TestCompressConvertErrors:
         assert _compress_convert_errors([]) == []
 
     def test_single_error_kept_as_is(self):
-        errors = [
-            "Conversion 1: No FX rate found for CHF/JPY on or before 2026-03-01. Please sync rates."
-        ]
+        errors = ["Conversion 1: No FX rate found for CHF/JPY on or before 2026-03-01. Please sync rates."]
         result = _compress_convert_errors(errors)
         assert len(result) == 1
         assert "CHF/JPY" in result[0]
@@ -59,4 +55,3 @@ class TestCompressConvertErrors:
         assert len(result) == 2  # 1 compressed + 1 other
         compressed = [r for r in result if "2 dates" in r]
         assert len(compressed) == 1
-

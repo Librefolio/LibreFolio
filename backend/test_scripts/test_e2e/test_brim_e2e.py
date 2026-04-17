@@ -51,14 +51,14 @@ async def create_test_user(client: httpx.AsyncClient) -> int:
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     assert resp.status_code == 201, f"Register failed: {resp.text}"
 
     resp = await client.post(
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     assert resp.status_code == 200, f"Login failed: {resp.text}"
     return resp.json()["user"]["id"]
 
@@ -93,7 +93,7 @@ class TestBRIME2EImport:
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert resp.status_code == 200, f"Failed to create broker: {resp.text}"
         return resp.json()["results"][0]["broker_id"]
 
@@ -123,7 +123,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
             file_id = upload_response.json()["file_id"]
 
@@ -133,9 +133,9 @@ class TestBRIME2EImport:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
             assert parse_response.status_code == 200
             parse_data = parse_response.json()
 
@@ -150,7 +150,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/transactions",
                 json=transactions,
                 timeout=TIMEOUT,
-                )
+            )
 
             # Transactions endpoint returns 200 with success_count
             assert import_response.status_code == 200, f"Import failed: {import_response.text}"
@@ -185,7 +185,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
             file_id = upload_response.json()["file_id"]
 
@@ -195,9 +195,9 @@ class TestBRIME2EImport:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
             assert parse_response.status_code == 200, f"Parse failed: {parse_response.text}"
             parse_data = parse_response.json()
 
@@ -252,7 +252,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files1,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload1.status_code == 200, f"Upload failed: {upload1.text}"
             file_id1 = upload1.json()["file_id"]
 
@@ -260,7 +260,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/files/{file_id1}/parse",
                 json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
             tx1 = parse1.json()["transactions"]
 
             # Import both
@@ -273,14 +273,12 @@ class TestBRIME2EImport:
 2025-03-03,DEPOSIT,0,2000.00,EUR,Third deposit {unique_id}
 """.encode()
 
-            files2 = {
-                "file": (f"filter_test2_{unique_id}.csv", io.BytesIO(csv_content2), "text/csv")
-                }
+            files2 = {"file": (f"filter_test2_{unique_id}.csv", io.BytesIO(csv_content2), "text/csv")}
             upload2 = await client.post(
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files2,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload2.status_code == 200, f"Upload2 failed: {upload2.text}"
             file_id2 = upload2.json()["file_id"]
 
@@ -288,7 +286,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/files/{file_id2}/parse",
                 json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
             parse2_data = parse2.json()
 
             # Should have 1 unique (new deposit) and 1 duplicate
@@ -303,7 +301,7 @@ class TestBRIME2EImport:
                     f"{API_BASE}/transactions",
                     json=transactions_to_import,
                     timeout=TIMEOUT,
-                    )
+                )
                 assert import2.status_code == 200
                 # Should import only the new one
                 assert import2.json()["success_count"] == len(unique_indices)
@@ -333,7 +331,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files1,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload1.status_code == 200, f"Upload failed: {upload1.text}"
             file_id1 = upload1.json()["file_id"]
 
@@ -341,7 +339,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/files/{file_id1}/parse",
                 json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
             tx1 = parse1.json()["transactions"]
 
             # Import first time
@@ -353,7 +351,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files2,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload2.status_code == 200, f"Upload2 failed: {upload2.text}"
             file_id2 = upload2.json()["file_id"]
 
@@ -362,14 +360,12 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/files/{file_id2}/parse",
                 json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
 
             duplicates = parse2.json()["duplicates"]
 
             # Should have duplicates detected
-            total_duplicates = len(duplicates.get("tx_possible_duplicates", [])) + len(
-                duplicates.get("tx_likely_duplicates", [])
-                )
+            total_duplicates = len(duplicates.get("tx_possible_duplicates", [])) + len(duplicates.get("tx_likely_duplicates", []))
             assert total_duplicates >= 1, "Should detect duplicate transaction"
 
 

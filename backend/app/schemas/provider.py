@@ -28,13 +28,12 @@ from __future__ import annotations
 
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.db.models import IdentifierType, ProviderInputType
-from backend.app.schemas.common import BaseDeleteResult, BaseBulkResponse, OldNew
-
+from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNew
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
@@ -129,8 +128,8 @@ class FAProviderConfigBase(BaseModel):
     @model_validator(mode="after")
     def validate_provider_params_with_plugin(self):
         """Validate provider_params using the plugin's validate_params method."""
-        from backend.app.services.provider_registry import AssetProviderRegistry
         from backend.app.services.asset_source import AssetSourceError
+        from backend.app.services.provider_registry import AssetProviderRegistry
 
         provider = AssetProviderRegistry.get_provider_instance(self.provider_code)
         if not provider:
@@ -139,9 +138,9 @@ class FAProviderConfigBase(BaseModel):
         try:
             provider.validate_params(self.provider_params)
         except AssetSourceError as e:
-            raise ValueError(f"Invalid provider_params for {self.provider_code}: {e.message}")
+            raise ValueError(f"Invalid provider_params for {self.provider_code}: {e.message}") from e
         except Exception as e:
-            raise ValueError(f"Provider validation error for {self.provider_code}: {str(e)}")
+            raise ValueError(f"Provider validation error for {self.provider_code}: {str(e)}") from e
 
         return self
 
@@ -211,7 +210,10 @@ class FAProviderRefreshFieldsDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    refreshed_fields: List[OldNew[str | None]] = Field(..., description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.", )
+    refreshed_fields: List[OldNew[str | None]] = Field(
+        ...,
+        description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.",
+    )
     missing_data_fields: List[str] = Field(..., description="Fields provider couldn't fetch (no data available)")
     ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
 
@@ -263,6 +265,7 @@ class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
 
 class ProbeOperation(str, Enum):
     """Operations available for provider probe endpoint."""
+
     CURRENT_PRICE = "current_price"
     HISTORY = "history"
     METADATA = "metadata"
@@ -279,11 +282,12 @@ class FAProviderProbeRequest(FAProviderConfigBase):
     from FAProviderConfigBase. Adds operations list to select which
     probe operations to execute.
     """
+
     operations: List[ProbeOperation] = Field(
         ...,
         min_length=1,
         description=f"Operations to execute. Allowed values: {_PROBE_OPS_ALLOWED}",
-        )
+    )
 
 
 class BaseProbeOperationResult(BaseModel):
@@ -330,6 +334,7 @@ class FAProviderProbeResponse(BaseModel):
     Contains results for each requested operation, with per-operation
     execution time and a total execution time.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     provider_code: str = Field(...)
@@ -358,9 +363,7 @@ class FAProviderSearchResultItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     identifier: str = Field(..., description="Asset identifier (ISIN, ticker, URL, etc.)")
-    identifier_type: IdentifierType = Field(
-        ..., description="Type of identifier (ISIN, TICKER, URL, etc.)"
-        )
+    identifier_type: IdentifierType = Field(..., description="Type of identifier (ISIN, TICKER, URL, etc.)")
     display_name: str = Field(..., description="Human-readable asset name")
     provider_code: str = Field(..., description="Provider that returned this result")
     currency: Optional[str] = Field(None, description="Asset currency if known")

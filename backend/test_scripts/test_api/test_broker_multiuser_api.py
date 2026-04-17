@@ -10,7 +10,7 @@ Tests verify that operations are correctly allowed/denied based on role.
 """
 
 import uuid
-from datetime import datetime, date
+from datetime import date, datetime
 from typing import Optional
 
 import httpx
@@ -41,15 +41,17 @@ def unique_username() -> str:
 # ============================================================================
 
 
-async def create_user_and_login(
-    client: httpx.AsyncClient, username: Optional[str] = None
-    ) -> tuple[int, str]:
+async def create_user_and_login(client: httpx.AsyncClient, username: Optional[str] = None) -> tuple[int, str]:
     """Create user, login, return (user_id, username)."""
     username = username or unique_username()
     email = f"{username}@test.com"
     password = "TestPass123!"
 
-    resp = await client.post(f"{API_BASE}/auth/register", json={"username": username, "email": email, "password": password}, timeout=TIMEOUT, )
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
     user_id = resp.json()["user"]["id"]
 
     login_resp = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
@@ -70,22 +72,19 @@ async def create_broker(client: httpx.AsyncClient, name: Optional[str] = None) -
 async def add_access(client: httpx.AsyncClient, broker_id: int, user_id: int, role: str) -> None:
     """Add user access to broker via bulk PUT (preserving existing accesses)."""
     # First get current access list
-    access_resp = await client.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT, )
+    access_resp = await client.get(
+        f"{API_BASE}/brokers/{broker_id}/access",
+        timeout=TIMEOUT,
+    )
     current = access_resp.json()["items"]
-    accesses = [
-        {
-            "user_id": a["user_id"], "role": a["role"],
-            "share_percentage": float(a["share_percentage"])
-            }
-        for a in current
-        ]
+    accesses = [{"user_id": a["user_id"], "role": a["role"], "share_percentage": float(a["share_percentage"])} for a in current]
     # Add new user (share=0 for non-OWNER)
     accesses.append({"user_id": user_id, "role": role, "share_percentage": 0})
     await client.put(
         f"{API_BASE}/brokers/{broker_id}/access",
         json=accesses,
         timeout=TIMEOUT,
-        )
+    )
 
 
 # ============================================================================
@@ -149,7 +148,7 @@ class TestMultiUserRoles:
                 f"{API_BASE}/brokers/{broker_id}",
                 json={"description": "Modified by editor"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert resp.status_code == 200
             assert resp.json()["results"][0]["success"] is True
@@ -195,7 +194,7 @@ class TestMultiUserRoles:
                 f"{API_BASE}/brokers/{broker_id}",
                 json={"description": "Should fail"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert resp.status_code == 200
             assert resp.json()["results"][0]["success"] is False
@@ -222,9 +221,7 @@ class TestMultiUserRoles:
             assert resp.json()["id"] == broker_id
 
             # Viewer reads summary
-            summary_resp = await viewer_client.get(
-                f"{API_BASE}/brokers/{broker_id}/summary", timeout=TIMEOUT
-                )
+            summary_resp = await viewer_client.get(f"{API_BASE}/brokers/{broker_id}/summary", timeout=TIMEOUT)
 
             assert summary_resp.status_code == 200
 
@@ -266,8 +263,8 @@ class TestMultiUserRoles:
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "1000"},
-                    }
-                ]
+                }
+            ]
 
             resp = await editor_client.post(f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT)
 
@@ -296,8 +293,8 @@ class TestMultiUserRoles:
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "1000"},
-                    }
-                ]
+                }
+            ]
 
             resp = await viewer_client.post(f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT)
 
@@ -346,7 +343,7 @@ class TestEditorRestrictions:
             httpx.AsyncClient() as owner_client,
             httpx.AsyncClient() as editor_client,
             httpx.AsyncClient() as third_client,
-            ):
+        ):
             await create_user_and_login(owner_client)
             broker_id = await create_broker(owner_client)
 
@@ -361,9 +358,9 @@ class TestEditorRestrictions:
                 json=[
                     {"user_id": editor_id, "role": "EDITOR", "share_percentage": 0},
                     {"user_id": third_id, "role": "VIEWER", "share_percentage": 0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
 
             # Should fail with 403 (only OWNER can manage access)
             assert resp.status_code == 403

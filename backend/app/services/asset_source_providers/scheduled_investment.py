@@ -37,30 +37,30 @@ For detailed parameter structure documentation, see:
 import calendar
 import hashlib
 import json
-from datetime import date as date_type, timedelta
+from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 
 from backend.app.db.models import (
     IdentifierType,
     ProviderInputType,
-    )
+)
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
+    DayCountConvention,
     FACurrentValue,
     FAHistoricalData,
+    FAInterestRatePeriod,
     FAPricePoint,
     FAScheduledInvestmentSchedule,
-    FAInterestRatePeriod,
-    DayCountConvention,
     InterestType,
     MaturationFrequency,
-    )
+)
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAAssetEventPoint
-from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
-from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
+from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
+from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.cache_utils import get_ttl_cache
-
 
 # ============================================================================
 # FINANCIAL MATH — Day count conventions & simple interest
@@ -71,7 +71,7 @@ def calculate_day_count_fraction(
     start_date: date_type,
     end_date: date_type,
     convention: DayCountConvention = DayCountConvention.ACT_365,
-    ) -> Decimal:
+) -> Decimal:
     """
     Calculate day fraction using specified day count convention.
 
@@ -167,9 +167,7 @@ def _calculate_30_360(start_date: date_type, end_date: date_type) -> Decimal:
     return Decimal(days) / Decimal(360)
 
 
-def calculate_simple_interest(
-    principal: Decimal, annual_rate: Decimal, time_fraction: Decimal
-    ) -> Decimal:
+def calculate_simple_interest(principal: Decimal, annual_rate: Decimal, time_fraction: Decimal) -> Decimal:
     """
     Calculate simple interest: I = P * r * t.
 
@@ -187,6 +185,7 @@ def calculate_simple_interest(
 # ============================================================================
 # MATURATION DATES HELPER
 # ============================================================================
+
 
 def _compute_maturation_dates(start: date_type, end: date_type, frequency: MaturationFrequency) -> set[date_type]:
     """Compute all maturation dates within [start, end] for given frequency.
@@ -232,7 +231,7 @@ def _cache_key(schedule: FAScheduledInvestmentSchedule) -> str:
 
 def _generate_schedule_values(
     schedule: FAScheduledInvestmentSchedule,
-    ) -> tuple[dict[date_type, Decimal], list[FAAssetEventPoint]]:
+) -> tuple[dict[date_type, Decimal], list[FAAssetEventPoint]]:
     """
     Generate values for the entire schedule range at maturation dates.
 
@@ -306,7 +305,7 @@ def _generate_schedule_values(
                 start_date=current_date - timedelta(days=1),
                 end_date=current_date,
                 convention=convention,
-                )
+            )
             if day_fraction > 0:
                 if is_compound:
                     # COMPOUND interest formula: I = V_{t-1} * r * Δt
@@ -315,26 +314,28 @@ def _generate_schedule_values(
                         principal=base,
                         annual_rate=period.annual_rate,
                         time_fraction=day_fraction,
-                        )
+                    )
                 else:
                     # Simple interest formula: I = P₀ * r * Δt
                     total_interest += calculate_simple_interest(
                         principal=principal,
                         annual_rate=period.annual_rate,
                         time_fraction=day_fraction,
-                        )
+                    )
 
         # === D8 Step 2: Auto-coupon at maturation date (generate_interest) ===
         if current_date in all_maturation_dates and period and period.generate_interest:
             current_value = principal + total_interest + event_adjustment
             interest_amount = current_value - principal
             if interest_amount > 0:
-                auto_events.append(FAAssetEventPoint(
-                    date=current_date,
-                    type="INTEREST",
-                    value=Currency(code=currency_code, amount=interest_amount),
-                    notes="Auto-generated interest payout",
-                    ))
+                auto_events.append(
+                    FAAssetEventPoint(
+                        date=current_date,
+                        type="INTEREST",
+                        value=Currency(code=currency_code, amount=interest_amount),
+                        notes="Auto-generated interest payout",
+                    )
+                )
                 # Reset: value returns to initial_value (D1/D2)
                 # Coupon includes both accrued interest + any price adjustments
                 total_interest = Decimal("0")
@@ -357,12 +358,14 @@ def _generate_schedule_values(
     last_period = schedule.schedule[-1]
     if last_period.generate_interest and not schedule.late_interest:
         settlement_value = values.get(last_end, principal)
-        auto_events.append(FAAssetEventPoint(
-            date=last_end,
-            type="MATURITY_SETTLEMENT",
-            value=Currency(code=currency_code, amount=settlement_value),
-            notes="Maturity settlement — asset closed",
-            ))
+        auto_events.append(
+            FAAssetEventPoint(
+                date=last_end,
+                type="MATURITY_SETTLEMENT",
+                value=Currency(code=currency_code, amount=settlement_value),
+                notes="Maturity settlement — asset closed",
+            )
+        )
 
     result = (values, auto_events)
     _CACHE.set(key, result)
@@ -374,7 +377,7 @@ def _compute_late_interest_value(
     target_date: date_type,
     last_scheduled_value: Decimal,
     maturity_date: date_type,
-    ) -> Decimal:
+) -> Decimal:
     """
     Compute value for a date after schedule ends (grace + late interest).
 
@@ -408,12 +411,12 @@ def _compute_late_interest_value(
                     start_date=current - timedelta(days=1),
                     end_date=current,
                     convention=convention,
-                    )
+                )
                 value += calculate_simple_interest(
                     principal=value,
                     annual_rate=last_period.annual_rate,
                     time_fraction=frac,
-                    )
+                )
                 current += timedelta(days=1)
             return value
         else:
@@ -422,12 +425,12 @@ def _compute_late_interest_value(
                 start_date=maturity_date,
                 end_date=target_date,
                 convention=convention,
-                )
+            )
             return last_scheduled_value + calculate_simple_interest(
                 principal=principal,
                 annual_rate=last_period.annual_rate,
                 time_fraction=grace_fraction,
-                )
+            )
 
     # After grace: grace interest + late interest
     if is_compound:
@@ -440,12 +443,12 @@ def _compute_late_interest_value(
                 start_date=current - timedelta(days=1),
                 end_date=current,
                 convention=convention,
-                )
+            )
             value += calculate_simple_interest(
                 principal=value,
                 annual_rate=rate,
                 time_fraction=frac,
-                )
+            )
             current += timedelta(days=1)
         return value
     else:
@@ -454,23 +457,23 @@ def _compute_late_interest_value(
             start_date=maturity_date,
             end_date=grace_end,
             convention=convention,
-            )
+        )
         grace_interest = calculate_simple_interest(
             principal=principal,
             annual_rate=last_period.annual_rate,
             time_fraction=grace_fraction,
-            )
+        )
 
         late_fraction = calculate_day_count_fraction(
             start_date=grace_end,
             end_date=target_date,
             convention=convention,
-            )
+        )
         late_interest = calculate_simple_interest(
             principal=principal,
             annual_rate=li.annual_rate,
             time_fraction=late_fraction,
-            )
+        )
 
         return last_scheduled_value + grace_interest + late_interest
 
@@ -509,13 +512,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
     @property
     def params_schema(self) -> list[dict]:
         return [
-            {
-                "key": "_ui_component",
-                "type": "ui_component",
-                "required": False,
-                "description": "Custom editor: ScheduledInvestmentEditor",
-                "default": "scheduled_investment"
-            },
+            {"key": "_ui_component", "type": "ui_component", "required": False, "description": "Custom editor: ScheduledInvestmentEditor", "default": "scheduled_investment"},
         ]
 
     @property
@@ -533,13 +530,13 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                             end_date=date_type(2025, 12, 31),
                             annual_rate=Decimal("0.05"),
                             maturation_frequency=MaturationFrequency.DAILY,
-                            )
-                        ],
+                        )
+                    ],
                     late_interest=None,
                     asset_events=[],
-                    ).model_dump(),
-                }
-            ]
+                ).model_dump(),
+            }
+        ]
 
     @property
     def supports_search(self) -> bool:
@@ -556,7 +553,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: dict,
-        ) -> FACurrentValue:
+    ) -> FACurrentValue:
         """
         Calculate current value for scheduled investment.
 
@@ -578,16 +575,14 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     currency=schedule.initial_value.code,
                     as_of_date=target_date,
                     source=self.provider_name,
-                    )
+                )
 
             if target_date in cached:
                 value = cached[target_date]
             elif cached and target_date > max(cached.keys()):
                 # Post-maturity: compute late interest one-shot
                 maturity_date = max(cached.keys())
-                value = _compute_late_interest_value(
-                    schedule, target_date, cached[maturity_date], maturity_date
-                    )
+                value = _compute_late_interest_value(schedule, target_date, cached[maturity_date], maturity_date)
             elif cached and target_date < min(cached.keys()):
                 # Before schedule: return initial_value
                 value = schedule.initial_value.amount
@@ -606,7 +601,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 currency=schedule.initial_value.code,
                 as_of_date=target_date,
                 source=self.provider_name,
-                )
+            )
 
         except AssetSourceError:
             raise
@@ -615,7 +610,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 f"Failed to calculate current value: {e}",
                 error_code="CALCULATION_ERROR",
                 details={"error": str(e)},
-                )
+            ) from e
 
     async def get_history_value(
         self,
@@ -624,7 +619,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         provider_params: dict,
         start_date: date_type,
         end_date: date_type,
-        ) -> FAHistoricalData:
+    ) -> FAHistoricalData:
         """
         Calculate historical values for scheduled investment.
 
@@ -661,7 +656,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     maturity_date + timedelta(days=1),
                     end_date,
                     li.maturation_frequency,
-                    )
+                )
                 sorted_late_dates = sorted(late_mat_dates)
                 last_late_date = sorted_late_dates[-1] if sorted_late_dates else None
 
@@ -670,50 +665,46 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                         # Skip if past settlement
                         if settlement_date and d > settlement_date:
                             break
-                        value = _compute_late_interest_value(
-                            schedule, d, cached[maturity_date], maturity_date
-                            )
+                        value = _compute_late_interest_value(schedule, d, cached[maturity_date], maturity_date)
                         prices.append(FAPricePoint(date=d, close=value, currency=currency))
 
                         # Auto-generate late INTEREST events if generate_interest=True
                         if li.generate_interest:
                             interest_amount = value - principal
                             if interest_amount > 0:
-                                late_auto_events.append(FAAssetEventPoint(
-                                    date=d,
-                                    type="INTEREST",
-                                    value=Currency(code=currency, amount=interest_amount),
-                                    notes="Auto-generated late interest payout",
-                                    ))
+                                late_auto_events.append(
+                                    FAAssetEventPoint(
+                                        date=d,
+                                        type="INTEREST",
+                                        value=Currency(code=currency, amount=interest_amount),
+                                        notes="Auto-generated late interest payout",
+                                    )
+                                )
 
                 # Late interest MATURITY_SETTLEMENT at last maturation date
                 if li.generate_interest and last_late_date and not settlement_date:
-                    settle_value = _compute_late_interest_value(
-                        schedule, last_late_date, cached[maturity_date], maturity_date
+                    settle_value = _compute_late_interest_value(schedule, last_late_date, cached[maturity_date], maturity_date)
+                    late_auto_events.append(
+                        FAAssetEventPoint(
+                            date=last_late_date,
+                            type="MATURITY_SETTLEMENT",
+                            value=Currency(code=currency, amount=settle_value),
+                            notes="Late interest maturity settlement — asset closed",
                         )
-                    late_auto_events.append(FAAssetEventPoint(
-                        date=last_late_date,
-                        type="MATURITY_SETTLEMENT",
-                        value=Currency(code=currency, amount=settle_value),
-                        notes="Late interest maturity settlement — asset closed",
-                        ))
+                    )
 
             elif maturity_date and end_date > maturity_date:
                 # No late interest config — emit maturity value as flat line at end_date
                 if end_date not in cached:
                     if not settlement_date or end_date <= settlement_date:
-                        prices.append(FAPricePoint(
-                            date=end_date, close=cached[maturity_date], currency=currency
-                            ))
+                        prices.append(FAPricePoint(date=end_date, close=cached[maturity_date], currency=currency))
 
             # If past settlement, emit settlement value as final anchor
             if settlement_date and end_date > settlement_date:
                 # Ensure no prices after settlement
                 prices = [p for p in prices if p.date <= settlement_date]
                 if end_date > settlement_date:
-                    prices.append(FAPricePoint(
-                        date=end_date, close=settlement_evt.value.amount, currency=currency
-                        ))
+                    prices.append(FAPricePoint(date=end_date, close=settlement_evt.value.amount, currency=currency))
 
             # If start_date is before schedule, emit initial_value as anchor
             if cached and start_date < min(cached.keys()):
@@ -733,7 +724,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 events=all_events,
                 currency=currency,
                 source=self.provider_name,
-                )
+            )
 
         except AssetSourceError:
             raise
@@ -742,7 +733,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 f"Failed to calculate history: {e}",
                 error_code="CALCULATION_ERROR",
                 details={"error": str(e)},
-                )
+            ) from e
 
     @property
     def test_search_query(self) -> str | None:
@@ -755,7 +746,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             "Search not supported for scheduled_investment provider",
             error_code="NOT_SUPPORTED",
             details={"message": "Scheduled investments require manual configuration"},
-            )
+        )
 
     def validate_params(self, provider_params: dict) -> FAScheduledInvestmentSchedule:
         """
@@ -770,7 +761,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             return FAScheduledInvestmentSchedule(
                 initial_value=Currency(code="EUR", amount=Decimal("10000")),
                 schedule=[],
-                )
+            )
 
         try:
             return FAScheduledInvestmentSchedule(**provider_params)
@@ -779,4 +770,4 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 f"Invalid provider params: {e}",
                 error_code="INVALID_PARAMS",
                 details={"error": str(e)},
-                )
+            ) from e

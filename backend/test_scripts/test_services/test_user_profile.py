@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.session import get_async_engine
 from backend.app.services import user_service
 
-
 # ============================================================================
 # PYTEST FIXTURES
 # ============================================================================
@@ -57,7 +56,7 @@ async def test_user(session: AsyncSession):
         email=f"profiletest_{unique_id}@example.com",
         password="TestPass123!",
         is_active=True,
-        )
+    )
     if error:
         raise RuntimeError(f"Failed to create test user: {error}")
     yield user
@@ -81,7 +80,7 @@ class TestUpdateProfileService:
             session=session,
             user_id=test_user.id,
             username=new_username,
-            )
+        )
 
         assert error is None
         assert updated is not None
@@ -97,7 +96,7 @@ class TestUpdateProfileService:
             session=session,
             user_id=test_user.id,
             email=new_email,
-            )
+        )
 
         assert error is None
         assert updated is not None
@@ -115,7 +114,7 @@ class TestUpdateProfileService:
             user_id=test_user.id,
             username=new_username,
             email=new_email,
-            )
+        )
 
         assert error is None
         assert updated is not None
@@ -130,7 +129,7 @@ class TestUpdateProfileService:
         updated, error = await user_service.update_profile(
             session=session,
             user_id=test_user.id,
-            )
+        )
 
         assert error is None
         assert updated is not None
@@ -148,13 +147,13 @@ class TestUpdateProfileService:
             username=existing_username,
             email=f"existing_{unique_id}@example.com",
             password="TestPass123!",
-            )
+        )
 
         updated, error = await user_service.update_profile(
             session=session,
             user_id=test_user.id,
             username=existing_username,
-            )
+        )
 
         assert error == "Username already taken"
         assert updated is None
@@ -170,13 +169,13 @@ class TestUpdateProfileService:
             username=f"another_{unique_id}",
             email=taken_email,
             password="TestPass123!",
-            )
+        )
 
         updated, error = await user_service.update_profile(
             session=session,
             user_id=test_user.id,
             email=taken_email,
-            )
+        )
 
         assert error == "Email already registered"
         assert updated is None
@@ -189,7 +188,7 @@ class TestUpdateProfileService:
             session=session,
             user_id=test_user.id,
             username=original_username,  # same as current
-            )
+        )
 
         assert error is None
         assert updated is not None
@@ -202,7 +201,7 @@ class TestUpdateProfileService:
             session=session,
             user_id=99999,
             username="newname",
-            )
+        )
 
         assert error == "User not found"
         assert updated is None
@@ -233,7 +232,7 @@ class TestCountSuperusers:
             email=f"super_{unique_id}@example.com",
             password="SuperPass123!",
             is_superuser=True,
-            )
+        )
         assert error is None
         assert new_user.is_superuser is True
 
@@ -254,7 +253,7 @@ class TestDeleteUser:
             username=f"todelete_{unique_id}",
             email=f"delete_{unique_id}@example.com",
             password="DeleteMe123!",
-            )
+        )
         assert error is None
         user_id = user_to_delete.id
 
@@ -296,7 +295,7 @@ class TestListUsers:
             username=f"listtest_{unique_id}",
             email=f"listtest_{unique_id}@example.com",
             password="ListPass123!",
-            )
+        )
         assert error is None
 
         users = await user_service.list_users(session)
@@ -309,14 +308,14 @@ class TestListUsers:
         initial = await user_service.list_users(session)
         initial_count = len(initial)
 
-        for i in range(2):
+        for _i in range(2):
             uid = uuid.uuid4().hex[:8]
             await user_service.create_user(
                 session=session,
                 username=f"multi_{uid}",
                 email=f"multi_{uid}@example.com",
                 password="MultiPass123!",
-                )
+            )
 
         after = await user_service.list_users(session)
         assert len(after) >= initial_count + 2
@@ -339,14 +338,14 @@ class TestResetPassword:
             username=f"resetpw_{unique_id}",
             email=f"resetpw_{unique_id}@example.com",
             password="OldPass123!",
-            )
+        )
         assert error is None
 
         success, err_msg = await user_service.reset_password(
             session=session,
             username=f"resetpw_{unique_id}",
             new_password="NewPass456!",
-            )
+        )
         assert success is True
         assert err_msg is None
 
@@ -357,7 +356,7 @@ class TestResetPassword:
             session=session,
             username="nonexistent_user_xyz",
             new_password="Whatever123!",
-            )
+        )
         assert success is False
         assert err_msg is not None
         assert "not found" in err_msg
@@ -381,7 +380,7 @@ class TestSetUserActive:
             email=f"deact_{unique_id}@example.com",
             password="DeactPass123!",
             is_active=True,
-            )
+        )
         assert error is None
         assert user.is_active is True
 
@@ -389,7 +388,7 @@ class TestSetUserActive:
             session=session,
             username=f"deact_{unique_id}",
             active=False,
-            )
+        )
         assert success is True
         assert err_msg is None
 
@@ -407,14 +406,14 @@ class TestSetUserActive:
             email=f"react_{unique_id}@example.com",
             password="ReactPass123!",
             is_active=False,
-            )
+        )
         assert error is None
 
         success, err_msg = await user_service.set_user_active(
             session=session,
             username=f"react_{unique_id}",
             active=True,
-            )
+        )
         assert success is True
 
         updated_user = await user_service.get_user_by_username(session, f"react_{unique_id}")
@@ -427,7 +426,6 @@ class TestSetUserActive:
             session=session,
             username="nonexistent_user_xyz",
             active=False,
-            )
+        )
         assert success is False
         assert "not found" in err_msg
-

@@ -19,7 +19,6 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 import shutil
-from pathlib import Path
 
 from backend.app.services.static_uploads import (
     UploadSecurityError,
@@ -33,7 +32,6 @@ from backend.app.services.static_uploads import (
     validate_upload_security,
 )
 from backend.test_scripts.test_utils import print_section, print_success
-
 
 # ============================================================================
 # FIXTURE — isolated uploads directory
@@ -354,20 +352,14 @@ class TestValidateUploadSecurity:
     def test_declared_mime_octet_stream(self):
         """Declared octet-stream is always accepted (generic)."""
         print_section("validate_upload_security: declared octet-stream")
-        mime = validate_upload_security(
-            b"binary data", "file.bin",
-            declared_mime_type="application/octet-stream"
-        )
+        mime = validate_upload_security(b"binary data", "file.bin", declared_mime_type="application/octet-stream")
         assert mime is not None
         print_success(f"octet-stream declared → {mime}")
 
     def test_declared_mime_text_match(self):
         """Declared text/* matches actual text/* → accepted."""
         print_section("validate_upload_security: text/* declared match")
-        mime = validate_upload_security(
-            b"col1,col2\nval1,val2", "data.csv",
-            declared_mime_type="text/csv"
-        )
+        mime = validate_upload_security(b"col1,col2\nval1,val2", "data.csv", declared_mime_type="text/csv")
         assert mime is not None
         print_success(f"text/csv declared → {mime}")
 

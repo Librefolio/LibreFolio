@@ -19,20 +19,19 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from typing import Optional, List
+from typing import List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.db.models import UserRole
 from backend.app.schemas.common import (
-    Currency,
-    BaseBulkResponse,
     BaseBulkDeleteResponse,
+    BaseBulkResponse,
     BaseDeleteResult,
     BaseListResponse,
-    )
+    Currency,
+)
 from backend.app.utils.datetime_utils import UTCDateTime
-
 
 # =============================================================================
 # BROKER CREATE
@@ -53,37 +52,19 @@ class BRCreateItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=100, description="Broker name (must be unique)")
-    description: Optional[str] = Field(
-        default=None, max_length=500, description="Broker description"
-        )
-    portal_url: Optional[str] = Field(
-        default=None, max_length=255, description="URL to broker's web portal"
-        )
-    icon_url: Optional[str] = Field(
-        default=None, max_length=500, description="Custom icon URL for the broker"
-        )
-    default_import_plugin: Optional[str] = Field(
-        default=None, max_length=100, description="Default BRIM plugin for importing transactions"
-        )
+    description: Optional[str] = Field(default=None, max_length=500, description="Broker description")
+    portal_url: Optional[str] = Field(default=None, max_length=255, description="URL to broker's web portal")
+    icon_url: Optional[str] = Field(default=None, max_length=500, description="Custom icon URL for the broker")
+    default_import_plugin: Optional[str] = Field(default=None, max_length=100, description="Default BRIM plugin for importing transactions")
 
-    allow_cash_overdraft: bool = Field(
-        default=False, description="Allow leveraged buying (negative cash balance)"
-        )
-    allow_asset_shorting: bool = Field(
-        default=False, description="Allow short selling (negative asset quantities)"
-        )
+    allow_cash_overdraft: bool = Field(default=False, description="Allow leveraged buying (negative cash balance)")
+    allow_asset_shorting: bool = Field(default=False, description="Allow short selling (negative asset quantities)")
 
-    is_active: bool = Field(
-        default=True, description="Whether the broker account is currently active"
-        )
-    opened_at: Optional[date_type] = Field(
-        default=None, description="Date when the account was opened in reality"
-        )
+    is_active: bool = Field(default=True, description="Whether the broker account is currently active")
+    opened_at: Optional[date_type] = Field(default=None, description="Date when the account was opened in reality")
 
     # Auto-creates DEPOSIT transactions - using Currency objects
-    initial_balances: Optional[List[Currency]] = Field(
-        default=None, description="Initial cash balances. Creates DEPOSIT transactions."
-        )
+    initial_balances: Optional[List[Currency]] = Field(default=None, description="Initial cash balances. Creates DEPOSIT transactions.")
 
     @field_validator("name")
     @classmethod
@@ -289,7 +270,7 @@ class BRDeleteItem(BaseModel):
     force: bool = Field(
         default=False,
         description="If True, cascade delete all transactions. If False, fail if transactions exist.",
-        )
+    )
 
 
 class BRDeleteResult(BaseDeleteResult):
@@ -301,9 +282,7 @@ class BRDeleteResult(BaseDeleteResult):
     """
 
     id: int = Field(..., description="Broker ID")
-    transactions_deleted: int = Field(
-        default=0, ge=0, description="Number of transactions cascade-deleted (only when force=True)"
-        )
+    transactions_deleted: int = Field(default=0, ge=0, description="Number of transactions cascade-deleted (only when force=True)")
 
 
 class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):
@@ -325,9 +304,7 @@ class BRCreateResult(BaseModel):
     success: bool
     broker_id: Optional[int] = None
     name: str  # Echo back for client correlation
-    deposits_created: int = Field(
-        default=0, ge=0, description="Number of DEPOSIT transactions created"
-        )
+    deposits_created: int = Field(default=0, ge=0, description="Number of DEPOSIT transactions created")
     error: Optional[str] = None
 
 
@@ -349,9 +326,7 @@ class BRUpdateResult(BaseModel):
 
     id: int
     success: bool
-    validation_triggered: bool = Field(
-        default=False, description="Whether balance validation was triggered due to flag change"
-        )
+    validation_triggered: bool = Field(default=False, description="Whether balance validation was triggered due to flag change")
     error: Optional[str] = None
 
 
@@ -378,15 +353,14 @@ class BRAccessItem(BaseModel):
     username: str = Field(..., description="Username")
     email: str = Field(..., description="User email")
     role: UserRole = Field(..., description="Access role")
-    share_percentage: Decimal = Field(
-        ..., description="Ownership fraction (0.0-1.0) for portfolio aggregation"
-        )
+    share_percentage: Decimal = Field(..., description="Ownership fraction (0.0-1.0) for portfolio aggregation")
     avatar_url: Optional[str] = Field(None, description="User avatar URL")
     created_at: UTCDateTime = Field(..., description="When access was granted")
 
 
 class BRAccessListResponse(BaseListResponse[BRAccessItem]):
     """Response for listing broker accesses."""
+
     pass
 
 
@@ -403,16 +377,18 @@ class BRAccessBulkItem(BaseModel):
 
     user_id: int = Field(..., gt=0, description="User ID")
     role: UserRole = Field(..., description="Access role (OWNER/EDITOR/VIEWER)")
-    share_percentage: Decimal = Field(default=Decimal("0"), ge=0, le=1, description="Ownership fraction (0.0-1.0). Only valid for OWNER role. Frontend displays as %.", )
+    share_percentage: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        le=1,
+        description="Ownership fraction (0.0-1.0). Only valid for OWNER role. Frontend displays as %.",
+    )
 
     @model_validator(mode="after")
     def validate_share_for_role(self):
         """Enforce: only OWNERs can have share_percentage > 0."""
         if self.role != UserRole.OWNER and self.share_percentage > 0:
-            raise ValueError(
-                f"share_percentage must be 0 for role {self.role.value}. "
-                f"Only OWNERs can have ownership percentage."
-                )
+            raise ValueError(f"share_percentage must be 0 for role {self.role.value}. " f"Only OWNERs can have ownership percentage.")
         return self
 
 

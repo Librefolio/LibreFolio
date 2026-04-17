@@ -19,20 +19,18 @@ import pytest
 # Force test mode BEFORE any other imports
 os.environ["LIBREFOLIO_TEST_MODE"] = "1"
 
+from backend.app.db.models import IdentifierType
 from backend.app.schemas.assets import (
     FAInterestRatePeriod,
     FALateInterestConfig,
     FAScheduledInvestmentSchedule,
-    DayCountConvention,
-    MaturationFrequency,
     InterestType,
-    )
+    MaturationFrequency,
+)
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAAssetEventPoint
-from backend.app.db.models import IdentifierType
-from backend.app.services.asset_source_providers.scheduled_investment import (
-    ScheduledInvestmentProvider, _generate_schedule_values
-    )
+from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider, _generate_schedule_values
+
 
 async def _history_values(params: dict, start: date, end: date):
     provider = ScheduledInvestmentProvider()
@@ -47,19 +45,24 @@ async def test_e2e_p2p_loan_two_periods_late_interest():
         initial_value=Currency(code="EUR", amount=Decimal("10000")),
         schedule=[
             FAInterestRatePeriod(
-                start_date=date(2025, 1, 1), end_date=date(2025, 6, 30),
-                annual_rate=Decimal("0.05"), maturation_frequency=MaturationFrequency.DAILY,
-                ),
-            FAInterestRatePeriod(
-                start_date=date(2025, 7, 1), end_date=date(2025, 12, 31),
-                annual_rate=Decimal("0.06"), maturation_frequency=MaturationFrequency.DAILY,
-                ),
-            ],
-        late_interest=FALateInterestConfig(
-            annual_rate=Decimal("0.12"), grace_period_days=30,
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 6, 30),
+                annual_rate=Decimal("0.05"),
+                maturation_frequency=MaturationFrequency.DAILY,
             ),
+            FAInterestRatePeriod(
+                start_date=date(2025, 7, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.06"),
+                maturation_frequency=MaturationFrequency.DAILY,
+            ),
+        ],
+        late_interest=FALateInterestConfig(
+            annual_rate=Decimal("0.12"),
+            grace_period_days=30,
+        ),
         asset_events=[],
-        )
+    )
     params = schedule_model.model_dump()
 
     async def value_on(d: date) -> Decimal:
@@ -86,9 +89,10 @@ async def test_e2e_p2p_loan_two_periods_late_interest():
 @pytest.mark.asyncio
 async def test_e2e_maturation_frequencies():
     base = dict(
-        start_date=date(2025, 1, 1), end_date=date(2025, 12, 31),
+        start_date=date(2025, 1, 1),
+        end_date=date(2025, 12, 31),
         annual_rate=Decimal("0.04"),
-        )
+    )
 
     # Collect end-of-year value for each frequency — must be identical
     end_values = {}
@@ -97,7 +101,7 @@ async def test_e2e_maturation_frequencies():
             initial_value=Currency(code="EUR", amount=Decimal("20000")),
             schedule=[FAInterestRatePeriod(**base, maturation_frequency=freq)],
             asset_events=[],
-            )
+        )
         params = schedule.model_dump()
 
         # Query the full year: end_date (Dec 31) is always an anchor
@@ -118,12 +122,12 @@ async def test_e2e_maturation_frequencies():
         initial_value=Currency(code="EUR", amount=Decimal("20000")),
         schedule=[FAInterestRatePeriod(**base, maturation_frequency=MaturationFrequency.DAILY)],
         asset_events=[],
-        )
+    )
     annual_schedule = FAScheduledInvestmentSchedule(
         initial_value=Currency(code="EUR", amount=Decimal("20000")),
         schedule=[FAInterestRatePeriod(**base, maturation_frequency=MaturationFrequency.ANNUAL)],
         asset_events=[],
-        )
+    )
     daily_hist = await _history_values(daily_schedule.model_dump(), date(2025, 1, 1), date(2025, 12, 31))
     annual_hist = await _history_values(annual_schedule.model_dump(), date(2025, 1, 1), date(2025, 12, 31))
     assert len(daily_hist) > len(annual_hist)
@@ -136,20 +140,26 @@ async def test_e2e_multi_period_rate_changes():
         initial_value=Currency(code="EUR", amount=Decimal("5000")),
         schedule=[
             FAInterestRatePeriod(
-                start_date=date(2025, 1, 1), end_date=date(2025, 3, 31),
-                annual_rate=Decimal("0.03"), maturation_frequency=MaturationFrequency.DAILY,
-                ),
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 3, 31),
+                annual_rate=Decimal("0.03"),
+                maturation_frequency=MaturationFrequency.DAILY,
+            ),
             FAInterestRatePeriod(
-                start_date=date(2025, 4, 1), end_date=date(2025, 6, 30),
-                annual_rate=Decimal("0.035"), maturation_frequency=MaturationFrequency.MONTHLY,
-                ),
+                start_date=date(2025, 4, 1),
+                end_date=date(2025, 6, 30),
+                annual_rate=Decimal("0.035"),
+                maturation_frequency=MaturationFrequency.MONTHLY,
+            ),
             FAInterestRatePeriod(
-                start_date=date(2025, 7, 1), end_date=date(2025, 12, 31),
-                annual_rate=Decimal("0.04"), maturation_frequency=MaturationFrequency.DAILY,
-                ),
-            ],
+                start_date=date(2025, 7, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.04"),
+                maturation_frequency=MaturationFrequency.DAILY,
+            ),
+        ],
         asset_events=[],
-        )
+    )
     params = schedule.model_dump()
 
     q1 = (await _history_values(params, date(2025, 3, 31), date(2025, 3, 31)))[0]
@@ -171,19 +181,24 @@ if __name__ == "__main__":
 # Scenario 4+: generate_interest, auto-coupon, MATURITY_SETTLEMENT
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_generate_interest_monthly_coupons():
     """generate_interest=True + MONTHLY → 12 auto INTEREST events, price resets to initial_value each month."""
     schedule = FAScheduledInvestmentSchedule(
         initial_value=Currency(code="EUR", amount=Decimal("10000")),
         interest_type=InterestType.SIMPLE,
-        schedule=[FAInterestRatePeriod(
-            start_date=date(2025, 1, 1), end_date=date(2025, 12, 31),
-            annual_rate=Decimal("0.12"), maturation_frequency=MaturationFrequency.MONTHLY,
-            generate_interest=True,
-            )],
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.12"),
+                maturation_frequency=MaturationFrequency.MONTHLY,
+                generate_interest=True,
+            )
+        ],
         asset_events=[],
-        )
+    )
     values, auto_events = _generate_schedule_values(schedule)
 
     # Auto INTEREST events (excluding MATURITY_SETTLEMENT)
@@ -204,13 +219,17 @@ async def test_generate_interest_compound_resets():
     schedule = FAScheduledInvestmentSchedule(
         initial_value=Currency(code="EUR", amount=Decimal("10000")),
         interest_type=InterestType.COMPOUND,
-        schedule=[FAInterestRatePeriod(
-            start_date=date(2025, 1, 1), end_date=date(2025, 12, 31),
-            annual_rate=Decimal("0.12"), maturation_frequency=MaturationFrequency.MONTHLY,
-            generate_interest=True,
-            )],
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.12"),
+                maturation_frequency=MaturationFrequency.MONTHLY,
+                generate_interest=True,
+            )
+        ],
         asset_events=[],
-        )
+    )
     values, auto_events = _generate_schedule_values(schedule)
     interest_events = [e for e in auto_events if e.type == "INTEREST"]
     assert len(interest_events) >= 11
@@ -226,19 +245,24 @@ async def test_generate_interest_negative_no_coupon():
     """generate_interest=True + negative PRICE_ADJUSTMENT → no coupon generated (only positive)."""
     schedule = FAScheduledInvestmentSchedule(
         initial_value=Currency(code="EUR", amount=Decimal("10000")),
-        schedule=[FAInterestRatePeriod(
-            start_date=date(2025, 1, 1), end_date=date(2025, 3, 31),
-            annual_rate=Decimal("0.05"), maturation_frequency=MaturationFrequency.MONTHLY,
-            generate_interest=True,
-            )],
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 3, 31),
+                annual_rate=Decimal("0.05"),
+                maturation_frequency=MaturationFrequency.MONTHLY,
+                generate_interest=True,
+            )
+        ],
         asset_events=[
             FAAssetEventPoint(
-                date=date(2025, 1, 2), type="PRICE_ADJUSTMENT",
+                date=date(2025, 1, 2),
+                type="PRICE_ADJUSTMENT",
                 value=Currency(code="EUR", amount=Decimal("-5000")),
                 notes="Massive write-down",
-                ),
-            ],
-        )
+            ),
+        ],
+    )
     values, auto_events = _generate_schedule_values(schedule)
     interest_events = [e for e in auto_events if e.type == "INTEREST"]
     # After write-down of 5000, value drops below initial_value → no positive coupon possible for a while
@@ -253,14 +277,18 @@ async def test_maturity_settlement_no_late():
     """generate_interest=True on last period without late → MATURITY_SETTLEMENT at end_date."""
     schedule = FAScheduledInvestmentSchedule(
         initial_value=Currency(code="EUR", amount=Decimal("10000")),
-        schedule=[FAInterestRatePeriod(
-            start_date=date(2025, 1, 1), end_date=date(2025, 6, 30),
-            annual_rate=Decimal("0.06"), maturation_frequency=MaturationFrequency.MONTHLY,
-            generate_interest=True,
-            )],
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 6, 30),
+                annual_rate=Decimal("0.06"),
+                maturation_frequency=MaturationFrequency.MONTHLY,
+                generate_interest=True,
+            )
+        ],
         late_interest=None,
         asset_events=[],
-        )
+    )
     values, auto_events = _generate_schedule_values(schedule)
     settlements = [e for e in auto_events if e.type == "MATURITY_SETTLEMENT"]
     assert len(settlements) == 1, f"Expected 1 MATURITY_SETTLEMENT, got {len(settlements)}"
@@ -275,14 +303,18 @@ async def test_get_current_value_after_settlement():
     provider = ScheduledInvestmentProvider()
     schedule = FAScheduledInvestmentSchedule(
         initial_value=Currency(code="EUR", amount=Decimal("10000")),
-        schedule=[FAInterestRatePeriod(
-            start_date=date(2024, 1, 1), end_date=date(2024, 6, 30),
-            annual_rate=Decimal("0.06"), maturation_frequency=MaturationFrequency.MONTHLY,
-            generate_interest=True,
-            )],
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2024, 1, 1),
+                end_date=date(2024, 6, 30),
+                annual_rate=Decimal("0.06"),
+                maturation_frequency=MaturationFrequency.MONTHLY,
+                generate_interest=True,
+            )
+        ],
         late_interest=None,
         asset_events=[],
-        )
+    )
     params = schedule.model_dump()
 
     # Current date (2026-04-03) is well past settlement (2024-06-30)
@@ -291,9 +323,7 @@ async def test_get_current_value_after_settlement():
     # Should return the settlement value, no further interest
     _, auto_events = _generate_schedule_values(schedule)
     settlement = next(e for e in auto_events if e.type == "MATURITY_SETTLEMENT")
-    assert result.value == settlement.value.amount, (
-        f"Expected settlement value {settlement.value.amount}, got {result.value}"
-    )
+    assert result.value == settlement.value.amount, f"Expected settlement value {settlement.value.amount}, got {result.value}"
 
 
 @pytest.mark.asyncio
@@ -301,20 +331,25 @@ async def test_auto_and_manual_interest_coexist():
     """Auto INTEREST + manual INTEREST on same date → both appear in events."""
     schedule = FAScheduledInvestmentSchedule(
         initial_value=Currency(code="EUR", amount=Decimal("10000")),
-        schedule=[FAInterestRatePeriod(
-            start_date=date(2025, 1, 1), end_date=date(2025, 6, 30),
-            annual_rate=Decimal("0.12"), maturation_frequency=MaturationFrequency.MONTHLY,
-            generate_interest=True,
-            )],
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 6, 30),
+                annual_rate=Decimal("0.12"),
+                maturation_frequency=MaturationFrequency.MONTHLY,
+                generate_interest=True,
+            )
+        ],
         late_interest=None,
         asset_events=[
             FAAssetEventPoint(
-                date=date(2025, 2, 1), type="INTEREST",
+                date=date(2025, 2, 1),
+                type="INTEREST",
                 value=Currency(code="EUR", amount=Decimal("50")),
                 notes="Manual extra interest",
-                ),
-            ],
-        )
+            ),
+        ],
+    )
     params = schedule.model_dump()
     provider = ScheduledInvestmentProvider()
     result = await provider.get_history_value("test", IdentifierType.OTHER, params, date(2025, 1, 1), date(2025, 6, 30))
@@ -322,5 +357,3 @@ async def test_auto_and_manual_interest_coexist():
     # Events on Feb 1: should have both auto + manual
     feb_events = [e for e in result.events if e.date == date(2025, 2, 1) and e.type == "INTEREST"]
     assert len(feb_events) >= 2, f"Expected ≥2 INTEREST events on Feb 1 (auto+manual), got {len(feb_events)}"
-
-

@@ -7,7 +7,7 @@ Provides login, logout, and JWT-based session management.
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter, HTTPException, Response, Request, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import User
@@ -17,22 +17,21 @@ from backend.app.schemas.auth import (
     AuthLoginResponse,
     AuthLogoutResponse,
     AuthMeResponse,
-    AuthUserResponse,
     AuthRegisterRequest,
     AuthRegisterResponse,
+    AuthUserResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
     UpdateProfileRequest,
     UpdateProfileResponse,
-    )
-from backend.app.services import settings_service
-from backend.app.services import user_service
+)
+from backend.app.services import settings_service, user_service
 from backend.app.services.auth_service import (
-    verify_password,
-    hash_password,
     create_jwt_token,
     decode_jwt_token,
-    )
+    hash_password,
+    verify_password,
+)
 from backend.app.services.global_settings_service import get_session_ttl_hours
 
 logger = structlog.get_logger(__name__)
@@ -52,9 +51,7 @@ def get_session_cookie(request: Request) -> str | None:
     return request.cookies.get(SESSION_COOKIE_NAME)
 
 
-async def get_current_user(
-    request: Request, session: AsyncSession = Depends(get_session_generator)
-    ) -> User:
+async def get_current_user(request: Request, session: AsyncSession = Depends(get_session_generator)) -> User:
     """
     Dependency to get current authenticated user.
     Raises 401 if not authenticated.
@@ -81,9 +78,7 @@ async def get_current_user(
     return user
 
 
-async def get_optional_user(  # pragma: no cover — unused dependency, prepared for future use
-    request: Request, session: AsyncSession = Depends(get_session_generator)
-    ) -> User | None:
+async def get_optional_user(request: Request, session: AsyncSession = Depends(get_session_generator)) -> User | None:  # pragma: no cover — unused dependency, prepared for future use
     """
     Dependency to get current user if authenticated, None otherwise.
     Does not raise exceptions.
@@ -99,7 +94,7 @@ async def login(
     request: AuthLoginRequest,
     response: Response,
     session: AsyncSession = Depends(get_session_generator),
-    ):
+):
     """
     Authenticate user and create session.
 
@@ -140,24 +135,20 @@ async def login(
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
-        )
+    )
 
     logger.info("User logged in", user_id=user.id, username=user.username)
 
     # Get user settings (may be None if never saved)
     user_settings = await settings_service.get_user_settings(user.id, session)
 
-    return AuthLoginResponse(
-        user=AuthUserResponse.model_validate(user),
-        user_settings=user_settings,
-        message="Login successful"
-        )
+    return AuthLoginResponse(user=AuthUserResponse.model_validate(user), user_settings=user_settings, message="Login successful")
 
 
 @router.post("/logout", response_model=AuthLogoutResponse)
 async def logout(
     response: Response,
-    ):
+):
     """
     Logout current user and clear session cookie.
     JWT is stateless — logout simply clears the cookie client-side.
@@ -169,7 +160,7 @@ async def logout(
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
-        )
+    )
 
     return AuthLogoutResponse(message="Logged out successfully")
 
@@ -183,9 +174,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/register", response_model=AuthRegisterResponse, status_code=201)
-async def register(
-    request: AuthRegisterRequest, session: AsyncSession = Depends(get_session_generator)
-    ):
+async def register(request: AuthRegisterRequest, session: AsyncSession = Depends(get_session_generator)):
     """
     Register a new user.
 
@@ -204,19 +193,17 @@ async def register(
         password=request.password,
         is_superuser=is_first_user,  # First user becomes admin
         is_active=True,
-        )
+    )
 
     if not user:
         raise HTTPException(status_code=400, detail=error)
 
-    logger.info(
-        "User registered", user_id=user.id, username=user.username, is_first_user=is_first_user
-        )
+    logger.info("User registered", user_id=user.id, username=user.username, is_first_user=is_first_user)
 
     return AuthRegisterResponse(
         user=AuthUserResponse.model_validate(user),
         message="Registration successful" + (" (Admin)" if is_first_user else ""),
-        )
+    )
 
 
 @router.post("/change-password", response_model=ChangePasswordResponse)
@@ -224,7 +211,7 @@ async def change_password(
     request: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ):
+):
     """
     Change password for the currently authenticated user.
 
@@ -237,9 +224,7 @@ async def change_password(
 
     # Check new password is different
     if request.current_password == request.new_password:
-        raise HTTPException(
-            status_code=400, detail="New password must be different from current password"
-            )
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
 
     # Update password
     current_user.hashed_password = hash_password(request.new_password)
@@ -256,7 +241,7 @@ async def update_profile(
     request: UpdateProfileRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ):
+):
     """
     Update profile for the currently authenticated user.
 
@@ -265,10 +250,7 @@ async def update_profile(
     """
     # Nothing to update
     if request.username is None and request.email is None:
-        return UpdateProfileResponse(
-            user=AuthUserResponse.model_validate(current_user),
-            message="No changes requested"
-            )
+        return UpdateProfileResponse(user=AuthUserResponse.model_validate(current_user), message="No changes requested")
 
     # Update profile
     updated_user, error = await user_service.update_profile(
@@ -276,22 +258,14 @@ async def update_profile(
         user_id=current_user.id,
         username=request.username,
         email=request.email,
-        )
+    )
 
     if error:
         raise HTTPException(status_code=400, detail=error)
 
-    logger.info(
-        "Profile updated",
-        user_id=updated_user.id,
-        username=updated_user.username,
-        email=updated_user.email
-        )
+    logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email=updated_user.email)
 
-    return UpdateProfileResponse(
-        user=AuthUserResponse.model_validate(updated_user),
-        message="Profile updated successfully"
-        )
+    return UpdateProfileResponse(user=AuthUserResponse.model_validate(updated_user), message="Profile updated successfully")
 
 
 @router.delete("/users/me", response_model=dict)
@@ -299,7 +273,7 @@ async def delete_own_account(
     response: Response,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ):
+):
     """
     Delete the currently authenticated user's account.
 
@@ -315,19 +289,12 @@ async def delete_own_account(
     if current_user.is_superuser:
         superuser_count = await user_service.count_superusers(session)
         if superuser_count <= 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot delete account: you are the only administrator"
-                )
+            raise HTTPException(status_code=400, detail="Cannot delete account: you are the only administrator")
 
     # Delete the user (cascades to related data)
     await user_service.delete_user(session, current_user.id)
 
-    logger.warning(
-        "User account deleted",
-        user_id=current_user.id,
-        username=current_user.username
-        )
+    logger.warning("User account deleted", user_id=current_user.id, username=current_user.username)
 
     # Clear session cookie
     response.delete_cookie(
@@ -335,6 +302,6 @@ async def delete_own_account(
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
-        )
+    )
 
     return {"message": "Account deleted successfully"}

@@ -6,7 +6,7 @@ Covers:
 - get_git_version: returns git describe string
 """
 
-from backend.app.utils.version import get_version_info, get_git_version
+from backend.app.utils.version import get_git_version, get_version_info
 
 
 class TestGetGitVersion:
@@ -35,4 +35,3 @@ class TestGetVersionInfo:
     def test_is_release_is_bool(self):
         info = get_version_info()
         assert isinstance(info["is_release"], bool)
-

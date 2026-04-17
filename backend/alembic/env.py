@@ -3,15 +3,14 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 # Add the backend directory to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Import SQLModel base and config
-from backend.app.db.base import SQLModel
 from backend.app.config import get_settings
+from backend.app.db.base import SQLModel
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -73,7 +72,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         render_as_batch=True,  # Enable batch mode for SQLite
-        )
+    )
 
     with context.begin_transaction():
         context.run_migrations()
@@ -90,14 +89,14 @@ def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        )
+    )
 
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             render_as_batch=True,  # Enable batch mode for SQLite
-            )
+        )
 
         with context.begin_transaction():
             context.run_migrations()

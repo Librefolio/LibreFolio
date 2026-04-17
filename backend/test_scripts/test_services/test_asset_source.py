@@ -19,7 +19,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.config import PROJECT_ROOT
-from backend.app.utils.decimal_utils import truncate_priceHistory, get_model_column_precision
+from backend.app.utils.decimal_utils import get_model_column_precision, truncate_priceHistory
 
 # Add project root to path
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -29,38 +29,33 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.app.db.session import get_async_engine
+
 from backend.app.db.models import (
     Asset,
+    AssetProviderAssignment,
     AssetType,
+    FxRate,
     IdentifierType,
+    PriceHistory,
     ProviderInputType,
-    )
+)
+from backend.app.db.session import get_async_engine
+from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.prices import FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
+from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.schemas.refresh import FARefreshItem
 from backend.app.services.asset_source import AssetSourceManager, AssetSourceProvider
-
 from backend.app.services.asset_source_providers.scheduled_investment import (
     calculate_day_count_fraction,
-    )
+)
 from backend.test_scripts.test_utils import (
     print_info,
     print_section,
     print_success,
-    )
-
-from backend.app.db.models import PriceHistory
-from sqlalchemy import select
-from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.prices import FAUpsert, FAPricePoint, FAPriceQueryItem
-
-from backend.app.db.models import AssetProviderAssignment, FxRate
-from sqlalchemy import delete
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-
-from backend.app.schemas.prices import FAAssetDelete
-from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.refresh import FARefreshItem
-
+)
 
 # ============================================================================
 # PYTEST FIXTURES
@@ -89,9 +84,9 @@ def asset_ids():
                     currency="USD",
                     asset_type=AssetType.STOCK,
                     active=True,
-                    )
+                )
                 for i in range(1, 4)
-                ]
+            ]
 
             session.add_all(test_assets)
             await session.commit()
@@ -136,7 +131,7 @@ def test_truncate_price():
         ("175.123456", "175.123456"),  # Already at precision
         ("175.12", "175.120000"),  # Pad to 6 decimals
         ("1000.9999999", "1000.999999"),  # Large number
-        ]
+    ]
 
     for input_str, expected_str in test_cases:
         input_val = Decimal(input_str)
@@ -158,7 +153,7 @@ def test_act365_calculation():
         (date(2025, 1, 1), date(2025, 1, 31), Decimal("30") / Decimal("365")),  # 30 days
         (date(2025, 1, 1), date(2025, 12, 31), Decimal("364") / Decimal("365")),  # 364 days
         (date(2025, 1, 1), date(2026, 1, 1), Decimal("365") / Decimal("365")),  # Exactly 1 year
-        ]
+    ]
 
     for start, end, expected in test_cases:
         result = calculate_day_count_fraction(start, end)
@@ -180,7 +175,6 @@ async def test_bulk_assign_providers():
     """Test bulk_assign_providers() method."""
     print_section("Test 5: Bulk Assign Providers")
 
-
     timestamp = int(time.time() * 1000)
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -191,9 +185,9 @@ async def test_bulk_assign_providers():
                 currency="USD",
                 asset_type=AssetType.STOCK,
                 active=True,
-                )
+            )
             for i in range(1, 4)
-            ]
+        ]
 
         session.add_all(test_assets)
         await session.commit()
@@ -211,31 +205,29 @@ async def test_bulk_assign_providers():
                 identifier="TEST1",
                 identifier_type=IdentifierType.TICKER,
                 provider_params={"ticker": "TEST1"},
-                ),
+            ),
             FAProviderAssignmentItem(
                 asset_id=test_assets[1].id,
                 provider_code="yfinance",
                 identifier="TEST2",
                 identifier_type=IdentifierType.TICKER,
                 provider_params={"ticker": "TEST2"},
-                ),
+            ),
             FAProviderAssignmentItem(
                 asset_id=test_assets[2].id,
                 provider_code="mockprov",
                 identifier="MOCK1",
                 identifier_type=ProviderInputType.AUTO_GENERATED,
                 provider_params=None,
-                ),
-            ]
+            ),
+        ]
 
         results = await AssetSourceManager.bulk_assign_providers(assignments, session)
 
         # Detailed logging of results
         for r in results:
             status = "OK" if r.success else "ERROR"
-            print_info(
-                f"Assignment result: asset_id={r.asset_id} status={status} message={r.message}"
-                )
+            print_info(f"Assignment result: asset_id={r.asset_id} status={status} message={r.message}")
 
         # Verify all succeeded
         for result in results:
@@ -254,7 +246,6 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
     """Test metadata auto-populate on provider assignment."""
     print_section("Test 6a: Metadata Auto-Populate")
 
-
     timestamp = int(time.time() * 1000)
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -265,7 +256,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
             asset_type=AssetType.STOCK,
             active=True,
             classification_params=None,  # Start with no metadata
-            )
+        )
         session.add(test_asset)
         await session.commit()
         await session.refresh(test_asset)
@@ -278,7 +269,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
             identifier="MOCK_META_TEST",
             identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params={"mock_param": "test"},
-            )
+        )
 
         results = await AssetSourceManager.bulk_assign_providers([item], session)
         # Assuming single result, extract it
@@ -291,9 +282,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
         await session.refresh(test_asset)
 
         # Verify metadata was populated (mockprov MUST populate metadata)
-        assert (
-            test_asset.classification_params is not None
-        ), "Metadata should be populated by mockprov provider"
+        assert test_asset.classification_params is not None, "Metadata should be populated by mockprov provider"
         print_success(f"✓ Metadata auto-populated: {test_asset.classification_params[:100]}")
 
         # Parse and verify content
@@ -326,9 +315,7 @@ async def test_bulk_remove_providers(asset_ids: list[int]):
         for asset_id in asset_ids:
             provider = await AssetSourceManager.get_asset_provider(asset_id, session)
             assert provider is None, f"Provider still exists for asset {asset_id}"
-            print_success(
-                f"✓ Verified DB: asset {asset_id} has no provider providers successfully removed"
-                )
+            print_success(f"✓ Verified DB: asset {asset_id} has no provider providers successfully removed")
 
 
 # ============================================================================
@@ -352,15 +339,15 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
                         close=Decimal("100.50"),
                         volume=Decimal("1000"),
                         currency="USD",
-                        ),
+                    ),
                     FAPricePoint(
                         date=date(2025, 1, 2),
                         close=Decimal("101.25"),
                         volume=Decimal("1500"),
                         currency="USD",
-                        ),
-                    ],
-                ),
+                    ),
+                ],
+            ),
             FAUpsert(
                 asset_id=asset_ids[1],
                 prices=[
@@ -369,27 +356,23 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
                         close=Decimal("200.00"),
                         volume=Decimal("500"),
                         currency="USD",
-                        ),
-                    ],
-                ),
-            ]
+                    ),
+                ],
+            ),
+        ]
 
         result = await AssetSourceManager.bulk_upsert_prices(data, session)
 
         # Verify result contains expected count
         assert "inserted_count" in result, "Result should contain inserted_count"
-        assert (
-            result["inserted_count"] == 3
-        ), f"Expected 3 prices inserted, got {result.get('inserted_count')}"
+        assert result["inserted_count"] == 3, f"Expected 3 prices inserted, got {result.get('inserted_count')}"
 
         # Detailed logging of DB state per asset
         for item in data:
             stmt = select(PriceHistory).where(PriceHistory.asset_id == item.asset_id)
             db_result = await session.execute(stmt)
             prices = db_result.scalars().all()
-            print_info(
-                f"Asset {item.asset_id} prices in DB: {[(p.date, p.close, p.volume) for p in prices]}"
-                )
+            print_info(f"Asset {item.asset_id} prices in DB: {[(p.date, p.close, p.volume) for p in prices]}")
 
         # Verify in DB
         stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_ids[0])
@@ -397,9 +380,7 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
         prices = db_result.scalars().all()
 
         assert len(prices) == 2, f"Expected 2 prices, got {len(prices)}"
-        assert prices[0].volume == Decimal("1000") and prices[1].volume == Decimal(
-            "1500"
-            ), "Volume values not persisted correctly"
+        assert prices[0].volume == Decimal("1000") and prices[1].volume == Decimal("1500"), "Volume values not persisted correctly"
 
 
 @pytest.mark.asyncio
@@ -414,10 +395,10 @@ async def test_get_prices_with_backfill(asset_ids: list[int]):
                 FAPriceQueryItem(
                     asset_id=asset_ids[0],
                     date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 5)),
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         prices = results[0].prices
 
         assert len(prices) == 5, f"Expected 5 prices, got {len(prices)}"
@@ -426,9 +407,7 @@ async def test_get_prices_with_backfill(asset_ids: list[int]):
         for p in prices:
             bf = p.backward_fill_info
             if bf:
-                print_info(
-                    f"{p.date}: {p.close} (backfilled from {bf.actual_rate_date} , days_back={bf.days_back})"
-                    )
+                print_info(f"{p.date}: {p.close} (backfilled from {bf.actual_rate_date} , days_back={bf.days_back})")
             else:
                 print_info(f"{p.date}: {p.close} (exact)")
 
@@ -481,7 +460,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                 volume=day1_volume,
                 currency="USD",
                 source_plugin_key="manual_test",
-                ),
+            ),
             PriceHistory(
                 asset_id=test_asset_id,
                 date=date(2025, 1, 2),
@@ -492,8 +471,8 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                 volume=day2_volume,
                 currency="USD",
                 source_plugin_key="manual_test",
-                ),
-            ]
+            ),
+        ]
 
         session.add_all(prices_to_insert)
         await session.commit()
@@ -504,10 +483,10 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                 FAPriceQueryItem(
                     asset_id=test_asset_id,
                     date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 4)),
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         prices = results[0].prices
 
         assert len(prices) == 4, f"Expected 4 prices (2 actual + 2 backfilled), got {len(prices)}"
@@ -516,18 +495,14 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
         day1_price = prices[0]
         assert day1_price.date == date(2025, 1, 1), "Day 1 date mismatch"
         assert day1_price.close == Decimal("103.00"), "Day 1 close mismatch"
-        assert (
-            day1_price.volume == day1_volume
-        ), f"Day 1 volume mismatch: expected {day1_volume}, got {day1_price.volume}"
+        assert day1_price.volume == day1_volume, f"Day 1 volume mismatch: expected {day1_volume}, got {day1_price.volume}"
         assert day1_price.backward_fill_info is None, "Day 1 should not be backfilled"
         print_success(f"✓ Day 1: close={day1_price.close}, volume={day1_price.volume} (exact)")
 
         day2_price = prices[1]
         assert day2_price.date == date(2025, 1, 2), "Day 2 date mismatch"
         assert day2_price.close == Decimal("106.00"), "Day 2 close mismatch"
-        assert (
-            day2_price.volume == day2_volume
-        ), f"Day 2 volume mismatch: expected {day2_volume}, got {day2_price.volume}"
+        assert day2_price.volume == day2_volume, f"Day 2 volume mismatch: expected {day2_volume}, got {day2_price.volume}"
         assert day2_price.backward_fill_info is None, "Day 2 should not be backfilled"
         print_success(f"✓ Day 2: close={day2_price.close}, volume={day2_price.volume} (exact)")
 
@@ -535,27 +510,15 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
         for idx, expected_date in enumerate([date(2025, 1, 3), date(2025, 1, 4)], start=2):
             price = prices[idx]
             assert price.date == expected_date, f"Day {idx + 1} date mismatch"
-            assert (
-                price.backward_fill_info is not None
-            ), f"Day {idx + 1} should have backward_fill_info"
-            assert price.backward_fill_info.actual_rate_date == date(
-                2025, 1, 2
-                ), f"Day {idx + 1} should be backfilled from Day 2"
-            assert (
-                price.backward_fill_info.days_back == idx - 1
-            ), f"Day {idx + 1} days_back should be {idx - 1}"
+            assert price.backward_fill_info is not None, f"Day {idx + 1} should have backward_fill_info"
+            assert price.backward_fill_info.actual_rate_date == date(2025, 1, 2), f"Day {idx + 1} should be backfilled from Day 2"
+            assert price.backward_fill_info.days_back == idx - 1, f"Day {idx + 1} days_back should be {idx - 1}"
 
             # Critical assertion: volume must be backfilled
             assert price.close == Decimal("106.00"), f"Day {idx + 1} close should be backfilled"
-            assert (
-                price.volume == day2_volume
-            ), f"Day {idx + 1} volume should be backfilled: expected {day2_volume}, got {price.volume}"
+            assert price.volume == day2_volume, f"Day {idx + 1} volume should be backfilled: expected {day2_volume}, got {price.volume}"
 
-            print_success(
-                f"✓ Day {idx + 1}: close={price.close}, volume={price.volume} "
-                f"(backfilled from {price.backward_fill_info.actual_rate_date}, "
-                f"days_back={price.backward_fill_info.days_back})"
-                )
+            print_success(f"✓ Day {idx + 1}: close={price.close}, volume={price.volume} " f"(backfilled from {price.backward_fill_info.actual_rate_date}, " f"days_back={price.backward_fill_info.days_back})")
 
         backfilled_count = sum(1 for p in prices if p.backward_fill_info)
 
@@ -590,16 +553,14 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
                 FAPriceQueryItem(
                     asset_id=test_asset_id,
                     date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 4)),
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         prices = results[0].prices
 
         # Should return empty list (no data to backfill from)
-        assert (
-            len(prices) == 0
-        ), f"Expected empty list when no data exists, got {len(prices)} prices"
+        assert len(prices) == 0, f"Expected empty list when no data exists, got {len(prices)} prices"
         print_info("✓ Edge case handled: empty list returned when no initial data exists")
 
 
@@ -615,7 +576,6 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
     """
     print_section("Test 13: Sync/Query Separation with Invalid Provider")
 
-
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         test_asset_id = asset_ids[0]
 
@@ -624,9 +584,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
         invalid_provider = "invalid_nonexistent_provider"
 
         # Delete existing assignment if any
-        await session.execute(
-            delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == test_asset_id)
-            )
+        await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == test_asset_id))
 
         # Insert invalid provider directly
         invalid_assignment = AssetProviderAssignment(
@@ -636,12 +594,10 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params=None,
             fetch_interval=1440,
-            )
+        )
         session.add(invalid_assignment)
         await session.commit()
-        print_info(
-            f"Inserted invalid provider '{invalid_provider}' directly in DB for asset {test_asset_id}"
-            )
+        print_info(f"Inserted invalid provider '{invalid_provider}' directly in DB for asset {test_asset_id}")
 
         # Insert manual prices in DB
         await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
@@ -653,10 +609,10 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             close=Decimal("999.00"),
             currency="USD",
             source_plugin_key="manual_test_fallback",
-            )
+        )
         session.add(fallback_price)
         await session.commit()
-        print_info(f"Inserted manual price in DB: date=2025-01-10, close=999.00")
+        print_info("Inserted manual price in DB: date=2025-01-10, close=999.00")
 
         # Step 1: SYNC with invalid provider → should fail gracefully, no crash
         sync_response = await AssetSourceManager.bulk_refresh_prices(
@@ -664,10 +620,10 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
                 FARefreshItem(
                     asset_id=test_asset_id,
                     date_range=DateRangeModel(start=date(2025, 1, 10), end=date(2025, 1, 10)),
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
 
         sync_result = sync_response.results[0]
         assert len(sync_result.errors) > 0, "Sync with invalid provider should produce errors"
@@ -679,23 +635,19 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
                 FAPriceQueryItem(
                     asset_id=test_asset_id,
                     date_range=DateRangeModel(start=date(2025, 1, 10), end=date(2025, 1, 10)),
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         prices = query_results[0].prices
 
         # Verify query returned manual data despite invalid provider
         assert len(prices) == 1, f"Expected 1 price from DB query, got {len(prices)}"
         assert prices[0].close == Decimal("999.00"), f"Expected price 999.00, got {prices[0].close}"
-        assert prices[0].date == date(
-            2025, 1, 10
-            ), f"Expected date 2025-01-10, got {prices[0].date}"
+        assert prices[0].date == date(2025, 1, 10), f"Expected date 2025-01-10, got {prices[0].date}"
 
         print_success(f"✓ Query returned manual price despite invalid provider: {prices[0].close}")
-        print_info(
-            "✓ Sync/Query separation verified: invalid provider blocks sync but NOT query"
-            )
+        print_info("✓ Sync/Query separation verified: invalid provider blocks sync but NOT query")
 
 
 @pytest.mark.asyncio
@@ -709,12 +661,12 @@ async def test_bulk_delete_prices(asset_ids: list[int]):
             FAAssetDelete(
                 asset_id=asset_ids[0],
                 date_ranges=[DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 2))],
-                ),
+            ),
             FAAssetDelete(
                 asset_id=asset_ids[1],
                 date_ranges=[DateRangeModel(start=date(2025, 1, 1), end=None)],  # Single day
-                ),
-            ]
+            ),
+        ]
 
         bulkDelresult = await AssetSourceManager.bulk_delete_prices(data, session)
 
@@ -738,6 +690,7 @@ async def test_bulk_delete_prices(asset_ids: list[int]):
 # CURRENCY CONVERSION TESTS (C1/C2)
 # ============================================================================
 
+
 @pytest.fixture(scope="module")
 def fx_asset_ids():
     """Create assets with EUR currency + insert FX rates for USD→EUR conversion tests."""
@@ -752,7 +705,7 @@ def fx_asset_ids():
                 currency="USD",
                 asset_type=AssetType.STOCK,
                 active=True,
-                )
+            )
             session.add(asset)
             await session.commit()
             await session.refresh(asset)
@@ -760,36 +713,33 @@ def fx_asset_ids():
             # Insert USD prices for the asset (use Feb dates to avoid collisions)
             prices = [
                 PriceHistory(
-                    asset_id=asset.id, date=date(2025, 2, d),
-                    close=Decimal("100.00") + d, currency="USD",
+                    asset_id=asset.id,
+                    date=date(2025, 2, d),
+                    close=Decimal("100.00") + d,
+                    currency="USD",
                     source_plugin_key="test_fx_conversion",
-                    )
+                )
                 for d in range(1, 6)  # Feb 1-5
-                ]
+            ]
             session.add_all(prices)
 
             # Insert FX rates: EUR/USD (base=EUR < quote=USD → 1 EUR = rate USD)
             # So to convert USD → EUR: divide by rate
             # Use MERGE/upsert pattern to handle re-runs
             for fx_data in [
-                {
-                    "date": date(2025, 2, 1), "base": "EUR", "quote": "USD",
-                    "rate": Decimal("1.10"), "source": "TEST"
-                    },
-                {
-                    "date": date(2025, 2, 2), "base": "EUR", "quote": "USD",
-                    "rate": Decimal("1.12"), "source": "TEST"
-                    },
+                {"date": date(2025, 2, 1), "base": "EUR", "quote": "USD", "rate": Decimal("1.10"), "source": "TEST"},
+                {"date": date(2025, 2, 2), "base": "EUR", "quote": "USD", "rate": Decimal("1.12"), "source": "TEST"},
                 # Gap on Feb 3-4 → FX backward-fill should kick in
-                {
-                    "date": date(2025, 2, 5), "base": "EUR", "quote": "USD",
-                    "rate": Decimal("1.08"), "source": "TEST"
-                    },
-                ]:
-                stmt = sqlite_insert(FxRate).values(**fx_data).on_conflict_do_update(
-                    index_elements=["date", "base", "quote"],
-                    set_={"rate": fx_data["rate"], "source": fx_data["source"]},
+                {"date": date(2025, 2, 5), "base": "EUR", "quote": "USD", "rate": Decimal("1.08"), "source": "TEST"},
+            ]:
+                stmt = (
+                    sqlite_insert(FxRate)
+                    .values(**fx_data)
+                    .on_conflict_do_update(
+                        index_elements=["date", "base", "quote"],
+                        set_={"rate": fx_data["rate"], "source": fx_data["source"]},
                     )
+                )
                 await session.execute(stmt)
             await session.commit()
 
@@ -811,10 +761,10 @@ async def test_get_prices_with_target_currency(fx_asset_ids: int):
                     asset_id=fx_asset_ids,
                     date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 5)),
                     target_currency="EUR",
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         result = results[0]
         prices = result.prices
 
@@ -830,9 +780,7 @@ async def test_get_prices_with_target_currency(fx_asset_ids: int):
         # Day 1: USD 101 / 1.10 = ~91.818 EUR
         p1 = prices[0]
         expected_close_1 = Decimal("101.00") / Decimal("1.10")
-        assert abs(float(p1.close) - float(expected_close_1)) < 0.01, (
-            f"Day 1 close mismatch: {p1.close} vs expected ~{expected_close_1:.4f}"
-        )
+        assert abs(float(p1.close) - float(expected_close_1)) < 0.01, f"Day 1 close mismatch: {p1.close} vs expected ~{expected_close_1:.4f}"
         # Verify original values preserved
         assert float(p1.original_close) == 101.0, f"original_close should be 101.0, got {p1.original_close}"
         print_info(f"Day 1: USD 101.00 → EUR {p1.close:.4f} (rate 1.10), original_close={p1.original_close}")
@@ -840,33 +788,23 @@ async def test_get_prices_with_target_currency(fx_asset_ids: int):
         # Day 2: USD 102 / 1.12 = ~91.071 EUR
         p2 = prices[1]
         expected_close_2 = Decimal("102.00") / Decimal("1.12")
-        assert abs(float(p2.close) - float(expected_close_2)) < 0.01, (
-            f"Day 2 close mismatch: {p2.close} vs expected ~{expected_close_2:.4f}"
-        )
+        assert abs(float(p2.close) - float(expected_close_2)) < 0.01, f"Day 2 close mismatch: {p2.close} vs expected ~{expected_close_2:.4f}"
         print_info(f"Day 2: USD 102.00 → EUR {p2.close:.4f} (rate 1.12)")
 
         # Day 3: FX backward-filled from day 2 (rate 1.12), price 103
         p3 = prices[2]
         assert p3.backward_fill_info is not None, "Day 3 should have backward_fill_info"
         assert p3.backward_fill_info.fx_days_back is not None, "Day 3 should have fx_days_back"
-        assert p3.backward_fill_info.fx_days_back == 1, (
-            f"Day 3 fx_days_back should be 1, got {p3.backward_fill_info.fx_days_back}"
-        )
-        print_info(
-            f"Day 3: USD 103.00 → EUR {p3.close:.4f} (FX backfilled {p3.backward_fill_info.fx_days_back}d)"
-            )
+        assert p3.backward_fill_info.fx_days_back == 1, f"Day 3 fx_days_back should be 1, got {p3.backward_fill_info.fx_days_back}"
+        print_info(f"Day 3: USD 103.00 → EUR {p3.close:.4f} (FX backfilled {p3.backward_fill_info.fx_days_back}d)")
 
         # Day 5: exact FX rate (1.08), price 105
         p5 = prices[4]
         expected_close_5 = Decimal("105.00") / Decimal("1.08")
-        assert abs(float(p5.close) - float(expected_close_5)) < 0.01, (
-            f"Day 5 close mismatch: {p5.close} vs expected ~{expected_close_5:.4f}"
-        )
+        assert abs(float(p5.close) - float(expected_close_5)) < 0.01, f"Day 5 close mismatch: {p5.close} vs expected ~{expected_close_5:.4f}"
         # Day 5 has exact FX rate → no FX staleness
         if p5.backward_fill_info is not None:
-            assert p5.backward_fill_info.fx_days_back == 0 or p5.backward_fill_info.fx_days_back is None, (
-                f"Day 5 fx_days_back should be 0 or None, got {p5.backward_fill_info.fx_days_back}"
-            )
+            assert p5.backward_fill_info.fx_days_back == 0 or p5.backward_fill_info.fx_days_back is None, f"Day 5 fx_days_back should be 0 or None, got {p5.backward_fill_info.fx_days_back}"
         print_info(f"Day 5: USD 105.00 → EUR {p5.close:.4f} (rate 1.08, exact)")
 
         print_success("✓ Currency conversion with FX backward-fill verified")
@@ -883,10 +821,10 @@ async def test_get_prices_no_target_currency(fx_asset_ids: int):
                 FAPriceQueryItem(
                     asset_id=fx_asset_ids,
                     date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 2)),
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         prices = results[0].prices
 
         assert len(prices) == 2
@@ -910,19 +848,17 @@ async def test_get_prices_same_target_currency(fx_asset_ids: int):
                     asset_id=fx_asset_ids,
                     date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 2)),
                     target_currency="USD",
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         prices = results[0].prices
 
         assert len(prices) == 2
         for p in prices:
             assert p.currency == "USD"
             # Same currency → no conversion, original_currency should be None
-            assert p.original_currency is None, (
-                f"Same-currency conversion should not set original_currency, got {p.original_currency}"
-            )
+            assert p.original_currency is None, f"Same-currency conversion should not set original_currency, got {p.original_currency}"
         assert prices[0].close == Decimal("101.00"), "Price should be unchanged"
         print_success("✓ Same-currency target is a no-op")
 
@@ -939,17 +875,21 @@ async def test_get_prices_missing_fx_pair():
                 currency="JPY",
                 asset_type=AssetType.STOCK,
                 active=True,
-                )
+            )
             session.add(asset)
             await session.commit()
             await session.refresh(asset)
 
             # Insert a JPY price
-            session.add(PriceHistory(
-                asset_id=asset.id, date=date(2025, 2, 1),
-                close=Decimal("15000.00"), currency="JPY",
-                source_plugin_key="test_fx_missing",
-                ))
+            session.add(
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=date(2025, 2, 1),
+                    close=Decimal("15000.00"),
+                    currency="JPY",
+                    source_plugin_key="test_fx_missing",
+                )
+            )
             await session.commit()
             return asset.id
 
@@ -962,10 +902,10 @@ async def test_get_prices_missing_fx_pair():
                     asset_id=jpy_asset_id,
                     date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 1)),
                     target_currency="CHF",  # No JPY/CHF rate exists
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         result = results[0]
 
         # Price should remain in JPY (conversion failed)
@@ -992,10 +932,10 @@ async def test_query_result_errors_field(fx_asset_ids: int):
                     asset_id=fx_asset_ids,
                     date_range=DateRangeModel(start=date(2025, 2, 1), end=date(2025, 2, 2)),
                     target_currency="EUR",
-                    )
-                ],
+                )
+            ],
             session=session,
-            )
+        )
         result = results[0]
         assert isinstance(result.errors, list), "errors should be a list"
         assert len(result.errors) == 0, f"Expected 0 errors, got {result.errors}"
@@ -1043,5 +983,3 @@ class TestMapIdentifierTypeToInputType:
         """FIGI has no provider equivalent → None."""
         result = AssetSourceProvider.map_identifier_type_to_input_type("FIGI")
         assert result is None
-
-

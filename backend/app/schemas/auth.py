@@ -11,7 +11,6 @@ from pydantic import BaseModel, EmailStr, Field
 from backend.app.schemas.settings import UserSettingsRead
 from backend.app.utils.datetime_utils import UTCDateTime
 
-
 # =============================================================================
 # Request Schemas
 # =============================================================================

@@ -14,7 +14,7 @@ import httpx
 
 from backend.app.logging_config import get_logger
 from backend.app.services.fx import FXRateProvider, FXServiceError
-from backend.app.services.provider_registry import register_provider, FXProviderRegistry
+from backend.app.services.provider_registry import FXProviderRegistry, register_provider
 
 logger = get_logger(__name__)
 
@@ -67,7 +67,7 @@ class ECBProvider(FXRateProvider):
             "it": "Banca Centrale Europea — pubblica tassi di cambio di riferimento giornalieri per 30+ valute contro EUR. Aggiornamento ogni giorno lavorativo verso le 16:00 CET. Un dato al giorno.",
             "fr": "Banque Centrale Européenne — publie des taux de change de référence quotidiens pour 30+ devises contre EUR. Mise à jour chaque jour ouvrable vers 16h00 CET. Un point par jour.",
             "es": "Banco Central Europeo — publica tipos de cambio de referencia diarios para 30+ monedas contra EUR. Actualizado cada día hábil alrededor de las 16:00 CET. Un dato por día.",
-            }
+        }
 
     @property
     def base_currency(self) -> str:
@@ -87,7 +87,7 @@ class ECBProvider(FXRateProvider):
             "CAD",  # Canadian Dollar
             "AUD",  # Australian Dollar
             "EUR",  # Euro (base currency)
-            ]
+        ]
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -105,7 +105,7 @@ class ECBProvider(FXRateProvider):
             "format": "jsondata",
             "detail": "dataonly",
             "lastNObservations": 1,  # We only need structure, not all data
-            }
+        }
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -141,7 +141,7 @@ class ECBProvider(FXRateProvider):
                     logger.error("EUR not found in ECB API response, API may be malformed")
                     raise FXServiceError("EUR not found in ECB API - base currency missing")
 
-                return sorted(list(currencies))
+                return sorted(currencies)
 
         except httpx.HTTPError as e:
             logger.error(f"Failed to fetch available currencies from ECB: {e}")
@@ -150,9 +150,7 @@ class ECBProvider(FXRateProvider):
             logger.error(f"Failed to parse ECB response: {e}")
             raise FXServiceError(f"Invalid ECB response format: {e}") from e
 
-    async def fetch_rates(
-        self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
-        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+    async def fetch_rates(self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from ECB API for given date range and currencies.
 
@@ -172,9 +170,7 @@ class ECBProvider(FXRateProvider):
         """
         # Validate base_currency for single-base provider
         if base_currency is not None and base_currency != "EUR":
-            raise ValueError(
-                f"ECB provider only supports EUR as base currency, got {base_currency}"
-                )
+            raise ValueError(f"ECB provider only supports EUR as base currency, got {base_currency}")
 
         start_date, end_date = date_range
         results = {}
@@ -193,7 +189,7 @@ class ECBProvider(FXRateProvider):
                 "format": "jsondata",
                 "startPeriod": start_date.isoformat(),
                 "endPeriod": end_date.isoformat(),
-                }
+            }
 
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
@@ -201,10 +197,7 @@ class ECBProvider(FXRateProvider):
                     response.raise_for_status()
 
                     if not response.text:
-                        logger.info(
-                            f"No FX rates available for {currency} ({start_date} to {end_date}). "
-                            f"This is normal for weekends/holidays when ECB doesn't publish rates."
-                            )
+                        logger.info(f"No FX rates available for {currency} ({start_date} to {end_date}). " f"This is normal for weekends/holidays when ECB doesn't publish rates.")
                         return currency, []
 
                     # Parse JSON response from ECB API
@@ -221,18 +214,14 @@ class ECBProvider(FXRateProvider):
                             obs_data = first_series.get("observations", {})
 
                             dimensions = data["structure"]["dimensions"]["observation"]
-                            time_periods = next(
-                                d["values"] for d in dimensions if d["id"] == "TIME_PERIOD"
-                                )
+                            time_periods = next(d["values"] for d in dimensions if d["id"] == "TIME_PERIOD")
 
                             for obs_idx, obs_value in obs_data.items():
                                 idx = int(obs_idx)
                                 rate_date_str = time_periods[idx]["id"]
                                 ecb_rate = Decimal(str(obs_value[0]))
                                 rate_date = date.fromisoformat(rate_date_str)
-                                observations.append(
-                                    (rate_date, self.base_currency, currency, ecb_rate)
-                                    )
+                                observations.append((rate_date, self.base_currency, currency, ecb_rate))
 
                     return currency, observations
 

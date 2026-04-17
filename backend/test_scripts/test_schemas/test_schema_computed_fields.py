@@ -12,22 +12,24 @@ Covers:
 - TXCreateItem / TXUpdateItem: _validate_tags, get_tags_csv
 """
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
-import pytest
-
-from backend.app.schemas.common import Currency, BackwardFillInfo, BaseBulkResponse
+from backend.app.schemas.common import BackwardFillInfo, BaseBulkResponse, Currency
 from backend.app.schemas.fx import FXConversionResult, FXUpsertResult
-from backend.app.schemas.prices import FAPricePoint, FACurrentValue
+from backend.app.schemas.prices import FACurrentValue, FAPricePoint
 from backend.app.schemas.transactions import TXCreateItem, TXUpdateItem
 
 # Helper for creating BRSummary with all required fields
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 _BR_BASE = dict(
-    id=1, name="Test",
-    allow_cash_overdraft=False, allow_asset_shorting=False,
-    is_active=True, created_at=_NOW, updated_at=_NOW,
+    id=1,
+    name="Test",
+    allow_cash_overdraft=False,
+    allow_asset_shorting=False,
+    is_active=True,
+    created_at=_NOW,
+    updated_at=_NOW,
 )
 
 
@@ -73,14 +75,15 @@ class TestBRSummaryComputed:
         assert summary.total_cash_positions == 3
 
     def test_total_asset_positions(self):
-        from backend.app.schemas.brokers import BRSummary, BRAssetHolding
+        from backend.app.schemas.brokers import BRAssetHolding, BRSummary
 
         summary = BRSummary(
             **_BR_BASE,
             cash_balances=[],
             holdings=[
                 BRAssetHolding(
-                    asset_id=1, asset_name="VWCE",
+                    asset_id=1,
+                    asset_name="VWCE",
                     quantity=Decimal("10"),
                     total_cost=Currency(code="EUR", amount=Decimal("500")),
                     average_cost_per_unit=Decimal("50"),
@@ -267,11 +270,3 @@ class TestTXTagHelpers:
     def test_update_item_get_tags_csv(self):
         item = TXUpdateItem(id=1, tags=["a", "b"])
         assert item.get_tags_csv() == "a,b"
-
-
-
-
-
-
-
-

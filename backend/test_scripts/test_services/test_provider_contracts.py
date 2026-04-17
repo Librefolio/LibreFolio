@@ -24,7 +24,7 @@ from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     BRIMProviderRegistry,
     FXProviderRegistry,
-    )
+)
 
 # ============================================================================
 # DISCOVERY (run once at module import)

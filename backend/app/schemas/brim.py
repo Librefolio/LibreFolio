@@ -28,7 +28,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.transactions import TXCreateItem
@@ -39,7 +39,7 @@ from backend.app.utils.datetime_utils import UTCDateTime
 # =============================================================================
 
 # Fake IDs start from MAX_INT and decrement to avoid collision with real IDs
-FAKE_ASSET_ID_BASE = 2 ** 31 - 1  # 2147483647
+FAKE_ASSET_ID_BASE = 2**31 - 1  # 2147483647
 
 
 def is_fake_asset_id(asset_id: Optional[int]) -> bool:
@@ -52,31 +52,6 @@ def is_fake_asset_id(asset_id: Optional[int]) -> bool:
 # =============================================================================
 # EXTRACTED ASSET INFO (from plugin parsing)
 # =============================================================================
-
-
-class BRIMExtractedAssetInfo(BaseModel):
-    """
-    Asset information extracted from a broker report file by a plugin.
-
-    This represents what the PLUGIN found in the file - NOT database lookups.
-    The plugin assigns fake_asset_ids to group transactions by asset.
-    The CORE then uses this info to search for matching assets in the DB.
-
-    At least one of extracted_symbol, extracted_isin, or extracted_name
-    should be populated.
-    """
-
-    model_config = ConfigDict(frozen=True)  # Immutable after creation
-
-    extracted_symbol: Optional[str] = Field(
-        default=None, description="Ticker symbol extracted from file (e.g., 'AAPL', 'VWCE.DE')"
-        )
-    extracted_isin: Optional[str] = Field(
-        default=None, description="ISIN extracted from file (12-character international identifier)"
-        )
-    extracted_name: Optional[str] = Field(
-        default=None, description="Asset name extracted from file (e.g., 'Apple Inc.')"
-        )
 
 
 # =============================================================================
@@ -313,7 +288,10 @@ class BRIMParseRequest(BaseModel):
         broker_id: Target broker ID for the transactions
     """
 
-    plugin_code: str = Field(default="auto", description="Plugin code to use for parsing. Use 'auto' for automatic detection.", )
+    plugin_code: str = Field(
+        default="auto",
+        description="Plugin code to use for parsing. Use 'auto' for automatic detection.",
+    )
     broker_id: int = Field(..., gt=0, description="Target broker ID")
 
 
@@ -342,6 +320,7 @@ class BRIMParseResponse(BaseModel):
     asset_mappings: List[BRIMAssetMapping] = Field(default_factory=list, description="Fake asset ID → candidate real assets mapping")
     duplicates: Optional[BRIMDuplicateReport] = Field(default=None, description="Duplicate detection results")
     warnings: List[str] = Field(default_factory=list, description="Parser warnings (skipped rows, ambiguous data, etc.)")
+
 
 # NOTE: No BRIMImportRequest schema needed.
 # After parsing, the client should:

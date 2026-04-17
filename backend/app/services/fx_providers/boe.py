@@ -8,14 +8,14 @@ API Documentation: https://www.bankofengland.co.uk/boeapps/database/
 """
 
 import asyncio
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 
 import httpx
 
 from backend.app.logging_config import get_logger
 from backend.app.services.fx import FXRateProvider, FXServiceError
-from backend.app.services.provider_registry import register_provider, FXProviderRegistry
+from backend.app.services.provider_registry import FXProviderRegistry, register_provider
 
 logger = get_logger(__name__)
 
@@ -54,7 +54,7 @@ class BOEProvider(FXRateProvider):
         "SGD": "XUDLSGS",  # Singapore Dollar spot
         "ZAR": "XUDLZRS",  # South African Rand spot
         "INR": "XUDLBK97",  # Indian Rupee spot
-        }
+    }
 
     @property
     def code(self) -> str:
@@ -92,7 +92,7 @@ class BOEProvider(FXRateProvider):
             "it": "Bank of England — pubblica tassi di cambio spot giornalieri per 20+ valute contro GBP. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
             "fr": "Banque d'Angleterre — publie des taux de change spot quotidiens pour 20+ devises contre GBP. Mise à jour chaque jour ouvrable. Un point par jour.",
             "es": "Banco de Inglaterra — publica tipos de cambio spot diarios para 20+ monedas contra GBP. Actualizado cada día hábil. Un dato por día.",
-            }
+        }
 
     @property
     def test_currencies(self) -> list[str]:
@@ -107,7 +107,7 @@ class BOEProvider(FXRateProvider):
             "JPY",  # Japanese Yen
             "CHF",  # Swiss Franc
             "AUD",  # Australian Dollar
-            ]
+        ]
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -122,9 +122,7 @@ class BOEProvider(FXRateProvider):
         currencies = ["GBP"] + list(self.CURRENCY_SERIES.keys())
         return sorted(currencies)
 
-    async def fetch_rates(
-        self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
-        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+    async def fetch_rates(self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from BOE API for given date range and currencies.
 
@@ -144,9 +142,7 @@ class BOEProvider(FXRateProvider):
         """
         # Validate base_currency for single-base provider
         if base_currency is not None and base_currency != "GBP":
-            raise ValueError(
-                f"BOE provider only supports GBP as base currency, got {base_currency}"
-                )
+            raise ValueError(f"BOE provider only supports GBP as base currency, got {base_currency}")
 
         start_date, end_date = date_range
         results = {}
@@ -173,31 +169,23 @@ class BOEProvider(FXRateProvider):
                 "UsingCodes": "Y",
                 "VPD": "Y",
                 "VFD": "N",
-                }
+            }
 
             try:
                 headers = {
                     "User-Agent": "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)",
                     "Accept": "text/csv, text/plain, */*;q=0.1",
-                    }
+                }
 
-                async with httpx.AsyncClient(
-                    timeout=30.0, headers=headers, follow_redirects=True
-                    ) as client:
+                async with httpx.AsyncClient(timeout=30.0, headers=headers, follow_redirects=True) as client:
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
                     # Guard: detect HTML bot-protection pages
                     body = response.text
                     if "<html" in body.lower()[:500] or "<!doctype" in body.lower()[:500]:
-                        logger.error(
-                            f"BOE returned HTML instead of CSV for {currency} "
-                            f"(first 200 chars: {body[:200]})"
-                            )
-                        raise FXServiceError(
-                            f"BOE returned HTML instead of CSV for {currency} — "
-                            f"possible bot protection or endpoint change"
-                            )
+                        logger.error(f"BOE returned HTML instead of CSV for {currency} " f"(first 200 chars: {body[:200]})")
+                        raise FXServiceError(f"BOE returned HTML instead of CSV for {currency} — " f"possible bot protection or endpoint change")
 
                     observations = self._parse_response(body, currency)
                     return currency, observations

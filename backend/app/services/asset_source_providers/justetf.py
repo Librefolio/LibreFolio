@@ -6,7 +6,7 @@ Uses the justetf-scraping library to fetch ETF data from justetf.com.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Dict, List, Optional
 
@@ -14,26 +14,25 @@ from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
-    FACurrentValue,
-    FAHistoricalData,
     FAAssetEventPoint,
     FAAssetPatchItem,
-    FAPricePoint,
     FAClassificationParams,
+    FACurrentValue,
     FAGeographicArea,
+    FAHistoricalData,
+    FAPricePoint,
     FASectorArea,
-    )
+)
+from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
-from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.sector_fin_utils import validate_sector
 
 try:
     import justetf_scraping
-    from justetf_scraping import get_etf_overview, load_chart, load_overview
-    from justetf_scraping import load_live_quote, iterate_live_quote
     import pandas as pd
+    from justetf_scraping import get_etf_overview, iterate_live_quote, load_chart, load_live_quote, load_overview
 
     JUSTETF_AVAILABLE = True
 except ImportError:
@@ -66,7 +65,7 @@ _etf_list_cache = get_ttl_cache("justetf_etf_list", maxsize=100, ttl=3600)  # 1 
 # ============================================================================
 import threading
 
-_live_quote_store: dict[str, object] = {}          # isin → latest Quote object
+_live_quote_store: dict[str, object] = {}  # isin → latest Quote object
 _live_quote_threads: dict[str, threading.Thread] = {}
 _live_quote_stop = threading.Event()
 _live_quote_lock = threading.Lock()
@@ -114,7 +113,7 @@ def shutdown_live_feeds() -> None:  # pragma: no cover
     """Stop all live-feed threads.  Called from app shutdown."""
     _live_quote_stop.set()
     with _live_quote_lock:
-        for isin, t in _live_quote_threads.items():
+        for _isin, t in _live_quote_threads.items():
             t.join(timeout=3)
         _live_quote_threads.clear()
     logger.info("All JustETF live quote feeds stopped")
@@ -145,7 +144,7 @@ class JustETFProvider(AssetSourceProvider):
     """JustETF.com data provider using the justetf-scraping library."""
 
     @classmethod
-    def etf_list(cls) -> "pd.DataFrame":
+    def etf_list(cls) -> pd.DataFrame:
         """Get cached ETF list."""
         cached, ok = _etf_list_cache.get("etf_list")
         if ok:
@@ -161,7 +160,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 "justetf-scraping library not available - install with: pipenv install justetf-scraping",
                 "NOT_AVAILABLE",
-                )
+            )
 
     @property
     def provider_code(self) -> str:
@@ -197,15 +196,15 @@ class JustETFProvider(AssetSourceProvider):
                 "identifier_type": IdentifierType.ISIN,
                 "provider_params": None,
                 "expected_symbol": "IE00B4L5Y983",  # JustETF uses ISIN as identifier
-                }
-            ]
+            }
+        ]
 
     async def get_current_value(
         self,
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-        ) -> FACurrentValue:
+    ) -> FACurrentValue:
         """
         Fetch current price from JustETF.
 
@@ -219,7 +218,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 f"JustETF provider only supports ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
-                )
+            )
 
         try:
             # Ensure persistent WebSocket feed is running for this ISIN
@@ -236,7 +235,7 @@ class JustETFProvider(AssetSourceProvider):
                 raise AssetSourceError(
                     f"No gettex quote available for {identifier}",
                     "NOT_FOUND",
-                    )
+                )
 
             # Extract price from Quote dataclass
             price = quote.last or quote.mid
@@ -247,8 +246,7 @@ class JustETFProvider(AssetSourceProvider):
                 raise AssetSourceError(
                     f"No price data in gettex quote for {identifier}",
                     "NOT_FOUND",
-                    )
-
+                )
 
             # Convert timestamp to date
             as_of_date = timestamp.date() if timestamp else date.today()
@@ -258,7 +256,7 @@ class JustETFProvider(AssetSourceProvider):
                 currency=currency,
                 as_of_date=as_of_date,
                 source=self.provider_name,
-                )
+            )
         except AssetSourceError:
             raise
         except Exception as e:
@@ -266,7 +264,7 @@ class JustETFProvider(AssetSourceProvider):
                 f"Failed to fetch current value for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
-                ) from e
+            ) from e
 
     @property
     def supports_history(self) -> bool:
@@ -279,7 +277,7 @@ class JustETFProvider(AssetSourceProvider):
         provider_params: Dict | None,
         start_date: date,
         end_date: date,
-        ) -> FAHistoricalData:
+    ) -> FAHistoricalData:
         """
         Fetch historical data from JustETF using load_chart.
         Adds current value only if end_date is today.
@@ -289,7 +287,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 f"JustETF provider only supports ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
-                )
+            )
 
         try:
             currency: str = "EUR"
@@ -325,8 +323,8 @@ class JustETFProvider(AssetSourceProvider):
                         volume=None,
                         currency=currency,
                         backward_fill_info=None,
-                        )
                     )
+                )
 
             # --- Parse dividend events from chart data ---
             # load_chart() returns a DataFrame with a 'dividends' column
@@ -336,12 +334,14 @@ class JustETFProvider(AssetSourceProvider):
                 if "dividends" in df.columns:
                     div_rows = df[df["dividends"] > 0]
                     for row in div_rows.itertuples():
-                        events.append(FAAssetEventPoint(
-                            date=row.date_only,
-                            type="DIVIDEND",
-                            value=CurrencyAmount(code=currency, amount=Decimal(str(row.dividends))),
-                            notes=f"JustETF distribution for {identifier}",
-                        ))
+                        events.append(
+                            FAAssetEventPoint(
+                                date=row.date_only,
+                                type="DIVIDEND",
+                                value=CurrencyAmount(code=currency, amount=Decimal(str(row.dividends))),
+                                notes=f"JustETF distribution for {identifier}",
+                            )
+                        )
                     if events:
                         logger.info(f"Parsed {len(events)} DIVIDEND events for {identifier} from chart data")
             except Exception as e:
@@ -353,7 +353,7 @@ class JustETFProvider(AssetSourceProvider):
                 f"Failed to fetch history for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
-                ) from e
+            ) from e
 
     @property
     def test_search_query(self) -> str | None:
@@ -367,7 +367,7 @@ class JustETFProvider(AssetSourceProvider):
             # Define only the normal columns (exclude index 'isin' from here)
             cols_only = ["name", "ticker", "wkn"]
             # Search in columns (Vectorized)
-            mask_cols = (df_all[cols_only].fillna('').astype(str).agg(" ".join, axis=1).str.contains(query, case=False))
+            mask_cols = df_all[cols_only].fillna("").astype(str).agg(" ".join, axis=1).str.contains(query, case=False)
             # Search in Index (Directly, without reset_index)
             mask_index = df_all.index.to_series().astype(str).str.contains(query, case=False)
             # Combine results with logical OR
@@ -381,15 +381,15 @@ class JustETFProvider(AssetSourceProvider):
                     "display_name": row["name"],
                     "currency": row["currency"],  # Currency from DataFrame
                     "type": "ETF",
-                    }
+                }
                 for idx, row in result.iterrows()
-                ]
+            ]
         except Exception as e:
             raise AssetSourceError(
                 f"Search failed for '{query}' on JustETF: {e}",
                 "SEARCH_ERROR",
                 {"query": query, "error": str(e)},
-                ) from e
+            ) from e
 
     def validate_params(self, params: Dict | None) -> None:
         """JustETF provider does not require any params."""
@@ -400,7 +400,7 @@ class JustETFProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-        ) -> FAAssetPatchItem | None:
+    ) -> FAAssetPatchItem | None:
         """Fetch asset metadata from JustETF using get_etf_overview."""
         self._check_availability()
         if identifier_type != IdentifierType.ISIN:
@@ -480,9 +480,7 @@ class JustETFProvider(AssetSourceProvider):
 
                 if sector_distribution and sector_total > Decimal("0"):
                     # Renormalize to sum to 1.0
-                    sector_distribution = {
-                        k: v / sector_total for k, v in sector_distribution.items()
-                        }
+                    sector_distribution = {k: v / sector_total for k, v in sector_distribution.items()}
                     # Log warning for unknown sectors before normalization
                     for sector_name in sector_distribution:
                         if not validate_sector(sector_name):
@@ -492,7 +490,7 @@ class JustETFProvider(AssetSourceProvider):
                                 identifier=identifier,
                                 original_sector=sector_name,
                                 mapped_to="Other",
-                                )
+                            )
                     try:
                         # FASectorArea will normalize sector names using FinancialSector enum
                         sector_area = FASectorArea(distribution=sector_distribution)
@@ -503,7 +501,7 @@ class JustETFProvider(AssetSourceProvider):
                 short_description=short_description,
                 geographic_area=geographic_area,
                 sector_area=sector_area,
-                )
+            )
 
             # Extract currency from overview
             fund_currency = overview.get("fund_currency")
@@ -521,7 +519,7 @@ class JustETFProvider(AssetSourceProvider):
                 active=None,
                 identifier_isin=identifier,  # ISIN is the search key for JustETF
                 identifier_ticker=ticker_val if ticker_val else None,
-                )
+            )
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier} from JustETF: {e}")
             return None
@@ -529,4 +527,3 @@ class JustETFProvider(AssetSourceProvider):
     def shutdown(self) -> None:  # pragma: no cover
         """Stop all persistent live-quote WebSocket threads."""
         shutdown_live_feeds()
-

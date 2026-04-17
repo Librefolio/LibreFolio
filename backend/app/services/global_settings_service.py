@@ -47,9 +47,7 @@ async def get_setting_value(session: AsyncSession, key: str, default: Any = None
     if not setting:
         # Try to get default from GLOBAL_SETTINGS_DEFAULTS
         if key in GLOBAL_SETTINGS_DEFAULTS:
-            return _convert_value(
-                GLOBAL_SETTINGS_DEFAULTS[key]["value"], GLOBAL_SETTINGS_DEFAULTS[key]["type"]
-                )
+            return _convert_value(GLOBAL_SETTINGS_DEFAULTS[key]["value"], GLOBAL_SETTINGS_DEFAULTS[key]["type"])
         return default
 
     return _convert_value(setting.value, setting.value_type)
@@ -102,4 +100,3 @@ async def is_registration_enabled(session: AsyncSession) -> bool:
     """
     value = await get_setting_value(session, "enable_registration", True)
     return bool(value)
-

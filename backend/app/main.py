@@ -19,25 +19,32 @@ warnings.filterwarnings("ignore", message=".*already taken in index.*")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.router import router as api_v1_router
 from backend.app.config import (
-    get_settings, set_test_mode, is_test_mode, PROJECT_ROOT, ensure_data_dirs,
-    PROJECT_NAME, API_V1_PREFIX, get_version,
-    )
-from backend.app.logging_config import configure_logging, get_logger
-from backend.app.utils.version import get_git_version
-from backend.app.services.provider_registry import (
-    AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry,
-    )
-from backend.app.services.static_uploads import seed_default_avatars
-from backend.app.services.settings_service import initialize_global_settings
-from backend.app.utils.cache_utils import close_all_caches
+    API_V1_PREFIX,
+    PROJECT_NAME,
+    PROJECT_ROOT,
+    ensure_data_dirs,
+    get_settings,
+    get_version,
+    is_test_mode,
+    set_test_mode,
+)
 from backend.app.db.session import get_async_engine
-
-from sqlalchemy.ext.asyncio import AsyncSession
+from backend.app.logging_config import configure_logging, get_logger
+from backend.app.services.provider_registry import (
+    AssetProviderRegistry,
+    BRIMProviderRegistry,
+    FXProviderRegistry,
+)
+from backend.app.services.settings_service import initialize_global_settings
+from backend.app.services.static_uploads import seed_default_avatars
+from backend.app.utils.cache_utils import close_all_caches
+from backend.app.utils.version import get_git_version
 
 # Check for test mode via environment variable ONLY
 # NOTE: Do NOT check sys.argv here - it causes issues when this module is imported
@@ -85,9 +92,7 @@ def ensure_database_exists():
             logger.warning("Database file not found, running migrations", db_path=str(db_path))
             needs_migration = True
         elif db_path.stat().st_size == 0:
-            logger.warning(
-                "Database file is empty (0 bytes), running migrations", db_path=str(db_path)
-                )
+            logger.warning("Database file is empty (0 bytes), running migrations", db_path=str(db_path))
             needs_migration = True
         else:
             # Check if database has tables using SQLite directly
@@ -95,25 +100,17 @@ def ensure_database_exists():
             try:
                 conn = sqlite3.connect(str(db_path))
                 cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                    )
+                cursor.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
                 table_count = cursor.fetchone()[0]
                 conn.close()
 
                 if table_count == 0:
-                    logger.warning(
-                        "Database has no tables, running migrations", db_path=str(db_path)
-                        )
+                    logger.warning("Database has no tables, running migrations", db_path=str(db_path))
                     needs_migration = True
                 else:
-                    logger.info(
-                        f"Database initialized with {table_count} tables", db_path=str(db_path)
-                        )
+                    logger.info(f"Database initialized with {table_count} tables", db_path=str(db_path))
             except sqlite3.DatabaseError as e:
-                logger.warning(
-                    f"Database appears corrupted, running migrations: {e}", db_path=str(db_path)
-                    )
+                logger.warning(f"Database appears corrupted, running migrations: {e}", db_path=str(db_path))
                 needs_migration = True
 
         if needs_migration:
@@ -130,7 +127,7 @@ def ensure_database_exists():
                     cwd=PROJECT_ROOT,
                     capture_output=True,
                     text=True,
-                    )
+                )
 
                 if result.returncode == 0:
                     logger.info("Database created and migrated successfully")
@@ -156,7 +153,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         version=git_version,
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
         test_mode=is_test_mode(),
-        )
+    )
 
     # Ensure all data directories exist (prod or test based on mode)
     ensure_data_dirs()
@@ -214,7 +211,7 @@ app = FastAPI(
     docs_url=f"{API_V1_PREFIX}/docs",
     redoc_url=f"{API_V1_PREFIX}/redoc",
     lifespan=lifespan,
-    )
+)
 
 # Configure CORS
 app.add_middleware(
@@ -223,7 +220,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    )
+)
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=API_V1_PREFIX)
@@ -245,8 +242,7 @@ def docs_available() -> bool:  # pragma: no cover
 
 
 def render_docs_not_built() -> HTMLResponse:  # pragma: no cover
-    return HTMLResponse(
-        """<html><body>
+    return HTMLResponse("""<html><body>
         <h1>Documentation not generated</h1>
         <p>To build the <b>MkDocs</b> site, change into the <b>LibreFolio</b> installation directory and run:</p>
         <pre><code>cd `/path/to/LibreFolio`
@@ -254,8 +250,7 @@ def render_docs_not_built() -> HTMLResponse:  # pragma: no cover
         <p>If you are using <b>Docker</b> (coming soon), open a shell in the backend container and run the same command:</p>
         <pre><code>docker compose exec backend /bin/bash
 ./dev.sh info:mk build</code></pre>
-        </body></html>"""
-        )
+        </body></html>""")
 
 
 @app.get("/mkdocs", response_class=HTMLResponse)
@@ -295,7 +290,7 @@ async def root():  # pragma: no cover
         "version": get_version(),
         "docs": f"{API_V1_PREFIX}/docs",
         "frontend": "Not built. Run: ./dev.sh fe:build",
-        }
+    }
 
 
 # Serve frontend static assets (JS, CSS, images) if build exists
@@ -331,17 +326,13 @@ def frontend_catchall(path: str):  # pragma: no cover
 
     # Check if frontend is available at runtime
     if not frontend_available():
-        return HTMLResponse(
-            "<h1>Frontend not built</h1><p>Run: ./dev.py front build</p>",
-            status_code=503
-            )
+        return HTMLResponse("<h1>Frontend not built</h1><p>Run: ./dev.py front build</p>", status_code=503)
 
     # Try to serve the exact file from the build directory
     # This handles: favicon.png, robots.txt, manifest, etc.
     target = FRONTEND_BUILD_DIR / path
     if target.exists() and target.is_file():
         return FileResponse(target)
-
 
     # For SPA routes, serve 200.html (fallback generated by adapter-static)
     # This contains the full SvelteKit app that can handle client-side routing

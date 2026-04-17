@@ -36,7 +36,6 @@ from backend.app.services.asset_source import (
 )
 from backend.test_scripts.test_utils import print_section, print_success
 
-
 # ============================================================================
 # FIXTURES — clear core caches before each test
 # ============================================================================
@@ -395,4 +394,3 @@ class TestProbeBypassesCache:
         assert "_asset_metadata_cache" not in source, "Probe should NOT use metadata cache"
         assert "_run_provider_in_thread" in source, "Probe should use thread isolation"
         print_success("Probe bypasses all caches, uses thread isolation only")
-

@@ -81,7 +81,7 @@ BLOCKED_MIME_TYPES = {
     # (optional - can be enabled if needed)
     # "application/x-tar",
     # "application/zip",
-    }
+}
 
 # Blocked file extensions
 BLOCKED_EXTENSIONS = {
@@ -117,7 +117,7 @@ BLOCKED_EXTENSIONS = {
     ".com",
     ".scr",
     ".pif",
-    }
+}
 
 
 class UploadSecurityError(Exception):
@@ -149,7 +149,7 @@ def _load_metadata(file_id: str) -> Optional[dict]:
         data = json.loads(meta_path.read_text())
         _upload_meta_cache.set(file_id, data)
         return data
-    except (json.JSONDecodeError, IOError) as e:
+    except (OSError, json.JSONDecodeError) as e:
         logger.warning("Failed to load metadata", file_id=file_id, error=str(e))
         return None
 
@@ -172,7 +172,7 @@ def _metadata_to_info(metadata: dict) -> UploadFileInfo:
         uploaded_by_user_id=metadata["uploaded_by_user_id"],
         description=metadata.get("description"),
         url=_get_file_url(metadata["id"]),
-        )
+    )
 
 
 def _detect_actual_mime_type(content: bytes) -> Optional[str]:
@@ -194,7 +194,7 @@ def validate_upload_security(
     content: bytes,
     original_filename: str,
     declared_mime_type: Optional[str] = None,
-    ) -> str:
+) -> str:
     """
     Validate file upload for security.
 
@@ -252,7 +252,7 @@ def validate_upload_security(
                 declared=declared_mime_type,
                 actual=actual_mime,
                 filename=original_filename,
-                )
+            )
             # We allow but log the mismatch - not all clients send correct MIME
             # If you want strict enforcement, uncomment below:
             # raise UploadSecurityError(
@@ -273,7 +273,7 @@ def save_upload(
     user_id: int,
     description: Optional[str] = None,
     mime_type: Optional[str] = None,
-    ) -> UploadFileInfo:
+) -> UploadFileInfo:
     """
     Save an uploaded file.
 
@@ -316,7 +316,7 @@ def save_upload(
         "uploaded_at": now.isoformat(),
         "uploaded_by_user_id": user_id,
         "description": description,
-        }
+    }
     _save_metadata(file_id, metadata)
 
     logger.info(
@@ -325,7 +325,7 @@ def save_upload(
         original_name=original_filename,
         size_bytes=len(content),
         user_id=user_id,
-        )
+    )
 
     return _metadata_to_info(metadata)
 
@@ -522,7 +522,7 @@ def seed_default_avatars() -> int:
             "uploaded_at": now.isoformat(),
             "uploaded_by_user_id": 0,
             "description": f"Default avatar: {avatar_file.stem}",
-            }
+        }
         _save_metadata(file_id, metadata)
         count += 1
 

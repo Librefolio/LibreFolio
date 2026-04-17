@@ -22,7 +22,7 @@ import pytest
 
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success
+from backend.test_scripts.test_utils import print_info, print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -53,15 +53,13 @@ async def create_test_user(client: httpx.AsyncClient) -> tuple[str, str, Optiona
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
 
     if resp.status_code != 201:
         return username, email, None
 
     # Login
-    login_resp = await client.post(
-        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-        )
+    login_resp = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
 
     session_cookie = login_resp.cookies.get("session")
     if session_cookie:
@@ -103,7 +101,7 @@ def test_broker_id(test_server) -> int:
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-                )
+            )
             assert response.status_code == 200, f"Failed to create broker: {response.text}"
             data = response.json()
 
@@ -145,12 +143,12 @@ def test_asset_id(test_server) -> int:
                 "display_name": f"API Test Stock {date.today().isoformat()}",
                 "asset_type": "STOCK",
                 "currency": "EUR",
-                }
+            }
             response = await client.post(
                 f"{API_BASE}/assets",
                 json=payload,
                 timeout=TIMEOUT,
-                )
+            )
             if response.status_code == 200:
                 return response.json()["id"]
 
@@ -179,7 +177,7 @@ async def test_post_transactions_single(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -189,18 +187,16 @@ async def test_post_transactions_single(test_server, test_broker_id):
                 "type": "DEPOSIT",
                 "date": date.today().isoformat(),
                 "cash": {"code": "EUR", "amount": "1000"},
-                }
-            ]
+            }
+        ]
 
         response = await client.post(
             f"{API_BASE}/transactions",
             json=payload,
             timeout=TIMEOUT,
-            )
+        )
 
-        assert (
-            response.status_code == 200
-        ), f"Expected 200, got {response.status_code}: {response.text}"
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
         data = response.json()
         assert data["success_count"] == 1
@@ -225,7 +221,7 @@ async def test_post_transactions_bulk(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -235,26 +231,26 @@ async def test_post_transactions_bulk(test_server, test_broker_id):
                 "type": "DEPOSIT",
                 "date": date.today().isoformat(),
                 "cash": {"code": "EUR", "amount": "5000"},
-                },
+            },
             {
                 "broker_id": broker_id,
                 "type": "DEPOSIT",
                 "date": date.today().isoformat(),
                 "cash": {"code": "USD", "amount": "3000"},
-                },
+            },
             {
                 "broker_id": broker_id,
                 "type": "WITHDRAWAL",
                 "date": date.today().isoformat(),
                 "cash": {"code": "EUR", "amount": "-500"},
-                },
-            ]
+            },
+        ]
 
         response = await client.post(
             f"{API_BASE}/transactions",
             json=payload,
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -278,7 +274,7 @@ async def test_post_transactions_validation_error(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -289,14 +285,14 @@ async def test_post_transactions_validation_error(test_server, test_broker_id):
                 "type": "DEPOSIT",
                 "date": date.today().isoformat(),
                 # cash is missing - required for DEPOSIT
-                }
-            ]
+            }
+        ]
 
         response = await client.post(
             f"{API_BASE}/transactions",
             json=payload,
             timeout=TIMEOUT,
-            )
+        )
 
         # Pydantic validation should return 422
         assert response.status_code == 422, f"Expected 422, got {response.status_code}"
@@ -319,13 +315,13 @@ async def test_post_transactions_balance_error(test_server):
             {
                 "name": unique_name,
                 "allow_cash_overdraft": False,
-                }
-            ]
+            }
+        ]
         broker_resp = await client.post(
             f"{API_BASE}/brokers",
             json=broker_payload,
             timeout=TIMEOUT,
-            )
+        )
         broker_data = broker_resp.json()
         assert broker_data["results"][0]["success"], f"Failed to create broker: {broker_data}"
         broker_id = broker_data["results"][0]["broker_id"]
@@ -337,30 +333,25 @@ async def test_post_transactions_balance_error(test_server):
                 "type": "WITHDRAWAL",
                 "date": date.today().isoformat(),
                 "cash": {"code": "EUR", "amount": "-500"},
-                }
-            ]
+            }
+        ]
 
         response = await client.post(
             f"{API_BASE}/transactions",
             json=payload,
             timeout=TIMEOUT,
-            )
+        )
 
         # The endpoint returns 200 with errors array populated when balance validation fails
         # Transaction was created (success_count=1) but balance validation failed (errors has items)
-        assert (
-            response.status_code == 200
-        ), f"Expected 200, got {response.status_code}: {response.text}"
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         data = response.json()
 
         # Either transaction creation failed OR balance validation failed
         has_errors = len(data.get("errors", [])) > 0
         has_failed_results = any(not r.get("success", True) for r in data.get("results", []))
 
-        assert has_errors or has_failed_results, (
-            f"Expected either errors or failed results for overdraft. "
-            f"Got: success_count={data.get('success_count')}, errors={data.get('errors')}, results={data.get('results')}"
-        )
+        assert has_errors or has_failed_results, f"Expected either errors or failed results for overdraft. " f"Got: success_count={data.get('success_count')}, errors={data.get('errors')}, results={data.get('results')}"
 
         print_success("✓ Got balance/access error in response as expected")
 
@@ -385,7 +376,7 @@ async def test_get_transactions(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -398,16 +389,16 @@ async def test_get_transactions(test_server, test_broker_id):
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "1000"},
-                    }
-                ],
+                }
+            ],
             timeout=TIMEOUT,
-            )
+        )
 
         response = await client.get(
             f"{API_BASE}/transactions",
             params={"broker_id": broker_id},
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -431,7 +422,7 @@ async def test_get_transactions_with_filters(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -444,25 +435,25 @@ async def test_get_transactions_with_filters(test_server, test_broker_id):
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "1000"},
-                    },
+                },
                 {
                     "broker_id": broker_id,
                     "type": "WITHDRAWAL",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "-100"},
-                    },
-                ],
+                },
+            ],
             timeout=TIMEOUT,
-            )
+        )
 
         response = await client.get(
             f"{API_BASE}/transactions",
             params={
                 "broker_id": broker_id,
                 "types": ["DEPOSIT"],
-                },
+            },
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -489,7 +480,7 @@ async def test_get_transactions_pagination(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -502,29 +493,29 @@ async def test_get_transactions_pagination(test_server, test_broker_id):
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "100"},
-                    },
+                },
                 {
                     "broker_id": broker_id,
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "200"},
-                    },
+                },
                 {
                     "broker_id": broker_id,
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "300"},
-                    },
-                ],
+                },
+            ],
             timeout=TIMEOUT,
-            )
+        )
 
         # Get all
         all_response = await client.get(
             f"{API_BASE}/transactions",
             params={"broker_id": broker_id, "limit": 100},
             timeout=TIMEOUT,
-            )
+        )
         all_data = all_response.json()
 
         if len(all_data) >= 2:
@@ -533,7 +524,7 @@ async def test_get_transactions_pagination(test_server, test_broker_id):
                 f"{API_BASE}/transactions",
                 params={"broker_id": broker_id, "limit": 1, "offset": 1},
                 timeout=TIMEOUT,
-                )
+            )
             paginated_data = paginated.json()
 
             assert len(paginated_data) <= 1
@@ -557,7 +548,7 @@ async def test_get_transaction_by_id(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -568,20 +559,20 @@ async def test_get_transaction_by_id(test_server, test_broker_id):
                 "type": "DEPOSIT",
                 "date": date.today().isoformat(),
                 "cash": {"code": "EUR", "amount": "100"},
-                }
-            ]
+            }
+        ]
         create_resp = await client.post(
             f"{API_BASE}/transactions",
             json=payload,
             timeout=TIMEOUT,
-            )
+        )
         tx_id = create_resp.json()["results"][0]["transaction_id"]
 
         # Get by ID
         response = await client.get(
             f"{API_BASE}/transactions/{tx_id}",
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -602,7 +593,7 @@ async def test_get_transaction_not_found(test_server):
         response = await client.get(
             f"{API_BASE}/transactions/999999",
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 404
 
@@ -621,7 +612,7 @@ async def test_get_transaction_types(test_server):
         response = await client.get(
             f"{API_BASE}/transactions/types",
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -657,7 +648,7 @@ async def test_patch_transactions(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -668,13 +659,13 @@ async def test_patch_transactions(test_server, test_broker_id):
                 "type": "DEPOSIT",
                 "date": date.today().isoformat(),
                 "cash": {"code": "EUR", "amount": "100"},
-                }
-            ]
+            }
+        ]
         create_resp = await client.post(
             f"{API_BASE}/transactions",
             json=payload,
             timeout=TIMEOUT,
-            )
+        )
         tx_id = create_resp.json()["results"][0]["transaction_id"]
 
         # Update it
@@ -682,13 +673,13 @@ async def test_patch_transactions(test_server, test_broker_id):
             {
                 "id": tx_id,
                 "description": "Updated via API test",
-                }
-            ]
+            }
+        ]
         response = await client.patch(
             f"{API_BASE}/transactions",
             json=update_payload,
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -710,13 +701,13 @@ async def test_patch_transactions_not_found(test_server):
             {
                 "id": 999999,
                 "description": "Should fail",
-                }
-            ]
+            }
+        ]
         response = await client.patch(
             f"{API_BASE}/transactions",
             json=update_payload,
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -745,7 +736,7 @@ async def test_delete_transactions(test_server, test_broker_id):
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -756,19 +747,19 @@ async def test_delete_transactions(test_server, test_broker_id):
                 "type": "DEPOSIT",
                 "date": date.today().isoformat(),
                 "cash": {"code": "EUR", "amount": "100"},
-                },
+            },
             {
                 "broker_id": broker_id,
                 "type": "DEPOSIT",
                 "date": date.today().isoformat(),
                 "cash": {"code": "EUR", "amount": "200"},
-                },
-            ]
+            },
+        ]
         create_resp = await client.post(
             f"{API_BASE}/transactions",
             json=payload,
             timeout=TIMEOUT,
-            )
+        )
         tx_ids = [r["transaction_id"] for r in create_resp.json()["results"]]
 
         # Delete them
@@ -776,7 +767,7 @@ async def test_delete_transactions(test_server, test_broker_id):
             f"{API_BASE}/transactions",
             params={"ids": tx_ids},
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -800,7 +791,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert br_resp.status_code == 200
         source_broker_id = br_resp.json()["results"][0]["broker_id"]
 
@@ -811,7 +802,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
             f"{API_BASE}/brokers",
             json=broker_payload,
             timeout=TIMEOUT,
-            )
+        )
         target_broker_id = broker_resp.json()["results"][0]["broker_id"]
 
         # First get or create an asset
@@ -826,9 +817,9 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
                     "display_name": f"Test Asset {uuid.uuid4().hex[:8]}",
                     "asset_type": "STOCK",
                     "currency": "EUR",
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
             asset_id = asset_resp.json()["id"]
 
         # First add some asset to source broker via ADJUSTMENT
@@ -839,8 +830,8 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
                 "type": "ADJUSTMENT",
                 "date": (date.today() - timedelta(days=1)).isoformat(),
                 "quantity": "100",
-                }
-            ]
+            }
+        ]
         await client.post(f"{API_BASE}/transactions", json=adj_payload, timeout=TIMEOUT)
 
         # Create linked transfer
@@ -853,7 +844,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
                 "date": date.today().isoformat(),
                 "quantity": "-10",
                 "link_uuid": link_uuid,
-                },
+            },
             {
                 "broker_id": target_broker_id,
                 "asset_id": asset_id,
@@ -861,13 +852,13 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
                 "date": date.today().isoformat(),
                 "quantity": "10",
                 "link_uuid": link_uuid,
-                },
-            ]
+            },
+        ]
         create_resp = await client.post(
             f"{API_BASE}/transactions",
             json=transfer_payload,
             timeout=TIMEOUT,
-            )
+        )
         tx_ids = [r["transaction_id"] for r in create_resp.json()["results"]]
 
         # Try to delete only the first one
@@ -875,7 +866,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
             f"{API_BASE}/transactions",
             params={"ids": [tx_ids[0]]},
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200
         data = response.json()

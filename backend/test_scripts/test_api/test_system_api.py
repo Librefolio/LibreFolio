@@ -12,13 +12,13 @@ Covers:
 import pytest
 
 from backend.app.api.v1.system import (
-    get_display_name,
-    get_system_info,
-    parse_pipfile,
-    get_backend_deps,
-    get_frontend_deps,
     BACKEND_NAME_MAP,
     FRONTEND_NAME_MAP,
+    get_backend_deps,
+    get_display_name,
+    get_frontend_deps,
+    get_system_info,
+    parse_pipfile,
 )
 
 
@@ -103,4 +103,3 @@ class TestGetSystemInfoEndpoint:
         assert result.os_name
         assert len(result.backend_dependencies) > 0
         assert len(result.frontend_dependencies) > 0
-

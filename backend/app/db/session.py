@@ -6,13 +6,11 @@ Handles SQLite connection and session lifecycle with async support.
 from pathlib import Path
 from typing import AsyncGenerator
 
-from sqlalchemy import create_engine
-from sqlalchemy import event, Engine
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine
+from sqlalchemy import Engine, create_engine, event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from backend.app.config import get_settings
-
 
 # NOTE: settings is loaded lazily in get_sync_engine() and get_async_engine()
 # to allow test setup to configure LIBREFOLIO_TEST_MODE before first use.
@@ -43,9 +41,7 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
 # These are created ONCE at the first call, and reused throughout the app.
 # The singleton pattern ensures a single connection pool per engine.
 
-sync_engine: Engine | None = (
-    None  # For migrations, scripts populate, checks, populated in get_sync_engine()
-)
+sync_engine: Engine | None = None  # For migrations, scripts populate, checks, populated in get_sync_engine()
 async_engine: AsyncEngine | None = None  # For FastAPI app, populated in get_async_engine()
 
 
@@ -82,7 +78,7 @@ def get_sync_engine() -> Engine:
         db_url,
         echo=False,
         poolclass=NullPool,
-        )
+    )
     return sync_engine
 
 
@@ -121,7 +117,7 @@ def get_async_engine() -> AsyncEngine:
         async_db_url,
         echo=False,
         poolclass=NullPool,  # NullPool for SQLite - each connection is independent
-        )
+    )
     return async_engine
 
 
@@ -130,7 +126,7 @@ def get_async_engine() -> AsyncEngine:
 # ============================================================================
 
 
-async def get_session_generator() -> AsyncGenerator[AsyncSession, None]:
+async def get_session_generator() -> AsyncGenerator[AsyncSession]:
     """
     Async session factory for FastAPI dependency injection.
 

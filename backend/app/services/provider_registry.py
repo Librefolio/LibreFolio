@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-from typing import Type, Dict, List
+from typing import Dict, List, Type
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.logging_config import get_logger
@@ -112,9 +112,7 @@ class AbstractProviderRegistry:
                     spec.loader.exec_module(mod)
             except Exception as e:
                 # Log error but don't stop discovery on single-module errors
-                logger.error(
-                    "Error importing provider module", module_name=module_name, error=str(e)
-                    )
+                logger.error("Error importing provider module", module_name=module_name, error=str(e))
                 continue
         cls._discovery_done = True
 
@@ -131,7 +129,12 @@ class AbstractProviderRegistry:
                 instance = provider_class()
                 instance.shutdown()
             except Exception as e:
-                logger.warning("Error during provider shutdown", provider_code=code, registry=cls.__name__, error=str(e), )
+                logger.warning(
+                    "Error during provider shutdown",
+                    provider_code=code,
+                    registry=cls.__name__,
+                    error=str(e),
+                )
 
     # --- methods to specialize in subclasses ---
     @classmethod
@@ -205,7 +208,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
                         plugin_code=code,
                         priority=priority,
                         file_path=str(file_path),
-                        )
+                    )
                     return code
             except Exception as e:
                 logger.warning("Error checking plugin can_parse", plugin_code=code, error=str(e))
@@ -247,7 +250,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         """
         cls.auto_discover()
         result = []
-        for code, plugin_cls in cls._providers.items():
+        for _code, plugin_cls in cls._providers.items():
             try:
                 instance = plugin_cls()
                 result.append(instance.to_plugin_info())

@@ -19,18 +19,18 @@ from backend.app.db.models import IdentifierType, ProviderInputType
 from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
-    )
+)
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import (
-    FAPricePoint,
-    FAUpsert,
-    FABulkUpsertResponse,
     FAAssetDelete,
     FABulkDeleteResponse,
-    )
+    FABulkUpsertResponse,
+    FAPricePoint,
+    FAUpsert,
+)
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
+from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -40,6 +40,7 @@ TIMEOUT = 30.0
 async def create_user_and_login(client: httpx.AsyncClient) -> None:
     """Create a test user, login, and set session cookie on client."""
     import uuid as _uuid
+
     username = f"test_{int(__import__('time').time() * 1000)}_{_uuid.uuid4().hex[:4]}"
     email = f"{username}@test.com"
     password = "TestPass123!"
@@ -47,14 +48,14 @@ async def create_user_and_login(client: httpx.AsyncClient) -> None:
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     if resp.status_code != 201:
         raise Exception(f"Failed to create user: {resp.text}")
     login_resp = await client.post(
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     if login_resp.status_code != 200:
         raise Exception(f"Failed to login: {login_resp.text}")
     session = login_resp.cookies.get("session")
@@ -82,12 +83,8 @@ async def test_bulk_upsert_prices(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         # Step 1: Create test asset
-        create_item = FAAssetCreateItem(
-            display_name=f"Price Upsert Test {unique_id('PRICE1')}", currency="USD"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        create_item = FAAssetCreateItem(display_name=f"Price Upsert Test {unique_id('PRICE1')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"Created asset ID: {asset_id}")
@@ -100,26 +97,20 @@ async def test_bulk_upsert_prices(test_server):
                 close=Decimal("100.50"),
                 volume=Decimal("1000"),
                 currency="USD",
-                ),
+            ),
             FAPricePoint(
                 date=today - timedelta(days=1),
                 close=Decimal("101.25"),
                 volume=Decimal("1500"),
                 currency="USD",
-                ),
-            FAPricePoint(
-                date=today, close=Decimal("102.00"), volume=Decimal("2000"), currency="USD"
-                ),
-            ]
+            ),
+            FAPricePoint(date=today, close=Decimal("102.00"), volume=Decimal("2000"), currency="USD"),
+        ]
 
         upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
 
-        upsert_resp = await client.post(
-            f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT
-            )
-        assert (
-            upsert_resp.status_code == 200
-        ), f"Upsert failed: {upsert_resp.status_code}: {upsert_resp.text}"
+        upsert_resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT)
+        assert upsert_resp.status_code == 200, f"Upsert failed: {upsert_resp.status_code}: {upsert_resp.text}"
 
         upsert_result = FABulkUpsertResponse(**upsert_resp.json())
         assert upsert_result.success_count >= 1
@@ -134,11 +125,11 @@ async def test_bulk_upsert_prices(test_server):
                     "date_range": {
                         "start": (today - timedelta(days=2)).isoformat(),
                         "end": today.isoformat(),
-                        },
-                    }
-                ],
+                    },
+                }
+            ],
             timeout=TIMEOUT,
-            )
+        )
         assert query_resp.status_code == 200
 
         query_data = query_resp.json()
@@ -158,12 +149,8 @@ async def test_get_price_history(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         # Step 1: Create asset
-        create_item = FAAssetCreateItem(
-            display_name=f"Price Get Test {unique_id('PRICEGET')}", currency="USD"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        create_item = FAAssetCreateItem(display_name=f"Price Get Test {unique_id('PRICEGET')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"Created asset ID: {asset_id}")
@@ -173,11 +160,9 @@ async def test_get_price_history(test_server):
             FAPricePoint(date=date(2025, 1, 1), close=Decimal("100.00"), currency="USD"),
             FAPricePoint(date=date(2025, 1, 3), close=Decimal("103.00"), currency="USD"),
             FAPricePoint(date=date(2025, 1, 5), close=Decimal("105.00"), currency="USD"),
-            ]
+        ]
         upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
-        await client.post(
-            f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        await client.post(f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT)
         print_info("Prices inserted")
 
         # Step 3: Query prices with date range via POST bulk
@@ -187,10 +172,10 @@ async def test_get_price_history(test_server):
                 {
                     "asset_id": asset_id,
                     "date_range": {"start": "2025-01-01", "end": "2025-01-05"},
-                    }
-                ],
+                }
+            ],
             timeout=TIMEOUT,
-            )
+        )
         assert query_resp.status_code == 200
 
         query_data = query_resp.json()
@@ -210,41 +195,30 @@ async def test_bulk_delete_prices(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         # Step 1: Create asset and insert prices
-        create_item = FAAssetCreateItem(
-            display_name=f"Price Delete Test {unique_id('PRICEDEL')}", currency="USD"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        create_item = FAAssetCreateItem(display_name=f"Price Delete Test {unique_id('PRICEDEL')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"Created asset ID: {asset_id}")
 
         # Insert prices for Jan 1-10
-        prices = [
-            FAPricePoint(date=date(2025, 1, d), close=Decimal(f"100.{d:02d}"), currency="USD")
-            for d in range(1, 11)
-            ]
+        prices = [FAPricePoint(date=date(2025, 1, d), close=Decimal(f"100.{d:02d}"), currency="USD") for d in range(1, 11)]
         upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
-        await client.post(
-            f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        await client.post(f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT)
         print_info("Inserted 10 prices (Jan 1-10)")
 
         # Step 2: DELETE range Jan 3-7 (5 days) using FAAssetDelete
         delete_request = FAAssetDelete(
             asset_id=asset_id,
             date_ranges=[DateRangeModel(start=date(2025, 1, 3), end=date(2025, 1, 7))],
-            )
+        )
         delete_resp = await client.request(
             "DELETE",
             f"{API_BASE}/assets/prices",
             json=[delete_request.model_dump(mode="json")],
             timeout=TIMEOUT,
-            )
-        assert (
-            delete_resp.status_code == 200
-        ), f"Delete failed: {delete_resp.status_code}: {delete_resp.text}"
+        )
+        assert delete_resp.status_code == 200, f"Delete failed: {delete_resp.status_code}: {delete_resp.text}"
 
         delete_data = FABulkDeleteResponse(**delete_resp.json())
         assert delete_data.success_count >= 1
@@ -257,10 +231,10 @@ async def test_bulk_delete_prices(test_server):
                 {
                     "asset_id": asset_id,
                     "date_range": {"start": "2025-01-01", "end": "2025-01-10"},
-                    }
-                ],
+                }
+            ],
             timeout=TIMEOUT,
-            )
+        )
         remaining_data = query_resp.json()
         remaining_prices = remaining_data["items"][0]["prices"]
         print_success(f"Remaining prices: {len(remaining_prices)}")
@@ -277,12 +251,8 @@ async def test_refresh_prices_from_provider(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         # Step 1: Create asset and assign mockprov
-        create_item = FAAssetCreateItem(
-            display_name=f"Price Refresh Test {unique_id('PRICEREF')}", currency="USD"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        create_item = FAAssetCreateItem(display_name=f"Price Refresh Test {unique_id('PRICEREF')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"Created asset ID: {asset_id}")
@@ -294,12 +264,12 @@ async def test_refresh_prices_from_provider(test_server):
             identifier="MOCK_REFRESH",
             identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params={"symbol": "MOCKREFRESH"},
-            )
+        )
         await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment.model_dump(mode="json")],
             timeout=TIMEOUT,
-            )
+        )
         print_info("Provider mockprov assigned")
 
         # Step 2: Refresh prices from provider
@@ -310,15 +280,11 @@ async def test_refresh_prices_from_provider(test_server):
                 "date_range": {
                     "start": (today - timedelta(days=5)).isoformat(),
                     "end": today.isoformat(),
-                    },
-                }
-            ]
-        refresh_resp = await client.post(
-            f"{API_BASE}/assets/prices/sync", json=refresh_request, timeout=TIMEOUT
-            )
-        assert (
-            refresh_resp.status_code == 200
-        ), f"Refresh failed: {refresh_resp.status_code}: {refresh_resp.text}"
+                },
+            }
+        ]
+        refresh_resp = await client.post(f"{API_BASE}/assets/prices/sync", json=refresh_request, timeout=TIMEOUT)
+        assert refresh_resp.status_code == 200, f"Refresh failed: {refresh_resp.status_code}: {refresh_resp.text}"
         print_success("Prices refresh requested")
 
         # Step 3: Verify prices were created (mockprov returns current value)
@@ -330,11 +296,11 @@ async def test_refresh_prices_from_provider(test_server):
                     "date_range": {
                         "start": (today - timedelta(days=5)).isoformat(),
                         "end": today.isoformat(),
-                        },
-                    }
-                ],
+                    },
+                }
+            ],
             timeout=TIMEOUT,
-            )
+        )
         query_data = query_resp.json()
         price_history = query_data["items"][0]["prices"]
         print_success(f"Prices after refresh: {len(price_history)}")
@@ -353,12 +319,8 @@ async def test_bulk_query_multi_asset(test_server):
         # Step 1: Create two assets
         asset_ids = []
         for i in range(2):
-            create_item = FAAssetCreateItem(
-                display_name=f"Multi Query Test {i} {unique_id(f'MULTIQUERY{i}')}", currency="USD"
-                )
-            create_resp = await client.post(
-                f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-                )
+            create_item = FAAssetCreateItem(display_name=f"Multi Query Test {i} {unique_id(f'MULTIQUERY{i}')}", currency="USD")
+            create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
             create_data = FABulkAssetCreateResponse(**create_resp.json())
             asset_ids.append(create_data.results[0].asset_id)
         print_info(f"Created asset IDs: {asset_ids}")
@@ -370,13 +332,11 @@ async def test_bulk_query_multi_asset(test_server):
                     date=date(2025, 1, d),
                     close=Decimal(f"{100 + idx * 50 + d}.00"),
                     currency="USD",
-                    )
-                for d in range(1, 4)
-                ]
-            upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
-            await client.post(
-                f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT
                 )
+                for d in range(1, 4)
+            ]
+            upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
+            await client.post(f"{API_BASE}/assets/prices", json=[upsert_data.model_dump(mode="json")], timeout=TIMEOUT)
         print_info("Prices inserted for both assets")
 
         # Step 3: Query both assets in a single bulk POST
@@ -385,9 +345,9 @@ async def test_bulk_query_multi_asset(test_server):
             json=[
                 {"asset_id": asset_ids[0], "date_range": {"start": "2025-01-01", "end": "2025-01-03"}},
                 {"asset_id": asset_ids[1], "date_range": {"start": "2025-01-01", "end": "2025-01-03"}},
-                ],
+            ],
             timeout=TIMEOUT,
-            )
+        )
         assert query_resp.status_code == 200
 
         query_data = query_resp.json()
@@ -420,12 +380,8 @@ async def test_query_without_sync_returns_empty(test_server):
         await create_user_and_login(client)
 
         # 1. Create asset
-        asset_item = FAAssetCreateItem(
-            display_name=f"No-Sync Test {unique_id('NOSYNC')}", currency="USD"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        asset_item = FAAssetCreateItem(display_name=f"No-Sync Test {unique_id('NOSYNC')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -438,12 +394,12 @@ async def test_query_without_sync_returns_empty(test_server):
             identifier="AAPL",
             identifier_type=IdentifierType.TICKER,
             provider_params=None,
-            )
+        )
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment.model_dump(mode="json")],
             timeout=TIMEOUT,
-            )
+        )
         assert assign_resp.status_code == 200
         print_info("  Provider assigned: yfinance (AAPL)")
 
@@ -456,7 +412,7 @@ async def test_query_without_sync_returns_empty(test_server):
             f"{API_BASE}/assets/prices/query",
             json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
             timeout=TIMEOUT,
-            )
+        )
         assert query_resp.status_code == 200
         prices_before = query_resp.json()["items"][0]["prices"]
         assert len(prices_before) == 0, f"Expected 0 prices before sync, got {len(prices_before)}"
@@ -467,7 +423,7 @@ async def test_query_without_sync_returns_empty(test_server):
             f"{API_BASE}/assets/prices/sync",
             json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
             timeout=TIMEOUT,
-            )
+        )
         assert sync_resp.status_code == 200
         sync_result = sync_resp.json()["results"][0]
         print_info(f"  Sync fetched: {sync_result.get('points_fetched', 0)} prices")
@@ -477,7 +433,7 @@ async def test_query_without_sync_returns_empty(test_server):
             f"{API_BASE}/assets/prices/query",
             json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
             timeout=TIMEOUT,
-            )
+        )
         assert query_resp2.status_code == 200
         prices_after = query_resp2.json()["items"][0]["prices"]
         assert len(prices_after) > 0, "Should have prices after sync"
@@ -500,25 +456,24 @@ async def test_sync_idempotency(test_server):
         await create_user_and_login(client)
 
         # Create asset + assign provider
-        create_item = FAAssetCreateItem(
-            display_name=f"Idempotency Test {unique_id('IDEMP')}", currency="USD"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        create_item = FAAssetCreateItem(display_name=f"Idempotency Test {unique_id('IDEMP')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
 
         assignment = FAProviderAssignmentItem(
-            asset_id=asset_id, provider_code="yfinance",
-            identifier="AAPL", identifier_type=IdentifierType.TICKER,
+            asset_id=asset_id,
+            provider_code="yfinance",
+            identifier="AAPL",
+            identifier_type=IdentifierType.TICKER,
             provider_params=None,
-            )
+        )
         await client.post(
             f"{API_BASE}/assets/provider",
-            json=[assignment.model_dump(mode="json")], timeout=TIMEOUT,
-            )
+            json=[assignment.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
 
         today = date.today()
         start = (today - timedelta(days=7)).isoformat()
@@ -529,7 +484,7 @@ async def test_sync_idempotency(test_server):
             f"{API_BASE}/assets/prices/sync",
             json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
             timeout=TIMEOUT,
-            )
+        )
         assert sync1.status_code == 200
         r1 = sync1.json()["results"][0]
         assert r1["points_changed"] > 0, "First sync should insert prices"
@@ -540,7 +495,7 @@ async def test_sync_idempotency(test_server):
             f"{API_BASE}/assets/prices/sync",
             json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
             timeout=TIMEOUT,
-            )
+        )
         assert sync2.status_code == 200
         r2 = sync2.json()["results"][0]
         assert r2["points_changed"] == 0, f"Re-sync should change 0 points, got {r2['points_changed']}"
@@ -561,12 +516,8 @@ async def test_query_with_include_events(test_server):
         await create_user_and_login(client)
 
         # Create asset
-        create_item = FAAssetCreateItem(
-            display_name=f"Events Test {unique_id('EVT')}", currency="USD"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        create_item = FAAssetCreateItem(display_name=f"Events Test {unique_id('EVT')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -578,10 +529,9 @@ async def test_query_with_include_events(test_server):
         # Query with include_events: true — should succeed and have 'events' key
         query_resp = await client.post(
             f"{API_BASE}/assets/prices/query",
-            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end},
-                   "include_events": True}],
+            json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}, "include_events": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert query_resp.status_code == 200
         result = query_resp.json()["items"][0]
         assert "events" in result, "Response must contain 'events' field when include_events is true"
@@ -593,7 +543,7 @@ async def test_query_with_include_events(test_server):
             f"{API_BASE}/assets/prices/query",
             json=[{"asset_id": asset_id, "date_range": {"start": start, "end": end}}],
             timeout=TIMEOUT,
-            )
+        )
         assert query_resp2.status_code == 200
         result2 = query_resp2.json()["items"][0]
         assert result2.get("events", []) == [], "Events should be empty when include_events is not set"
@@ -622,23 +572,24 @@ async def test_bulk_sync_multi_asset(test_server):
         asset_ids = []
         for ticker, name in tickers:
             create_item = FAAssetCreateItem(display_name=name, currency="USD")
-            resp = await client.post(
-                f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-                )
+            resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
             assert resp.status_code == 201
             create_data = FABulkAssetCreateResponse(**resp.json())
             aid = create_data.results[0].asset_id
             asset_ids.append(aid)
 
             assignment = FAProviderAssignmentItem(
-                asset_id=aid, provider_code="yfinance",
-                identifier=ticker, identifier_type=IdentifierType.TICKER,
+                asset_id=aid,
+                provider_code="yfinance",
+                identifier=ticker,
+                identifier_type=IdentifierType.TICKER,
                 provider_params=None,
-                )
+            )
             await client.post(
                 f"{API_BASE}/assets/provider",
-                json=[assignment.model_dump(mode="json")], timeout=TIMEOUT,
-                )
+                json=[assignment.model_dump(mode="json")],
+                timeout=TIMEOUT,
+            )
         print_info(f"  Created {len(asset_ids)} assets with providers")
 
         today = date.today()
@@ -648,15 +599,16 @@ async def test_bulk_sync_multi_asset(test_server):
         # Bulk sync all 3
         sync_body = [{"asset_id": aid, "date_range": {"start": start, "end": end}} for aid in asset_ids]
         sync_resp = await client.post(
-            f"{API_BASE}/assets/prices/sync", json=sync_body, timeout=60.0,
-            )
+            f"{API_BASE}/assets/prices/sync",
+            json=sync_body,
+            timeout=60.0,
+        )
         assert sync_resp.status_code == 200
         results = sync_resp.json()["results"]
         assert len(results) == 3, f"Expected 3 results, got {len(results)}"
 
         for i, r in enumerate(results):
-            assert r.get("points_fetched", 0) > 0 or r.get("points_changed", 0) >= 0, \
-                f"Asset {i} sync should report results"
+            assert r.get("points_fetched", 0) > 0 or r.get("points_changed", 0) >= 0, f"Asset {i} sync should report results"
             print_info(f"  {tickers[i][0]}: fetched={r.get('points_fetched', 0)}, changed={r.get('points_changed', 0)}")
 
         print_success(f"  ✓ Bulk sync of {len(asset_ids)} assets completed successfully")
@@ -677,12 +629,8 @@ async def test_get_current_prices_with_db_data(test_server):
         await create_user_and_login(client)
 
         # Create asset and insert manual prices
-        create_item = FAAssetCreateItem(
-            display_name=f"Current Price DB {unique_id('CUR1')}", currency="EUR"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        create_item = FAAssetCreateItem(display_name=f"Current Price DB {unique_id('CUR1')}", currency="EUR")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -695,16 +643,12 @@ async def test_get_current_prices_with_db_data(test_server):
             FAPricePoint(date=today, close=Decimal("52.25"), currency="EUR"),
         ]
         upsert_item = FAUpsert(asset_id=asset_id, prices=prices)
-        upsert_resp = await client.post(
-            f"{API_BASE}/assets/prices", json=[upsert_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        upsert_resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert_item.model_dump(mode="json")], timeout=TIMEOUT)
         assert upsert_resp.status_code == 200
         print_info(f"  Inserted {len(prices)} prices for asset {asset_id}")
 
         # Now call current prices endpoint
-        current_resp = await client.post(
-            f"{API_BASE}/assets/prices/current", json=[asset_id], timeout=TIMEOUT
-            )
+        current_resp = await client.post(f"{API_BASE}/assets/prices/current", json=[asset_id], timeout=TIMEOUT)
         assert current_resp.status_code == 200
         data = current_resp.json()
         assert "results" in data
@@ -735,20 +679,14 @@ async def test_get_current_prices_no_data(test_server):
         await create_user_and_login(client)
 
         # Create asset with no prices
-        create_item = FAAssetCreateItem(
-            display_name=f"Current Price Empty {unique_id('CUR2')}", currency="USD"
-            )
-        create_resp = await client.post(
-            f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT
-            )
+        create_item = FAAssetCreateItem(display_name=f"Current Price Empty {unique_id('CUR2')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
 
         # Call current prices endpoint
-        current_resp = await client.post(
-            f"{API_BASE}/assets/prices/current", json=[asset_id], timeout=TIMEOUT
-            )
+        current_resp = await client.post(f"{API_BASE}/assets/prices/current", json=[asset_id], timeout=TIMEOUT)
         assert current_resp.status_code == 200
         data = current_resp.json()
         assert data["success_count"] == 0
@@ -774,9 +712,7 @@ async def test_get_current_prices_nonexistent(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
 
-        current_resp = await client.post(
-            f"{API_BASE}/assets/prices/current", json=[999999], timeout=TIMEOUT
-            )
+        current_resp = await client.post(f"{API_BASE}/assets/prices/current", json=[999999], timeout=TIMEOUT)
         assert current_resp.status_code == 200
         data = current_resp.json()
         assert data["success_count"] == 0
@@ -799,12 +735,9 @@ async def test_get_current_prices_empty_list(test_server):
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
 
-        current_resp = await client.post(
-            f"{API_BASE}/assets/prices/current", json=[], timeout=TIMEOUT
-            )
+        current_resp = await client.post(f"{API_BASE}/assets/prices/current", json=[], timeout=TIMEOUT)
         assert current_resp.status_code == 200
         data = current_resp.json()
         assert data["results"] == []
         assert data["success_count"] == 0
         print_success("  ✓ Empty list returns empty results")
-

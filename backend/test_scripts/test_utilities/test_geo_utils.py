@@ -10,7 +10,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas import FAGeographicArea
-from backend.app.utils.geo_utils import normalize_country_to_iso3, expand_region
+from backend.app.utils.geo_utils import expand_region, normalize_country_to_iso3
 
 
 def test_normalize_country_to_iso3():
@@ -52,7 +52,7 @@ def test_FAGeographicArea():
         "USA": Decimal("0.6000"),
         "GBR": Decimal("0.3000"),
         "ITA": Decimal("0.1000"),
-        }
+    }
     assert sum(result.distribution.values()) == Decimal("1.0")
 
     # ISO-2 to ISO-3 conversion

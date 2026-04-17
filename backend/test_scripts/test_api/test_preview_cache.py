@@ -2,8 +2,6 @@
 
 import time
 
-import pytest
-
 from backend.app.api.v1.uploads import PreviewCache
 
 
@@ -90,4 +88,3 @@ class TestPreviewCache:
         assert self.cache.current_bytes == 5
         self.cache.invalidate("f1")
         assert self.cache.current_bytes == 0
-

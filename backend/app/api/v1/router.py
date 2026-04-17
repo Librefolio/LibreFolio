@@ -6,17 +6,17 @@ Aggregates all v1 endpoints.
 from fastapi import APIRouter
 
 from backend.app.api.v1 import (
-    fx,
     assets,
-    transactions,
-    brokers,
-    backup,
     auth,
+    backup,
+    brokers,
+    fx,
     settings,
     system,
+    transactions,
     uploads,
     users,
-    )
+)
 from backend.app.api.v1.utilities import router as utilities_router
 from backend.app.logging_config import get_logger
 

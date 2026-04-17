@@ -27,155 +27,151 @@ and standardize data exchange between components.
 """
 
 from backend.app.schemas.assets import (
-    FACurrentValue,
-    FAPricePoint,
-    FAHistoricalData,
-    FAAssetEventPoint,
-    FAAssetProviderAssignment,
-    FAAssetPatchItem,
     # Distribution models
     BaseDistribution,
-    # Metadata & classification
-    FAGeographicArea,
-    FASectorArea,
-    FAClassificationParams,
-    FAAssetMetadataResponse,
-    FAMetadataChangeDetail,
-    FAMetadataRefreshResult,
-    FABulkMetadataRefreshResponse,
-    FABulkAssetPatchResponse,
-    FAAssetPatchResult,
+    FAAinfoFiltersRequest,
     # Asset CRUD
     FAAssetCreateItem,
     FAAssetCreateResult,
-    FABulkAssetCreateResponse,
-    FAAinfoFiltersRequest,
-    FAinfoResponse,
     FAAssetDeleteResult,
+    FAAssetEventPoint,
+    FAAssetMetadataResponse,
+    FAAssetPatchItem,
+    FAAssetPatchResult,
+    FAAssetProviderAssignment,
+    FABulkAssetCreateResponse,
     FABulkAssetDeleteResponse,
-    )
+    FABulkAssetPatchResponse,
+    FABulkMetadataRefreshResponse,
+    FAClassificationParams,
+    FACurrentValue,
+    # Metadata & classification
+    FAGeographicArea,
+    FAHistoricalData,
+    FAinfoResponse,
+    FAMetadataChangeDetail,
+    FAMetadataRefreshResult,
+    FASectorArea,
+)
 from backend.app.schemas.brim import (
     # Constants and helpers
     FAKE_ASSET_ID_BASE,
-    is_fake_asset_id,
-    # Enums
-    BRIMFileStatus,
-    BRIMMatchConfidence,
-    BRIMDuplicateLevel,
-    # File management
-    BRIMFileInfo,
-    BRIMPluginInfo,
     # Asset mapping
     BRIMAssetCandidate,
     BRIMAssetMapping,
+    BRIMDuplicateLevel,
     # Duplicate detection
     BRIMDuplicateMatch,
-    BRIMTXDuplicateCandidate,
     BRIMDuplicateReport,
+    # File management
+    BRIMFileInfo,
+    # Enums
+    BRIMFileStatus,
+    BRIMMatchConfidence,
     # Parse (import uses POST /transactions)
     BRIMParseRequest,
     BRIMParseResponse,
-    )
+    BRIMPluginInfo,
+    BRIMTXDuplicateCandidate,
+    is_fake_asset_id,
+)
 from backend.app.schemas.brokers import (
-    BRCreateItem,
-    BRReadItem,
-    BRSummary,
-    BRAssetHolding,
-    BRUpdateItem,
-    BRDeleteItem,
-    BRDeleteResult,
-    BRBulkDeleteResponse,
-    BRCreateResult,
-    BRBulkCreateResponse,
-    BRUpdateResult,
-    BRBulkUpdateResponse,
-    BRAccessItem,
-    BRAccessListResponse,
     BRAccessBulkItem,
     BRAccessBulkResponse,
-    )
+    BRAccessItem,
+    BRAccessListResponse,
+    BRAssetHolding,
+    BRBulkCreateResponse,
+    BRBulkDeleteResponse,
+    BRBulkUpdateResponse,
+    BRCreateItem,
+    BRCreateResult,
+    BRDeleteItem,
+    BRDeleteResult,
+    BRReadItem,
+    BRSummary,
+    BRUpdateItem,
+    BRUpdateResult,
+)
 from backend.app.schemas.common import (
-    Currency,
     BackwardFillInfo,
-    DateRangeModel,
-    OldNew,
+    BaseBulkDeleteResponse,
     BaseBulkResponse,
     BaseDeleteResult,
-    BaseBulkDeleteResponse,
-    )
+    Currency,
+    DateRangeModel,
+    OldNew,
+)
 from backend.app.schemas.fx import (
-    FXProviderInfo,
+    FXBulkDeleteResponse,
+    FXBulkUpsertResponse,
     FXConversionRequest,
     FXConversionResult,
+    FXConversionRouteItem,
+    FXConversionRouteResult,
+    FXConversionRoutesResponse,
     FXConvertResponse,
-    FXUpsertItem,
-    FXBulkUpsertResponse,
+    FXCreateRoutesResponse,
     FXDeleteItem,
     FXDeleteResult,
-    FXBulkDeleteResponse,
-    FXRouteStep,
-    FXConversionRouteItem,
-    FXConversionRoutesResponse,
-    FXConversionRouteResult,
-    FXCreateRoutesResponse,
     FXDeleteRouteItem,
     FXDeleteRouteResult,
     FXDeleteRoutesResponse,
+    FXProviderInfo,
+    FXRouteStep,
+    FXUpsertItem,
     validate_chain_steps,
-    )
+)
 from backend.app.schemas.prices import (
-    FAUpsert,
-    FAPricePoint,
     FAAssetDelete,
-    FABulkUpsertResponse,
     FABulkDeleteResponse,
+    FABulkUpsertResponse,
     FAPriceDeleteResult,
+    FAPricePoint,
+    FAUpsert,
     FAUpsertResult,
-    FAPriceQueryItem,
-    FAPriceQueryResult,
-    FAPriceQueryResponse,
-    )
+)
 from backend.app.schemas.provider import (
-    FAProviderInfo,
     FABulkAssignResponse,
     FABulkRemoveResponse,
     FAProviderAssignmentItem,
     FAProviderAssignmentReadItem,
     FAProviderAssignmentResult,
-    FAProviderRemovalResult,
+    FAProviderInfo,
     FAProviderRefreshFieldsDetail,
-    )
+    FAProviderRemovalResult,
+)
 from backend.app.schemas.refresh import (
-    FARefreshItem,
     FABulkRefreshResponse,
+    FARefreshItem,
     FARefreshResult,
-    SyncStatus,
-    FXSyncStatus,
+    FXSyncBulkResponse,
     FXSyncPairRequest,
     FXSyncPairResult,
-    FXSyncBulkResponse,
-    )
+    FXSyncStatus,
+    SyncStatus,
+)
 from backend.app.schemas.transactions import (
-    TXCreateItem,
-    TXReadItem,
-    TXUpdateItem,
-    TXDeleteItem,
-    TXQueryParams,
-    TXCreateResultItem,
-    TXBulkCreateResponse,
-    TXUpdateResultItem,
-    TXBulkUpdateResponse,
-    TXDeleteResult,
-    TXBulkDeleteResponse,
-    TXTypeMetadata,
     TX_TYPE_METADATA,
+    AssetMode,
     # Type aliases
     SignType,
-    AssetMode,
+    TXBulkCreateResponse,
+    TXBulkDeleteResponse,
+    TXBulkUpdateResponse,
+    TXCreateItem,
+    TXCreateResultItem,
+    TXDeleteItem,
+    TXDeleteResult,
+    TXQueryParams,
+    TXReadItem,
+    TXTypeMetadata,
+    TXUpdateItem,
+    TXUpdateResultItem,
+    tags_to_csv,
     # Shared utilities
     validate_tags_list,
-    tags_to_csv,
-    )
+)
 
 __all__ = [
     # Common (base classes)
@@ -310,4 +306,4 @@ __all__ = [
     "BRIMDuplicateReport",
     "BRIMParseRequest",
     "BRIMParseResponse",
-    ]
+]

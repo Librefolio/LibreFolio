@@ -52,7 +52,7 @@ BACKEND_NAME_MAP = {
     "python-multipart": "python-multipart",
     "justetf-scraping": "JustETF Scraping",
     "email-validator": "email-validator",
-    }
+}
 
 FRONTEND_NAME_MAP = {
     "@sveltejs/kit": "SvelteKit",
@@ -65,7 +65,7 @@ FRONTEND_NAME_MAP = {
     "svelte-i18n": "svelte-i18n",
     "date-fns": "date-fns",
     "@zodios/core": "Zodios",
-    }
+}
 
 
 def get_display_name(pkg_name: str, name_map: dict) -> str:
@@ -127,7 +127,7 @@ def get_frontend_deps() -> list[DependencyInfo]:
         package_json_path = PROJECT_ROOT / "frontend" / "package.json"
 
         if package_json_path.exists():
-            with open(package_json_path, "r") as f:
+            with open(package_json_path) as f:
                 pkg_data = json.load(f)
 
             # Collect all deps
@@ -168,7 +168,7 @@ async def get_system_info() -> SystemInfoResponse:
         platform=platform.platform(),
         backend_dependencies=get_backend_deps(),
         frontend_dependencies=get_frontend_deps(),
-        )
+    )
 
 
 @router.get("/health")

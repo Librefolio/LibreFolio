@@ -4,14 +4,14 @@ Handles currency conversion and FX rate synchronization.
 """
 
 import json
-from datetime import date
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, delete as sql_delete
+from sqlmodel import delete as sql_delete
+from sqlmodel import select
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import FxConversionRoute, FxRate, User
@@ -19,39 +19,39 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
 from backend.app.schemas.fx import (
-    # Provider models
-    FXProviderInfo,
+    FXBulkDeleteResponse,
+    FXBulkUpsertResponse,
     # Conversion models
     FXConversionRequest,
     FXConversionResult,
+    FXConversionRouteItem,
+    FXConversionRouteResult,
+    FXConversionRoutesResponse,
     FXConvertResponse,
-    # Rate upsert models
-    FXUpsertItem,
-    FXUpsertResult,
-    FXBulkUpsertResponse,
+    FXCreateRoutesResponse,
     # Rate delete models
     FXDeleteItem,
     FXDeleteResult,
-    FXBulkDeleteResponse,
-    # Route models (replaces pair-source models)
-    FXRouteStep,
-    FXConversionRouteItem,
-    FXConversionRoutesResponse,
-    FXConversionRouteResult,
-    FXCreateRoutesResponse,
     FXDeleteRouteItem,
     FXDeleteRouteResult,
     FXDeleteRoutesResponse,
     # Pairs list models
-    )
-from backend.app.schemas.refresh import FXSyncPairRequest, FXSyncBulkResponse
+    # Provider models
+    FXProviderInfo,
+    # Route models (replaces pair-source models)
+    FXRouteStep,
+    # Rate upsert models
+    FXUpsertItem,
+    FXUpsertResult,
+)
+from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
 from backend.app.services.fx import (
     FXServiceError,
     convert_bulk,
+    delete_rates_bulk,
     sync_pairs_bulk,
     upsert_rates_bulk,
-    delete_rates_bulk,
-    )
+)
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
 from backend.app.services.provider_registry import FXProviderRegistry
 
@@ -90,9 +90,12 @@ def _build_providers_description() -> str:
 
 @router_providers.get("", response_model=List[FXProviderInfo], description=_build_providers_description())
 async def list_providers(
-    providers: Optional[List[str]] = Query(None, description="Optional list of provider codes to filter. If empty, returns all providers.", ),
+    providers: Optional[List[str]] = Query(
+        None,
+        description="Optional list of provider codes to filter. If empty, returns all providers.",
+    ),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Get the list of available FX rate providers, optionally filtered."""
     try:
         # Get all providers from registry
@@ -129,19 +132,17 @@ async def list_providers(
                     base_currency=instance.base_currency,
                     base_currencies=base_currencies,
                     target_currencies=sorted(target_currencies),
-                    description=getattr(
-                        instance, "description", f'{provider_dict["name"]} FX rate provider'
-                        ),
+                    description=getattr(instance, "description", f'{provider_dict["name"]} FX rate provider'),
                     description_i18n=getattr(instance, "description_i18n", {}),
                     warning_i18n=getattr(instance, "warning_i18n", {}),
                     icon_url=instance.icon,
                     docs_url=getattr(instance, "docs_url", None),
-                    )
                 )
+            )
 
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}") from e
 
 
 @router_currencies.post("/sync", response_model=FXSyncBulkResponse)
@@ -149,7 +150,7 @@ async def sync_rates(
     body: FXSyncPairRequest,
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Synchronize FX rates for specified currency pairs and date range.
 
@@ -173,9 +174,7 @@ async def sync_rates(
     """
     # Validate date range
     if body.start > body.end:
-        raise HTTPException(
-            status_code=400, detail="Start date must be before or equal to end date"
-            )
+        raise HTTPException(status_code=400, detail="Start date must be before or equal to end date")
     if body.end > date.today():
         raise HTTPException(status_code=400, detail="End date cannot be in the future")
 
@@ -184,23 +183,24 @@ async def sync_rates(
             session,
             pairs=body.pairs,
             date_range=(body.start, body.end),
-            )
+        )
         return result
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except FXServiceError as e:
-        raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}") from e
     except Exception as e:
         # Catch-all to prevent hanging — always return a response
-        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {str(e)}") from e
 
 
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)
 async def upsert_rates_endpoint(
-    rates: List[FXUpsertItem], session: AsyncSession = Depends(get_session_generator),
+    rates: List[FXUpsertItem],
+    session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Manually insert or update one or more FX rates (bulk operation).
 
@@ -239,9 +239,7 @@ async def upsert_rates_endpoint(
 
         try:
             # Use bulk service function
-            rate_results = await upsert_rates_bulk(
-                session, [(rate_item.rate_date, base, quote, rate_value, rate_item.source)]
-                )
+            rate_results = await upsert_rates_bulk(session, [(rate_item.rate_date, base, quote, rate_value, rate_item.source)])
 
             success, action = rate_results[0]
 
@@ -253,8 +251,8 @@ async def upsert_rates_endpoint(
                     date=rate_item.rate_date.isoformat(),
                     base=base,
                     quote=quote,
-                    )
                 )
+            )
 
         except ValueError as e:
             error_msg = f"Rate {idx}: Validation error: {str(e)}"
@@ -272,9 +270,10 @@ async def upsert_rates_endpoint(
 
 @router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)
 async def delete_rates_endpoint(
-    deletions: List[FXDeleteItem], session: AsyncSession = Depends(get_session_generator),
+    deletions: List[FXDeleteItem],
+    session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Delete one or more FX rates (bulk operation).
 
@@ -337,16 +336,12 @@ async def delete_rates_endpoint(
             # Delete ALL rates for this pair (no date filter)
             try:
                 # Count existing
-                count_stmt = select(FxRate).where(
-                    FxRate.base == base, FxRate.quote == quote
-                    )
+                count_stmt = select(FxRate).where(FxRate.base == base, FxRate.quote == quote)
                 count_result = await session.execute(count_stmt)
                 existing_count = len(count_result.scalars().all())
 
                 # Delete all
-                del_stmt = sql_delete(FxRate).where(
-                    FxRate.base == base, FxRate.quote == quote
-                    )
+                del_stmt = sql_delete(FxRate).where(FxRate.base == base, FxRate.quote == quote)
                 del_result = await session.execute(del_stmt)
                 deleted_count = del_result.rowcount
                 await session.commit()
@@ -362,8 +357,8 @@ async def delete_rates_endpoint(
                         existing_count=existing_count,
                         deleted_count=deleted_count,
                         message=message,
-                        )
                     )
+                )
                 total_deleted += deleted_count
             except Exception as e:
                 errors.append(f"Delete all for {base}/{quote} failed: {str(e)}")
@@ -380,8 +375,8 @@ async def delete_rates_endpoint(
                     "to_currency": to_cur,
                     "start_date": start_date,
                     "end_date": end_date,
-                    }
-                )
+                }
+            )
 
     # Execute bulk deletions if any valid
     if bulk_deletions:
@@ -390,9 +385,7 @@ async def delete_rates_endpoint(
             delete_results = await delete_rates_bulk(session, bulk_deletions)
 
             # Process results
-            for metadata, (success, existing_count, deleted_count, message) in zip(
-                deletion_metadata, delete_results
-                ):
+            for metadata, (success, existing_count, deleted_count, message) in zip(deletion_metadata, delete_results, strict=True):
                 # Backend normalized the pair, we need to figure out what it became
                 # For display, we'll show the normalized version
                 from_cur = metadata["from_currency"]
@@ -412,12 +405,12 @@ async def delete_rates_endpoint(
                         date_range=DateRangeModel(
                             start=metadata["start_date"],
                             end=metadata["end_date"] if metadata["end_date"] else None,
-                            ),
+                        ),
                         existing_count=existing_count,
                         deleted_count=deleted_count,
                         message=message,
-                        )
                     )
+                )
 
                 total_deleted += deleted_count
 
@@ -425,7 +418,7 @@ async def delete_rates_endpoint(
             error_msg = f"Bulk deletion failed: {str(e)}"
             errors.append(error_msg)
             # If entire bulk operation failed, return 500
-            raise HTTPException(status_code=500, detail=error_msg)
+            raise HTTPException(status_code=500, detail=error_msg) from e
 
     # If all deletions failed validation, return 400
     if errors and not results:
@@ -436,7 +429,7 @@ async def delete_rates_endpoint(
         success_count=len([r for r in results if r.success]),
         total_deleted=total_deleted,
         errors=errors,
-        )
+    )
 
 
 import re
@@ -478,9 +471,10 @@ def _compress_convert_errors(errors: list[str]) -> list[str]:
 
 @router_currencies.post("/convert", response_model=FXConvertResponse)
 async def convert_currency_bulk(
-    request: List[FXConversionRequest], session: AsyncSession = Depends(get_session_generator),
+    request: List[FXConversionRequest],
+    session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Convert one or more amounts between currencies (bulk operation).
 
@@ -514,7 +508,7 @@ async def convert_currency_bulk(
             raise HTTPException(
                 status_code=400,
                 detail=f"Conversion {conv_idx}: start date must be before or equal to end date",
-                )
+            )
 
         # Expand date range into individual days
         # Now using new signature: (Currency, to_currency, date)
@@ -533,8 +527,8 @@ async def convert_currency_bulk(
                     "original_idx": conv_idx,
                     "conversion": conversion,
                     "date": conversion.date_range.start,
-                    }
-                )
+                }
+            )
 
     # Call convert_bulk with raise_on_error=False to get partial results
     bulk_results, bulk_errors = await convert_bulk(session, bulk_conversions, raise_on_error=False)
@@ -542,7 +536,7 @@ async def convert_currency_bulk(
     results = []
 
     # Process results
-    for idx, (metadata, bulk_result) in enumerate(zip(conversion_metadata, bulk_results)):
+    for _idx, (metadata, bulk_result) in enumerate(zip(conversion_metadata, bulk_results, strict=True)):
         if bulk_result is None:
             # This conversion failed (error already in bulk_errors)
             continue
@@ -563,9 +557,7 @@ async def convert_currency_bulk(
         backward_fill_info = None
         if backward_fill_applied:
             days_back = (on_date - actual_rate_date).days
-            backward_fill_info = BackwardFillInfo(
-                actual_rate_date=actual_rate_date, days_back=days_back
-                )
+            backward_fill_info = BackwardFillInfo(actual_rate_date=actual_rate_date, days_back=days_back)
 
         results.append(
             FXConversionResult(
@@ -574,8 +566,8 @@ async def convert_currency_bulk(
                 conversion_date=on_date.isoformat(),
                 rate=rate,
                 backward_fill_info=backward_fill_info,
-                )
             )
+        )
 
     # Compress repeated errors (e.g. same pair missing for N dates → single message)
     compressed_errors = _compress_convert_errors(bulk_errors) if bulk_errors else []
@@ -588,7 +580,7 @@ async def convert_currency_bulk(
         results=results,
         success_count=len([r for r in results if r.to_amount is not None]),
         errors=compressed_errors,
-        )
+    )
 
 
 # ============================================================================
@@ -597,8 +589,7 @@ async def convert_currency_bulk(
 
 
 @router_providers.get("/routes", response_model=FXConversionRoutesResponse)
-async def list_routes(session: AsyncSession = Depends(get_session_generator),
-                      _current_user: User = Depends(get_current_user)):
+async def list_routes(session: AsyncSession = Depends(get_session_generator), _current_user: User = Depends(get_current_user)):
     """
     Get the list of configured conversion routes.
 
@@ -615,22 +606,25 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator),
 
         routes_list = [
             FXConversionRouteItem(
-                base=r.base, quote=r.quote, priority=r.priority,
+                base=r.base,
+                quote=r.quote,
+                priority=r.priority,
                 chain_steps=[FXRouteStep(**s) for s in json.loads(r.chain_steps)],
-                )
+            )
             for r in routes
-            ]
+        ]
 
         return FXConversionRoutesResponse(items=routes_list)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch routes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch routes: {str(e)}") from e
 
 
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
 async def create_routes_bulk(
-    routes: List[FXConversionRouteItem], session: AsyncSession = Depends(get_session_generator),
+    routes: List[FXConversionRouteItem],
+    session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Create or update multiple conversion routes in a single atomic transaction.
 
@@ -670,8 +664,8 @@ async def create_routes_bulk(
                         priority=route_item.priority,
                         chain_steps=route_item.chain_steps,
                         message=f"Unknown provider(s): {', '.join(invalid_providers)}",
-                        )
                     )
+                )
                 error_count += 1
                 continue
 
@@ -680,17 +674,14 @@ async def create_routes_bulk(
             quote = max(route_item.base.upper(), route_item.quote.upper())
 
             # Serialize chain_steps to JSON
-            chain_steps_json = json.dumps([
-                {"from": s.from_currency, "to": s.to_currency, "provider": s.provider}
-                for s in route_item.chain_steps
-                ])
+            chain_steps_json = json.dumps([{"from": s.from_currency, "to": s.to_currency, "provider": s.provider} for s in route_item.chain_steps])
 
             # Check if already exists
             stmt = select(FxConversionRoute).where(
                 FxConversionRoute.base == base,
                 FxConversionRoute.quote == quote,
                 FxConversionRoute.priority == route_item.priority,
-                )
+            )
             result = await session.execute(stmt)
             existing = result.scalar_one_or_none()
 
@@ -704,7 +695,7 @@ async def create_routes_bulk(
                     quote=quote,
                     priority=route_item.priority,
                     chain_steps=chain_steps_json,
-                    )
+                )
                 session.add(new_route)
                 action = "created"
 
@@ -717,8 +708,8 @@ async def create_routes_bulk(
                     priority=route_item.priority,
                     chain_steps=route_item.chain_steps,
                     message=None,
-                    )
                 )
+            )
             success_count += 1
 
         if error_count > 0:
@@ -728,8 +719,8 @@ async def create_routes_bulk(
                 detail={
                     "message": f"Validation failed for {error_count} route(s). Transaction rolled back.",
                     "results": [r.model_dump() for r in results],
-                    },
-                )
+                },
+            )
 
         # Auto-remove MANUAL sentinel for pairs that now have real providers
         pairs_with_real_providers = set()
@@ -742,17 +733,17 @@ async def create_routes_bulk(
 
         for base, quote in pairs_with_real_providers:
             # Delete MANUAL routes for this pair
-            manual_del = sql_delete(FxConversionRoute).where(
+            _manual_del = sql_delete(FxConversionRoute).where(
                 FxConversionRoute.base == base,
                 FxConversionRoute.quote == quote,
                 # A route is MANUAL if chain_steps contains only MANUAL provider
                 # We check by looking for routes where chain_steps has MANUAL
-                )
+            )
             # More targeted: find MANUAL routes
             manual_stmt = select(FxConversionRoute).where(
                 FxConversionRoute.base == base,
                 FxConversionRoute.quote == quote,
-                )
+            )
             manual_result = await session.execute(manual_stmt)
             manual_routes = manual_result.scalars().all()
             for mr in manual_routes:
@@ -769,14 +760,15 @@ async def create_routes_bulk(
         raise
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create routes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create routes: {str(e)}") from e
 
 
 @router_providers.delete("/routes", response_model=FXDeleteRoutesResponse)
 async def delete_routes_bulk(
-    routes: List[FXDeleteRouteItem], session: AsyncSession = Depends(get_session_generator),
+    routes: List[FXDeleteRouteItem],
+    session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Delete multiple conversion routes.
 
@@ -808,12 +800,12 @@ async def delete_routes_bulk(
                     FxConversionRoute.base == norm_base,
                     FxConversionRoute.quote == norm_quote,
                     FxConversionRoute.priority == priority,
-                    )
+                )
             else:
                 stmt = sql_delete(FxConversionRoute).where(
                     FxConversionRoute.base == norm_base,
                     FxConversionRoute.quote == norm_quote,
-                    )
+                )
 
             result = await session.execute(stmt)
             deleted_count = result.rowcount
@@ -828,8 +820,8 @@ async def delete_routes_bulk(
                         priority=priority,
                         deleted_count=0,
                         message=f"Route {norm_base}/{norm_quote}{priority_str} not found (nothing to delete)",
-                        )
                     )
+                )
             else:
                 results.append(
                     FXDeleteRouteResult(
@@ -839,8 +831,8 @@ async def delete_routes_bulk(
                         priority=priority,
                         deleted_count=deleted_count,
                         message=None,
-                        )
                     )
+                )
                 total_deleted += deleted_count
 
         # Auto-reinstate MANUAL sentinel for pairs that have no routes left
@@ -855,7 +847,7 @@ async def delete_routes_bulk(
             count_stmt = select(FxConversionRoute).where(
                 FxConversionRoute.base == base,
                 FxConversionRoute.quote == quote,
-                )
+            )
             remaining = await session.execute(count_stmt)
             remaining_routes = remaining.scalars().all()
 
@@ -867,15 +859,13 @@ async def delete_routes_bulk(
                     has_real = True
                     break
 
-            if not has_real and not any(
-                all(s["provider"].upper() == "MANUAL" for s in r.parsed_steps)
-                for r in remaining_routes
-                ):
+            if not has_real and not any(all(s["provider"].upper() == "MANUAL" for s in r.parsed_steps) for r in remaining_routes):
                 manual_route = FxConversionRoute(
-                    base=base, quote=quote,
+                    base=base,
+                    quote=quote,
                     priority=MANUAL_PRIORITY,
                     chain_steps=json.dumps([{"from": base, "to": quote, "provider": "MANUAL"}]),
-                    )
+                )
                 session.add(manual_route)
                 logger.info(f"Auto-reinstated MANUAL sentinel for {base}/{quote} (no real providers left)")
 
@@ -885,11 +875,11 @@ async def delete_routes_bulk(
             results=results,
             success_count=len([r for r in results if r.success]),
             total_deleted=total_deleted,
-            )
+        )
 
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete routes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete routes: {str(e)}") from e
 
 
 # ============================================================================

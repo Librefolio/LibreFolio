@@ -3,12 +3,11 @@ Test datetime utilities.
 All test is independent of the others, so help use pytest features.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from backend.app.utils.datetime_utils import utcnow
-
 
 # ============================================================================
 # TESTS: utcnow
@@ -25,14 +24,14 @@ def test_utcnow_has_timezone_info():
     """Test that utcnow() returns timezone-aware datetime."""
     result = utcnow()
     assert result.tzinfo is not None
-    assert result.tzinfo == timezone.utc
+    assert result.tzinfo == UTC
 
 
 def test_utcnow_returns_current_time():
     """Test that utcnow() returns approximately current time."""
-    before = datetime.now(timezone.utc)
+    before = datetime.now(UTC)
     result = utcnow()
-    after = datetime.now(timezone.utc)
+    after = datetime.now(UTC)
 
     # Result should be between before and after (within same second)
     assert before <= result <= after
@@ -50,7 +49,7 @@ def test_utcnow_multiple_calls():
 def test_utcnow_tzinfo_is_utc():
     """Test that utcnow() specifically returns UTC timezone."""
     result = utcnow()
-    assert result.tzinfo == timezone.utc
+    assert result.tzinfo == UTC
     assert result.utcoffset().total_seconds() == 0
 
 

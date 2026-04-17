@@ -14,6 +14,7 @@ Usage:
     pytest backend/test_scripts/test_db/db_schema_validate.py -v
     or via test_runner.py: ./dev.py test db validate
 """
+
 import sys
 
 import pytest
@@ -29,18 +30,19 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 # Standard library and SQLAlchemy imports
-from sqlalchemy import inspect, text, CheckConstraint, UniqueConstraint, ForeignKeyConstraint
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint, inspect, text
+
+from backend.alembic.check_constraints_hook import LogLevel, check_and_add_missing_constraints
+from backend.app.db.base import SQLModel
+from backend.app.db.models import (
+    AssetType,
+    IdentifierType,
+    TransactionType,
+    UserRole,
+)
 
 # App imports
 from backend.app.db.session import get_sync_engine
-from backend.app.db.base import SQLModel
-from backend.app.db.models import (
-    IdentifierType,
-    AssetType,
-    TransactionType,
-    UserRole,
-    )
-from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
 
 
 def test_tables_exist():
@@ -61,17 +63,13 @@ def test_tables_exist():
 
     # Check for missing tables (ERROR)
     missing = expected_tables - actual_tables
-    assert not missing, (
-        f"Missing tables: {', '.join(sorted(missing))}\n"
-        f"Expected (from models): {', '.join(sorted(expected_tables))}\n"
-        f"Found (in database): {', '.join(sorted(actual_tables))}"
-    )
+    assert not missing, f"Missing tables: {', '.join(sorted(missing))}\n" f"Expected (from models): {', '.join(sorted(expected_tables))}\n" f"Found (in database): {', '.join(sorted(actual_tables))}"
 
     # Check for extra tables (WARNING - not an error, just informational)
     extra = actual_tables - expected_tables
     if extra:
         print(f"ℹ️  Extra tables found (not in models): {', '.join(sorted(extra))}")
-        print(f"   This might be OK (e.g., temp tables)")
+        print("   This might be OK (e.g., temp tables)")
 
     print(f"✅ All {len(expected_tables)} required tables exist")
     if extra:
@@ -102,7 +100,7 @@ def test_unique_constraints():
         # We just check that there are some constraints, not exact match
         if len(db_unique) == 0 and expected_count > 0:
             print(f"  ℹ️  {table_name}: Expected {expected_count} constraints, found 0 in DB")
-            print(f"      (May be implemented as unique indexes in SQLite)")
+            print("      (May be implemented as unique indexes in SQLite)")
 
     print("✅ Unique constraints checked")
 
@@ -128,9 +126,7 @@ def test_foreign_keys():
         fks = inspector.get_foreign_keys(table_name)
         actual_count = len(fks)
 
-        assert (
-            actual_count == expected_count
-        ), f"{table_name}: expected {expected_count} FK(s), found {actual_count}"
+        assert actual_count == expected_count, f"{table_name}: expected {expected_count} FK(s), found {actual_count}"
 
         print(f"  ✅ {table_name}: {actual_count} FK(s)")
 
@@ -152,13 +148,11 @@ def test_indexes():
         # Count indexes defined in the model
         index_count = len(table.indexes)
         if index_count > 0:
-            tables_with_indexes.append(
-                (table_name, index_count, [idx.name for idx in table.indexes])
-                )
+            tables_with_indexes.append((table_name, index_count, [idx.name for idx in table.indexes]))
 
     # Verify indexes exist in database
     missing_indexes = []
-    for table_name, expected_count, expected_names in sorted(tables_with_indexes):
+    for table_name, _expected_count, expected_names in sorted(tables_with_indexes):
         db_indexes = inspector.get_indexes(table_name)
         db_index_names = [idx["name"] for idx in db_indexes if idx.get("name")]
 
@@ -265,17 +259,11 @@ def test_check_constraints():
         pytest.skip("No CHECK constraints defined in models")
 
     print("  Verifying constraints exist in database...")
-    all_present, missing = check_and_add_missing_constraints(
-        auto_fix=False, log_level=LogLevel.VERBOSE
-        )
+    all_present, missing = check_and_add_missing_constraints(auto_fix=False, log_level=LogLevel.VERBOSE)
 
-    assert all_present, (
-        f"Missing CHECK constraints: {', '.join(missing)}\n"
-        f"SQLite/Alembic limitation: CHECK constraints must be added manually to migrations\n"
-        f"Run: python -m backend.alembic.check_constraints_hook"
-    )
+    assert all_present, f"Missing CHECK constraints: {', '.join(missing)}\n" f"SQLite/Alembic limitation: CHECK constraints must be added manually to migrations\n" f"Run: python -m backend.alembic.check_constraints_hook"
 
-    print(f"✅ All CHECK constraints present in database")
+    print("✅ All CHECK constraints present in database")
 
 
 def test_identifier_columns_match_enum():
@@ -295,11 +283,11 @@ def test_identifier_columns_match_enum():
     """
     from backend.app.db.models import Asset, IdentifierType
     from backend.app.schemas.assets import (
+        FAAinfoFiltersRequest,
         FAAssetCreateItem,
         FAAssetPatchItem,
         FAinfoResponse,
-        FAAinfoFiltersRequest,
-        )
+    )
 
     print("\n  Checking IdentifierType → Schema field mappings:")
 
@@ -310,7 +298,7 @@ def test_identifier_columns_match_enum():
         (FAAssetCreateItem, "identifier_{}", "Create schema field"),
         (FAAssetPatchItem, "identifier_{}", "Patch schema field"),
         (FAinfoResponse, "identifier_{}", "Response schema field"),
-        ]
+    ]
 
     # FAAinfoFiltersRequest uses short names (isin, ticker, etc.)
     # We check that separately with a mapping
@@ -322,7 +310,7 @@ def test_identifier_columns_match_enum():
         "FIGI": "figi",
         "UUID": "uuid",
         "OTHER": "identifier_other",  # OTHER uses identifier_other (partial match)
-        }
+    }
 
     all_missing = []
 
@@ -346,7 +334,7 @@ def test_identifier_columns_match_enum():
                 all_missing.append(f"{schema_class.__name__}.{field_name}")
 
     # Check FAAinfoFiltersRequest separately
-    print(f"\n  FAAinfoFiltersRequest filter fields:")
+    print("\n  FAAinfoFiltersRequest filter fields:")
     for id_type in IdentifierType:
         expected_field = filter_field_mapping.get(id_type.value)
         if expected_field:
@@ -361,10 +349,7 @@ def test_identifier_columns_match_enum():
         print(f"\n❌ Missing fields: {all_missing}")
         print("   See IdentifierType docstring in models.py for update checklist")
 
-    assert not all_missing, (
-        f"Missing fields for IdentifierType sync: {all_missing}\n"
-        f"See IdentifierType docstring in models.py for full update checklist"
-    )
+    assert not all_missing, f"Missing fields for IdentifierType sync: {all_missing}\n" f"See IdentifierType docstring in models.py for full update checklist"
 
     total_checks = len(list(IdentifierType)) * len(checks) + len(filter_field_mapping)
     print(f"\n✅ All {total_checks} IdentifierType field mappings verified")

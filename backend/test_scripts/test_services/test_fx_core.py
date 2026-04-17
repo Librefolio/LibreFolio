@@ -36,7 +36,6 @@ from backend.app.services.fx import (
 from backend.app.utils.decimal_utils import truncate_fx_rate
 from backend.test_scripts.test_utils import print_section, print_success
 
-
 # ============================================================================
 # FIXTURE — clean FxRate table before each test
 # ============================================================================
@@ -221,9 +220,7 @@ class TestDeleteRatesBulk:
             await self._seed(session, [("EUR", "USD", d) for d in dates])
 
         async with AsyncSession(engine) as session:
-            results = await delete_rates_bulk(
-                session, [("EUR", "USD", dates[0], dates[-1])]
-            )
+            results = await delete_rates_bulk(session, [("EUR", "USD", dates[0], dates[-1])])
             success, existing, deleted, msg = results[0]
             assert success is True
             assert deleted == 5
@@ -234,9 +231,7 @@ class TestDeleteRatesBulk:
         print_section("delete_rates_bulk: pair not found")
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            results = await delete_rates_bulk(
-                session, [("AAA", "ZZZ", date.today(), None)]
-            )
+            results = await delete_rates_bulk(session, [("AAA", "ZZZ", date.today(), None)])
             success, existing, deleted, msg = results[0]
             assert success is True
             assert deleted == 0
@@ -312,8 +307,8 @@ class TestCountActualChanges:
 
         async with AsyncSession(engine) as session:
             computed = [
-                (d1, "EUR", "USD", rate_same),           # same → no change
-                (d2, "EUR", "USD", rate_changed_new),     # changed → +1
+                (d1, "EUR", "USD", rate_same),  # same → no change
+                (d2, "EUR", "USD", rate_changed_new),  # changed → +1
                 (d3, "EUR", "USD", truncate_fx_rate(Decimal("1.0750"))),  # new → +1
             ]
             count = await _count_actual_changes(session, computed)
@@ -401,5 +396,3 @@ class TestUpsertRatesBulkEdgeCases:
             assert len(results) == 3
             assert all(r[0] for r in results), "All should succeed"
             print_success(f"Inserted {len(results)} different pairs")
-
-
