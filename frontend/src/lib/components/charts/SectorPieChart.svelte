@@ -68,7 +68,7 @@
     function setupResizeObserver() {
         if (resizeObserver || !chartContainer) return;
         resizeObserver = new ResizeObserver(() => {
-            chartInstance?.resize();
+            renderChart();
         });
         resizeObserver.observe(chartContainer);
     }
@@ -114,6 +114,34 @@
             })
             .sort((a, b) => b.value - a.value);
 
+        // Responsive: if container is narrow, put legend below instead of right
+        const containerWidth = chartContainer.getBoundingClientRect().width;
+        const isNarrow = containerWidth < 400;
+
+        const legendConfig: any = isNarrow
+            ? {
+                  type: 'plain',
+                  orient: 'horizontal',
+                  bottom: 0,
+                  left: 'center',
+                  width: '95%',
+                  textStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11},
+              }
+            : {
+                  type: 'scroll',
+                  orient: 'vertical',
+                  right: 10,
+                  top: 20,
+                  bottom: 20,
+                  textStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11},
+                  pageTextStyle: {color: isDark ? '#94a3b8' : '#64748b'},
+                  pageIconColor: isDark ? '#94a3b8' : '#64748b',
+                  pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
+              };
+
+        const pieCenter = isNarrow ? ['50%', '40%'] : ['35%', '50%'];
+        const pieRadius = isNarrow ? ['25%', '55%'] : ['35%', '70%'];
+
         const option: echarts.EChartsOption = {
             color: palette,
             tooltip: {
@@ -123,25 +151,12 @@
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
             },
-            legend: {
-                type: 'scroll',
-                orient: 'vertical',
-                right: 10,
-                top: 20,
-                bottom: 20,
-                textStyle: {
-                    color: isDark ? '#94a3b8' : '#64748b',
-                    fontSize: 11,
-                },
-                pageTextStyle: {color: isDark ? '#94a3b8' : '#64748b'},
-                pageIconColor: isDark ? '#94a3b8' : '#64748b',
-                pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
-            },
+            legend: legendConfig,
             series: [
                 {
                     type: 'pie',
-                    radius: ['35%', '70%'],
-                    center: ['35%', '50%'],
+                    radius: pieRadius,
+                    center: pieCenter,
                     avoidLabelOverlap: true,
                     padAngle: 1,
                     itemStyle: {
