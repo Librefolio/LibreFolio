@@ -28,7 +28,7 @@ from backend.app.schemas.assets import (
     FABulkMetadataRefreshResponse,
     FAClassificationParams,
     FAinfoResponse,
-    )
+)
 from backend.app.schemas.prices import (
     FAAssetDelete,
     FABulkDeleteResponse,
@@ -45,7 +45,7 @@ from backend.app.schemas.prices import (
     FAPriceQueryResponse,
     FAUpsert,
     FAUpsertResult,
-    )
+)
 from backend.app.schemas.provider import (
     FABulkAssignResponse,
     FABulkRemoveResponse,
@@ -57,13 +57,13 @@ from backend.app.schemas.provider import (
     FAProviderProbeResponse,
     FAProviderSearchResponse,
     ProbeOperation,
-    )
+)
 from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
 from backend.app.services.asset_source import (
     AssetCRUDService,
     AssetSearchService,
     AssetSourceManager,
-    )
+)
 from backend.app.services.provider_registry import AssetProviderRegistry
 
 logger = get_logger(__name__)
@@ -84,7 +84,7 @@ async def create_assets_bulk(
     assets: List[FAAssetCreateItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Create multiple assets in bulk (partial success allowed).
 
@@ -135,7 +135,7 @@ async def patch_assets_bulk(
     assets: List[FAAssetPatchItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Update multiple assets in bulk (partial success allowed).
 
@@ -213,7 +213,7 @@ async def list_assets(
     identifier_contains: Optional[str] = Query(None, description="Partial match in any identifier field"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     List all assets with optional filters - enhanced for BRIM asset matching.
 
@@ -258,7 +258,7 @@ async def list_assets(
             uuid=uuid,
             identifier_other=identifier_other,
             identifier_contains=identifier_contains,
-            )
+        )
         return await AssetCRUDService.list_assets(filters, session)
     except Exception as e:
         logger.error(f"Error listing assets: {e}")
@@ -270,7 +270,7 @@ async def delete_assets_bulk(
     asset_ids: List[int] = Query(..., min_length=1, description="List of asset IDs to delete"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Delete multiple assets in bulk (partial success allowed).
 
@@ -321,7 +321,7 @@ async def delete_assets_bulk(
 async def list_providers(
     providers: Optional[str] = Query(None, description="Comma-separated provider codes to filter (default: all)"),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """List all available asset pricing providers.
 
     Optionally filter by provider codes (comma-separated).
@@ -361,8 +361,8 @@ async def list_providers(
                     params_schema=schema_fields,
                     accepted_identifier_types=[t.value for t in instance.accepted_identifier_types],
                     provider_help_url=instance.provider_help_url,
-                    )
                 )
+            )
 
     return result
 
@@ -372,7 +372,7 @@ async def search_assets_via_providers(
     q: str = Query(..., min_length=1, description="Search query"),
     providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Search for assets across one or more providers in parallel.
 
@@ -431,7 +431,7 @@ async def search_assets_stream(  # pragma: no cover
     q: str = Query(..., min_length=1, description="Search query"),
     providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Stream search results via Server-Sent Events (SSE).
 
@@ -455,15 +455,15 @@ async def search_assets_stream(  # pragma: no cover
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
-            },
-        )
+        },
+    )
 
 
 @provider_router.post("/probe", response_model=FAProviderProbeResponse)
 async def probe_provider_config(
     request: FAProviderProbeRequest,
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Probe a provider configuration without persisting anything (dry-run).
 
@@ -484,7 +484,7 @@ async def probe_provider_config(
         result = await AssetSourceManager.probe_provider_config(
             config=request,
             operations=request.operations,
-            )
+        )
         return result
     except AssetSourceError as e:
         raise HTTPException(status_code=400, detail=e.message) from e
@@ -497,7 +497,7 @@ async def assign_providers_bulk(
     assignments: List[FAProviderAssignmentItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Bulk assign providers to assets (PRIMARY bulk endpoint)."""
     try:
         results = await AssetSourceManager.bulk_assign_providers(assignments, session)
@@ -513,7 +513,7 @@ async def remove_providers_bulk(
     asset_ids: List[int] = Query(..., description="List of asset IDs to remove providers from"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Bulk remove provider assignments (PRIMARY bulk endpoint)."""
     try:
         return await AssetSourceManager.bulk_remove_providers(asset_ids, session)
@@ -527,7 +527,7 @@ async def get_provider_assignments(
     asset_ids: List[int] = Query(..., description="List of asset IDs"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Get provider assignments for multiple assets.
 
@@ -580,8 +580,8 @@ async def get_provider_assignments(
                     fetch_interval=a.fetch_interval,
                     last_fetch_at=a.last_fetch_at.isoformat() if a.last_fetch_at else None,
                     provider_url=provider_url,
-                    )
                 )
+            )
 
         return items
     except Exception as e:
@@ -599,7 +599,7 @@ async def upsert_prices_bulk(
     assets: List[FAUpsert],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Bulk upsert prices manually (PRIMARY bulk endpoint)."""
     try:
         # Pass FAUpsert objects directly to service
@@ -613,7 +613,7 @@ async def upsert_prices_bulk(
             updated_count=result["updated_count"],
             results=results_list,
             success_count=success_count,
-            )
+        )
     except Exception as e:
         logger.error(f"Error in bulk upsert prices: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -624,7 +624,7 @@ async def delete_prices_bulk(
     assets: List[FAAssetDelete],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Bulk delete price ranges (PRIMARY bulk endpoint)."""
     try:
         return await AssetSourceManager.bulk_delete_prices(assets, session)
@@ -643,7 +643,7 @@ async def query_prices_bulk(
     requests: List[FAPriceQueryItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Bulk query prices for multiple assets.
 
     Reads from DB only (no provider delegation). Uses a single SQL query
@@ -663,7 +663,7 @@ async def get_current_prices_bulk(
     asset_ids: List[int],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Bulk fetch current/live prices for multiple assets.
 
@@ -706,7 +706,7 @@ async def read_assets_bulk(
     asset_ids: List[int] = Query(..., description="List of asset IDs to read"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Bulk read assets with classification metadata (preserves request order).
 
@@ -783,7 +783,7 @@ async def read_assets_bulk(
         provider_stmt = select(
             AssetProviderAssignment.asset_id,
             AssetProviderAssignment.provider_code,
-            ).where(AssetProviderAssignment.asset_id.in_(asset_ids))
+        ).where(AssetProviderAssignment.asset_id.in_(asset_ids))
         provider_result = await session.execute(provider_stmt)
         provider_map = {row[0]: row[1] for row in provider_result.fetchall()}
 
@@ -802,7 +802,7 @@ async def read_assets_bulk(
                     logger.error(
                         f"Failed to parse classification_params for asset {asset.id}: {e}",
                         extra={"asset_id": asset.id, "error": str(e)},
-                        )
+                    )
                     pass  # Skip invalid JSON
 
             responses.append(
@@ -814,8 +814,8 @@ async def read_assets_bulk(
                     asset_type=asset.asset_type,
                     classification_params=classification_params,
                     provider_code=provider_map.get(asset.id),
-                    )
                 )
+            )
 
         return responses
     except Exception as e:
@@ -833,7 +833,7 @@ async def sync_prices_bulk(
     requests: List[FARefreshItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Bulk sync prices via providers (PRIMARY bulk endpoint)."""
     try:
         return await AssetSourceManager.bulk_refresh_prices(requests, session)
@@ -847,7 +847,7 @@ async def refresh_assets_from_provider(
     asset_ids: List[int] = Query(..., description="List of asset IDs to refresh metadata for"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Refresh asset data from assigned providers (bulk operation).
 
@@ -922,7 +922,7 @@ async def upsert_events_bulk(
     assets: List[FAEventUpsert],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Bulk upsert manual events (provider_assignment_id = NULL).
 
     Creates or updates manual asset events. Auto-generated events from providers
@@ -934,7 +934,7 @@ async def upsert_events_bulk(
         return FABulkEventUpsertResponse(
             results=results_list,
             success_count=result["success_count"],
-            )
+        )
     except Exception as e:
         logger.error(f"Error in bulk upsert events: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -945,7 +945,7 @@ async def delete_event(
     event_id: int,
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Delete a single event by its primary key.
 
     Works for both auto-generated and manual events.
@@ -964,7 +964,7 @@ async def query_events_bulk(
     requests: List[FAEventQueryItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """Bulk query events for multiple assets.
 
     Returns events with id and is_auto flag for frontend rendering.
