@@ -78,6 +78,7 @@ async def _run_provider_in_thread(provider, method, *args):
 ```
 
 !!! warning "Event Loop Blocking Rule"
+
     **Never call synchronous I/O** (HTTP requests, file reads, `time.sleep()`) directly inside an `async def` endpoint or service method. Always use `run_in_executor()` or an async-native library.
 
     Symptoms of event loop blocking:

@@ -54,4 +54,5 @@ To sustain the infrastructure, maintenance, and ongoing development, the cloud p
 ---
 
 !!! tip "Thank you!"
+
     Every form of support — code, ideas, bug reports, or donations — is deeply appreciated. Together we can build the best self-hosted portfolio tracker! :rocket:

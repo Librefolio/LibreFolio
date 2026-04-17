@@ -5,15 +5,9 @@ import {execSync} from 'child_process';
 /**
  * Get git version from git describe.
  * Returns format like 'v1.2.3' or 'v1.2.3-5-gabcdef-dirty'.
- * When HEAD is exactly on a tag, '-dirty' is suppressed because
- * build artifacts (openapi.json) always regenerate and cause false dirty.
  */
 function getGitVersion(): string {
     try {
-        const clean = execSync('git describe --tags --always').toString().trim();
-        // On exact tag (no -N-gHASH suffix): skip dirty check
-        if (!clean.includes('-')) return clean;
-        // Between tags: include dirty state
         return execSync('git describe --tags --always --dirty').toString().trim();
     } catch {
         return 'unknown';
