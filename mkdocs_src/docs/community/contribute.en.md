@@ -24,7 +24,7 @@ We welcome contributions of all sizes:
 2. **Create a branch** for your feature or fix
 3. **Submit a Pull Request** with a clear description
 
-Check the [Developer Manual](../developer/) for architecture details, coding conventions, and testing guidelines.
+Check the [Developer Manual](../developer/index.md) for architecture details, coding conventions, and testing guidelines.
 
 ---
 

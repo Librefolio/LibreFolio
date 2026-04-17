@@ -24,7 +24,7 @@ Aceptamos contribuciones de cualquier tamaño:
 2. **Crea una rama** para tu funcionalidad o corrección
 3. **Envía una Pull Request** con una descripción clara
 
-Consulta el [Manual del Desarrollador](../developer/) para detalles de arquitectura, convenciones y guías de pruebas.
+Consulta el [Manual del Desarrollador](../developer/index.md) para detalles de arquitectura, convenciones y guías de pruebas.
 
 ---
 

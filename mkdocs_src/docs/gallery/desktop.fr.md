@@ -91,13 +91,6 @@ Gérez vos informations de profil, votre avatar et les paramètres de votre comp
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab">
 </div>
 
-### ✏️ Édition du Courtier
-
-Modifiez les détails du courtier — nom, icône, devise de base et configuration.
-
-<div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Broker Edit Modal">
-</div>
 
 ---
 
