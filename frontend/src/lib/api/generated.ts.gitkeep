@@ -1,0 +1,7 @@
+This directory expects a `generated.ts` file — the Zodios API client auto-generated from openapi.json.
+
+What:    Type-safe API client with Zod runtime validation (endpoints, schemas, types)
+Size:    ~285KB, ~8600 lines — changes whenever openapi.json changes
+Generate: ./dev.py api sync
+Why not committed: auto-generated artifact, regenerated before every frontend build
+

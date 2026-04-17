@@ -1,0 +1,7 @@
+This directory expects an `openapi.json` file — the OpenAPI 3.x schema exported from the FastAPI backend.
+
+What:    Full API specification (endpoints, schemas, parameters, responses)
+Size:    ~400KB, ~12000 lines — changes with every backend API modification
+Generate: ./dev.py api sync
+Why not committed: auto-generated artifact, regenerated before every frontend build
+
