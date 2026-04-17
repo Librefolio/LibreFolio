@@ -16,24 +16,67 @@ Ogni donazione — per quanto piccola — aiuta a coprire strumenti di sviluppo,
 
 ---
 
-## :computer: Contribuisci con il Codice
+## :rocket: Contributi ad Alto Impatto
 
-Accogliamo contributi di ogni dimensione:
+Per noi, **una grande idea o un contributo di codice ha lo stesso valore di una donazione**. Ecco le aree dove il tuo aiuto può fare la differenza più grande:
 
-1. **Fai un fork** del [repository](https://github.com/Alfystar/LibreFolio)
-2. **Crea un branch** per la tua feature o fix
-3. **Invia una Pull Request** con una descrizione chiara
+### :electric_plug: Nuovi Plugin
 
-Consulta il [Manuale Sviluppatore](../developer/index.md) per dettagli sull'architettura, convenzioni e linee guida per i test.
+LibreFolio utilizza un [Sistema Registry & Plugin](../developer/architecture/patterns/registry_pattern.md) con auto-discovery. Aggiungere un nuovo plugin è uno dei contributi più importanti:
+
+| Tipo | Guida | Cosa fa |
+|------|-------|---------|
+| 📥 **BRIM** | [Guida Plugin BRIM](../developer/architecture/patterns/brim_plugin_guide.md) | Importa transazioni da un nuovo broker (CSV/Excel) |
+| 📈 **Asset** | [Guida Plugin Asset](../developer/architecture/patterns/asset_plugin_guide.md) | Recupera prezzi da una nuova fonte dati |
+| 💱 **FX** | [Guida Plugin FX](../developer/architecture/patterns/fx_plugin_guide.md) | Aggiunge un nuovo fornitore di tassi di cambio |
+| 📊 **Segnali Grafici** | *Guida in arrivo* | Nuovi indicatori tecnici e overlay grafici (EMA, MACD, RSI, Bollinger…) |
+
+### :art: Idee UI/UX
+
+Miglioramenti estetici, suggerimenti di layout, accessibilità — se vedi qualcosa che potrebbe apparire o funzionare meglio, faccelo sapere!
+
+### :bug: Segnalazioni di Bug
+
+Trovare e segnalare chiaramente i problemi è incredibilmente utile. Apri una nuova [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) con la keyword **`[BUG]`** all'inizio del titolo.
+
+Includi screenshot, info sul browser e passaggi per riprodurre — anche le inconsistenze estetiche contano.
 
 ---
 
-## :bulb: Condividi Idee e Segnala Bug
+## :bulb: Condividi Idee e Richiedi Funzionalità
 
-Il tuo feedback plasma il futuro di LibreFolio:
+Hai un'idea o vuoi una nuova funzionalità? Apri una [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) usando la keyword appropriata all'inizio del titolo:
 
-- :bug: **Segnala bug** su [GitHub Issues](https://github.com/Alfystar/LibreFolio/issues)
-- :sparkles: **Suggerisci funzionalità** tramite [GitHub Discussions](https://github.com/Alfystar/LibreFolio/discussions)
+| Keyword | Quando usarla |
+|---------|--------------|
+| **`[IDEA]`** | Suggerimenti generali, miglioramenti UX, idee di workflow |
+| **`[FEATURE]`** | Richieste di funzionalità specifiche con un caso d'uso chiaro |
+
+Ogni richiesta verrà valutata e presa in carico appena ci sarà la possibilità di svilupparla. Le richieste ben descritte con esempi concreti vengono prioritizzate più velocemente.
+
+---
+
+## :computer: Contribuisci con il Codice
+
+Se sei uno sviluppatore e vuoi contribuire direttamente:
+
+1. **Fai un fork** del [repository](https://github.com/Alfystar/LibreFolio)
+2. **Crea un branch** per la tua feature o fix
+3. **Sviluppa e testa** nel tuo repo
+4. **Invia una Pull Request** con una descrizione chiara e la keyword appropriata nel titolo:
+
+| Keyword | Quando usarla |
+|---------|--------------|
+| **`[FIX]`** | Correzioni di bug |
+| **`[FEAT]`** | Nuove funzionalità o miglioramenti |
+| **`[PLUGIN]`** | Nuovo plugin (BRIM, Asset, FX, Signal) |
+| **`[DOCS]`** | Miglioramenti alla documentazione |
+
+!!! warning "Politica di merge"
+
+    Una PR verrà mergiata **solo se tutti i test esistenti continuano a passare**. Se le tue modifiche richiedono aggiornamenti ai test, includili nella PR — è perfettamente normale e previsto.
+
+Consulta il [Manuale Sviluppatore](../developer/index.md) per dettagli sull'architettura, convenzioni e linee guida per i test.
 
 ---
 

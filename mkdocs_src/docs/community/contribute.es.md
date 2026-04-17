@@ -16,24 +16,67 @@ Cada donación — por pequeña que sea — ayuda a cubrir herramientas de desar
 
 ---
 
-## :computer: Contribuye con Código
+## :rocket: Contribuciones de Alto Impacto
 
-Aceptamos contribuciones de cualquier tamaño:
+Para nosotros, **una gran idea o una contribución de código tiene el mismo valor que una donación**. Estas son las áreas donde tu ayuda puede marcar la mayor diferencia:
 
-1. **Haz un fork** del [repositorio](https://github.com/Alfystar/LibreFolio)
-2. **Crea una rama** para tu funcionalidad o corrección
-3. **Envía una Pull Request** con una descripción clara
+### :electric_plug: Nuevos Plugins
 
-Consulta el [Manual del Desarrollador](../developer/index.md) para detalles de arquitectura, convenciones y guías de pruebas.
+LibreFolio utiliza un [Sistema Registry & Plugin](../developer/architecture/patterns/registry_pattern.md) con auto-descubrimiento. Añadir un nuevo plugin es una de las contribuciones más impactantes:
+
+| Tipo | Guía | Qué hace |
+|------|------|----------|
+| 📥 **BRIM** | [Guía Plugin BRIM](../developer/architecture/patterns/brim_plugin_guide.md) | Importar transacciones de un nuevo broker (CSV/Excel) |
+| 📈 **Asset** | [Guía Plugin Asset](../developer/architecture/patterns/asset_plugin_guide.md) | Obtener precios de una nueva fuente de datos |
+| 💱 **FX** | [Guía Plugin FX](../developer/architecture/patterns/fx_plugin_guide.md) | Añadir un nuevo proveedor de tipos de cambio |
+| 📊 **Señales Gráficas** | *Guía próximamente* | Nuevos indicadores técnicos y superposiciones gráficas (EMA, MACD, RSI, Bollinger…) |
+
+### :art: Ideas UI/UX
+
+Mejoras estéticas, sugerencias de diseño, accesibilidad — si ves algo que podría verse o funcionar mejor, ¡dínoslo!
+
+### :bug: Reportes de Errores
+
+Encontrar y reportar claramente los problemas es increíblemente útil. Abre una nueva [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) con la keyword **`[BUG]`** al inicio del título.
+
+Incluye capturas de pantalla, información del navegador y pasos para reproducir — incluso las inconsistencias estéticas cuentan.
 
 ---
 
-## :bulb: Comparte Ideas y Reporta Errores
+## :bulb: Comparte Ideas y Solicita Funcionalidades
 
-Tu retroalimentación moldea el futuro de LibreFolio:
+¿Tienes una idea o quieres una nueva funcionalidad? Abre una [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) usando la keyword apropiada al inicio del título:
 
-- :bug: **Reporta errores** en [GitHub Issues](https://github.com/Alfystar/LibreFolio/issues)
-- :sparkles: **Sugiere funcionalidades** a través de [GitHub Discussions](https://github.com/Alfystar/LibreFolio/discussions)
+| Keyword | Cuándo usarla |
+|---------|--------------|
+| **`[IDEA]`** | Sugerencias generales, mejoras UX, ideas de workflow |
+| **`[FEATURE]`** | Solicitudes de funcionalidades específicas con un caso de uso claro |
+
+Cada solicitud será evaluada y tomada en cuenta en cuanto haya capacidad para desarrollarla. Las solicitudes bien descritas con ejemplos concretos se priorizan más rápido.
+
+---
+
+## :computer: Contribuye con Código
+
+Si eres desarrollador y quieres contribuir directamente:
+
+1. **Haz un fork** del [repositorio](https://github.com/Alfystar/LibreFolio)
+2. **Crea una rama** para tu funcionalidad o corrección
+3. **Desarrolla y testea** en tu propio repo
+4. **Envía una Pull Request** con una descripción clara y la keyword apropiada en el título:
+
+| Keyword | Cuándo usarla |
+|---------|--------------|
+| **`[FIX]`** | Correcciones de errores |
+| **`[FEAT]`** | Nuevas funcionalidades o mejoras |
+| **`[PLUGIN]`** | Nuevo plugin (BRIM, Asset, FX, Signal) |
+| **`[DOCS]`** | Mejoras en la documentación |
+
+!!! warning "Política de merge"
+
+    Una PR será mergeada **solo si todos los tests existentes continúan pasando**. Si tus cambios requieren actualización de tests, inclúyelos en la PR — es perfectamente normal y esperado.
+
+Consulta el [Manual del Desarrollador](../developer/index.md) para detalles de arquitectura, convenciones y guías de pruebas.
 
 ---
 
