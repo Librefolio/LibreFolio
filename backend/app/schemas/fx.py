@@ -34,19 +34,18 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.schemas.common import (
     BackwardFillInfo,
-    DateRangeModel,
-    BaseDeleteResult,
-    BaseBulkResponse,
     BaseBulkDeleteResponse,
+    BaseBulkResponse,
+    BaseDeleteResult,
     BaseListResponse,
     Currency,
-    )
+    DateRangeModel,
+)
 from backend.app.utils.datetime_utils import parse_ISO_date
-
 
 # ============================================================================
 # PROVIDER MODELS
@@ -89,7 +88,7 @@ class FXConversionRequest(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-        )
+    )
 
     from_amount: Currency = Field(..., description="Amount to convert with source currency")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
@@ -112,15 +111,12 @@ class FXConversionResult(BaseModel):
 
     from_amount: Currency = Field(..., description="Original amount with source currency")
     to_amount: Currency = Field(..., description="Converted amount with target currency")
-    conversion_date: date_type = Field(
-        ..., description="Date requested for conversion (ISO format)"
-        )
+    conversion_date: date_type = Field(..., description="Date requested for conversion (ISO format)")
     rate: Optional[Decimal] = Field(None, description="Exchange rate used (if not identity)")
     backward_fill_info: Optional[BackwardFillInfo] = Field(
         None,
-        description="Backward-fill info (only present if rate from a different date was used). "
-                    "If null, rate_date = conversion_date",
-        )
+        description="Backward-fill info (only present if rate from a different date was used). " "If null, rate_date = conversion_date",
+    )
 
     @field_validator("conversion_date", mode="before")
     @classmethod
@@ -151,7 +147,7 @@ class FXUpsertItem(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-        )
+    )
 
     rate_date: date_type = Field(..., description="Date of the rate (ISO format)", alias="date")
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
@@ -214,7 +210,10 @@ class FXDeleteItem(BaseModel):
     If `delete_all=True`, all rates for the pair are deleted regardless of date_range.
     """
 
-    model_config = ConfigDict(populate_by_name=True, str_strip_whitespace=True, )
+    model_config = ConfigDict(
+        populate_by_name=True,
+        str_strip_whitespace=True,
+    )
 
     from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
@@ -227,7 +226,7 @@ class FXDeleteItem(BaseModel):
         return Currency.validate_code(v)
 
     @model_validator(mode="after")
-    def validate_range_or_all(self) -> "FXDeleteItem":
+    def validate_range_or_all(self) -> FXDeleteItem:
         """Ensure either date_range or delete_all is specified."""
         if not self.delete_all and self.date_range is None:
             raise ValueError("Either 'date_range' or 'delete_all: true' must be specified")
@@ -267,7 +266,7 @@ def validate_chain_steps(
     steps: list,  # list[FXRouteStep] or list[dict] with from/to keys
     base: str,
     quote: str,
-    ) -> None:
+) -> None:
     """
     Validate the coherence of a chain_steps list.
 
@@ -287,24 +286,24 @@ def validate_chain_steps(
 
     # 1. Continuity: step[i].to == step[i+1].from
     for i in range(len(steps) - 1):
-        to_cur = _get(steps[i], 'to_currency', 'to')
-        from_cur = _get(steps[i + 1], 'from_currency', 'from')
+        to_cur = _get(steps[i], "to_currency", "to")
+        from_cur = _get(steps[i + 1], "from_currency", "from")
         if to_cur != from_cur:
             raise ValueError(f"Chain discontinuity at step {i}: {to_cur} != {from_cur}")
 
     # 2. No repeated edges (unordered pair, any direction/provider)
     edges_seen: set[tuple[str, str]] = set()
     for s in steps:
-        fc = _get(s, 'from_currency', 'from')
-        tc = _get(s, 'to_currency', 'to')
+        fc = _get(s, "from_currency", "from")
+        tc = _get(s, "to_currency", "to")
         edge = tuple(sorted([fc, tc]))
         if edge in edges_seen:
             raise ValueError(f"Duplicate edge: {edge[0]}-{edge[1]}")
         edges_seen.add(edge)
 
     # 3. Endpoints must match (base, quote) of the route
-    first_from = _get(steps[0], 'from_currency', 'from')
-    last_to = _get(steps[-1], 'to_currency', 'to')
+    first_from = _get(steps[0], "from_currency", "from")
+    last_to = _get(steps[-1], "to_currency", "to")
     endpoints = tuple(sorted([first_from, last_to]))
     pair = tuple(sorted([base, quote]))
     if endpoints != pair:
@@ -313,7 +312,7 @@ def validate_chain_steps(
     # 4. Multi-step chains must not contain MANUAL provider
     if len(steps) > 1:
         for s in steps:
-            prov = _get(s, 'provider', 'provider')
+            prov = _get(s, "provider", "provider")
             if prov.upper() == "MANUAL":
                 raise ValueError("MANUAL provider cannot be used in multi-step chains")
 
@@ -323,6 +322,7 @@ class FXRouteStep(BaseModel):
 
     Corresponds to an edge in the currency graph built by the DFS algorithm.
     """
+
     model_config = ConfigDict(populate_by_name=True, str_strip_whitespace=True)
 
     from_currency: str = Field(..., alias="from", min_length=3, max_length=3)
@@ -355,13 +355,13 @@ class FXConversionRouteItem(BaseModel):
     - 1 step = direct conversion (e.g., EUR→USD via ECB)
     - 2+ steps = chain conversion (e.g., RON→EUR→USD via ECB+ECB)
     """
+
     model_config = ConfigDict(str_strip_whitespace=True)
 
     base: str = Field(..., min_length=3, max_length=3)
     quote: str = Field(..., min_length=3, max_length=3)
     priority: int = Field(..., ge=1)
-    chain_steps: list[FXRouteStep] = Field(..., min_length=1,
-                                           description="Ordered list of conversion steps (edges of the graph)")
+    chain_steps: list[FXRouteStep] = Field(..., min_length=1, description="Ordered list of conversion steps (edges of the graph)")
 
     @field_validator("base", "quote", mode="before")
     @classmethod
@@ -376,6 +376,7 @@ class FXConversionRouteItem(BaseModel):
 
 class FXConversionRoutesResponse(BaseListResponse[FXConversionRouteItem]):
     """Response model for listing conversion routes."""
+
     pass
 
 
@@ -426,6 +427,7 @@ class FXDeleteRouteResult(BaseDeleteResult):
 
 class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
     """Response model for DELETE /routes."""
+
     pass
 
 
@@ -444,4 +446,5 @@ class FXPairItem(BaseModel):
 
 class FXPairsListResponse(BaseListResponse[FXPairItem]):
     """Response for GET /currencies/pairs — all known FX pairs."""
+
     pass

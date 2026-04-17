@@ -8,7 +8,6 @@ Provides standardized output formatting, test helpers, and common functions.
 import sys
 import time
 
-
 # ============================================================================
 # ANSI COLOR CODES
 # ============================================================================
@@ -107,9 +106,7 @@ def print_test_summary(results: dict[str, bool], suite_name: str = "Test Suite")
     total = len(results)
 
     for test_name, result in results.items():
-        status = (
-            f"{Colors.GREEN}✅ PASS{Colors.NC}" if result else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        )
+        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if result else f"{Colors.RED}❌ FAIL{Colors.NC}"
         print(f"{status}: {test_name}")
 
     print(f"\n{'=' * 60}")

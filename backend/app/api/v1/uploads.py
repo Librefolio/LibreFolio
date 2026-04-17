@@ -26,7 +26,7 @@ from backend.app.schemas.uploads import (
     UploadFileInfo,
     UploadListResponse,
     UploadResponse,
-    )
+)
 from backend.app.services.global_settings_service import get_max_upload_mb
 from backend.app.services.static_uploads import (
     UploadSecurityError,
@@ -36,7 +36,7 @@ from backend.app.services.static_uploads import (
     get_upload_path,
     list_uploads,
     save_upload,
-    )
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -68,6 +68,7 @@ class PreviewCache:
             return
         try:
             from backend.app.config import get_settings
+
             self.max_bytes = get_settings().PREVIEW_CACHE_MAX_MB * 1024 * 1024
         except Exception:
             pass  # Keep default
@@ -129,7 +130,7 @@ PLUGIN_STATIC_DIRS = {
     "brim": PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "static",
     "fx": PROJECT_ROOT / "backend" / "app" / "services" / "fx_providers" / "static",
     "asset": PROJECT_ROOT / "backend" / "app" / "services" / "asset_source_providers" / "static",
-    }
+}
 
 
 @router.post("", response_model=UploadResponse)
@@ -138,7 +139,7 @@ async def upload_file(
     description: Optional[str] = Form(default=None),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     session: AsyncSession = Depends(get_session_generator),
-    ):
+):
     """
     Upload a file.
 
@@ -172,14 +173,14 @@ async def upload_file(
             user_id=current_user.id,
             description=description,
             mime_type=file.content_type,
-            )
+        )
 
         logger.info(
             "File uploaded via API",
             file_id=file_info.id,
             user_id=current_user.id,
             size_bytes=file_info.size_bytes,
-            )
+        )
 
         return UploadResponse(file=file_info)
 
@@ -189,18 +190,18 @@ async def upload_file(
             error=str(e),
             filename=file.filename,
             user_id=current_user.id,
-            )
-        raise HTTPException(status_code=400, detail=str(e))
+        )
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("Upload failed", error=str(e), user_id=current_user.id)
-        raise HTTPException(status_code=500, detail="Failed to save file")
+        raise HTTPException(status_code=500, detail="Failed to save file") from e
 
 
 @router.get("", response_model=UploadListResponse)
 async def list_files(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     my_files_only: bool = False,
-    ):
+):
     """
     List all uploaded files.
 
@@ -220,7 +221,7 @@ async def list_files(
 async def get_file_info(
     file_id: str,
     current_user: Annotated[User, Depends(get_current_user)] = None,
-    ):
+):
     """
     Get metadata for a specific file.
 
@@ -240,7 +241,7 @@ async def get_file_info(
 async def delete_file(
     file_id: str,
     current_user: Annotated[User, Depends(get_current_user)] = None,
-    ):
+):
     """
     Delete an uploaded file.
 
@@ -273,7 +274,7 @@ async def delete_file(
         success=True,
         message="File deleted successfully",
         file_id=file_id,
-        )
+    )
 
 
 @router.get("/file/{file_id}")
@@ -284,7 +285,7 @@ async def serve_file(
     window: Optional[int] = None,
     img_preview: Optional[str] = None,
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Serve the actual file content.
 
@@ -319,31 +320,26 @@ async def serve_file(
     # Text preview mode
     if offset is not None or window is not None:
         if not mime_type.startswith("text/"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Text preview not supported for {mime_type}. Only text/* files supported."
-                )
+            raise HTTPException(status_code=400, detail=f"Text preview not supported for {mime_type}. Only text/* files supported.")
 
         # Read text file window
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 if offset:
                     f.seek(offset)
                 content = f.read(window) if window else f.read()
 
             from fastapi.responses import PlainTextResponse
+
             return PlainTextResponse(content=content, media_type=mime_type)
         except Exception as e:
             logger.error("Failed to read text preview", error=str(e), file_id=file_id)
-            raise HTTPException(status_code=500, detail="Failed to read file preview")
+            raise HTTPException(status_code=500, detail="Failed to read file preview") from e
 
     # Image preview mode
     if img_preview:
         if not mime_type.startswith("image/"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Image preview not supported for {mime_type}. Only image/* files supported."
-                )
+            raise HTTPException(status_code=400, detail=f"Image preview not supported for {mime_type}. Only image/* files supported.")
 
         # Parse dimensions (format: "200x200")
         try:
@@ -351,28 +347,24 @@ async def serve_file(
             max_width = int(width_str)
             max_height = int(height_str)
         except (ValueError, AttributeError):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid img_preview format. Expected: WIDTHxHEIGHT (e.g., 200x200)"
-                )
+            raise HTTPException(status_code=400, detail="Invalid img_preview format. Expected: WIDTHxHEIGHT (e.g., 200x200)") from None
 
         # Check cache first
         size_key = f"{max_width}x{max_height}"
         cached = preview_cache.get(file_id, size_key)
         if cached:
             image_bytes, cached_mime = cached
-            from fastapi.responses import StreamingResponse
             import io
-            return StreamingResponse(
-                io.BytesIO(image_bytes),
-                media_type=cached_mime,
-                headers={"Cache-Control": "public, max-age=3600"}
-                )
+
+            from fastapi.responses import StreamingResponse
+
+            return StreamingResponse(io.BytesIO(image_bytes), media_type=cached_mime, headers={"Cache-Control": "public, max-age=3600"})
 
         # Generate resized image (synchronous - Pillow is fast for simple resizes)
         try:
-            from PIL import Image
             import io
+
+            from PIL import Image
 
             img = Image.open(file_path)
 
@@ -382,11 +374,7 @@ async def serve_file(
 
             if ratio >= 1:
                 # Requested size >= original — serve file directly, no processing needed
-                return FileResponse(
-                    path=file_path,
-                    media_type=mime_type,
-                    headers={"Cache-Control": "public, max-age=3600"}
-                    )
+                return FileResponse(path=file_path, media_type=mime_type, headers={"Cache-Control": "public, max-age=3600"})
 
             new_width = int(orig_width * ratio)
             new_height = int(orig_height * ratio)
@@ -403,15 +391,11 @@ async def serve_file(
 
             from fastapi.responses import StreamingResponse
 
-            return StreamingResponse(
-                io.BytesIO(image_bytes),
-                media_type=mime_type,
-                headers={"Cache-Control": "public, max-age=3600"}
-                )
+            return StreamingResponse(io.BytesIO(image_bytes), media_type=mime_type, headers={"Cache-Control": "public, max-age=3600"})
 
         except Exception as e:
             logger.error("Failed to generate image preview", error=str(e), file_id=file_id)
-            raise HTTPException(status_code=500, detail="Failed to generate image preview")
+            raise HTTPException(status_code=500, detail="Failed to generate image preview") from e
 
     # Normal file serving (no preview)
     # Get original filename for downloads
@@ -425,7 +409,7 @@ async def serve_file(
         path=file_path,
         media_type=mime_type,
         filename=filename or file_path.name,
-        )
+    )
 
 
 # =============================================================================
@@ -438,7 +422,7 @@ async def serve_plugin_static(
     provider_type: str,
     path: str,
     _current_user: User = Depends(get_current_user),
-    ):
+):
     """
     Serve static assets from plugin directories.
 
@@ -469,7 +453,7 @@ async def serve_plugin_static(
         raise HTTPException(
             status_code=400,
             detail=f"Invalid provider type. Must be one of: {list(PLUGIN_STATIC_DIRS.keys())}",
-            )
+        )
 
     # Build path and validate
     base_dir = PLUGIN_STATIC_DIRS[provider_type]
@@ -482,7 +466,7 @@ async def serve_plugin_static(
         if not str(file_path).startswith(str(base_resolved)):
             raise HTTPException(status_code=403, detail="Access denied")
     except (OSError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid path")
+        raise HTTPException(status_code=400, detail="Invalid path") from None
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
@@ -496,4 +480,4 @@ async def serve_plugin_static(
     return FileResponse(
         path=file_path,
         media_type=mime_type,
-        )
+    )

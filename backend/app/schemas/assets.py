@@ -35,26 +35,26 @@ price points, asset metadata, and scheduled investment calculations.
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal, ROUND_HALF_EVEN
+from decimal import ROUND_HALF_EVEN, Decimal
 from enum import Enum
-from typing import Optional, List
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.app.db.models import AssetType, IdentifierType
+
 # Import from common and prices modules
 from backend.app.schemas.common import (
     BackwardFillInfo,
-    BaseDeleteResult,
     BaseBulkResponse,
-    OldNew,
+    BaseDeleteResult,
     Currency,
-    )
-from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData, FAAssetEventPoint
+    OldNew,
+)
+from backend.app.schemas.prices import FAAssetEventPoint, FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.geo_utils import normalize_country_keys
 from backend.app.utils.sector_fin_utils import normalize_sector
-
 
 # ============================================================================
 # ENUMS FOR FINANCIAL CALCULATIONS
@@ -167,12 +167,7 @@ class FAInterestRatePeriod(BaseModel):
     end_date: date
     annual_rate: Decimal
     maturation_frequency: MaturationFrequency = MaturationFrequency.DAILY
-    generate_interest: bool = Field(
-        default=False,
-        description="Auto-generate INTEREST events at each maturation date. "
-                    "Event value = asset_value - initial_value (resets price to initial_value). "
-                    "Only generated if positive (no negative coupons)."
-        )
+    generate_interest: bool = Field(default=False, description="Auto-generate INTEREST events at each maturation date. " "Event value = asset_value - initial_value (resets price to initial_value). " "Only generated if positive (no negative coupons).")
 
     @field_validator("annual_rate", mode="before")
     @classmethod
@@ -211,20 +206,9 @@ class FALateInterestConfig(BaseModel):
 
     annual_rate: Decimal
     grace_period_days: int = 0
-    interest_type: InterestType = Field(
-        default=InterestType.COMPOUND,
-        description="Interest type for late interest: SIMPLE (on principal) or COMPOUND (on accumulated value, default)"
-        )
-    maturation_frequency: MaturationFrequency = Field(
-        default=MaturationFrequency.DAILY,
-        description="Maturation frequency for late interest period"
-        )
-    generate_interest: bool = Field(
-        default=False,
-        description="Auto-generate INTEREST events at each late maturation date, "
-                    "plus a MATURITY_SETTLEMENT event at the end. "
-                    "After settlement, the asset produces no further price points."
-        )
+    interest_type: InterestType = Field(default=InterestType.COMPOUND, description="Interest type for late interest: SIMPLE (on principal) or COMPOUND (on accumulated value, default)")
+    maturation_frequency: MaturationFrequency = Field(default=MaturationFrequency.DAILY, description="Maturation frequency for late interest period")
+    generate_interest: bool = Field(default=False, description="Auto-generate INTEREST events at each late maturation date, " "plus a MATURITY_SETTLEMENT event at the end. " "After settlement, the asset produces no further price points.")
 
     @field_validator("annual_rate", mode="before")
     @classmethod
@@ -318,7 +302,6 @@ class FAScheduledInvestmentSchedule(BaseModel):
     schedule: List[FAInterestRatePeriod]
     late_interest: Optional[FALateInterestConfig] = None
 
-
     @field_validator("schedule")
     @classmethod
     def validate_schedule_continuity(cls, v):
@@ -338,15 +321,9 @@ class FAScheduledInvestmentSchedule(BaseModel):
             days_gap = (next_period.start_date - current.end_date).days
 
             if days_gap < 0:
-                raise ValueError(
-                    f"Overlapping periods detected: period ending {current.end_date} "
-                    f"overlaps with period starting {next_period.start_date}"
-                    )
+                raise ValueError(f"Overlapping periods detected: period ending {current.end_date} " f"overlaps with period starting {next_period.start_date}")
             elif days_gap > 1:
-                raise ValueError(
-                    f"Gap detected between periods: period ending {current.end_date} "
-                    f"and period starting {next_period.start_date} ({days_gap} days gap)"
-                    )
+                raise ValueError(f"Gap detected between periods: period ending {current.end_date} " f"and period starting {next_period.start_date} ({days_gap} days gap)")
 
         return sorted_schedule
 
@@ -379,9 +356,7 @@ class BaseDistribution(BaseModel):
     distribution: dict[str, Decimal] = Field(..., description="Distribution weights (must sum to 1.0)")
 
     @classmethod
-    def _validate_and_normalize_weights(
-        cls, weights: dict[str, Decimal], allow_empty: bool = False
-        ) -> dict[str, Decimal]:
+    def _validate_and_normalize_weights(cls, weights: dict[str, Decimal], allow_empty: bool = False) -> dict[str, Decimal]:
         """
         Common validation logic for distribution weights.
 
@@ -432,10 +407,7 @@ class BaseDistribution(BaseModel):
 
         # Check if raw sum is too far from 1.0 to be a rounding issue
         if abs(raw_total - target) > tolerance:
-            raise ValueError(
-                f"Distribution weights must sum to approximately 1.0 (±{tolerance}). "
-                f"Current sum: {raw_total} (difference: {abs(raw_total - target)})"
-                )
+            raise ValueError(f"Distribution weights must sum to approximately 1.0 (±{tolerance}). " f"Current sum: {raw_total} (difference: {abs(raw_total - target)})")
 
         # Normalize weights to sum to exactly 1.0, then quantize
         quantized = {}
@@ -454,19 +426,14 @@ class BaseDistribution(BaseModel):
             adjusted_weight = quantized[min_key] + adjustment
 
             if adjusted_weight < 0:
-                raise ValueError(
-                    f"Cannot renormalize: adjustment would make weight negative. "
-                    f"Key: {min_key}, Original: {quantized[min_key]}, Adjustment: {adjustment}"
-                    )
+                raise ValueError(f"Cannot renormalize: adjustment would make weight negative. " f"Key: {min_key}, Original: {quantized[min_key]}, Adjustment: {adjustment}")
 
             quantized[min_key] = adjusted_weight
 
         # Final validation
         final_sum = sum(quantized.values())
         if final_sum != target:
-            raise ValueError(
-                f"Internal error: final sum is {final_sum} after renormalization (expected {target})"
-                )
+            raise ValueError(f"Internal error: final sum is {final_sum} after renormalization (expected {target})")
 
         return quantized
 
@@ -648,9 +615,7 @@ class FAMetadataRefreshResult(BaseModel):
     asset_id: int
     success: bool
     message: str
-    fields_detail: Optional["FAProviderRefreshFieldsDetail"] = Field(
-        None, description="Details of refreshed fields with old/new values"
-        )
+    fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(None, description="Details of refreshed fields with old/new values")
     warnings: Optional[List[str]] = None
 
 
@@ -682,15 +647,11 @@ class FAAssetCreateItem(BaseModel):
 
     display_name: str = Field(..., description="Human-readable asset name (must be unique)")
     currency: str = Field(..., min_length=3, max_length=3, description="Asset currency (ISO 4217)")
-    asset_type: Optional[AssetType] = Field(
-        None, description="Asset type (STOCK, ETF, BOND, CROWDFUND_LOAN, etc.)"
-        )
+    asset_type: Optional[AssetType] = Field(None, description="Asset type (STOCK, ETF, BOND, CROWDFUND_LOAN, etc.)")
     icon_url: Optional[str] = Field(None, description="URL to asset icon (local or remote)")
 
     # Classification metadata (optional)
-    classification_params: Optional[FAClassificationParams] = Field(
-        None, description="Asset classification metadata"
-        )
+    classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
 
     # Identifier fields (one per IdentifierType) - optional
     identifier_isin: Optional[str] = Field(None, max_length=12, description="ISIN code (12 chars)")
@@ -698,9 +659,7 @@ class FAAssetCreateItem(BaseModel):
     identifier_cusip: Optional[str] = Field(None, max_length=9, description="CUSIP code (9 chars)")
     identifier_sedol: Optional[str] = Field(None, max_length=7, description="SEDOL code (7 chars)")
     identifier_figi: Optional[str] = Field(None, max_length=12, description="FIGI code (12 chars)")
-    identifier_uuid: Optional[str] = Field(
-        None, max_length=36, description="UUID for custom assets"
-        )
+    identifier_uuid: Optional[str] = Field(None, max_length=36, description="UUID for custom assets")
     identifier_other: Optional[str] = Field(None, max_length=100, description="Other identifier")
 
     @field_validator("currency")
@@ -773,9 +732,7 @@ class FAAinfoFiltersRequest(BaseModel):
 
     # Identifier-based exact search (one per IdentifierType)
     isin: Optional[str] = Field(None, description="Exact ISIN match (Asset.identifier_isin)")
-    ticker: Optional[str] = Field(
-        None, description="Exact ticker/symbol match (Asset.identifier_ticker)"
-        )
+    ticker: Optional[str] = Field(None, description="Exact ticker/symbol match (Asset.identifier_ticker)")
     cusip: Optional[str] = Field(None, description="Exact CUSIP match (Asset.identifier_cusip)")
     sedol: Optional[str] = Field(None, description="Exact SEDOL match (Asset.identifier_sedol)")
     figi: Optional[str] = Field(None, description="Exact FIGI match (Asset.identifier_figi)")
@@ -785,9 +742,7 @@ class FAAinfoFiltersRequest(BaseModel):
     identifier_other: Optional[str] = Field(None, description="Partial match in identifier_other")
 
     # Partial match across ALL identifier columns
-    identifier_contains: Optional[str] = Field(
-        None, description="Partial match in any identifier field"
-        )
+    identifier_contains: Optional[str] = Field(None, description="Partial match in any identifier field")
 
     @field_validator("currency")
     @classmethod
@@ -839,9 +794,7 @@ class FAinfoResponse(BaseModel):
     identifier_other: Optional[str] = Field(None, description="Other identifier")
 
     # Legacy fields for backward compatibility with provider assignment
-    identifier: Optional[str] = Field(
-        None, description="Primary identifier (from provider assignment)"
-        )
+    identifier: Optional[str] = Field(None, description="Primary identifier (from provider assignment)")
     identifier_type: Optional[IdentifierType] = Field(None, description="Primary identifier type")
 
 
@@ -938,9 +891,7 @@ class FAAssetPatchResult(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     success: bool = Field(..., description="Whether patch succeeded")
     message: str = Field(..., description="Success message or error description")
-    updated_fields: Optional[List[OldNew[str | None]]] = Field(
-        None, description="List of fields updated: [{info: field, old: old_value, new: new_value}]"
-        )
+    updated_fields: Optional[List[OldNew[str | None]]] = Field(None, description="List of fields updated: [{info: field, old: old_value, new: new_value}]")
 
 
 class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
@@ -988,4 +939,4 @@ __all__ = [
     "FAAssetPatchItem",
     "FABulkAssetPatchResponse",
     "FAAssetPatchResult",
-    ]
+]

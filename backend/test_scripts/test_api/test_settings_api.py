@@ -18,7 +18,7 @@ from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
 from backend.app.services import user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success
+from backend.test_scripts.test_utils import print_info, print_section, print_success
 
 # API configuration
 settings = get_settings()
@@ -50,9 +50,7 @@ def get_next_username() -> str:
     return f"settings_test_user_{_user_counter}"
 
 
-async def get_or_create_test_user(
-    client: httpx.AsyncClient, username: str
-    ) -> tuple[str, str, Optional[str], bool]:
+async def get_or_create_test_user(client: httpx.AsyncClient, username: str) -> tuple[str, str, Optional[str], bool]:
     """
     Get existing user or create new one.
     First tries to login. If that fails, registers the user.
@@ -64,9 +62,7 @@ async def get_or_create_test_user(
     password = "TestPass123!"
 
     # First try to login (user might already exist)
-    login_resp = await client.post(
-        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-        )
+    login_resp = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
 
     if login_resp.status_code == 200:
         session_cookie = login_resp.cookies.get("session")
@@ -86,16 +82,14 @@ async def get_or_create_test_user(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
 
     if resp.status_code != 201:
         # Registration also failed - return failure
         return username, email, None, False
 
     # Now login
-    login_resp = await client.post(
-        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-        )
+    login_resp = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
 
     session_cookie = login_resp.cookies.get("session")
 
@@ -138,9 +132,7 @@ async def create_user_simple(client: httpx.AsyncClient) -> tuple[str, str, Optio
 
 async def login_user(client: httpx.AsyncClient, username: str, password: str) -> Optional[str]:
     """Login and return session cookie. Also sets cookie on client."""
-    resp = await client.post(
-        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-        )
+    resp = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
     session = resp.cookies.get("session") if resp.status_code == 200 else None
     if session:
         client.cookies.set("session", session)
@@ -229,9 +221,7 @@ class TestUserSettings:
             data = resp.json()
 
             # Verify structure
-            assert (
-                "language" in data or "theme" in data or "settings" in data
-            ), "Response should contain user settings"
+            assert "language" in data or "theme" in data or "settings" in data, "Response should contain user settings"
 
             print_success("✓ User settings retrieved successfully")
 
@@ -279,9 +269,7 @@ class TestUserSettings:
             # Try invalid language code
             invalid_settings = {"language": "invalid_language_code_that_is_too_long"}
 
-            resp = await client.put(
-                f"{API_BASE}/settings/user", json=invalid_settings, timeout=TIMEOUT
-                )
+            resp = await client.put(f"{API_BASE}/settings/user", json=invalid_settings, timeout=TIMEOUT)
 
             # Accept 422 (validation error) or 404 (not implemented)
             if resp.status_code == 404:
@@ -290,7 +278,7 @@ class TestUserSettings:
             assert resp.status_code in [
                 400,
                 422,
-                ], f"Expected 400/422 for invalid data, got {resp.status_code}"
+            ], f"Expected 400/422 for invalid data, got {resp.status_code}"
             print_success("✓ Correctly rejected invalid settings")
 
 
@@ -363,9 +351,7 @@ class TestGlobalSettingsSingle:
             assert session is not None, "Failed to create test user"
 
             # Try to get session_ttl_hours (should exist)
-            resp = await client.get(
-                f"{API_BASE}/settings/global/session_ttl_hours", timeout=TIMEOUT
-                )
+            resp = await client.get(f"{API_BASE}/settings/global/session_ttl_hours", timeout=TIMEOUT)
 
             # Accept 200 or 404 (if single-get not implemented)
             if resp.status_code == 404:
@@ -390,9 +376,7 @@ class TestGlobalSettingsSingle:
             username, email, session = await create_user_simple(client)
             assert session is not None, "Failed to create test user"
 
-            resp = await client.get(
-                f"{API_BASE}/settings/global/nonexistent_setting_key", timeout=TIMEOUT
-                )
+            resp = await client.get(f"{API_BASE}/settings/global/nonexistent_setting_key", timeout=TIMEOUT)
 
             assert resp.status_code == 404, f"Expected 404, got {resp.status_code}"
             print_success("✓ Correctly returned 404 for non-existent setting")
@@ -411,7 +395,7 @@ class TestGlobalSettingsSingle:
                 f"{API_BASE}/settings/global/session_ttl_hours",
                 json={"value": "48"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
 
@@ -420,7 +404,7 @@ class TestGlobalSettingsSingle:
                 f"{API_BASE}/settings/global/session_ttl_hours",
                 json={"value": "24"},
                 timeout=TIMEOUT,
-                )
+            )
 
             print_success("✓ Admin successfully updated setting")
 
@@ -451,7 +435,7 @@ class TestGlobalSettingsSingle:
                 f"{API_BASE}/settings/global/session_ttl_hours",
                 json={"value": "48"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert resp.status_code == 403, f"Expected 403, got {resp.status_code}"
             print_success("✓ Non-admin correctly rejected with 403")
@@ -469,7 +453,7 @@ class TestGlobalSettingsSingle:
                 f"{API_BASE}/settings/global/nonexistent_setting_xyz",
                 json={"value": "test"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert resp.status_code == 404, f"Expected 404, got {resp.status_code}"
             print_success("✓ Admin correctly received 404 for non-existent setting")

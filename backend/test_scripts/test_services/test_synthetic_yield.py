@@ -21,23 +21,21 @@ import pytest
 os.environ["LIBREFOLIO_TEST_MODE"] = "1"
 
 from backend.app.db.models import IdentifierType
+from backend.app.schemas.assets import (
+    DayCountConvention,
+    FAInterestRatePeriod,
+    FALateInterestConfig,
+    FAScheduledInvestmentSchedule,
+    InterestType,
+    MaturationFrequency,
+)
+from backend.app.schemas.common import Currency
+from backend.app.schemas.prices import FAAssetEventPoint
 from backend.app.services.asset_source_providers.scheduled_investment import (
     ScheduledInvestmentProvider,
-    _generate_schedule_values,
     _compute_late_interest_value,
-    )
-
-from backend.app.schemas.assets import (
-    FAScheduledInvestmentSchedule,
-    FAInterestRatePeriod,
-    DayCountConvention,
-    FALateInterestConfig,
-    MaturationFrequency,
-    InterestType,
-    )
-from backend.app.schemas.prices import FAAssetEventPoint
-from backend.app.schemas.common import Currency
-
+    _generate_schedule_values,
+)
 
 # ============================================================================
 # PROVIDER TESTS — Pure deterministic (no DB, no _transaction_override)
@@ -58,14 +56,14 @@ async def test_provider_validate_params():
                 "end_date": "2025-12-31",
                 "annual_rate": "0.05",
                 "maturation_frequency": "DAILY",
-                }
-            ],
+            }
+        ],
         "late_interest": {
             "annual_rate": "0.12",
             "grace_period_days": 30,
-            },
+        },
         "asset_events": [],
-        }
+    }
 
     validated = provider.validate_params(valid_params)
     assert isinstance(validated, FAScheduledInvestmentSchedule)
@@ -90,14 +88,14 @@ async def test_provider_get_current_value():
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
-            ),
+        ),
         asset_events=[],
-        ).model_dump()
+    ).model_dump()
 
     result = await provider.get_current_value("test-1", IdentifierType.OTHER, params)
 
@@ -120,11 +118,11 @@ async def test_provider_get_history_value():
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         late_interest=None,
         asset_events=[],
-        ).model_dump()
+    ).model_dump()
 
     start = date(2025, 1, 1)
     end = date(2025, 1, 7)
@@ -151,11 +149,11 @@ async def test_provider_interest_calculation():
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         late_interest=None,
         asset_events=[],
-        )
+    )
 
     cached, _ = _generate_schedule_values(params)
     value = cached[date(2025, 1, 30)]
@@ -180,8 +178,8 @@ async def test_provider_with_interest_event():
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         late_interest=None,
         asset_events=[
             FAAssetEventPoint(
@@ -189,9 +187,9 @@ async def test_provider_with_interest_event():
                 type="INTEREST",
                 value=Currency(code="EUR", amount=Decimal("250")),
                 notes="H1 interest payout",
-                ),
-            ],
-        )
+            ),
+        ],
+    )
 
     cached, _ = _generate_schedule_values(params)
     value_before = cached[date(2025, 6, 30)]
@@ -214,8 +212,8 @@ async def test_provider_with_price_adjustment_event():
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         late_interest=None,
         asset_events=[
             FAAssetEventPoint(
@@ -223,9 +221,9 @@ async def test_provider_with_price_adjustment_event():
                 type="PRICE_ADJUSTMENT",
                 value=Currency(code="EUR", amount=Decimal("-1000")),
                 notes="Write-down",
-                ),
-            ],
-        )
+            ),
+        ],
+    )
 
     cached, _ = _generate_schedule_values(params)
     value_before = cached[date(2025, 5, 31)]
@@ -249,15 +247,15 @@ async def test_provider_history_with_events():
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         late_interest=None,
         asset_events=[
             FAAssetEventPoint(date=date(2025, 3, 15), type="INTEREST", value=Currency(code="EUR", amount=Decimal("100"))),
             FAAssetEventPoint(date=date(2025, 6, 15), type="INTEREST", value=Currency(code="EUR", amount=Decimal("100"))),
             FAAssetEventPoint(date=date(2025, 9, 15), type="INTEREST", value=Currency(code="EUR", amount=Decimal("100"))),
-            ],
-        ).model_dump()
+        ],
+    ).model_dump()
 
     # Query only March
     result = await provider.get_history_value("test-1", IdentifierType.OTHER, params, date(2025, 3, 1), date(2025, 3, 31))
@@ -278,14 +276,14 @@ async def test_provider_late_interest():
                 end_date=date(2025, 3, 31),
                 annual_rate=Decimal("0.05"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
-            ),
+        ),
         asset_events=[],
-        )
+    )
 
     cached, _ = _generate_schedule_values(params)
     maturity_date = date(2025, 3, 31)
@@ -316,10 +314,10 @@ async def test_compound_vs_simple_interest():
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.10"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         asset_events=[],
-        )
+    )
 
     simple = FAScheduledInvestmentSchedule(interest_type=InterestType.SIMPLE, **base_args)
     compound = FAScheduledInvestmentSchedule(interest_type=InterestType.COMPOUND, **base_args)
@@ -329,9 +327,7 @@ async def test_compound_vs_simple_interest():
 
     # At the end of the year, compound must exceed simple
     end_date = date(2025, 12, 31)
-    assert compound_values[end_date] > simple_values[end_date], (
-        f"COMPOUND ({compound_values[end_date]}) should exceed SIMPLE ({simple_values[end_date]})"
-    )
+    assert compound_values[end_date] > simple_values[end_date], f"COMPOUND ({compound_values[end_date]}) should exceed SIMPLE ({simple_values[end_date]})"
 
     # Both must start at the same value on day 1
     assert simple_values[date(2025, 1, 1)] == compound_values[date(2025, 1, 1)] == Decimal("10000")
@@ -349,10 +345,10 @@ async def test_compound_interest_numeric():
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
-                )
-            ],
+            )
+        ],
         asset_events=[],
-        )
+    )
 
     cached, _ = _generate_schedule_values(params)
     value_end = cached[date(2025, 12, 31)]
@@ -374,10 +370,10 @@ async def test_compound_with_different_day_counts():
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
-                )
-            ],
+            )
+        ],
         asset_events=[],
-        )
+    )
 
     act365 = FAScheduledInvestmentSchedule(day_count=DayCountConvention.ACT_365, **base_args)
     act360 = FAScheduledInvestmentSchedule(day_count=DayCountConvention.ACT_360, **base_args)
@@ -386,9 +382,7 @@ async def test_compound_with_different_day_counts():
     v360, _ = _generate_schedule_values(act360)
 
     # ACT/360 gives larger fractions per day → higher total interest
-    assert v360[date(2025, 12, 31)] > v365[date(2025, 12, 31)], (
-        f"ACT/360 ({v360[date(2025, 12, 31)]}) should exceed ACT/365 ({v365[date(2025, 12, 31)]})"
-    )
+    assert v360[date(2025, 12, 31)] > v365[date(2025, 12, 31)], f"ACT/360 ({v360[date(2025, 12, 31)]}) should exceed ACT/365 ({v365[date(2025, 12, 31)]})"
 
 
 # ============================================================================
@@ -407,27 +401,27 @@ async def test_late_interest_compound_vs_simple():
                 end_date=date(2025, 3, 31),
                 annual_rate=Decimal("0.05"),
                 maturation_frequency=MaturationFrequency.DAILY,
-                )
-            ],
+            )
+        ],
         asset_events=[],
-        )
+    )
 
     simple_params = FAScheduledInvestmentSchedule(
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=10,
             interest_type=InterestType.SIMPLE,
-            ),
+        ),
         **base_args,
-        )
+    )
     compound_params = FAScheduledInvestmentSchedule(
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=10,
             interest_type=InterestType.COMPOUND,
-            ),
+        ),
         **base_args,
-        )
+    )
 
     simple_cached, _ = _generate_schedule_values(simple_params)
     compound_cached, _ = _generate_schedule_values(compound_params)
@@ -443,9 +437,7 @@ async def test_late_interest_compound_vs_simple():
     simple_late = _compute_late_interest_value(simple_params, target, simple_maturity, maturity)
     compound_late = _compute_late_interest_value(compound_params, target, compound_maturity, maturity)
 
-    assert compound_late > simple_late, (
-        f"COMPOUND late ({compound_late}) should exceed SIMPLE late ({simple_late})"
-    )
+    assert compound_late > simple_late, f"COMPOUND late ({compound_late}) should exceed SIMPLE late ({simple_late})"
     # Both should exceed maturity value (interest is accruing)
     assert simple_late > simple_maturity
     assert compound_late > compound_maturity
@@ -462,6 +454,7 @@ async def test_late_interest_default_is_compound():
 async def test_validate_params_missing_required():
     """Test that missing required params raise validation error."""
     from pydantic import ValidationError
+
     # Empty schedule with no initial_value → should raise
     with pytest.raises(ValidationError):
         FAScheduledInvestmentSchedule(
@@ -474,6 +467,7 @@ async def test_validate_params_missing_required():
 async def test_validate_params_invalid_day_count():
     """Test that invalid day count convention is rejected by Pydantic."""
     from pydantic import ValidationError
+
     with pytest.raises(ValidationError):
         FAScheduledInvestmentSchedule(
             initial_value=Currency(code="EUR", amount=Decimal("1000")),

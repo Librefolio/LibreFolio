@@ -41,4 +41,3 @@ class TestBRIMParseError:
         assert isinstance(err, Exception)
         with pytest.raises(BRIMParseError, match="test"):
             raise err
-

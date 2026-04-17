@@ -23,8 +23,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import sqlglot
-from sqlalchemy import CheckConstraint, text
-from sqlalchemy import create_engine
+from sqlalchemy import CheckConstraint, create_engine, text
 from sqlglot.expressions import CheckColumnConstraint
 from sqlmodel import Session
 
@@ -32,10 +31,12 @@ from sqlmodel import Session
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.db.base import SQLModel
 import os
-from sqlalchemy import event
 from pathlib import Path
+
+from sqlalchemy import event
+
+from backend.app.db.base import SQLModel
 
 
 class LogLevel(str, Enum):
@@ -120,9 +121,7 @@ def get_model_check_constraints() -> Dict[str, List[Tuple[str, CheckColumnConstr
             if isinstance(constraint, CheckConstraint):
                 constraint_name = constraint.name
                 # Get SQL expression as string (not normalized here, done during comparison)
-                constraint_sql = sqlglot.expressions.CheckColumnConstraint(
-                    this=sqlglot.parse_one(str(constraint.sqltext), dialect="sqlite")
-                    )
+                constraint_sql = sqlglot.expressions.CheckColumnConstraint(this=sqlglot.parse_one(str(constraint.sqltext), dialect="sqlite"))
                 check_constraints.append((constraint_name, constraint_sql))
 
         if check_constraints:
@@ -161,22 +160,16 @@ def get_db_check_constraints(table_name: str) -> List[CheckColumnConstraint]:
         result = session.execute(
             text("SELECT sql FROM sqlite_master WHERE type='table' AND name=:table_name"),
             {"table_name": table_name},
-            ).first()
+        ).first()
 
         if not result or not result[0]:
             return []
 
-        check_constrain = list(
-            sqlglot.parse_one(result[0], dialect="sqlite").find_all(
-                sqlglot.expressions.CheckColumnConstraint
-                )
-            )
+        check_constrain = list(sqlglot.parse_one(result[0], dialect="sqlite").find_all(sqlglot.expressions.CheckColumnConstraint))
         return check_constrain
 
 
-def add_check_constraint_to_table(
-    table_name: str, constraint_name: str, constraint_sql: str
-    ) -> bool:
+def add_check_constraint_to_table(table_name: str, constraint_name: str, constraint_sql: str) -> bool:
     """
     Add CHECK constraint to table by recreating it (SQLite doesn't support ALTER TABLE ADD CONSTRAINT for CHECK).
 
@@ -188,23 +181,19 @@ def add_check_constraint_to_table(
     Returns:
         True if successfully added, False otherwise
     """
-    print(f"⚠️  SQLite doesn't support ALTER TABLE ADD CONSTRAINT for CHECK constraints.")
+    print("⚠️  SQLite doesn't support ALTER TABLE ADD CONSTRAINT for CHECK constraints.")
     print(f"   To add constraint '{constraint_name}' to '{table_name}':")
-    print(f"   1. Create a new migration with Alembic")
-    print(f"   2. Manually add the constraint in the migration:")
-    print(f"      op.execute('''")
-    print(
-        f"          ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} CHECK ({constraint_sql})"
-        )
-    print(f"      ''')")
-    print(f"   OR recreate the table with the constraint included.")
+    print("   1. Create a new migration with Alembic")
+    print("   2. Manually add the constraint in the migration:")
+    print("      op.execute('''")
+    print(f"          ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} CHECK ({constraint_sql})")
+    print("      ''')")
+    print("   OR recreate the table with the constraint included.")
     print()
     return False
 
 
-def check_and_add_missing_constraints(
-    auto_fix: bool = False, log_level: LogLevel = LogLevel.DEBUG
-    ) -> Tuple[bool, List[str]]:
+def check_and_add_missing_constraints(auto_fix: bool = False, log_level: LogLevel = LogLevel.DEBUG) -> Tuple[bool, List[str]]:
     """
     Check if all CHECK constraints from models exist in database.
 
@@ -247,20 +236,14 @@ def check_and_add_missing_constraints(
             if found:
                 passed.append(constraint_full_name)
                 if show_details:
-                    print(
-                        f"  ✅  {constraint_name} - PRESENT:\n     {colum_constraints.sql(dialect="sqlite")}"
-                        )
+                    print(f"  ✅  {constraint_name} - PRESENT:\n     {colum_constraints.sql(dialect="sqlite")}")
             else:
                 missing.append(constraint_full_name)
                 if show_details:
-                    print(
-                        f"  ❌  {constraint_name} - MISSING:\n     {colum_constraints.sql(dialect="sqlite")}"
-                        )
+                    print(f"  ❌  {constraint_name} - MISSING:\n     {colum_constraints.sql(dialect="sqlite")}")
 
                 if auto_fix:
-                    add_check_constraint_to_table(
-                        table_name, constraint_name, colum_constraints.sql(dialect="sqlite")
-                        )
+                    add_check_constraint_to_table(table_name, constraint_name, colum_constraints.sql(dialect="sqlite"))
 
         if show_details:
             print()
@@ -296,13 +279,11 @@ def check_and_add_missing_constraints(
                         for cname, csql in constraints:
                             if cname == constraint_name:
                                 print(f"  # For {table_name}.{constraint_name}")
-                                print(
-                                    f"  with op.batch_alter_table('{table_name}', schema=None) as batch_op:"
-                                    )
-                                print(f"      batch_op.create_check_constraint(")
+                                print(f"  with op.batch_alter_table('{table_name}', schema=None) as batch_op:")
+                                print("      batch_op.create_check_constraint(")
                                 print(f"          '{constraint_name}',")
                                 print(f"          '{csql}'")
-                                print(f"      )")
+                                print("      )")
                                 print()
 
             print("STEP 3: Apply the fix")
@@ -342,16 +323,14 @@ def main():
             choices=["info", "debug", "verbose"],
             default="debug",
             help="Logging verbosity: info (summary only), debug (details), verbose (with fix instructions)",
-            )
+        )
 
         args = parser.parse_args()
 
         # Convert string to LogLevel enum
         log_level = LogLevel(args.log_level)
 
-        all_present, missing = check_and_add_missing_constraints(
-            auto_fix=args.fix, log_level=log_level
-            )
+        all_present, missing = check_and_add_missing_constraints(auto_fix=args.fix, log_level=log_level)
 
         if not all_present:
             sys.exit(1)

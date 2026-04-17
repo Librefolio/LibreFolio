@@ -11,24 +11,28 @@ Provides helper endpoints for:
 from fastapi import APIRouter, Query
 
 from backend.app.schemas.utilities import (
-    CountryNormalizationResponse,
-    CountryListResponse,
     CountryListItem,
-    CurrencyListResponse,
+    CountryListResponse,
+    CountryNormalizationResponse,
     CurrencyListItem,
+    CurrencyListResponse,
     CurrencyNormalizationResponse,
     SectorListResponse,
-    )
+)
+from backend.app.utils.currency_utils import (
+    list_currencies as list_currencies_util,
+)
 from backend.app.utils.currency_utils import (
     normalize_currency,
-    list_currencies as list_currencies_util,
-    )
+)
 from backend.app.utils.geo_utils import (
-    normalize_country_to_iso3,
-    is_region,
     expand_region,
+    is_region,
+    normalize_country_to_iso3,
+)
+from backend.app.utils.geo_utils import (
     list_countries as list_countries_util,
-    )
+)
 from backend.app.utils.sector_fin_utils import FinancialSector
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
@@ -36,9 +40,7 @@ router = APIRouter(prefix="/utilities", tags=["Utilities"])
 
 # TODO: la richiesta http://localhost:8000/api/v1/utilities/countries/normalize?name=Germania fallisce ad esempio, scrivere Test per le utility in varie lingue e su molti paesi/valute!
 @router.get("/countries/normalize", response_model=CountryNormalizationResponse)
-async def normalize_country(
-    name: str = Query(..., min_length=1, description="Country name or code to normalize")
-    ):
+async def normalize_country(name: str = Query(..., min_length=1, description="Country name or code to normalize")):
     """
     Normalize country name/code to ISO-3166-A3 format.
 
@@ -78,26 +80,18 @@ async def normalize_country(
     # Check if it's a region first
     if is_region(name_upper):
         countries = expand_region(name_upper)
-        return CountryNormalizationResponse(
-            query=name, iso3_codes=countries, match_type="region", error=None
-            )
+        return CountryNormalizationResponse(query=name, iso3_codes=countries, match_type="region", error=None)
 
     # Try to normalize as single country
     try:
         iso3_code = normalize_country_to_iso3(name)
-        return CountryNormalizationResponse(
-            query=name, iso3_codes=[iso3_code], match_type="exact", error=None
-            )
+        return CountryNormalizationResponse(query=name, iso3_codes=[iso3_code], match_type="exact", error=None)
     except ValueError as e:
-        return CountryNormalizationResponse(
-            query=name, iso3_codes=[], match_type="not_found", error=str(e)
-            )
+        return CountryNormalizationResponse(query=name, iso3_codes=[], match_type="not_found", error=str(e))
 
 
 @router.get("/sectors", response_model=SectorListResponse)
-async def list_sectors(
-    include_other: bool = Query(True, description="Include 'Other' in the list")
-    ):
+async def list_sectors(include_other: bool = Query(True, description="Include 'Other' in the list")):
     """
     Get list of all standard financial sectors.
 
@@ -140,9 +134,7 @@ async def list_sectors(
 
 
 @router.get("/countries", response_model=CountryListResponse)
-async def list_countries(
-    language: str = Query("en", description="Language for country names (default: en)")
-    ):
+async def list_countries(language: str = Query("en", description="Language for country names (default: en)")):
     """
     Get list of all countries with ISO codes and flag emoji.
 
@@ -186,9 +178,7 @@ async def list_countries(
 
 
 @router.get("/currencies", response_model=CurrencyListResponse)
-async def list_currencies(
-    language: str = Query("en", description="Language for currency names (default: en)")
-    ):
+async def list_currencies(language: str = Query("en", description="Language for currency names (default: en)")):
     """
     Get list of all currencies with ISO codes, names, and symbols.
 
@@ -234,7 +224,7 @@ async def list_currencies(
 async def normalize_currency_endpoint(
     name: str = Query(..., min_length=1, description="Currency code, symbol, or name to normalize"),
     language: str = Query("en", description="Language for name matching (default: en)"),
-    ):
+):
     """
     Normalize currency name/code/symbol to ISO 4217 format.
 
@@ -277,4 +267,4 @@ async def normalize_currency_endpoint(
         iso_codes=result["iso_codes"],
         match_type=result["match_type"],
         error=result.get("error"),
-        )
+    )

@@ -8,8 +8,7 @@ Covers:
 
 import pytest
 
-from backend.app.services.settings_service import get_session_ttl_sync, get_session_ttl
-from backend.test_scripts.test_db_config import setup_test_database
+from backend.app.services.settings_service import get_session_ttl, get_session_ttl_sync
 
 
 class TestGetSessionTTLSync:
@@ -31,6 +30,7 @@ class TestGetSessionTTL:
     async def test_returns_positive_integer(self):
         """get_session_ttl returns a positive int from DB."""
         from sqlalchemy.ext.asyncio import AsyncSession
+
         from backend.app.db.session import get_async_engine
 
         engine = get_async_engine()
@@ -43,11 +43,10 @@ class TestGetSessionTTL:
     async def test_returns_default_when_no_setting(self):
         """Falls back to default when setting not in DB."""
         from sqlalchemy.ext.asyncio import AsyncSession
+
         from backend.app.db.session import get_async_engine
 
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
             ttl = await get_session_ttl(session)
             assert ttl >= 1
-
-

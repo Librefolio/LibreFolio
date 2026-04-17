@@ -29,10 +29,11 @@ This plugin parses CSV exports from Interactive Brokers.
 from __future__ import annotations
 
 import csv
-from datetime import date as date_type, datetime
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
@@ -40,8 +41,8 @@ from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMProvider, BRIMParseError
-from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -102,10 +103,7 @@ class IBKRBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return (
-            "Import trades from Interactive Brokers CSV export. "
-            "Supports stocks, ETFs, and FX trades with commissions."
-        )
+        return "Import trades from Interactive Brokers CSV export. " "Supports stocks, ETFs, and FX trades with commissions."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -136,9 +134,7 @@ class IBKRBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(
-        self, file_path: Path, broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse IBKR CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -147,7 +143,7 @@ class IBKRBrokerProvider(BRIMProvider):
         next_fake_id = FAKE_ASSET_ID_BASE
 
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            with open(file_path, encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
                 row_num = 1
 
@@ -197,7 +193,7 @@ class IBKRBrokerProvider(BRIMProvider):
                             "extracted_symbol": None,
                             "extracted_isin": isin,
                             "extracted_name": None,
-                            }
+                        }
 
                         next_fake_id -= 1
 
@@ -221,12 +217,10 @@ class IBKRBrokerProvider(BRIMProvider):
                             type=tx_type,
                             date=tx_date,
                             quantity=quantity,
-                            cash=(
-                                Currency(code=currency, amount=trade_money) if trade_money else None
-                            ),
+                            cash=(Currency(code=currency, amount=trade_money) if trade_money else None),
                             description=f"IBKR {direction}: {isin}",
                             tags=["import", "ibkr"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -236,12 +230,7 @@ class IBKRBrokerProvider(BRIMProvider):
                     # Handle commission as separate FEE transaction
                     commission = _parse_ibkr_number(row.get(COL_COMMISSION, ""))
                     if commission and commission != 0:
-                        comm_currency = (
-                            row.get(COL_COMMISSION_CURRENCY, currency)
-                            .strip()
-                            .upper()
-                            .replace('"', "")
-                        )
+                        comm_currency = row.get(COL_COMMISSION_CURRENCY, currency).strip().upper().replace('"', "")
                         if not comm_currency:
                             comm_currency = currency
 
@@ -255,15 +244,15 @@ class IBKRBrokerProvider(BRIMProvider):
                                 cash=Currency(code=comm_currency, amount=commission),
                                 description=f"IBKR commission: {isin}",
                                 tags=["import", "ibkr", "commission"],
-                                )
+                            )
                             transactions.append(fee_tx)
                         except Exception as e:
                             warnings.append(f"Row {row_num}: error creating fee transaction: {e}")
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}")
+            raise BRIMParseError(f"File not found: {file_path}") from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}")
+            raise BRIMParseError(f"Error parsing file: {e}") from e
 
         if not transactions:
             raise BRIMParseError("No valid transactions found in file")
@@ -274,16 +263,16 @@ class IBKRBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "IBKR file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-            )
+        )
 
         return transactions, warnings, extracted_assets_typed
 

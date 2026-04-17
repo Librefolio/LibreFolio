@@ -34,7 +34,7 @@ import httpx
 import uvicorn
 
 # Import settings to get TEST_PORT
-from backend.app.config import Settings, PROJECT_ROOT
+from backend.app.config import PROJECT_ROOT, Settings
 
 # Get settings
 _settings = Settings()
@@ -88,18 +88,18 @@ def print_port_occupied_help(port: int, process_info: str):
     print("\n📋 Process using the port:")
     print(process_info)
     print("\n💡 How to fix this:")
-    print(f"\n1. Check what's using the port:")
+    print("\n1. Check what's using the port:")
     print(f"   lsof -i :{port}")
-    print(f"\n2. Find the PID (Process ID) from the output above")
-    print(f"\n3. Kill the process:")
-    print(f"   kill <PID>")
-    print(f"   # Or forcefully:")
-    print(f"   kill -9 <PID>")
-    print(f"\n4. If it's a zombie uvicorn server:")
+    print("\n2. Find the PID (Process ID) from the output above")
+    print("\n3. Kill the process:")
+    print("   kill <PID>")
+    print("   # Or forcefully:")
+    print("   kill -9 <PID>")
+    print("\n4. If it's a zombie uvicorn server:")
     print(f"   pkill -f 'uvicorn.*{port}'")
-    print(f"\n5. Or kill all Python processes (⚠️  use with caution):")
-    print(f"   pkill -f python")
-    print(f"\n6. Then run the test again")
+    print("\n5. Or kill all Python processes (⚠️  use with caution):")
+    print("   pkill -f python")
+    print("\n6. Then run the test again")
     print(f"{'=' * 60}\n")
 
 
@@ -124,7 +124,7 @@ class _TestingServerManager:
         try:
             response = httpx.get(self.health_url, timeout=2.0)
             return response.status_code == 200
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -133,10 +133,11 @@ class _TestingServerManager:
         try:
             result = subprocess.run(
                 ["lsof", "-i", f":{port}", "-t"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if result.stdout.strip():
-                pids = [int(p) for p in result.stdout.strip().split('\n') if p]
+                pids = [int(p) for p in result.stdout.strip().split("\n") if p]
                 for pid in pids:
                     try:
                         os.kill(pid, signal.SIGKILL)
@@ -166,7 +167,7 @@ class _TestingServerManager:
             port=TEST_SERVER_PORT,
             log_level="error",  # Reduce noise
             access_log=False,
-            )
+        )
 
     def start_server(self) -> bool:
         """
@@ -195,7 +196,7 @@ class _TestingServerManager:
             target=self._run_server,
             daemon=True,  # Thread dies when main process exits
             name="uvicorn-test-server",
-            )
+        )
         self.server_thread.start()
 
         # Wait for thread to signal start

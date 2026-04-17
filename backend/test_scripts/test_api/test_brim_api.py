@@ -21,7 +21,7 @@ import uuid
 import httpx
 import pytest
 
-from backend.app.config import get_settings, PROJECT_ROOT
+from backend.app.config import PROJECT_ROOT, get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
 settings = get_settings()
@@ -54,7 +54,7 @@ async def create_test_user(client: httpx.AsyncClient) -> int:
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     assert resp.status_code == 201, f"Register failed: {resp.text}"
 
     # Login
@@ -62,7 +62,7 @@ async def create_test_user(client: httpx.AsyncClient) -> int:
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     assert resp.status_code == 200, f"Login failed: {resp.text}"
     return resp.json()["user"]["id"]
 
@@ -116,7 +116,7 @@ async def create_test_broker(client: httpx.AsyncClient, user_id: int = None) -> 
         f"{API_BASE}/brokers",
         json=[{"name": unique_name, "allow_cash_overdraft": True}],
         timeout=TIMEOUT,
-        )
+    )
     assert resp.status_code == 200, f"Failed to create broker: {resp.text}"
     return resp.json()["results"][0]["broker_id"]
 
@@ -136,7 +136,7 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200, f"Upload failed: {response.text}"
             data = response.json()
@@ -162,7 +162,7 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 400
             assert "empty" in response.json()["detail"].lower()
@@ -180,14 +180,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
 
             # List files
             list_response = await client.get(
                 f"{API_BASE}/brokers/import/files",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert list_response.status_code == 200
             data = list_response.json()
@@ -207,13 +207,13 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             # Filter by 'uploaded' status
             response = await client.get(
                 f"{API_BASE}/brokers/import/files?status=uploaded",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -233,14 +233,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Get file info
             response = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -255,7 +255,7 @@ class TestFileStorage:
             response = await client.get(
                 f"{API_BASE}/brokers/import/files/nonexistent-uuid",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 404
 
@@ -272,14 +272,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Delete file
             delete_response = await client.delete(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert delete_response.status_code == 200
             assert delete_response.json()["success"] is True
@@ -288,7 +288,7 @@ class TestFileStorage:
             get_response = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-                )
+            )
             assert get_response.status_code == 404
 
 
@@ -308,7 +308,7 @@ class TestParseEndpoint:
             f"{API_BASE}/brokers",
             json=[{"name": unique_name, "allow_cash_overdraft": True}],
             timeout=TIMEOUT,
-            )
+        )
         assert resp.status_code == 200, f"Failed to create broker: {resp.text}"
         return resp.json()["results"][0]["broker_id"]
 
@@ -324,7 +324,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Parse file
@@ -333,9 +333,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             if parse_response.status_code != 200:
                 print(f"Parse error: {parse_response.text}")
@@ -361,7 +361,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Parse
@@ -370,9 +370,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert parse_response.status_code == 200
             data = parse_response.json()
@@ -397,7 +397,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Parse
@@ -406,9 +406,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert parse_response.status_code == 200
             data = parse_response.json()
@@ -430,9 +430,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 404
 
@@ -448,7 +448,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Parse with invalid plugin
@@ -457,9 +457,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "nonexistent_plugin",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 400
             assert "plugin" in response.json()["detail"].lower()
@@ -476,7 +476,7 @@ class TestPluginsEndpoint:
             response = await client.get(
                 f"{API_BASE}/brokers/import/plugins",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -514,7 +514,7 @@ class TestMultiUserBRIM:
                 f"{API_BASE}/brokers/import/upload",  # No broker_id
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             # Should fail with 422 (missing required param)
             assert response.status_code == 422
@@ -531,7 +531,7 @@ class TestMultiUserBRIM:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -553,7 +553,7 @@ class TestMultiUserBRIM:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker1}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             # Upload to broker2
             files = {"file": ("b2.csv", io.BytesIO(sample_csv_content), "text/csv")}
@@ -561,13 +561,13 @@ class TestMultiUserBRIM:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker2}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             # List only broker1 files
             response = await client.get(
                 f"{API_BASE}/brokers/import/files?broker_ids={broker1}",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -594,7 +594,7 @@ class TestMultiUserBRIM:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             # Should fail with 403 (no access)
             assert response.status_code == 403
@@ -605,11 +605,11 @@ class TestMultiUserBRIM:
         async with httpx.AsyncClient() as client:
             # User1 creates broker
             await create_test_user(client)
-            broker_id = await create_test_broker(client)
+            _broker_id = await create_test_broker(client)
 
         # User2 becomes VIEWER on broker1's broker
         async with httpx.AsyncClient() as client2:
-            user2_id = await create_test_user(client2)
+            _user2_id = await create_test_user(client2)
 
         # User1 adds User2 as VIEWER
         async with httpx.AsyncClient() as client:
@@ -637,7 +637,7 @@ class TestMultiUserBRIM:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
             file_id = upload_response.json()["file_id"]
 
@@ -647,9 +647,9 @@ class TestMultiUserBRIM:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
             assert parse_response.status_code == 200
             parse_data = parse_response.json()
 
@@ -657,7 +657,7 @@ class TestMultiUserBRIM:
             file_response = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-                )
+            )
             assert file_response.status_code == 200
             file_data = file_response.json()
 
@@ -680,7 +680,7 @@ class TestMultiUserBRIM:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
             file_id = upload_response.json()["file_id"]
 
@@ -688,7 +688,7 @@ class TestMultiUserBRIM:
             last_parse_before = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}/last-parse",
                 timeout=TIMEOUT,
-                )
+            )
             assert last_parse_before.status_code == 200
             # Before parsing, result should be null
             assert last_parse_before.json() is None
@@ -699,16 +699,16 @@ class TestMultiUserBRIM:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
             assert parse_response.status_code == 200
 
             # After parse - should return cached result
             last_parse_after = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}/last-parse",
                 timeout=TIMEOUT,
-                )
+            )
             assert last_parse_after.status_code == 200
             cached = last_parse_after.json()
 
@@ -735,9 +735,9 @@ class TestMultiUserBRIM:
                 json=[
                     {"user_id": owner_id, "role": "OWNER", "share_percentage": 1.0},
                     {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert add_access_response.status_code == 200
 
         # User2 (EDITOR) uploads file
@@ -765,7 +765,7 @@ class TestMultiUserBRIM:
                 f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
             file_id = upload_response.json()["file_id"]
 
@@ -773,7 +773,7 @@ class TestMultiUserBRIM:
             download_response = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}/download",
                 timeout=TIMEOUT,
-                )
+            )
             assert download_response.status_code == 200
 
             # Content should match uploaded file

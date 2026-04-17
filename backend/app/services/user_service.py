@@ -10,7 +10,7 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import User, UserSettings, BrokerUserAccess
+from backend.app.db.models import BrokerUserAccess, User, UserSettings
 from backend.app.services.auth_service import hash_password
 from backend.app.utils.datetime_utils import utcnow
 
@@ -118,7 +118,7 @@ async def create_user(
     password: str,
     is_superuser: bool = False,
     is_active: bool = True,
-    ) -> tuple[Optional[User], Optional[str]]:
+) -> tuple[Optional[User], Optional[str]]:
     """
     Create a new user.
 
@@ -150,7 +150,7 @@ async def create_user(
         hashed_password=hash_password(password),
         is_active=is_active,
         is_superuser=is_superuser,
-        )
+    )
 
     session.add(user)
     await session.commit()
@@ -164,7 +164,7 @@ async def reset_password(
     session: AsyncSession,
     username: str,
     new_password: str,
-    ) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, Optional[str]]:
     """
     Reset a user's password.
 
@@ -198,7 +198,7 @@ async def set_user_active(
     session: AsyncSession,
     username: str,
     active: bool,
-    ) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, Optional[str]]:
     """
     Activate or deactivate a user.
 
@@ -228,7 +228,7 @@ async def set_user_admin(
     session: AsyncSession,
     username: str,
     is_admin: bool,
-    ) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, Optional[str]]:
     """
     Promote or demote a user to/from admin.
 
@@ -266,7 +266,7 @@ async def update_profile(
     user_id: int,
     username: str | None = None,
     email: str | None = None,
-    ) -> tuple[Optional[User], Optional[str]]:
+) -> tuple[Optional[User], Optional[str]]:
     """
     Update user profile (username and/or email).
 
@@ -311,12 +311,7 @@ async def update_profile(
     await session.commit()
     await session.refresh(user)
 
-    logger.info(
-        "User profile updated",
-        user_id=user.id,
-        username=user.username,
-        email=user.email
-        )
+    logger.info("User profile updated", user_id=user.id, username=user.username, email=user.email)
     return user, None
 
 
@@ -330,7 +325,7 @@ async def count_superusers(session: AsyncSession) -> int:
     Returns:
         Number of superusers
     """
-    stmt = select(func.count(User.id)).where(User.is_superuser == True)
+    stmt = select(func.count(User.id)).where(User.is_superuser == True)  # noqa: E712 — SQLAlchemy filter
     result = await session.execute(stmt)
     return result.scalar() or 0
 
@@ -360,11 +355,7 @@ async def delete_user(session: AsyncSession, user_id: int) -> bool:
     await session.delete(user)
     await session.commit()
 
-    logger.warning(
-        "User deleted",
-        user_id=user_id,
-        username=user.username
-        )
+    logger.warning("User deleted", user_id=user_id, username=user.username)
     return True
 
 
@@ -372,7 +363,7 @@ async def search_users(
     session: AsyncSession,
     query: str,
     exclude_broker_id: Optional[int] = None,
-    ) -> list[dict]:
+) -> list[dict]:
     """
     Search users by username (ILIKE). Does NOT expose email for privacy.
 
@@ -390,18 +381,15 @@ async def search_users(
         select(User, UserSettings)
         .outerjoin(UserSettings, UserSettings.user_id == User.id)
         .where(
-            User.is_active == True,
+            User.is_active == True,  # noqa: E712 — SQLAlchemy filter
             User.username.ilike(f"%{query}%"),
-            )
+        )
         .order_by(User.username)
     )
 
     if exclude_broker_id is not None:
         # Subquery to find users already on this broker
-        broker_users_subq = (
-            select(BrokerUserAccess.user_id)
-            .where(BrokerUserAccess.broker_id == exclude_broker_id)
-        ).scalar_subquery()
+        broker_users_subq = (select(BrokerUserAccess.user_id).where(BrokerUserAccess.broker_id == exclude_broker_id)).scalar_subquery()
         stmt = stmt.where(User.id.notin_(broker_users_subq))
 
     result = await session.execute(stmt)
@@ -412,6 +400,6 @@ async def search_users(
             "id": user.id,
             "username": user.username,
             "avatar_url": settings.avatar_url if settings else None,
-            }
+        }
         for user, settings in rows
-        ]
+    ]

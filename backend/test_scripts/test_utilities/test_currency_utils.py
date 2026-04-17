@@ -12,7 +12,7 @@ from backend.app.schemas.common import CRYPTO_CURRENCIES, _validate_currency_cod
 from backend.app.utils.currency_utils import (
     _build_currency_to_flag_map,
     list_currencies,
-    )
+)
 
 
 class TestListCurrencies:
@@ -32,17 +32,29 @@ class TestListCurrencies:
                 _validate_currency_code_cached(c["code"])
             except ValueError as e:
                 failures.append(f"{c['code']}: {e}")
-        assert not failures, f"Validation failures:\n" + "\n".join(failures)
+        assert not failures, "Validation failures:\n" + "\n".join(failures)
 
     def test_no_historic_currencies(self):
         """Historic currencies like ADP, AFA, ATS should NOT appear."""
         currencies = list_currencies("en")
         codes = {c["code"] for c in currencies}
         historic = [
-            "ADP", "AFA", "ATS", "ARA", "ARL",
-            "BEF", "DEM", "FRF", "ITL", "ESP",
-            "GRD", "NLG", "PTE", "FIM", "IEP",
-            ]
+            "ADP",
+            "AFA",
+            "ATS",
+            "ARA",
+            "ARL",
+            "BEF",
+            "DEM",
+            "FRF",
+            "ITL",
+            "ESP",
+            "GRD",
+            "NLG",
+            "PTE",
+            "FIM",
+            "IEP",
+        ]
         for h in historic:
             assert h not in codes, f"Historic currency {h} should not be in the list"
 
@@ -109,14 +121,35 @@ class TestCurrencyFlagMap:
         """Major currencies must have the correct flag emoji."""
         fm = _build_currency_to_flag_map()
         expected = {
-            "USD": "🇺🇸", "EUR": "🇪🇺", "GBP": "🇬🇧", "JPY": "🇯🇵",
-            "CHF": "🇨🇭", "CAD": "🇨🇦", "AUD": "🇦🇺", "NZD": "🇳🇿",
-            "CNY": "🇨🇳", "INR": "🇮🇳", "BRL": "🇧🇷", "MXN": "🇲🇽",
-            "ZAR": "🇿🇦", "SEK": "🇸🇪", "NOK": "🇳🇴", "DKK": "🇩🇰",
-            "PLN": "🇵🇱", "CZK": "🇨🇿", "HUF": "🇭🇺", "RON": "🇷🇴",
-            "BGN": "🇧🇬", "TRY": "🇹🇷", "KRW": "🇰🇷", "SGD": "🇸🇬",
-            "HKD": "🇭🇰", "THB": "🇹🇭", "RUB": "🇷🇺", "ILS": "🇮🇱",
-            }
+            "USD": "🇺🇸",
+            "EUR": "🇪🇺",
+            "GBP": "🇬🇧",
+            "JPY": "🇯🇵",
+            "CHF": "🇨🇭",
+            "CAD": "🇨🇦",
+            "AUD": "🇦🇺",
+            "NZD": "🇳🇿",
+            "CNY": "🇨🇳",
+            "INR": "🇮🇳",
+            "BRL": "🇧🇷",
+            "MXN": "🇲🇽",
+            "ZAR": "🇿🇦",
+            "SEK": "🇸🇪",
+            "NOK": "🇳🇴",
+            "DKK": "🇩🇰",
+            "PLN": "🇵🇱",
+            "CZK": "🇨🇿",
+            "HUF": "🇭🇺",
+            "RON": "🇷🇴",
+            "BGN": "🇧🇬",
+            "TRY": "🇹🇷",
+            "KRW": "🇰🇷",
+            "SGD": "🇸🇬",
+            "HKD": "🇭🇰",
+            "THB": "🇹🇭",
+            "RUB": "🇷🇺",
+            "ILS": "🇮🇱",
+        }
         for code, exp_flag in expected.items():
             actual = fm.get(code, "?")
             assert actual == exp_flag, f"{code}: expected {exp_flag}, got {actual}"

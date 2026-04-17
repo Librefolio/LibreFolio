@@ -33,23 +33,22 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
 
+from backend.alembic.check_constraints_hook import LogLevel, check_and_add_missing_constraints
 from backend.app.db import (
-    Transaction,
-    Broker,
     Asset,
-    PriceHistory,
     AssetProviderAssignment,
-    TransactionType,
     AssetType,
+    Broker,
     IdentifierType,
-    )
-from backend.app.db.session import get_sync_engine
-from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
+    PriceHistory,
+    Transaction,
+    TransactionType,
+)
 from backend.app.db.models import FxRate
-
+from backend.app.db.session import get_sync_engine
 
 # ============================================================================
 # FIXTURES
@@ -67,7 +66,7 @@ def populate_test_data():
         [sys.executable, "-m", "backend.test_scripts.test_db.populate_mock_data", "--force"],
         capture_output=True,
         text=True,
-        )
+    )
 
     if result.returncode != 0:
         print(f"Warning: populate_mock_data failed: {result.stderr}")
@@ -88,7 +87,7 @@ def test_data():
         return {
             "broker_id": broker.id,
             "asset_id": asset.id,
-            }
+        }
 
 
 @pytest.fixture
@@ -99,7 +98,7 @@ def clean_test_asset():
             display_name=f"Test Asset {int(time.time() * 1000)}",
             currency="EUR",
             asset_type=AssetType.STOCK,
-            )
+        )
         session.add(asset)
         session.commit()
         session.refresh(asset)
@@ -113,17 +112,11 @@ def clean_test_asset():
             asset = session.get(Asset, asset_id)
             if asset:
                 # Delete related data first
-                prices = session.exec(
-                    select(PriceHistory).where(PriceHistory.asset_id == asset_id)
-                    ).all()
+                prices = session.exec(select(PriceHistory).where(PriceHistory.asset_id == asset_id)).all()
                 for price in prices:
                     session.delete(price)
 
-                assignment = session.exec(
-                    select(AssetProviderAssignment).where(
-                        AssetProviderAssignment.asset_id == asset_id
-                        )
-                    ).first()
+                assignment = session.exec(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id)).first()
                 if assignment:
                     session.delete(assignment)
 
@@ -152,9 +145,7 @@ def clean_test_broker():
             broker = session.get(Broker, broker_id)
             if broker:
                 # Delete related transactions first
-                transactions = session.exec(
-                    select(Transaction).where(Transaction.broker_id == broker_id)
-                    ).all()
+                transactions = session.exec(select(Transaction).where(Transaction.broker_id == broker_id)).all()
                 for tx in transactions:
                     session.delete(tx)
                 session.delete(broker)
@@ -179,16 +170,12 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
             identifier_type=IdentifierType.TICKER,
             provider_params='{"symbol": "TEST"}',
             fetch_interval=1440,
-            )
+        )
         session.add(assignment)
         session.commit()
 
         # Verify assignment exists
-        assignment_check = session.exec(
-            select(AssetProviderAssignment).where(
-                AssetProviderAssignment.asset_id == clean_test_asset
-                )
-            ).first()
+        assignment_check = session.exec(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == clean_test_asset)).first()
         assert assignment_check is not None
 
         # Delete asset
@@ -197,11 +184,7 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
         session.commit()
 
         # Verify assignment was CASCADE deleted
-        assignment_after = session.exec(
-            select(AssetProviderAssignment).where(
-                AssetProviderAssignment.asset_id == clean_test_asset
-                )
-            ).first()
+        assignment_after = session.exec(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == clean_test_asset)).first()
         assert assignment_after is None, "AssetProviderAssignment should be CASCADE deleted"
 
 
@@ -215,14 +198,12 @@ def test_asset_deletion_cascades_price_history(clean_test_asset):
             close=Decimal("100.00"),
             currency="EUR",
             source_plugin_key="test",
-            )
+        )
         session.add(price)
         session.commit()
 
         # Verify price exists
-        price_check = session.exec(
-            select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)
-            ).first()
+        price_check = session.exec(select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)).first()
         assert price_check is not None
 
         # Delete asset
@@ -231,9 +212,7 @@ def test_asset_deletion_cascades_price_history(clean_test_asset):
         session.commit()
 
         # Verify price was CASCADE deleted
-        price_after = session.exec(
-            select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)
-            ).first()
+        price_after = session.exec(select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)).first()
         assert price_after is None, "PriceHistory should be CASCADE deleted"
 
 
@@ -254,7 +233,7 @@ def test_broker_deletion_restricted_by_transactions(clean_test_broker, clean_tes
             quantity=Decimal("10.00"),
             amount=Decimal("-1000.00"),
             currency="EUR",
-            )
+        )
         session.add(tx)
         session.commit()
 
@@ -325,7 +304,7 @@ def test_unique_constraint_price_history_asset_date():
             display_name=f"Price Test Asset {int(time.time() * 1000)}",
             currency="EUR",
             asset_type=AssetType.STOCK,
-            )
+        )
         session.add(asset)
         session.commit()
         asset_id = asset.id
@@ -337,7 +316,7 @@ def test_unique_constraint_price_history_asset_date():
             close=Decimal("100.00"),
             currency="EUR",
             source_plugin_key="test",
-            )
+        )
         session.add(price1)
         session.commit()
 
@@ -348,7 +327,7 @@ def test_unique_constraint_price_history_asset_date():
             close=Decimal("101.00"),
             currency="EUR",
             source_plugin_key="test",
-            )
+        )
         session.add(price2)
 
         with pytest.raises(IntegrityError):
@@ -358,9 +337,7 @@ def test_unique_constraint_price_history_asset_date():
 
         # Cleanup - price1 is still in DB (committed before the failed price2)
         # Need to re-query since session state was rolled back
-        existing_prices = session.exec(
-            select(PriceHistory).where(PriceHistory.asset_id == asset_id)
-            ).all()
+        existing_prices = session.exec(select(PriceHistory).where(PriceHistory.asset_id == asset_id)).all()
         for p in existing_prices:
             session.delete(p)
 
@@ -386,7 +363,7 @@ def test_fx_rate_base_less_than_quote():
             quote="EUR",  # Wrong: should be USD
             rate=Decimal("0.92"),
             source="TEST",
-            )
+        )
         session.add(rate)
 
         with pytest.raises(IntegrityError):
@@ -405,7 +382,7 @@ def test_fx_rate_base_less_than_quote_valid():
             quote="USD",
             rate=Decimal("1.09"),
             source="TEST",
-            )
+        )
         session.add(rate)
         session.commit()
 
@@ -435,14 +412,12 @@ def test_transaction_with_null_asset():
             amount=Decimal("1000.00"),
             currency="EUR",
             description="Test deposit",
-            )
+        )
         session.add(tx)
         session.commit()
 
         # Verify
-        tx_check = session.exec(
-            select(Transaction).where(Transaction.description == "Test deposit")
-            ).first()
+        tx_check = session.exec(select(Transaction).where(Transaction.description == "Test deposit")).first()
         assert tx_check is not None
         assert tx_check.asset_id is None
 
@@ -460,7 +435,7 @@ def test_transaction_related_transaction_link():
         broker2 = Broker(
             name=f"Transfer Test Broker {int(time.time() * 1000000)}",  # More unique
             description="For transfer testing",
-            )
+        )
         session.add(broker2)
         session.commit()
         session.refresh(broker2)
@@ -479,7 +454,7 @@ def test_transaction_related_transaction_link():
             amount=Decimal("0"),
             currency="EUR",
             description=f"Transfer out {broker2_id}",  # Unique description
-            )
+        )
         session.add(tx_out)
         session.commit()
         session.refresh(tx_out)
@@ -496,7 +471,7 @@ def test_transaction_related_transaction_link():
             currency="EUR",
             related_transaction_id=tx_out_id,  # Link to outgoing
             description=f"Transfer in {broker2_id}",  # Unique description
-            )
+        )
         session.add(tx_in)
         session.commit()
         session.refresh(tx_in)
@@ -505,9 +480,7 @@ def test_transaction_related_transaction_link():
         # Verify link - use fresh query
         tx_in_check = session.get(Transaction, tx_in_id)
         assert tx_in_check is not None
-        assert (
-            tx_in_check.related_transaction_id == tx_out_id
-        ), f"Expected related_transaction_id={tx_out_id}, got {tx_in_check.related_transaction_id}"
+        assert tx_in_check.related_transaction_id == tx_out_id, f"Expected related_transaction_id={tx_out_id}, got {tx_in_check.related_transaction_id}"
 
         # Cleanup - must delete in reverse order of dependencies
         # tx_in references tx_out via FK, so delete tx_in first
@@ -535,9 +508,7 @@ def test_transaction_related_transaction_link():
 
 def test_check_constraints_present():
     """Verify all CHECK constraints are present in database."""
-    all_present, missing_constraints = check_and_add_missing_constraints(
-        auto_fix=False, log_level=LogLevel.INFO
-        )
+    all_present, missing_constraints = check_and_add_missing_constraints(auto_fix=False, log_level=LogLevel.INFO)
 
     assert all_present, f"Missing CHECK constraints: {missing_constraints}"
 

@@ -19,6 +19,7 @@ This ensures:
 - Database truncation matches our expectations
 - No false update detections in sync operations
 """
+
 import sys
 from datetime import date
 from decimal import Decimal
@@ -43,10 +44,10 @@ from sqlmodel import select
 from backend.app.db import models
 from backend.app.db.session import get_async_engine
 from backend.app.utils.decimal_utils import (
-    truncate_to_db_precision,
     get_model_column_precision,
     truncate_fx_rate,
-    )
+    truncate_to_db_precision,
+)
 
 
 def discover_numeric_columns():
@@ -86,8 +87,8 @@ def discover_numeric_columns():
                             "column_name": column_name,
                             "precision": column.type.precision,
                             "scale": column.type.scale,
-                            }
-                        )
+                        }
+                    )
 
     return numeric_columns
 
@@ -110,7 +111,7 @@ def generate_test_value(scale: int) -> Decimal:
     total_decimals = scale + extra_decimals
 
     # Create string like "1.065757220505168922519450069"
-    decimal_part = "".join(str((i % 10)) for i in range(total_decimals))
+    decimal_part = "".join(str(i % 10) for i in range(total_decimals))
     return Decimal(f"1.{decimal_part}")
 
 
@@ -128,12 +129,8 @@ def test_truncation_helpers():
         # Test get_column_decimal_precision
         precision, scale = get_model_column_precision(model, column_name)
 
-        assert (
-            precision == expected_precision
-        ), f"{model.__name__}.{column_name}: Expected precision {expected_precision}, got {precision}"
-        assert (
-            scale == expected_scale
-        ), f"{model.__name__}.{column_name}: Expected scale {expected_scale}, got {scale}"
+        assert precision == expected_precision, f"{model.__name__}.{column_name}: Expected precision {expected_precision}, got {precision}"
+        assert scale == expected_scale, f"{model.__name__}.{column_name}: Expected scale {expected_scale}, got {scale}"
 
         # Test truncate_decimal_to_db_precision
         test_value = generate_test_value(scale)
@@ -143,10 +140,7 @@ def test_truncation_helpers():
         truncated_str = str(truncated)
         if "." in truncated_str:
             actual_scale = len(truncated_str.split(".")[1])
-            assert actual_scale == scale, (
-                f"{model.__name__}.{column_name}: Truncated to {actual_scale} decimals, expected {scale}\n"
-                f"Input: {test_value}\nOutput: {truncated}"
-            )
+            assert actual_scale == scale, f"{model.__name__}.{column_name}: Truncated to {actual_scale} decimals, expected {scale}\n" f"Input: {test_value}\nOutput: {truncated}"
 
         print(f"✓ {model.__name__}.{column_name}: Numeric({precision}, {scale}) - Helper OK")
 
@@ -178,7 +172,7 @@ async def test_database_truncation():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote,
-                )
+            )
             result = await session.execute(cleanup_stmt)
             existing = result.scalar_one_or_none()
             if existing:
@@ -193,7 +187,7 @@ async def test_database_truncation():
                 rate=test_value,  # Insert with extra precision
                 source=source,
                 fetched_at=utcnow(),
-                )
+            )
             session.add(test_rate)
             await session.commit()
 
@@ -202,18 +196,14 @@ async def test_database_truncation():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote,
-                )
+            )
             result = await session.execute(stmt)
             stored_rate = result.scalar_one()
 
             print(f"Stored in DB:          {stored_rate.rate}")
 
             # Verify database truncated correctly
-            assert stored_rate.rate == truncated_expected, (
-                f"Database truncation mismatch!\n"
-                f"Expected: {truncated_expected}\n"
-                f"Got:      {stored_rate.rate}"
-            )
+            assert stored_rate.rate == truncated_expected, f"Database truncation mismatch!\n" f"Expected: {truncated_expected}\n" f"Got:      {stored_rate.rate}"
 
         finally:
             # Cleanup - make sure we delete even if test fails
@@ -222,7 +212,7 @@ async def test_database_truncation():
                     models.FxRate.date == test_date,
                     models.FxRate.base == test_base,
                     models.FxRate.quote == test_quote,
-                    )
+                )
                 result = await session.execute(cleanup_stmt)
                 stored_rate = result.scalar_one_or_none()
                 if stored_rate:
@@ -257,7 +247,7 @@ async def test_no_false_updates():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote,
-                )
+            )
             result = await session.execute(cleanup_stmt)
             existing = result.scalar_one_or_none()
             if existing:
@@ -272,7 +262,7 @@ async def test_no_false_updates():
                 rate=test_value,
                 source=source,
                 fetched_at=utcnow(),
-                )
+            )
             session.add(test_rate)
             await session.commit()
 
@@ -281,7 +271,7 @@ async def test_no_false_updates():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote,
-                )
+            )
             result = await session.execute(stmt)
             stored_rate_1 = result.scalar_one()
             stored_value_1 = stored_rate_1.rate
@@ -308,18 +298,16 @@ async def test_no_false_updates():
                 stored_rate_1.fetched_at = utcnow()
                 await session.commit()
                 await session.refresh(stored_rate_1)
-                print(f"✓ Update applied (values differ after truncation)")
+                print("✓ Update applied (values differ after truncation)")
                 updated = True
             else:
                 # Values are the same after truncation, should NOT update
-                print(f"✓ No update (values identical after truncation)")
+                print("✓ No update (values identical after truncation)")
                 updated = False
 
             # Verify the logic works correctly
             if stored_truncated == new_truncated:
-                assert (
-                    not updated
-                ), "False update occurred despite values being identical after truncation"
+                assert not updated, "False update occurred despite values being identical after truncation"
                 print(f"Both truncate to: {stored_truncated}")
             else:
                 assert updated, "Update should have been applied for different values"
@@ -331,7 +319,7 @@ async def test_no_false_updates():
                     models.FxRate.date == test_date,
                     models.FxRate.base == test_base,
                     models.FxRate.quote == test_quote,
-                    )
+                )
                 result = await session.execute(cleanup_stmt)
                 stored_rate = result.scalar_one_or_none()
                 if stored_rate:

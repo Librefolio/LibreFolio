@@ -19,17 +19,18 @@ from backend.app.db import IdentifierType
 # Add project root to path
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.app.services.asset_source import AssetSourceError
+import traceback
+
 from backend.app.schemas.prices import FACurrentValue
+from backend.app.services.asset_source import AssetSourceError
+from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,
     print_section,
     print_success,
     print_warning,
-    )
-import traceback
+)
 
 # ============================================================================
 # PYTEST FIXTURES AND PARAMETRIZATION
@@ -132,9 +133,7 @@ async def test_current_value(provider_code: str):
             provider_params = test_case.get("provider_params")
             if isinstance(provider_params, dict) and "_transaction_override" in test_case:
                 provider_params["_transaction_override"] = test_case.get("_transaction_override")
-            identifier_type = test_case.get(
-                "identifier_type", IdentifierType.TICKER
-                )  # Default to TICKER
+            identifier_type = test_case.get("identifier_type", IdentifierType.TICKER)  # Default to TICKER
 
             print_info(f"  Testing: {identifier} (expects: {expected_symbol})")
 
@@ -146,24 +145,18 @@ async def test_current_value(provider_code: str):
             # Call with all required parameters
             try:
                 if provider_params:
-                    result = await provider.get_current_value(
-                        identifier, identifier_type, provider_params
-                        )
+                    result = await provider.get_current_value(identifier, identifier_type, provider_params)
                 else:
                     result = await provider.get_current_value(identifier, identifier_type)
             except TypeError as e:
                 # Provider requires provider_params but test_case doesn't have it
                 if "provider_params" in str(e):
-                    print_warning(
-                        f"{provider_code} requires provider_params but none in test_case - SKIPPING"
-                        )
+                    print_warning(f"{provider_code} requires provider_params but none in test_case - SKIPPING")
                     pytest.skip(f"{provider_code} test_case missing provider_params")
                 raise
 
             # Validate result is FACurrentValue Pydantic model
-            assert isinstance(
-                result, FACurrentValue
-                ), f"Result is not FACurrentValue: {type(result)}"
+            assert isinstance(result, FACurrentValue), f"Result is not FACurrentValue: {type(result)}"
 
             # Access Pydantic model attributes directly (FACurrentValue has: value, currency, as_of_date, source)
             current_price = result.value
@@ -239,9 +232,7 @@ async def test_historical_data(provider_code: str):
 
         print_info(f"  Date range: {start_date} to {end_date}")
 
-        result = await provider.get_history_value(
-            identifier, identifier_type, provider_params, start_date, end_date
-            )
+        result = await provider.get_history_value(identifier, identifier_type, provider_params, start_date, end_date)
 
         # Validate result structure - FAHistoricalData has .prices attribute
         assert hasattr(result, "prices"), f"Result missing 'prices' attribute: {type(result)}"
@@ -315,25 +306,13 @@ async def test_search(provider_code: str):
 
             # Different providers may return different keys (symbol/identifier, name/description/display_name)
             has_symbol = "symbol" in first_result or "identifier" in first_result
-            has_name = (
-                "name" in first_result
-                or "description" in first_result
-                or "display_name" in first_result
-            )
+            has_name = "name" in first_result or "description" in first_result or "display_name" in first_result
 
-            assert (
-                has_symbol
-            ), f"Search result missing 'symbol' or 'identifier': {first_result.keys()}"
-            assert (
-                has_name
-            ), f"Search result missing 'name', 'description', or 'display_name': {first_result.keys()}"
+            assert has_symbol, f"Search result missing 'symbol' or 'identifier': {first_result.keys()}"
+            assert has_name, f"Search result missing 'name', 'description', or 'display_name': {first_result.keys()}"
 
             symbol = first_result.get("symbol") or first_result.get("identifier")
-            name = (
-                first_result.get("name")
-                or first_result.get("description")
-                or first_result.get("display_name")
-            )
+            name = first_result.get("name") or first_result.get("description") or first_result.get("display_name")
             print_success(f"  ✓ First result: {symbol} - {name}")
 
         print_success("Search functionality OK")
@@ -377,7 +356,7 @@ def test_validate_params(provider_code: str):
             empty_accepted = True
         except Exception as e:
             print_info(f"  {provider_code} rejects empty dict: {str(e)[:80]}")
-            empty_accepted = False
+            _empty_accepted = False
 
         # Test 3: Validate all provider_params from test_cases
         if provider.test_cases:
@@ -399,22 +378,16 @@ def test_validate_params(provider_code: str):
                         raise
                 else:
                     # Test case has no params - provider should accept None
-                    print_info(f"    Test case has no provider_params (None)")
+                    print_info("    Test case has no provider_params (None)")
                     if not none_accepted:
-                        print_warning(f"    Provider requires params but test_case has None!")
+                        print_warning("    Provider requires params but test_case has None!")
 
             # If any test_case has params, ensure None/empty were rejected (provider requires params)
-            any_test_case_has_params = any(
-                tc.get("provider_params") is not None for tc in provider.test_cases
-                )
+            any_test_case_has_params = any(tc.get("provider_params") is not None for tc in provider.test_cases)
             if any_test_case_has_params and none_accepted:
-                print_warning(
-                    f"  Provider has test_cases with params but also accepts None - may be intentional"
-                    )
+                print_warning("  Provider has test_cases with params but also accepts None - may be intentional")
         else:
-            print_info(
-                f"  {provider_code} has no test_cases - skipping params validation from test_cases"
-                )
+            print_info(f"  {provider_code} has no test_cases - skipping params validation from test_cases")
 
         print_success("Provider params validation test passed")
 
@@ -445,12 +418,12 @@ async def test_error_handling(provider_code: str):
             # If we got a result, check what it is
             if result is None:
                 # Provider returned None - acceptable
-                print_success(f"  ✓ Provider returned None for invalid identifier")
+                print_success("  ✓ Provider returned None for invalid identifier")
                 error_raised = True
             elif isinstance(result, FACurrentValue):
                 # Got a valid result - provider may have returned mock/default data
                 print_warning(f"  Provider returned result for invalid identifier: {result.symbol}")
-                print_info(f"  This may be acceptable for test/mock providers")
+                print_info("  This may be acceptable for test/mock providers")
                 # Don't fail for mock providers
                 if "mock" in provider_code.lower() or "test" in provider_code.lower():
                     error_raised = True

@@ -50,6 +50,7 @@ DEFAULT_TEST_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "test"
 # Test mode management
 # =============================================================================
 
+
 def set_test_mode(enabled: bool = True):
     """
     Enable/disable test mode globally.
@@ -62,6 +63,7 @@ def set_test_mode(enabled: bool = True):
 def _reset_engine_singletons():
     """Reset engine singletons to allow recreation with new settings."""
     from backend.app.db import session as session_module
+
     session_module.sync_engine = None
     session_module.async_engine = None
 
@@ -77,6 +79,7 @@ def is_test_mode() -> bool:
 # =============================================================================
 # Settings model (loaded from .env)
 # =============================================================================
+
 
 class Settings(BaseSettings):
     """
@@ -111,12 +114,13 @@ class Settings(BaseSettings):
         case_sensitive=True,
         env_file_encoding="utf-8",
         extra="ignore",  # Ignore env vars not defined as fields (e.g. LIBREFOLIO_DATA_DIR)
-        )
+    )
 
 
 # =============================================================================
 # Data directory resolution
 # =============================================================================
+
 
 def get_data_dir() -> Path:
     """
@@ -152,6 +156,7 @@ def get_version() -> str:
     Same logic as ./dev.py info version and frontend APP_VERSION.
     """
     from backend.app.utils.version import get_git_version
+
     return get_git_version()
 
 
@@ -185,5 +190,5 @@ def ensure_data_dirs() -> None:
         "broker_reports/parsed",
         "broker_reports/failed",
         "logs",
-        ]:
+    ]:
         (data_dir / subdir).mkdir(parents=True, exist_ok=True)

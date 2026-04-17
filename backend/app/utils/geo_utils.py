@@ -55,7 +55,7 @@ REGION_MAPPING: dict[str, list[str]] = {
         "SVN",
         "CYP",
         "EST",
-        ],  # Eurozone 20
+    ],  # Eurozone 20
     "EU": [
         "DEU",
         "FRA",
@@ -84,7 +84,7 @@ REGION_MAPPING: dict[str, list[str]] = {
         "BGR",
         "HRV",
         "ROU",
-        ],  # EU27
+    ],  # EU27
     "NORDIC": ["SWE", "DNK", "NOR", "FIN", "ISL"],
     # Americas
     "LATAM": [
@@ -107,7 +107,7 @@ REGION_MAPPING: dict[str, list[str]] = {
         "NIC",
         "DOM",
         "CUB",
-        ],
+    ],
     "NAFTA": ["USA", "CAN", "MEX"],
     # Asia
     "ASIA": [
@@ -131,7 +131,7 @@ REGION_MAPPING: dict[str, list[str]] = {
         "LAO",
         "MNG",
         "NPL",
-        ],
+    ],
     "ASEAN": ["SGP", "THA", "VNM", "IDN", "MYS", "PHL", "KHM", "LAO", "MMR", "BRN"],
     # Middle East & Africa
     "MENA": [
@@ -149,7 +149,7 @@ REGION_MAPPING: dict[str, list[str]] = {
         "DZA",
         "IRQ",
         "YEM",
-        ],
+    ],
     "AFRICA": [
         "ZAF",
         "EGY",
@@ -170,7 +170,7 @@ REGION_MAPPING: dict[str, list[str]] = {
         "ZWE",
         "RWA",
         "BEN",
-        ],
+    ],
     # Oceania
     "OCEANIA": ["AUS", "NZL", "FJI", "PNG", "NCL", "PYF", "GUM", "SLB", "VUT"],
     # Economic groups
@@ -195,9 +195,9 @@ REGION_MAPPING: dict[str, list[str]] = {
         "IDN",
         "AUS",
         "ARG",
-        ],
+    ],
     "BRICS": ["BRA", "RUS", "IND", "CHN", "ZAF"],
-    }
+}
 
 
 def is_region(code: str) -> bool:
@@ -247,9 +247,7 @@ def iso2_to_flag_emoji(iso2: str) -> str:
 
     iso2_upper = iso2.upper()
     # Convert each letter to Regional Indicator Symbol
-    return chr(0x1F1E6 + ord(iso2_upper[0]) - ord("A")) + chr(
-        0x1F1E6 + ord(iso2_upper[1]) - ord("A")
-        )
+    return chr(0x1F1E6 + ord(iso2_upper[0]) - ord("A")) + chr(0x1F1E6 + ord(iso2_upper[1]) - ord("A"))
 
 
 def list_countries(language: str = "en") -> List[dict]:
@@ -275,12 +273,9 @@ def list_countries(language: str = "en") -> List[dict]:
         except Exception:
             name = country.name
 
-        countries.append(
-            {"iso3": iso3, "iso2": iso2, "name": name, "flag_emoji": iso2_to_flag_emoji(iso2)}
-            )
+        countries.append({"iso3": iso3, "iso2": iso2, "name": name, "flag_emoji": iso2_to_flag_emoji(iso2)})
 
     return sorted(countries, key=lambda x: x["name"])
-
 
 
 def normalize_country_to_iso3(country_input: str) -> str:
@@ -348,9 +343,7 @@ def normalize_country_to_iso3(country_input: str) -> str:
         pass
 
     # Not found
-    raise ValueError(
-        f"Country '{country_input}' not found. Please use ISO-3166-A2 (e.g., US), ISO-3166-A3 (e.g., USA), or full country name."
-        )
+    raise ValueError(f"Country '{country_input}' not found. Please use ISO-3166-A2 (e.g., US), ISO-3166-A3 (e.g., USA), or full country name.")
 
 
 def normalize_country_keys(data: dict[str, Any]) -> dict[str, Decimal]:
@@ -389,14 +382,11 @@ def normalize_country_keys(data: dict[str, Any]) -> dict[str, Decimal]:
             try:
                 iso3_code = normalize_country_to_iso3(country_input)
             except ValueError as e:
-                raise ValueError(f"Invalid country '{country_input}': {e}")
+                raise ValueError(f"Invalid country '{country_input}': {e}") from e
 
         # Check for duplicates (after normalization)
         if iso3_code in normalized:
-            raise ValueError(
-                f"Duplicate country after normalization: '{country_input}' → {iso3_code} "
-                f"(already present in geographic area)"
-                )
+            raise ValueError(f"Duplicate country after normalization: '{country_input}' → {iso3_code} " f"(already present in geographic area)")
 
         # Parse weight
         weight = parse_decimal_value(weight_value)

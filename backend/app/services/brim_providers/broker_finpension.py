@@ -29,10 +29,11 @@ This plugin parses CSV exports from Finpension (Swiss pension platform).
 from __future__ import annotations
 
 import csv
-from datetime import date as date_type, datetime
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
@@ -40,8 +41,8 @@ from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMProvider, BRIMParseError
-from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -64,7 +65,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "flat-rate administrative fee": TransactionType.FEE,
     "deposit": TransactionType.DEPOSIT,
     "withdrawal": TransactionType.WITHDRAWAL,
-    }
+}
 
 
 def _parse_finpension_date(value: str) -> Optional[date_type]:
@@ -110,10 +111,7 @@ class FinpensionBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return (
-            "Import transactions from Finpension CSV export. "
-            "Supports Swiss pension fund investments."
-        )
+        return "Import transactions from Finpension CSV export. " "Supports Swiss pension fund investments."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -146,9 +144,7 @@ class FinpensionBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(
-        self, file_path: Path, broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Finpension CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -157,7 +153,7 @@ class FinpensionBrokerProvider(BRIMProvider):
         next_fake_id = FAKE_ASSET_ID_BASE
 
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            with open(file_path, encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f, delimiter=";")
                 row_num = 1
 
@@ -190,13 +186,11 @@ class FinpensionBrokerProvider(BRIMProvider):
                     asset_required = tx_type in [
                         TransactionType.BUY,
                         TransactionType.SELL,
-                        ]
+                    ]
 
                     if asset_required:
                         if not isin and not asset_name:
-                            warnings.append(
-                                f"Row {row_num}: {tx_type.value} requires asset, skipping"
-                                )
+                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
                             continue
 
                         asset_key = isin if isin else asset_name
@@ -211,7 +205,7 @@ class FinpensionBrokerProvider(BRIMProvider):
                                 "extracted_symbol": None,
                                 "extracted_isin": isin if isin else None,
                                 "extracted_name": asset_name if asset_name else None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -236,7 +230,7 @@ class FinpensionBrokerProvider(BRIMProvider):
                             cash=Currency(code="CHF", amount=amount) if amount else None,
                             description=f"{category}: {asset_name}" if asset_name else category,
                             tags=["import", "finpension"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -244,9 +238,9 @@ class FinpensionBrokerProvider(BRIMProvider):
                         continue
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}")
+            raise BRIMParseError(f"File not found: {file_path}") from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}")
+            raise BRIMParseError(f"Error parsing file: {e}") from e
 
         if not transactions:
             raise BRIMParseError("No valid transactions found in file")
@@ -257,16 +251,16 @@ class FinpensionBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "Finpension file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-            )
+        )
 
         return transactions, warnings, extracted_assets_typed
 

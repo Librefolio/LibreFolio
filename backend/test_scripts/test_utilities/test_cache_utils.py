@@ -15,15 +15,14 @@ import pytest
 
 from backend.app.utils.cache_utils import (
     NamedCache,
-    get_ttl_cache,
-    clear_cache,
+    _cache_registry,
     clear_all_caches,
+    clear_cache,
     close_all_caches,
     get_cache_stats,
+    get_ttl_cache,
     list_caches,
-    _cache_registry,
 )
-
 
 # ============================================================================
 # Fixtures
@@ -227,4 +226,3 @@ class TestCacheRegistry:
         assert len(result) == 2
         names = {s["name"] for s in result}
         assert names == {"list_1", "list_2"}
-

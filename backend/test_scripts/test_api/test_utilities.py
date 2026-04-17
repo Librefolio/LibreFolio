@@ -13,7 +13,7 @@ import pytest
 
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success
+from backend.test_scripts.test_utils import print_info, print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -23,6 +23,7 @@ TIMEOUT = 30
 async def create_user_and_login(client: httpx.AsyncClient) -> None:
     """Create a test user, login, and set session cookie on client."""
     import uuid as _uuid
+
     username = f"test_{int(__import__('time').time() * 1000)}_{_uuid.uuid4().hex[:4]}"
     email = f"{username}@test.com"
     password = "TestPass123!"
@@ -30,14 +31,14 @@ async def create_user_and_login(client: httpx.AsyncClient) -> None:
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     if resp.status_code != 201:
         raise Exception(f"Failed to create user: {resp.text}")
     login_resp = await client.post(
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     if login_resp.status_code != 200:
         raise Exception(f"Failed to login: {login_resp.text}")
     session = login_resp.cookies.get("session")
@@ -95,7 +96,7 @@ async def test_list_sectors_with_other(test_server):
             "Telecommunication",
             "Utilities",
             "Other",
-            ]
+        ]
         for sector in expected:
             assert sector in data["items"], f"Missing sector: {sector}"
 
@@ -110,9 +111,7 @@ async def test_list_sectors_without_other(test_server):
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(
-            f"{API_BASE}/utilities/sectors", params={"include_other": "false"}, timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/utilities/sectors", params={"include_other": "false"}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -136,9 +135,7 @@ async def test_normalize_country_iso3(test_server):
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(
-            f"{API_BASE}/utilities/countries/normalize", params={"name": "USA"}, timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/utilities/countries/normalize", params={"name": "USA"}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -159,9 +156,7 @@ async def test_normalize_country_iso2(test_server):
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(
-            f"{API_BASE}/utilities/countries/normalize", params={"name": "IT"}, timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/utilities/countries/normalize", params={"name": "IT"}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -181,9 +176,7 @@ async def test_normalize_country_name(test_server):
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(
-            f"{API_BASE}/utilities/countries/normalize", params={"name": "Germany"}, timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/utilities/countries/normalize", params={"name": "Germany"}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -207,7 +200,7 @@ async def test_normalize_country_invalid(test_server):
             f"{API_BASE}/utilities/countries/normalize",
             params={"name": "InvalidCountryXYZ"},
             timeout=TIMEOUT,
-            )
+        )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -234,18 +227,14 @@ async def test_normalize_country_case_insensitive(test_server):
             ("italy", "ITA"),
             ("FRANCE", "FRA"),
             ("jApAn", "JPN"),
-            ]
+        ]
 
         for name, expected_iso3 in test_cases:
-            response = await client.get(
-                f"{API_BASE}/utilities/countries/normalize", params={"name": name}, timeout=TIMEOUT
-                )
+            response = await client.get(f"{API_BASE}/utilities/countries/normalize", params={"name": name}, timeout=TIMEOUT)
 
             assert response.status_code == 200
             data = response.json()
-            assert (
-                expected_iso3 in data["iso3_codes"]
-            ), f"{name} should normalize to {expected_iso3}"
+            assert expected_iso3 in data["iso3_codes"], f"{name} should normalize to {expected_iso3}"
             print_info(f"  {name} -> {data['iso3_codes']}")
 
         print_success("✓ Case-insensitive normalization works")
@@ -296,9 +285,7 @@ async def test_list_countries_italian(test_server):
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(
-            f"{API_BASE}/utilities/countries", params={"language": "it"}, timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/utilities/countries", params={"language": "it"}, timeout=TIMEOUT)
 
         assert response.status_code == 200
         data = response.json()
@@ -327,10 +314,7 @@ async def test_normalize_currency_iso_code(test_server):
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(
-            f"{API_BASE}/utilities/currencies/normalize",
-            params={"name": "USD"}, timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "USD"}, timeout=TIMEOUT)
 
         assert response.status_code == 200
         data = response.json()
@@ -350,10 +334,7 @@ async def test_normalize_currency_symbol(test_server):
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(
-            f"{API_BASE}/utilities/currencies/normalize",
-            params={"name": "€"}, timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "€"}, timeout=TIMEOUT)
 
         assert response.status_code == 200
         data = response.json()
@@ -373,10 +354,7 @@ async def test_normalize_currency_passthrough(test_server):
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(
-            f"{API_BASE}/utilities/currencies/normalize",
-            params={"name": "xyznotacurrency123"}, timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "xyznotacurrency123"}, timeout=TIMEOUT)
 
         assert response.status_code == 200
         data = response.json()
@@ -414,9 +392,7 @@ class TestListCurrenciesEndpoint:
         print_section("list_currencies: Italian")
         async with httpx.AsyncClient() as client:
             await create_user_and_login(client)
-            response = await client.get(
-                f"{API_BASE}/utilities/currencies", params={"language": "it"}, timeout=TIMEOUT
-                )
+            response = await client.get(f"{API_BASE}/utilities/currencies", params={"language": "it"}, timeout=TIMEOUT)
             assert response.status_code == 200
             data = response.json()
             assert data["language"] == "it"

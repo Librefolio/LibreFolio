@@ -46,12 +46,10 @@ async def create_user_and_login(client: httpx.AsyncClient) -> tuple[int, str]:
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     user_id = resp.json()["user"]["id"]
 
-    login_resp = await client.post(
-        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-        )
+    login_resp = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
     session = login_resp.cookies.get("session")
     if session:
         client.cookies.set("session", session)
@@ -99,9 +97,7 @@ class TestUpload:
             files = {"file": (filename, BytesIO(content), "text/plain")}
             response = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
 
-            assert (
-                response.status_code == 200
-            ), f"Expected 200, got {response.status_code}: {response.text}"
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
             assert data["success"] is True
             assert data["file"]["original_name"] == filename
@@ -175,9 +171,7 @@ class TestListUploads:
             await client2.post(f"{API_BASE}/uploads", files=files2, timeout=TIMEOUT)
 
             # User 2 lists only their files
-            response = await client2.get(
-                f"{API_BASE}/uploads", params={"my_files_only": True}, timeout=TIMEOUT
-                )
+            response = await client2.get(f"{API_BASE}/uploads", params={"my_files_only": True}, timeout=TIMEOUT)
 
             assert response.status_code == 200
             data = response.json()
@@ -320,9 +314,7 @@ class TestPluginStatic:
 
         async with httpx.AsyncClient() as client:
             await create_user_and_login(client)
-            response = await client.get(
-                f"{API_BASE}/uploads/plugin/brim/nonexistent/logo.png", timeout=TIMEOUT
-                )
+            response = await client.get(f"{API_BASE}/uploads/plugin/brim/nonexistent/logo.png", timeout=TIMEOUT)
 
             assert response.status_code == 404
 
@@ -357,15 +349,13 @@ class TestFileSizeLimit:
             large_content = b"X" * ((max_mb + 1) * 1024 * 1024)
             files = {"file": ("large_file.bin", BytesIO(large_content), "application/octet-stream")}
 
-            response = await client.post(
-                f"{API_BASE}/uploads", files=files, timeout=60  # Longer timeout for large file
-                )
+            response = await client.post(f"{API_BASE}/uploads", files=files, timeout=60)  # Longer timeout for large file
 
             # Should be rejected with 413 or 400
             assert response.status_code in [
                 400,
                 413,
-                ], f"Expected 400/413, got {response.status_code}"
+            ], f"Expected 400/413, got {response.status_code}"
 
             print_success("✓ Large file correctly rejected")
 
@@ -395,9 +385,7 @@ class TestSuperuserDelete:
             # Regular user uploads file
             await create_user_and_login(user_client)
             files = {"file": ("user_file.txt", BytesIO(b"User content"), "text/plain")}
-            upload_resp = await user_client.post(
-                f"{API_BASE}/uploads", files=files, timeout=TIMEOUT
-                )
+            upload_resp = await user_client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
             file_id = upload_resp.json()["file"]["id"]
 
             # Superuser deletes it

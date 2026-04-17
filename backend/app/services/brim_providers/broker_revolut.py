@@ -31,10 +31,11 @@ This plugin parses CSV exports from Revolut Trading.
 from __future__ import annotations
 
 import csv
-from datetime import date as date_type, datetime
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
@@ -42,8 +43,8 @@ from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMProvider, BRIMParseError
-from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -68,13 +69,13 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "cash top-up": TransactionType.DEPOSIT,
     "cash withdrawal": TransactionType.WITHDRAWAL,
     "custody fee": TransactionType.FEE,
-    }
+}
 
 # Types to skip
 SKIP_TYPES = [
     "transfer",
     "stock split",
-    ]
+]
 
 
 def _parse_revolut_datetime(value: str) -> Optional[date_type]:
@@ -92,7 +93,7 @@ def _parse_revolut_datetime(value: str) -> Optional[date_type]:
         "%Y-%m-%dT%H:%M:%S.%f",
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%d",
-        ]
+    ]
 
     for fmt in formats:
         try:
@@ -168,10 +169,7 @@ class RevolutBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return (
-            "Import transactions from Revolut Trading CSV export. "
-            "Supports stocks, dividends, and cash movements."
-        )
+        return "Import transactions from Revolut Trading CSV export. " "Supports stocks, dividends, and cash movements."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -207,15 +205,13 @@ class RevolutBrokerProvider(BRIMProvider):
                 "price per share",
                 "total amount",
                 "fx rate",
-                ]
+            ]
             return all(col in first_line for col in required)
 
         except Exception:
             return False
 
-    def parse(
-        self, file_path: Path, broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Revolut Trading CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -224,7 +220,7 @@ class RevolutBrokerProvider(BRIMProvider):
         next_fake_id = FAKE_ASSET_ID_BASE
 
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            with open(file_path, encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
                 row_num = 1
 
@@ -265,13 +261,11 @@ class RevolutBrokerProvider(BRIMProvider):
                         TransactionType.BUY,
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
-                        ]
+                    ]
 
                     if asset_required:
                         if not ticker:
-                            warnings.append(
-                                f"Row {row_num}: {tx_type.value} requires asset, skipping"
-                                )
+                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
                             continue
 
                         if ticker in asset_to_fake_id:
@@ -284,7 +278,7 @@ class RevolutBrokerProvider(BRIMProvider):
                                 "extracted_symbol": ticker,
                                 "extracted_isin": None,
                                 "extracted_name": None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -314,7 +308,7 @@ class RevolutBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=f"{tx_type_raw}: {ticker}" if ticker else tx_type_raw,
                             tags=["import", "revolut"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -322,9 +316,9 @@ class RevolutBrokerProvider(BRIMProvider):
                         continue
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}")
+            raise BRIMParseError(f"File not found: {file_path}") from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}")
+            raise BRIMParseError(f"Error parsing file: {e}") from e
 
         if not transactions:
             raise BRIMParseError("No valid transactions found in file")
@@ -335,16 +329,16 @@ class RevolutBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "Revolut file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-            )
+        )
 
         return transactions, warnings, extracted_assets_typed
 

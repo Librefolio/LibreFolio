@@ -33,7 +33,6 @@ from backend.app.services.global_settings_service import (
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_utils import print_section, print_success
 
-
 # ============================================================================
 # FIXTURE — clean settings table before each test
 # ============================================================================
@@ -193,9 +192,7 @@ class TestTypedGetters:
         print_section("get_session_ttl_hours: custom value in DB")
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            session.add(
-                GlobalSetting(key="session_ttl_hours", value="48", value_type="int", updated_at=utcnow())
-            )
+            session.add(GlobalSetting(key="session_ttl_hours", value="48", value_type="int", updated_at=utcnow()))
             await session.commit()
             result = await get_session_ttl_hours(session)
             assert result == 48
@@ -213,9 +210,7 @@ class TestTypedGetters:
         print_section("get_max_upload_mb: custom value in DB")
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            session.add(
-                GlobalSetting(key="max_file_upload_mb", value="50", value_type="int", updated_at=utcnow())
-            )
+            session.add(GlobalSetting(key="max_file_upload_mb", value="50", value_type="int", updated_at=utcnow()))
             await session.commit()
             result = await get_max_upload_mb(session)
             assert result == 50
@@ -233,12 +228,8 @@ class TestTypedGetters:
         print_section("is_registration_enabled: disabled in DB")
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
-            session.add(
-                GlobalSetting(key="enable_registration", value="false", value_type="bool", updated_at=utcnow())
-            )
+            session.add(GlobalSetting(key="enable_registration", value="false", value_type="bool", updated_at=utcnow()))
             await session.commit()
             result = await is_registration_enabled(session)
             assert result is False
             print_success(f"Registration disabled = {result}")
-
-

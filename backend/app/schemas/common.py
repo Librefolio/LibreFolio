@@ -22,10 +22,10 @@ from __future__ import annotations
 from datetime import date as date_type
 from decimal import Decimal
 from functools import lru_cache
-from typing import Optional, List, TypeVar, Generic, Any
+from typing import Any, Generic, List, Optional, TypeVar
 
 import pycountry
-from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.utils.datetime_utils import parse_ISO_date
 
@@ -55,7 +55,7 @@ CRYPTO_CURRENCIES = {
     "ALGO": "Algorand",
     "VET": "VeChain",
     "FIL": "Filecoin",
-    }
+}
 
 
 # =============================================================================
@@ -92,9 +92,7 @@ def _validate_currency_code_cached(code: str) -> str:
         return code
 
     # Invalid currency
-    raise ValueError(
-        f"Invalid currency code: '{code}'. " f"Must be ISO 4217 currency or supported crypto."
-        )
+    raise ValueError(f"Invalid currency code: '{code}'. " f"Must be ISO 4217 currency or supported crypto.")
 
 
 # =============================================================================
@@ -188,10 +186,10 @@ class Currency(BaseModel):
             try:
                 return Decimal(str(v))
             except Exception:
-                raise ValueError(f"Cannot convert '{v}' to Decimal")
+                raise ValueError(f"Cannot convert '{v}' to Decimal") from None
         raise ValueError(f"Amount must be numeric, got {type(v)}")
 
-    def __add__(self, other: "Currency") -> "Currency":
+    def __add__(self, other: Currency) -> Currency:
         """Add two Currency objects (same currency only)."""
         if not isinstance(other, Currency):
             raise TypeError(f"Cannot add Currency and {type(other).__name__}")
@@ -199,7 +197,7 @@ class Currency(BaseModel):
             raise ValueError(f"Cannot add {self.code} and {other.code}")
         return Currency(code=self.code, amount=self.amount + other.amount)
 
-    def __sub__(self, other: "Currency") -> "Currency":
+    def __sub__(self, other: Currency) -> Currency:
         """Subtract two Currency objects (same currency only)."""
         if not isinstance(other, Currency):
             raise TypeError(f"Cannot subtract {type(other).__name__} from Currency")
@@ -207,11 +205,11 @@ class Currency(BaseModel):
             raise ValueError(f"Cannot subtract {other.code} from {self.code}")
         return Currency(code=self.code, amount=self.amount - other.amount)
 
-    def __neg__(self) -> "Currency":
+    def __neg__(self) -> Currency:
         """Negate currency amount."""
         return Currency(code=self.code, amount=-self.amount)
 
-    def __abs__(self) -> "Currency":
+    def __abs__(self) -> Currency:
         """Absolute value of currency amount."""
         return Currency(code=self.code, amount=abs(self.amount))
 
@@ -225,7 +223,7 @@ class Currency(BaseModel):
         """Check inequality."""
         return not self.__eq__(other)
 
-    def __lt__(self, other: "Currency") -> bool:
+    def __lt__(self, other: Currency) -> bool:
         """Less than comparison (same currency only)."""
         if not isinstance(other, Currency):
             raise TypeError(f"Cannot compare Currency and {type(other).__name__}")
@@ -233,11 +231,11 @@ class Currency(BaseModel):
             raise ValueError(f"Cannot compare {self.code} and {other.code}")
         return self.amount < other.amount
 
-    def __le__(self, other: "Currency") -> bool:
+    def __le__(self, other: Currency) -> bool:
         """Less than or equal comparison (same currency only)."""
         return self == other or self < other
 
-    def __gt__(self, other: "Currency") -> bool:
+    def __gt__(self, other: Currency) -> bool:
         """Greater than comparison (same currency only)."""
         if not isinstance(other, Currency):
             raise TypeError(f"Cannot compare Currency and {type(other).__name__}")
@@ -245,7 +243,7 @@ class Currency(BaseModel):
             raise ValueError(f"Cannot compare {self.code} and {other.code}")
         return self.amount > other.amount
 
-    def __ge__(self, other: "Currency") -> bool:
+    def __ge__(self, other: Currency) -> bool:
         """Greater than or equal comparison (same currency only)."""
         return self == other or self > other
 
@@ -266,7 +264,7 @@ class Currency(BaseModel):
         return {"currency": self.code, "amount": str(self.amount)}  # Decimal → string for JSON
 
     @classmethod
-    def zero(cls, code: str) -> "Currency":
+    def zero(cls, code: str) -> Currency:
         """Create a zero-valued Currency."""
         return cls(code=code, amount=Decimal("0"))
 
@@ -358,7 +356,7 @@ class DateRangeModel(BaseModel):
     end: Optional[date_type] = Field(None, description="End date (inclusive, optional = single day)")
 
     @model_validator(mode="after")
-    def validate_end_after_start(self) -> "DateRangeModel":
+    def validate_end_after_start(self) -> DateRangeModel:
         """Ensure end >= start when end is provided."""
         if self.end is not None and self.end < self.start:
             raise ValueError(f"end date ({self.end}) must be >= start date ({self.end})")

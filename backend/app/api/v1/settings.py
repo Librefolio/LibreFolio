@@ -15,11 +15,11 @@ from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.settings import (
     GlobalSettingRead,
-    GlobalSettingUpdate,
     GlobalSettingsListResponse,
+    GlobalSettingUpdate,
     UserSettingsRead,
     UserSettingsUpdate,
-    )
+)
 from backend.app.services.settings_service import (
     get_all_global_settings,
     get_global_setting,
@@ -27,7 +27,7 @@ from backend.app.services.settings_service import (
     initialize_global_settings,
     update_global_setting,
     update_user_settings,
-    )
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -55,7 +55,7 @@ async def require_admin(current_user: Annotated[User, Depends(get_current_user)]
 async def get_user_settings_endpoint(
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> UserSettingsRead:
+) -> UserSettingsRead:
     """
     Get current user's settings.
 
@@ -69,7 +69,7 @@ async def update_user_settings_endpoint(
     updates: UserSettingsUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> UserSettingsRead:
+) -> UserSettingsRead:
     """
     Update current user's settings.
 
@@ -79,7 +79,7 @@ async def update_user_settings_endpoint(
         "Updating user settings",
         user_id=current_user.id,
         updates=updates.model_dump(exclude_none=True),
-        )
+    )
     return await update_user_settings(current_user.id, updates, session)
 
 
@@ -91,7 +91,7 @@ async def update_user_settings_endpoint(
 @router.get("/global", response_model=GlobalSettingsListResponse)
 async def list_global_settings(
     session: AsyncSession = Depends(get_session_generator),
-    ) -> GlobalSettingsListResponse:
+) -> GlobalSettingsListResponse:
     """
     List all global settings.
 
@@ -102,9 +102,7 @@ async def list_global_settings(
 
 
 @router.get("/global/{key}", response_model=GlobalSettingRead)
-async def get_global_setting_endpoint(
-    key: str, session: AsyncSession = Depends(get_session_generator)
-    ) -> GlobalSettingRead:
+async def get_global_setting_endpoint(key: str, session: AsyncSession = Depends(get_session_generator)) -> GlobalSettingRead:
     """
     Get a specific global setting by key.
 
@@ -112,9 +110,7 @@ async def get_global_setting_endpoint(
     """
     setting = await get_global_setting(key, session)
     if not setting:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{key}' not found"
-            )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{key}' not found")
     return setting
 
 
@@ -124,7 +120,7 @@ async def update_global_setting_endpoint(
     update: GlobalSettingUpdate,
     admin: Annotated[User, Depends(require_admin)],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> GlobalSettingRead:
+) -> GlobalSettingRead:
     """
     Update a global setting.
 
@@ -134,9 +130,7 @@ async def update_global_setting_endpoint(
 
     result = await update_global_setting(key, update.value, admin.id, session)
     if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{key}' not found"
-            )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{key}' not found")
     return result
 
 
@@ -144,7 +138,7 @@ async def update_global_setting_endpoint(
 async def initialize_global_settings_endpoint(
     admin: Annotated[User, Depends(require_admin)],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> dict:
+) -> dict:
     """
     Initialize global settings with default values.
 

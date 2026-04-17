@@ -25,7 +25,7 @@ async def search_users_endpoint(
     exclude_broker_id: int | None = Query(None, description="Exclude users already on this broker"),
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ):
+):
     """
     Search for users by username (ILIKE match). Does NOT expose email for privacy. Optionally excludes users already having access to a specific broker.
     """
@@ -33,7 +33,7 @@ async def search_users_endpoint(
         session=session,
         query=q,
         exclude_broker_id=exclude_broker_id,
-        )
+    )
 
     users = [UserSearchItem(**r) for r in results]
     return UserSearchResponse(items=users)

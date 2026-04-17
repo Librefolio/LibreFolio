@@ -5,32 +5,32 @@ Verifies that re-syncing the same data does NOT inflate points_changed.
 The root cause was _count_actual_price_changes comparing raw provider values
 with DB-truncated values, causing every price to appear "changed".
 """
-from datetime import date
+
 import time
+from datetime import date
 
 import pytest
 
-from backend.test_scripts.test_db_config import setup_test_database, initialize_test_database
+from backend.test_scripts.test_db_config import initialize_test_database, setup_test_database
 
 setup_test_database()
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.app.db.session import get_async_engine
-from backend.app.services.asset_source import AssetSourceManager
+
 from backend.app.db.models import Asset, AssetType, ProviderInputType
-from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.refresh import FARefreshItem, SyncStatus
+from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.schemas.refresh import FARefreshItem
+from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.provider_registry import AssetProviderRegistry
 
 
 def _unique(prefix: str) -> str:
     return f"{prefix}_{int(time.time() * 1000)}"
 
 
-async def _create_asset_with_provider(
-    session: AsyncSession, name: str, provider_code: str = "mockprov", identifier: str = "MOCK"
-) -> int:
+async def _create_asset_with_provider(session: AsyncSession, name: str, provider_code: str = "mockprov", identifier: str = "MOCK") -> int:
     """Helper: create asset + assign provider, return asset_id."""
     asset = Asset(display_name=name, currency="USD", asset_type=AssetType.STOCK, active=True)
     session.add(asset)
@@ -82,8 +82,4 @@ async def test_second_sync_reports_zero_changes():
         r2 = next((r for r in result2.results if r.asset_id == asset_id), None)
         assert r2 is not None, "Second sync result missing"
         assert r2.points_fetched > 0, "Second sync should still fetch points"
-        assert r2.points_changed == 0, (
-            f"Second sync should report 0 changes, got {r2.points_changed} "
-            f"(inserted={r2.inserted_count}, updated={r2.updated_count})"
-        )
-
+        assert r2.points_changed == 0, f"Second sync should report 0 changes, got {r2.points_changed} " f"(inserted={r2.inserted_count}, updated={r2.updated_count})"

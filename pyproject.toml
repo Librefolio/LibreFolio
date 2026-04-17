@@ -42,8 +42,8 @@ dev = [
 packages = ["backend"]
 
 [tool.black]
-line-length = 100
-target-version = ["py311", "py312", "py313"]
+line-length = 300
+target-version = ["py313"]
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -60,8 +60,8 @@ extend-exclude = '''
 '''
 
 [tool.ruff]
-line-length = 100
-target-version = "py311"
+line-length = 300
+target-version = "py313"
 extend-exclude = [
     ".git",
     ".venv",
@@ -72,17 +72,23 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "PLC0415",  # import-outside-toplevel (imports inside functions)
 ]
 ignore = [
-    "E501",  # line too long (handled by black)
-    "B008",  # do not perform function calls in argument defaults
+    "E501",   # line too long (handled by black)
+    "E402",   # module-level import not at top — intentional (sys.path, warnings.filterwarnings)
+    "B008",   # do not perform function calls in argument defaults (FastAPI Depends)
+    "UP006",  # keep List[X] instead of list[X] — more explicit
+    "UP007",  # keep Union[X, Y] instead of X | Y — more explicit
+    "UP035",  # keep typing imports (List, Dict, Optional, etc.)
+    "UP045",  # keep Optional[X] instead of X | None — more explicit with Pydantic
 ]
 
 [tool.pytest.ini_options]

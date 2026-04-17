@@ -21,8 +21,10 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlmodel import select
+from sqlalchemy import func
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
@@ -33,10 +35,7 @@ from backend.test_scripts.test_utils import (
     print_info,
     print_section,
     print_success,
-    )
-from sqlalchemy.dialects.sqlite import insert
-from sqlalchemy import func
-
+)
 
 # ============================================================================
 # PYTEST FIXTURE - Auto-populate mock FX rates
@@ -80,14 +79,14 @@ async def setup_mock_fx_rates(session):
         ("EUR", "GBP", Decimal("0.8392")),  # 1 EUR = 0.8392 GBP
         ("CHF", "EUR", Decimal("1.0650")),  # 1 CHF = 1.0650 EUR
         ("EUR", "JPY", Decimal("163.45")),  # 1 EUR = 163.45 JPY
-        ]
+    ]
 
     # Create rates for multiple dates to test date handling
     dates_to_create = [
         date.today(),
         date.today() - timedelta(days=1),  # Yesterday
         date.today() - timedelta(days=7),  # 7 days ago
-        ]
+    ]
 
     inserted_count = 0
 
@@ -105,7 +104,7 @@ async def setup_mock_fx_rates(session):
                 rate=adjusted_rate,
                 source="MOCK",
                 fetched_at=func.current_timestamp(),
-                )
+            )
 
             # UPSERT: update if exists, insert if not
             upsert_stmt = stmt.on_conflict_do_update(
@@ -114,16 +113,14 @@ async def setup_mock_fx_rates(session):
                     "rate": stmt.excluded.rate,
                     "source": stmt.excluded.source,
                     "fetched_at": func.current_timestamp(),
-                    },
-                )
+                },
+            )
 
             await session.execute(upsert_stmt)
             inserted_count += 1
 
     await session.commit()
-    print_success(
-        f"Mock FX rates ready ({inserted_count} rates across {len(dates_to_create)} dates)"
-        )
+    print_success(f"Mock FX rates ready ({inserted_count} rates across {len(dates_to_create)} dates)")
 
 
 async def _convert_single(session, amount, to_currency, as_of_date, return_rate_info=False):
@@ -149,18 +146,14 @@ async def test_identity_conversion():
         # Test EUR → EUR (using Currency objects)
         amount_eur = Currency(code="EUR", amount=test_amount)
         result_eur = await _convert_single(session, amount_eur, "EUR", test_date)
-        assert (
-            result_eur.amount == test_amount
-        ), f"EUR → EUR: expected {test_amount}, got {result_eur.amount}"
+        assert result_eur.amount == test_amount, f"EUR → EUR: expected {test_amount}, got {result_eur.amount}"
         assert result_eur.code == "EUR", f"EUR → EUR: expected code EUR, got {result_eur.code}"
         print_success(f"EUR → EUR: {test_amount} = {result_eur} ✓")
 
         # Test USD → USD
         amount_usd = Currency(code="USD", amount=test_amount)
         result_usd = await _convert_single(session, amount_usd, "USD", test_date)
-        assert (
-            result_usd.amount == test_amount
-        ), f"USD → USD: expected {test_amount}, got {result_usd.amount}"
+        assert result_usd.amount == test_amount, f"USD → USD: expected {test_amount}, got {result_usd.amount}"
         assert result_usd.code == "USD", f"USD → USD: expected code USD, got {result_usd.code}"
         print_success(f"USD → USD: {test_amount} = {result_usd} ✓")
 
@@ -174,17 +167,12 @@ async def test_direct_conversion():
 
     async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
-        stmt = (
-            select(FxRate)
-            .where(FxRate.base == "EUR", FxRate.quote == "USD")
-            .order_by(FxRate.date.desc())
-            .limit(1)
-        )
+        stmt = select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD").order_by(FxRate.date.desc()).limit(1)
 
         result = await session.execute(stmt)
         rate_record = result.scalars().first()
 
-        assert rate_record, f"No EUR/USD rate found in DB. Run persistence tests first."
+        assert rate_record, "No EUR/USD rate found in DB. Run persistence tests first."
 
         print_info(f"Using rate from {rate_record.date}")
         print_info(f"EUR/USD = {rate_record.rate} (1 EUR = {rate_record.rate} USD)")
@@ -198,9 +186,7 @@ async def test_direct_conversion():
         print_info(f"Expected: {expected_usd} USD")
 
         assert result_usd.code == "USD", f"Expected currency USD, got {result_usd.code}"
-        assert not (
-            abs(result_usd.amount - expected_usd) > Decimal("0.01")
-        ), f"Conversion result doesn't match expected value"
+        assert not (abs(result_usd.amount - expected_usd) > Decimal("0.01")), "Conversion result doesn't match expected value"
 
         print_success("Direct conversion (EUR → USD) correct")
 
@@ -214,17 +200,12 @@ async def test_inverse_conversion():
 
     async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
-        stmt = (
-            select(FxRate)
-            .where(FxRate.base == "EUR", FxRate.quote == "USD")
-            .order_by(FxRate.date.desc())
-            .limit(1)
-        )
+        stmt = select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD").order_by(FxRate.date.desc()).limit(1)
 
         result = await session.execute(stmt)
         rate_record = result.scalars().first()
 
-        assert rate_record, f"No EUR/USD rate found in DB. Run persistence tests first."
+        assert rate_record, "No EUR/USD rate found in DB. Run persistence tests first."
 
         print_info(f"Using rate from {rate_record.date}")
         print_info(f"EUR/USD = {rate_record.rate} (1 EUR = {rate_record.rate} USD)")
@@ -239,9 +220,7 @@ async def test_inverse_conversion():
         print_info(f"Expected: {expected_eur} EUR")
 
         assert result_eur.code == "EUR", f"Expected currency EUR, got {result_eur.code}"
-        assert not (
-            abs(result_eur.amount - expected_eur) > Decimal("0.01")
-        ), f"Inverse conversion result doesn't match expected value"
+        assert not (abs(result_eur.amount - expected_eur) > Decimal("0.01")), "Inverse conversion result doesn't match expected value"
 
         print_success("Inverse conversion (USD → EUR) correct")
 
@@ -255,17 +234,12 @@ async def test_roundtrip_conversion():
 
     async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
-        stmt = (
-            select(FxRate)
-            .where(FxRate.base == "EUR", FxRate.quote == "USD")
-            .order_by(FxRate.date.desc())
-            .limit(1)
-        )
+        stmt = select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD").order_by(FxRate.date.desc()).limit(1)
 
         result = await session.execute(stmt)
         rate_record = result.scalars().first()
 
-        assert rate_record, f"No EUR/USD rate found in DB. Run persistence tests first."
+        assert rate_record, "No EUR/USD rate found in DB. Run persistence tests first."
 
         print_info(f"Using rate from {rate_record.date}: EUR/USD = {rate_record.rate}")
 
@@ -286,9 +260,7 @@ async def test_roundtrip_conversion():
         print_info(f"Difference: {difference} EUR")
 
         assert final_result.code == "EUR", f"Expected EUR, got {final_result.code}"
-        assert not (
-            difference > Decimal("0.01")
-        ), f"Roundtrip failed: started with {original_amount}, ended with {final_result.amount}"
+        assert not (difference > Decimal("0.01")), f"Roundtrip failed: started with {original_amount}, ended with {final_result.amount}"
 
         print_success("Roundtrip conversion successful (rate inversion works correctly)")
 
@@ -319,11 +291,9 @@ async def test_different_dates():
         print_success(f"7 days ago ({week_ago}): {test_amount} → {result_week_ago}")
 
         # Verify rates are different (due to daily variation in mock data)
-        assert not (
-            result_today.amount == result_yesterday.amount == result_week_ago.amount
-        ), f"All dates returned same rate - variation not working"
+        assert not (result_today.amount == result_yesterday.amount == result_week_ago.amount), "All dates returned same rate - variation not working"
 
-        print_info(f"Rate variation detected (rates differ across dates) ✓")
+        print_info("Rate variation detected (rates differ across dates) ✓")
 
 
 @pytest.mark.asyncio
@@ -335,17 +305,12 @@ async def test_backward_fill():
 
     async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
-        stmt = (
-            select(FxRate)
-            .where(FxRate.base == "EUR", FxRate.quote == "USD")
-            .order_by(FxRate.date.desc())
-            .limit(1)
-        )
+        stmt = select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD").order_by(FxRate.date.desc()).limit(1)
 
         result = await session.execute(stmt)
         rate_record = result.scalars().first()
 
-        assert rate_record, f"No EUR/USD rate found in DB. Run persistence tests first."
+        assert rate_record, "No EUR/USD rate found in DB. Run persistence tests first."
 
         print_info(f"Most recent rate in DB: {rate_record.date}")
         print_info(f"EUR/USD = {rate_record.rate}")
@@ -354,34 +319,26 @@ async def test_backward_fill():
         print_info(f"\nTest 6.1: Exact date match ({rate_record.date})")
         amount = Currency(code="EUR", amount=Decimal("100.00"))
 
-        converted, actual_date, backward_filled = await _convert_single(
-            session, amount, "USD", rate_record.date, return_rate_info=True
-            )
+        converted, actual_date, backward_filled = await _convert_single(session, amount, "USD", rate_record.date, return_rate_info=True)
 
-        assert not (backward_filled), f"Backward-fill should not be applied for exact date match"
+        assert not (backward_filled), "Backward-fill should not be applied for exact date match"
 
-        print_success(f"✓ Exact match: no backward-fill applied")
+        print_success("✓ Exact match: no backward-fill applied")
 
         # Test 2: Future date (should use backward-fill - unlimited)
         future_date = rate_record.date + timedelta(days=365)  # 1 year ahead
         print_info(f"\nTest 6.2: Future date ({future_date}, +365 days)")
         print_info("Expected: Use unlimited backward-fill")
 
-        converted, actual_date, backward_filled = await _convert_single(
-            session, amount, "USD", future_date, return_rate_info=True
-            )
+        converted, actual_date, backward_filled = await _convert_single(session, amount, "USD", future_date, return_rate_info=True)
 
-        assert backward_filled, f"Backward-fill should be applied for future date"
+        assert backward_filled, "Backward-fill should be applied for future date"
 
         days_back = (future_date - actual_date).days
-        print_success(
-            f"✓ Backward-fill applied: used rate from {actual_date} ({days_back} days back)"
-            )
+        print_success(f"✓ Backward-fill applied: used rate from {actual_date} ({days_back} days back)")
 
         expected = amount.amount * rate_record.rate
-        assert not (
-            abs(converted.amount - expected) > Decimal("0.01")
-        ), f"Conversion value incorrect"
+        assert not (abs(converted.amount - expected) > Decimal("0.01")), "Conversion value incorrect"
 
         # Test 3: Very old date (before any rate exists - should fail)
         very_old_date = rate_record.date - timedelta(days=3650)  # 10 years before
@@ -405,17 +362,12 @@ async def test_missing_rate_error():
 
     async with AsyncSession(engine) as session:
         # Find the oldest rate in DB
-        stmt = (
-            select(FxRate)
-            .where(FxRate.base == "EUR", FxRate.quote == "USD")
-            .order_by(FxRate.date.asc())
-            .limit(1)
-        )
+        stmt = select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD").order_by(FxRate.date.asc()).limit(1)
 
         result = await session.execute(stmt)
         oldest_rate = result.scalars().first()
 
-        assert oldest_rate, f"No EUR/USD rates in DB"
+        assert oldest_rate, "No EUR/USD rates in DB"
 
         print_info(f"Oldest rate in DB: {oldest_rate.date}")
 
@@ -439,11 +391,9 @@ async def test_missing_rate_error():
         print_info("Expected: Success with backward-fill")
 
         try:
-            converted, actual_date, backward_filled = await _convert_single(
-                session, amount, "USD", old_but_valid_date, return_rate_info=True
-                )
+            converted, actual_date, backward_filled = await _convert_single(session, amount, "USD", old_but_valid_date, return_rate_info=True)
 
-            assert backward_filled, f"Should use backward-fill for old date"
+            assert backward_filled, "Should use backward-fill for old date"
 
             days_back = (old_but_valid_date - actual_date).days
             print_success(f"✓ Backward-fill used: {actual_date} ({days_back} days back)")
@@ -463,26 +413,19 @@ async def test_bulk_conversions_single():
 
     async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
-        stmt = (
-            select(FxRate)
-            .where(FxRate.base == "EUR", FxRate.quote == "USD")
-            .order_by(FxRate.date.desc())
-            .limit(1)
-        )
+        stmt = select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD").order_by(FxRate.date.desc()).limit(1)
 
         result = await session.execute(stmt)
         rate_record = result.scalars().first()
 
-        assert rate_record, f"No EUR/USD rate found in DB"
+        assert rate_record, "No EUR/USD rate found in DB"
 
         print_info(f"Using rate from {rate_record.date}: EUR/USD = {rate_record.rate}")
 
         # Convert using bulk with single item (raise_on_error=True)
         # New signature: (Currency, to_currency, date)
         amount = Currency(code="EUR", amount=Decimal("100.00"))
-        results, errors = await convert_bulk(
-            session, [(amount, "USD", rate_record.date)], raise_on_error=True
-            )
+        results, errors = await convert_bulk(session, [(amount, "USD", rate_record.date)], raise_on_error=True)
 
         assert len(results) == 1, f"Expected 1 result, got {len(results)}"
 
@@ -492,9 +435,7 @@ async def test_bulk_conversions_single():
         expected = amount.amount * rate_record.rate
 
         assert converted.code == "USD", f"Expected USD, got {converted.code}"
-        assert not (
-            abs(converted.amount - expected) > Decimal("0.01")
-        ), f"Expected {expected}, got {converted.amount}"
+        assert not (abs(converted.amount - expected) > Decimal("0.01")), f"Expected {expected}, got {converted.amount}"
 
         print_success(f"✓ Single item bulk: {amount} → {converted}")
 
@@ -515,7 +456,7 @@ async def test_bulk_conversions_multiple():
             (Currency(code="EUR", amount=Decimal("100.00")), "USD", test_date),
             (Currency(code="EUR", amount=Decimal("100.00")), "GBP", test_date),
             (Currency(code="CHF", amount=Decimal("100.00")), "EUR", test_date),
-            ]
+        ]
 
         print_info("Testing 3 conversions in single bulk call")
 
@@ -555,9 +496,9 @@ async def test_bulk_partial_failure():
                 Currency(code="EUR", amount=Decimal("100.00")),
                 "USD",
                 very_old_date,
-                ),  # Fails - no rate for date
+            ),  # Fails - no rate for date
             (Currency(code="EUR", amount=Decimal("100.00")), "GBP", test_date),  # Valid
-            ]
+        ]
 
         print_info("Testing 3 conversions: 2 valid, 1 failing (no rate for 1900)")
 
@@ -601,7 +542,7 @@ async def test_bulk_all_failures():
             (Currency(code="EUR", amount=Decimal("100.00")), "USD", very_old_date),
             (Currency(code="USD", amount=Decimal("100.00")), "GBP", very_old_date),
             (Currency(code="GBP", amount=Decimal("100.00")), "CHF", very_old_date),
-            ]
+        ]
 
         print_info("Testing 3 conversions: all will fail (no rates for date 1900-01-01)")
 
@@ -616,7 +557,7 @@ async def test_bulk_all_failures():
 
         assert len(errors) == 3, f"Expected 3 errors, got {len(errors)}"
 
-        print_success(f"✓ All results None (as expected)")
+        print_success("✓ All results None (as expected)")
         print_success(f"✓ All errors captured: {len(errors)}")
 
 
@@ -643,13 +584,13 @@ async def test_bulk_raise_on_error():
                 Currency(code="EUR", amount=Decimal("100.00")),
                 "USD",
                 very_old_date,
-                ),  # Fails - no rate
+            ),  # Fails - no rate
             (
                 Currency(code="EUR", amount=Decimal("100.00")),
                 "GBP",
                 test_date,
-                ),  # Valid but should not be reached
-            ]
+            ),  # Valid but should not be reached
+        ]
 
         print_info("Testing raise_on_error=True with failing second item (no rate for 1900)")
 
@@ -702,12 +643,12 @@ class TestComputeChainRate:
         steps = [
             {"from": "GBP", "to": "EUR"},  # inverse: 1/0.84
             {"from": "EUR", "to": "USD"},  # direct: 1.07
-            ]
+        ]
         d = date(2025, 1, 1)
         leg_rates = {
             ("EUR", "GBP", d): Decimal("0.84"),
             ("EUR", "USD", d): Decimal("1.07"),
-            }
+        }
         result = compute_chain_rate(steps, leg_rates, d)
         expected = (Decimal("1") / Decimal("0.84")) * Decimal("1.07")
         assert abs(result - expected) < Decimal("0.0001")
@@ -717,7 +658,7 @@ class TestComputeChainRate:
         steps = [
             {"from": "EUR", "to": "GBP"},
             {"from": "GBP", "to": "USD"},
-            ]
+        ]
         # Only one leg present
         leg_rates = {("EUR", "GBP", date(2025, 1, 1)): Decimal("0.84")}
         result = compute_chain_rate(steps, leg_rates, date(2025, 1, 1))

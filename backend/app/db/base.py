@@ -8,26 +8,26 @@ from sqlmodel import SQLModel
 
 # Import all models so Alembic can detect them
 from backend.app.db.models import (
-    # Enums
-    IdentifierType,
-    AssetType,
+    Asset,
+    AssetEvent,
     AssetEventType,
-    TransactionType,
-    UserRole,
-    ProviderInputType,
-    # Models
-    User,
-    UserSettings,
+    AssetProviderAssignment,
+    AssetType,
     Broker,
     BrokerUserAccess,
-    Asset,
-    Transaction,
-    PriceHistory,
-    AssetEvent,
-    FxRate,
     FxConversionRoute,
-    AssetProviderAssignment,
-    )
+    FxRate,
+    # Enums
+    IdentifierType,
+    PriceHistory,
+    ProviderInputType,
+    Transaction,
+    TransactionType,
+    # Models
+    User,
+    UserRole,
+    UserSettings,
+)
 
 __all__ = [
     "SQLModel",
@@ -50,4 +50,4 @@ __all__ = [
     "FxRate",
     "FxConversionRoute",
     "AssetProviderAssignment",
-    ]
+]

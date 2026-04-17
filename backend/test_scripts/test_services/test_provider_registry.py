@@ -6,9 +6,9 @@ Tests provider auto-discovery for Asset and FX providers.
 
 import pytest
 
-from backend.app.services.provider_registry import AssetProviderRegistry, FXProviderRegistry
-from backend.app.services.fx import FXRateProvider
 from backend.app.services.asset_source import AssetSourceProvider
+from backend.app.services.fx import FXRateProvider
+from backend.app.services.provider_registry import AssetProviderRegistry, FXProviderRegistry
 
 
 def test_asset_provider_discovery():
@@ -43,9 +43,7 @@ def test_fx_provider_discovery():
     expected_providers = {"ECB", "FED", "BOE", "SNB"}
     provider_set = set(provider_codes)
 
-    assert expected_providers.issubset(
-        provider_set
-        ), f"Missing expected FX providers: {expected_providers - provider_set}. Found: {provider_codes}"
+    assert expected_providers.issubset(provider_set), f"Missing expected FX providers: {expected_providers - provider_set}. Found: {provider_codes}"
     assert len(provider_codes) >= 4, f"Expected at least 4 providers, got {len(provider_codes)}"
 
 
@@ -74,4 +72,3 @@ def test_fx_static_url_nested_path():
     """generate_static_url handles nested paths correctly."""
     url = FXRateProvider.generate_static_url("snb/icons/small.png")
     assert url == "/api/v1/uploads/plugin/fx/snb/icons/small.png"
-
