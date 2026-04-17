@@ -55,7 +55,7 @@ def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None
     Returns:
         tuple: (is_available, process_info_or_none)
     """
-    import subprocess
+    import subprocess  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     try:
         # Use lsof to check port (works on macOS/Linux)
@@ -70,7 +70,7 @@ def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None
 
     except FileNotFoundError:
         # lsof not available, try alternative method
-        import socket
+        import socket  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
@@ -150,12 +150,12 @@ class _TestingServerManager:
     def _run_server(self):
         """Run uvicorn server in background thread (called by start_server)."""
         # Set test mode using the proper function (updates both env var and global flag)
-        from backend.app.config import set_test_mode
+        from backend.app.config import set_test_mode  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         set_test_mode(True)
 
         # Import app here (inside thread) to ensure coverage tracking
-        from backend.app.main import app
+        from backend.app.main import app  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         # Signal that we're starting
         self.server_started.set()

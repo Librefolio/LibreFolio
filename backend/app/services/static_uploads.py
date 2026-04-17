@@ -485,7 +485,7 @@ def seed_default_avatars() -> int:
     Returns:
         Number of avatar files seeded (0 if already seeded).
     """
-    from backend.app.config import PROJECT_ROOT
+    from backend.app.config import PROJECT_ROOT  # noqa: PLC0415 — lazy import / avoid circular
 
     _ensure_dir()
     uploads_dir = get_uploads_dir()

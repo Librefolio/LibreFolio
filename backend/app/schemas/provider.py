@@ -27,7 +27,7 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 from __future__ import annotations
 
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -128,8 +128,8 @@ class FAProviderConfigBase(BaseModel):
     @model_validator(mode="after")
     def validate_provider_params_with_plugin(self):
         """Validate provider_params using the plugin's validate_params method."""
-        from backend.app.services.asset_source import AssetSourceError
-        from backend.app.services.provider_registry import AssetProviderRegistry
+        from backend.app.services.asset_source import AssetSourceError  # noqa: PLC0415 — lazy import / avoid circular
+        from backend.app.services.provider_registry import AssetProviderRegistry  # noqa: PLC0415 — avoid circular import
 
         provider = AssetProviderRegistry.get_provider_instance(self.provider_code)
         if not provider:
@@ -263,7 +263,7 @@ class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
 # ============================================================================
 
 
-class ProbeOperation(str, Enum):
+class ProbeOperation(StrEnum):
     """Operations available for provider probe endpoint."""
 
     CURRENT_PRICE = "current_price"

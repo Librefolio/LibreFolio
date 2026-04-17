@@ -478,7 +478,7 @@ async def probe_provider_config(
     - "Ask Provider" button to fetch identifiers and metadata (`metadata`)
     - Verify provider is working correctly
     """.format(ops_list="\n    ".join(f"- `{op.value}`" for op in ProbeOperation))
-    from backend.app.services.asset_source import AssetSourceError
+    from backend.app.services.asset_source import AssetSourceError  # noqa: PLC0415 — lazy import / avoid circular
 
     try:
         result = await AssetSourceManager.probe_provider_config(

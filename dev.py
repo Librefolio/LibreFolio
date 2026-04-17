@@ -1290,8 +1290,15 @@ def cmd_format(args):
 
 def cmd_lint(args):
     """Lint code with ruff."""
-    print(Colors.success("Linting code with ruff..."))
-    return run_pipenv(["ruff", "check", "backend/"])
+    cmd = ["ruff", "check", "backend/"]
+    if getattr(args, "fix", False):
+        cmd.append("--fix")
+        if getattr(args, "unsafe", False):
+            cmd.append("--unsafe-fixes")
+    if getattr(args, "statistics", False):
+        cmd.append("--statistics")
+    print(Colors.success(f"Linting code with ruff {'(--fix) ' if getattr(args, 'fix', False) else ''}..."))
+    return run_pipenv(cmd)
 
 
 # =============================================================================
@@ -1716,6 +1723,9 @@ Examples:
     p.set_defaults(func=cmd_format)
 
     p = subparsers.add_parser("lint", help="📦 Lint code with ruff")
+    p.add_argument("--fix", action="store_true", help="Auto-fix safe issues")
+    p.add_argument("--unsafe", action="store_true", help="Include unsafe fixes (use with --fix)")
+    p.add_argument("--statistics", action="store_true", help="Show error statistics")
     p.set_defaults(func=cmd_lint)
 
     # =========================================================================

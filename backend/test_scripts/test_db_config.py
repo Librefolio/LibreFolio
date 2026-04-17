@@ -123,7 +123,7 @@ def initialize_test_database(print_func=None):
     print_func(f"✅ Using test database: {db_url}")
 
     # Ensure database exists and is migrated (lazy import to avoid side effects)
-    from backend.app.main import ensure_database_exists
+    from backend.app.main import ensure_database_exists  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     ensure_database_exists()
     return True

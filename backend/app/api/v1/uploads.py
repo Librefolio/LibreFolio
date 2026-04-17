@@ -67,7 +67,7 @@ class PreviewCache:
         if self.config_loaded:
             return
         try:
-            from backend.app.config import get_settings
+            from backend.app.config import get_settings  # noqa: PLC0415 — lazy import / avoid circular
 
             self.max_bytes = get_settings().PREVIEW_CACHE_MAX_MB * 1024 * 1024
         except Exception:
@@ -329,7 +329,7 @@ async def serve_file(
                     f.seek(offset)
                 content = f.read(window) if window else f.read()
 
-            from fastapi.responses import PlainTextResponse
+            from fastapi.responses import PlainTextResponse  # noqa: PLC0415 — lazy import / avoid circular
 
             return PlainTextResponse(content=content, media_type=mime_type)
         except Exception as e:
@@ -354,17 +354,17 @@ async def serve_file(
         cached = preview_cache.get(file_id, size_key)
         if cached:
             image_bytes, cached_mime = cached
-            import io
+            import io  # noqa: PLC0415 — lazy import / avoid circular
 
-            from fastapi.responses import StreamingResponse
+            from fastapi.responses import StreamingResponse  # noqa: PLC0415 — avoid circular import
 
             return StreamingResponse(io.BytesIO(image_bytes), media_type=cached_mime, headers={"Cache-Control": "public, max-age=3600"})
 
         # Generate resized image (synchronous - Pillow is fast for simple resizes)
         try:
-            import io
+            import io  # noqa: PLC0415 — lazy import / avoid circular
 
-            from PIL import Image
+            from PIL import Image  # noqa: PLC0415 — avoid circular import
 
             img = Image.open(file_path)
 
@@ -389,7 +389,7 @@ async def serve_file(
             # Store in cache
             preview_cache.put(file_id, size_key, image_bytes, mime_type)
 
-            from fastapi.responses import StreamingResponse
+            from fastapi.responses import StreamingResponse  # noqa: PLC0415 — lazy import / avoid circular
 
             return StreamingResponse(io.BytesIO(image_bytes), media_type=mime_type, headers={"Cache-Control": "public, max-age=3600"})
 
@@ -472,7 +472,7 @@ async def serve_plugin_static(
         raise HTTPException(status_code=404, detail="File not found")
 
     # Guess MIME type
-    import mimetypes
+    import mimetypes  # noqa: PLC0415 — lazy import / avoid circular
 
     mime_type, _ = mimetypes.guess_type(str(file_path))
     mime_type = mime_type or "application/octet-stream"

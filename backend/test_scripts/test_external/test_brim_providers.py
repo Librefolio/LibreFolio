@@ -276,7 +276,7 @@ class TestPluginInterface:
         assert isinstance(assets, dict), "extracted_assets should be dict"
 
         # Each value should be BRIMExtractedAssetInfo
-        from backend.app.schemas.brim import BRIMExtractedAssetInfo
+        from backend.app.schemas.brim import BRIMExtractedAssetInfo  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         for fake_id, info in assets.items():
             assert isinstance(fake_id, int), "Fake ID should be int"

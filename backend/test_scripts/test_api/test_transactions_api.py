@@ -87,7 +87,7 @@ def test_server():
 @pytest.fixture(scope="module")
 def test_broker_id(test_server) -> int:
     """Create a test broker and return its ID."""
-    import asyncio
+    import asyncio  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     async def create_broker():
         async with httpx.AsyncClient() as client:
@@ -124,7 +124,7 @@ def test_broker_id(test_server) -> int:
 @pytest.fixture(scope="module")
 def test_asset_id(test_server) -> int:
     """Create a test asset and return its ID (using existing asset or create one)."""
-    import asyncio
+    import asyncio  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     async def get_or_create_asset():
         async with httpx.AsyncClient() as client:

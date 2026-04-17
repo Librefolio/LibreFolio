@@ -306,9 +306,9 @@ async def test_provider_late_interest():
 @pytest.mark.asyncio
 async def test_compound_vs_simple_interest():
     """Test that COMPOUND yields more than SIMPLE for the same parameters."""
-    base_args = dict(
-        initial_value=Currency(code="EUR", amount=Decimal("10000")),
-        schedule=[
+    base_args = {
+        "initial_value": Currency(code="EUR", amount=Decimal("10000")),
+        "schedule": [
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
@@ -316,8 +316,8 @@ async def test_compound_vs_simple_interest():
                 maturation_frequency=MaturationFrequency.DAILY,
             )
         ],
-        asset_events=[],
-    )
+        "asset_events": [],
+    }
 
     simple = FAScheduledInvestmentSchedule(interest_type=InterestType.SIMPLE, **base_args)
     compound = FAScheduledInvestmentSchedule(interest_type=InterestType.COMPOUND, **base_args)
@@ -362,18 +362,18 @@ async def test_compound_interest_numeric():
 @pytest.mark.asyncio
 async def test_compound_with_different_day_counts():
     """Test compound interest with ACT/360 vs ACT/365."""
-    base_args = dict(
-        initial_value=Currency(code="EUR", amount=Decimal("10000")),
-        interest_type=InterestType.COMPOUND,
-        schedule=[
+    base_args = {
+        "initial_value": Currency(code="EUR", amount=Decimal("10000")),
+        "interest_type": InterestType.COMPOUND,
+        "schedule": [
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
             )
         ],
-        asset_events=[],
-    )
+        "asset_events": [],
+    }
 
     act365 = FAScheduledInvestmentSchedule(day_count=DayCountConvention.ACT_365, **base_args)
     act360 = FAScheduledInvestmentSchedule(day_count=DayCountConvention.ACT_360, **base_args)
@@ -393,9 +393,9 @@ async def test_compound_with_different_day_counts():
 @pytest.mark.asyncio
 async def test_late_interest_compound_vs_simple():
     """Test that COMPOUND late interest yields more than SIMPLE for same parameters."""
-    base_args = dict(
-        initial_value=Currency(code="EUR", amount=Decimal("10000")),
-        schedule=[
+    base_args = {
+        "initial_value": Currency(code="EUR", amount=Decimal("10000")),
+        "schedule": [
             FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 3, 31),
@@ -403,8 +403,8 @@ async def test_late_interest_compound_vs_simple():
                 maturation_frequency=MaturationFrequency.DAILY,
             )
         ],
-        asset_events=[],
-    )
+        "asset_events": [],
+    }
 
     simple_params = FAScheduledInvestmentSchedule(
         late_interest=FALateInterestConfig(
@@ -453,7 +453,7 @@ async def test_late_interest_default_is_compound():
 @pytest.mark.asyncio
 async def test_validate_params_missing_required():
     """Test that missing required params raise validation error."""
-    from pydantic import ValidationError
+    from pydantic import ValidationError  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     # Empty schedule with no initial_value → should raise
     with pytest.raises(ValidationError):
@@ -466,7 +466,7 @@ async def test_validate_params_missing_required():
 @pytest.mark.asyncio
 async def test_validate_params_invalid_day_count():
     """Test that invalid day count convention is rejected by Pydantic."""
-    from pydantic import ValidationError
+    from pydantic import ValidationError  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     with pytest.raises(ValidationError):
         FAScheduledInvestmentSchedule(

@@ -18,7 +18,7 @@ Author: LibreFolio Contributors
 """
 
 import sys
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -39,7 +39,7 @@ from sqlalchemy import event
 from backend.app.db.base import SQLModel
 
 
-class LogLevel(str, Enum):
+class LogLevel(StrEnum):
     """Log levels for constraint verification output."""
 
     INFO = "info"  # Only summary
@@ -78,7 +78,7 @@ def get_engine_for_check():
     4. DATABASE_URL from .env file
     5. Fallback to prod database path via get_data_dir()
     """
-    from backend.app.config import get_data_dir
+    from backend.app.config import get_data_dir  # noqa: PLC0415 — alembic migration — imports after path setup
 
     # Check for custom override first (won't be overridden by .env loading)
     # This is set by dev.sh when specifying a non-default database
@@ -308,7 +308,7 @@ def check_and_add_missing_constraints(auto_fix: bool = False, log_level: LogLeve
 
 def main():
     """Run CHECK constraints verification."""
-    import argparse
+    import argparse  # noqa: PLC0415 — alembic migration — imports after path setup
 
     # Force unbuffered output
     sys.stdout.reconfigure(line_buffering=True)
@@ -339,7 +339,7 @@ def main():
 
     except Exception as e:
         print(f"❌ Error running CHECK constraints verification: {e}", file=sys.stderr)
-        import traceback
+        import traceback  # noqa: PLC0415 — alembic migration — imports after path setup
 
         traceback.print_exc()
         sys.exit(1)

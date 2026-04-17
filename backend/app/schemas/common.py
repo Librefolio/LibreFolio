@@ -22,7 +22,7 @@ from __future__ import annotations
 from datetime import date as date_type
 from decimal import Decimal
 from functools import lru_cache
-from typing import Any, Generic, List, Optional, TypeVar
+from typing import Any, List, Optional
 
 import pycountry
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -413,10 +413,9 @@ class BaseDeleteResult(BaseModel):
 
 
 # CustomType specified by subclass
-CType = TypeVar("CType")
 
 
-class OldNew(BaseModel, Generic[CType]):
+class OldNew[CType](BaseModel):
     """
     Represents a field change with old and new values.
 
@@ -438,10 +437,9 @@ class OldNew(BaseModel, Generic[CType]):
 
 
 # Generic type for result items in bulk responses, must be child of BaseModel
-TResult = TypeVar("TResult", bound=BaseModel)
 
 
-class BaseListResponse(BaseModel, Generic[TResult]):
+class BaseListResponse[TResult: BaseModel](BaseModel):
     """
     Standardized base class for all list/collection responses.
 
@@ -471,7 +469,7 @@ class BaseListResponse(BaseModel, Generic[TResult]):
     items: List[TResult] = Field(default_factory=list, description="List of items")
 
 
-class BaseBulkResponse(BaseModel, Generic[TResult]):
+class BaseBulkResponse[TResult: BaseModel](BaseModel):
     """
     Standardized base class for all bulk operation responses.
 
@@ -522,7 +520,7 @@ class BaseBulkResponse(BaseModel, Generic[TResult]):
         return len(self.results)
 
 
-class BaseBulkDeleteResponse(BaseBulkResponse[TResult]):
+class BaseBulkDeleteResponse[TResult: BaseModel](BaseBulkResponse[TResult]):
     """
     Specialized base class for bulk delete/removal operations.
 

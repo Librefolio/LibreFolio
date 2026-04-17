@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import ROUND_HALF_EVEN, Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -61,7 +61,7 @@ from backend.app.utils.sector_fin_utils import normalize_sector
 # ============================================================================
 
 
-class MaturationFrequency(str, Enum):
+class MaturationFrequency(StrEnum):
     """
     Frequency at which interest matures/accrues.
 
@@ -84,7 +84,7 @@ class MaturationFrequency(str, Enum):
     ANNUAL = "ANNUAL"
 
 
-class DayCountConvention(str, Enum):
+class DayCountConvention(StrEnum):
     """
     Day count convention for interest calculations.
 
@@ -100,7 +100,7 @@ class DayCountConvention(str, Enum):
     THIRTY_360 = "30/360"
 
 
-class InterestType(str, Enum):
+class InterestType(StrEnum):
     """
     Interest calculation method for the entire scheduled investment.
 

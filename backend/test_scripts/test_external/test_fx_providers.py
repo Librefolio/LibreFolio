@@ -109,7 +109,7 @@ async def test_provider_metadata(provider_code: str):
 
     except Exception as e:
         print_error(f"Provider metadata test failed: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         traceback.print_exc()
 
@@ -162,7 +162,7 @@ async def test_supported_currencies(provider_code: str):
 
     except Exception as e:
         print_error(f"Unexpected error: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         traceback.print_exc()
 
@@ -226,7 +226,7 @@ async def test_fetch_rates(provider_code: str):
 
     except Exception as e:
         print_error(f"Unexpected error: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         traceback.print_exc()
 
@@ -287,7 +287,7 @@ async def test_normalize_for_storage(provider_code: str):
 
     except Exception as e:
         print_error(f"Normalization test failed: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         traceback.print_exc()
         raise  # Re-raise for pytest
@@ -388,7 +388,7 @@ async def test_multi_unit_identification(provider_code: str):
 
     except Exception as e:
         print_error(f"Multi-unit identification test failed: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         traceback.print_exc()
         raise
@@ -460,7 +460,7 @@ async def test_multi_unit_reasonableness(provider_code: str):
 
     except Exception as e:
         print_error(f"Multi-unit rate reasonableness test failed: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         traceback.print_exc()
         raise
@@ -509,7 +509,7 @@ async def test_multi_unit_consistency(provider_code: str):
 
     except Exception as e:
         print_error(f"Multi-unit consistency test failed: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         traceback.print_exc()
         raise

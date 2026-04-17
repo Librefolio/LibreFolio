@@ -19,26 +19,29 @@ Both configured with **line-length = 300** (dense lines, minimal wrapping) and *
 ```bash
 # Lint check (dry-run)
 ./dev.py lint
-python -m ruff check backend/
+
+# Lint with statistics
+./dev.py lint --statistics
+
+# Lint auto-fix (safe fixes only)
+./dev.py lint --fix
+
+# Lint auto-fix (including unsafe fixes like C408 dict()→{})
+./dev.py lint --fix --unsafe
+
+# Format apply
+./dev.py format
+
+# Full pipeline: lint fix → format
+./dev.py lint --fix && ./dev.py format
+
+# === Direct commands (for single file or advanced use) ===
 
 # Lint single file
 python -m ruff check backend/app/services/some_file.py
 
-# Lint auto-fix (safe fixes only)
-python -m ruff check backend/ --fix
-
-# Lint with statistics
-python -m ruff check backend/ --statistics
-
-# Format check (dry-run)
-python -m black backend/ --diff
-
-# Format apply
-./dev.py format
-python -m black backend/
-
-# Full pipeline: lint fix → format
-python -m ruff check backend/ --fix && python -m black backend/
+# Format single file
+python -m black backend/app/services/some_file.py
 ```
 
 ### Output to file (for large codebases)

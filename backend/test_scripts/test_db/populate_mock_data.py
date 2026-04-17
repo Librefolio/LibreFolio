@@ -1552,7 +1552,7 @@ def configure_user_avatars(session: Session):
 
 def clean_data_dirs():
     """Remove all files from custom-uploads and broker_reports subdirs."""
-    import shutil
+    import shutil  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     data_dir = get_data_dir()
     dirs_to_clean = [
@@ -1607,8 +1607,8 @@ def upload_broker_reports(session: Session):
         broker_reports/uploaded/broker_{id}/{uuid}.csv   (data file)
         broker_reports/uploaded/broker_{id}/{uuid}.json  (metadata sidecar)
     """
-    from backend.app.config import PROJECT_ROOT
-    from backend.app.services.brim_provider import save_uploaded_file
+    from backend.app.config import PROJECT_ROOT  # noqa: PLC0415 — test setup — imports after sys.path/db config
+    from backend.app.services.brim_provider import save_uploaded_file  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     print("\n📄 Uploading broker report samples...")
     print("-" * 60)

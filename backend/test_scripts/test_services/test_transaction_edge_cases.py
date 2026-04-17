@@ -58,7 +58,7 @@ async def session(engine):
 @pytest_asyncio.fixture
 async def test_broker(session) -> Broker:
     """Create a test broker with overdraft enabled for edge case testing."""
-    import uuid
+    import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     broker = Broker(
         name=f"Edge Case Test Broker {uuid.uuid4().hex[:8]}",
@@ -76,7 +76,7 @@ async def test_broker(session) -> Broker:
 @pytest_asyncio.fixture
 async def test_asset(session) -> Asset:
     """Create a test asset for edge case testing."""
-    import uuid
+    import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     asset = Asset(
         display_name=f"Edge Case Test Asset {uuid.uuid4().hex[:8]}",
@@ -311,7 +311,7 @@ class TestDateEdgeCases:
         await session.commit()
 
         # Query with same start and end date
-        from backend.app.schemas.common import DateRangeModel
+        from backend.app.schemas.common import DateRangeModel  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         params = TXQueryParams(
             broker_id=test_broker.id,
@@ -328,7 +328,7 @@ class TestDateEdgeCases:
     @pytest.mark.asyncio
     async def test_balance_validation_single_day(self, session):
         """EDGE-021: All transactions on same day should validate correctly."""
-        import uuid
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         # Create broker without overdraft
         broker = Broker(
@@ -375,7 +375,7 @@ class TestDateEdgeCases:
     @pytest.mark.asyncio
     async def test_balance_validation_gaps(self, session):
         """EDGE-022: Transactions on day 1, 5, 10 should validate each day correctly."""
-        import uuid
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         # Create broker without overdraft
         broker = Broker(
@@ -526,7 +526,7 @@ class TestEmptyNullHandling:
         await session.commit()
 
         # Query with impossible date range (in the past before any transactions)
-        from backend.app.schemas.common import DateRangeModel
+        from backend.app.schemas.common import DateRangeModel  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         params = TXQueryParams(
             broker_id=test_broker.id,

@@ -192,7 +192,7 @@ def _compute_maturation_dates(start: date_type, end: date_type, frequency: Matur
 
     Always includes start and end as anchors.
     """
-    from dateutil.relativedelta import relativedelta
+    from dateutil.relativedelta import relativedelta  # noqa: PLC0415 — lazy import / avoid circular
 
     dates = {start, end}
     if frequency == MaturationFrequency.DAILY:

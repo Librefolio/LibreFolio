@@ -8,7 +8,7 @@ These endpoints are placeholders for future functionality:
 Status: 501 Not Implemented
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,7 +28,7 @@ backup_router = APIRouter(
 # =============================================================================
 
 
-class ExportFormat(str, Enum):
+class ExportFormat(StrEnum):
     """Supported export formats."""
 
     JSON = "json"
@@ -36,7 +36,7 @@ class ExportFormat(str, Enum):
     SQLITE = "sqlite"  # Full database backup
 
 
-class ExportScope(str, Enum):
+class ExportScope(StrEnum):
     """What to include in export."""
 
     ALL = "all"

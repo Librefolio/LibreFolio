@@ -96,7 +96,7 @@ async def create_transactions(
         return response
     except Exception as e:
         # Catch any unexpected error and return it as a response instead of 500
-        import sys
+        import sys  # noqa: PLC0415 — lazy import / avoid circular
 
         print(f"[CRITICAL] Transaction creation error: {e}", file=sys.stderr)
         print(f"[CRITICAL] Traceback:\n{traceback.format_exc()}", file=sys.stderr)

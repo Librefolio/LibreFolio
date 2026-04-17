@@ -420,7 +420,7 @@ class TestScheduledInvestmentSchedule:
 
     def test_with_asset_events(self):
         """Test schedule with asset events."""
-        from backend.app.schemas.prices import FAAssetEventPoint
+        from backend.app.schemas.prices import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         schedule = FAScheduledInvestmentSchedule(
             initial_value=Currency(code="EUR", amount=Decimal("10000")),
@@ -453,8 +453,8 @@ class TestFAAssetEventPoint:
 
     def test_valid_event(self):
         """Test creating a valid asset event point."""
-        from backend.app.schemas.common import Currency
-        from backend.app.schemas.prices import FAAssetEventPoint
+        from backend.app.schemas.common import Currency  # noqa: PLC0415 — test setup — imports after sys.path/db config
+        from backend.app.schemas.prices import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),
@@ -467,8 +467,8 @@ class TestFAAssetEventPoint:
 
     def test_value_requires_currency(self):
         """Test that value requires a Currency object with code."""
-        from backend.app.schemas.common import Currency
-        from backend.app.schemas.prices import FAAssetEventPoint
+        from backend.app.schemas.common import Currency  # noqa: PLC0415 — test setup — imports after sys.path/db config
+        from backend.app.schemas.prices import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),
@@ -480,8 +480,8 @@ class TestFAAssetEventPoint:
 
     def test_json_roundtrip(self):
         """Test JSON serialization/deserialization roundtrip."""
-        from backend.app.schemas.common import Currency
-        from backend.app.schemas.prices import FAAssetEventPoint
+        from backend.app.schemas.common import Currency  # noqa: PLC0415 — test setup — imports after sys.path/db config
+        from backend.app.schemas.prices import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),

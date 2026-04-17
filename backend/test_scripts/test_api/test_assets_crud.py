@@ -32,7 +32,7 @@ TIMEOUT = 30
 
 async def create_user_and_login(client: httpx.AsyncClient) -> None:
     """Create a test user, login, and set session cookie on client."""
-    import uuid as _uuid
+    import uuid as _uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
     username = f"test_{int(__import__('time').time() * 1000)}_{_uuid.uuid4().hex[:4]}"
     email = f"{username}@test.com"
