@@ -32,10 +32,9 @@ from datetime import date
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.schemas.common import Currency, DateRangeModel, BaseBulkResponse
-
+from backend.app.schemas.common import BaseBulkResponse, Currency, DateRangeModel
 
 # ============================================================================
 # SHARED SYNC STATUS ENUM
@@ -44,6 +43,7 @@ from backend.app.schemas.common import Currency, DateRangeModel, BaseBulkRespons
 
 class SyncStatus(str, Enum):
     """Status of a single sync operation (shared by FA and FX)."""
+
     OK = "ok"  # Provider returned data, inserted/updated in DB
     PARTIAL = "partial"  # Provider has data but incomplete (e.g. SNB monthly, gaps)
     FAILED = "failed"  # All providers for this pair/asset failed
@@ -115,13 +115,13 @@ class FXSyncPairRequest(BaseModel):
     start: date = Field(..., description="Start date (inclusive)")
     end: date = Field(..., description="End date (inclusive)")
 
-    @field_validator('pairs', mode='before')
+    @field_validator("pairs", mode="before")
     @classmethod
     def validate_pairs(cls, v):
         """Validate each pair: split by '-', validate both currencies, normalize to alphabetical order."""
         validated = []
         for pair in v:
-            parts = pair.split('-')
+            parts = pair.split("-")
             if len(parts) != 2:
                 raise ValueError(f"Invalid pair format: '{pair}'. Expected 'BASE-QUOTE'.")
             base = Currency.validate_code(parts[0])
@@ -165,25 +165,14 @@ class FXSyncPairResult(BaseModel):
     points_changed: int = Field(0, ge=0, description="Number of rate points actually inserted/updated in DB")
     message: Optional[str] = Field(None, description="Optional note (e.g. 'monthly data only', 'fallback used')")
     errors: List[str] = Field(default_factory=list, description="List of error messages for this pair")
-    detail: Optional[List[FXSyncLegDetail]] = Field(
-        None,
-        description="Per-leg diagnostic breakdown. Present for chains and single-provider routes "
-                    "when status is partial or failed. Each entry shows provider name, "
-                    "leg pair, dates available, and any error encountered."
-        )
-    elapsed_ms: Optional[int] = Field(
-        None, ge=0,
-        description="Backend sync time for this pair in integer milliseconds. "
-                    "Measured from bulk start (Phase 1) to commit completion, "
-                    "via time.monotonic_ns() with integer division (// 1_000_000). "
-                    "None for SKIPPED/MANUAL pairs."
-        )
+    detail: Optional[List[FXSyncLegDetail]] = Field(None, description="Per-leg diagnostic breakdown. Present for chains and single-provider routes " "when status is partial or failed. Each entry shows provider name, " "leg pair, dates available, and any error encountered.")
+    elapsed_ms: Optional[int] = Field(None, ge=0, description="Backend sync time for this pair in integer milliseconds. " "Measured from bulk start (Phase 1) to commit completion, " "via time.monotonic_ns() with integer division (// 1_000_000). " "None for SKIPPED/MANUAL pairs.")
 
-    @field_validator('pair')
+    @field_validator("pair")
     @classmethod
     def validate_pair(cls, v):
         """Validate pair currencies via Currency.validate_code."""
-        parts = v.split('-')
+        parts = v.split("-")
         if len(parts) != 2:
             raise ValueError(f"Invalid pair format: '{v}'")
         Currency.validate_code(parts[0])

@@ -22,8 +22,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.schemas.common import Currency, CRYPTO_CURRENCIES, OldNew, DateRangeModel
-
+from backend.app.schemas.common import CRYPTO_CURRENCIES, Currency, DateRangeModel, OldNew
 
 # ============================================================================
 # CURRENCY CREATION TESTS
@@ -301,7 +300,7 @@ class TestComparison:
         usd = Currency(code="USD", amount=Decimal("100"))
         eur = Currency(code="EUR", amount=Decimal("50"))
         with pytest.raises(ValueError, match="Cannot compare"):
-            usd < eur
+            usd < eur  # noqa: B015 — intentional: testing that comparison raises ValueError
 
 
 # ============================================================================

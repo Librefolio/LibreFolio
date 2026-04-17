@@ -4,7 +4,7 @@ Pydantic schemas for utility endpoints.
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.common import BaseListResponse
 
@@ -69,4 +69,5 @@ class CurrencyNormalizationResponse(BaseModel):
 
 class SectorListResponse(BaseListResponse[str]):
     """Response for sectors list endpoint."""
+
     pass

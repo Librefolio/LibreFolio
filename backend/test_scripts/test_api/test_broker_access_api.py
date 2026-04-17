@@ -44,9 +44,7 @@ def unique_username() -> str:
 # ============================================================================
 
 
-async def create_user_and_login(
-    client: httpx.AsyncClient, username: Optional[str] = None
-    ) -> tuple[int, str, str, Optional[str]]:
+async def create_user_and_login(client: httpx.AsyncClient, username: Optional[str] = None) -> tuple[int, str, str, Optional[str]]:
     """
     Create a new user, login, and return (user_id, username, email, session).
     Sets session cookie on client.
@@ -59,16 +57,14 @@ async def create_user_and_login(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
 
     if resp.status_code != 201:
         raise Exception(f"Failed to create user: {resp.text}")
 
     user_id = resp.json()["user"]["id"]
 
-    login_resp = await client.post(
-        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-        )
+    login_resp = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
 
     session = login_resp.cookies.get("session")
     if session:
@@ -99,19 +95,23 @@ async def bulk_set_access(client: httpx.AsyncClient, broker_id: int, accesses: l
         f"{API_BASE}/brokers/{broker_id}/access",
         json=accesses,
         timeout=TIMEOUT,
-        )
+    )
 
 
 async def add_user_via_bulk(
-    owner_client: httpx.AsyncClient, broker_id: int, owner_id: int,
-    target_user_id: int, role: str, share_pct: float = 0,
+    owner_client: httpx.AsyncClient,
+    broker_id: int,
+    owner_id: int,
+    target_user_id: int,
+    role: str,
+    share_pct: float = 0,
     owner_share: float = 1.0,
-    ) -> httpx.Response:
+) -> httpx.Response:
     """Helper: add a user by sending bulk with current owner + new user."""
     accesses = [
         {"user_id": owner_id, "role": "OWNER", "share_percentage": owner_share},
         {"user_id": target_user_id, "role": role, "share_percentage": share_pct},
-        ]
+    ]
     return await bulk_set_access(owner_client, broker_id, accesses)
 
 
@@ -149,7 +149,7 @@ class TestAccessList:
             response = await client.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -171,7 +171,7 @@ class TestAccessList:
             response = await client2.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 404
 
@@ -239,10 +239,14 @@ class TestBulkAddAccess:
             broker_id = await create_broker(client1)
             user2_id, _, _, _ = await create_user_and_login(client2)
 
-            resp = await bulk_set_access(client1, broker_id, [
-                {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
-                {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
-                ])
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                    {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+                ],
+            )
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -267,11 +271,15 @@ class TestBulkAddAccess:
             await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "EDITOR")
 
             # User2 (EDITOR) tries to modify access → rejected
-            resp = await bulk_set_access(client2, broker_id, [
-                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
-                {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
-                {"user_id": user3_id, "role": "VIEWER", "share_percentage": 0},
-                ])
+            resp = await bulk_set_access(
+                client2,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
+                    {"user_id": user3_id, "role": "VIEWER", "share_percentage": 0},
+                ],
+            )
             assert resp.status_code == 403
 
             print_success("✓ Non-owner correctly rejected")
@@ -285,10 +293,14 @@ class TestBulkAddAccess:
             user_id, _, _, _ = await create_user_and_login(client)
             broker_id = await create_broker(client)
 
-            resp = await bulk_set_access(client, broker_id, [
-                {"user_id": user_id, "role": "OWNER", "share_percentage": 1.0},
-                {"user_id": 999999, "role": "VIEWER", "share_percentage": 0},
-                ])
+            resp = await bulk_set_access(
+                client,
+                broker_id,
+                [
+                    {"user_id": user_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": 999999, "role": "VIEWER", "share_percentage": 0},
+                ],
+            )
             assert resp.status_code == 400
             assert "not found" in resp.json()["detail"]
 
@@ -317,10 +329,14 @@ class TestBulkUpdateAccess:
             await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "VIEWER")
 
             # Promote to editor via bulk
-            resp = await bulk_set_access(client1, broker_id, [
-                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
-                {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
-                ])
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
+                ],
+            )
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -343,10 +359,14 @@ class TestBulkUpdateAccess:
             await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "EDITOR")
 
             # Degrade to viewer
-            resp = await bulk_set_access(client1, broker_id, [
-                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
-                {"user_id": user2_id, "role": "VIEWER", "share_percentage": 0},
-                ])
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": user2_id, "role": "VIEWER", "share_percentage": 0},
+                ],
+            )
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -365,9 +385,13 @@ class TestBulkUpdateAccess:
             broker_id = await create_broker(client)
 
             # Try to set self as EDITOR (no OWNER left)
-            resp = await bulk_set_access(client, broker_id, [
-                {"user_id": user_id, "role": "EDITOR", "share_percentage": 0},
-                ])
+            resp = await bulk_set_access(
+                client,
+                broker_id,
+                [
+                    {"user_id": user_id, "role": "EDITOR", "share_percentage": 0},
+                ],
+            )
             assert resp.status_code == 400
             assert "OWNER" in resp.json()["detail"]
 
@@ -398,9 +422,13 @@ class TestBulkRemoveAccess:
             assert len(accesses) == 2
 
             # Remove by sending only owner
-            resp = await bulk_set_access(client1, broker_id, [
-                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
-                ])
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                ],
+            )
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -419,16 +447,24 @@ class TestBulkRemoveAccess:
             user2_id, _, _, _ = await create_user_and_login(client2)
 
             # Add second owner
-            resp = await bulk_set_access(client1, broker_id, [
-                {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
-                {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
-                ])
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                    {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+                ],
+            )
             assert resp.status_code == 200
 
             # Remove second owner
-            resp = await bulk_set_access(client1, broker_id, [
-                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
-                ])
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                ],
+            )
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)
@@ -463,7 +499,7 @@ class TestMultiUserIsolation:
             direct_resp = await client2.get(
                 f"{API_BASE}/brokers/{broker_id}",
                 timeout=TIMEOUT,
-                )
+            )
             assert direct_resp.status_code == 404
 
             print_success("✓ User isolation works correctly")
@@ -493,10 +529,7 @@ class TestSuperuserAccess:
             is_superuser = me_resp.json().get("user", {}).get("is_superuser", False)
 
             if not is_superuser:
-                pytest.skip(
-                    "First user is not superuser (DB not clean). "
-                    "To test: ./dev.py db create-clean --test && ./dev.py test api broker-access -k superuser"
-                    )
+                pytest.skip("First user is not superuser (DB not clean). " "To test: ./dev.py db create-clean --test && ./dev.py test api broker-access -k superuser")
 
             await create_user_and_login(user_client)
             broker_id = await create_broker(user_client, unique_name("UserBroker"))
@@ -505,7 +538,7 @@ class TestSuperuserAccess:
                 f"{API_BASE}/brokers",
                 params={"as_user_id": "all"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             broker_ids = [b["id"] for b in response.json()]
@@ -525,7 +558,7 @@ class TestSuperuserAccess:
                 f"{API_BASE}/brokers",
                 params={"as_user_id": "all"},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 403
             assert "superuser" in response.json()["detail"].lower()
@@ -550,9 +583,13 @@ class TestSelfModification:
             user_id, _, _, _ = await create_user_and_login(client)
             broker_id = await create_broker(client)
 
-            resp = await bulk_set_access(client, broker_id, [
-                {"user_id": user_id, "role": "EDITOR", "share_percentage": 0},
-                ])
+            resp = await bulk_set_access(
+                client,
+                broker_id,
+                [
+                    {"user_id": user_id, "role": "EDITOR", "share_percentage": 0},
+                ],
+            )
             assert resp.status_code == 400
             assert "OWNER" in resp.json()["detail"]
 
@@ -569,17 +606,25 @@ class TestSelfModification:
             user2_id, _, _, _ = await create_user_and_login(client2)
 
             # Add second owner
-            resp = await bulk_set_access(client1, broker_id, [
-                {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
-                {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
-                ])
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                    {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+                ],
+            )
             assert resp.status_code == 200
 
             # User1 degrades self to EDITOR (user2 remains OWNER)
-            resp = await bulk_set_access(client1, broker_id, [
-                {"user_id": user1_id, "role": "EDITOR", "share_percentage": 0},
-                {"user_id": user2_id, "role": "OWNER", "share_percentage": 1.0},
-                ])
+            resp = await bulk_set_access(
+                client1,
+                broker_id,
+                [
+                    {"user_id": user1_id, "role": "EDITOR", "share_percentage": 0},
+                    {"user_id": user2_id, "role": "OWNER", "share_percentage": 1.0},
+                ],
+            )
             assert resp.status_code == 200
 
             accesses = await get_access_list(client1, broker_id)

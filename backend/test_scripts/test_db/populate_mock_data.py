@@ -25,13 +25,11 @@ Usage:
 """
 
 # Setup test database BEFORE importing app modules
-from backend.test_scripts.test_db_config import setup_test_database, initialize_test_database
+from backend.test_scripts.test_db_config import initialize_test_database, setup_test_database
 
 setup_test_database()
 
 # Get database path from config
-from backend.app.config import get_settings
-
 import argparse
 import json
 import random
@@ -40,39 +38,43 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from sqlmodel import Session, select, delete
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from sqlmodel import Session, delete, select
 
+from backend.app.config import get_data_dir, get_settings
 from backend.app.db import (
+    Asset,
+    AssetEvent,
+    AssetEventType,
+    AssetProviderAssignment,
+    AssetType,
     # DON'T import sync_engine - it was created before setup_test_database()!
     Broker,
     BrokerUserAccess,
-    UserRole,
-    Asset,
-    AssetProviderAssignment,
-    Transaction,
-    PriceHistory,
-    AssetEvent,
-    AssetEventType,
-    FxRate,
     FxConversionRoute,
-    AssetType,
+    FxRate,
     IdentifierType,
+    PriceHistory,
     ProviderInputType,
+    Transaction,
     TransactionType,
     User,
+    UserRole,
     UserSettings,
-    )
+)
 from backend.app.services.auth_service import hash_password
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
-from backend.app.services.static_uploads import seed_default_avatars, get_uploads_dir
-from backend.app.config import get_data_dir
+from backend.app.services.static_uploads import get_uploads_dir, seed_default_avatars
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
 # This ensures we use the test database, not the production one
 _settings = get_settings()
-engine = create_engine(_settings.DATABASE_URL, echo=False, poolclass=NullPool, )
+engine = create_engine(
+    _settings.DATABASE_URL,
+    echo=False,
+    poolclass=NullPool,
+)
 
 
 def cleanup_all_tables(session: Session):
@@ -93,7 +95,7 @@ def cleanup_all_tables(session: Session):
             FxConversionRoute,
             Asset,
             Broker,
-            ]
+        ]
 
         for model in tables_to_clean:
             # Count existing rows
@@ -128,7 +130,7 @@ def populate_brokers(session: Session):
             "brim_plugin_key": "broker_ibkr",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
+        },
         {
             "name": "DEGIRO",
             "description": "European low-cost broker",
@@ -136,7 +138,7 @@ def populate_brokers(session: Session):
             "brim_plugin_key": "broker_degiro",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
+        },
         {
             "name": "Directa SIM",
             "description": "Italian online broker for stocks, ETFs, and bonds",
@@ -144,7 +146,7 @@ def populate_brokers(session: Session):
             "brim_plugin_key": "broker_directa",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
+        },
         {
             "name": "eToro",
             "description": "Social trading platform with stocks and CFDs",
@@ -152,7 +154,7 @@ def populate_brokers(session: Session):
             "brim_plugin_key": "broker_etoro",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
+        },
         {
             "name": "Coinbase",
             "description": "Cryptocurrency exchange for Bitcoin and altcoins",
@@ -160,7 +162,7 @@ def populate_brokers(session: Session):
             "brim_plugin_key": "broker_coinbase",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
+        },
         {
             "name": "Recrowd",
             "description": "Real estate crowdfunding platform",
@@ -168,8 +170,8 @@ def populate_brokers(session: Session):
             "brim_plugin_key": "broker_generic_csv",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
-        ]
+        },
+    ]
 
     for broker_data in brokers:
         broker = Broker(**broker_data)
@@ -204,7 +206,7 @@ def populate_broker_user_access(session: Session):
         # "Free" users — NOT assigned to any broker, useful for search tests
         ("e2e_user_frank", "frank@test.example.com", "FrankPass123!", False),
         ("e2e_user_grace", "grace@test.example.com", "GracePass123!", False),
-        ]
+    ]
 
     # Create any missing users
     for uname, email, pwd, is_admin in test_user_defs:
@@ -216,7 +218,7 @@ def populate_broker_user_access(session: Session):
                 hashed_password=hash_password(pwd),
                 is_active=True,
                 is_admin=is_admin,
-                )
+            )
             session.add(u)
             print(f"  ✅ Created user: {uname}{' (admin)' if is_admin else ''}")
     session.commit()
@@ -255,7 +257,7 @@ def populate_broker_user_access(session: Session):
                 broker_id=broker.id,
                 role=UserRole.OWNER,
                 share_percentage=share,
-                )
+            )
             session.add(access)
             pct = int(share * 100)
             print(f"  ✅ {admin.username} → {broker.name} (OWNER, {pct}%)")
@@ -278,7 +280,7 @@ def populate_broker_user_access(session: Session):
                 broker_id=broker.id,
                 role=role,
                 share_percentage=share,
-                )
+            )
             session.add(access)
             pct_label = f"{int(share * 100)}%" if share > 0 else "0%"
             print(f"  ✅ {user.username} → {broker.name} ({role.value}, {pct_label})")
@@ -290,7 +292,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-            )
+        )
         session.add(access)
         print(f"  ✅ {user2.username} → {brokers[0].name} (VIEWER, 0%)")
 
@@ -301,7 +303,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.OWNER,
             share_percentage=Decimal("0.2"),
-            )
+        )
         session.add(access1)
         print(f"  ✅ {alice.username} → {brokers[0].name} (OWNER, 20%)")
         access2 = BrokerUserAccess(
@@ -309,7 +311,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[1].id,
             role=UserRole.EDITOR,
             share_percentage=Decimal("0"),
-            )
+        )
         session.add(access2)
         print(f"  ✅ {alice.username} → {brokers[1].name} (EDITOR, 0%)")
 
@@ -320,7 +322,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.EDITOR,
             share_percentage=Decimal("0"),
-            )
+        )
         session.add(access1)
         print(f"  ✅ {bob.username} → {brokers[0].name} (EDITOR, 0%)")
         access2 = BrokerUserAccess(
@@ -328,7 +330,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[2].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-            )
+        )
         session.add(access2)
         print(f"  ✅ {bob.username} → {brokers[2].name} (VIEWER, 0%)")
 
@@ -339,7 +341,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-            )
+        )
         session.add(access)
         print(f"  ✅ {carol.username} → {brokers[0].name} (VIEWER, 0%)")
 
@@ -350,7 +352,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[1].id,
             role=UserRole.EDITOR,
             share_percentage=Decimal("0"),
-            )
+        )
         session.add(access)
         print(f"  ✅ {dave.username} → {brokers[1].name} (EDITOR, 0%)")
 
@@ -361,7 +363,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[0].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-            )
+        )
         session.add(access1)
         print(f"  ✅ {eve.username} → {brokers[0].name} (VIEWER, 0%)")
         access2 = BrokerUserAccess(
@@ -369,7 +371,7 @@ def populate_broker_user_access(session: Session):
             broker_id=brokers[1].id,
             role=UserRole.VIEWER,
             share_percentage=Decimal("0"),
-            )
+        )
         session.add(access2)
         print(f"  ✅ {eve.username} → {brokers[1].name} (VIEWER, 0%)")
 
@@ -383,8 +385,8 @@ def populate_broker_user_access(session: Session):
             select(BrokerUserAccess).where(
                 BrokerUserAccess.user_id == user_obj.id,
                 BrokerUserAccess.broker_id == broker_obj.id,
-                )
-            ).first()
+            )
+        ).first()
         if existing:
             existing.role = role
             existing.share_percentage = share_pct
@@ -397,7 +399,7 @@ def populate_broker_user_access(session: Session):
                 broker_id=broker_obj.id,
                 role=role,
                 share_percentage=share_pct,
-                )
+            )
             session.add(access)
             pct = int(share_pct * 100)
             print(f"  ✅ {user_obj.username} → {broker_obj.name} ({role.value}, {pct}%)")
@@ -449,9 +451,9 @@ def populate_assets(session: Session):
                     "short_description": "Technology company",
                     "geographic_area": {"distribution": {"USA": 1.0}},
                     "sector_area": {"distribution": {"Technology": 0.85, "Services": 0.15}},
-                    }
-                ),
-            },
+                }
+            ),
+        },
         {
             "display_name": "Microsoft Corporation",
             "currency": "USD",
@@ -462,9 +464,9 @@ def populate_assets(session: Session):
                     "short_description": "Software and cloud computing",
                     "geographic_area": {"distribution": {"USA": 1.0}},
                     "sector_area": {"distribution": {"Technology": 0.70, "Cloud": 0.30}},
-                    }
-                ),
-            },
+                }
+            ),
+        },
         {
             "display_name": "Tesla, Inc.",
             "currency": "USD",
@@ -474,9 +476,9 @@ def populate_assets(session: Session):
                     "short_description": "Electric vehicles and clean energy",
                     "geographic_area": {"distribution": {"USA": 0.50, "CHN": 0.25, "DEU": 0.25}},
                     "sector_area": {"distribution": {"Consumer Discretionary": 0.70, "Energy": 0.30}},
-                    }
-                ),
-            },
+                }
+            ),
+        },
         # ETFs (EUR)
         {
             "display_name": "Vanguard FTSE All-World UCITS ETF",
@@ -492,8 +494,8 @@ def populate_assets(session: Session):
                             "GBR": 0.10,
                             "JPN": 0.10,
                             "CHN": 0.10,
-                            }
-                        },
+                        }
+                    },
                     "sector_area": {
                         "distribution": {
                             "Technology": 0.25,
@@ -504,11 +506,11 @@ def populate_assets(session: Session):
                             "Communication": 0.08,
                             "Energy": 0.05,
                             "Other": 0.05,
-                            }
-                        },
-                    }
-                ),
-            },
+                        }
+                    },
+                }
+            ),
+        },
         {
             "display_name": "iShares Core S&P 500 UCITS ETF",
             "currency": "EUR",
@@ -518,9 +520,9 @@ def populate_assets(session: Session):
                     "short_description": "S&P 500 index tracker",
                     "geographic_area": {"USA": 1.0},
                     "sector": "Diversified",
-                    }
-                ),
-            },
+                }
+            ),
+        },
         # Crowdfunding Loans (EUR)
         {
             "display_name": "Real Estate Loan - Milano Centro",
@@ -531,9 +533,9 @@ def populate_assets(session: Session):
                     "short_description": "Real estate development loan in Milan",
                     "geographic_area": {"ITA": 1.0},
                     "sector": "Real Estate",
-                    }
-                ),
-            },
+                }
+            ),
+        },
         {
             "display_name": "Real Estate Loan - Roma Parioli",
             "currency": "EUR",
@@ -543,9 +545,9 @@ def populate_assets(session: Session):
                     "short_description": "Residential project in Rome",
                     "geographic_area": {"ITA": 1.0},
                     "sector": "Real Estate",
-                    }
-                ),
-            },
+                }
+            ),
+        },
         # Cryptocurrencies (USD) for Coinbase
         {
             "display_name": "Bitcoin",
@@ -556,9 +558,9 @@ def populate_assets(session: Session):
                     "short_description": "Digital gold, store of value",
                     "geographic_area": {"GLOBAL": 1.0},
                     "sector": "Cryptocurrency",
-                    }
-                ),
-            },
+                }
+            ),
+        },
         {
             "display_name": "Ethereum",
             "currency": "USD",
@@ -568,9 +570,9 @@ def populate_assets(session: Session):
                     "short_description": "Smart contract platform",
                     "geographic_area": {"GLOBAL": 1.0},
                     "sector": "Cryptocurrency",
-                    }
-                ),
-            },
+                }
+            ),
+        },
         # Assets WITHOUT transactions — for testing delete success flow
         {
             "display_name": "NVIDIA Corporation",
@@ -581,9 +583,9 @@ def populate_assets(session: Session):
                     "short_description": "GPU and AI computing leader",
                     "geographic_area": {"USA": 1.0},
                     "sector": "Technology",
-                    }
-                ),
-            },
+                }
+            ),
+        },
         {
             "display_name": "Amundi MSCI World UCITS ETF",
             "currency": "EUR",
@@ -598,11 +600,11 @@ def populate_assets(session: Session):
                         "JPN": 0.07,
                         "FRA": 0.06,
                         "CHN": 0.06,
-                        },
+                    },
                     "sector": "Diversified",
-                    }
-                ),
-            },
+                }
+            ),
+        },
         # INDEX assets — benchmarks, no transactions allowed
         {
             "display_name": "S&P 500",
@@ -614,9 +616,9 @@ def populate_assets(session: Session):
                     "short_description": "Standard & Poor's 500 — US large-cap benchmark index",
                     "geographic_area": {"USA": 1.0},
                     "sector": "Diversified",
-                    }
-                ),
-            },
+                }
+            ),
+        },
         {
             "display_name": "MSCI World Index",
             "currency": "USD",
@@ -632,11 +634,11 @@ def populate_assets(session: Session):
                             "GBR": 0.04,
                             "FRA": 0.03,
                             "DEU": 0.03,
-                            }
-                        },
-                    }
-                ),
-            },
+                        }
+                    },
+                }
+            ),
+        },
         # Scheduled Investment — bond with interest schedule
         {
             "display_name": "BTP Italia 2028",
@@ -648,9 +650,9 @@ def populate_assets(session: Session):
                     "short_description": "Italian government inflation-linked bond maturing 2028",
                     "geographic_area": {"distribution": {"ITA": 1.0}},
                     "sector_area": {"distribution": {"Government Bonds": 1.0}},
-                    }
-                ),
-            },
+                }
+            ),
+        },
         # CSS Scraper — gold spot price
         {
             "display_name": "Gold Spot Price",
@@ -662,10 +664,10 @@ def populate_assets(session: Session):
                     "short_description": "Gold spot price (XAU/USD) via web scraping",
                     "geographic_area": {"distribution": {"GLOBAL": 1.0}},
                     "sector_area": {"distribution": {"Precious Metals": 1.0}},
-                    }
-                ),
-            },
-        ]
+                }
+            ),
+        },
+    ]
 
     for asset_data in assets:
         asset = Asset(**asset_data)
@@ -697,7 +699,10 @@ def populate_asset_provider_assignments(session: Session):
         ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None),
         # Scheduled Investment — BTP Italia with interest schedule
         (
-            "BTP Italia 2028", "scheduled_investment", None, ProviderInputType.AUTO_GENERATED,
+            "BTP Italia 2028",
+            "scheduled_investment",
+            None,
+            ProviderInputType.AUTO_GENERATED,
             {
                 "initial_value": {"code": "EUR", "amount": 1000},
                 "interest_type": "SIMPLE",
@@ -715,7 +720,9 @@ def populate_asset_provider_assignments(session: Session):
         ),
         # CSS Scraper — Gold spot price
         (
-            "Gold Spot Price", "css_scraper", "https://www.kitco.com/charts/livegold.html",
+            "Gold Spot Price",
+            "css_scraper",
+            "https://www.kitco.com/charts/livegold.html",
             ProviderInputType.URL,
             {
                 "current_css_selector": "#sp-last",
@@ -723,7 +730,7 @@ def populate_asset_provider_assignments(session: Session):
                 "decimal_format": "us",
             },
         ),
-        ]
+    ]
 
     for display_name, provider_code, identifier, id_type, params in provider_configs:
         asset = session.exec(select(Asset).where(Asset.display_name == display_name)).first()
@@ -736,7 +743,7 @@ def populate_asset_provider_assignments(session: Session):
                 identifier_type=id_type,
                 provider_params=json.dumps(params) if params else None,
                 fetch_interval=1440,  # 24 hours
-                )
+            )
             session.add(assignment)
             print(f"  ✅ {display_name} → {provider_code} ({identifier})")
 
@@ -779,7 +786,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 30,
             "description": "Initial EUR funding from bank",
-            },
+        },
         {
             "broker": ib,
             "asset": None,
@@ -789,7 +796,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 30,
             "description": "Initial USD funding from bank",
-            },
+        },
         {
             "broker": degiro,
             "asset": None,
@@ -799,7 +806,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 30,
             "description": "Initial deposit",
-            },
+        },
         {
             "broker": recrowd,
             "asset": None,
@@ -809,7 +816,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 30,
             "description": "P2P lending capital",
-            },
+        },
         # Day -28: Buy AAPL on Interactive Brokers
         {
             "broker": ib,
@@ -820,7 +827,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 28,
             "description": "Initial AAPL purchase",
-            },
+        },
         # Day -25: Buy VWCE on Degiro
         {
             "broker": degiro,
@@ -831,7 +838,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 25,
             "description": "Start ETF accumulation plan",
-            },
+        },
         # Day -20: Invest in loan 1 on Recrowd
         {
             "broker": recrowd,
@@ -842,7 +849,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 20,
             "description": "P2P lending - Milano Centro",
-            },
+        },
         # Day -18: Buy MSFT on Interactive Brokers
         {
             "broker": ib,
@@ -853,7 +860,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 18,
             "description": "Diversification into MSFT",
-            },
+        },
         # Day -15: Invest in loan 2 on Recrowd
         {
             "broker": recrowd,
@@ -864,7 +871,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 15,
             "description": "P2P lending - Roma Parioli",
-            },
+        },
         # Day -10: Buy more VWCE on Degiro
         {
             "broker": degiro,
@@ -875,7 +882,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 10,
             "description": "Monthly ETF purchase",
-            },
+        },
         # Day -8: Receive dividend from AAPL (net of taxes)
         {
             "broker": ib,
@@ -886,7 +893,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 8,
             "description": "Q4 dividend payment (net of 30% tax)",
-            },
+        },
         # Day -5: Sell some AAPL (taking profit)
         {
             "broker": ib,
@@ -897,7 +904,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 5,
             "description": "Taking profits",
-            },
+        },
         # Day -3: Interest payment from loan 1
         {
             "broker": recrowd,
@@ -908,7 +915,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 3,
             "description": "Monthly interest payment (8.5% annual)",
-            },
+        },
         # Day -1: Buy CSPX on Degiro
         {
             "broker": degiro,
@@ -919,7 +926,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 1,
             "description": "S&P 500 exposure",
-            },
+        },
         # Day -1: Fee transaction
         {
             "broker": ib,
@@ -930,7 +937,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 1,
             "description": "Monthly platform fee",
-            },
+        },
         # --- Directa SIM transactions ---
         # Day -29: Initial deposit to Directa
         {
@@ -942,7 +949,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 29,
             "description": "Bonifico da conto corrente",
-            },
+        },
         # Day -22: Buy Tesla on Directa
         {
             "broker": directa,
@@ -953,7 +960,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 22,
             "description": "Acquisto TSLA",
-            },
+        },
         # --- eToro transactions ---
         # Day -28: Initial deposit to eToro
         {
@@ -965,7 +972,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 28,
             "description": "Initial deposit via PayPal",
-            },
+        },
         # Day -20: Buy Apple on eToro
         {
             "broker": etoro,
@@ -976,7 +983,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 20,
             "description": "Copy trade - AAPL",
-            },
+        },
         # --- Coinbase transactions ---
         # Day -27: Initial deposit to Coinbase
         {
@@ -988,7 +995,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 27,
             "description": "Bank transfer for crypto purchase",
-            },
+        },
         # Day -26: Buy Bitcoin on Coinbase
         {
             "broker": coinbase,
@@ -999,7 +1006,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 26,
             "description": "BTC purchase",
-            },
+        },
         # Day -24: Buy Ethereum on Coinbase
         {
             "broker": coinbase,
@@ -1010,7 +1017,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 24,
             "description": "ETH purchase",
-            },
+        },
         # Day -7: Staking reward on Coinbase
         {
             "broker": coinbase,
@@ -1021,8 +1028,8 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 7,
             "description": "ETH staking reward",
-            },
-        ]
+        },
+    ]
 
     for tx_data in transactions:
         tx = Transaction(
@@ -1034,7 +1041,7 @@ def populate_transactions(session: Session):
             amount=tx_data["amount"],
             currency=tx_data["currency"],
             description=tx_data["description"],
-            )
+        )
         session.add(tx)
 
         tx_emoji = {
@@ -1044,12 +1051,10 @@ def populate_transactions(session: Session):
             TransactionType.DIVIDEND: "💵",
             TransactionType.INTEREST: "📈",
             TransactionType.FEE: "📋",
-            }.get(tx_data["type"], "📊")
+        }.get(tx_data["type"], "📊")
 
         asset_name = tx_data["asset"].display_name if tx_data["asset"] else "Cash"
-        print(
-            f"  {tx_emoji} {tx_data['type'].value}: {asset_name} ({tx_data['amount']} {tx_data['currency']})"
-            )
+        print(f"  {tx_emoji} {tx_data['type'].value}: {asset_name} ({tx_data['amount']} {tx_data['currency']})")
 
     session.commit()
 
@@ -1080,7 +1085,7 @@ def populate_price_history(session: Session):
         (cspx, "EUR", Decimal("480.00"), Decimal("490.00"), "yfinance", True),
         (btc, "USD", Decimal("42000.00"), Decimal("45000.00"), "yfinance", False),  # Crypto trades 24/7
         (eth, "USD", Decimal("2400.00"), Decimal("2650.00"), "yfinance", False),
-        ]
+    ]
 
     for asset, currency, start_price, end_price, source, skip_weekends in price_configs:
         if not asset:
@@ -1116,7 +1121,7 @@ def populate_price_history(session: Session):
                 adjusted_close=close_price,
                 currency=currency,
                 source_plugin_key=source,
-                )
+            )
             session.add(price)
             count += 1
 
@@ -1149,57 +1154,67 @@ def populate_asset_events(session: Session):
     # Apple — quarterly dividends (USD)
     if apple:
         for days_ago, amount in [(90, "0.24"), (180, "0.24"), (270, "0.25")]:
-            events_data.append(AssetEvent(
-                asset_id=apple.id,
-                date=today - timedelta(days=days_ago),
-                type=AssetEventType.DIVIDEND,
-                value=Decimal(amount),
-                currency="USD",
-                notes="Quarterly dividend",
-            ))
+            events_data.append(
+                AssetEvent(
+                    asset_id=apple.id,
+                    date=today - timedelta(days=days_ago),
+                    type=AssetEventType.DIVIDEND,
+                    value=Decimal(amount),
+                    currency="USD",
+                    notes="Quarterly dividend",
+                )
+            )
 
     # VWCE — semi-annual distributions (EUR)
     if vwce:
         for days_ago, amount in [(120, "0.52"), (300, "0.48")]:
-            events_data.append(AssetEvent(
-                asset_id=vwce.id,
-                date=today - timedelta(days=days_ago),
-                type=AssetEventType.DIVIDEND,
-                value=Decimal(amount),
-                currency="EUR",
-                notes="Distribution",
-            ))
+            events_data.append(
+                AssetEvent(
+                    asset_id=vwce.id,
+                    date=today - timedelta(days=days_ago),
+                    type=AssetEventType.DIVIDEND,
+                    value=Decimal(amount),
+                    currency="EUR",
+                    notes="Distribution",
+                )
+            )
 
     # Loan Milano — monthly interest + haircut
     if loan1:
         for days_ago, amount in [(30, "25.00"), (60, "25.00"), (90, "25.00"), (120, "25.50")]:
-            events_data.append(AssetEvent(
+            events_data.append(
+                AssetEvent(
+                    asset_id=loan1.id,
+                    date=today - timedelta(days=days_ago),
+                    type=AssetEventType.INTEREST,
+                    value=Decimal(amount),
+                    currency="EUR",
+                    notes="Monthly interest",
+                )
+            )
+        events_data.append(
+            AssetEvent(
                 asset_id=loan1.id,
-                date=today - timedelta(days=days_ago),
-                type=AssetEventType.INTEREST,
-                value=Decimal(amount),
+                date=today - timedelta(days=45),
+                type=AssetEventType.PRICE_ADJUSTMENT,
+                value=Decimal("-200.00"),
                 currency="EUR",
-                notes="Monthly interest",
-            ))
-        events_data.append(AssetEvent(
-            asset_id=loan1.id,
-            date=today - timedelta(days=45),
-            type=AssetEventType.PRICE_ADJUSTMENT,
-            value=Decimal("-200.00"),
-            currency="EUR",
-            notes="Haircut Q3 — collateral revaluation",
-        ))
+                notes="Haircut Q3 — collateral revaluation",
+            )
+        )
 
     # Loan Roma — maturity settlement
     if loan2:
-        events_data.append(AssetEvent(
-            asset_id=loan2.id,
-            date=today - timedelta(days=15),
-            type=AssetEventType.MATURITY_SETTLEMENT,
-            value=Decimal("10000.00"),
-            currency="EUR",
-            notes="Final capital return at maturity",
-        ))
+        events_data.append(
+            AssetEvent(
+                asset_id=loan2.id,
+                date=today - timedelta(days=15),
+                type=AssetEventType.MATURITY_SETTLEMENT,
+                value=Decimal("10000.00"),
+                currency="EUR",
+                notes="Final capital return at maturity",
+            )
+        )
 
     for evt in events_data:
         session.add(evt)
@@ -1237,7 +1252,7 @@ def populate_fx_rates(session: Session):
         ("EUR", "HUF", Decimal("390.00"), Decimal("400.00")),  # CHF/HUF chain (ECB leg)
         ("EUR", "SEK", Decimal("11.20"), Decimal("11.50")),  # SEK/USD chain (ECB leg)
         ("CHF", "USD", Decimal("1.10"), Decimal("1.14")),  # KRW/CHF chain (SNB leg)
-        ]
+    ]
 
     for base, quote, start_rate, end_rate in fx_configs:
         rate_range = end_rate - start_rate
@@ -1288,13 +1303,15 @@ def populate_fx_currency_pair_sources(session: Session):
         ("EUR", "JPY", [{"from": "EUR", "to": "JPY", "provider": "ECB"}]),
         ("AUD", "EUR", [{"from": "AUD", "to": "EUR", "provider": "ECB"}]),
         ("CAD", "EUR", [{"from": "CAD", "to": "EUR", "provider": "ECB"}]),
-        ]
+    ]
 
     for base, quote, steps in eur_direct_routes:
         route = FxConversionRoute(
-            base=base, quote=quote, priority=1,
+            base=base,
+            quote=quote,
+            priority=1,
             chain_steps=json.dumps(steps),
-            )
+        )
         session.add(route)
         print(f"  ✅ {base}/{quote} → ECB (1-step, priority=1)")
 
@@ -1303,104 +1320,153 @@ def populate_fx_currency_pair_sources(session: Session):
     # CHF→JPY via EUR, both legs ECB (ECB has EUR as base, covers CHF and JPY)
     chain_routes = []
 
-    chain_routes.append(FxConversionRoute(
-        base="CHF", quote="JPY", priority=1,
-        chain_steps=json.dumps([
-            {"from": "CHF", "to": "EUR", "provider": "ECB"},
-            {"from": "EUR", "to": "JPY", "provider": "ECB"},
-            ]),
-        ))
-    print(f"  🔗 CHF/JPY → CHAIN:ECB+ECB (2-step via EUR)")
+    chain_routes.append(
+        FxConversionRoute(
+            base="CHF",
+            quote="JPY",
+            priority=1,
+            chain_steps=json.dumps(
+                [
+                    {"from": "CHF", "to": "EUR", "provider": "ECB"},
+                    {"from": "EUR", "to": "JPY", "provider": "ECB"},
+                ]
+            ),
+        )
+    )
+    print("  🔗 CHF/JPY → CHAIN:ECB+ECB (2-step via EUR)")
 
     # AUD→GBP via EUR, both legs ECB
-    chain_routes.append(FxConversionRoute(
-        base="AUD", quote="GBP", priority=1,
-        chain_steps=json.dumps([
-            {"from": "AUD", "to": "EUR", "provider": "ECB"},
-            {"from": "EUR", "to": "GBP", "provider": "ECB"},
-            ]),
-        ))
-    print(f"  🔗 AUD/GBP → CHAIN:ECB+ECB (2-step via EUR)")
+    chain_routes.append(
+        FxConversionRoute(
+            base="AUD",
+            quote="GBP",
+            priority=1,
+            chain_steps=json.dumps(
+                [
+                    {"from": "AUD", "to": "EUR", "provider": "ECB"},
+                    {"from": "EUR", "to": "GBP", "provider": "ECB"},
+                ]
+            ),
+        )
+    )
+    print("  🔗 AUD/GBP → CHAIN:ECB+ECB (2-step via EUR)")
 
     # BRL→INR via USD, both legs FED (FED has USD as base, covers BRL and INR)
-    chain_routes.append(FxConversionRoute(
-        base="BRL", quote="INR", priority=1,
-        chain_steps=json.dumps([
-            {"from": "BRL", "to": "USD", "provider": "FED"},
-            {"from": "USD", "to": "INR", "provider": "FED"},
-            ]),
-        ))
-    print(f"  🔗 BRL/INR → CHAIN:FED+FED (2-step via USD)")
+    chain_routes.append(
+        FxConversionRoute(
+            base="BRL",
+            quote="INR",
+            priority=1,
+            chain_steps=json.dumps(
+                [
+                    {"from": "BRL", "to": "USD", "provider": "FED"},
+                    {"from": "USD", "to": "INR", "provider": "FED"},
+                ]
+            ),
+        )
+    )
+    print("  🔗 BRL/INR → CHAIN:FED+FED (2-step via USD)")
 
     # ── Multi-step chains: cross-provider ──
 
     # RON→USD: ECB (RON→EUR) + FED (EUR→USD) — classic cross-provider
-    chain_routes.append(FxConversionRoute(
-        base="RON", quote="USD", priority=1,
-        chain_steps=json.dumps([
-            {"from": "RON", "to": "EUR", "provider": "ECB"},
-            {"from": "EUR", "to": "USD", "provider": "FED"},
-            ]),
-        ))
-    print(f"  🔗 RON/USD → CHAIN:ECB+FED (2-step via EUR, cross-provider)")
+    chain_routes.append(
+        FxConversionRoute(
+            base="RON",
+            quote="USD",
+            priority=1,
+            chain_steps=json.dumps(
+                [
+                    {"from": "RON", "to": "EUR", "provider": "ECB"},
+                    {"from": "EUR", "to": "USD", "provider": "FED"},
+                ]
+            ),
+        )
+    )
+    print("  🔗 RON/USD → CHAIN:ECB+FED (2-step via EUR, cross-provider)")
 
     # PLN→GBP: ECB (PLN→EUR) + BOE (EUR→GBP) — ECB + BOE cross-provider
-    chain_routes.append(FxConversionRoute(
-        base="GBP", quote="PLN", priority=1,
-        chain_steps=json.dumps([
-            {"from": "PLN", "to": "EUR", "provider": "ECB"},
-            {"from": "EUR", "to": "GBP", "provider": "BOE"},
-            ]),
-        ))
-    print(f"  🔗 GBP/PLN → CHAIN:ECB+BOE (2-step via EUR, cross-provider)")
+    chain_routes.append(
+        FxConversionRoute(
+            base="GBP",
+            quote="PLN",
+            priority=1,
+            chain_steps=json.dumps(
+                [
+                    {"from": "PLN", "to": "EUR", "provider": "ECB"},
+                    {"from": "EUR", "to": "GBP", "provider": "BOE"},
+                ]
+            ),
+        )
+    )
+    print("  🔗 GBP/PLN → CHAIN:ECB+BOE (2-step via EUR, cross-provider)")
 
     # HUF→CHF: ECB (HUF→EUR) + SNB (EUR→CHF) — ECB + SNB cross-provider
-    chain_routes.append(FxConversionRoute(
-        base="CHF", quote="HUF", priority=1,
-        chain_steps=json.dumps([
-            {"from": "HUF", "to": "EUR", "provider": "ECB"},
-            {"from": "EUR", "to": "CHF", "provider": "SNB"},
-            ]),
-        ))
-    print(f"  🔗 CHF/HUF → CHAIN:ECB+SNB (2-step via EUR, cross-provider)")
+    chain_routes.append(
+        FxConversionRoute(
+            base="CHF",
+            quote="HUF",
+            priority=1,
+            chain_steps=json.dumps(
+                [
+                    {"from": "HUF", "to": "EUR", "provider": "ECB"},
+                    {"from": "EUR", "to": "CHF", "provider": "SNB"},
+                ]
+            ),
+        )
+    )
+    print("  🔗 CHF/HUF → CHAIN:ECB+SNB (2-step via EUR, cross-provider)")
 
     # SEK→USD: ECB (SEK→EUR) + FED (EUR→USD) — ECB + FED cross-provider
-    chain_routes.append(FxConversionRoute(
-        base="SEK", quote="USD", priority=1,
-        chain_steps=json.dumps([
-            {"from": "SEK", "to": "EUR", "provider": "ECB"},
-            {"from": "EUR", "to": "USD", "provider": "FED"},
-            ]),
-        ))
-    print(f"  🔗 SEK/USD → CHAIN:ECB+FED (2-step via EUR, cross-provider)")
+    chain_routes.append(
+        FxConversionRoute(
+            base="SEK",
+            quote="USD",
+            priority=1,
+            chain_steps=json.dumps(
+                [
+                    {"from": "SEK", "to": "EUR", "provider": "ECB"},
+                    {"from": "EUR", "to": "USD", "provider": "FED"},
+                ]
+            ),
+        )
+    )
+    print("  🔗 SEK/USD → CHAIN:ECB+FED (2-step via EUR, cross-provider)")
 
     # ── Additional same-provider chains ──
 
     # CAD→GBP via USD, both legs FED (FED has USD as base, covers CAD and GBP)
-    chain_routes.append(FxConversionRoute(
-        base="CAD", quote="GBP", priority=1,
-        chain_steps=json.dumps([
-            {"from": "CAD", "to": "USD", "provider": "FED"},
-            {"from": "USD", "to": "GBP", "provider": "FED"},
-            ]),
-        ))
-    print(f"  🔗 CAD/GBP → CHAIN:FED+FED (2-step via USD)")
+    chain_routes.append(
+        FxConversionRoute(
+            base="CAD",
+            quote="GBP",
+            priority=1,
+            chain_steps=json.dumps(
+                [
+                    {"from": "CAD", "to": "USD", "provider": "FED"},
+                    {"from": "USD", "to": "GBP", "provider": "FED"},
+                ]
+            ),
+        )
+    )
+    print("  🔗 CAD/GBP → CHAIN:FED+FED (2-step via USD)")
 
     for cr in chain_routes:
         session.add(cr)
 
     # ── MANUAL-only pair for testing ──
     manual_route = FxConversionRoute(
-        base="NOK", quote="SEK", priority=MANUAL_PRIORITY,
+        base="NOK",
+        quote="SEK",
+        priority=MANUAL_PRIORITY,
         chain_steps=json.dumps([{"from": "NOK", "to": "SEK", "provider": "MANUAL"}]),
-        )
+    )
     session.add(manual_route)
     print(f"  ✅ NOK/SEK → MANUAL (priority={MANUAL_PRIORITY}) — manual-only pair")
 
     session.commit()
     total = len(eur_direct_routes) + len(chain_routes) + 1  # direct + chains + manual
-    print(f"\n  📊 Configured {total} conversion routes "
-          f"({len(eur_direct_routes)} direct + {len(chain_routes)} chains + 1 manual)")
+    print(f"\n  📊 Configured {total} conversion routes " f"({len(eur_direct_routes)} direct + {len(chain_routes)} chains + 1 manual)")
 
 
 def configure_user_avatars(session: Session):
@@ -1453,7 +1519,7 @@ def configure_user_avatars(session: Session):
         "e2e_user_eve": "woman_04.png",
         "e2e_user_frank": "men_05.png",
         "e2e_user_grace": "woman_05.png",
-        }
+    }
 
     for username, avatar_filename in user_avatar_assignments.items():
         user = session.exec(select(User).where(User.username == username)).first()
@@ -1469,9 +1535,7 @@ def configure_user_avatars(session: Session):
         avatar_url = f"/api/v1/uploads/file/{file_id}"
 
         # Find or create UserSettings
-        settings = session.exec(
-            select(UserSettings).where(UserSettings.user_id == user.id)
-            ).first()
+        settings = session.exec(select(UserSettings).where(UserSettings.user_id == user.id)).first()
 
         if settings:
             settings.avatar_url = avatar_url
@@ -1480,7 +1544,7 @@ def configure_user_avatars(session: Session):
             settings = UserSettings(
                 user_id=user.id,
                 avatar_url=avatar_url,
-                )
+            )
             session.add(settings)
 
         print(f"  ✅ {username} avatar → {avatar_filename} ({avatar_url})")
@@ -1496,7 +1560,7 @@ def clean_data_dirs():
         data_dir / "broker_reports" / "uploaded",
         data_dir / "broker_reports" / "parsed",
         data_dir / "broker_reports" / "failed",
-        ]
+    ]
 
     print("\n🧹 Cleaning data directories...")
     print("-" * 60)
@@ -1525,7 +1589,7 @@ def upload_static_resources(session: Session):
     if count > 0:
         print(f"  ✅ Seeded {count} default avatar images")
     else:
-        print(f"  ℹ️  Avatars already seeded (marker exists)")
+        print("  ℹ️  Avatars already seeded (marker exists)")
 
     # Note: broker icons are NOT set here on purpose — the frontend
     # automatically fetches icons from Clearbit/similar services when
@@ -1551,7 +1615,7 @@ def upload_broker_reports(session: Session):
 
     samples_dir = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
     if not samples_dir.exists():
-        print(f"  ⚠️  Sample reports directory not found")
+        print("  ⚠️  Sample reports directory not found")
         return
 
     # Map broker names to sample report files
@@ -1562,7 +1626,7 @@ def upload_broker_reports(session: Session):
         "eToro": "etoro-export.csv",
         "Coinbase": "coinbase-export.csv",
         "Recrowd": "generic_simple.csv",
-        }
+    }
 
     # Get admin user for uploaded_by_user_id
     admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()
@@ -1587,7 +1651,7 @@ def upload_broker_reports(session: Session):
             original_filename=sample_filename,
             user_id=admin_id,
             broker_id=broker.id,
-            )
+        )
         print(f"  ✅ {broker.name} → {sample_filename} (id: {file_info.file_id[:8]}…)")
 
 
@@ -1627,7 +1691,7 @@ def main():
         if args.force:
             print(f"⚠️  Database file exists: {db_path}")
             print(f"     Size: {db_path.stat().st_size} bytes")
-            print(f"\n🗑️  --force flag detected: Deleting database file...")
+            print("\n🗑️  --force flag detected: Deleting database file...")
             db_path.unlink()
             # Also remove SQLite WAL/SHM journal files to avoid disk I/O errors
             for suffix in ("-shm", "-wal"):
@@ -1635,15 +1699,15 @@ def main():
                 if journal.exists():
                     journal.unlink()
                     print(f"  🗑️  Removed journal file: {journal.name}")
-            print(f"  ✅ Database deleted\n")
+            print("  ✅ Database deleted\n")
         else:
-            print(f"❌ Error: Database file already exists!")
+            print("❌ Error: Database file already exists!")
             print(f"     Path: {db_path}")
             print(f"     Size: {db_path.stat().st_size} bytes")
-            print(f"\n💡 Solutions:")
-            print(f"  1. Use --force flag to delete and recreate:")
-            print(f"     python -m backend.test_scripts.test_db.populate_mock_data --force")
-            print(f"  2. Delete database manually:")
+            print("\n💡 Solutions:")
+            print("  1. Use --force flag to delete and recreate:")
+            print("     python -m backend.test_scripts.test_db.populate_mock_data --force")
+            print("  2. Delete database manually:")
             print(f"     rm {db_path}")
             return 1
 
@@ -1696,7 +1760,7 @@ def main():
                 "price_history": len(session.exec(select(PriceHistory)).all()),
                 "fx_rates": len(session.exec(select(FxRate)).all()),
                 "fx_pair_sources": len(session.exec(select(FxConversionRoute)).all()),
-                }
+            }
 
             print("\n📊 Summary:")
             for name, count in counts.items():

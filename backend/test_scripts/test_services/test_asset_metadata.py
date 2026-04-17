@@ -46,9 +46,7 @@ def test_apply_partial_update_absent_fields_ignored():
 
 def test_apply_partial_update_null_clears_field():
     """Test that null in patch clears the field (PATCH semantics)."""
-    current = FAClassificationParams(
-        short_description="Original", sector_area=FASectorArea(distribution={"Technology": 1})
-        )
+    current = FAClassificationParams(short_description="Original", sector_area=FASectorArea(distribution={"Technology": 1}))
 
     # Explicitly set sector_area to None to clear it
     patch = FAClassificationParams(sector_area=None)
@@ -61,24 +59,18 @@ def test_apply_partial_update_null_clears_field():
 def test_apply_partial_update_geographic_area_full_replace():
     """Test that geographic_area is fully replaced (no merge)."""
     current = FAClassificationParams(
-        geographic_area=FAGeographicArea(
-            distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}
-            ),
+        geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}),
         sector_area=FASectorArea(distribution={"Technology": 1}),
-        )
+    )
 
     # Replace entire geographic_area
-    patch = FAClassificationParams(
-        geographic_area=FAGeographicArea(
-            distribution={"USA": Decimal("0.7"), "FRA": Decimal("0.3")}
-            )
-        )
+    patch = FAClassificationParams(geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.7"), "FRA": Decimal("0.3")}))
 
     updated = AssetMetadataService.apply_partial_update(current, patch)
     assert updated.geographic_area.distribution == {
         "USA": Decimal("0.7000"),
         "FRA": Decimal("0.3000"),
-        }
+    }
     # ITA is removed (full replace, not merge)
     assert "ITA" not in updated.geographic_area.distribution
     assert "Technology" in updated.sector_area.distribution  # Unchanged
@@ -88,11 +80,7 @@ def test_merge_provider_metadata():
     """Test merging provider-fetched metadata with current metadata."""
     current = FAClassificationParams(short_description="User description")
 
-    provider_data = {
-        "sector_area": FASectorArea(
-            distribution={"Technology": Decimal("1.0")}
-            )  # Provider adds new field
-        }
+    provider_data = {"sector_area": FASectorArea(distribution={"Technology": Decimal("1.0")})}  # Provider adds new field
 
     merged = AssetMetadataService.merge_provider_metadata(current, provider_data)
     assert "Technology" in merged.sector_area.distribution  # Added by provider
@@ -111,10 +99,8 @@ def test_patch_semantic_edge_cases():
         sector_area=FASectorArea(distribution={"Technology": 1}),
         short_description="Tech stock",
         geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")}),
-        )
-    patch = FAClassificationParams(
-        geographic_area=FAGeographicArea(distribution={"USA": "0.6", "GBR": "0.4"})
-        )
+    )
+    patch = FAClassificationParams(geographic_area=FAGeographicArea(distribution={"USA": "0.6", "GBR": "0.4"}))
     updated = AssetMetadataService.apply_partial_update(current, patch)
 
     # Verify: geographic_area changed, other fields unchanged
@@ -123,16 +109,12 @@ def test_patch_semantic_edge_cases():
     assert updated.geographic_area.distribution == {
         "USA": Decimal("0.6000"),
         "GBR": Decimal("0.4000"),
-        }
+    }
     print("✅ Only geographic_area changed, other fields preserved")
 
     # Case 2: PATCH geographic_area=null → clears existing geographic_area
     print("\nCase 2: PATCH geographic_area=null clears field")
-    current = FAClassificationParams(
-        geographic_area=FAGeographicArea(
-            distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}
-            )
-        )
+    current = FAClassificationParams(geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}))
     patch = FAClassificationParams(geographic_area=None)
     updated = AssetMetadataService.apply_partial_update(current, patch)
 
@@ -148,7 +130,7 @@ def test_patch_semantic_edge_cases():
     patch1 = FAClassificationParams(
         sector_area=FASectorArea(distribution={"Technology": 1}),
         geographic_area=FAGeographicArea(distribution={"USA": "1.0"}),
-        )
+    )
     current = AssetMetadataService.apply_partial_update(current, patch1)
     assert "Technology" in current.sector_area.distribution, "sector should be changed"
     assert current.geographic_area.distribution == {"USA": Decimal("1.0000")}

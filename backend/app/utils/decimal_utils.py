@@ -17,13 +17,13 @@ Usage:
     # Returns: Decimal("175.123456")
 """
 
-from decimal import Decimal, ROUND_DOWN
-from typing import Type, Tuple, Optional
+from decimal import ROUND_DOWN, Decimal
+from typing import Optional, Tuple, Type
 
 from sqlalchemy import Numeric
 from sqlmodel import SQLModel
 
-from backend.app.db.models import PriceHistory, FxRate
+from backend.app.db.models import FxRate, PriceHistory
 
 
 def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple[int, int]:
@@ -57,9 +57,7 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
     try:
         table = model.__table__
     except AttributeError:
-        raise ValueError(
-            f"Model {model.__name__} is not a valid SQLModel/SQLAlchemy model (no __table__)"
-            )
+        raise ValueError(f"Model {model.__name__} is not a valid SQLModel/SQLAlchemy model (no __table__)") from None
 
     if column_name not in table.columns:
         raise ValueError(f"Column '{column_name}' not found in {model.__name__}")
@@ -69,18 +67,13 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
 
     # Check if it's a Numeric type
     if not isinstance(column_type, Numeric):
-        raise ValueError(
-            f"Column '{column_name}' in {model.__name__} is not Numeric type "
-            f"(found: {type(column_type).__name__})"
-            )
+        raise ValueError(f"Column '{column_name}' in {model.__name__} is not Numeric type " f"(found: {type(column_type).__name__})")
 
     precision = column_type.precision
     scale = column_type.scale
 
     if precision is None or scale is None:
-        raise ValueError(
-            f"Column '{column_name}' in {model.__name__} has undefined precision/scale"
-            )
+        raise ValueError(f"Column '{column_name}' in {model.__name__} has undefined precision/scale")
 
     return precision, scale
 

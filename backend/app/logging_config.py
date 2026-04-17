@@ -119,7 +119,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
             backupCount=52,  # Keep 52 weeks (1 year)
             encoding="utf-8",
             utc=True,  # Use UTC for rotation timing
-            )
+        )
         file_handler.setLevel(numeric_level)
 
         # Enable compression of rotated files
@@ -142,7 +142,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.JSONRenderer(),
-        ]
+    ]
 
     # Configure structlog
     structlog.configure(
@@ -151,7 +151,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
-        )
+    )
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:

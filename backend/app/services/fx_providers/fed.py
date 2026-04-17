@@ -17,7 +17,7 @@ import httpx
 
 from backend.app.logging_config import get_logger
 from backend.app.services.fx import FXRateProvider, FXServiceError
-from backend.app.services.provider_registry import register_provider, FXProviderRegistry
+from backend.app.services.provider_registry import FXProviderRegistry, register_provider
 
 logger = get_logger(__name__)
 
@@ -65,7 +65,7 @@ class FEDProvider(FXRateProvider):
         "TWD": "DEXTAUS",  # Taiwan Dollar (USD per TWD)
         "NZD": "DEXUSNZ",  # New Zealand Dollar (USD per NZD)
         "THB": "DEXTHUS",  # Thai Baht (USD per THB)
-        }
+    }
 
     @property
     def code(self) -> str:
@@ -103,7 +103,7 @@ class FEDProvider(FXRateProvider):
             "it": "Federal Reserve Bank (FRED) — pubblica tassi di cambio giornalieri dal bollettino statistico H.10 per 20+ valute contro USD. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
             "fr": "Federal Reserve Bank (FRED) — publie des taux de change quotidiens du bulletin statistique H.10 pour 20+ devises contre USD. Mise à jour chaque jour ouvrable. Un point par jour.",
             "es": "Federal Reserve Bank (FRED) — publica tipos de cambio diarios del boletín estadístico H.10 para 20+ monedas contra USD. Actualizado cada día hábil. Un dato por día.",
-            }
+        }
 
     @property
     def test_currencies(self) -> list[str]:
@@ -119,7 +119,7 @@ class FEDProvider(FXRateProvider):
             "CAD",  # Canadian Dollar
             "CHF",  # Swiss Franc
             "AUD",  # Australian Dollar
-            ]
+        ]
 
     @property
     def multi_unit_currencies(self) -> set[str]:
@@ -142,9 +142,7 @@ class FEDProvider(FXRateProvider):
         currencies = ["USD"] + list(self.CURRENCY_SERIES.keys())
         return sorted(currencies)
 
-    async def fetch_rates(
-        self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
-        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+    async def fetch_rates(self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from FRED API for given date range and currencies.
 
@@ -165,9 +163,7 @@ class FEDProvider(FXRateProvider):
         """
         # Validate base_currency for single-base provider
         if base_currency is not None and base_currency != "USD":
-            raise ValueError(
-                f"FED provider only supports USD as base currency, got {base_currency}"
-                )
+            raise ValueError(f"FED provider only supports USD as base currency, got {base_currency}")
 
         start_date, end_date = date_range
         results = {}
@@ -190,7 +186,7 @@ class FEDProvider(FXRateProvider):
                 "id": series_id,
                 "cosd": start_date.isoformat(),
                 "coed": end_date.isoformat(),
-                }
+            }
 
             try:
                 async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -205,9 +201,7 @@ class FEDProvider(FXRateProvider):
                 raise FXServiceError(f"FED/FRED API error for {currency}: {e}") from e
             except Exception as e:
                 logger.error(f"Failed to parse FED/FRED response for {currency}: {e}")
-                raise FXServiceError(
-                    f"Unexpected FED/FRED response format for {currency}: {e}"
-                    ) from e
+                raise FXServiceError(f"Unexpected FED/FRED response format for {currency}: {e}") from e
 
         # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)
         tasks = [_fetch_one(c) for c in valid_currencies]
@@ -224,9 +218,7 @@ class FEDProvider(FXRateProvider):
 
         return results
 
-    def _parse_csv(
-        self, csv_text: str, currency: str, start_date: date, end_date: date
-        ) -> list[tuple[date, str, str, Decimal]]:
+    def _parse_csv(self, csv_text: str, currency: str, start_date: date, end_date: date) -> list[tuple[date, str, str, Decimal]]:
         """
         Parse FRED CSV response.
 

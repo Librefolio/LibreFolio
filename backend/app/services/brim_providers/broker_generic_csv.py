@@ -31,7 +31,7 @@ import csv
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
@@ -39,8 +39,8 @@ from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMProvider, BRIMParseError
-from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -61,7 +61,7 @@ HEADER_MAPPINGS: Dict[str, List[str]] = {
         "datum",
         "transaction_date",
         "exec_date",
-        ],
+    ],
     "type": [
         "type",
         "tipo",
@@ -72,7 +72,7 @@ HEADER_MAPPINGS: Dict[str, List[str]] = {
         "azione",
         "trans_type",
         "op_type",
-        ],
+    ],
     "quantity": [
         "quantity",
         "quantità",
@@ -83,7 +83,7 @@ HEADER_MAPPINGS: Dict[str, List[str]] = {
         "unità",
         "amount_shares",
         "num_shares",
-        ],
+    ],
     "amount": [
         "amount",
         "importo",
@@ -95,7 +95,7 @@ HEADER_MAPPINGS: Dict[str, List[str]] = {
         "net_amount",
         "gross_amount",
         "price",
-        ],
+    ],
     "currency": ["currency", "valuta", "ccy", "curr", "currency_code", "divisa", "währung"],
     "description": [
         "description",
@@ -107,7 +107,7 @@ HEADER_MAPPINGS: Dict[str, List[str]] = {
         "dettagli",
         "comment",
         "commento",
-        ],
+    ],
     "asset": [
         "asset",
         "symbol",
@@ -120,8 +120,8 @@ HEADER_MAPPINGS: Dict[str, List[str]] = {
         "titolo",
         "name",
         "nome",
-        ],
-    }
+    ],
+}
 
 # =============================================================================
 # TYPE MAPPINGS
@@ -187,7 +187,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "rettifica": TransactionType.ADJUSTMENT,
     "aggiustamento": TransactionType.ADJUSTMENT,
     "correction": TransactionType.ADJUSTMENT,
-    }
+}
 
 # =============================================================================
 # DATE PARSING
@@ -204,7 +204,7 @@ DATE_FORMATS = [
     "%Y%m%d",  # Compact: 20250103
     "%d %b %Y",  # Text: 03 Jan 2025
     "%d %B %Y",  # Full text: 03 January 2025
-    ]
+]
 
 
 def parse_date(value: str) -> Optional[date]:
@@ -326,11 +326,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return (
-            "Import transactions from a generic CSV file. "
-            "Auto-detects columns based on header names. "
-            "Supports various date and number formats."
-        )
+        return "Import transactions from a generic CSV file. " "Auto-detects columns based on header names. " "Supports various date and number formats."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -351,16 +347,14 @@ class GenericCSVBrokerProvider(BRIMProvider):
             return False
 
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            with open(file_path, encoding="utf-8-sig") as f:
                 reader = csv.reader(f)
                 header = next(reader, None)
                 return header is not None and len(header) > 0
         except Exception:
             return False
 
-    def parse(
-        self, file_path: Path, broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """
         Parse CSV file and return transactions, warnings, and extracted assets.
 
@@ -389,7 +383,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         self._extracted_assets_raw: Dict[int, BRIMExtractedAssetInfo] = {}
 
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            with open(file_path, encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
 
                 # Map header columns to standard names
@@ -400,12 +394,12 @@ class GenericCSVBrokerProvider(BRIMProvider):
                     raise BRIMParseError(
                         "Required column 'date' not found in CSV header",
                         details={"headers": reader.fieldnames},
-                        )
+                    )
                 if "type" not in column_map:
                     raise BRIMParseError(
                         "Required column 'type' not found in CSV header",
                         details={"headers": reader.fieldnames},
-                        )
+                    )
 
                 # Parse rows
                 for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
@@ -419,9 +413,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(
-                f"Error reading CSV file: {str(e)}", details={"file": file_path.name}
-                )
+            raise BRIMParseError(f"Error reading CSV file: {str(e)}", details={"file": file_path.name}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -453,9 +445,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         return column_map
 
-    def _parse_row(
-        self, row: Dict[str, str], column_map: Dict[str, str], broker_id: int, row_num: int
-        ) -> Optional[TXCreateItem]:
+    def _parse_row(self, row: Dict[str, str], column_map: Dict[str, str], broker_id: int, row_num: int) -> Optional[TXCreateItem]:
         """
         Parse a single CSV row into a TXCreateItem.
 
@@ -528,7 +518,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             TransactionType.DIVIDEND,
             TransactionType.TRANSFER,
             TransactionType.ADJUSTMENT,
-            }
+        }
 
         # Assign fake asset ID if asset info is present OR if type requires asset
         asset_id: Optional[int] = None
@@ -556,17 +546,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
         # For generic CSV, we can't auto-generate paired transfers
         # Just warn and skip TRANSFER types
         if tx_type == TransactionType.TRANSFER:
-            raise ValueError(
-                "TRANSFER type requires paired transactions with link_uuid. "
-                "Please use manual entry or broker-specific plugin."
-                )
+            raise ValueError("TRANSFER type requires paired transactions with link_uuid. " "Please use manual entry or broker-specific plugin.")
 
         # Handle FX_CONVERSION type - needs link_uuid
         if tx_type == TransactionType.FX_CONVERSION:
-            raise ValueError(
-                "FX_CONVERSION type requires paired transactions with link_uuid. "
-                "Please use manual entry or broker-specific plugin."
-                )
+            raise ValueError("FX_CONVERSION type requires paired transactions with link_uuid. " "Please use manual entry or broker-specific plugin.")
 
         # Build TXCreateItem - validation will pass because:
         # - Asset-required types now always have a fake_id assigned
@@ -581,7 +565,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             link_uuid=None,
             description=description,
             tags=["import", "csv"],
-            )
+        )
 
     def _classify_asset_identifier(self, identifier: str) -> BRIMExtractedAssetInfo:
         """
@@ -597,17 +581,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         # Check if it looks like an ISIN
         if len(identifier) == 12 and identifier[:2].isalpha() and identifier[2:].isalnum():
-            return BRIMExtractedAssetInfo(
-                extracted_symbol=None, extracted_isin=identifier.upper(), extracted_name=None
-                )
+            return BRIMExtractedAssetInfo(extracted_symbol=None, extracted_isin=identifier.upper(), extracted_name=None)
 
         # Check if it looks like a ticker symbol (1-6 chars, alphanumeric with dots/dashes)
         if 1 <= len(identifier) <= 6 and identifier.replace(".", "").replace("-", "").isalnum():
-            return BRIMExtractedAssetInfo(
-                extracted_symbol=identifier.upper(), extracted_isin=None, extracted_name=None
-                )
+            return BRIMExtractedAssetInfo(extracted_symbol=identifier.upper(), extracted_isin=None, extracted_name=None)
 
         # Otherwise treat as name
-        return BRIMExtractedAssetInfo(
-            extracted_symbol=None, extracted_isin=None, extracted_name=identifier
-            )
+        return BRIMExtractedAssetInfo(extracted_symbol=None, extracted_isin=None, extracted_name=identifier)

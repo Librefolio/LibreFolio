@@ -31,9 +31,7 @@ def unique_username() -> str:
     return f"usearch_{timestamp}_{uuid.uuid4().hex[:4]}"
 
 
-async def create_user_and_login(
-    client: httpx.AsyncClient, username: Optional[str] = None
-    ) -> dict:
+async def create_user_and_login(client: httpx.AsyncClient, username: Optional[str] = None) -> dict:
     """Create a new user, login, and return user info dict."""
     username = username or unique_username()
     email = f"{username}@test.com"
@@ -43,7 +41,7 @@ async def create_user_and_login(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     if resp.status_code != 201:
         raise Exception(f"Failed to create user: {resp.text}")
 
@@ -53,7 +51,7 @@ async def create_user_and_login(
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     if login_resp.status_code != 200:
         raise Exception(f"Failed to login: {login_resp.text}")
 
@@ -71,7 +69,7 @@ async def create_broker(client: httpx.AsyncClient, name: Optional[str] = None) -
         f"{API_BASE}/brokers",
         json=[{"name": name}],
         timeout=TIMEOUT,
-        )
+    )
     assert resp.status_code == 200, f"Failed to create broker: {resp.text}"
     data = resp.json()
     return data["results"][0]["broker_id"]
@@ -82,7 +80,7 @@ async def get_access_list(client: httpx.AsyncClient, broker_id: int) -> list:
     resp = await client.get(
         f"{API_BASE}/brokers/{broker_id}/access",
         timeout=TIMEOUT,
-        )
+    )
     assert resp.status_code == 200, f"Failed to get access list: {resp.text}"
     return resp.json()["items"]
 
@@ -123,7 +121,7 @@ class TestUserSearch:
                 f"{API_BASE}/users/search",
                 params={"q": query},
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
             data = resp.json()
             assert "items" in data
@@ -151,13 +149,13 @@ class TestUserSearch:
                 f"{API_BASE}/users/search",
                 params={"q": "a"},
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 422
 
             resp = await client.get(
                 f"{API_BASE}/users/search",
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 422
 
             print_success("✓ Short queries rejected with 422")
@@ -168,7 +166,7 @@ class TestUserSearch:
         print_section("USEARCH-003: Exclude users on broker")
 
         async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as other_client:
-            owner_data = await create_user_and_login(owner_client)
+            _owner_data = await create_user_and_login(owner_client)
             broker_id = await create_broker(owner_client)
             other_data = await create_user_and_login(other_client)
             other_username = other_data["username"]
@@ -178,28 +176,26 @@ class TestUserSearch:
                 f"{API_BASE}/users/search",
                 params={"q": other_username[:10]},
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200
             found = any(u["username"] == other_username for u in resp.json()["items"])
             assert found, "Other user should appear without exclude"
 
             # Add other user to broker via bulk update
             current = await get_access_list(owner_client, broker_id)
-            new_accesses = [
+            new_accesses = [{"user_id": a["user_id"], "role": a["role"], "share_percentage": float(a["share_percentage"])} for a in current]
+            new_accesses.append(
                 {
-                    "user_id": a["user_id"], "role": a["role"],
-                    "share_percentage": float(a["share_percentage"])
-                    }
-                for a in current
-                ]
-            new_accesses.append({
-                "user_id": other_data["user_id"], "role": "VIEWER", "share_percentage": 0,
-                })
+                    "user_id": other_data["user_id"],
+                    "role": "VIEWER",
+                    "share_percentage": 0,
+                }
+            )
             resp = await owner_client.put(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json=new_accesses,
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200
 
             # Search WITH exclude — should NOT find other user
@@ -207,7 +203,7 @@ class TestUserSearch:
                 f"{API_BASE}/users/search",
                 params={"q": other_username[:10], "exclude_broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200
             found = any(u["username"] == other_username for u in resp.json()["items"])
             assert not found, "Other user should be excluded"
@@ -224,7 +220,7 @@ class TestUserSearch:
                 f"{API_BASE}/users/search",
                 params={"q": "test"},
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 401
 
             print_success("✓ Unauthenticated request rejected")
@@ -241,7 +237,7 @@ class TestUserSearch:
                 f"{API_BASE}/users/search",
                 params={"q": user_data["username"][:10]},
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
             data = resp.json()
             assert len(data["items"]) >= 1
@@ -275,9 +271,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 0.6},
                     {"user_id": other_data["user_id"], "role": "VIEWER", "share_percentage": 0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
             data = resp.json()
             assert data["success_count"] == 2
@@ -303,9 +299,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 0.8},
                     {"user_id": other_data["user_id"], "role": "OWNER", "share_percentage": 0.3},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
 
             print_success("✓ Sum > 100% correctly rejected")
@@ -325,9 +321,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 0.5},
                     {"user_id": other_data["user_id"], "role": "OWNER", "share_percentage": 0.5},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
 
             print_success("✓ Sum = 100% works")
@@ -347,9 +343,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 0.5},
                     {"user_id": other_data["user_id"], "role": "VIEWER", "share_percentage": 0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
 
             print_success("✓ Sum < 100% works (phantom co-owner)")
@@ -370,9 +366,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 1.0},
                     {"user_id": other_data["user_id"], "role": "EDITOR", "share_percentage": 0.1},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
 
             # VIEWER with share > 0 → schema validation error (422)
@@ -381,9 +377,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 1.0},
                     {"user_id": other_data["user_id"], "role": "VIEWER", "share_percentage": 0.05},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
 
             print_success("✓ share_percentage > 0 rejected for non-OWNER roles")
@@ -403,9 +399,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "EDITOR", "share_percentage": 0},
                     {"user_id": other_data["user_id"], "role": "VIEWER", "share_percentage": 0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
 
             print_success("✓ At least one OWNER required")
@@ -426,9 +422,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 1.0},
                     {"user_id": other_data["user_id"], "role": "VIEWER", "share_percentage": 0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200
             accesses = await get_access_list(owner_client, broker_id)
             assert len(accesses) == 2
@@ -438,9 +434,9 @@ class TestBulkAccessAndSharePercentage:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 1.0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200
             accesses = await get_access_list(owner_client, broker_id)
             assert len(accesses) == 1
@@ -463,9 +459,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": owner_data["user_id"], "role": "OWNER", "share_percentage": 1.0},
                     {"user_id": viewer_data["user_id"], "role": "VIEWER", "share_percentage": 0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 200
 
             # Viewer tries bulk update → should be rejected
@@ -473,9 +469,9 @@ class TestBulkAccessAndSharePercentage:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json=[
                     {"user_id": viewer_data["user_id"], "role": "OWNER", "share_percentage": 1.0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 403, f"Expected 403, got {resp.status_code}: {resp.text}"
 
             print_success("✓ Non-OWNER correctly rejected from bulk update")
@@ -494,9 +490,9 @@ class TestBulkAccessAndSharePercentage:
                 json=[
                     {"user_id": user_data["user_id"], "role": "OWNER", "share_percentage": 0.5},
                     {"user_id": user_data["user_id"], "role": "EDITOR", "share_percentage": 0},
-                    ],
+                ],
                 timeout=TIMEOUT,
-                )
+            )
             assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
 
             print_success("✓ Duplicate user_ids rejected")

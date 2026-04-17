@@ -76,7 +76,7 @@ class FinancialSector(str, Enum):
             # Yahoo Finance aliases
             "financial services": cls.FINANCIALS,
             "consumer cyclical": cls.CONSUMER_DISCRETIONARY,
-            }
+        }
 
         if normalized_key in mapping:
             return mapping[normalized_key]
@@ -86,7 +86,7 @@ class FinancialSector(str, Enum):
             "Sector not in standard classification",
             original_sector=sector_name,
             normalized_to="Other",
-            )
+        )
         return cls.OTHER
 
     @classmethod

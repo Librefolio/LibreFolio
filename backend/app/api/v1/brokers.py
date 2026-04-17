@@ -28,7 +28,7 @@ Provides RESTful endpoints for broker report file management and parsing:
 
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,31 +36,30 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User, UserRole
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.brim import BRIMAssetMapping
 from backend.app.schemas.brim import (
+    BRIMAssetMapping,
     BRIMFileInfo,
     BRIMFileStatus,
-    BRIMPluginInfo,
     BRIMParseRequest,
     BRIMParseResponse,
-    )
+    BRIMPluginInfo,
+)
 from backend.app.schemas.brokers import (
+    BRAccessBulkItem,
+    BRAccessBulkResponse,
+    BRAccessItem,
+    BRAccessListResponse,
+    BRBulkCreateResponse,
+    BRBulkDeleteResponse,
+    BRBulkUpdateResponse,
     BRCreateItem,
+    BRDeleteItem,
     BRReadItem,
     BRSummary,
     BRUpdateItem,
-    BRDeleteItem,
-    BRBulkCreateResponse,
-    BRBulkUpdateResponse,
-    BRBulkDeleteResponse,
-    BRAccessItem,
-    BRAccessBulkItem,
-    BRAccessListResponse,
-    BRAccessBulkResponse,
-    )
+)
 from backend.app.services import brim_provider
-from backend.app.services.brim_provider import BRIMParseError
-from backend.app.services.brim_provider import search_asset_candidates, detect_tx_duplicates
+from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates
 from backend.app.services.broker_service import BrokerService
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
@@ -81,7 +80,7 @@ async def create_brokers(
     items: List[BRCreateItem],
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRBulkCreateResponse:
+) -> BRBulkCreateResponse:
     """
     Create multiple brokers.
 
@@ -124,7 +123,7 @@ async def list_brokers(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> List[BRReadItem]:
+) -> List[BRReadItem]:
     """
     List brokers accessible by the current user.
 
@@ -150,7 +149,7 @@ async def get_broker(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRReadItem:
+) -> BRReadItem:
     """
     Get a single broker by ID.
 
@@ -187,7 +186,7 @@ async def get_broker_summary(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRSummary:
+) -> BRSummary:
     """
     Get broker with full summary.
 
@@ -232,7 +231,7 @@ async def update_broker(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRBulkUpdateResponse:
+) -> BRBulkUpdateResponse:
     """
     Update a broker.
 
@@ -261,9 +260,7 @@ async def update_broker(
     logger.info(f"Updating broker {broker_id}", user_id=user_id)
 
     service = BrokerService(session)
-    response = await service.update_bulk(
-        [item], [broker_id], user_id=user_id, as_user_id=as_user_id
-        )
+    response = await service.update_bulk([item], [broker_id], user_id=user_id, as_user_id=as_user_id)
 
     if not response.errors and response.success_count > 0:
         await session.commit()
@@ -288,7 +285,7 @@ async def delete_brokers(
     force: bool = Query(False, description="Force delete with transactions"),
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRBulkDeleteResponse:
+) -> BRBulkDeleteResponse:
     """
     Delete multiple brokers.
 
@@ -339,7 +336,7 @@ async def list_broker_access(
     broker_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRAccessListResponse:
+) -> BRAccessListResponse:
     """
     List all users with access to a broker.
 
@@ -351,16 +348,14 @@ async def list_broker_access(
         broker_id=broker_id,
         user_id=current_user.id,
         is_superuser=current_user.is_superuser,
-        )
+    )
 
     if not accesses and not current_user.is_superuser:
-        raise HTTPException(
-            status_code=404, detail=f"Broker {broker_id} not found or access denied"
-            )
+        raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found or access denied")
 
     return BRAccessListResponse(
         items=[BRAccessItem(**a) for a in accesses],
-        )
+    )
 
 
 @broker_router.put("/{broker_id}/access", response_model=BRAccessBulkResponse)
@@ -369,7 +364,7 @@ async def bulk_update_broker_access(
     items: List[BRAccessBulkItem],
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRAccessBulkResponse:
+) -> BRAccessBulkResponse:
     """
     Atomically replace the access configuration for a broker.
 
@@ -392,7 +387,7 @@ async def bulk_update_broker_access(
         desired_accesses=items,
         current_user_id=current_user.id,
         is_superuser=current_user.is_superuser,
-        )
+    )
 
     if not success:
         if "Only OWNERs can" in message or "Access denied" in message:
@@ -408,12 +403,12 @@ async def bulk_update_broker_access(
     logger.info(
         f"Bulk updated access for broker {broker_id} ({len(access_items)} users)",
         user_id=current_user.id,
-        )
+    )
 
     return BRAccessBulkResponse(
         results=access_items,
         success_count=len(access_items),
-        )
+    )
 
 
 # =============================================================================
@@ -436,7 +431,7 @@ async def upload_file(
     broker_id: int = Query(..., description="Target broker ID for this report"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRIMFileInfo:
+) -> BRIMFileInfo:
     """
     Upload a broker report file for future processing.
 
@@ -452,10 +447,7 @@ async def upload_file(
     role = await broker_service._check_user_access(broker_id, current_user.id, min_role=UserRole.EDITOR)
 
     if not current_user.is_superuser and role is None:
-        raise HTTPException(
-            status_code=403,
-            detail="EDITOR or OWNER access required to upload files to this broker"
-            )
+        raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to upload files to this broker")
 
     # Read file content
     content = await file.read()
@@ -467,7 +459,7 @@ async def upload_file(
         raise HTTPException(
             status_code=413,
             detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)} MB",
-            )
+        )
 
     # Get original filename
     filename = file.filename or "unknown"
@@ -478,7 +470,7 @@ async def upload_file(
         filename,
         user_id=current_user.id,
         broker_id=broker_id,
-        )
+    )
 
     logger.info(
         "File uploaded",
@@ -488,22 +480,18 @@ async def upload_file(
         compatible_plugins=file_info.compatible_plugins,
         user_id=current_user.id,
         broker_id=broker_id,
-        )
+    )
 
     return file_info
 
 
 @brim_router.get("/files", response_model=List[BRIMFileInfo])
 async def list_files(
-    status: Optional[BRIMFileStatus] = Query(
-        default=None, description="Filter by status: uploaded, imported, failed"
-        ),
-    broker_ids: Optional[List[int]] = Query(
-        default=None, description="Filter by broker IDs (repeated query params, e.g., ?broker_ids=1&broker_ids=2)"
-        ),
+    status: Optional[BRIMFileStatus] = Query(default=None, description="Filter by status: uploaded, imported, failed"),
+    broker_ids: Optional[List[int]] = Query(default=None, description="Filter by broker IDs (repeated query params, e.g., ?broker_ids=1&broker_ids=2)"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> List[BRIMFileInfo]:
+) -> List[BRIMFileInfo]:
     """
     List all uploaded broker report files.
 
@@ -535,7 +523,7 @@ async def get_file(
     file_id: str,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRIMFileInfo:
+) -> BRIMFileInfo:
     """
     Get details for a specific file.
 
@@ -560,7 +548,7 @@ async def delete_file(
     file_id: str,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> dict:
+) -> dict:
     """
     Delete a file and its metadata.
 
@@ -590,7 +578,7 @@ async def download_file(
     file_id: str,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ):
+):
     """
     Download a file by its ID.
 
@@ -613,11 +601,7 @@ async def download_file(
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
-    return FileResponse(
-        path=file_path,
-        filename=file_info.filename,
-        media_type="application/octet-stream"
-        )
+    return FileResponse(path=file_path, filename=file_info.filename, media_type="application/octet-stream")
 
 
 @brim_router.get("/files/{file_id}/last-parse")
@@ -625,7 +609,7 @@ async def get_last_parse_result(
     file_id: str,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> Optional[dict]:
+) -> Optional[dict]:
     """
     Get the cached result from the last successful parse.
 
@@ -657,7 +641,7 @@ async def parse_file(
     request: BRIMParseRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRIMParseResponse:
+) -> BRIMParseResponse:
     """
     Parse a file and return transactions for preview.
 
@@ -702,9 +686,7 @@ async def parse_file(
         detected_plugin = BRIMProviderRegistry.auto_detect_plugin(file_path)
         if detected_plugin:
             plugin_code = detected_plugin
-            logger.info(
-                "Auto-detected plugin for file", file_id=file_id, detected_plugin=plugin_code
-                )
+            logger.info("Auto-detected plugin for file", file_id=file_id, detected_plugin=plugin_code)
         else:
             # Fallback to generic CSV
             plugin_code = "broker_generic_csv"
@@ -712,9 +694,7 @@ async def parse_file(
 
     try:
         # 1. Parse file using plugin (plugin only reads file format)
-        transactions, warnings, extracted_assets = brim_provider.parse_file(
-            file_id=file_id, plugin_code=plugin_code, broker_id=request.broker_id
-            )
+        transactions, warnings, extracted_assets = brim_provider.parse_file(file_id=file_id, plugin_code=plugin_code, broker_id=request.broker_id)
 
         # 2. Build asset mappings (CORE responsibility)
         # Search DB for candidates for each extracted asset
@@ -725,7 +705,7 @@ async def parse_file(
                 extracted_symbol=info.extracted_symbol,
                 extracted_isin=info.extracted_isin,
                 extracted_name=info.extracted_name,
-                )
+            )
             asset_mappings.append(
                 BRIMAssetMapping(
                     fake_asset_id=fake_id,
@@ -734,8 +714,8 @@ async def parse_file(
                     extracted_name=info.extracted_name,
                     candidates=candidates,
                     selected_asset_id=auto_selected,
-                    )
                 )
+            )
 
         # 3. Detect duplicates (CORE responsibility)
         # Query DB for existing transactions that match
@@ -745,7 +725,7 @@ async def parse_file(
             broker_id=request.broker_id,
             session=session,
             asset_mappings=asset_mappings,
-            )
+        )
 
         # Move file to parsed folder on success
         brim_provider.move_to_parsed(file_id)
@@ -759,7 +739,7 @@ async def parse_file(
             asset_mappings=asset_mappings,
             duplicates=duplicates,
             warnings=warnings,
-            )
+        )
 
         # Cache the parse result in file metadata for later retrieval
         brim_provider.save_parse_result(file_id, response.model_dump(mode="json"))
@@ -773,22 +753,22 @@ async def parse_file(
             unique_tx_count=len(duplicates.tx_unique_indices),
             possible_duplicates=len(duplicates.tx_possible_duplicates),
             likely_duplicates=len(duplicates.tx_likely_duplicates),
-            )
+        )
 
         return response
 
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="File not found") from None
 
     except ValueError as e:
         # Parse failed - move to failed folder
         brim_provider.move_to_failed(file_id, str(e))
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     except BRIMParseError as e:
         # Parse failed - move to failed folder
         brim_provider.move_to_failed(file_id, e.message)
-        raise HTTPException(status_code=400, detail=f"Parse error: {e.message}")
+        raise HTTPException(status_code=400, detail=f"Parse error: {e.message}") from e
 
 
 # =============================================================================

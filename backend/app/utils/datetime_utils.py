@@ -4,7 +4,7 @@ Date and time utilities for LibreFolio.
 Provides timezone-aware datetime helpers and date manipulation functions.
 """
 
-from datetime import datetime, timezone, date
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from pydantic import BeforeValidator, PlainSerializer
@@ -26,7 +26,7 @@ def utcnow() -> datetime:
         Always use this function instead of datetime.now() to ensure
         timezone-aware timestamps across the application.
     """
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def ensure_utc(dt: datetime | str | None) -> datetime | None:
@@ -47,11 +47,11 @@ def ensure_utc(dt: datetime | str | None) -> datetime | None:
 
     if isinstance(dt, str):
         # Parse ISO string
-        dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
 
     if dt.tzinfo is None:
         # Naive datetime - assume UTC
-        return dt.replace(tzinfo=timezone.utc)
+        return dt.replace(tzinfo=UTC)
 
     return dt
 
@@ -67,25 +67,21 @@ def serialize_datetime_utc(dt: datetime | None) -> str | None:
 
     # Ensure timezone-aware
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
 
     # Format with Z for UTC
     iso_str = dt.isoformat()
 
     # Replace +00:00 with Z for cleaner format
-    if iso_str.endswith('+00:00'):
-        iso_str = iso_str[:-6] + 'Z'
+    if iso_str.endswith("+00:00"):
+        iso_str = iso_str[:-6] + "Z"
 
     return iso_str
 
 
 # Annotated type for datetime fields that need UTC serialization
 # Use this in Pydantic schemas for created_at/updated_at fields
-UTCDateTime = Annotated[
-    datetime,
-    BeforeValidator(ensure_utc),
-    PlainSerializer(serialize_datetime_utc, return_type=str)
-]
+UTCDateTime = Annotated[datetime, BeforeValidator(ensure_utc), PlainSerializer(serialize_datetime_utc, return_type=str)]
 
 
 def today_date() -> date:
@@ -100,7 +96,7 @@ def today_date() -> date:
         >>> isinstance(today, date)
         True
     """
-    return datetime.now(timezone.utc).date()
+    return datetime.now(UTC).date()
 
 
 def parse_ISO_date(v) -> date:
@@ -112,5 +108,5 @@ def parse_ISO_date(v) -> date:
         try:
             return date.fromisoformat(v)
         except ValueError as e:
-            raise ValueError(f"Input must be an ISO date string (YYYY-MM-DD). Error: {e}")
+            raise ValueError(f"Input must be an ISO date string (YYYY-MM-DD). Error: {e}") from e
     raise TypeError(f"Input must be a str, date or datetime, got {type(v)}")

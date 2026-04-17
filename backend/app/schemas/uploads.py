@@ -6,7 +6,7 @@ DTOs for file upload operations.
 
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -42,6 +42,7 @@ from backend.app.schemas.common import BaseListResponse
 
 class UploadListResponse(BaseListResponse[UploadFileInfo]):
     """Response for listing uploads."""
+
     pass
 
 

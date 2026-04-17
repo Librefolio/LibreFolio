@@ -9,14 +9,14 @@ Service Layer (Phase 3):
 
 from backend.app.services.broker_service import BrokerService
 from backend.app.services.transaction_service import (
-    TransactionService,
     BalanceValidationError,
     LinkedTransactionError,
-    )
+    TransactionService,
+)
 
 __all__ = [
     "TransactionService",
     "BalanceValidationError",
     "LinkedTransactionError",
     "BrokerService",
-    ]
+]

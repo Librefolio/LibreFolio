@@ -16,29 +16,29 @@ Design Notes:
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date as date_type, timedelta
+from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
-from typing import List, Optional, Dict, Tuple, Set
+from typing import Dict, List, Optional, Set, Tuple
 
-from sqlalchemy import or_, and_
-from sqlalchemy import select, func
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Transaction, TransactionType, Broker, BrokerUserAccess, UserRole, Asset, AssetType
+from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
 from backend.app.schemas.transactions import (
+    TXBulkCreateResponse,
+    TXBulkDeleteResponse,
+    TXBulkUpdateResponse,
     TXCreateItem,
+    TXCreateResultItem,
+    TXDeleteItem,
+    TXDeleteResult,
+    TXQueryParams,
     TXReadItem,
     TXUpdateItem,
-    TXDeleteItem,
-    TXQueryParams,
-    TXCreateResultItem,
-    TXBulkCreateResponse,
     TXUpdateResultItem,
-    TXBulkUpdateResponse,
-    TXDeleteResult,
-    TXBulkDeleteResponse,
-    )
-from backend.app.schemas.transactions import tags_to_csv
+    tags_to_csv,
+)
 from backend.app.utils.datetime_utils import utcnow
 
 
@@ -52,7 +52,7 @@ class BalanceValidationError(Exception):
         currency_or_asset: str,
         balance: Decimal,
         message: str,
-        ):
+    ):
         self.broker_id = broker_id
         self.date = date
         self.currency_or_asset = currency_or_asset
@@ -81,9 +81,7 @@ class TransactionService:
     # ACCESS CONTROL
     # =========================================================================
 
-    async def _check_broker_access(
-        self, broker_id: int, user_id: int, min_role: UserRole = UserRole.VIEWER
-        ) -> Optional[UserRole]:
+    async def _check_broker_access(self, broker_id: int, user_id: int, min_role: UserRole = UserRole.VIEWER) -> Optional[UserRole]:
         """
         Check if user has access to a broker and return their role.
 
@@ -95,9 +93,7 @@ class TransactionService:
         Returns:
             User's role if they have at least min_role access, None otherwise
         """
-        stmt = select(BrokerUserAccess).where(
-            and_(BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.user_id == user_id)
-            )
+        stmt = select(BrokerUserAccess).where(and_(BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.user_id == user_id))
         result = await self.session.execute(stmt)
         access = result.scalar_one_or_none()
 
@@ -114,9 +110,7 @@ class TransactionService:
     # CREATE OPERATIONS
     # =========================================================================
 
-    async def create_bulk(
-        self, items: List[TXCreateItem], user_id: Optional[int] = None
-        ) -> TXBulkCreateResponse:
+    async def create_bulk(self, items: List[TXCreateItem], user_id: Optional[int] = None) -> TXBulkCreateResponse:
         """
         Create multiple transactions in a single database transaction.
 
@@ -153,9 +147,7 @@ class TransactionService:
                 if user_id is not None:
                     broker_id = item.broker_id
                     if broker_id not in broker_access_cache:
-                        role = await self._check_broker_access(
-                            broker_id, user_id, min_role=UserRole.EDITOR
-                            )
+                        role = await self._check_broker_access(broker_id, user_id, min_role=UserRole.EDITOR)
                         broker_access_cache[broker_id] = role
 
                     if broker_access_cache[broker_id] is None:
@@ -163,18 +155,21 @@ class TransactionService:
                             TXCreateResultItem(
                                 success=False,
                                 error=f"Access denied: EDITOR role required for broker {broker_id}",
-                                )
                             )
+                        )
                         continue
 
                 # Reject transactions for INDEX assets (benchmarks, not tradeable)
                 if item.asset_id is not None:
-                    asset_result = await self.session.execute(
-                        select(Asset.asset_type).where(Asset.id == item.asset_id)
-                        )
+                    asset_result = await self.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
                     asset_type_val = asset_result.scalar_one_or_none()
                     if asset_type_val == AssetType.INDEX:
-                        results.append(TXCreateResultItem(success=False,error="Cannot create transactions for INDEX assets",))
+                        results.append(
+                            TXCreateResultItem(
+                                success=False,
+                                error="Cannot create transactions for INDEX assets",
+                            )
+                        )
                         continue
 
                 tx = Transaction(
@@ -190,7 +185,7 @@ class TransactionService:
                     cost_basis_override=item.cost_basis_override,
                     created_at=utcnow(),
                     updated_at=utcnow(),
-                    )
+                )
                 self.session.add(tx)
                 await self.session.flush()  # Get ID
 
@@ -201,23 +196,17 @@ class TransactionService:
                 if tx.broker_id not in earliest_date_by_broker:
                     earliest_date_by_broker[tx.broker_id] = tx.date
                 else:
-                    earliest_date_by_broker[tx.broker_id] = min(
-                        earliest_date_by_broker[tx.broker_id], tx.date
-                        )
+                    earliest_date_by_broker[tx.broker_id] = min(earliest_date_by_broker[tx.broker_id], tx.date)
 
                 # Track for link resolution
                 if item.link_uuid:
                     link_uuid_map[item.link_uuid].append(tx)
 
-                results.append(
-                    TXCreateResultItem(success=True, transaction_id=tx.id, link_uuid=item.link_uuid)
-                    )
+                results.append(TXCreateResultItem(success=True, transaction_id=tx.id, link_uuid=item.link_uuid))
                 success_count += 1
 
             except Exception as e:
-                results.append(
-                    TXCreateResultItem(success=False, link_uuid=item.link_uuid, error=str(e))
-                    )
+                results.append(TXCreateResultItem(success=False, link_uuid=item.link_uuid, error=str(e)))
 
         # Phase 2: Resolve link_uuid pairs - BIDIRECTIONAL linking
         # With DEFERRABLE FK constraint, we can set A->B and B->A in the same transaction
@@ -335,11 +324,7 @@ class TransactionService:
             try:
                 tx = await self.session.get(Transaction, item.id)
                 if not tx:
-                    results.append(
-                        TXUpdateResultItem(
-                            id=item.id, success=False, error=f"Transaction {item.id} not found"
-                            )
-                        )
+                    results.append(TXUpdateResultItem(id=item.id, success=False, error=f"Transaction {item.id} not found"))
                     continue
 
                 # Track for validation
@@ -373,9 +358,7 @@ class TransactionService:
                 if tx.broker_id not in earliest_date_by_broker:
                     earliest_date_by_broker[tx.broker_id] = check_date
                 else:
-                    earliest_date_by_broker[tx.broker_id] = min(
-                        earliest_date_by_broker[tx.broker_id], check_date
-                        )
+                    earliest_date_by_broker[tx.broker_id] = min(earliest_date_by_broker[tx.broker_id], check_date)
 
                 results.append(TXUpdateResultItem(id=item.id, success=True))
                 success_count += 1
@@ -430,12 +413,9 @@ class TransactionService:
                             id=tx.id,
                             success=False,
                             deleted_count=0,
-                            message=(
-                                f"Cannot delete linked transaction {tx.id} without its pair {tx.related_transaction_id}. "
-                                f"Include both IDs in the delete request."
-                            ),
-                            )
+                            message=(f"Cannot delete linked transaction {tx.id} without its pair {tx.related_transaction_id}. " f"Include both IDs in the delete request."),
                         )
+                    )
                     continue
 
             # Find any tx that points to this one
@@ -448,12 +428,9 @@ class TransactionService:
                         id=tx.id,
                         success=False,
                         deleted_count=0,
-                        message=(
-                            f"Cannot delete linked transaction {tx.id} without its pair {related.id}. "
-                            f"Include both IDs in the delete request."
-                        ),
-                        )
+                        message=(f"Cannot delete linked transaction {tx.id} without its pair {related.id}. " f"Include both IDs in the delete request."),
                     )
+                )
                 continue
 
         # Get IDs that passed validation
@@ -477,22 +454,16 @@ class TransactionService:
                 if tx.broker_id not in earliest_date_by_broker:
                     earliest_date_by_broker[tx.broker_id] = tx.date
                 else:
-                    earliest_date_by_broker[tx.broker_id] = min(
-                        earliest_date_by_broker[tx.broker_id], tx.date
-                        )
+                    earliest_date_by_broker[tx.broker_id] = min(earliest_date_by_broker[tx.broker_id], tx.date)
 
                 await self.session.delete(tx)
                 total_deleted += 1
 
-                results.append(
-                    TXDeleteResult(id=tx.id, success=True, deleted_count=1, message=None)
-                    )
+                results.append(TXDeleteResult(id=tx.id, success=True, deleted_count=1, message=None))
                 success_count += 1
 
             except Exception as e:
-                results.append(
-                    TXDeleteResult(id=tx.id, success=False, deleted_count=0, message=str(e))
-                    )
+                results.append(TXDeleteResult(id=tx.id, success=False, deleted_count=0, message=str(e)))
 
         # Single flush at end for performance
         await self.session.flush()
@@ -505,9 +476,7 @@ class TransactionService:
             except BalanceValidationError as e:
                 errors.append(str(e))
 
-        return TXBulkDeleteResponse(
-            results=results, success_count=success_count, total_deleted=total_deleted, errors=errors
-            )
+        return TXBulkDeleteResponse(results=results, success_count=success_count, total_deleted=total_deleted, errors=errors)
 
     async def delete_by_broker(self, broker_id: int) -> int:
         """
@@ -536,9 +505,7 @@ class TransactionService:
     # BALANCE VALIDATION
     # =========================================================================
 
-    async def _validate_broker_balances(
-        self, broker_id: int, from_date: Optional[date_type] = None
-        ) -> None:
+    async def _validate_broker_balances(self, broker_id: int, from_date: Optional[date_type] = None) -> None:
         """
         Validate cash and asset balances for a broker from a given date.
 
@@ -569,23 +536,12 @@ class TransactionService:
             cash_balances: Dict[str, Decimal] = {}
             asset_balances: Dict[int, Decimal] = {}
             # Get all transactions ordered by date
-            stmt = (
-                select(Transaction)
-                .where(Transaction.broker_id == broker_id)
-                .order_by(Transaction.date, Transaction.id)
-            )
+            stmt = select(Transaction).where(Transaction.broker_id == broker_id).order_by(Transaction.date, Transaction.id)
         else:
             # Get starting balances (sum of all transactions before from_date)
-            cash_balances, asset_balances = await self._get_balances_before_date(
-                broker_id, from_date
-                )
+            cash_balances, asset_balances = await self._get_balances_before_date(broker_id, from_date)
             # Get all transactions from from_date onwards, ordered by date
-            stmt = (
-                select(Transaction)
-                .where(Transaction.broker_id == broker_id)
-                .where(Transaction.date >= from_date)
-                .order_by(Transaction.date, Transaction.id)
-            )
+            stmt = select(Transaction).where(Transaction.broker_id == broker_id).where(Transaction.date >= from_date).order_by(Transaction.date, Transaction.id)
 
         result = await self.session.execute(stmt)
         txs = list(result.scalars().all())
@@ -610,15 +566,11 @@ class TransactionService:
             for tx in txs_by_date.get(current_date, []):
                 # Cash movement
                 if tx.amount != Decimal("0") and tx.currency:
-                    cash_balances[tx.currency] = (
-                        cash_balances.get(tx.currency, Decimal("0")) + tx.amount
-                    )
+                    cash_balances[tx.currency] = cash_balances.get(tx.currency, Decimal("0")) + tx.amount
 
                 # Asset movement
                 if tx.quantity != Decimal("0") and tx.asset_id:
-                    asset_balances[tx.asset_id] = (
-                        asset_balances.get(tx.asset_id, Decimal("0")) + tx.quantity
-                    )
+                    asset_balances[tx.asset_id] = asset_balances.get(tx.asset_id, Decimal("0")) + tx.quantity
 
             # Validate end-of-day balances
             if not broker.allow_cash_overdraft:
@@ -629,11 +581,8 @@ class TransactionService:
                             date=current_date,
                             currency_or_asset=currency,
                             balance=balance,
-                            message=(
-                                f"Cash balance for {currency} goes negative ({balance}) "
-                                f"on {current_date} for broker {broker_id}"
-                            ),
-                            )
+                            message=(f"Cash balance for {currency} goes negative ({balance}) " f"on {current_date} for broker {broker_id}"),
+                        )
 
             if not broker.allow_asset_shorting:
                 for asset_id, balance in asset_balances.items():
@@ -643,17 +592,12 @@ class TransactionService:
                             date=current_date,
                             currency_or_asset=f"asset:{asset_id}",
                             balance=balance,
-                            message=(
-                                f"Asset {asset_id} quantity goes negative ({balance}) "
-                                f"on {current_date} for broker {broker_id}"
-                            ),
-                            )
+                            message=(f"Asset {asset_id} quantity goes negative ({balance}) " f"on {current_date} for broker {broker_id}"),
+                        )
 
             current_date += timedelta(days=1)
 
-    async def _get_balances_before_date(
-        self, broker_id: int, before_date: date_type
-        ) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
+    async def _get_balances_before_date(self, broker_id: int, before_date: date_type) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
         """
         Get cash and asset balances at end of day before the given date.
 
@@ -661,32 +605,16 @@ class TransactionService:
             Tuple of (cash_balances, asset_balances) dicts
         """
         # Cash balances
-        cash_stmt = (
-            select(Transaction.currency, func.sum(Transaction.amount))
-            .where(Transaction.broker_id == broker_id)
-            .where(Transaction.date < before_date)
-            .where(Transaction.currency.isnot(None))
-            .group_by(Transaction.currency)
-        )
+        cash_stmt = select(Transaction.currency, func.sum(Transaction.amount)).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date).where(Transaction.currency.isnot(None)).group_by(Transaction.currency)
         result = await self.session.execute(cash_stmt)
         cash_results = result.all()
-        cash_balances: Dict[str, Decimal] = {
-            currency: amount for currency, amount in cash_results if currency
-            }
+        cash_balances: Dict[str, Decimal] = {currency: amount for currency, amount in cash_results if currency}
 
         # Asset balances
-        asset_stmt = (
-            select(Transaction.asset_id, func.sum(Transaction.quantity))
-            .where(Transaction.broker_id == broker_id)
-            .where(Transaction.date < before_date)
-            .where(Transaction.asset_id.isnot(None))
-            .group_by(Transaction.asset_id)
-        )
+        asset_stmt = select(Transaction.asset_id, func.sum(Transaction.quantity)).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date).where(Transaction.asset_id.isnot(None)).group_by(Transaction.asset_id)
         result = await self.session.execute(asset_stmt)
         asset_results = result.all()
-        asset_balances: Dict[int, Decimal] = {
-            asset_id: qty for asset_id, qty in asset_results if asset_id
-            }
+        asset_balances: Dict[int, Decimal] = {asset_id: qty for asset_id, qty in asset_results if asset_id}
 
         return cash_balances, asset_balances
 
@@ -700,12 +628,7 @@ class TransactionService:
 
         Returns dict of currency -> balance.
         """
-        stmt = (
-            select(Transaction.currency, func.sum(Transaction.amount))
-            .where(Transaction.broker_id == broker_id)
-            .where(Transaction.currency.isnot(None))
-            .group_by(Transaction.currency)
-        )
+        stmt = select(Transaction.currency, func.sum(Transaction.amount)).where(Transaction.broker_id == broker_id).where(Transaction.currency.isnot(None)).group_by(Transaction.currency)
         result = await self.session.execute(stmt)
         results = result.all()
         return {currency: amount for currency, amount in results if currency}
@@ -716,12 +639,7 @@ class TransactionService:
 
         Returns dict of asset_id -> quantity.
         """
-        stmt = (
-            select(Transaction.asset_id, func.sum(Transaction.quantity))
-            .where(Transaction.broker_id == broker_id)
-            .where(Transaction.asset_id.isnot(None))
-            .group_by(Transaction.asset_id)
-        )
+        stmt = select(Transaction.asset_id, func.sum(Transaction.quantity)).where(Transaction.broker_id == broker_id).where(Transaction.asset_id.isnot(None)).group_by(Transaction.asset_id)
         result = await self.session.execute(stmt)
         results = result.all()
         return {asset_id: qty for asset_id, qty in results if asset_id}
@@ -735,12 +653,7 @@ class TransactionService:
 
         Returns absolute value (positive).
         """
-        stmt = (
-            select(func.sum(Transaction.amount))
-            .where(Transaction.broker_id == broker_id)
-            .where(Transaction.asset_id == asset_id)
-            .where(Transaction.type == TransactionType.BUY)
-        )
+        stmt = select(func.sum(Transaction.amount)).where(Transaction.broker_id == broker_id).where(Transaction.asset_id == asset_id).where(Transaction.type == TransactionType.BUY)
         result = await self.session.execute(stmt)
         value = result.scalar_one_or_none()
         # BUY amounts are negative, so negate to get positive cost

@@ -36,10 +36,11 @@ from __future__ import annotations
 
 import csv
 import re
-from datetime import date as date_type, datetime
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
@@ -47,8 +48,8 @@ from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMProvider, BRIMParseError
-from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -100,7 +101,7 @@ TYPE_PATTERNS: Dict[str, Tuple[TransactionType, bool]] = {
     r"comissões": (TransactionType.FEE, True),
     r"aansluitingskosten": (TransactionType.FEE, False),  # Connection fees
     r"connection fee": (TransactionType.FEE, False),
-    }
+}
 
 # Patterns to skip (FX conversions, internal transfers, etc.)
 SKIP_PATTERNS = [
@@ -120,7 +121,7 @@ SKIP_PATTERNS = [
     r"conversion fonds",
     r"corporate action",
     r"courtesy",  # DEGIRO courtesy refunds
-    ]
+]
 
 
 def _parse_degiro_date(value: str) -> Optional[date_type]:
@@ -200,7 +201,7 @@ def _extract_quantity_from_description(description: str) -> Decimal:
         r"(?:koop|verkoop|buy|sell|compra|venta|achat|vente)\s+(\d+(?:[.,]\d+)?)\s*@",
         description,
         re.IGNORECASE,
-        )
+    )
     if match:
         qty_str = match.group(1).replace(",", ".")
         try:
@@ -214,7 +215,7 @@ def _extract_quantity_from_description(description: str) -> Decimal:
         r"(?:koop|verkoop|buy|sell|compra|venta|achat|vente)\s+(\d+(?:[.,]\d+)?)\s+[^@]+@",
         description,
         re.IGNORECASE,
-        )
+    )
     if match:
         qty_str = match.group(1).replace(",", ".")
         try:
@@ -252,11 +253,7 @@ class DegiroBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return (
-            "Import transactions from DEGIRO CSV export. "
-            "Supports multi-language descriptions (Dutch, English, French, etc.) "
-            "and multi-currency transactions."
-        )
+        return "Import transactions from DEGIRO CSV export. " "Supports multi-language descriptions (Dutch, English, French, etc.) " "and multi-currency transactions."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -281,7 +278,7 @@ class DegiroBrokerProvider(BRIMProvider):
 
         try:
             content = self._read_file_head(file_path, num_lines=5)
-            content_lower = content.lower()
+            _content_lower = content.lower()
 
             # DEGIRO specific: must have these columns
             required_columns = ["datum", "tijd", "isin", "omschrijving"]
@@ -294,9 +291,7 @@ class DegiroBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(
-        self, file_path: Path, broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """
         Parse DEGIRO CSV export file.
 
@@ -310,7 +305,7 @@ class DegiroBrokerProvider(BRIMProvider):
         next_fake_id = FAKE_ASSET_ID_BASE
 
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            with open(file_path, encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
 
                 row_num = 1  # Header is row 1
@@ -344,9 +339,7 @@ class DegiroBrokerProvider(BRIMProvider):
 
                     if requires_asset:
                         if not isin and not product:
-                            warnings.append(
-                                f"Row {row_num}: {tx_type.value} requires asset but none found, skipping"
-                                )
+                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset but none found, skipping")
                             continue
 
                         asset_key = isin if isin else product
@@ -361,7 +354,7 @@ class DegiroBrokerProvider(BRIMProvider):
                                 "extracted_symbol": None,  # DEGIRO doesn't provide symbols
                                 "extracted_isin": isin if isin else None,
                                 "extracted_name": product if product else None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -385,7 +378,7 @@ class DegiroBrokerProvider(BRIMProvider):
 
                     # If we couldn't find amount via Mutatie, try other columns
                     if amount is None:
-                        for key, value in row.items():
+                        for _key, value in row.items():
                             parsed = _parse_degiro_number(value)
                             if parsed is not None and parsed != Decimal("0"):
                                 amount = parsed
@@ -399,9 +392,7 @@ class DegiroBrokerProvider(BRIMProvider):
                     if tx_type in [TransactionType.BUY, TransactionType.SELL]:
                         quantity = _extract_quantity_from_description(description)
                         if quantity == 0:
-                            warnings.append(
-                                f"Row {row_num}: could not extract quantity from '{description}'"
-                                )
+                            warnings.append(f"Row {row_num}: could not extract quantity from '{description}'")
 
                     # Adjust signs
                     if tx_type == TransactionType.SELL and quantity > 0:
@@ -418,7 +409,7 @@ class DegiroBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=description,
                             tags=["import", "degiro"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -426,9 +417,9 @@ class DegiroBrokerProvider(BRIMProvider):
                         continue
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}")
+            raise BRIMParseError(f"File not found: {file_path}") from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}")
+            raise BRIMParseError(f"Error parsing file: {e}") from e
 
         if not transactions:
             raise BRIMParseError("No valid transactions found in file")
@@ -439,16 +430,16 @@ class DegiroBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "DEGIRO file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-            )
+        )
 
         return transactions, warnings, extracted_assets_typed
 

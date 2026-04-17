@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 from backend.app.schemas.common import BaseListResponse
 from backend.app.utils.datetime_utils import UTCDateTime
 
-
 # ============================================================================
 # USER SETTINGS
 # ============================================================================
@@ -61,6 +60,7 @@ class GlobalSettingUpdate(BaseModel):
 
 class GlobalSettingsListResponse(BaseListResponse[GlobalSettingRead]):
     """Response for listing all global settings."""
+
     pass
 
 
@@ -74,48 +74,48 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "value": "24",
         "type": "int",
         "description": "Session cookie TTL in hours (default: 24)",
-        },
+    },
     "enable_registration": {
         "value": "true",
         "type": "bool",
         "description": "Allow new user registration",
-        },
+    },
     "require_email_verification": {
         "value": "false",
         "type": "bool",
         "description": "Require email verification for new users",
-        },
+    },
     # File Upload
     "max_file_upload_mb": {
         "value": "10",
         "type": "int",
         "description": "Max file upload size in MB",
-        },
+    },
     # Data Sync
     "auto_sync_fx_rates": {
         "value": "true",
         "type": "bool",
         "description": "Automatically sync FX rates daily",
-        },
+    },
     "auto_sync_prices": {
         "value": "true",
         "type": "bool",
         "description": "Automatically sync asset prices",
-        },
+    },
     "price_sync_interval_hours": {
         "value": "6",
         "type": "int",
         "description": "Asset price sync interval in hours",
-        },
+    },
     # Display
     "default_currency": {
         "value": "EUR",
         "type": "str",
         "description": "Default display currency for new users",
-        },
+    },
     "default_language": {
         "value": "en",
         "type": "str",
         "description": "Default language for new users (en, it, fr, es)",
-        },
-    }
+    },
+}

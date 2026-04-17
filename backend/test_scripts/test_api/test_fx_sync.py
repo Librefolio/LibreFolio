@@ -18,12 +18,13 @@ import pytest
 from backend.app.config import get_settings
 from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import (
+    DateRangeModel,
     FXConversionRequest,
     FXConvertResponse,
     FXCreateRoutesResponse,
-    DateRangeModel,
-    )
+)
 from backend.app.schemas.refresh import FXSyncBulkResponse
+
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
@@ -36,6 +37,7 @@ TIMEOUT = 30.0
 async def create_user_and_login(client: httpx.AsyncClient) -> None:
     """Create a test user, login, and set session cookie on client."""
     import uuid as _uuid
+
     username = f"test_{int(__import__('time').time() * 1000)}_{_uuid.uuid4().hex[:4]}"
     email = f"{username}@test.com"
     password = "TestPass123!"
@@ -43,14 +45,14 @@ async def create_user_and_login(client: httpx.AsyncClient) -> None:
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     if resp.status_code != 201:
         raise Exception(f"Failed to create user: {resp.text}")
     login_resp = await client.post(
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-        )
+    )
     if login_resp.status_code != 200:
         raise Exception(f"Failed to login: {login_resp.text}")
     session = login_resp.cookies.get("session")
@@ -88,9 +90,11 @@ def test_server():
 def _route_json(base: str, quote: str, provider: str, priority: int = 1) -> dict:
     """Build a 1-step route JSON payload for tests."""
     return {
-        "base": base, "quote": quote, "priority": priority,
+        "base": base,
+        "quote": quote,
+        "priority": priority,
         "chain_steps": [{"from": base, "to": quote, "provider": provider}],
-        }
+    }
 
 
 # ============================================================
@@ -109,9 +113,9 @@ async def test_sync_invalid_date_range(test_server):
                 "pairs": ["EUR-USD"],
                 "start": "2025-02-01",
                 "end": "2025-01-01",
-                },
+            },
             timeout=TIMEOUT,
-            )
+        )
         assert resp.status_code == 400, f"Expected 400, got {resp.status_code}"
         print_success("✓ Invalid date range correctly rejected with 400")
 
@@ -130,13 +134,13 @@ async def test_sync_auto_config(test_server):
         routes = [
             _route_json("EUR", "USD", "ECB"),
             _route_json("GBP", "USD", "ECB"),
-            ]
+        ]
 
         create_resp = await client.post(
             f"{API_BASE}/fx/providers/routes",
             json=routes,
             timeout=TIMEOUT,
-            )
+        )
 
         if create_resp.status_code == 201:
             create_data = FXCreateRoutesResponse(**create_resp.json())
@@ -154,9 +158,9 @@ async def test_sync_auto_config(test_server):
                 "pairs": ["EUR-USD", "GBP-USD"],
                 "start": yesterday.isoformat(),
                 "end": yesterday.isoformat(),
-                },
+            },
             timeout=TIMEOUT,
-            )
+        )
 
         assert sync_resp.status_code == 200, f"Auto-config sync failed: {sync_resp.status_code}"
 
@@ -172,7 +176,7 @@ async def test_sync_auto_config(test_server):
             f"{API_BASE}/fx/providers/routes",
             json=[{"base": "EUR", "quote": "USD"}, {"base": "GBP", "quote": "USD"}],
             timeout=TIMEOUT,
-            )
+        )
         print_info("  Cleanup: Routes deleted")
 
 
@@ -192,7 +196,7 @@ async def test_sync_manual_only_skipped(test_server):
             f"{API_BASE}/fx/providers/routes",
             json=[_route_json("ILS", "PHP", "MANUAL", priority=999)],
             timeout=TIMEOUT,
-            )
+        )
 
         sync_resp = await client.post(
             f"{API_BASE}/fx/currencies/sync",
@@ -200,9 +204,9 @@ async def test_sync_manual_only_skipped(test_server):
                 "pairs": ["ILS-PHP"],
                 "start": "2025-01-10",
                 "end": "2025-01-10",
-                },
+            },
             timeout=TIMEOUT,
-            )
+        )
 
         assert sync_resp.status_code == 200, f"Expected 200, got {sync_resp.status_code}"
         sync_data = FXSyncBulkResponse(**sync_resp.json())
@@ -216,7 +220,7 @@ async def test_sync_manual_only_skipped(test_server):
             f"{API_BASE}/fx/providers/routes",
             json=[{"base": "ILS", "quote": "PHP"}],
             timeout=TIMEOUT,
-            )
+        )
 
 
 # ============================================================
@@ -234,7 +238,7 @@ async def test_sync_weekend_no_rates(test_server):
             f"{API_BASE}/fx/providers/routes",
             json=[_route_json("EUR", "GBP", "ECB")],
             timeout=TIMEOUT,
-            )
+        )
 
         # 2025-01-04 = Saturday
         weekend_date = "2025-01-04"
@@ -244,9 +248,9 @@ async def test_sync_weekend_no_rates(test_server):
                 "pairs": ["EUR-GBP"],
                 "start": weekend_date,
                 "end": weekend_date,
-                },
+            },
             timeout=TIMEOUT,
-            )
+        )
 
         assert sync_resp.status_code == 200, f"Sync failed: {sync_resp.status_code}"
         sync_data = FXSyncBulkResponse(**sync_resp.json())
@@ -260,7 +264,7 @@ async def test_sync_weekend_no_rates(test_server):
             f"{API_BASE}/fx/providers/routes",
             json=[{"base": "EUR", "quote": "GBP"}],
             timeout=TIMEOUT,
-            )
+        )
 
 
 # ============================================================
@@ -278,7 +282,7 @@ async def test_convert_multi_day_process(test_server):
             f"{API_BASE}/fx/providers/routes",
             json=[_route_json("EUR", "USD", "ECB")],
             timeout=TIMEOUT,
-            )
+        )
 
         end_date = date.today()
         start_date = end_date - timedelta(days=7)
@@ -289,9 +293,9 @@ async def test_convert_multi_day_process(test_server):
                 "pairs": ["EUR-USD"],
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
-                },
+            },
             timeout=TIMEOUT,
-            )
+        )
         print_info("  FX rates synced for date range")
 
         # Step 2: Request conversion with date range (multi-day)
@@ -300,18 +304,16 @@ async def test_convert_multi_day_process(test_server):
                 from_amount=Currency(code="USD", amount=Decimal("100")),
                 **{"to": "EUR"},
                 date_range=DateRangeModel(start=start_date, end=end_date),
-                )
-            ]
+            )
+        ]
 
         convert_resp = await client.post(
             f"{API_BASE}/fx/currencies/convert",
             json=[c.model_dump(mode="json") for c in conversions],
             timeout=TIMEOUT,
-            )
+        )
 
-        assert (
-            convert_resp.status_code == 200
-        ), f"Convert failed: {convert_resp.status_code}: {convert_resp.text}"
+        assert convert_resp.status_code == 200, f"Convert failed: {convert_resp.status_code}: {convert_resp.text}"
 
         convert_data = FXConvertResponse(**convert_resp.json())
         assert convert_data.success_count >= 1
@@ -327,7 +329,7 @@ async def test_convert_multi_day_process(test_server):
             f"{API_BASE}/fx/providers/routes",
             json=[{"base": "EUR", "quote": "USD"}],
             timeout=TIMEOUT,
-            )
+        )
 
 
 # ============================================================
@@ -347,9 +349,9 @@ async def test_convert_bulk_multi_day(test_server):
             json=[
                 _route_json("EUR", "USD", "ECB"),
                 _route_json("EUR", "GBP", "ECB"),
-                ],
+            ],
             timeout=TIMEOUT,
-            )
+        )
 
         today = date.today()
         start_date = today - timedelta(days=7)
@@ -360,9 +362,9 @@ async def test_convert_bulk_multi_day(test_server):
                 "pairs": ["EUR-USD", "EUR-GBP"],
                 "start": start_date.isoformat(),
                 "end": today.isoformat(),
-                },
+            },
             timeout=TIMEOUT,
-            )
+        )
         print_info("  FX rates synced for bulk test")
 
         # Step 2: Request BULK conversions, each with multi-day range
@@ -371,30 +373,26 @@ async def test_convert_bulk_multi_day(test_server):
                 from_amount=Currency(code="USD", amount=Decimal("100")),
                 **{"to": "EUR"},
                 date_range=DateRangeModel(start=start_date, end=start_date + timedelta(days=2)),
-                ),
+            ),
             FXConversionRequest(
                 from_amount=Currency(code="GBP", amount=Decimal("200")),
                 **{"to": "EUR"},
                 date_range=DateRangeModel(start=start_date, end=start_date + timedelta(days=2)),
-                ),
-            ]
+            ),
+        ]
 
         convert_resp = await client.post(
             f"{API_BASE}/fx/currencies/convert",
             json=[c.model_dump(mode="json") for c in conversions],
             timeout=TIMEOUT,
-            )
+        )
 
         assert convert_resp.status_code == 200, f"Bulk convert failed: {convert_resp.status_code}"
 
         convert_data = FXConvertResponse(**convert_resp.json())
-        assert (
-            convert_data.success_count >= 3
-        ), f"Expected at least 3 successful conversions, got {convert_data.success_count}"
+        assert convert_data.success_count >= 3, f"Expected at least 3 successful conversions, got {convert_data.success_count}"
 
-        print_success(
-            f"✓ Bulk multi-day conversion successful: {convert_data.success_count} conversions"
-            )
+        print_success(f"✓ Bulk multi-day conversion successful: {convert_data.success_count} conversions")
         print_info(f"  Results returned: {len(convert_data.results)}")
 
         if convert_data.errors:
@@ -407,6 +405,6 @@ async def test_convert_bulk_multi_day(test_server):
             json=[
                 {"base": "EUR", "quote": "USD"},
                 {"base": "EUR", "quote": "GBP"},
-                ],
+            ],
             timeout=TIMEOUT,
-            )
+        )
