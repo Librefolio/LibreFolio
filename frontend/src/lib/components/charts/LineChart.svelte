@@ -19,7 +19,7 @@
     import * as echarts from 'echarts';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations,} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
 
     // =========================================================================
     // Types
@@ -36,7 +36,6 @@
         /** Original (unconverted) value — from original_close when FX conversion is active */
         originalValue?: number;
     }
-
 
     interface Props {
         data: LineDataPoint[];
@@ -157,7 +156,6 @@
         }
     });
 
-
     function cleanup() {
         resizeObserver?.disconnect();
         resizeObserver = null;
@@ -169,7 +167,6 @@
     // =========================================================================
     // Helpers — see lineChartHelpers.ts for color utilities
     // =========================================================================
-
 
     // =========================================================================
     // Chart Rendering
@@ -186,7 +183,8 @@
                     try {
                         chartInstance?.resize();
                         if (chartInstance) updateArrowRotations(chartInstance);
-                    } catch (_) { /* ignore coord errors during resize */
+                    } catch (_) {
+                        /* ignore coord errors during resize */
                     }
                 } else if (chartContainer && data.length > 0) {
                     // Chart not yet initialized (e.g. container was zero-size on first attempt).
@@ -222,22 +220,20 @@
         const isDark = document.documentElement.classList.contains('dark');
         const isPercentage = viewMode === 'percentage';
 
-        const baseColor = isDark
-            ? (darkLineColor || DEFAULT_LINE_DARK)
-            : (lineColor || DEFAULT_LINE_LIGHT);
+        const baseColor = isDark ? darkLineColor || DEFAULT_LINE_DARK : lineColor || DEFAULT_LINE_LIGHT;
 
         const greenColor = isDark ? GREEN_DARK : GREEN_LIGHT;
         const redColor = isDark ? RED_DARK : RED_LIGHT;
 
         // Build series data
-        const dates = data.map(d => d.date);
+        const dates = data.map((d) => d.date);
 
         // Determine if we need baseline coloring (green above baseline, red below)
         const useBaselineColoring = colorByBaseline && !compact;
         const baselineValue = isPercentage ? 0 : (data[0]?.value ?? 0);
 
         // Build per-point stale data array
-        const staleDaysArr = data.map(d => d.staleDays ?? 0);
+        const staleDaysArr = data.map((d) => d.staleDays ?? 0);
 
         const series: any[] = [];
         // Tooltip needs a stable series name for the main data — we use this name
@@ -246,22 +242,9 @@
 
         // ── Unified main series: handles baseline coloring + stale gradient together ──
         {
-            const values = data.map(d => d.value);
+            const values = data.map((d) => d.value);
             const lineW = compact ? 1.5 : 2;
-            const mainSeriesList = buildMainSeries(
-                values,
-                staleDaysArr,
-                baseColor,
-                greenColor,
-                redColor,
-                isDark,
-                areaFill,
-                lineW,
-                mainSeriesName,
-                useBaselineColoring,
-                baselineValue,
-                showGradient,
-            );
+            const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, lineW, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
             series.push(...mainSeriesList);
         }
 
@@ -270,10 +253,12 @@
             series.push({
                 type: 'scatter',
                 name: 'Pending',
-                data: pendingData.map(d => {
-                    const idx = dates.indexOf(d.date);
-                    return idx >= 0 ? [idx, d.value] : null;
-                }).filter(Boolean),
+                data: pendingData
+                    .map((d) => {
+                        const idx = dates.indexOf(d.date);
+                        return idx >= 0 ? [idx, d.value] : null;
+                    })
+                    .filter(Boolean),
                 symbol: 'diamond',
                 symbolSize: 10,
                 itemStyle: {
@@ -297,7 +282,7 @@
                 const sType = signal.seriesType ?? 'line';
 
                 // Build date→value lookup, then align to main chart's date axis
-                const signalLookup = new Map(signal.data.map(d => [d.date, d.value]));
+                const signalLookup = new Map(signal.data.map((d) => [d.date, d.value]));
                 const signalSeriesData: any[] = dates.map((date) => {
                     const val = signalLookup.get(date);
                     return val ?? null;
@@ -421,27 +406,27 @@
         // Check which overlay axes are active (have at least one signal with data).
         // In compact mode the axes are hidden but still auto-scaled so overlay
         // lines render at the correct proportions — no fixed min/max fallback.
-        const hasSecondaryAxis = overlaySignals.some(s => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
-        const hasTertiaryAxis = overlaySignals.some(s => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
+        const hasSecondaryAxis = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
+        const hasTertiaryAxis = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
 
         // Count how many extra axes need right-side space (only visible in non-compact)
         const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
 
         const gridConfig = compact
             ? {
-                top: 5,
-                right: showMiniAxis ? 45 : 5,
-                bottom: 5,
-                left: 5,
-                containLabel: false,
-            }
+                  top: 5,
+                  right: showMiniAxis ? 45 : 5,
+                  bottom: 5,
+                  left: 5,
+                  containLabel: false,
+              }
             : {
-                top: 20,
-                right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12,
-                bottom: 25,
-                left: 10,
-                containLabel: true,
-            };
+                  top: 20,
+                  right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12,
+                  bottom: 25,
+                  left: 10,
+                  containLabel: true,
+              };
 
         // Pre-compute stale lookup map for O(1) tooltip access (instead of O(n) data.find per hover)
         const staleLookup = new Map<string, number>();
@@ -452,15 +437,17 @@
         const option: echarts.EChartsOption = {
             animation: false,
             grid: gridConfig,
-            dataZoom: compact ? [] : [
-                {
-                    type: 'inside',
-                    xAxisIndex: 0,
-                    filterMode: 'filter',
-                    zoomOnMouseWheel: true,
-                    moveOnMouseMove: true,
-                },
-            ],
+            dataZoom: compact
+                ? []
+                : [
+                      {
+                          type: 'inside',
+                          xAxisIndex: 0,
+                          filterMode: 'filter',
+                          zoomOnMouseWheel: true,
+                          moveOnMouseMove: true,
+                      },
+                  ],
             xAxis: {
                 type: 'category',
                 data: dates,
@@ -487,7 +474,7 @@
                     return {
                         type: 'value' as const,
                         show: showYAxis,
-                        position: compact && showMiniAxis ? 'right' as const : 'left' as const,
+                        position: compact && showMiniAxis ? ('right' as const) : ('left' as const),
                         min: effectiveMin,
                         max: effectiveMax,
                         axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
@@ -500,10 +487,10 @@
                             formatter: isPercentage
                                 ? (v: number) => `${v.toFixed(1)}%`
                                 : (v: number) => {
-                                    if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-                                    if (Math.abs(v) >= 1) return v.toFixed(2);
-                                    return v.toFixed(4).replace(/\.?0+$/, '');
-                                },
+                                      if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+                                      if (Math.abs(v) >= 1) return v.toFixed(2);
+                                      return v.toFixed(4).replace(/\.?0+$/, '');
+                                  },
                         },
                         splitLine: {
                             show: showGridLines && showYAxis,
@@ -582,91 +569,85 @@
                     scale: hasTertiaryAxis,
                 },
             ],
-            tooltip: compact ? undefined : {
-                trigger: 'axis',
-                appendToBody: true,
-                backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
-                formatter: (params: any) => {
-                    const items = Array.isArray(params) ? params : [params];
-                    if (!items.length) return '';
-                    const date = items[0].axisValue || items[0].name;
-                    let html = `<strong>${date}</strong>`;
+            tooltip: compact
+                ? undefined
+                : {
+                      trigger: 'axis',
+                      appendToBody: true,
+                      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                      borderColor: isDark ? '#334155' : '#e2e8f0',
+                      textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                      formatter: (params: any) => {
+                          const items = Array.isArray(params) ? params : [params];
+                          if (!items.length) return '';
+                          const date = items[0].axisValue || items[0].name;
+                          let html = `<strong>${date}</strong>`;
 
-                    // Build a set of band helper series names to skip in tooltip
-                    const bandHelperNames = new Set<string>();
-                    for (const sig of overlaySignals) {
-                        if ((sig.seriesType ?? 'line') === 'band') {
-                            bandHelperNames.add(`${sig.label} Lower`);
-                            bandHelperNames.add(`${sig.label} Band`);
-                        }
-                    }
+                          // Build a set of band helper series names to skip in tooltip
+                          const bandHelperNames = new Set<string>();
+                          for (const sig of overlaySignals) {
+                              if ((sig.seriesType ?? 'line') === 'band') {
+                                  bandHelperNames.add(`${sig.label} Lower`);
+                                  bandHelperNames.add(`${sig.label} Band`);
+                              }
+                          }
 
-                    // Build yAxisIndex lookup for overlay signals by name
-                    const signalAxisMap = new Map<string, number>();
-                    for (const sig of overlaySignals) {
-                        signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
-                    }
+                          // Build yAxisIndex lookup for overlay signals by name
+                          const signalAxisMap = new Map<string, number>();
+                          for (const sig of overlaySignals) {
+                              signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
+                          }
 
-                    // Track already-shown series names to deduplicate segmented baseline entries
-                    const shownNames = new Set<string>();
+                          // Track already-shown series names to deduplicate segmented baseline entries
+                          const shownNames = new Set<string>();
 
-                    for (const p of items) {
-                        // Skip pending scatter series
-                        if (p.seriesName === 'Pending') continue;
-                        // Skip baseline reference line
-                        if (p.seriesName === '__baseline__') continue;
-                        // Skip band helper series (Lower invisible + shaded delta)
-                        if (bandHelperNames.has(p.seriesName)) continue;
+                          for (const p of items) {
+                              // Skip pending scatter series
+                              if (p.seriesName === 'Pending') continue;
+                              // Skip baseline reference line
+                              if (p.seriesName === '__baseline__') continue;
+                              // Skip band helper series (Lower invisible + shaded delta)
+                              if (bandHelperNames.has(p.seriesName)) continue;
 
-                        // Extract value (plain number or object with .value)
-                        const rawVal = p.value;
-                        const value = (typeof rawVal === 'object' && rawVal?.value !== undefined)
-                            ? rawVal.value
-                            : rawVal;
-                        if (value === null || value === undefined) continue;
+                              // Extract value (plain number or object with .value)
+                              const rawVal = p.value;
+                              const value = typeof rawVal === 'object' && rawVal?.value !== undefined ? rawVal.value : rawVal;
+                              if (value === null || value === undefined) continue;
 
-                        // Deduplicate: for segmented baseline coloring, multiple series
-                        // share the same name. Only show the first non-null one.
-                        if (shownNames.has(p.seriesName)) continue;
-                        shownNames.add(p.seriesName);
+                              // Deduplicate: for segmented baseline coloring, multiple series
+                              // share the same name. Only show the first non-null one.
+                              if (shownNames.has(p.seriesName)) continue;
+                              shownNames.add(p.seriesName);
 
-                        const suffix = isPercentage ? '%' : '';
-                        const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                        const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
-                        // Signals on non-primary axes have their own scale — show without % suffix
-                        const valueSuffix = axisIdx === 0 ? suffix : '';
-                        const axisNote = axisIdx === 1
-                            ? ` <span style="font-size:10px;color:#94a3b8">[RSI]</span>`
-                            : axisIdx === 2
-                                ? ` <span style="font-size:10px;color:#a78bfa">[MACD]</span>`
-                                : '';
-                        html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                              const suffix = isPercentage ? '%' : '';
+                              const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
+                              const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
+                              // Signals on non-primary axes have their own scale — show without % suffix
+                              const valueSuffix = axisIdx === 0 ? suffix : '';
+                              const axisNote = axisIdx === 1 ? ` <span style="font-size:10px;color:#94a3b8">[RSI]</span>` : axisIdx === 2 ? ` <span style="font-size:10px;color:#a78bfa">[MACD]</span>` : '';
+                              html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
 
-                        // For band signals, also show upper/lower in the tooltip
-                        const bandSignal = overlaySignals.find(
-                            s => s.label === p.seriesName && (s.seriesType ?? 'line') === 'band' && s.bandData
-                        );
-                        if (bandSignal?.bandData) {
-                            const dataIdx = bandSignal.data.findIndex(d => d.date === date);
-                            if (dataIdx >= 0) {
-                                html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${bandSignal.bandData.upper[dataIdx].toFixed(4)}${suffix} · ${$t('chart.tooltip.lower')}: ${bandSignal.bandData.lower[dataIdx].toFixed(4)}${suffix}</span>`;
-                            }
-                        }
-                    }
+                              // For band signals, also show upper/lower in the tooltip
+                              const bandSignal = overlaySignals.find((s) => s.label === p.seriesName && (s.seriesType ?? 'line') === 'band' && s.bandData);
+                              if (bandSignal?.bandData) {
+                                  const dataIdx = bandSignal.data.findIndex((d) => d.date === date);
+                                  if (dataIdx >= 0) {
+                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${bandSignal.bandData.upper[dataIdx].toFixed(4)}${suffix} · ${$t('chart.tooltip.lower')}: ${bandSignal.bandData.lower[dataIdx].toFixed(4)}${suffix}</span>`;
+                                  }
+                              }
+                          }
 
-                    // Stale warning for main series
-                    const staleDays = staleLookup.get(date);
-                    if (staleDays !== undefined) {
-                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
-                    }
-                    if (isPercentage) {
-                        html += `<br/><span style="color:#94a3b8;font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
-                    }
-                    return html;
-                },
-            },
+                          // Stale warning for main series
+                          const staleDays = staleLookup.get(date);
+                          if (staleDays !== undefined) {
+                              html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
+                          }
+                          if (isPercentage) {
+                              html += `<br/><span style="color:#94a3b8;font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
+                          }
+                          return html;
+                      },
+                  },
             series,
         };
 
@@ -675,7 +656,7 @@
 
         // Preserve user zoom state across re-renders (adding signals, toggling options).
         // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
-        let savedZoom: { start: number; end: number } | null = null;
+        let savedZoom: {start: number; end: number} | null = null;
         if (chartOptionSet && chartInstance) {
             try {
                 const opt = chartInstance.getOption() as any;
@@ -685,7 +666,8 @@
                         savedZoom = {start: dz.start, end: dz.end};
                     }
                 }
-            } catch (_) { /* ignore */
+            } catch (_) {
+                /* ignore */
             }
         }
 
@@ -706,9 +688,4 @@
     }
 </script>
 
-<div
-        bind:this={chartContainer}
-        class="w-full"
-        style="height: {height};"
-></div>
-
+<div bind:this={chartContainer} class="w-full" style="height: {height};"></div>

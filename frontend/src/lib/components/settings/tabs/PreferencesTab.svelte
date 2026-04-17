@@ -33,7 +33,7 @@
     const FALLBACK_DEFAULTS = {
         language: 'en',
         default_currency: 'EUR',
-        theme: 'auto' as 'light' | 'dark' | 'auto'
+        theme: 'auto' as 'light' | 'dark' | 'auto',
     };
 
     // Global defaults (loaded from server's global settings)
@@ -52,10 +52,10 @@
     let selectedCategory: string = '';
 
     // Language options
-    const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map(l => ({
+    const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map((l) => ({
         value: l.code,
         label: l.name,
-        icon: l.flag
+        icon: l.flag,
     }));
 
     onMount(async () => {
@@ -80,7 +80,7 @@
             globalDefaults = {
                 language: settingsMap['default_language'] || FALLBACK_DEFAULTS.language,
                 default_currency: settingsMap['default_currency'] || FALLBACK_DEFAULTS.default_currency,
-                theme: (settingsMap['default_theme'] as 'light' | 'dark' | 'auto') || FALLBACK_DEFAULTS.theme
+                theme: (settingsMap['default_theme'] as 'light' | 'dark' | 'auto') || FALLBACK_DEFAULTS.theme,
             };
             debug.log('PreferencesTab', 'globalDefaults set to', globalDefaults);
         } catch (e) {
@@ -100,7 +100,7 @@
             originalValues = {
                 language: response.language || $currentLanguage,
                 default_currency: response.base_currency || 'EUR',
-                theme: response.theme || getStoredThemePreference()
+                theme: response.theme || getStoredThemePreference(),
             };
             editedValues = {...originalValues};
         } catch (e) {
@@ -109,7 +109,6 @@
             isLoading = false;
         }
     }
-
 
     // Check if a field has been modified (reactive computed)
     $: languageModified = editedValues.language !== originalValues.language;
@@ -140,9 +139,7 @@
     }
 
     // Get visible fields (avatar is always visible, handled separately in template)
-    $: visibleFields = selectedCategory === ''
-        ? ['language', 'default_currency', 'theme'] as const
-        : getCategoryFields(selectedCategory) as (keyof typeof editedValues)[];
+    $: visibleFields = selectedCategory === '' ? (['language', 'default_currency', 'theme'] as const) : (getCategoryFields(selectedCategory) as (keyof typeof editedValues)[]);
 
     // Single field actions
     async function saveField(field: keyof typeof editedValues) {
@@ -158,7 +155,7 @@
                 userSettings.setDirect({
                     language: editedValues.language,
                     base_currency: editedValues.default_currency,
-                    theme: editedValues.theme
+                    theme: editedValues.theme,
                 });
             } else if (field === 'default_currency') {
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({base_currency: editedValues.default_currency});
@@ -166,7 +163,7 @@
                 userSettings.setDirect({
                     language: editedValues.language,
                     base_currency: editedValues.default_currency,
-                    theme: editedValues.theme
+                    theme: editedValues.theme,
                 });
             } else if (field === 'theme') {
                 applyTheme(editedValues.theme as 'light' | 'dark' | 'auto');
@@ -175,13 +172,13 @@
                 userSettings.setDirect({
                     language: editedValues.language,
                     base_currency: editedValues.default_currency,
-                    theme: editedValues.theme
+                    theme: editedValues.theme,
                 });
             }
 
             originalValues = {...originalValues, [field]: editedValues[field]};
             success = $_('settings.savedSuccessfully');
-            setTimeout(() => success = null, 3000);
+            setTimeout(() => (success = null), 3000);
         } catch (e) {
             if (isAxiosError(e)) {
                 error = e.message;
@@ -235,11 +232,11 @@
                 userSettings.setDirect({
                     language: editedValues.language,
                     base_currency: editedValues.default_currency,
-                    theme: editedValues.theme
+                    theme: editedValues.theme,
                 });
                 success = `${$_('settings.savedSuccessfully')}: ${saved.join(', ')}`;
             }
-            setTimeout(() => success = null, 4000);
+            setTimeout(() => (success = null), 4000);
         } catch (e) {
             if (isAxiosError(e)) {
                 error = e.message;
@@ -260,45 +257,33 @@
     }
 </script>
 
-<SettingsLayout
-        bind:selectedCategory
-        {categories}
-        {hasChanges}
-        hasNonDefaults={false}
-        isLocked={false}
-        on:resetAll={resetAll}
-        on:saveAll={saveAll}
-        on:undoAll={undoAll}
-        showLock={false}
-        title={$_('settings.userPreferences')}
->
+<SettingsLayout bind:selectedCategory {categories} {hasChanges} hasNonDefaults={false} isLocked={false} on:resetAll={resetAll} on:saveAll={saveAll} on:undoAll={undoAll} showLock={false} title={$_('settings.userPreferences')}>
     <!-- Success/Error Messages -->
     {#if success}
         <div class="mb-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
             {success}
         </div>
     {/if}
-    <InfoBanner class="mb-4" dismissible message={error} ondismiss={() => error = ''} variant="error"/>
+    <InfoBanner class="mb-4" dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
     <!-- Settings Fields -->
     {#if isLoading}
-        <LoadingSpinner/>
+        <LoadingSpinner />
     {:else}
-
         <!-- Language Setting -->
         {#if visibleFields.includes('language')}
             <div data-testid="preference-language">
                 <SettingSelect
-                        bind:value={editedValues.language}
-                        options={languageOptions}
-                        label={$_('settings.language')}
-                        hint={$_('settings.languageHint')}
-                        isModified={languageModified}
-                        isNonDefault={languageNonDefault}
-                        isLocked={false}
-                        onsave={() => saveField('language')}
-                        onundo={() => undoField('language')}
-                        onreset={() => resetField('language')}
+                    bind:value={editedValues.language}
+                    options={languageOptions}
+                    label={$_('settings.language')}
+                    hint={$_('settings.languageHint')}
+                    isModified={languageModified}
+                    isNonDefault={languageNonDefault}
+                    isLocked={false}
+                    onsave={() => saveField('language')}
+                    onundo={() => undoField('language')}
+                    onreset={() => resetField('language')}
                 />
             </div>
         {/if}
@@ -307,15 +292,15 @@
         {#if visibleFields.includes('default_currency')}
             <div data-testid="preference-currency">
                 <SettingCurrency
-                        bind:value={editedValues.default_currency}
-                        label={$_('settings.defaultCurrency')}
-                        hint={$_('settings.defaultCurrencyHint')}
-                        isModified={currencyModified}
-                        isNonDefault={currencyNonDefault}
-                        isLocked={false}
-                        onsave={() => saveField('default_currency')}
-                        onundo={() => undoField('default_currency')}
-                        onreset={() => resetField('default_currency')}
+                    bind:value={editedValues.default_currency}
+                    label={$_('settings.defaultCurrency')}
+                    hint={$_('settings.defaultCurrencyHint')}
+                    isModified={currencyModified}
+                    isNonDefault={currencyNonDefault}
+                    isLocked={false}
+                    onsave={() => saveField('default_currency')}
+                    onundo={() => undoField('default_currency')}
+                    onreset={() => resetField('default_currency')}
                 />
             </div>
         {/if}
@@ -324,19 +309,18 @@
         {#if visibleFields.includes('theme')}
             <div data-testid="preference-theme">
                 <SettingTheme
-                        bind:value={editedValues.theme}
-                        label={$_('settings.theme')}
-                        hint={$_('settings.themeHint')}
-                        icon={Palette}
-                        isModified={themeModified}
-                        isNonDefault={themeNonDefault}
-                        isLocked={false}
-                        on:save={() => saveField('theme')}
-                        on:undo={() => undoField('theme')}
-                        on:reset={() => resetField('theme')}
+                    bind:value={editedValues.theme}
+                    label={$_('settings.theme')}
+                    hint={$_('settings.themeHint')}
+                    icon={Palette}
+                    isModified={themeModified}
+                    isNonDefault={themeNonDefault}
+                    isLocked={false}
+                    on:save={() => saveField('theme')}
+                    on:undo={() => undoField('theme')}
+                    on:reset={() => resetField('theme')}
                 />
             </div>
         {/if}
     {/if}
 </SettingsLayout>
-

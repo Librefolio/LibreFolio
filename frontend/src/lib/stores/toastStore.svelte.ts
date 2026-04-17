@@ -12,7 +12,7 @@
  *   toasts.info('Note: ...');
  */
 
-import { generateUUID } from '$lib/utils/uuid';
+import {generateUUID} from '$lib/utils/uuid';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
@@ -52,9 +52,9 @@ function show(variant: ToastVariant, message: string, duration?: number): string
 }
 
 function dismiss(id: string) {
-    const toast = items.find(t => t.id === id);
+    const toast = items.find((t) => t.id === id);
     if (toast?._timeout) clearTimeout(toast._timeout);
-    items = items.filter(t => t.id !== id);
+    items = items.filter((t) => t.id !== id);
 }
 
 function clear() {
@@ -78,4 +78,3 @@ export const toasts = {
     warning: (message: string, duration?: number) => show('warning', message, duration),
     info: (message: string, duration?: number) => show('info', message, duration),
 };
-

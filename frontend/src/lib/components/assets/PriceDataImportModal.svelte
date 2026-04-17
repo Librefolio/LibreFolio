@@ -24,11 +24,7 @@
         onclose?: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        onimport,
-        onclose,
-    }: Props = $props();
+    let {open = $bindable(false), onimport, onclose}: Props = $props();
 
     // =========================================================================
     // Column definitions for asset prices
@@ -50,13 +46,7 @@
     }
 </script>
 
-<DataImportModal
-        bind:open
-        columns={priceColumns}
-        {onclose}
-        {onimport}
-        title="📥 Import Prices CSV"
->
+<DataImportModal bind:open columns={priceColumns} {onclose} {onimport} title="📥 Import Prices CSV">
     {#snippet headerSlot()}
         <InfoBanner variant="info">
             <div class="flex items-start gap-2">
@@ -65,13 +55,8 @@
                     <p><strong>Extended:</strong> date;currency;close;open;high;low;volume</p>
                     <p class="text-[11px] opacity-80">Use <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">;</code> to skip optional columns.</p>
                 </div>
-                <button
-                        class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0"
-                        onclick={openDocs}
-                        title="Open documentation"
-                        type="button"
-                >
-                    <BookOpen size={16}/>
+                <button class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0" onclick={openDocs} title="Open documentation" type="button">
+                    <BookOpen size={16} />
                 </button>
             </div>
         </InfoBanner>
@@ -95,4 +80,3 @@
         </ul>
     {/snippet}
 </DataImportModal>
-

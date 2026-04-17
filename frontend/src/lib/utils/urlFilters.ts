@@ -34,12 +34,9 @@ export interface UrlFilterConfig {
  *   { urlKey: 'size', type: 'size' },
  * ]);
  */
-export function parseUrlFilters(
-    searchParams: URLSearchParams,
-    columns: UrlFilterConfig[]
-): Map<string, FilterValue> {
+export function parseUrlFilters(searchParams: URLSearchParams, columns: UrlFilterConfig[]): Map<string, FilterValue> {
     const filters = new Map<string, FilterValue>();
-    const columnMap = new Map(columns.map(c => [c.urlKey, c]));
+    const columnMap = new Map(columns.map((c) => [c.urlKey, c]));
 
     for (const [key, value] of searchParams.entries()) {
         const col = columnMap.get(key);
@@ -72,7 +69,7 @@ export function parseUrlFilters(
                 }
 
                 case 'enum': {
-                    const selected = value.split(',').filter(v => v.trim());
+                    const selected = value.split(',').filter((v) => v.trim());
                     if (selected.length > 0) {
                         const filter: EnumFilter = {
                             type: 'enum',
@@ -89,8 +86,7 @@ export function parseUrlFilters(
                     const minBytes = minStr ? parseInt(minStr, 10) : undefined;
                     const maxBytes = maxStr ? parseInt(maxStr, 10) : undefined;
 
-                    if ((minBytes !== undefined && !isNaN(minBytes)) ||
-                        (maxBytes !== undefined && !isNaN(maxBytes))) {
+                    if ((minBytes !== undefined && !isNaN(minBytes)) || (maxBytes !== undefined && !isNaN(maxBytes))) {
                         const filter: SizeFilter = {
                             type: 'size',
                             minBytes: minBytes && !isNaN(minBytes) ? minBytes : undefined,
@@ -133,13 +129,9 @@ export function parseUrlFilters(
  * @param columnIdToUrlKey - Optional mapping from column ID to URL key (if different)
  * @returns URLSearchParams with filter values
  */
-export function buildUrlFilters(
-    filters: Map<string, FilterValue>,
-    columns: UrlFilterConfig[],
-    columnIdToUrlKey?: Map<string, string>
-): URLSearchParams {
+export function buildUrlFilters(filters: Map<string, FilterValue>, columns: UrlFilterConfig[], columnIdToUrlKey?: Map<string, string>): URLSearchParams {
     const params = new URLSearchParams();
-    const validKeys = new Set(columns.map(c => c.urlKey));
+    const validKeys = new Set(columns.map((c) => c.urlKey));
 
     for (const [columnId, filterValue] of filters.entries()) {
         if (!filterValue) continue;
@@ -221,10 +213,7 @@ export function hasActiveFilters(filters: Map<string, FilterValue>): boolean {
 /**
  * Clean URL by removing empty/invalid filter params
  */
-export function cleanUrlParams(
-    searchParams: URLSearchParams,
-    validKeys: Set<string>
-): URLSearchParams {
+export function cleanUrlParams(searchParams: URLSearchParams, validKeys: Set<string>): URLSearchParams {
     const cleaned = new URLSearchParams();
 
     for (const [key, value] of searchParams.entries()) {

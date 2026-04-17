@@ -4,9 +4,7 @@ import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 import {LANGUAGE_INFO, SUPPORTED_LANGUAGES, t} from './fixtures/i18n-data';
 
 test.describe('Authentication', () => {
-
     test.describe('Core Auth Flow (language-agnostic)', () => {
-
         test('login page renders correctly', async ({page}) => {
             await page.goto('/');
             // Wait for auth check to complete (3s timeout for localhost)
@@ -49,7 +47,6 @@ test.describe('Authentication', () => {
     });
 
     test.describe('Register Modal', () => {
-
         test('can open register modal from login', async ({page}) => {
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
@@ -100,7 +97,6 @@ test.describe('Authentication', () => {
     });
 
     test.describe('Forgot Password Modal', () => {
-
         test('can open forgot password modal from login', async ({page}) => {
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
@@ -121,7 +117,6 @@ test.describe('Authentication', () => {
     });
 
     test.describe('Language Selector', () => {
-
         test('language selector is visible and clickable', async ({page}) => {
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});

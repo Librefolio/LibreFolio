@@ -43,4 +43,3 @@ export function computeDirection(current: number | null, prev: number | null): L
     if (current == null || prev == null || current === prev) return 'neutral';
     return current > prev ? 'up' : 'down';
 }
-

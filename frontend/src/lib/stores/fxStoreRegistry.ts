@@ -38,7 +38,6 @@ export interface FxDataPoint extends TimeSeriesPoint {
     } | null;
 }
 
-
 /**
  * FX pair configuration derived from GET /fx/providers/routes.
  * Represents a unique currency pair with its route configuration.
@@ -88,7 +87,7 @@ export function createPairSlug(base: string, quote: string): string {
  * @example
  * parsePairSlug('EUR-USD') → { base: 'EUR', quote: 'USD' }
  */
-export function parsePairSlug(slug: string): { base: string; quote: string } {
+export function parsePairSlug(slug: string): {base: string; quote: string} {
     const parts = slug.split('-');
     if (parts.length !== 2) {
         throw new Error(`Invalid pair slug: "${slug}". Expected format: "AAA-BBB"`);
@@ -166,10 +165,9 @@ export function apiResultToFxDataPoint(result: {
         rate: result.rate ? parseFloat(String(result.rate)) : 0,
         backwardFillInfo: result.backward_fill_info
             ? {
-                actualRateDate: result.backward_fill_info.actual_rate_date,
-                daysBack: result.backward_fill_info.days_back,
-            }
+                  actualRateDate: result.backward_fill_info.actual_rate_date,
+                  daysBack: result.backward_fill_info.days_back,
+              }
             : null,
     };
 }
-

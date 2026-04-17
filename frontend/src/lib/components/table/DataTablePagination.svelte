@@ -95,23 +95,14 @@
         <!-- Row 1: Page size + label + total (groups together on mobile) -->
         <div class="pagination-row-top">
             <div bind:this={dropdownRef} class="page-size-selector">
-                <button
-                        class="page-size-btn"
-                        onclick={() => showDropdown = !showDropdown}
-                        type="button"
-                >
+                <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button">
                     <span>{formatPageSize(getDisplayPageSize())}</span>
-                    <ChevronDown size={14}/>
+                    <ChevronDown size={14} />
                 </button>
                 {#if showDropdown}
                     <div class="page-size-dropdown">
                         {#each pageSizeOptions as size}
-                            <button
-                                    type="button"
-                                    class="dropdown-option"
-                                    class:selected={getDisplayPageSize() === size}
-                                    onclick={() => selectPageSize(size)}
-                            >
+                            <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)}>
                                 {formatPageSize(size)}
                             </button>
                         {/each}
@@ -126,22 +117,31 @@
         <!-- Row 2: Page navigation -->
         <div class="pagination-row-bottom">
             <button class="nav-btn" disabled={!canPrevPage} onclick={() => goToPage(currentPage - 1)} type="button">
-                <ChevronLeft size={16}/>
+                <ChevronLeft size={16} />
             </button>
             <div class="page-numbers">
                 {#each getPageNumbers() as page}
                     {#if page === 'ellipsis'}
                         <span class="ellipsis">…</span>
                     {:else if page === currentPage}
-                        <input type="text" class="page-input" bind:value={pageInputValue} onkeydown={handlePageInputKeydown} onblur={handlePageInputBlur}
-                               onclick={(e) => {const el = e.target; if (el instanceof HTMLInputElement) el.select();}}/>
+                        <input
+                            type="text"
+                            class="page-input"
+                            bind:value={pageInputValue}
+                            onkeydown={handlePageInputKeydown}
+                            onblur={handlePageInputBlur}
+                            onclick={(e) => {
+                                const el = e.target;
+                                if (el instanceof HTMLInputElement) el.select();
+                            }}
+                        />
                     {:else}
                         <button type="button" class="page-btn" onclick={() => goToPage(page)}>{page}</button>
                     {/if}
                 {/each}
             </div>
             <button class="nav-btn" disabled={!canNextPage} onclick={() => goToPage(currentPage + 1)} type="button">
-                <ChevronRight size={16}/>
+                <ChevronRight size={16} />
             </button>
         </div>
     </div>

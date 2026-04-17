@@ -12,21 +12,7 @@
     import {t} from '$lib/i18n';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
-    import {
-        Download,
-        File as FileIcon,
-        FileArchive,
-        FileAudio,
-        FileCode,
-        FileJson,
-        FileSpreadsheet,
-        FileText,
-        FileType,
-        FileVideo,
-        Image as ImageIcon,
-        Link,
-        Trash2
-    } from 'lucide-svelte';
+    import {Download, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
     import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
     import {safeNumber} from '$lib/types';
     // Generate a consistent color based on broker id for visual distinction
@@ -82,7 +68,7 @@
     }
 
     function getFileSize(file: FileData): number {
-        return type === 'static' ? (file as UploadedFile).size_bytes : ((file as BrimFile).size_bytes || 0);
+        return type === 'static' ? (file as UploadedFile).size_bytes : (file as BrimFile).size_bytes || 0;
     }
 
     function isImageFile(file: FileData): boolean {
@@ -105,26 +91,22 @@
             const mimeType = f.mime_type || '';
 
             // Images (png, jpg, jpeg, gif, webp, svg, bmp, ico)
-            if (mimeType.startsWith('image/') ||
-                ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'].includes(ext)) {
+            if (mimeType.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'].includes(ext)) {
                 return Image;
             }
 
             // Videos
-            if (mimeType.startsWith('video/') ||
-                ['mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv'].includes(ext)) {
+            if (mimeType.startsWith('video/') || ['mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv'].includes(ext)) {
                 return FileVideo;
             }
 
             // Audio
-            if (mimeType.startsWith('audio/') ||
-                ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'].includes(ext)) {
+            if (mimeType.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'].includes(ext)) {
                 return FileAudio;
             }
 
             // Spreadsheets (csv, xlsx, xls, ods)
-            if (mimeType.includes('spreadsheet') || mimeType.includes('csv') ||
-                ['csv', 'xlsx', 'xls', 'ods', 'numbers'].includes(ext)) {
+            if (mimeType.includes('spreadsheet') || mimeType.includes('csv') || ['csv', 'xlsx', 'xls', 'ods', 'numbers'].includes(ext)) {
                 return FileSpreadsheet;
             }
 
@@ -134,25 +116,22 @@
             }
 
             // Code files
-            if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'cs', 'go', 'rs',
-                'rb', 'php', 'swift', 'kt', 'scala', 'html', 'css', 'scss', 'less', 'vue', 'svelte'].includes(ext)) {
+            if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt', 'scala', 'html', 'css', 'scss', 'less', 'vue', 'svelte'].includes(ext)) {
                 return FileCode;
             }
 
             // Archives
-            if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('archive') ||
-                ['zip', 'tar', 'gz', 'rar', '7z', 'bz2', 'xz', 'tgz'].includes(ext)) {
+            if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('archive') || ['zip', 'tar', 'gz', 'rar', '7z', 'bz2', 'xz', 'tgz'].includes(ext)) {
                 return FileArchive;
             }
 
             // PDF
             if (mimeType.includes('pdf') || ext === 'pdf') {
-                return FileType;  // FileType looks like a document with lines
+                return FileType; // FileType looks like a document with lines
             }
 
             // Text/Documents
-            if (mimeType.includes('text') ||
-                ['txt', 'md', 'rtf', 'doc', 'docx', 'odt', 'pages'].includes(ext)) {
+            if (mimeType.includes('text') || ['txt', 'md', 'rtf', 'doc', 'docx', 'odt', 'pages'].includes(ext)) {
                 return FileText;
             }
         } else {
@@ -196,7 +175,7 @@
         return broker?.name || `#${brokerId} (${$t('uploads.otherUser') || 'other user'})`;
     }
 
-    function getBrokerColor(brokerId: number): { bg: string; text: string; darkBg: string; darkText: string } {
+    function getBrokerColor(brokerId: number): {bg: string; text: string; darkBg: string; darkText: string} {
         return getIndexColor(brokerId, 120);
     }
 
@@ -259,7 +238,7 @@
                         };
                     },
                     type: 'enum',
-                    enumOptions: Array.from(brokers.values()).map(b => ({
+                    enumOptions: Array.from(brokers.values()).map((b) => ({
                         value: String(b.id),
                         label: b.name,
                     })),
@@ -313,12 +292,11 @@
                 type: 'date',
                 width: 160,
                 getValue: (row) => row.uploaded_at,
-            }
+            },
         );
 
         return cols;
     }
-
 
     // Helper to copy to clipboard with fallback
     async function copyToClipboard(text: string): Promise<boolean> {
@@ -429,9 +407,9 @@
                 label: () => $t('common.delete'),
                 onClick: (selectedFiles) => {
                     if (onDeleteMultiple) {
-                        onDeleteMultiple(selectedFiles.map(f => getFileId(f)));
+                        onDeleteMultiple(selectedFiles.map((f) => getFileId(f)));
                     } else {
-                        selectedFiles.forEach(file => onDelete(getFileId(file)));
+                        selectedFiles.forEach((file) => onDelete(getFileId(file)));
                     }
                 },
                 variant: 'danger',
@@ -448,20 +426,5 @@
 </script>
 
 <div data-testid="files-table-{type}">
-    <DataTable
-            bind:this={dataTableRef}
-            {bulkActions}
-            {columns}
-            data={files}
-            emptyMessage={$t('uploads.noFiles')}
-            getRowDisplayName={getFileName}
-            getRowId={getFileId}
-            {initialFilters}
-            {onFiltersChange}
-            onSelectionChange={onSelectionChange}
-            {rowActions}
-            storageKey="filesTable_{type}"
-            tableLayout="auto"
-    />
+    <DataTable bind:this={dataTableRef} {bulkActions} {columns} data={files} emptyMessage={$t('uploads.noFiles')} getRowDisplayName={getFileName} getRowId={getFileId} {initialFilters} {onFiltersChange} {onSelectionChange} {rowActions} storageKey="filesTable_{type}" tableLayout="auto" />
 </div>
-

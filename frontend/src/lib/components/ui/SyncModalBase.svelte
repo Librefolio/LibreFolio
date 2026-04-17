@@ -39,20 +39,7 @@
         onclose: () => void;
     }
 
-    let {
-        open = $bindable(),
-        dateStart,
-        dateEnd,
-        title,
-        description,
-        testId,
-        headerIcon: HeaderIcon = RefreshCw,
-        headerIconBg = 'bg-amber-100 dark:bg-amber-900/30',
-        headerIconColor = 'text-amber-600 dark:text-amber-400',
-        sections,
-        onsynced,
-        onclose,
-    }: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-amber-100 dark:bg-amber-900/30', headerIconColor = 'text-amber-600 dark:text-amber-400', sections, onsynced, onclose}: Props = $props();
 
     // =========================================================================
     // State
@@ -73,15 +60,13 @@
     // =========================================================================
 
     /** Only sections with items to sync */
-    let activeSections = $derived(sections.filter(s => s.targetIds.length > 0));
+    let activeSections = $derived(sections.filter((s) => s.targetIds.length > 0));
 
     /** Total item count across all sections */
     let itemCount = $derived(activeSections.reduce((sum, s) => sum + s.targetIds.length, 0));
 
     /** Count label combining all section labels */
-    let countLabel = $derived(
-        activeSections.map(s => `${s.targetIds.length} ${s.countLabel}`).join(' · ')
-    );
+    let countLabel = $derived(activeSections.map((s) => `${s.targetIds.length} ${s.countLabel}`).join(' · '));
 
     /** All results flattened */
     let allResults = $derived(Array.from(sectionResults.values()).flat());
@@ -89,8 +74,8 @@
     let hasResults = $derived(allResults.length > 0);
     let remainingSec = $derived(Math.max(0, timeoutSec - Math.floor(elapsedMs / 1000)));
     let progressPct = $derived(Math.min(100, (elapsedMs / (timeoutSec * 1000)) * 100));
-    let failedItems = $derived(allResults.filter(r => r.status === 'failed' || r.status === 'partial'));
-    let successCount = $derived(allResults.filter(r => r.status === 'ok').length);
+    let failedItems = $derived(allResults.filter((r) => r.status === 'failed' || r.status === 'partial'));
+    let successCount = $derived(allResults.filter((r) => r.status === 'ok').length);
     let totalPointsFetched = $derived(allResults.reduce((sum, r) => sum + (r.points_fetched ?? 0), 0));
     let totalPointsChanged = $derived(allResults.reduce((sum, r) => sum + (r.points_changed ?? 0), 0));
 
@@ -136,7 +121,7 @@
 
     /** Find which section owns a given result ID */
     function findSectionForId(id: string): SyncSection | undefined {
-        return activeSections.find(s => s.targetIds.includes(id));
+        return activeSections.find((s) => s.targetIds.includes(id));
     }
 
     /** Sync specific IDs within a single section */
@@ -153,7 +138,7 @@
                 errMsg = e?.response?.data?.detail || e?.message || 'Sync failed';
                 error = errMsg;
             }
-            return ids.map(id => ({
+            return ids.map((id) => ({
                 id,
                 status: 'failed' as const,
                 points_fetched: 0,
@@ -166,10 +151,7 @@
     /** Merge new results into sectionResults for a given section */
     function mergeResults(sectionId: string, newResults: SyncResult[], retriedIds: Set<string>) {
         const existing = sectionResults.get(sectionId) ?? [];
-        const merged = [
-            ...existing.filter(r => !retriedIds.has(r.id)),
-            ...newResults,
-        ];
+        const merged = [...existing.filter((r) => !retriedIds.has(r.id)), ...newResults];
         // Trigger reactivity by creating a new Map
         const updated = new Map(sectionResults);
         updated.set(sectionId, merged);
@@ -185,10 +167,12 @@
         startCountdown();
 
         try {
-            await Promise.all(activeSections.map(async (section) => {
-                const results = await doSyncSection(section, section.targetIds);
-                mergeResults(section.id, results, new Set(section.targetIds));
-            }));
+            await Promise.all(
+                activeSections.map(async (section) => {
+                    const results = await doSyncSection(section, section.targetIds);
+                    mergeResults(section.id, results, new Set(section.targetIds));
+                }),
+            );
             onsynced();
         } finally {
             syncing = false;
@@ -214,12 +198,14 @@
                 failedBySection.set(section.id, list);
             }
 
-            await Promise.all(Array.from(failedBySection.entries()).map(async ([sectionId, ids]) => {
-                const section = activeSections.find(s => s.id === sectionId);
-                if (!section) return;
-                const results = await doSyncSection(section, ids);
-                mergeResults(sectionId, results, new Set(ids));
-            }));
+            await Promise.all(
+                Array.from(failedBySection.entries()).map(async ([sectionId, ids]) => {
+                    const section = activeSections.find((s) => s.id === sectionId);
+                    if (!section) return;
+                    const results = await doSyncSection(section, ids);
+                    mergeResults(sectionId, results, new Set(ids));
+                }),
+            );
             onsynced();
         } finally {
             syncing = false;
@@ -247,22 +233,19 @@
     }
 </script>
 
-<ModalBase maxWidth="max-w-md" onRequestClose={onclose} {open} testId={testId}>
+<ModalBase maxWidth="max-w-md" onRequestClose={onclose} {open} {testId}>
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-center gap-2.5">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg {headerIconBg}">
-                <HeaderIcon class={headerIconColor} size={18}/>
+                <HeaderIcon class={headerIconColor} size={18} />
             </div>
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
                 {title}
             </h2>
         </div>
-        <button
-                class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                onclick={onclose}
-        >
-            <X size={18}/>
+        <button class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" onclick={onclose}>
+            <X size={18} />
         </button>
     </div>
 
@@ -283,17 +266,9 @@
         <!-- Timeout setting -->
         {#if !hasResults || failedItems.length > 0 || isTimeout}
             <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <Timer size={13} class="shrink-0"/>
+                <Timer size={13} class="shrink-0" />
                 <span>{$t('fx.sync.timeout') ?? 'Timeout'}:</span>
-                <input
-                        type="number"
-                        min="10"
-                        max="600"
-                        step="10"
-                        bind:value={timeoutSec}
-                        disabled={syncing}
-                        class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
-                />
+                <input type="number" min="10" max="600" step="10" bind:value={timeoutSec} disabled={syncing} class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50" />
                 <span>sec</span>
             </div>
         {/if}
@@ -303,32 +278,26 @@
             <div class="space-y-1.5">
                 <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span class="flex items-center gap-1.5">
-                        <Clock size={13} class="animate-pulse"/>
+                        <Clock size={13} class="animate-pulse" />
                         {$t('common.syncing') ?? 'Syncing...'}
                     </span>
                     <span class="font-mono tabular-nums">{formatTime(remainingSec)}</span>
                 </div>
                 <div class="h-1.5 w-full bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                            class="h-full bg-amber-500 rounded-full transition-all duration-100"
-                            style="width: {progressPct}%"
-                    ></div>
+                    <div class="h-full bg-amber-500 rounded-full transition-all duration-100" style="width: {progressPct}%"></div>
                 </div>
             </div>
         {/if}
 
         {#if error}
-            <InfoBanner variant="error" message={error}/>
+            <InfoBanner variant="error" message={error} />
         {/if}
 
         {#if hasResults}
             <!-- Retry all failed button -->
             {#if failedItems.length > 1 && !syncing}
-                <button
-                        class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                        onclick={handleRetryFailed}
-                >
-                    <SkipForward size={13}/>
+                <button class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors" onclick={handleRetryFailed}>
+                    <SkipForward size={13} />
                     Retry {failedItems.length} failed
                 </button>
             {/if}
@@ -347,7 +316,8 @@
                     {/each}
                     {#if syncing && sResults.length === 0}
                         <div class="flex items-center gap-2 text-xs text-gray-400">
-                            <RefreshCw size={12} class="animate-spin"/> {$t('common.syncing') ?? 'Syncing'}…
+                            <RefreshCw size={12} class="animate-spin" />
+                            {$t('common.syncing') ?? 'Syncing'}…
                         </div>
                     {/if}
                 </div>
@@ -356,15 +326,16 @@
             <!-- Summary -->
             <InfoBanner variant={successCount === allResults.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
                 <span class="text-sm font-medium flex items-center gap-1 flex-wrap">
-                    {$t('fx.sync.synced') ?? 'Synced'} {successCount}/{allResults.length}
+                    {$t('fx.sync.synced') ?? 'Synced'}
+                    {successCount}/{allResults.length}
                     ·
                     <span>{totalPointsFetched}↓</span>
                     <Tooltip text={$t('fx.sync.tooltipFetched')} position="top">
-                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors"/>
+                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
                     </Tooltip>
                     <span>{totalPointsChanged}Δ</span>
                     <Tooltip text={$t('fx.sync.tooltipChanged')} position="top">
-                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors"/>
+                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
                     </Tooltip>
                 </span>
             </InfoBanner>
@@ -373,19 +344,16 @@
 
     <!-- Footer -->
     <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
-        <button
-                class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                onclick={onclose}
-        >
+        <button class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" onclick={onclose}>
             {hasResults || isTimeout ? ($t('common.close') ?? 'Close') : ($t('common.cancel') ?? 'Cancel')}
         </button>
         {#if !hasResults || failedItems.length > 0}
             <button
-                    class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                    onclick={hasResults && failedItems.length > 0 ? handleRetryFailed : handleSyncAll}
-                    disabled={syncing || itemCount === 0}
+                class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                onclick={hasResults && failedItems.length > 0 ? handleRetryFailed : handleSyncAll}
+                disabled={syncing || itemCount === 0}
             >
-                <RefreshCw size={15} class={syncing ? 'animate-spin' : ''}/>
+                <RefreshCw size={15} class={syncing ? 'animate-spin' : ''} />
                 {#if failedItems.length > 0 && hasResults}
                     {$t('common.retry') ?? 'Retry'} {failedItems.length} failed
                 {:else if syncing}
@@ -397,4 +365,3 @@
         {/if}
     </div>
 </ModalBase>
-

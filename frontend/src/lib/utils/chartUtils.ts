@@ -12,6 +12,5 @@ export function normalizeToPercentage(data: LineDataPoint[]): LineDataPoint[] {
     if (data.length === 0) return data;
     const p0 = data[0].value;
     if (p0 === 0) return data;
-    return data.map(d => ({...d, value: ((d.value - p0) / p0) * 100}));
+    return data.map((d) => ({...d, value: ((d.value - p0) / p0) * 100}));
 }
-

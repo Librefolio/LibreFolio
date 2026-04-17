@@ -20,11 +20,7 @@
         class?: string;
     }
 
-    let {
-        tableRef,
-        showLabel = false,
-        class: extraClass = '',
-    }: Props = $props();
+    let {tableRef, showLabel = false, class: extraClass = ''}: Props = $props();
 
     // =========================================================================
     // Types
@@ -49,7 +45,7 @@
     function refreshColumns() {
         if (!tableRef) return;
         const cols = tableRef.getColumnsForVisibility();
-        columnItems = cols.map(c => ({
+        columnItems = cols.map((c) => ({
             id: c.id,
             label: typeof c.header === 'function' ? c.header() : c.header,
             visible: c.visible,
@@ -94,14 +90,14 @@
 
     function handleToggleColumn(columnId: string) {
         tableRef?.toggleColumnVisibilityById(columnId);
-        const col = columnItems.find(c => c.id === columnId);
+        const col = columnItems.find((c) => c.id === columnId);
         if (col) col.visible = !col.visible;
         columnItems = [...columnItems];
     }
 
     function handleReorder(newItems: ColumnItem[]) {
         columnItems = newItems;
-        tableRef?.setColumnOrder(newItems.map(c => c.id));
+        tableRef?.setColumnOrder(newItems.map((c) => c.id));
     }
 
     function handleReset() {
@@ -111,12 +107,12 @@
 </script>
 
 <button
-        bind:this={triggerEl}
-        class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors {extraClass}"
-        onclick={toggle}
-        type="button"
+    bind:this={triggerEl}
+    class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors {extraClass}"
+    onclick={toggle}
+    type="button"
 >
-    <Eye size={13}/>
+    <Eye size={13} />
     {#if showLabel}<span>{$t('table.columns')}</span>{/if}
 </button>
 
@@ -127,40 +123,28 @@
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div
-            bind:this={dropdownRef}
-            class="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg p-2 max-h-[400px] overflow-y-auto w-max"
-            style={dropdownStyle}
-            onclick={(e) => e.stopPropagation()}
-    >
-        <OrderableList
-                items={columnItems}
-                keyFn={(c) => c.id}
-                onReorder={handleReorder}
-        >
+    <div bind:this={dropdownRef} class="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg p-2 max-h-[400px] overflow-y-auto w-max" style={dropdownStyle} onclick={(e) => e.stopPropagation()}>
+        <OrderableList items={columnItems} keyFn={(c) => c.id} onReorder={handleReorder}>
             {#snippet children({item})}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <div
-                        class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap"
-                        onclick={() => handleToggleColumn(item.id)}
-                >
+                <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" onclick={() => handleToggleColumn(item.id)}>
                     {#if item.visible}
-                        <Eye size={13} class="text-libre-green shrink-0"/>
+                        <Eye size={13} class="text-libre-green shrink-0" />
                     {:else}
-                        <EyeOff size={13} class="text-gray-400 dark:text-gray-500 shrink-0"/>
+                        <EyeOff size={13} class="text-gray-400 dark:text-gray-500 shrink-0" />
                     {/if}
-                    <span class="{item.visible ? '' : 'text-gray-400 dark:text-gray-500 line-through'}">{item.label}</span>
+                    <span class={item.visible ? '' : 'text-gray-400 dark:text-gray-500 line-through'}>{item.label}</span>
                 </div>
             {/snippet}
         </OrderableList>
 
         <button
-                type="button"
-                class="w-full flex items-center justify-center gap-1.5 mt-2 px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600 rounded-md border border-gray-200 dark:border-slate-600 transition-colors"
-                onclick={handleReset}
+            type="button"
+            class="w-full flex items-center justify-center gap-1.5 mt-2 px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600 rounded-md border border-gray-200 dark:border-slate-600 transition-colors"
+            onclick={handleReset}
         >
-            <RotateCcw size={12}/>
+            <RotateCcw size={12} />
             Reset layout
         </button>
     </div>

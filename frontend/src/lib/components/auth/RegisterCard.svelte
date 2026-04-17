@@ -8,7 +8,7 @@
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
-        gotoLogin: { message?: string };
+        gotoLogin: {message?: string};
     }>();
 
     let username = '';
@@ -54,7 +54,7 @@
 
     function validatePassword() {
         // Check all password rules
-        const allPassed = Object.values(passwordRules).every(check => check(password));
+        const allPassed = Object.values(passwordRules).every((check) => check(password));
         if (!allPassed) {
             passwordError = $_('auth.validation.passwordTooWeak');
             return false;
@@ -131,12 +131,11 @@
 </script>
 
 <div class="w-full max-w-lg bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="register-modal">
-
     <!-- Header Section (Dark Green) -->
     <div class="bg-libre-green p-8 flex flex-col items-center justify-center space-y-2">
         <div class="flex items-center space-x-3 text-white">
             <div class="w-10 h-10 rounded-lg flex items-center justify-center p-1" style="background:#fff">
-                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png"/>
+                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
             </div>
             <span class="text-2xl font-bold tracking-wide">LibreFolio</span>
         </div>
@@ -146,28 +145,27 @@
     <!-- Body Section -->
     <div class="p-8 pt-6">
         <form class="space-y-4" data-testid="register-form" on:submit|preventDefault={handleSubmit}>
-
             <!-- General Error Message -->
-            <InfoBanner dismissible message={error} ondismiss={() => error = ''} variant="error"/>
+            <InfoBanner dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
             <!-- Username Input -->
             <div>
                 <input
-                        autocomplete="username"
-                        bind:value={username}
-                        class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
-                        class:border-gray-400={!usernameError}
-                        class:border-red-400={usernameError}
-                        class:focus:border-libre-green={!usernameError}
-                        class:focus:border-red-400={usernameError}
-                        class:focus:ring-libre-green={!usernameError}
-                        class:focus:ring-red-400={usernameError}
-                        data-testid="register-username"
-                        disabled={loading}
-                        id="register-username"
-                        on:blur={validateUsername}
-                        placeholder={$_('auth.username')}
-                        type="text"
+                    autocomplete="username"
+                    bind:value={username}
+                    class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
+                    class:border-gray-400={!usernameError}
+                    class:border-red-400={usernameError}
+                    class:focus:border-libre-green={!usernameError}
+                    class:focus:border-red-400={usernameError}
+                    class:focus:ring-libre-green={!usernameError}
+                    class:focus:ring-red-400={usernameError}
+                    data-testid="register-username"
+                    disabled={loading}
+                    id="register-username"
+                    on:blur={validateUsername}
+                    placeholder={$_('auth.username')}
+                    type="text"
                 />
                 {#if usernameError}
                     <p class="text-red-600 text-xs mt-1">{usernameError}</p>
@@ -177,21 +175,21 @@
             <!-- Email Input -->
             <div>
                 <input
-                        autocomplete="email"
-                        bind:value={email}
-                        class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
-                        class:border-gray-400={!emailError}
-                        class:border-red-400={emailError}
-                        class:focus:border-libre-green={!emailError}
-                        class:focus:border-red-400={emailError}
-                        class:focus:ring-libre-green={!emailError}
-                        class:focus:ring-red-400={emailError}
-                        data-testid="register-email"
-                        disabled={loading}
-                        id="register-email"
-                        on:blur={validateEmail}
-                        placeholder={$_('auth.email')}
-                        type="email"
+                    autocomplete="email"
+                    bind:value={email}
+                    class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
+                    class:border-gray-400={!emailError}
+                    class:border-red-400={emailError}
+                    class:focus:border-libre-green={!emailError}
+                    class:focus:border-red-400={emailError}
+                    class:focus:ring-libre-green={!emailError}
+                    class:focus:ring-red-400={emailError}
+                    data-testid="register-email"
+                    disabled={loading}
+                    id="register-email"
+                    on:blur={validateEmail}
+                    placeholder={$_('auth.email')}
+                    type="email"
                 />
                 {#if emailError}
                     <p class="text-red-600 text-xs mt-1">{emailError}</p>
@@ -200,16 +198,8 @@
 
             <!-- Password Input -->
             <div>
-                <PasswordInput
-                        autocomplete="new-password"
-                        bind:value={password}
-                        disabled={loading}
-                        hasError={!!passwordError}
-                        on:blur={validatePassword}
-                        placeholder={$_('auth.password')}
-                        testId="register-password"
-                />
-                <PasswordStrength {password}/>
+                <PasswordInput autocomplete="new-password" bind:value={password} disabled={loading} hasError={!!passwordError} on:blur={validatePassword} placeholder={$_('auth.password')} testId="register-password" />
+                <PasswordStrength {password} />
                 {#if passwordError}
                     <p class="text-red-600 text-xs mt-1">{passwordError}</p>
                 {/if}
@@ -217,27 +207,14 @@
 
             <!-- Confirm Password Input -->
             <div>
-                <PasswordInput
-                        autocomplete="new-password"
-                        bind:value={confirmPassword}
-                        disabled={loading}
-                        hasError={!!confirmPasswordError}
-                        on:blur={validateConfirmPassword}
-                        placeholder={$_('auth.confirmPassword')}
-                        testId="register-confirm-password"
-                />
+                <PasswordInput autocomplete="new-password" bind:value={confirmPassword} disabled={loading} hasError={!!confirmPasswordError} on:blur={validateConfirmPassword} placeholder={$_('auth.confirmPassword')} testId="register-confirm-password" />
                 {#if confirmPasswordError}
                     <p class="text-red-600 text-xs mt-1">{confirmPasswordError}</p>
                 {/if}
             </div>
 
             <!-- Register Button -->
-            <button
-                    class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-                    data-testid="register-submit"
-                    disabled={loading}
-                    type="submit"
-            >
+            <button class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-2" data-testid="register-submit" disabled={loading} type="submit">
                 {#if loading}
                     {$_('common.loading')}
                 {:else}
@@ -248,17 +225,10 @@
             <!-- Login Link -->
             <div class="text-center pt-2 text-xs text-gray-600">
                 <span>{$_('auth.hasAccount')} </span>
-                <button
-                        class="font-bold text-libre-dark hover:underline"
-                        data-testid="goto-login"
-                        on:click={() => dispatch('gotoLogin', {})}
-                        type="button"
-                >
+                <button class="font-bold text-libre-dark hover:underline" data-testid="goto-login" on:click={() => dispatch('gotoLogin', {})} type="button">
                     {$_('auth.loginHere')}
                 </button>
             </div>
-
         </form>
     </div>
 </div>
-

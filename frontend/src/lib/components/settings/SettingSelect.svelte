@@ -25,21 +25,7 @@
         onchange?: (value: string) => void;
     }
 
-    let {
-        value = $bindable(''),
-        options = [],
-        label,
-        hint = '',
-        icon = null,
-        isModified = false,
-        isNonDefault = false,
-        isLocked = false,
-        loading = false,
-        onsave,
-        onundo,
-        onreset,
-        onchange
-    }: Props = $props();
+    let {value = $bindable(''), options = [], label, hint = '', icon = null, isModified = false, isNonDefault = false, isLocked = false, loading = false, onsave, onundo, onreset, onchange}: Props = $props();
 
     function handleChange(newValue: string) {
         value = newValue;
@@ -53,7 +39,7 @@
         <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
             {#if icon}
                 {@const Icon = icon}
-                <Icon size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                <Icon size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
             {/if}
             {label}
         </div>
@@ -68,31 +54,16 @@
         {#if !isLocked}
             <div class="flex items-center space-x-1">
                 {#if isModified}
-                    <button
-                            type="button"
-                            onclick={() => onsave?.()}
-                            class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                            title={$_('common.save')}
-                    >
-                        <Save size={14}/>
+                    <button type="button" onclick={() => onsave?.()} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" title={$_('common.save')}>
+                        <Save size={14} />
                     </button>
-                    <button
-                            type="button"
-                            onclick={() => onundo?.()}
-                            class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                            title={$_('common.undo')}
-                    >
-                        <Undo size={14}/>
+                    <button type="button" onclick={() => onundo?.()} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>
+                        <Undo size={14} />
                     </button>
                 {/if}
                 {#if isNonDefault && !isModified}
-                    <button
-                            type="button"
-                            onclick={() => onreset?.()}
-                            class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                            title={$_('common.reset')}
-                    >
-                        <RotateCcw size={14}/>
+                    <button type="button" onclick={() => onreset?.()} class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors" title={$_('common.reset')}>
+                        <RotateCcw size={14} />
                     </button>
                 {/if}
             </div>
@@ -100,14 +71,7 @@
 
         <!-- SimpleSelect dropdown - responsive width -->
         <div class="w-40 sm:w-48">
-            <SimpleSelect
-                    bind:value
-                    disabled={isLocked}
-                    {loading}
-                    onchange={handleChange}
-                    {options}
-                    placeholder={$_('common.select')}
-            />
+            <SimpleSelect bind:value disabled={isLocked} {loading} onchange={handleChange} {options} placeholder={$_('common.select')} />
         </div>
     </div>
 </div>

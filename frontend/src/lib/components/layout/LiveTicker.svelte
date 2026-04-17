@@ -39,11 +39,7 @@
         maxItems?: number;
     }
 
-    let {
-        assetIds: propAssetIds,
-        pollInterval = 30_000,
-        maxItems = 0,
-    }: Props = $props();
+    let {assetIds: propAssetIds, pollInterval = 30_000, maxItems = 0}: Props = $props();
 
     // =========================================================================
     // State
@@ -67,7 +63,7 @@
 
     // Resolved asset IDs (from props or loaded from API)
     let resolvedIds: number[] = $state([]);
-    let assetMetaMap = new Map<number, { name: string; currency: string; iconUrl: string | null; assetType: string | null }>();
+    let assetMetaMap = new Map<number, {name: string; currency: string; iconUrl: string | null; assetType: string | null}>();
 
     // Ensure currency info is loaded for flag display
     ensureCurrenciesLoaded($currentLanguage);
@@ -103,7 +99,7 @@
             }
 
             // Build placeholder items with value=null (renders "--")
-            items = resolvedIds.map(id => {
+            items = resolvedIds.map((id) => {
                 const meta = assetMetaMap.get(id);
                 return {
                     assetId: id,
@@ -140,7 +136,7 @@
                 prevMap.set(it.assetId, it.value);
             }
 
-            items = results.map(r => {
+            items = results.map((r) => {
                 const meta = assetMetaMap.get(r.assetId);
                 const prev = prevMap.get(r.assetId) ?? null;
                 return {
@@ -196,30 +192,27 @@
 
 <!-- Ticker container -->
 <div class="flex flex-wrap items-center gap-2" data-testid="live-ticker">
-
     {#if initializing}
         <span class="text-xs text-gray-400 dark:text-gray-500 animate-pulse flex items-center gap-1">
-            <RefreshCw size={12} class="animate-spin"/>
+            <RefreshCw size={12} class="animate-spin" />
             {$_('ticker.loading')}
         </span>
-
     {:else if error && items.length === 0}
         <span class="text-xs text-red-500 dark:text-red-400" title={error}>
             {$_('ticker.errorFetching')}
         </span>
-
     {:else if items.length === 0}
         <span class="text-xs text-gray-400 dark:text-gray-500">
             {$_('ticker.noAssets')}
         </span>
-
     {:else}
         {#each visibleItems as item (item.assetId)}
-            <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full
+            <div
+                class="flex items-center gap-1.5 px-2.5 py-1 rounded-full
                         text-xs whitespace-nowrap border transition-colors duration-300
                         {badgeClasses(item.direction)}"
-                 title="{item.displayName} — {item.source ?? ''}">
-
+                title="{item.displayName} — {item.source ?? ''}"
+            >
                 <!-- Asset icon -->
                 <AssetIcon iconUrl={item.iconUrl} assetType={item.assetType} altText={item.displayName} size="sm" />
 

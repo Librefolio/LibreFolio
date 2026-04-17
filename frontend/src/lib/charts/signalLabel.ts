@@ -61,21 +61,15 @@ export function signalLabelToHtml(info: SignalLabelInfo): string {
     // Color dot (fixed-width slot — same width as crown for table alignment)
     // Skip dot when crown is shown — crown already serves as the visual identifier
     if (info.color && !info.isCrown) {
-        parts.push(
-            `<span style="display:inline-block;width:16px;text-align:center;margin-right:2px;vertical-align:middle;line-height:0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${info.color};"></span></span>`
-        );
+        parts.push(`<span style="display:inline-block;width:16px;text-align:center;margin-right:2px;vertical-align:middle;line-height:0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${info.color};"></span></span>`);
     }
 
     // Icon (priority chain: custom icon_url → asset type PNG)
     if (info.iconUrl) {
-        parts.push(
-            `<img src="${info.iconUrl}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:3px;display:inline-block;" />`
-        );
+        parts.push(`<img src="${info.iconUrl}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
     } else if (info.assetType) {
         const url = getAssetTypeIconUrl(info.assetType);
-        parts.push(
-            `<img src="${url}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px;display:inline-block;" />`
-        );
+        parts.push(`<img src="${url}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
     }
 
     // Label text
@@ -103,9 +97,7 @@ export function signalLabelToText(info: SignalLabelInfo): string {
  * Extracts color, iconUrl, and assetType from each RenderedSignal
  * to build a consistent lookup map keyed by signal label.
  */
-export function buildOverlaySignalInfoMap(
-    overlaySignals: ReadonlyArray<{ label: string; color: string; iconUrl?: string | null; assetType?: string | null; currency?: string; currencyFlag?: string; opacity?: number }>,
-): Map<string, SignalLabelInfo> {
+export function buildOverlaySignalInfoMap(overlaySignals: ReadonlyArray<{label: string; color: string; iconUrl?: string | null; assetType?: string | null; currency?: string; currencyFlag?: string; opacity?: number}>): Map<string, SignalLabelInfo> {
     const map = new Map<string, SignalLabelInfo>();
     for (const sig of overlaySignals) {
         const isGhost = sig.opacity != null && sig.opacity < 1;
@@ -121,4 +113,3 @@ export function buildOverlaySignalInfoMap(
     }
     return map;
 }
-

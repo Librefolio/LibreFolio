@@ -54,7 +54,7 @@ function generateId(): string {
 
 export class EditBuffer<T extends TimeSeriesPoint> {
     private edits: Map<string, PendingEdit<T>> = new Map(); // keyed by edit ID
-    private dateIndex: Map<string, string> = new Map();      // date → edit ID (latest for that date)
+    private dateIndex: Map<string, string> = new Map(); // date → edit ID (latest for that date)
     private listeners: Set<BufferChangeCallback<T>> = new Set();
     private nextCsvLine: number = 1;
 
@@ -177,7 +177,7 @@ export class EditBuffer<T extends TimeSeriesPoint> {
      */
     getAllPoints(): T[] {
         return Array.from(this.edits.values())
-            .map(e => e.point)
+            .map((e) => e.point)
             .sort((a, b) => a.date.localeCompare(b.date));
     }
 
@@ -253,4 +253,3 @@ export class EditBuffer<T extends TimeSeriesPoint> {
         }
     }
 }
-

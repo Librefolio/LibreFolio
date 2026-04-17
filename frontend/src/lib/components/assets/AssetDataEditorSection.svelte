@@ -39,23 +39,14 @@
         /** Number of dirty rows across both tabs — exposed for parent */
         dirtyCount?: number;
         /** Called after successful save, with optional expanded date range */
-        onsave?: (expandedRange?: { start: string; end: string }) => void;
+        onsave?: (expandedRange?: {start: string; end: string}) => void;
         /** Called when edit is cancelled */
         oncancel?: () => void;
         /** Dirty price rows emitted as a preview RenderedSignal overlay (purple) */
         onpendingchange?: (previewSignal: RenderedSignal | null) => void;
     }
 
-    let {
-        assetId,
-        chartData,
-        events,
-        saving = $bindable(false),
-        dirtyCount = $bindable(0),
-        onsave,
-        oncancel,
-        onpendingchange,
-    }: Props = $props();
+    let {assetId, chartData, events, saving = $bindable(false), dirtyCount = $bindable(0), onsave, oncancel, onpendingchange}: Props = $props();
 
     // =========================================================================
     // Column definitions
@@ -104,7 +95,7 @@
     // =========================================================================
 
     function chartDataToPriceRows(data: any[]): DataRow[] {
-        return data.map(p => ({
+        return data.map((p) => ({
             rowId: p.date,
             date: p.date,
             status: 'original' as const,
@@ -131,7 +122,7 @@
     }
 
     function eventsToEventRows(evts: any[]): DataRow[] {
-        return evts.map(ev => ({
+        return evts.map((ev) => ({
             rowId: ev.id != null ? String(ev.id) : crypto.randomUUID(),
             date: ev.date,
             status: 'original' as const,
@@ -140,7 +131,7 @@
                 type: ev.type ?? '',
                 amount: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
                 currency: ev.value?.code ?? '',
-                notes: typeof ev.notes === 'string' ? ev.notes : (Array.isArray(ev.notes) ? ev.notes[0] ?? '' : ''),
+                notes: typeof ev.notes === 'string' ? ev.notes : Array.isArray(ev.notes) ? (ev.notes[0] ?? '') : '',
             },
             selected: false,
             readonly: ev.is_auto === true,
@@ -148,7 +139,7 @@
                 type: ev.type ?? '',
                 amount: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
                 currency: ev.value?.code ?? '',
-                notes: typeof ev.notes === 'string' ? ev.notes : (Array.isArray(ev.notes) ? ev.notes[0] ?? '' : ''),
+                notes: typeof ev.notes === 'string' ? ev.notes : Array.isArray(ev.notes) ? (ev.notes[0] ?? '') : '',
             },
         }));
     }
@@ -172,8 +163,8 @@
     // Dirty tracking → chart preview
     // =========================================================================
 
-    let priceDirtyCount = $derived(priceRows.filter(r => r.status !== 'original').length);
-    let eventDirtyCount = $derived(eventRows.filter(r => r.status !== 'original').length);
+    let priceDirtyCount = $derived(priceRows.filter((r) => r.status !== 'original').length);
+    let eventDirtyCount = $derived(eventRows.filter((r) => r.status !== 'original').length);
     let _dirtyCount = $derived(priceDirtyCount + eventDirtyCount);
 
     $effect(() => {
@@ -183,9 +174,9 @@
     function handlePriceDataChange(dirtyRows: DataRow[]) {
         // Emit preview signal from dirty price rows (close values)
         const pendingPoints: LineDataPoint[] = dirtyRows
-            .filter(r => r.status === 'edited' || r.status === 'appended')
-            .filter(r => r.values.close !== undefined && r.values.close !== null)
-            .map(r => ({
+            .filter((r) => r.status === 'edited' || r.status === 'appended')
+            .filter((r) => r.values.close !== undefined && r.values.close !== null)
+            .map((r) => ({
                 date: r.date,
                 value: Number(r.values.close),
             }));
@@ -215,8 +206,8 @@
     // =========================================================================
 
     async function handleSave() {
-        const dirtyPrices = priceRows.filter(r => r.status !== 'original');
-        const dirtyEvents = eventRows.filter(r => r.status !== 'original');
+        const dirtyPrices = priceRows.filter((r) => r.status !== 'original');
+        const dirtyEvents = eventRows.filter((r) => r.status !== 'original');
         if (dirtyPrices.length === 0 && dirtyEvents.length === 0) return;
 
         saving = true;
@@ -227,18 +218,18 @@
 
             // ─── PRICES ─────────────────────────────────────
             if (dirtyPrices.length > 0) {
-                const upsertPrices = dirtyPrices.filter(r => r.status === 'edited' || r.status === 'appended');
-                const deletePrices = dirtyPrices.filter(r => r.status === 'deleted');
+                const upsertPrices = dirtyPrices.filter((r) => r.status === 'edited' || r.status === 'appended');
+                const deletePrices = dirtyPrices.filter((r) => r.status === 'deleted');
 
                 // Filter valid upserts (close must be valid)
-                const validUpserts = upsertPrices.filter(r => {
+                const validUpserts = upsertPrices.filter((r) => {
                     const close = Number(r.values.close);
                     return !isNaN(close) && close > 0 && r.values.currency;
                 });
                 const invalidCount = upsertPrices.length - validUpserts.length;
 
                 if (validUpserts.length > 0) {
-                    const priceItems = validUpserts.map(r => ({
+                    const priceItems = validUpserts.map((r) => ({
                         date: r.date,
                         currency: String(r.values.currency),
                         close: Number(r.values.close),
@@ -247,17 +238,19 @@
                         low: r.values.low != null ? Number(r.values.low) : undefined,
                         volume: r.values.volume != null ? Number(r.values.volume) : undefined,
                     }));
-                    await zodiosApi.upsert_prices_bulk_api_v1_assets_prices_post([{
-                        asset_id: assetId,
-                        prices: priceItems,
-                    }]);
+                    await zodiosApi.upsert_prices_bulk_api_v1_assets_prices_post([
+                        {
+                            asset_id: assetId,
+                            prices: priceItems,
+                        },
+                    ]);
                     parts.push(`${validUpserts.length} prices saved`);
                 }
 
                 if (deletePrices.length > 0) {
                     // Merge consecutive dates into ranges
-                    const sortedDates = deletePrices.map(r => r.date).sort();
-                    const ranges: Array<{ start: string; end?: string }> = [];
+                    const sortedDates = deletePrices.map((r) => r.date).sort();
+                    const ranges: Array<{start: string; end?: string}> = [];
                     let rangeStart = sortedDates[0];
                     let rangeEnd = sortedDates[0];
                     for (let i = 1; i < sortedDates.length; i++) {
@@ -274,10 +267,12 @@
                     }
                     ranges.push(rangeStart === rangeEnd ? {start: rangeStart} : {start: rangeStart, end: rangeEnd});
 
-                    await zodiosApi.delete_prices_bulk_api_v1_assets_prices_delete([{
-                        asset_id: assetId,
-                        date_ranges: ranges,
-                    }]);
+                    await zodiosApi.delete_prices_bulk_api_v1_assets_prices_delete([
+                        {
+                            asset_id: assetId,
+                            date_ranges: ranges,
+                        },
+                    ]);
                     parts.push(`${deletePrices.length} prices deleted`);
                 }
 
@@ -286,17 +281,17 @@
 
             // ─── EVENTS ─────────────────────────────────────
             if (dirtyEvents.length > 0) {
-                const upsertEvents = dirtyEvents.filter(r => r.status === 'edited' || r.status === 'appended');
-                const deleteEvents = dirtyEvents.filter(r => r.status === 'deleted');
+                const upsertEvents = dirtyEvents.filter((r) => r.status === 'edited' || r.status === 'appended');
+                const deleteEvents = dirtyEvents.filter((r) => r.status === 'deleted');
 
                 if (upsertEvents.length > 0) {
-                    const validEvents = upsertEvents.filter(r => {
+                    const validEvents = upsertEvents.filter((r) => {
                         const amount = Number(r.values.amount);
                         return !isNaN(amount) && r.values.type;
                     });
 
                     if (validEvents.length > 0) {
-                        const eventItems = validEvents.map(r => ({
+                        const eventItems = validEvents.map((r) => ({
                             date: r.date,
                             type: String(r.values.type),
                             value: {
@@ -305,28 +300,30 @@
                             },
                             notes: r.values.notes ? String(r.values.notes) : undefined,
                         }));
-                        await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([{
-                            asset_id: assetId,
-                            events: eventItems,
-                        }]);
+                        await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([
+                            {
+                                asset_id: assetId,
+                                events: eventItems,
+                            },
+                        ]);
                         parts.push(`${validEvents.length} events saved`);
                     }
                 }
 
                 if (deleteEvents.length > 0) {
                     // Delete events that have a real DB id (not UUID-generated for new rows)
-                    const realDeletes = deleteEvents.filter(r => {
+                    const realDeletes = deleteEvents.filter((r) => {
                         const id = parseInt(r.rowId, 10);
                         return !isNaN(id) && id > 0;
                     });
                     // Delete in parallel (batch)
                     if (realDeletes.length > 0) {
                         await Promise.all(
-                            realDeletes.map(r =>
+                            realDeletes.map((r) =>
                                 zodiosApi.delete_event_api_v1_assets_events__event_id__delete(undefined, {
                                     params: {event_id: parseInt(r.rowId, 10)},
-                                })
-                            )
+                                }),
+                            ),
                         );
                         parts.push(`${realDeletes.length} events deleted`);
                     }
@@ -336,13 +333,13 @@
             toasts.success(`Asset data: ${parts.join(', ')}`);
 
             // Compute expanded date range from appended price rows
-            const appendedPrices = priceRows.filter(r => r.status === 'appended');
-            let expandedRange: { start: string; end: string } | undefined;
+            const appendedPrices = priceRows.filter((r) => r.status === 'appended');
+            let expandedRange: {start: string; end: string} | undefined;
             if (appendedPrices.length > 0 && chartData.length > 0) {
                 const chartDates = chartData.map((d: any) => d.date).sort();
                 const chartStart = chartDates[0];
                 const chartEnd = chartDates[chartDates.length - 1];
-                const allDates = [...chartDates, ...appendedPrices.map(r => r.date)].sort();
+                const allDates = [...chartDates, ...appendedPrices.map((r) => r.date)].sort();
                 const newStart = allDates[0];
                 const newEnd = allDates[allDates.length - 1];
                 if (newStart < chartStart || newEnd > chartEnd) {
@@ -403,14 +400,12 @@
     <!-- Tab bar -->
     <div class="flex border-b border-gray-200 dark:border-slate-600">
         <button
-                class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
-                       {activeTab === 'prices'
-                    ? 'border-libre-green text-libre-green dark:text-emerald-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-500'}"
-                onclick={() => activeTab = 'prices'}
-                data-testid="asset-editor-prices-tab"
+            class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+                       {activeTab === 'prices' ? 'border-libre-green text-libre-green dark:text-emerald-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-500'}"
+            onclick={() => (activeTab = 'prices')}
+            data-testid="asset-editor-prices-tab"
         >
-            <DollarSign size={14}/>
+            <DollarSign size={14} />
             {$t('assetDetail.pricesTab')}
             {#if priceDirtyCount > 0}
                 <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full">
@@ -419,14 +414,12 @@
             {/if}
         </button>
         <button
-                class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
-                       {activeTab === 'events'
-                    ? 'border-libre-green text-libre-green dark:text-emerald-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-500'}"
-                onclick={() => activeTab = 'events'}
-                data-testid="asset-editor-events-tab"
+            class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+                       {activeTab === 'events' ? 'border-libre-green text-libre-green dark:text-emerald-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-500'}"
+            onclick={() => (activeTab = 'events')}
+            data-testid="asset-editor-events-tab"
         >
-            <CalendarClock size={14}/>
+            <CalendarClock size={14} />
             {$t('assetDetail.eventsTab')}
             {#if eventDirtyCount > 0}
                 <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full">
@@ -438,56 +431,31 @@
 
     <!-- Data Editor: Prices -->
     {#if activeTab === 'prices'}
-        <DataEditor
-                bind:rows={priceRows}
-                bind:this={priceEditor}
-                columns={priceColumns}
-                onchange={handlePriceDataChange}
-        >
+        <DataEditor bind:rows={priceRows} bind:this={priceEditor} columns={priceColumns} onchange={handlePriceDataChange}>
             {#snippet importModal({open, setOpen, onimport})}
-                <PriceDataImportModal
-                        {open}
-                        onimport={onimport}
-                        onclose={() => setOpen(false)}
-                />
+                <PriceDataImportModal {open} {onimport} onclose={() => setOpen(false)} />
             {/snippet}
         </DataEditor>
     {/if}
 
     <!-- Data Editor: Events -->
     {#if activeTab === 'events'}
-        <DataEditor
-                bind:rows={eventRows}
-                bind:this={eventEditor}
-                columns={eventColumns}
-        >
+        <DataEditor bind:rows={eventRows} bind:this={eventEditor} columns={eventColumns}>
             {#snippet importModal({open, setOpen, onimport})}
-                <EventDataImportModal
-                        {open}
-                        onimport={onimport}
-                        onclose={() => setOpen(false)}
-                />
+                <EventDataImportModal {open} {onimport} onclose={() => setOpen(false)} />
             {/snippet}
         </DataEditor>
     {/if}
 
     <!-- Save / Cancel bar -->
     <div class="flex items-center justify-end gap-2 px-1">
-        <button
-                class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors"
-                disabled={saving || _dirtyCount === 0}
-                onclick={handleSave}
-        >
-            <Save size={15}/> {saving ? $t('dataEditor.saving') : $t('dataEditor.save', {values: {count: _dirtyCount}})}
+        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave}>
+            <Save size={15} />
+            {saving ? $t('dataEditor.saving') : $t('dataEditor.save', {values: {count: _dirtyCount}})}
         </button>
-        <button
-                class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
-                onclick={handleCancel}
-        >
-            <X size={15}/>
+        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors" onclick={handleCancel}>
+            <X size={15} />
             {$t('common.cancel')}
         </button>
     </div>
 </div>
-
-

@@ -109,9 +109,7 @@
     export function updatePendingEnd(date: string, value: number) {
         if (!measureActive || pendingStartDate === null) return;
         if (date === pendingStartDate) return; // no zero-length measure
-        const [s, e] = pendingStartDate <= date
-            ? [pendingStartDate, date]
-            : [date, pendingStartDate];
+        const [s, e] = pendingStartDate <= date ? [pendingStartDate, date] : [date, pendingStartDate];
         pendingMeasure = new MeasureSignal(
             '__pending__',
             {
@@ -132,9 +130,7 @@
             pendingStartValue = value;
         } else {
             const id = `measure-${nextId++}`;
-            const [start, end] = pendingStartDate <= date
-                ? [pendingStartDate, date]
-                : [date, pendingStartDate];
+            const [start, end] = pendingStartDate <= date ? [pendingStartDate, date] : [date, pendingStartDate];
 
             const measure = new MeasureSignal(
                 id,
@@ -183,12 +179,12 @@
     }
 
     function removeMeasure(id: string) {
-        measures = measures.filter(m => m.id !== id);
+        measures = measures.filter((m) => m.id !== id);
         emitRendered();
     }
 
     function updateMeasureStyle(id: string, key: keyof import('$lib/charts/signals').SignalStyle, value: any) {
-        const m = measures.find(m => m.id === id);
+        const m = measures.find((m) => m.id === id);
         if (!m) return;
         (m.style as any)[key] = value;
         measures = [...measures]; // trigger reactivity
@@ -196,7 +192,7 @@
     }
 
     function updateMeasureDates(id: string, newStart: string, newEnd: string) {
-        const m = measures.find(m => m.id === id);
+        const m = measures.find((m) => m.id === id);
         if (!m) return;
         // Ensure start <= end
         const [s, e] = newStart <= newEnd ? [newStart, newEnd] : [newEnd, newStart];
@@ -220,9 +216,7 @@
     // =========================================================================
 
     function emitRendered() {
-        const rendered: RenderedSignal[] = measures.map(m =>
-            m.render(chartData, viewMode),
-        ).filter(r => r.data.length > 0);
+        const rendered: RenderedSignal[] = measures.map((m) => m.render(chartData, viewMode)).filter((r) => r.data.length > 0);
         // Include pending preview (live measure during placement)
         if (pendingMeasure) {
             const preview = pendingMeasure.render(chartData, viewMode);
@@ -236,7 +230,7 @@
         void viewMode;
         if (measures.length > 0) {
             // Auto-delete measures whose start/end dates are no longer in chartData
-            const valid = measures.filter(m => m.getMeasurement(chartData) !== null);
+            const valid = measures.filter((m) => m.getMeasurement(chartData) !== null);
             if (valid.length < measures.length) {
                 measures = valid;
             }
@@ -248,9 +242,7 @@
     // Derived
     // =========================================================================
 
-    let measurements: Array<{ measure: MeasureSignal; result: MeasurementResult | null }> = $derived(
-        measures.map(m => ({measure: m, result: m.getMeasurement(chartData)}))
-    );
+    let measurements: Array<{measure: MeasureSignal; result: MeasurementResult | null}> = $derived(measures.map((m) => ({measure: m, result: m.getMeasurement(chartData)})));
 
     // =========================================================================
     // Formatting helpers
@@ -303,52 +295,75 @@
 
     const summaryColumns: ColumnDef<MeasureSummaryRow>[] = [
         {
-            id: 'signal', header: () => $t('measure.table.signal'), type: 'text',
+            id: 'signal',
+            header: () => $t('measure.table.signal'),
+            type: 'text',
             cell: (r) => wrapGhost(signalLabelToHtml(r.signalInfo), r.isGhost),
-            sortable: false, filterable: false, width: 100,
+            sortable: false,
+            filterable: false,
+            width: 100,
         },
         {
-            id: 'valueStart', header: () => $t('common.start'), type: 'number',
+            id: 'valueStart',
+            header: () => $t('common.start'),
+            type: 'number',
             cell: (r) => wrapGhost(`<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueStart)}</span>`, r.isGhost),
-            getValue: (r) => r.valueStart, sortable: true, filterable: true, width: 90,
+            getValue: (r) => r.valueStart,
+            sortable: true,
+            filterable: true,
+            width: 90,
         },
         {
-            id: 'valueEnd', header: () => $t('common.end'), type: 'number',
+            id: 'valueEnd',
+            header: () => $t('common.end'),
+            type: 'number',
             cell: (r) => wrapGhost(`<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueEnd)}</span>`, r.isGhost),
-            getValue: (r) => r.valueEnd, sortable: true, filterable: true, width: 90,
+            getValue: (r) => r.valueEnd,
+            sortable: true,
+            filterable: true,
+            width: 90,
         },
         {
-            id: 'deltaAbs', header: () => $t('measure.table.deltaAbs'), type: 'number',
+            id: 'deltaAbs',
+            header: () => $t('measure.table.deltaAbs'),
+            type: 'number',
             cell: (r) => wrapGhost(`<span class="font-mono ${colorClass(r.deltaAbs)}">${fmtDelta(r.deltaAbs)}</span>`, r.isGhost),
-            getValue: (r) => r.deltaAbs, sortable: true, filterable: true, width: 80,
+            getValue: (r) => r.deltaAbs,
+            sortable: true,
+            filterable: true,
+            width: 80,
         },
         {
-            id: 'deltaPct', header: () => $t('measure.table.deltaPct'), type: 'number',
+            id: 'deltaPct',
+            header: () => $t('measure.table.deltaPct'),
+            type: 'number',
             cell: (r) => wrapGhost(`<span class="font-mono ${colorClass(r.deltaPct)}">${fmtPct(r.deltaPct)}</span>`, r.isGhost),
-            getValue: (r) => r.deltaPct, sortable: true, filterable: true, width: 80,
+            getValue: (r) => r.deltaPct,
+            sortable: true,
+            filterable: true,
+            width: 80,
         },
         {
-            id: 'annualizedPct', header: () => $t('measure.table.annualized'), type: 'number',
+            id: 'annualizedPct',
+            header: () => $t('measure.table.annualized'),
+            type: 'number',
             headerTooltip: '$\\large (1 + \\Delta\\%)^{\\frac{365}{d}} - 1$',
-            cell: (r) => r.annualizedPct !== null
-                ? wrapGhost(`<span class="font-mono ${colorClass(r.annualizedPct)}">${fmtPct(r.annualizedPct)}</span>`, r.isGhost)
-                : ({type: 'html', html: '<span class="text-gray-400">—</span>'}),
-            getValue: (r) => r.annualizedPct ?? 0, sortable: true, filterable: true, width: 80,
+            cell: (r) => (r.annualizedPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.annualizedPct)}">${fmtPct(r.annualizedPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-gray-400">—</span>'}),
+            getValue: (r) => r.annualizedPct ?? 0,
+            sortable: true,
+            filterable: true,
+            width: 80,
         },
     ];
 
     /** Original (unconverted) chart data derived from chartData's originalValue field */
     let originalChartData: LineDataPoint[] = $derived.by(() => {
-        if (!chartData.some(d => d.originalValue !== undefined)) return [];
-        return chartData
-            .filter(d => d.originalValue !== undefined)
-            .map(d => ({date: d.date, value: d.originalValue!}));
+        if (!chartData.some((d) => d.originalValue !== undefined)) return [];
+        return chartData.filter((d) => d.originalValue !== undefined).map((d) => ({date: d.date, value: d.originalValue!}));
     });
 
     /** Original currency code (from first point with originalCurrency) */
-    let originalCurrencyCode = $derived(
-        chartData.find(d => d.originalCurrency)?.originalCurrency ?? ''
-    );
+    let originalCurrencyCode = $derived(chartData.find((d) => d.originalCurrency)?.originalCurrency ?? '');
 
     function buildSummaryRows(result: MeasurementResult, measureObj: MeasureSignal): MeasureSummaryRow[] {
         // When FX conversion is active, add 💱(target currency) suffix to main label
@@ -399,7 +414,7 @@
             }
         }
 
-        for (const signal of overlaySignals.filter(s => s.data.length > 0 && (s.yAxisIndex ?? 0) === 0)) {
+        for (const signal of overlaySignals.filter((s) => s.data.length > 0 && (s.yAxisIndex ?? 0) === 0)) {
             // Ghost overlay signals (opacity < 1) get 💱 label — they show original currency data
             const isGhost = signal.opacity != null && signal.opacity < 1;
             const sigResult = measureObj.getMeasurementForSignal(signal.data);
@@ -431,8 +446,6 @@
 </script>
 
 <div class="space-y-3">
-
-
     <!-- Pending indicator -->
     {#if measureActive && pendingStartDate}
         <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-1.5 border border-amber-200 dark:border-amber-800">
@@ -443,21 +456,17 @@
     <!-- Measure cards -->
     {#if measures.length > 0}
         <div class="space-y-2">
-            {#each measurements as {measure, result}}
+            {#each measurements as { measure, result }}
                 {@const isExpanded = expandedIds.has(measure.id)}
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-visible">
                     <!-- Card header: responsive layout (wide=1 row, tablet=2 rows via stacked DRP) -->
                     <div
-                            class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
+                        class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
                                     hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                     >
                         <!-- 1. Chevron -->
-                        <button
-                                type="button"
-                                class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0 self-center"
-                                onclick={() => toggleExpand(measure.id)}
-                        >
-                            <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}"/>
+                        <button type="button" class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0 self-center" onclick={() => toggleExpand(measure.id)}>
+                            <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
                         </button>
 
                         <!-- 2. DateRangePicker (or collapsed summary) -->
@@ -465,24 +474,15 @@
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
                             <div class="min-w-0 max-w-[300px] shrink-0 self-center" onclick={(e) => e.stopPropagation()}>
-                                <DateRangePicker
-                                        start={String(measure.params.startDate)}
-                                        end={String(measure.params.endDate)}
-                                        showPresets={false}
-                                        showCustomWindow={false}
-                                        compact={true}
-                                        stacked={isNarrow}
-                                        onchange={(s, e) => updateMeasureDates(measure.id, s, e)}
-                                />
+                                <DateRangePicker start={String(measure.params.startDate)} end={String(measure.params.endDate)} showPresets={false} showCustomWindow={false} compact={true} stacked={isNarrow} onchange={(s, e) => updateMeasureDates(measure.id, s, e)} />
                             </div>
                         {:else}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer self-center"
-                                  onclick={() => toggleExpand(measure.id)}>
+                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
                                 📏 {measure.params.startDate} → {measure.params.endDate}
                                 {#if result}
-                                    <span class="{result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                    <span class={result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
                                         {fmtPct(result.deltaPct)}
                                     </span>
                                     <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
@@ -502,12 +502,8 @@
                             {/if}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <div class="{isNarrow ? 'w-full' : 'ml-auto flex-1 min-w-[100px] max-w-[400px]'}" onclick={(e) => e.stopPropagation()}>
-                                <SignalStyleEditor
-                                        style={measure.style}
-                                        onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)}
-                                        simplified
-                                />
+                            <div class={isNarrow ? 'w-full' : 'ml-auto flex-1 min-w-[100px] max-w-[400px]'} onclick={(e) => e.stopPropagation()}>
+                                <SignalStyleEditor style={measure.style} onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)} simplified />
                             </div>
                         </div>
 
@@ -517,42 +513,49 @@
                                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                                 <div onclick={(e) => e.stopPropagation()}>
-                                    <ColumnVisibilityToggle tableRef={measureTableRefs[measure.id]}/>
+                                    <ColumnVisibilityToggle tableRef={measureTableRefs[measure.id]} />
                                 </div>
                             {/if}
                             <span
-                                    class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex items-center justify-center"
-                                    role="button"
-                                    tabindex="-1"
-                                    title={$t('common.remove')}
-                                    onclick={(e) => { e.stopPropagation(); removeMeasure(measure.id); }}
-                                    onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); removeMeasure(measure.id); }}}
+                                class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex items-center justify-center"
+                                role="button"
+                                tabindex="-1"
+                                title={$t('common.remove')}
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    removeMeasure(measure.id);
+                                }}
+                                onkeydown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.stopPropagation();
+                                        removeMeasure(measure.id);
+                                    }
+                                }}
                             >
-                                <Trash2 size={13}/>
+                                <Trash2 size={13} />
                             </span>
                         </div>
                     </div>
 
                     <!-- Expanded content -->
                     {#if isExpanded}
-
                         <!-- Summary table (DataTable) -->
                         {#if result}
                             <div class="border-t border-gray-200 dark:border-slate-600">
                                 <DataTable
-                                        bind:this={measureTableRefs[measure.id]}
-                                        data={buildSummaryRows(result, measure)}
-                                        columns={summaryColumns}
-                                        getRowId={(r) => r.id}
-                                        storageKey="measure-summary-{measure.id}"
-                                        enableSelection={false}
-                                        enableActions={false}
-                                        enableSorting={true}
-                                        enableColumnFilters={true}
-                                        enableColumnVisibility={true}
-                                        enableColumnResize={true}
-                                        enablePagination={false}
-                                        tableLayout="auto"
+                                    bind:this={measureTableRefs[measure.id]}
+                                    data={buildSummaryRows(result, measure)}
+                                    columns={summaryColumns}
+                                    getRowId={(r) => r.id}
+                                    storageKey="measure-summary-{measure.id}"
+                                    enableSelection={false}
+                                    enableActions={false}
+                                    enableSorting={true}
+                                    enableColumnFilters={true}
+                                    enableColumnVisibility={true}
+                                    enableColumnResize={true}
+                                    enablePagination={false}
+                                    tableLayout="auto"
                                 />
                             </div>
                         {/if}
@@ -566,4 +569,3 @@
         </p>
     {/if}
 </div>
-

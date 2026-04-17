@@ -46,20 +46,7 @@
         originalCurrency?: string;
     }
 
-    let {
-        value = $bindable(''),
-        allowedCurrencies,
-        excludedCurrencies,
-        includeAll = false,
-        placeholder = '',
-        disabled = false,
-        loading: externalLoading = false,
-        maxVisibleItems = 6,
-        dropdownPosition = 'auto',
-        onchange,
-        compact = false,
-        originalCurrency,
-    }: Props = $props();
+    let {value = $bindable(''), allowedCurrencies, excludedCurrencies, includeAll = false, placeholder = '', disabled = false, loading: externalLoading = false, maxVisibleItems = 6, dropdownPosition = 'auto', onchange, compact = false, originalCurrency}: Props = $props();
 
     let allCurrencies = $state<CurrencyInfo[]>([]);
     let internalLoading = $state(true);
@@ -67,11 +54,9 @@
 
     // Filter currencies: allowedCurrencies (include list) then excludedCurrencies (exclude set)
     let filteredCurrencies = $derived.by(() => {
-        let list = allowedCurrencies
-            ? allCurrencies.filter(c => allowedCurrencies!.includes(c.code))
-            : allCurrencies;
+        let list = allowedCurrencies ? allCurrencies.filter((c) => allowedCurrencies!.includes(c.code)) : allCurrencies;
         if (excludedCurrencies && excludedCurrencies.size > 0) {
-            list = list.filter(c => !excludedCurrencies!.has(c.code));
+            list = list.filter((c) => !excludedCurrencies!.has(c.code));
         }
         return list;
     });
@@ -155,18 +140,7 @@
     }
 </script>
 
-<SearchSelect
-        bind:value
-        {compact}
-        {disabled}
-        {dropdownPosition}
-        inlineSearch={true}
-        loading={isLoading}
-        {maxVisibleItems}
-        onchange={handleChange}
-        options={currencyOptions}
-        placeholder={placeholder || $_('fx.filter.filterCurrency')}
->
+<SearchSelect bind:value {compact} {disabled} {dropdownPosition} inlineSearch={true} loading={isLoading} {maxVisibleItems} onchange={handleChange} options={currencyOptions} placeholder={placeholder || $_('fx.filter.filterCurrency')}>
     {#snippet item(option)}
         <div class="flex items-center space-x-2 min-w-0">
             {#if option.icon}
@@ -212,4 +186,3 @@
         {/if}
     {/snippet}
 </SearchSelect>
-

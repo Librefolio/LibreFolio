@@ -15,7 +15,6 @@ function pt(date: string, value: number): TestPoint {
 }
 
 describe('TimeSeriesStore', () => {
-
     // =========================================================================
     // Test 1: getRange on empty store → single gap for entire range
     // =========================================================================
@@ -31,11 +30,7 @@ describe('TimeSeriesStore', () => {
     // =========================================================================
     it('merge + getRange returns data and no gap for covered dates', () => {
         const store = new TimeSeriesStore<TestPoint>();
-        store.merge([
-            pt('2024-01-01', 1.0),
-            pt('2024-01-02', 1.1),
-            pt('2024-01-03', 1.2),
-        ]);
+        store.merge([pt('2024-01-01', 1.0), pt('2024-01-02', 1.1), pt('2024-01-03', 1.2)]);
         const result = store.getRange('2024-01-01', '2024-01-03');
         expect(result.data).toHaveLength(3);
         expect(result.gaps).toEqual([]);
@@ -90,12 +85,7 @@ describe('TimeSeriesStore', () => {
     // =========================================================================
     it('invalidateRange removes only the specified range', () => {
         const store = new TimeSeriesStore<TestPoint>();
-        store.merge([
-            pt('2024-01-01', 1.0),
-            pt('2024-01-02', 1.1),
-            pt('2024-01-03', 1.2),
-            pt('2024-01-04', 1.3),
-        ]);
+        store.merge([pt('2024-01-01', 1.0), pt('2024-01-02', 1.1), pt('2024-01-03', 1.2), pt('2024-01-04', 1.3)]);
         store.invalidateRange('2024-01-02', '2024-01-03');
         expect(store.size).toBe(2);
         expect(store.has('2024-01-01')).toBe(true);
@@ -120,13 +110,9 @@ describe('TimeSeriesStore', () => {
     // =========================================================================
     it('getAllSorted returns chronologically ordered array', () => {
         const store = new TimeSeriesStore<TestPoint>();
-        store.merge([
-            pt('2024-01-03', 1.2),
-            pt('2024-01-01', 1.0),
-            pt('2024-01-02', 1.1),
-        ]);
+        store.merge([pt('2024-01-03', 1.2), pt('2024-01-01', 1.0), pt('2024-01-02', 1.1)]);
         const sorted = store.getAllSorted();
-        expect(sorted.map(d => d.date)).toEqual(['2024-01-01', '2024-01-02', '2024-01-03']);
+        expect(sorted.map((d) => d.date)).toEqual(['2024-01-01', '2024-01-02', '2024-01-03']);
     });
 
     // =========================================================================
@@ -166,11 +152,7 @@ describe('TimeSeriesStore', () => {
     // =========================================================================
     it('merge with non-contiguous dates → gaps calculated correctly', () => {
         const store = new TimeSeriesStore<TestPoint>();
-        store.merge([
-            pt('2024-01-01', 1.0),
-            pt('2024-01-05', 1.4),
-            pt('2024-01-10', 1.9),
-        ]);
+        store.merge([pt('2024-01-01', 1.0), pt('2024-01-05', 1.4), pt('2024-01-10', 1.9)]);
         const result = store.getRange('2024-01-01', '2024-01-10');
         expect(result.data).toHaveLength(3);
         expect(result.gaps).toHaveLength(2);
@@ -214,4 +196,3 @@ describe('TimeSeriesStore', () => {
         expect(result.gaps[0]).toEqual({start: '2024-01-03', end: '2024-01-05'});
     });
 });
-

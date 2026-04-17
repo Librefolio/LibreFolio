@@ -42,27 +42,13 @@
          */
         renderSignals?: (chartData: LineDataPoint[], viewMode: 'absolute' | 'percentage') => RenderedSignal[];
         /** Callbacks */
-        ondelete?: (info: { base: string; quote: string; slug: string }) => void;
-        onrefresh?: (info: { slug: string }) => void;
-        onsync?: (info: { slug: string; base: string; quote: string }) => void;
-        onsettings?: (info: { slug: string }) => void;
+        ondelete?: (info: {base: string; quote: string; slug: string}) => void;
+        onrefresh?: (info: {slug: string}) => void;
+        onsync?: (info: {slug: string; base: string; quote: string}) => void;
+        onsettings?: (info: {slug: string}) => void;
     }
 
-    let {
-        base,
-        quote,
-        slug,
-        data = [],
-        loading = false,
-        manualOnly = false,
-        globalViewMode = 'absolute',
-        chartSettings,
-        renderSignals,
-        ondelete,
-        onrefresh,
-        onsync,
-        onsettings,
-    }: Props = $props();
+    let {base, quote, slug, data = [], loading = false, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings}: Props = $props();
 
     // =========================================================================
     // State
@@ -112,22 +98,26 @@
     });
 
     let chartData = $derived.by((): LineDataPoint[] => {
-        const absolute = data.map((d): LineDataPoint => ({
-            date: d.date,
-            value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
-            staleDays: d.backwardFillInfo?.daysBack ?? 0,
-        }));
+        const absolute = data.map(
+            (d): LineDataPoint => ({
+                date: d.date,
+                value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
+                staleDays: d.backwardFillInfo?.daysBack ?? 0,
+            }),
+        );
         if (cardViewMode === 'absolute' || absolute.length === 0) return absolute;
         return normalizeToPercentage(absolute);
     });
 
     /** Absolute data for signal rendering (before % conversion) */
     let absoluteData = $derived.by((): LineDataPoint[] =>
-        data.map((d): LineDataPoint => ({
-            date: d.date,
-            value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
-            staleDays: d.backwardFillInfo?.daysBack ?? 0,
-        }))
+        data.map(
+            (d): LineDataPoint => ({
+                date: d.date,
+                value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
+                staleDays: d.backwardFillInfo?.daysBack ?? 0,
+            }),
+        ),
     );
 
     /** Overlay signals — re-rendered reactively when cardViewMode or inverted changes */
@@ -162,14 +152,14 @@
 </script>
 
 <div
-        class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden cursor-pointer
+    class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden cursor-pointer
        transition-all duration-200 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
        focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
-        data-testid="fx-card-{slug}"
-        onclick={handleCardClick}
-        onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
-        role="button"
-        tabindex="0"
+    data-testid="fx-card-{slug}"
+    onclick={handleCardClick}
+    onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
+    role="button"
+    tabindex="0"
 >
     <!-- Row 1: Pair + controls + badge -->
     <div class="px-4 pt-3 pb-1">
@@ -184,29 +174,32 @@
                 </span>
 
                 <button
-                        class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                        data-testid="fx-swap-btn"
-                        onclick={(e) => { stop(e); inverted = !inverted; setCardInverted(slug, inverted); }}
-                        title={$t('common.swapDirection')}
+                    class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    data-testid="fx-swap-btn"
+                    onclick={(e) => {
+                        stop(e);
+                        inverted = !inverted;
+                        setCardInverted(slug, inverted);
+                    }}
+                    title={$t('common.swapDirection')}
                 >
-                    <ArrowLeftRight size={14}/>
+                    <ArrowLeftRight size={14} />
                 </button>
             </div>
 
             <div class="flex items-center gap-1.5 shrink-0">
                 <button
-                        class="p-1 rounded-md transition-colors {cardViewMode === 'percentage'
-                        ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400'
-                        : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
-                        onclick={(e) => { stop(e); localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute'; }}
-                        title={cardViewMode === 'absolute' ? $t('chart.showPercentage') : $t('chart.showAbsolute')}
+                    class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    onclick={(e) => {
+                        stop(e);
+                        localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute';
+                    }}
+                    title={cardViewMode === 'absolute' ? $t('chart.showPercentage') : $t('chart.showAbsolute')}
                 >
-                    <Percent size={14}/>
+                    <Percent size={14} />
                 </button>
                 {#if manualOnly}
-                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
-                        ✏️ Manual
-                    </span>
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"> ✏️ Manual </span>
                 {/if}
             </div>
         </div>
@@ -221,7 +214,8 @@
                 </span>
                 {#if deltaPercent !== null}
                     <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                        {deltaPercent >= 0 ? '▲' : '▼'} {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                        {deltaPercent >= 0 ? '▲' : '▼'}
+                        {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
                     </span>
                 {/if}
             </div>
@@ -235,16 +229,7 @@
     <!-- Mini Chart -->
     <div class="px-4">
         {#if chartData.length > 0}
-            <PriceChartCompact
-                    data={chartData}
-                    height="80px"
-                    viewMode={cardViewMode}
-                    areaFill={chartSettings?.areaFill ?? true}
-                    colorByBaseline={chartSettings?.colorByBaseline}
-                    showGridLines={chartSettings?.gridLines}
-                    showGradient={chartSettings?.staleGradient ?? true}
-                    overlaySignals={overlaySignals}
-            />
+            <PriceChartCompact data={chartData} height="80px" viewMode={cardViewMode} areaFill={chartSettings?.areaFill ?? true} colorByBaseline={chartSettings?.colorByBaseline} showGridLines={chartSettings?.gridLines} showGradient={chartSettings?.staleGradient ?? true} {overlaySignals} />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
                 <div class="animate-pulse bg-gray-100 dark:bg-slate-700 rounded w-full h-12"></div>
@@ -260,37 +245,48 @@
     <div class="px-4 py-2.5 flex items-center justify-between border-t border-gray-50 dark:border-slate-700/50">
         <div class="flex items-center gap-0.5">
             <button
-                    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    onclick={(e) => { stop(e); onsettings?.({ slug }); }}
-                    title={$t('chartSettings.title')}
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onclick={(e) => {
+                    stop(e);
+                    onsettings?.({slug});
+                }}
+                title={$t('chartSettings.title')}
             >
-                <Settings size={15}/>
+                <Settings size={15} />
             </button>
             <button
-                    class="p-1.5 rounded-md transition-colors {manualOnly ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
-                    disabled={manualOnly}
-                    onclick={(e) => { stop(e); if (!manualOnly) onsync?.({ slug, base, quote }); }}
-                    title={manualOnly ? 'Manual-only pair' : 'Sync rates from provider'}
+                class="p-1.5 rounded-md transition-colors {manualOnly ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
+                disabled={manualOnly}
+                onclick={(e) => {
+                    stop(e);
+                    if (!manualOnly) onsync?.({slug, base, quote});
+                }}
+                title={manualOnly ? 'Manual-only pair' : 'Sync rates from provider'}
             >
-                <RotateCw class={loading ? 'animate-spin' : ''} size={15}/>
+                <RotateCw class={loading ? 'animate-spin' : ''} size={15} />
             </button>
             <button
-                    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
-                    onclick={(e) => { stop(e); onrefresh?.({ slug }); }}
-                    title={$t('common.refresh')}
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                onclick={(e) => {
+                    stop(e);
+                    onrefresh?.({slug});
+                }}
+                title={$t('common.refresh')}
             >
-                <RefreshCw size={15}/>
+                <RefreshCw size={15} />
             </button>
         </div>
         <div class="flex items-center gap-0.5">
             <button
-                    class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
-                    onclick={(e) => { stop(e); ondelete?.({ base, quote, slug }); }}
-                    title={$t('fx.deletePair')}
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
+                onclick={(e) => {
+                    stop(e);
+                    ondelete?.({base, quote, slug});
+                }}
+                title={$t('fx.deletePair')}
             >
-                <Trash2 size={15}/>
+                <Trash2 size={15} />
             </button>
         </div>
     </div>
 </div>
-

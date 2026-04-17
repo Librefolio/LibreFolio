@@ -11,4 +11,3 @@ export {default as DataEditor} from './DataEditor.svelte';
 export {default as DataImportModal} from './DataImportModal.svelte';
 export type {ColumnDef, DataRow, GapRow, TableRow, RowStatus} from './DataEditorTypes';
 export type {CsvColumnDef, ParsedRow} from './CsvEditor.svelte';
-

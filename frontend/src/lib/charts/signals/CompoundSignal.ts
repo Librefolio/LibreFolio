@@ -22,7 +22,7 @@ import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class CompoundSignal extends ChartSignal {
     static override signalType = 'compound';
-    static override displayName = 'Compound Growth';           // i18n: 'signals.compound'
+    static override displayName = 'Compound Growth'; // i18n: 'signals.compound'
     static override icon = '📊';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
     static docsPath = 'financial-theory/technical-analysis/synthetic-benchmarks/compound/';
@@ -93,4 +93,3 @@ export class CompoundSignal extends ChartSignal {
         return `Compound ${rate}%/yr${offsetStr}`;
     }
 }
-

@@ -430,14 +430,7 @@ test.describe('Asset Data Editor', () => {
         const modal = await openEventImportModal(page);
 
         const textarea = modal.locator('textarea');
-        await textarea.fill(
-            'date;currency;type;amount;notes\n' +
-            '2020-01-01;USD;DIVIDEND;1.00;\n' +
-            '2020-02-01;EUR;INTEREST;0.50;\n' +
-            '2020-03-01;;SPLIT;2;\n' +
-            '2020-04-01;USD;PRICE_ADJUSTMENT;-5.00;\n' +
-            '2020-05-01;USD;MATURITY_SETTLEMENT;100;final'
-        );
+        await textarea.fill('date;currency;type;amount;notes\n' + '2020-01-01;USD;DIVIDEND;1.00;\n' + '2020-02-01;EUR;INTEREST;0.50;\n' + '2020-03-01;;SPLIT;2;\n' + '2020-04-01;USD;PRICE_ADJUSTMENT;-5.00;\n' + '2020-05-01;USD;MATURITY_SETTLEMENT;100;final');
         await page.waitForTimeout(200);
 
         // All 5 event types should be valid

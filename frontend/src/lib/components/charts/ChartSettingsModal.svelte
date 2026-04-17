@@ -21,7 +21,7 @@
     import ChartAestheticsSection from './ChartAestheticsSection.svelte';
     import ChartSignalsSection from './ChartSignalsSection.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {type RenderedSignal, type SignalConfig, signalFromConfig,} from '$lib/charts/signals';
+    import {type RenderedSignal, type SignalConfig, signalFromConfig} from '$lib/charts/signals';
     import {SineSignal} from '$lib/charts/signals/SineSignal';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
 
@@ -38,7 +38,7 @@
         /** Available FX pairs for FxPairSignal dynamic options (slug format: 'EUR-GBP') */
         availablePairs?: string[];
         /** Available assets for AssetComparisonSignal dynamic options */
-        availableAssets?: Array<{id: number, display_name: string, icon_url?: string | null, asset_type?: string | null}>;
+        availableAssets?: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>;
         /** Pair-specific data for preview chart (used in pair mode). If omitted, uses synthetic demo data. */
         pairData?: LineDataPoint[];
         /** Map of pair slug → data points for resolving FxPairSignal data in preview */
@@ -51,18 +51,7 @@
         onclose?: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        settings,
-        mode = 'global',
-        availablePairs = [],
-        availableAssets = [],
-        pairData,
-        pairsDataMap = {},
-        assetsDataMap = {},
-        onsave,
-        onclose,
-    }: Props = $props();
+    let {open = $bindable(false), settings, mode = 'global', availablePairs = [], availableAssets = [], pairData, pairsDataMap = {}, assetsDataMap = {}, onsave, onclose}: Props = $props();
 
     // =========================================================================
     // Local editing state (cloned from props)
@@ -166,11 +155,7 @@
             d.setDate(d.getDate() - (DAYS - 1 - i));
             baseDates.push({date: d.toISOString().slice(0, 10), value: 1.0});
         }
-        const sineInstance = new SineSignal(
-            'demo-sine',
-            {color: '#000', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null},
-            {amplitude: 20, period: 120, offset: 0},
-        );
+        const sineInstance = new SineSignal('demo-sine', {color: '#000', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null}, {amplitude: 20, period: 120, offset: 0});
         const points = sineInstance.computePoints(baseDates);
         const stalePatches = [
             {start: 80, days: Array.from({length: 20}, (_, i) => i + 1)},
@@ -178,7 +163,7 @@
         ];
         for (const patch of stalePatches) {
             const lastFreshValue = patch.start > 0 ? points[patch.start - 1].value : points[0].value;
-            for (let j = 0; j < patch.days.length && (patch.start + j) < points.length; j++) {
+            for (let j = 0; j < patch.days.length && patch.start + j < points.length; j++) {
                 const idx = patch.start + j;
                 points[idx] = {...points[idx], value: lastFreshValue, staleDays: patch.days[j]};
             }
@@ -188,9 +173,7 @@
 
     const syntheticData = generateSyntheticData();
 
-    let previewDataAbs = $derived(
-        mode === 'pair' && pairData && pairData.length > 0 ? pairData : syntheticData
-    );
+    let previewDataAbs = $derived(mode === 'pair' && pairData && pairData.length > 0 ? pairData : syntheticData);
 
     let previewData = $derived.by((): LineDataPoint[] => {
         if (previewViewMode !== 'percentage' || previewDataAbs.length === 0) return previewDataAbs;
@@ -226,27 +209,18 @@
     });
 </script>
 
-<ModalBase
-        bind:open
-        maxWidth="3xl"
-        onRequestClose={handleClose}
-        testId="chart-settings-modal"
->
+<ModalBase bind:open maxWidth="3xl" onRequestClose={handleClose} testId="chart-settings-modal">
     <div class="flex flex-col max-h-[85vh]">
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
             <div class="flex items-center gap-2">
-                <Settings class="text-libre-green" size={20}/>
+                <Settings class="text-libre-green" size={20} />
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
                     {mode === 'global' ? $t('chartSettings.title') : $t('chartSettings.titleLocal')}
                 </h2>
             </div>
-            <button
-                    class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                    onclick={handleClose}
-                    type="button"
-            >
-                <X size={18}/>
+            <button class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={handleClose} type="button">
+                <X size={18} />
             </button>
         </div>
 
@@ -260,15 +234,7 @@
             {/if}
 
             <!-- Aesthetics Section (extracted component) -->
-            <ChartAestheticsSection
-                    bind:areaFill
-                    bind:colorByBaseline
-                    bind:gridLines
-                    bind:staleGradient
-                    bind:yAxisMax
-                    bind:yAxisMin
-                    bind:yAxisMode
-            />
+            <ChartAestheticsSection bind:areaFill bind:colorByBaseline bind:gridLines bind:staleGradient bind:yAxisMax bind:yAxisMin bind:yAxisMode />
 
             <!-- Preview Chart -->
             <div>
@@ -276,35 +242,35 @@
                     <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{$t('chartSettings.preview')}</h3>
                     <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                         <button
-                                class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                                onclick={() => previewViewMode = 'absolute'}
-                                type="button"
-                        >Abs
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            onclick={() => (previewViewMode = 'absolute')}
+                            type="button"
+                            >Abs
                         </button>
                         <button
-                                class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                                onclick={() => previewViewMode = 'percentage'}
-                                type="button"
-                        >%
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            onclick={() => (previewViewMode = 'percentage')}
+                            type="button"
+                            >%
                         </button>
                     </div>
                 </div>
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden bg-gray-50 dark:bg-slate-800/50">
                     <LineChart
-                            areaFill={areaFill}
-                            colorByBaseline={colorByBaseline}
-                            compact={false}
-                            currency={mode === 'pair' && pairData && pairData.length > 0 ? '' : 'Preview'}
-                            data={previewData}
-                            height="140px"
-                            overlaySignals={previewSignals}
-                            showGradient={staleGradient}
-                            showGridLines={gridLines}
-                            showMiniAxis={false}
-                            viewMode={previewViewMode}
-                            yAxisMax={yAxisMax}
-                            yAxisMin={yAxisMin}
-                            yAxisMode={yAxisMode}
+                        {areaFill}
+                        {colorByBaseline}
+                        compact={false}
+                        currency={mode === 'pair' && pairData && pairData.length > 0 ? '' : 'Preview'}
+                        data={previewData}
+                        height="140px"
+                        overlaySignals={previewSignals}
+                        showGradient={staleGradient}
+                        showGridLines={gridLines}
+                        showMiniAxis={false}
+                        viewMode={previewViewMode}
+                        {yAxisMax}
+                        {yAxisMin}
+                        {yAxisMode}
                     />
                 </div>
                 <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 italic">
@@ -313,27 +279,15 @@
             </div>
 
             <!-- Signals Section (extracted component) -->
-            <ChartSignalsSection
-                    {availablePairs}
-                    {availableAssets}
-                    bind:signals
-            />
+            <ChartSignalsSection {availablePairs} {availableAssets} bind:signals />
         </div>
 
         <!-- Footer -->
         <div class="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
-            <button
-                    class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                    onclick={handleClose}
-                    type="button"
-            >
+            <button class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" onclick={handleClose} type="button">
                 {$t('common.cancel')}
             </button>
-            <button
-                    class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors"
-                    onclick={handleSave}
-                    type="button"
-            >
+            <button class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSave} type="button">
                 {$t('chartSettings.apply')}
             </button>
         </div>
@@ -342,13 +296,15 @@
 
 <!-- Confirm discard changes -->
 <ConfirmModal
-        confirmText={$t('chartSettings.discard')}
-        danger={false}
-        message={$t('chartSettings.discardMessage')}
-        onCancel={() => { confirmCloseOpen = false; }}
-        onConfirm={confirmDiscardAndClose}
-        open={confirmCloseOpen}
-        title={$t('chartSettings.discardTitle')}
-        warning={true}
-        zIndex={70}
+    confirmText={$t('chartSettings.discard')}
+    danger={false}
+    message={$t('chartSettings.discardMessage')}
+    onCancel={() => {
+        confirmCloseOpen = false;
+    }}
+    onConfirm={confirmDiscardAndClose}
+    open={confirmCloseOpen}
+    title={$t('chartSettings.discardTitle')}
+    warning={true}
+    zIndex={70}
 />

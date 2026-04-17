@@ -35,6 +35,7 @@ backend/
 | FX Providers | `backend-providers-fx.instructions.md` — central banks, MANUAL sentinel |
 | BRIM Plugins | `backend-providers-brim.instructions.md` — broker import, fake asset ID flow |
 | Testing | `backend-testing.instructions.md` — pytest patterns, fixtures, coverage |
+| Lint & Format | skill `lint-format-backend` — ruff + black, rules, workflow |
 
 ## Auth
 

@@ -49,24 +49,11 @@
         initialQuote?: string;
         /** Lock the base currency field (e.g. when creating FX from asset detail) */
         readonlyBase?: boolean;
-        oncreated?: (detail: { base: string; quote: string; hasRealProvider: boolean; slug: string }) => void;
+        oncreated?: (detail: {base: string; quote: string; hasRealProvider: boolean; slug: string}) => void;
         onclose?: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        dateStart = '',
-        dateEnd = '',
-        editMode = false,
-        editBase = '',
-        editQuote = '',
-        editRoutes = [],
-        initialBase = '',
-        initialQuote = '',
-        readonlyBase = false,
-        oncreated,
-        onclose,
-    }: Props = $props();
+    let {open = $bindable(false), dateStart = '', dateEnd = '', editMode = false, editBase = '', editQuote = '', editRoutes = [], initialBase = '', initialQuote = '', readonlyBase = false, oncreated, onclose}: Props = $props();
 
     // =========================================================================
     // State
@@ -114,13 +101,7 @@
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
             const items = (response as any)?.items || [];
-            const pairRoutes = items
-                .filter((i: any) =>
-                    ((i.base === editBase && i.quote === editQuote) ||
-                        (i.base === editQuote && i.quote === editBase)) &&
-                    !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')
-                )
-                .sort((a: any, b: any) => a.priority - b.priority);
+            const pairRoutes = items.filter((i: any) => ((i.base === editBase && i.quote === editQuote) || (i.base === editQuote && i.quote === editBase)) && !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')).sort((a: any, b: any) => a.priority - b.priority);
             if (pairRoutes.length > 0) {
                 selectedRoutes = pairRoutes.map((r: any) => r.chain_steps ?? []);
             } else if (editRoutes.length > 0) {
@@ -146,7 +127,7 @@
 
     let hasCurrencies = $derived(!!baseCurrency && !!quoteCurrency && baseCurrency !== quoteCurrency);
     let hasRoutes = $derived(selectedRoutes.length > 0);
-    let hasChainRoutes = $derived(selectedRoutes.some(r => r.length > 1));
+    let hasChainRoutes = $derived(selectedRoutes.some((r) => r.length > 1));
     let isValid = $derived(hasCurrencies);
     let isDirty = $derived.by(() => {
         if (editMode) {
@@ -207,28 +188,31 @@
         error = null;
 
         // Normalize alphabetical order for storage
-        const base = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase()
-            ? baseCurrency.toUpperCase() : quoteCurrency.toUpperCase();
-        const quote = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase()
-            ? quoteCurrency.toUpperCase() : baseCurrency.toUpperCase();
+        const base = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase() ? baseCurrency.toUpperCase() : quoteCurrency.toUpperCase();
+        const quote = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase() ? quoteCurrency.toUpperCase() : baseCurrency.toUpperCase();
 
         try {
             // Build the main pair routes
-            const mainItems = selectedRoutes.length > 0
-                ? selectedRoutes.map((chainSteps, idx) => ({
-                    base, quote,
-                    chain_steps: chainSteps,
-                    priority: idx + 1,
-                }))
-                : [{
-                    base, quote,
-                    chain_steps: [{from: base, to: quote, provider: 'MANUAL'}],
-                    priority: 999,
-                }];
+            const mainItems =
+                selectedRoutes.length > 0
+                    ? selectedRoutes.map((chainSteps, idx) => ({
+                          base,
+                          quote,
+                          chain_steps: chainSteps,
+                          priority: idx + 1,
+                      }))
+                    : [
+                          {
+                              base,
+                              quote,
+                              chain_steps: [{from: base, to: quote, provider: 'MANUAL'}],
+                              priority: 999,
+                          },
+                      ];
 
             // Collect intermediate pair routes if flag is on and there are chain routes
             const intermediateItems: typeof mainItems = [];
-            if (createIntermediatePairs && selectedRoutes.some(r => r.length > 1)) {
+            if (createIntermediatePairs && selectedRoutes.some((r) => r.length > 1)) {
                 const existingSlugs = new Set(configuredPairSlugs);
                 // Also include the main pair being created
                 existingSlugs.add(`${base}-${quote}`);
@@ -244,7 +228,8 @@
                         if (iBase === base && iQuote === quote) continue;
                         added.add(slug);
                         intermediateItems.push({
-                            base: iBase, quote: iQuote,
+                            base: iBase,
+                            quote: iQuote,
                             chain_steps: [{from: step.from, to: step.to, provider: step.provider}],
                             priority: 1,
                         });
@@ -253,10 +238,7 @@
             }
 
             // Create all routes in one bulk call
-            await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([
-                ...mainItems,
-                ...intermediateItems,
-            ]);
+            await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]);
 
             // Auto-sync if real routes exist (not MANUAL-only)
             const hasRealProvider = selectedRoutes.length > 0;
@@ -283,7 +265,8 @@
             }
 
             oncreated?.({
-                base, quote,
+                base,
+                quote,
                 hasRealProvider,
                 slug: base < quote ? `${base}-${quote}` : `${quote}-${base}`,
             });
@@ -331,12 +314,8 @@
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
                 {editMode ? $_('fx.addPair.titleEdit') : $_('fx.addPair.title')}
             </h2>
-            <button
-                    class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-                    disabled={saving}
-                    onclick={handleClose}
-            >
-                <X size={20}/>
+            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={saving} onclick={handleClose}>
+                <X size={20} />
             </button>
         </div>
 
@@ -359,10 +338,10 @@
                             {$_('fx.addPair.baseCurrency')}
                         </div>
                         <CurrencySearchSelect
-                                bind:value={baseCurrency}
-                                disabled={editMode || readonlyBase}
-                                excludedCurrencies={editMode || readonlyBase ? new Set() : excludedForBase}
-                                onchange={() => {
+                            bind:value={baseCurrency}
+                            disabled={editMode || readonlyBase}
+                            excludedCurrencies={editMode || readonlyBase ? new Set() : excludedForBase}
+                            onchange={() => {
                                 if (!editMode) {
                                     // Auto-focus the quote currency select after picking base
                                     setTimeout(() => {
@@ -372,29 +351,24 @@
                                     }, 30);
                                 }
                             }}
-                                placeholder={$_('fx.addPair.baseCurrency')}
+                            placeholder={$_('fx.addPair.baseCurrency')}
                         />
                     </div>
                     <!-- Arrow: ↔ on desktop, ↕ on mobile -->
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:flex flex-col items-center">
                         <div aria-hidden="true" class="text-xs font-medium invisible mb-1 select-none">&nbsp;</div>
                         <div class="flex-1 flex items-center justify-center px-1">
-                            <ArrowLeftRight size={18}/>
+                            <ArrowLeftRight size={18} />
                         </div>
                     </div>
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:hidden">
-                        <ArrowDownUp size={18}/>
+                        <ArrowDownUp size={18} />
                     </div>
                     <div bind:this={quoteSelectRef} class="flex-1 min-w-0">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.quoteCurrency')}
                         </div>
-                        <CurrencySearchSelect
-                                bind:value={quoteCurrency}
-                                disabled={editMode}
-                                excludedCurrencies={editMode ? new Set() : excludedForQuote}
-                                placeholder={$_('fx.addPair.quoteCurrency')}
-                        />
+                        <CurrencySearchSelect bind:value={quoteCurrency} disabled={editMode} excludedCurrencies={editMode ? new Set() : excludedForQuote} placeholder={$_('fx.addPair.quoteCurrency')} />
                     </div>
                 </div>
             </div>
@@ -415,30 +389,18 @@
                 <!-- Hint when currencies not selected -->
                 {#if !hasCurrencies}
                     <div class="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 text-xs text-gray-400 dark:text-gray-500">
-                        <Lock size={12}/>
+                        <Lock size={12} />
                         {$_('fx.addPair.providerDisabledHint')}
                     </div>
                 {/if}
 
                 <!-- Route selection (unified: DFS pathfinding + search + flags) -->
-                <FxProviderSelect
-                        {baseCurrency}
-                        bind:selectedRoutes
-                        {configuredPairSlugs}
-                        disabled={!hasCurrencies}
-                        language={$currentLanguage}
-                        onSelectionChange={handleRoutesChange}
-                        {quoteCurrency}
-                />
+                <FxProviderSelect {baseCurrency} bind:selectedRoutes {configuredPairSlugs} disabled={!hasCurrencies} language={$currentLanguage} onSelectionChange={handleRoutesChange} {quoteCurrency} />
 
                 <!-- Create intermediate pairs checkbox (visible only when chain routes are selected) -->
                 {#if hasChainRoutes}
                     <label class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors">
-                        <input
-                                type="checkbox"
-                                bind:checked={createIntermediatePairs}
-                                class="mt-0.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green"
-                        />
+                        <input type="checkbox" bind:checked={createIntermediatePairs} class="mt-0.5 rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green" />
                         <div class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
                             <span class="font-medium">{$_('fx.addPair.createIntermediatePairs')}</span>
                             <p class="text-blue-500 dark:text-blue-400 mt-0.5">{$_('fx.addPair.createIntermediatePairsHint')}</p>
@@ -463,23 +425,18 @@
         <!-- Footer -->
         <!-- ============================================================= -->
         <div class="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0">
-            <button
-                    class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
-                    disabled={saving || syncing}
-                    onclick={handleClose}
-                    type="button"
-            >
+            <button class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" disabled={saving || syncing} onclick={handleClose} type="button">
                 {$_('common.cancel')}
             </button>
             <button
-                    class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                    data-testid="fx-add-pair-save"
-                    disabled={!isValid || saving || syncing}
-                    onclick={handleSave}
-                    type="button"
+                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                data-testid="fx-add-pair-save"
+                disabled={!isValid || saving || syncing}
+                onclick={handleSave}
+                type="button"
             >
                 {#if syncing}
-                    <RotateCcw size={14} class="animate-spin"/>
+                    <RotateCcw size={14} class="animate-spin" />
                     {$_('common.syncing')}
                 {:else if saving}
                     {$_('common.saving')}
@@ -493,13 +450,15 @@
 
 <!-- Discard changes confirmation -->
 <ConfirmModal
-        confirmText={$_('common.discard')}
-        danger={false}
-        message={$_('common.discardChangesMessage')}
-        onCancel={() => { showDiscardConfirm = false; }}
-        onConfirm={resetAndClose}
-        open={showDiscardConfirm}
-        title={$_('common.discardChanges')}
-        warning={true}
-        zIndex={70}
+    confirmText={$_('common.discard')}
+    danger={false}
+    message={$_('common.discardChangesMessage')}
+    onCancel={() => {
+        showDiscardConfirm = false;
+    }}
+    onConfirm={resetAndClose}
+    open={showDiscardConfirm}
+    title={$_('common.discardChanges')}
+    warning={true}
+    zIndex={70}
 />

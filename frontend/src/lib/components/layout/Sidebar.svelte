@@ -32,28 +32,26 @@
     const portfolioItems = [
         {href: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard'},
         {href: '/brokers', icon: Briefcase, labelKey: 'brokers.title'},
-        {href: '/transactions', icon: ArrowRightLeft, labelKey: 'transactions.title'}
+        {href: '/transactions', icon: ArrowRightLeft, labelKey: 'transactions.title'},
     ];
 
     // Group 2: Market Data (global/shared data)
     const marketDataItems = [
         {href: '/assets', icon: BarChart3, labelKey: 'assets.title'},
-        {href: '/fx', icon: Coins, labelKey: 'fx.title'}
+        {href: '/fx', icon: Coins, labelKey: 'fx.title'},
     ];
 
     // Group 3: Files & Settings
     const utilityItems = [
         {href: '/files', icon: Files, labelKey: 'uploads.title'},
-        {href: '/settings', icon: Settings, labelKey: 'nav.settings'}
+        {href: '/settings', icon: Settings, labelKey: 'nav.settings'},
     ];
 
     // All items flat for active check
     const allNavItems = [...portfolioItems, ...marketDataItems, ...utilityItems];
 
     // Reactive: compute active item based on current path
-    $: activeHref = allNavItems.find(item =>
-        currentPath === item.href || currentPath.startsWith(item.href + '/')
-    )?.href ?? '';
+    $: activeHref = allNavItems.find((item) => currentPath === item.href || currentPath.startsWith(item.href + '/'))?.href ?? '';
 
     // Get avatar URL safely from user settings
     $: avatarUrl = $userSettings?.avatar_url as string | null | undefined;
@@ -77,31 +75,20 @@
 
 <!-- Mobile Overlay -->
 {#if isOpen}
-    <div
-            class="fixed inset-0 bg-black/50 z-40 lg:hidden"
-            on:click={closeSidebar}
-            on:keydown={(e) => e.key === 'Escape' && closeSidebar()}
-            role="button"
-            tabindex="-1"
-            aria-label="Close sidebar"
-    ></div>
+    <div class="fixed inset-0 bg-black/50 z-40 lg:hidden" on:click={closeSidebar} on:keydown={(e) => e.key === 'Escape' && closeSidebar()} role="button" tabindex="-1" aria-label="Close sidebar"></div>
 {/if}
 
 <!-- Sidebar -->
 <nav
-        class="fixed left-0 top-0 h-screen bg-libre-green text-white flex flex-col z-50 transform transition-all duration-300 ease-in-out overflow-hidden
+    class="fixed left-0 top-0 h-screen bg-libre-green text-white flex flex-col z-50 transform transition-all duration-300 ease-in-out overflow-hidden
 		{collapsed ? 'w-16' : 'w-64'}
 		{isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0"
 >
     <!-- Logo Header -->
     <div class="p-4 flex items-center border-b border-white/10 {collapsed ? 'justify-center' : 'justify-between'}">
-        <button
-                class="flex items-center space-x-3 cursor-pointer"
-                on:click={toggleCollapsed}
-                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
+        <button class="flex items-center space-x-3 cursor-pointer" on:click={toggleCollapsed} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
             <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1" style="background:#fff">
-                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png"/>
+                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
             </div>
             {#if !collapsed}
                 <span class="text-xl font-bold tracking-wide whitespace-nowrap">LibreFolio</span>
@@ -110,7 +97,7 @@
         <!-- Mobile close button -->
         {#if !collapsed}
             <button class="lg:hidden p-2 hover:bg-white/10 rounded-lg" on:click={closeSidebar}>
-                <X size={20}/>
+                <X size={20} />
             </button>
         {/if}
     </div>
@@ -122,16 +109,17 @@
             {#each portfolioItems as item (item.href)}
                 <li>
                     <a
-                            href={item.href}
-                            on:click={() => { closeSidebar(); resetNavDepth(); }}
-                            class="flex items-center px-4 py-3 transition-all relative group
+                        href={item.href}
+                        on:click={() => {
+                            closeSidebar();
+                            resetNavDepth();
+                        }}
+                        class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href
-						? 'bg-white/20 border-r-4 border-white'
-						: 'hover:bg-white/10'}"
-                            title={collapsed ? $_(item.labelKey) : ''}
+						{activeHref === item.href ? 'bg-white/20 border-r-4 border-white' : 'hover:bg-white/10'}"
+                        title={collapsed ? $_(item.labelKey) : ''}
                     >
-                        <svelte:component this={item.icon} size={20} class="flex-shrink-0"/>
+                        <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
                         {#if !collapsed}
                             <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
                         {/if}
@@ -153,16 +141,17 @@
             {#each marketDataItems as item (item.href)}
                 <li>
                     <a
-                            href={item.href}
-                            on:click={() => { closeSidebar(); resetNavDepth(); }}
-                            class="flex items-center px-4 py-3 transition-all relative group
+                        href={item.href}
+                        on:click={() => {
+                            closeSidebar();
+                            resetNavDepth();
+                        }}
+                        class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href
-						? 'bg-white/20 border-r-4 border-white'
-						: 'hover:bg-white/10'}"
-                            title={collapsed ? $_(item.labelKey) : ''}
+						{activeHref === item.href ? 'bg-white/20 border-r-4 border-white' : 'hover:bg-white/10'}"
+                        title={collapsed ? $_(item.labelKey) : ''}
                     >
-                        <svelte:component this={item.icon} size={20} class="flex-shrink-0"/>
+                        <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
                         {#if !collapsed}
                             <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
                         {/if}
@@ -184,16 +173,17 @@
             {#each utilityItems as item (item.href)}
                 <li>
                     <a
-                            href={item.href}
-                            on:click={() => { closeSidebar(); resetNavDepth(); }}
-                            class="flex items-center px-4 py-3 transition-all relative group
+                        href={item.href}
+                        on:click={() => {
+                            closeSidebar();
+                            resetNavDepth();
+                        }}
+                        class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href
-						? 'bg-white/20 border-r-4 border-white'
-						: 'hover:bg-white/10'}"
-                            title={collapsed ? $_(item.labelKey) : ''}
+						{activeHref === item.href ? 'bg-white/20 border-r-4 border-white' : 'hover:bg-white/10'}"
+                        title={collapsed ? $_(item.labelKey) : ''}
                     >
-                        <svelte:component this={item.icon} size={20} class="flex-shrink-0"/>
+                        <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
                         {#if !collapsed}
                             <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
                         {/if}
@@ -210,25 +200,20 @@
 
     <!-- Bottom Section -->
     <div class="border-t border-white/10 p-4 space-y-2">
-
         <!-- User Avatar & Info -->
         <a
-                class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition-colors
+            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition-colors
                 {collapsed ? 'justify-center' : ''}"
-                data-testid="sidebar-user-avatar"
-                href="/settings"
-                on:click={closeSidebar}
-                title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
+            data-testid="sidebar-user-avatar"
+            href="/settings"
+            on:click={closeSidebar}
+            title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
         >
             {#if avatarUrl}
-                <img
-                        src={avatarUrl}
-                        alt="Avatar"
-                        class="w-8 h-8 rounded-full object-cover border border-white/30 flex-shrink-0"
-                />
+                <img src={avatarUrl} alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-white/30 flex-shrink-0" />
             {:else}
                 <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <User size={16} class="text-white/70"/>
+                    <User size={16} class="text-white/70" />
                 </div>
             {/if}
             {#if !collapsed}
@@ -245,14 +230,14 @@
 
         <!-- Logout Button -->
         <button
-                class="w-full flex items-center justify-center px-4 py-2
+            class="w-full flex items-center justify-center px-4 py-2
 				bg-white/10 hover:bg-white/20 rounded-lg transition-all text-sm
 				{collapsed ? '' : 'space-x-2'}"
-                data-testid="logout-button"
-                on:click={handleLogout}
-                title={collapsed ? $_('auth.logout') : ''}
+            data-testid="logout-button"
+            on:click={handleLogout}
+            title={collapsed ? $_('auth.logout') : ''}
         >
-            <LogOut class="flex-shrink-0" size={16}/>
+            <LogOut class="flex-shrink-0" size={16} />
             {#if !collapsed}
                 <span class="whitespace-nowrap">{$_('auth.logout')}</span>
             {/if}

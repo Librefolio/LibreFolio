@@ -12,10 +12,7 @@ export async function login(page: Page, user = TEST_USER) {
     const appLayout = page.getByTestId('logout-button');
 
     // Race: login page vs app layout (already authenticated)
-    const visible = await Promise.race([
-        loginPage.waitFor({state: 'visible', timeout: 10_000}).then(() => 'login' as const),
-        appLayout.waitFor({state: 'visible', timeout: 10_000}).then(() => 'app' as const),
-    ]).catch(() => 'timeout' as const);
+    const visible = await Promise.race([loginPage.waitFor({state: 'visible', timeout: 10_000}).then(() => 'login' as const), appLayout.waitFor({state: 'visible', timeout: 10_000}).then(() => 'app' as const)]).catch(() => 'timeout' as const);
 
     if (visible === 'app') {
         // Already logged in — nothing to do

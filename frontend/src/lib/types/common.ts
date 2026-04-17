@@ -77,14 +77,13 @@ export function safeCurrency(value: unknown): Currency | null {
     if (value === null || value === undefined) return null;
     if (Array.isArray(value)) {
         // Take first non-null element
-        const first = value.find(v => v !== null);
+        const first = value.find((v) => v !== null);
         if (!first) return null;
         value = first;
     }
     const v = value as Record<string, unknown>;
     if (typeof v.code !== 'string') return null;
-    const amount = typeof v.amount === 'string' ? v.amount :
-        typeof v.amount === 'number' ? String(v.amount) : '0';
+    const amount = typeof v.amount === 'string' ? v.amount : typeof v.amount === 'number' ? String(v.amount) : '0';
     return {code: v.code, amount};
 }
 

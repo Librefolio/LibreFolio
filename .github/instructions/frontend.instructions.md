@@ -41,6 +41,7 @@ frontend/
 |-------|-----------------|
 | Signal Library | `frontend-signals.instructions.md` — all signals, base class, registry, adding new signals |
 | E2E Testing | `frontend-testing.instructions.md` — Playwright patterns, fixtures, conventions |
+| Lint & Format | skill `lint-format-frontend` — Prettier + svelte-check, config, workflow |
 
 ## Design System
 

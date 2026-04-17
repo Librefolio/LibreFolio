@@ -39,21 +39,7 @@
         compact?: boolean;
     }
 
-    let {
-        value = $bindable(''),
-        options,
-        placeholder = '',
-        disabled = false,
-        loading = false,
-        dropdownPosition = 'bottom',
-        inlineSearch = false,
-        maxVisibleItems = 8,
-        class: className = '',
-        item,
-        selectedItem,
-        onchange,
-        compact = false,
-    }: Props = $props();
+    let {value = $bindable(''), options, placeholder = '', disabled = false, loading = false, dropdownPosition = 'bottom', inlineSearch = false, maxVisibleItems = 8, class: className = '', item, selectedItem, onchange, compact = false}: Props = $props();
 
     // Internal state
     let isOpen = $state(false);
@@ -69,7 +55,7 @@
     let dropdownStyle = $state('');
 
     // Derived state
-    let selectedOption = $derived(options.find(o => o.value === value));
+    let selectedOption = $derived(options.find((o) => o.value === value));
 
     // Item height approximation (px per item)
     const ITEM_HEIGHT = 44;
@@ -81,12 +67,7 @@
     let filteredOptions = $derived(
         searchQuery.trim() === ''
             ? options
-            : options.filter(o =>
-                o.value.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                o.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (o.searchText && o.searchText.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (o.icon && o.icon.includes(searchQuery))
-            )
+            : options.filter((o) => o.value.toLowerCase().includes(searchQuery.toLowerCase()) || o.label.toLowerCase().includes(searchQuery.toLowerCase()) || (o.searchText && o.searchText.toLowerCase().includes(searchQuery.toLowerCase())) || (o.icon && o.icon.includes(searchQuery))),
     );
 
     // Compute dropdown position and dynamic height based on available space
@@ -200,11 +181,7 @@
         if (advanceFocus && containerRef) {
             // Move focus to the next focusable element after closing
             setTimeout(() => {
-                const all = Array.from(
-                    document.querySelectorAll<HTMLElement>(
-                        '[tabindex]:not([tabindex="-1"]), input:not([disabled]), select:not([disabled]), button:not([disabled]), a[href]'
-                    )
-                ).filter(el => el.offsetParent !== null);
+                const all = Array.from(document.querySelectorAll<HTMLElement>('[tabindex]:not([tabindex="-1"]), input:not([disabled]), select:not([disabled]), button:not([disabled]), a[href]')).filter((el) => el.offsetParent !== null);
                 const idx = all.indexOf(containerRef!.querySelector<HTMLElement>('[tabindex]') ?? containerRef!);
                 if (idx >= 0 && idx + 1 < all.length) {
                     all[idx + 1].focus();
@@ -291,30 +268,35 @@
     <!-- Trigger Button / Inline Search -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-            aria-controls={listboxId}
-            aria-expanded={isOpen}
-            aria-haspopup="listbox"
-            class="w-full flex items-center justify-between {compact ? 'px-3 py-2 text-sm' : 'px-3 py-2'} border rounded-lg
+        aria-controls={listboxId}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        class="w-full flex items-center justify-between {compact ? 'px-3 py-2 text-sm' : 'px-3 py-2'} border rounded-lg
                transition-all text-left gap-2
                {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' : 'bg-white dark:bg-slate-700 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
                {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
-            onclick={() => !isOpen && openDropdown()}
-            onfocus={() => { triggerFocusedAt = Date.now(); }}
-            onkeydown={handleTriggerKeydown}
-            role="combobox"
-            tabindex={disabled ? -1 : 0}
+        onclick={() => !isOpen && openDropdown()}
+        onfocus={() => {
+            triggerFocusedAt = Date.now();
+        }}
+        onkeydown={handleTriggerKeydown}
+        role="combobox"
+        tabindex={disabled ? -1 : 0}
     >
         {#if inlineSearch && isOpen}
             <!-- Inline search mode: show search icon + input in trigger -->
-            <Search size={14} class="text-gray-400 shrink-0"/>
+            <Search size={14} class="text-gray-400 shrink-0" />
             <input
-                    type="text"
-                    bind:this={inputRef}
-                    bind:value={searchQuery}
-                    onkeydown={(e) => { e.stopPropagation(); handleSearchKeydown(e); }}
-                    onclick={(e) => e.stopPropagation()}
-                    class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100"
-                    placeholder={$_('common.search')}
+                type="text"
+                bind:this={inputRef}
+                bind:value={searchQuery}
+                onkeydown={(e) => {
+                    e.stopPropagation();
+                    handleSearchKeydown(e);
+                }}
+                onclick={(e) => e.stopPropagation()}
+                class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100"
+                placeholder={$_('common.search')}
             />
         {:else if selectedOption}
             {#if selectedItem}
@@ -337,33 +319,28 @@
         {:else}
             <span class="text-gray-400">{placeholder || $_('common.search')}</span>
         {/if}
-        <ChevronDown class="text-gray-400 shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" size={14}/>
+        <ChevronDown class="text-gray-400 shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
     </div>
 
     <!-- Dropdown -->
     {#if isOpen}
-        <div class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden"
-             style={dropdownStyle}
-        >
+        <div class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden" style={dropdownStyle}>
             {#if !inlineSearch}
                 <div class="p-2 border-b border-gray-100 dark:border-slate-700">
                     <div class="relative">
-                        <Search size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <Search size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
-                                bind:this={inputRef}
-                                bind:value={searchQuery}
-                                onkeydown={handleSearchKeydown}
-                                type="text"
-                                class="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg
+                            bind:this={inputRef}
+                            bind:value={searchQuery}
+                            onkeydown={handleSearchKeydown}
+                            type="text"
+                            class="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg
                                focus:outline-none focus:ring-2 focus:ring-libre-green focus:border-libre-green"
-                                placeholder={$_('common.search')}
+                            placeholder={$_('common.search')}
                         />
                         {#if searchQuery}
-                            <button
-                                    onclick={() => searchQuery = ''}
-                                    class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-                            >
-                                <X size={14}/>
+                            <button onclick={() => (searchQuery = '')} class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
+                                <X size={14} />
                             </button>
                         {/if}
                     </div>
@@ -383,11 +360,11 @@
                 {:else}
                     {#each filteredOptions as option, index (option.value)}
                         <button
-                                type="button"
-                                onclick={() => selectOption(option)}
-                                onmouseenter={() => highlightedIndex = index}
-                                disabled={option.disabled}
-                                class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
+                            type="button"
+                            onclick={() => selectOption(option)}
+                            onmouseenter={() => (highlightedIndex = index)}
+                            disabled={option.disabled}
+                            class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
                                    {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                    {index === highlightedIndex ? 'bg-libre-green/30 dark:bg-libre-green dark:text-white highlighted' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
                         >

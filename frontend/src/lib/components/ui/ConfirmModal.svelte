@@ -42,25 +42,10 @@
         /** Z-index for stacking (default 60 = above first-level modals) */
         zIndex?: number;
         /** Operation results to display after action completes (replaces message+items when present) */
-        results?: { label: string; success: boolean; detail?: string }[];
+        results?: {label: string; success: boolean; detail?: string}[];
     }
 
-    let {
-        open,
-        title,
-        message,
-        description = '',
-        items = [],
-        itemsLabel = '',
-        confirmText = $t('common.confirm'),
-        cancelText = $t('common.cancel'),
-        danger = false,
-        warning = false,
-        onConfirm,
-        onCancel,
-        zIndex = 60,
-        results = [],
-    }: Props = $props();
+    let {open, title, message, description = '', items = [], itemsLabel = '', confirmText = $t('common.confirm'), cancelText = $t('common.cancel'), danger = false, warning = false, onConfirm, onCancel, zIndex = 60, results = []}: Props = $props();
 
     // Auto-show items if there's only 1 (no need for toggle)
     let showItems = $state(false);
@@ -70,27 +55,17 @@
     let hasResults = $derived(results.length > 0);
 </script>
 
-<ModalBase
-        maxWidth="max-w-md"
-        onRequestClose={onCancel}
-        {open}
-        {zIndex}
->
+<ModalBase maxWidth="max-w-md" onRequestClose={onCancel} {open} {zIndex}>
     <!-- Header -->
     <div class="modal-header">
         {#if danger}
-            <AlertTriangle class="text-red-500" size={24}/>
+            <AlertTriangle class="text-red-500" size={24} />
         {:else if warning}
-            <AlertTriangle class="text-amber-500" size={24}/>
+            <AlertTriangle class="text-amber-500" size={24} />
         {/if}
         <h2 class="modal-title">{title}</h2>
-        <button
-                aria-label="Close"
-                class="close-btn"
-                onclick={onCancel}
-                type="button"
-        >
-            <X size={20}/>
+        <button aria-label="Close" class="close-btn" onclick={onCancel} type="button">
+            <X size={20} />
         </button>
     </div>
 
@@ -102,9 +77,9 @@
                 {#each results as r}
                     <li class="result-item">
                         {#if r.success}
-                            <Check size={14} class="text-emerald-500 shrink-0"/>
+                            <Check size={14} class="text-emerald-500 shrink-0" />
                         {:else}
-                            <XCircle size={14} class="text-red-500 shrink-0"/>
+                            <XCircle size={14} class="text-red-500 shrink-0" />
                         {/if}
                         <span class="result-label">{r.label}</span>
                         {#if r.detail}
@@ -122,24 +97,20 @@
             {#if items.length > 0}
                 <div class="items-section">
                     {#if items.length > 1}
-                        <button
-                                type="button"
-                                class="items-toggle"
-                                onclick={() => (showItems = !showItems)}
-                        >
+                        <button type="button" class="items-toggle" onclick={() => (showItems = !showItems)}>
                             <span class="items-label">
                                 {itemsLabel || `${items.length} items`}
                             </span>
                             {#if shouldShowItems}
-                                <ChevronUp size={16}/>
+                                <ChevronUp size={16} />
                             {:else}
-                                <ChevronDown size={16}/>
+                                <ChevronDown size={16} />
                             {/if}
                         </button>
                     {/if}
 
                     {#if shouldShowItems}
-                        <ul class="items-list" transition:fade={{ duration: 100 }}>
+                        <ul class="items-list" transition:fade={{duration: 100}}>
                             {#each items as item}
                                 <li class="item">{item}</li>
                             {/each}
@@ -160,11 +131,7 @@
             <button type="button" class="btn btn-secondary" onclick={onCancel}>
                 {cancelText}
             </button>
-            <button
-                    type="button"
-                    class="btn {danger ? 'btn-danger' : warning ? 'btn-warning' : 'btn-primary'}"
-                    onclick={onConfirm}
-            >
+            <button type="button" class="btn {danger ? 'btn-danger' : warning ? 'btn-warning' : 'btn-primary'}" onclick={onConfirm}>
                 {confirmText}
             </button>
         {/if}

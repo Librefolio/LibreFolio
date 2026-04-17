@@ -37,16 +37,7 @@
         compact?: boolean;
     }
 
-    let {
-        value = $bindable(''),
-        excludedCountries,
-        placeholder = '',
-        disabled = false,
-        maxVisibleItems = 6,
-        dropdownPosition = 'auto',
-        onchange,
-        compact = false,
-    }: Props = $props();
+    let {value = $bindable(''), excludedCountries, placeholder = '', disabled = false, maxVisibleItems = 6, dropdownPosition = 'auto', onchange, compact = false}: Props = $props();
 
     let allCountriesLocal = $state<CountryInfo[]>([]);
     let internalLoading = $state(true);
@@ -54,14 +45,14 @@
     // Filter out excluded countries
     let filteredCountries = $derived.by(() => {
         if (excludedCountries && excludedCountries.size > 0) {
-            return allCountriesLocal.filter(c => !excludedCountries!.has(c.iso3));
+            return allCountriesLocal.filter((c) => !excludedCountries!.has(c.iso3));
         }
         return allCountriesLocal;
     });
 
     // Build SelectOption array — flag emoji as icon, name in searchText
     let countryOptions = $derived.by<SelectOption[]>(() => {
-        return filteredCountries.map(c => ({
+        return filteredCountries.map((c) => ({
             value: c.iso3,
             label: `${c.iso3} — ${c.name}`,
             icon: c.flag_emoji || undefined,
@@ -93,18 +84,7 @@
     }
 </script>
 
-<SearchSelect
-        bind:value
-        {compact}
-        {disabled}
-        {dropdownPosition}
-        inlineSearch={true}
-        loading={internalLoading}
-        {maxVisibleItems}
-        onchange={handleChange}
-        options={countryOptions}
-        placeholder={placeholder || $_('assets.distribution.addCountry')}
->
+<SearchSelect bind:value {compact} {disabled} {dropdownPosition} inlineSearch={true} loading={internalLoading} {maxVisibleItems} onchange={handleChange} options={countryOptions} placeholder={placeholder || $_('assets.distribution.addCountry')}>
     {#snippet item(option)}
         <div class="flex items-center space-x-2 min-w-0">
             {#if option.icon}
@@ -141,4 +121,3 @@
         {/if}
     {/snippet}
 </SearchSelect>
-

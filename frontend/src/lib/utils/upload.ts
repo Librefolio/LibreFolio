@@ -42,18 +42,11 @@ export async function uploadFile(file: File, description?: string): Promise<stri
  * @returns The upload response data
  * @throws Error if upload fails
  */
-export async function uploadBrimFile(
-    file: File,
-    brokerId: number,
-    pluginName: string,
-): Promise<unknown> {
+export async function uploadBrimFile(file: File, brokerId: number, pluginName: string): Promise<unknown> {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await axiosInstance.post(
-        `/api/v1/brokers/import/${brokerId}/${pluginName}`,
-        formData,
-    );
+    const response = await axiosInstance.post(`/api/v1/brokers/import/${brokerId}/${pluginName}`, formData);
 
     return response.data;
 }
@@ -80,4 +73,3 @@ export function formatBytes(bytes: number): string {
     if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} ${kb}`;
     return `${bytes} ${b}`;
 }
-

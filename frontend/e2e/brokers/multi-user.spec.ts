@@ -71,7 +71,10 @@ test.describe('Multi-User Isolation', () => {
         // Modal should stay open and show an error (name already taken)
         // Either error message appears OR modal stays visible
         await page2.waitForTimeout(1000);
-        const hasError = await page2.locator('.bg-red-50, .text-red-700, [class*="error"]').isVisible().catch(() => false);
+        const hasError = await page2
+            .locator('.bg-red-50, .text-red-700, [class*="error"]')
+            .isVisible()
+            .catch(() => false);
         const modalStillOpen = await page2.getByTestId('broker-modal').isVisible();
 
         // Success: error shown OR modal didn't close (submission failed)

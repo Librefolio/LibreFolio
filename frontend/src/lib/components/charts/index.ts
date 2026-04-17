@@ -20,7 +20,6 @@ export {default as PriceChartFull} from './PriceChartFull.svelte';
 // Specialized charts
 export {default as SemiDonutChart} from './SemiDonutChart.svelte';
 
-
 // Re-export types
 export type {LineDataPoint} from './LineChart.svelte';
 export type {ChartType, ViewMode} from './ChartToolbar.svelte';

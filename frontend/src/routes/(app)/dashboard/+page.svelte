@@ -16,7 +16,7 @@
             titleKey: 'brokers.title',
             descKey: 'dashboard.manageBrokers',
             bgClass: 'bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50',
-            iconClass: 'text-blue-600 dark:text-blue-400'
+            iconClass: 'text-blue-600 dark:text-blue-400',
         },
         {
             href: '/assets',
@@ -24,7 +24,7 @@
             titleKey: 'assets.title',
             descKey: 'dashboard.manageAssets',
             bgClass: 'bg-green-100 dark:bg-green-900/30 group-hover:bg-green-200 dark:group-hover:bg-green-900/50',
-            iconClass: 'text-green-600 dark:text-green-400'
+            iconClass: 'text-green-600 dark:text-green-400',
         },
         {
             href: '/transactions',
@@ -32,7 +32,7 @@
             titleKey: 'transactions.title',
             descKey: 'dashboard.manageTransactions',
             bgClass: 'bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50',
-            iconClass: 'text-purple-600 dark:text-purple-400'
+            iconClass: 'text-purple-600 dark:text-purple-400',
         },
         {
             href: '/fx',
@@ -40,8 +40,8 @@
             titleKey: 'fx.title',
             descKey: 'dashboard.manageFx',
             bgClass: 'bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50',
-            iconClass: 'text-amber-600 dark:text-amber-400'
-        }
+            iconClass: 'text-amber-600 dark:text-amber-400',
+        },
     ];
 </script>
 
@@ -61,7 +61,7 @@
                 </div>
                 <div class="hidden sm:flex items-center justify-center w-16 h-16 bg-white/20 rounded-full overflow-hidden">
                     {#if avatarUrl}
-                        <img src={avatarUrl} alt="Avatar" class="w-full h-full object-cover"/>
+                        <img src={avatarUrl} alt="Avatar" class="w-full h-full object-cover" />
                     {:else}
                         <span class="text-3xl font-bold">
                             {$currentUser.username.charAt(0).toUpperCase()}
@@ -81,7 +81,7 @@
                     <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">€ --,---.--</p>
                 </div>
                 <div class="p-3 bg-libre-green/10 dark:bg-libre-green/20 rounded-lg">
-                    <Wallet class="text-libre-green" size={24}/>
+                    <Wallet class="text-libre-green" size={24} />
                 </div>
             </div>
         </div>
@@ -93,7 +93,7 @@
                     <p class="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">+€ ---.--</p>
                 </div>
                 <div class="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                    <TrendingUp class="text-green-600 dark:text-green-400" size={24}/>
+                    <TrendingUp class="text-green-600 dark:text-green-400" size={24} />
                 </div>
             </div>
         </div>
@@ -105,7 +105,7 @@
                     <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">--</p>
                 </div>
                 <div class="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                    <PieChart class="text-purple-600 dark:text-purple-400" size={24}/>
+                    <PieChart class="text-purple-600 dark:text-purple-400" size={24} />
                 </div>
             </div>
         </div>
@@ -114,7 +114,7 @@
     <!-- Live Asset Prices -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700">
         <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
-            <TrendingUp size={20} class="text-libre-green"/>
+            <TrendingUp size={20} class="text-libre-green" />
             {$_('assets.title')} — {$_('ticker.livePrices')}
         </h2>
         <LiveTicker />
@@ -125,13 +125,10 @@
         <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">{$_('dashboard.quickActions')}</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {#each quickActions as action}
-                <a
-                        href={action.href}
-                        class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all group"
-                >
+                <a href={action.href} class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all group">
                     <div class="flex items-center justify-between mb-4">
                         <div class="{action.bgClass} p-3 rounded-lg transition-all">
-                            <svelte:component this={action.icon} class={action.iconClass} size={24}/>
+                            <svelte:component this={action.icon} class={action.iconClass} size={24} />
                         </div>
                     </div>
                     <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200">{$_(action.titleKey)}</h3>
@@ -144,7 +141,7 @@
     <!-- Welcome Section -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-8 text-center border border-gray-100 dark:border-slate-700">
         <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 dark:bg-libre-green/20 rounded-full mb-4">
-            <BarChart3 class="text-libre-green" size={32}/>
+            <BarChart3 class="text-libre-green" size={32} />
         </div>
         <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('dashboard.welcomeTitle')}</h2>
         <p class="text-gray-500 dark:text-gray-400 max-w-md mx-auto">

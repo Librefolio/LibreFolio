@@ -63,4 +63,3 @@ test.describe('FX Sync', () => {
         await expect(syncBtn).toBeEnabled({timeout: 10000});
     });
 });
-

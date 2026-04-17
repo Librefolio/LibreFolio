@@ -3,7 +3,6 @@ import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 
 test.describe('Settings', () => {
-
     test.describe('Settings Page Access', () => {
         test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
@@ -174,7 +173,6 @@ test.describe('Settings', () => {
     });
 
     test.describe('Admin Tab (Global Settings)', () => {
-
         test('admin can view and access global settings', async ({page}) => {
             await login(page, TEST_ADMIN);
             await navigateTo(page, '/settings');
@@ -249,7 +247,10 @@ test.describe('Settings', () => {
             await gs(page).locator('button[aria-label^="Toggle"]').first().click();
 
             // Save/Undo should appear within the setting row
-            const settingRow = gs(page).locator('.setting-row').filter({has: page.locator('button[aria-label^="Toggle"]')}).first();
+            const settingRow = gs(page)
+                .locator('.setting-row')
+                .filter({has: page.locator('button[aria-label^="Toggle"]')})
+                .first();
             await expect(settingRow.locator('button[title="Save"]')).toBeVisible();
             await expect(settingRow.locator('button[title="Undo"]')).toBeVisible();
         });
@@ -260,9 +261,15 @@ test.describe('Settings', () => {
             await page.waitForTimeout(300);
 
             // Find first toggle setting-row
-            const settingRow = gs(page).locator('.setting-row').filter({has: page.locator('button[aria-label^="Toggle"]')}).first();
+            const settingRow = gs(page)
+                .locator('.setting-row')
+                .filter({has: page.locator('button[aria-label^="Toggle"]')})
+                .first();
             const toggleBtn = settingRow.locator('button[aria-label^="Toggle"]');
-            const stateText = toggleBtn.locator('xpath=..').locator('span').filter({hasText: /^(ON|OFF)$/});
+            const stateText = toggleBtn
+                .locator('xpath=..')
+                .locator('span')
+                .filter({hasText: /^(ON|OFF)$/});
             const initialState = await stateText.textContent();
 
             // Toggle
@@ -425,7 +432,10 @@ test.describe('Settings', () => {
                 await page.waitForTimeout(300);
 
                 // Select Italian if available
-                const italianOption = page.locator('[role="option"], [class*="option"]').filter({hasText: /Italiano|Italian/i}).first();
+                const italianOption = page
+                    .locator('[role="option"], [class*="option"]')
+                    .filter({hasText: /Italiano|Italian/i})
+                    .first();
                 if (await italianOption.isVisible().catch(() => false)) {
                     await italianOption.click();
                     await page.waitForTimeout(500);

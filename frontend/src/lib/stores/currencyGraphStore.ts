@@ -66,15 +66,10 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
     buildPromise = (async () => {
         try {
             // Ensure currencies are loaded (any language is fine — we only need codes)
-            const currenciesReady = isCurrenciesLoaded()
-                ? Promise.resolve()
-                : ensureCurrenciesLoaded();
+            const currenciesReady = isCurrenciesLoaded() ? Promise.resolve() : ensureCurrenciesLoaded();
 
             // Fetch providers and currencies in parallel
-            const [providersResponse] = await Promise.all([
-                zodiosApi.list_providers_api_v1_fx_providers_get(),
-                currenciesReady,
-            ]);
+            const [providersResponse] = await Promise.all([zodiosApi.list_providers_api_v1_fx_providers_get(), currenciesReady]);
 
             // Map API response to ProviderInfo
             const providers: ProviderInfo[] = (providersResponse as any[]).map((p: any) => ({
@@ -91,16 +86,16 @@ export async function getCurrencyGraph(): Promise<CurrencyGraph> {
             }));
 
             // Get all currency codes
-            const allCurrencyCodes = getAllCurrencies().map(c => c.code);
+            const allCurrencyCodes = getAllCurrencies().map((c) => c.code);
 
             // Build the graph
             const graph = buildCurrencyGraph(providers, allCurrencyCodes);
 
             // Cache
             cachedFxProviders = providers;
-            cachedProvidersHash = JSON.stringify(providers.map(p => p.code).sort());
+            cachedProvidersHash = JSON.stringify(providers.map((p) => p.code).sort());
             cachedGraph = graph;
-            fxProvidersVersion.update(v => v + 1);
+            fxProvidersVersion.update((v) => v + 1);
 
             return graph;
         } finally {
@@ -128,11 +123,7 @@ export function getCachedFxProviders(): ProviderInfo[] {
  * @param maxDepth - Maximum chain length (default 4)
  * @returns Array of paths sorted by length (shortest first)
  */
-export async function findConversionPaths(
-    source: string,
-    target: string,
-    maxDepth: number = 4,
-): Promise<ChainStep[][]> {
+export async function findConversionPaths(source: string, target: string, maxDepth: number = 4): Promise<ChainStep[][]> {
     const graph = await getCurrencyGraph();
     return findAllPaths(graph as Parameters<typeof findAllPaths>[0], source, target, maxDepth);
 }
@@ -147,4 +138,3 @@ export function invalidateCurrencyGraph(): void {
     cachedFxProviders = [];
     buildPromise = null;
 }
-

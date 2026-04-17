@@ -466,6 +466,16 @@ def cmd_fe_check(args):
     return run_command_live(["npm", "run", "check"], cwd=PROJECT_ROOT / "frontend")
 
 
+def cmd_fe_format(args):
+    """Format frontend code with Prettier."""
+    if getattr(args, "check", False):
+        print(Colors.success("Checking frontend formatting with Prettier..."))
+        return run_command_live(["npm", "run", "format:check"], cwd=PROJECT_ROOT / "frontend")
+    else:
+        print(Colors.success("Formatting frontend code with Prettier..."))
+        return run_command_live(["npm", "run", "format"], cwd=PROJECT_ROOT / "frontend")
+
+
 def cmd_fe_preview(args):
     """Preview production build."""
     print(Colors.success("Previewing production build..."))
@@ -1470,7 +1480,7 @@ Commands by Category:
       db                  Database commands (check, upgrade, create-clean...)
 
   🎨  Frontend
-      front               Frontend commands (dev, build, check, preview)
+      front               Frontend commands (dev, build, check, format, preview)
 
   🧪  Testing
       test                Run tests (api, db, external, schemas, services...)
@@ -1486,8 +1496,8 @@ Commands by Category:
       i18n                Translation commands (audit)
       cache               Cache management (js)
       info                Information commands (api)
-      format              Format code with black
-      lint                Lint code with ruff
+      format              Format backend code with black
+      lint                Lint backend code with ruff
 
   🔧  Setup
       shell               Open pipenv shell
@@ -1571,6 +1581,10 @@ Examples:
 
     fe_p = fe_sub.add_parser("check", help="Type check with svelte-check")
     fe_p.set_defaults(func=cmd_fe_check)
+
+    fe_p = fe_sub.add_parser("format", help="Format code with Prettier")
+    fe_p.add_argument("--check", action="store_true", help="Check only (no write)")
+    fe_p.set_defaults(func=cmd_fe_format)
 
     fe_p = fe_sub.add_parser("preview", help="Preview production build")
     fe_p.set_defaults(func=cmd_fe_preview)

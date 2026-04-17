@@ -24,7 +24,7 @@ import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class SineSignal extends ChartSignal {
     static override signalType = 'sine';
-    static override displayName = 'Sine Wave';             // i18n: 'signals.sine'
+    static override displayName = 'Sine Wave'; // i18n: 'signals.sine'
     static override icon = '〰️';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
     static docsPath = 'financial-theory/technical-analysis/synthetic-benchmarks/sine-wave/';
@@ -32,7 +32,7 @@ export class SineSignal extends ChartSignal {
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
             key: 'amplitude',
-            label: 'Amplitude',                        // i18n: 'signals.params.amplitude'
+            label: 'Amplitude', // i18n: 'signals.params.amplitude'
             type: 'number',
             default: 15,
             min: 0.1,
@@ -43,7 +43,7 @@ export class SineSignal extends ChartSignal {
         },
         {
             key: 'period',
-            label: 'Period',                           // i18n: 'signals.params.period'
+            label: 'Period', // i18n: 'signals.params.period'
             type: 'number',
             default: 45,
             min: 2,
@@ -54,7 +54,7 @@ export class SineSignal extends ChartSignal {
         },
         {
             key: 'offset',
-            label: 'Offset',                           // i18n: 'signals.params.offset'
+            label: 'Offset', // i18n: 'signals.params.offset'
             type: 'number',
             default: 0,
             min: -100,
@@ -74,7 +74,7 @@ export class SineSignal extends ChartSignal {
         const y0 = baseData[0].value;
         const startDate = baseData[0].date;
 
-        return baseData.map(d => {
+        return baseData.map((d) => {
             const days = ChartSignal.daysBetween(startDate, d.date);
             const sine = amplitude * Math.sin((2 * Math.PI * days) / period);
             return {date: d.date, value: y0 * (1 + offset + sine)};

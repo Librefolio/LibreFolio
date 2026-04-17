@@ -21,7 +21,7 @@
 
     // Delete dialog state
     let deleteDialogOpen = false;
-    let deletingBroker: { id: number; name: string } | null = null;
+    let deletingBroker: {id: number; name: string} | null = null;
     let deletingTransactionCount = 0;
     let deleteLoading = false;
 
@@ -38,16 +38,14 @@
             const basicBrokers = await zodiosApi.list_brokers_api_v1_brokers_get();
 
             // For each broker, get the summary to get cash_balances and holdings
-            const summaries = await Promise.all(
-                basicBrokers.map(b => zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: b.id}}).catch(() => null))
-            );
+            const summaries = await Promise.all(basicBrokers.map((b) => zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: b.id}}).catch(() => null)));
 
             brokers = basicBrokers.map((b, i) => {
                 const summary = summaries[i];
                 return {
                     ...b,
                     cash_balances: summary?.cash_balances ?? [],
-                    holdings: summary?.holdings ?? []
+                    holdings: summary?.holdings ?? [],
                 } as Broker;
             });
         } catch (e) {
@@ -65,8 +63,8 @@
         modalOpen = true;
     }
 
-    function handleEdit(event: CustomEvent<{ id: number }>) {
-        const broker = brokers.find(b => b.id === event.detail.id);
+    function handleEdit(event: CustomEvent<{id: number}>) {
+        const broker = brokers.find((b) => b.id === event.detail.id);
         if (broker) {
             modalMode = 'edit';
             editingBrokerId = broker.id;
@@ -79,19 +77,19 @@
                 allow_cash_overdraft: broker.allow_cash_overdraft,
                 allow_asset_shorting: broker.allow_asset_shorting,
                 is_active: broker.is_active,
-                opened_at: broker.opened_at
+                opened_at: broker.opened_at,
             };
             modalOpen = true;
         }
     }
 
-    function handleDelete(event: CustomEvent<{ id: number; name: string }>) {
+    function handleDelete(event: CustomEvent<{id: number; name: string}>) {
         deletingBroker = event.detail;
         deletingTransactionCount = 0; // We'd need an API call to get actual count
         deleteDialogOpen = true;
     }
 
-    async function confirmDelete(event: CustomEvent<{ force: boolean }>) {
+    async function confirmDelete(event: CustomEvent<{force: boolean}>) {
         if (!deletingBroker) return;
 
         deleteLoading = true;
@@ -128,21 +126,11 @@
             <p class="text-gray-500 text-sm">{$_('brokers.subtitle')}</p>
         </div>
         <div class="flex items-center space-x-2">
-            <button
-                    class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50"
-                    data-testid="brokers-refresh"
-                    disabled={loading}
-                    on:click={loadBrokers}
-                    title="Refresh"
-            >
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={18}/>
+            <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" disabled={loading} on:click={loadBrokers} title="Refresh">
+                <RefreshCw class={loading ? 'animate-spin' : ''} size={18} />
             </button>
-            <button
-                    class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all"
-                    data-testid="add-broker-button"
-                    on:click={openCreateModal}
-            >
-                <Plus size={18}/>
+            <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="add-broker-button" on:click={openCreateModal}>
+                <Plus size={18} />
                 <span class="hidden sm:inline">{$_('brokers.addBroker')}</span>
             </button>
         </div>
@@ -153,7 +141,7 @@
         <!-- Loading state -->
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32}/>
+                <RefreshCw class="text-libre-green animate-spin" size={32} />
             </div>
             <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
         </div>
@@ -161,14 +149,11 @@
         <!-- Error state -->
         <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-                <Briefcase class="text-red-600" size={32}/>
+                <Briefcase class="text-red-600" size={32} />
             </div>
             <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.error')}</h3>
             <p class="text-gray-500 mb-4">{error}</p>
-            <button
-                    on:click={loadBrokers}
-                    class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-            >
+            <button on:click={loadBrokers} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
                 {$_('error.tryAgain')}
             </button>
         </div>
@@ -176,15 +161,12 @@
         <!-- Empty state -->
         <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                <Briefcase class="text-blue-600" size={32}/>
+                <Briefcase class="text-blue-600" size={32} />
             </div>
             <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('brokers.noBrokers')}</h3>
             <p class="text-gray-500 mb-4">{$_('brokers.noBrokersMessage')}</p>
-            <button
-                    on:click={openCreateModal}
-                    class="inline-flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all"
-            >
-                <Plus size={18}/>
+            <button on:click={openCreateModal} class="inline-flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all">
+                <Plus size={18} />
                 <span>{$_('brokers.addBroker')}</span>
             </button>
         </div>
@@ -192,33 +174,24 @@
         <!-- Broker grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {#each brokers as broker (broker.id)}
-                <BrokerCard
-                        {broker}
-                        on:edit={handleEdit}
-                        on:delete={handleDelete}
-                />
+                <BrokerCard {broker} on:edit={handleEdit} on:delete={handleDelete} />
             {/each}
         </div>
     {/if}
 </div>
 
 <!-- Add/Edit Modal -->
-<BrokerModal
-        brokerId={editingBrokerId}
-        initialData={editingBrokerData}
-        isOpen={modalOpen}
-        mode={modalMode}
-        on:close={handleModalClose}
-        on:created={handleCreated}
-        on:updated={handleUpdated}
-/>
+<BrokerModal brokerId={editingBrokerId} initialData={editingBrokerData} isOpen={modalOpen} mode={modalMode} on:close={handleModalClose} on:created={handleCreated} on:updated={handleUpdated} />
 
 <!-- Delete Confirmation Dialog -->
 <DeleteBrokerDialog
-        brokerName={deletingBroker?.name ?? ''}
-        isOpen={deleteDialogOpen}
-        loading={deleteLoading}
-        on:cancel={() => { deleteDialogOpen = false; deletingBroker = null; }}
-        on:confirm={confirmDelete}
-        transactionCount={deletingTransactionCount}
+    brokerName={deletingBroker?.name ?? ''}
+    isOpen={deleteDialogOpen}
+    loading={deleteLoading}
+    on:cancel={() => {
+        deleteDialogOpen = false;
+        deletingBroker = null;
+    }}
+    on:confirm={confirmDelete}
+    transactionCount={deletingTransactionCount}
 />

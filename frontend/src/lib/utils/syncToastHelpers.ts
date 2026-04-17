@@ -45,9 +45,8 @@ function fxPairHtml(slug: string): string {
 function fxProviderChainHtml(providerUsed: string | null | undefined): string {
     if (!providerUsed) return '';
     const chain = parseProviderChain(providerUsed);
-    return chain.map(p => fxProviderBadgeHtml(p)).join(' <span style="opacity:0.5">→</span> ');
+    return chain.map((p) => fxProviderBadgeHtml(p)).join(' <span style="opacity:0.5">→</span> ');
 }
-
 
 export interface SyncToastResult {
     variant: 'success' | 'warning' | 'info' | 'error';
@@ -61,10 +60,7 @@ export interface SyncToastResult {
  * @param label - Display label (e.g. translated "Sync prices" or asset name)
  * @returns Toast variant and HTML message
  */
-export function buildAssetSyncToast(
-    result: any,
-    label: string,
-): SyncToastResult {
+export function buildAssetSyncToast(result: any, label: string): SyncToastResult {
     if (!result) {
         return {variant: 'error', message: `${label} — no response`};
     }
@@ -99,13 +95,7 @@ export function buildAssetSyncToast(
  * @param formatDetail - Optional function to format sync detail (for partial results)
  * @returns Toast variant and HTML message
  */
-export function buildFxSyncToast(
-    result: any,
-    slug: string,
-    tr: (key: string, opts?: any) => string,
-    _formatProvider?: (p: any) => string,
-    formatDetail?: (r: any, tr: (key: string, opts?: any) => string) => string,
-): SyncToastResult {
+export function buildFxSyncToast(result: any, slug: string, tr: (key: string, opts?: any) => string, _formatProvider?: (p: any) => string, formatDetail?: (r: any, tr: (key: string, opts?: any) => string) => string): SyncToastResult {
     if (!result) {
         return {variant: 'error', message: `FX sync ${slug} — no response`};
     }
@@ -132,4 +122,3 @@ export function buildFxSyncToast(
         return {variant: 'error', message: `Failed:\n${pairLabel}${errDetail}`};
     }
 }
-

@@ -77,4 +77,3 @@ export async function openEditAssetModal(page: import('@playwright/test').Page) 
     await page.getByTestId('asset-detail-edit-btn').click();
     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
 }
-

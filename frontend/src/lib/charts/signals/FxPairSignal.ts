@@ -15,17 +15,17 @@ import {getCurrencyInfo} from '$lib/stores/currencyStore';
 
 export class FxPairSignal extends ChartSignal {
     static override signalType = 'fx-pair';
-    static override displayName = 'FX Pair';                   // i18n: 'signals.fxPair'
+    static override displayName = 'FX Pair'; // i18n: 'signals.fxPair'
     static override icon = '💱';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'comparison';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
             key: 'pairSlug',
-            label: 'Currency Pair',                    // i18n: 'chartSettings.params.currencyPair'
+            label: 'Currency Pair', // i18n: 'chartSettings.params.currencyPair'
             type: 'select',
             default: '',
-            dynamicOptionsKey: 'configuredFxPairs',    // resolved at runtime by the modal
+            dynamicOptionsKey: 'configuredFxPairs', // resolved at runtime by the modal
             tooltip: 'chartSettings.tooltips.fxPair',
         },
     ];
@@ -38,7 +38,7 @@ export class FxPairSignal extends ChartSignal {
         const isInverted = Boolean(this.params._inverted);
 
         // Build date→value lookup, then align to base chart's date axis
-        const lookup = new Map(resolvedData.map(d => [d.date, d.value]));
+        const lookup = new Map(resolvedData.map((d) => [d.date, d.value]));
         const points: LineDataPoint[] = [];
         for (const bd of baseData) {
             const val = lookup.get(bd.date);
@@ -64,9 +64,9 @@ export class FxPairSignal extends ChartSignal {
 
         let data = absData;
         if (viewMode === 'percentage' && absData.length > 0) {
-            const p0 = absData[0].value;   // OWN first value, not base chart's
+            const p0 = absData[0].value; // OWN first value, not base chart's
             if (p0 !== 0) {
-                data = absData.map(d => ({
+                data = absData.map((d) => ({
                     ...d,
                     value: ((d.value - p0) / p0) * 100,
                 }));

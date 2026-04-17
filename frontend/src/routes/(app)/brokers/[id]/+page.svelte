@@ -17,7 +17,7 @@
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
 
     // Page data
-    export let data: { brokerId: number };
+    export let data: {brokerId: number};
 
     // State
     let broker: BrokerSummary | null = null;
@@ -45,7 +45,7 @@
         error = null;
 
         try {
-            broker = await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}}) as BrokerSummary;
+            broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}})) as BrokerSummary;
 
             // Load recent transactions
             try {
@@ -70,13 +70,13 @@
         editModalOpen = true;
     }
 
-    function handleDeposit(event: CustomEvent<{ currency: string }>) {
+    function handleDeposit(event: CustomEvent<{currency: string}>) {
         cashModalType = 'DEPOSIT';
         cashModalCurrency = event.detail.currency;
         cashModalOpen = true;
     }
 
-    function handleWithdraw(event: CustomEvent<{ currency: string }>) {
+    function handleWithdraw(event: CustomEvent<{currency: string}>) {
         cashModalType = 'WITHDRAWAL';
         cashModalCurrency = event.detail.currency;
         cashModalOpen = true;
@@ -103,7 +103,7 @@
             style: 'currency',
             currency: code,
             minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+            maximumFractionDigits: 2,
         }).format(numAmount);
     }
 
@@ -114,7 +114,7 @@
         return new Date(str).toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'short',
-            day: 'numeric'
+            day: 'numeric',
         });
     }
 
@@ -135,41 +135,29 @@
                 return 'bg-gray-100 text-gray-800';
         }
     }
-
 </script>
 
 <div class="space-y-6" data-testid="broker-detail-page">
     <!-- Header -->
     <div class="flex items-center space-x-4">
-        <button
-                class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors"
-                data-testid="broker-back-button"
-                on:click={handleBack}
-                title={$_('common.back')}
-        >
-            <ArrowLeft size={20}/>
+        <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
+            <ArrowLeft size={20} />
         </button>
 
         {#if broker}
             <!-- Broker Icon -->
-            <BrokerIcon
-                    iconUrl={safeString(broker.icon_url)}
-                    portalUrl={safeString(broker.portal_url)}
-                    pluginCode={safeString(broker.default_import_plugin)}
-                    altText={broker.name}
-                    size="lg"
-            />
+            <BrokerIcon iconUrl={safeString(broker.icon_url)} portalUrl={safeString(broker.portal_url)} pluginCode={safeString(broker.default_import_plugin)} altText={broker.name} size="lg" />
 
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                     {#if safeString(broker.user_role)}
                         {@const role = safeString(broker.user_role)}
-                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0
-                            {role === 'OWNER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                             role === 'EDITOR' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                             'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}"
-                              title={$_(role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}>
-                            {#if role === 'OWNER'}<Crown size={13}/>{:else if role === 'EDITOR'}<Pencil size={13}/>{:else}<Eye size={13}/>{/if}
+                        <span
+                            class="inline-flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0
+                            {role === 'OWNER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : role === 'EDITOR' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}"
+                            title={$_(role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}
+                        >
+                            {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
                         </span>
                     {/if}
                     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate" data-testid="broker-name">{broker.name}</h1>
@@ -182,46 +170,30 @@
             <div class="grid grid-cols-2 place-items-center sm:flex sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
                 <!-- Row 1 (mobile) / inline (desktop): Edit + Share -->
                 {#if canEdit}
-                    <button
-                            on:click={handleEdit}
-                            class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                            data-testid="broker-edit-button"
-                    >
-                        <Pencil size={18}/>
+                    <button on:click={handleEdit} class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="broker-edit-button">
+                        <Pencil size={18} />
                         <span class="hidden sm:inline">{$_('common.edit')}</span>
                     </button>
                 {/if}
                 {#if safeString(broker.user_role) === 'OWNER'}
                     <button
-                            on:click={() => sharingModalOpen = true}
-                            class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
-                            data-testid="broker-share-button"
-                            title={$_('brokers.sharing.title')}
+                        on:click={() => (sharingModalOpen = true)}
+                        class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
+                        data-testid="broker-share-button"
+                        title={$_('brokers.sharing.title')}
                     >
-                        <Share2 size={18}/>
+                        <Share2 size={18} />
                         <span class="hidden sm:inline">{$_('brokers.sharing.title')}</span>
                     </button>
                 {/if}
                 <!-- Row 2 (mobile) / inline (desktop): Portal + Refresh -->
                 {#if safeString(broker.portal_url)}
-                    <a
-                            href={safeString(broker.portal_url)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors sm:w-auto w-full"
-                            title={$_('brokers.openPortal')}
-                    >
-                        <ExternalLink size={20}/>
+                    <a href={safeString(broker.portal_url)} target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors sm:w-auto w-full" title={$_('brokers.openPortal')}>
+                        <ExternalLink size={20} />
                     </a>
                 {/if}
-                <button
-                        on:click={loadBroker}
-                        disabled={loading}
-                        class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50 sm:w-auto w-full"
-                        title="Refresh"
-                        data-testid="broker-refresh"
-                >
-                    <RefreshCw size={20} class={loading ? 'animate-spin' : ''}/>
+                <button on:click={loadBroker} disabled={loading} class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50 sm:w-auto w-full" title="Refresh" data-testid="broker-refresh">
+                    <RefreshCw size={20} class={loading ? 'animate-spin' : ''} />
                 </button>
             </div>
         {:else if !error}
@@ -235,7 +207,7 @@
         <!-- Loading state -->
         <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32}/>
+                <RefreshCw class="text-libre-green animate-spin" size={32} />
             </div>
             <p class="text-gray-500">{$_('common.loading')}</p>
         </div>
@@ -243,14 +215,11 @@
         <!-- Error state -->
         <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-                <Briefcase class="text-red-600" size={32}/>
+                <Briefcase class="text-red-600" size={32} />
             </div>
             <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.error')}</h3>
             <p class="text-gray-500 mb-4">{error}</p>
-            <button
-                    on:click={loadBroker}
-                    class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-            >
+            <button on:click={loadBroker} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
                 {$_('error.tryAgain')}
             </button>
         </div>
@@ -262,14 +231,11 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-cash-balances">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center space-x-2 text-gray-700">
-                            <Wallet size={20}/>
+                            <Wallet size={20} />
                             <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
                         </div>
                         {#if canEdit}
-                            <button
-                                    on:click={handleNewDeposit}
-                                    class="text-sm text-libre-green hover:underline"
-                            >
+                            <button on:click={handleNewDeposit} class="text-sm text-libre-green hover:underline">
                                 + {$_('brokers.deposit')}
                             </button>
                         {/if}
@@ -278,13 +244,7 @@
                     {#if broker.cash_balances && broker.cash_balances.length > 0}
                         <div class="space-y-3">
                             {#each broker.cash_balances as balance}
-                                <CashBalanceCard
-                                        code={balance.code}
-                                        amount={parseCurrencyAmount(balance.amount)}
-                                        {canEdit}
-                                        on:deposit={handleDeposit}
-                                        on:withdraw={handleWithdraw}
-                                />
+                                <CashBalanceCard code={balance.code} amount={parseCurrencyAmount(balance.amount)} {canEdit} on:deposit={handleDeposit} on:withdraw={handleWithdraw} />
                             {/each}
                         </div>
                     {:else}
@@ -295,7 +255,7 @@
                 <!-- Holdings Section -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-holdings">
                     <div class="flex items-center space-x-2 text-gray-700 mb-4">
-                        <TrendingUp size={20}/>
+                        <TrendingUp size={20} />
                         <h2 class="font-semibold">{$_('brokers.holdings')}</h2>
                     </div>
 
@@ -303,48 +263,48 @@
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead>
-                                <tr class="text-left text-gray-500 border-b">
-                                    <th class="pb-2 font-medium">Asset</th>
-                                    <th class="pb-2 font-medium text-right">Quantity</th>
-                                    <th class="pb-2 font-medium text-right">Cost</th>
-                                    <th class="pb-2 font-medium text-right">Value</th>
-                                    <th class="pb-2 font-medium text-right">P&L</th>
-                                </tr>
+                                    <tr class="text-left text-gray-500 border-b">
+                                        <th class="pb-2 font-medium">Asset</th>
+                                        <th class="pb-2 font-medium text-right">Quantity</th>
+                                        <th class="pb-2 font-medium text-right">Cost</th>
+                                        <th class="pb-2 font-medium text-right">Value</th>
+                                        <th class="pb-2 font-medium text-right">P&L</th>
+                                    </tr>
                                 </thead>
                                 <tbody>
-                                {#each broker.holdings as holding}
-                                    {@const totalCost = safeCurrency(holding.total_cost)}
-                                    {@const currentValue = safeCurrency(holding.current_value)}
-                                    {@const pnl = safeCurrency(holding.unrealized_pnl)}
-                                    <tr class="border-b border-gray-50 hover:bg-gray-50">
-                                        <td class="py-2 font-medium text-gray-800">{holding.asset_name}</td>
-                                        <td class="py-2 text-right text-gray-600">{holding.quantity.toLocaleString()}</td>
-                                        <td class="py-2 text-right text-gray-600">
-                                            {#if totalCost}
-                                                {formatCurrency(totalCost.amount, totalCost.code)}
-                                            {:else}
-                                                <span class="text-gray-400">-</span>
-                                            {/if}
-                                        </td>
-                                        <td class="py-2 text-right text-gray-600">
-                                            {#if currentValue}
-                                                {formatCurrency(currentValue.amount, currentValue.code)}
-                                            {:else}
-                                                <span class="text-gray-400">-</span>
-                                            {/if}
-                                        </td>
-                                        <td class="py-2 text-right">
-                                            {#if pnl}
-                                                {@const pnlNum = parseCurrencyAmount(pnl.amount)}
-                                                <span class="{pnlNum >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                                    {pnlNum >= 0 ? '+' : ''}{formatCurrency(pnl.amount, pnl.code)}
-                                                </span>
-                                            {:else}
-                                                <span class="text-gray-400">-</span>
-                                            {/if}
-                                        </td>
-                                    </tr>
-                                {/each}
+                                    {#each broker.holdings as holding}
+                                        {@const totalCost = safeCurrency(holding.total_cost)}
+                                        {@const currentValue = safeCurrency(holding.current_value)}
+                                        {@const pnl = safeCurrency(holding.unrealized_pnl)}
+                                        <tr class="border-b border-gray-50 hover:bg-gray-50">
+                                            <td class="py-2 font-medium text-gray-800">{holding.asset_name}</td>
+                                            <td class="py-2 text-right text-gray-600">{holding.quantity.toLocaleString()}</td>
+                                            <td class="py-2 text-right text-gray-600">
+                                                {#if totalCost}
+                                                    {formatCurrency(totalCost.amount, totalCost.code)}
+                                                {:else}
+                                                    <span class="text-gray-400">-</span>
+                                                {/if}
+                                            </td>
+                                            <td class="py-2 text-right text-gray-600">
+                                                {#if currentValue}
+                                                    {formatCurrency(currentValue.amount, currentValue.code)}
+                                                {:else}
+                                                    <span class="text-gray-400">-</span>
+                                                {/if}
+                                            </td>
+                                            <td class="py-2 text-right">
+                                                {#if pnl}
+                                                    {@const pnlNum = parseCurrencyAmount(pnl.amount)}
+                                                    <span class={pnlNum >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                                        {pnlNum >= 0 ? '+' : ''}{formatCurrency(pnl.amount, pnl.code)}
+                                                    </span>
+                                                {:else}
+                                                    <span class="text-gray-400">-</span>
+                                                {/if}
+                                            </td>
+                                        </tr>
+                                    {/each}
                                 </tbody>
                             </table>
                         </div>
@@ -405,30 +365,24 @@
 
                 <!-- Import Files Button -->
                 {#if canEdit}
-                    <button
-                            data-testid="import-files-button"
-                            class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
-                            on:click={() => importFilesModalOpen = true}
-                    >
+                    <button data-testid="import-files-button" class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group" on:click={() => (importFilesModalOpen = true)}>
                         <div class="flex items-center gap-3">
                             <div class="p-2 bg-libre-green/10 rounded-lg">
-                                <FileUp size={20} class="text-libre-green"/>
+                                <FileUp size={20} class="text-libre-green" />
                             </div>
                             <div class="text-left">
                                 <h3 class="font-semibold text-gray-700">{$_('brokers.importFiles')}</h3>
                                 <p class="text-sm text-gray-500">{$_('brokers.uploadHint')}</p>
                             </div>
                         </div>
-                        <span class="text-libre-green opacity-0 group-hover:opacity-100 transition-opacity">
-                        →
-                    </span>
+                        <span class="text-libre-green opacity-0 group-hover:opacity-100 transition-opacity"> → </span>
                     </button>
                 {/if}
 
                 <!-- Recent Transactions -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-transactions">
                     <div class="flex items-center space-x-2 text-gray-700 mb-3">
-                        <ArrowRightLeft size={18}/>
+                        <ArrowRightLeft size={18} />
                         <h3 class="font-semibold">{$_('brokers.recentTransactions')}</h3>
                     </div>
 
@@ -453,10 +407,7 @@
                                 </div>
                             {/each}
                         </div>
-                        <a
-                                href="/transactions?broker_id={broker.id}"
-                                class="block mt-3 text-center text-sm text-libre-green hover:underline"
-                        >
+                        <a href="/transactions?broker_id={broker.id}" class="block mt-3 text-center text-sm text-libre-green hover:underline">
                             {$_('brokers.viewAllTransactions')} →
                         </a>
                     {:else}
@@ -471,48 +422,30 @@
 <!-- Edit Modal -->
 {#if broker}
     <BrokerModal
-            isOpen={editModalOpen}
-            mode="edit"
-            brokerId={broker.id}
-            initialData={{
-                name: broker.name,
-                description: safeString(broker.description),
-                portal_url: safeString(broker.portal_url),
-                icon_url: safeString(broker.icon_url),
-                default_import_plugin: safeString(broker.default_import_plugin),
-                allow_cash_overdraft: broker.allow_cash_overdraft,
-                allow_asset_shorting: broker.allow_asset_shorting,
-                is_active: broker.is_active,
-                opened_at: safeString(broker.opened_at)
-            }}
-            on:close={() => editModalOpen = false}
-            on:updated={handleUpdated}
+        isOpen={editModalOpen}
+        mode="edit"
+        brokerId={broker.id}
+        initialData={{
+            name: broker.name,
+            description: safeString(broker.description),
+            portal_url: safeString(broker.portal_url),
+            icon_url: safeString(broker.icon_url),
+            default_import_plugin: safeString(broker.default_import_plugin),
+            allow_cash_overdraft: broker.allow_cash_overdraft,
+            allow_asset_shorting: broker.allow_asset_shorting,
+            is_active: broker.is_active,
+            opened_at: safeString(broker.opened_at),
+        }}
+        on:close={() => (editModalOpen = false)}
+        on:updated={handleUpdated}
     />
 
     <!-- Cash Transaction Modal -->
-    <CashTransactionModal
-            isOpen={cashModalOpen}
-            type={cashModalType}
-            brokerId={broker.id}
-            initialCurrency={cashModalCurrency}
-            on:close={() => cashModalOpen = false}
-            on:success={handleCashSuccess}
-    />
+    <CashTransactionModal isOpen={cashModalOpen} type={cashModalType} brokerId={broker.id} initialCurrency={cashModalCurrency} on:close={() => (cashModalOpen = false)} on:success={handleCashSuccess} />
 
     <!-- Import Files Modal -->
-    <BrokerImportFilesModal
-            open={importFilesModalOpen}
-            brokerId={broker.id}
-            brokerName={broker.name}
-            onClose={() => importFilesModalOpen = false}
-    />
+    <BrokerImportFilesModal open={importFilesModalOpen} brokerId={broker.id} brokerName={broker.name} onClose={() => (importFilesModalOpen = false)} />
 
     <!-- Sharing Modal -->
-    <BrokerSharingModal
-            open={sharingModalOpen}
-            brokerId={broker.id}
-            brokerName={broker.name}
-            onClose={() => sharingModalOpen = false}
-            onChanged={handleUpdated}
-    />
+    <BrokerSharingModal open={sharingModalOpen} brokerId={broker.id} brokerName={broker.name} onClose={() => (sharingModalOpen = false)} onChanged={handleUpdated} />
 {/if}

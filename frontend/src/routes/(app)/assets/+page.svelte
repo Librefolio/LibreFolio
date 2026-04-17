@@ -58,7 +58,7 @@
         lastPrice: number | null;
         deltaAbs: number | null;
         deltaPercent: number | null;
-        chartData: Array<{ date: string; value: number; staleDays?: number }>;
+        chartData: Array<{date: string; value: number; staleDays?: number}>;
         deltas: Record<string, number | null>;
         loadingPrices: boolean;
     }
@@ -89,7 +89,7 @@
     let syncingAssetIds = $state<Set<number>>(new Set());
 
     /** Live prices from bulk current-price endpoint (asset_id → {value, direction}) */
-    let livePriceMap = $state<Map<number, { value: number; direction: LivePriceDirection }>>(new Map());
+    let livePriceMap = $state<Map<number, {value: number; direction: LivePriceDirection}>>(new Map());
 
     // Delete dialog (single)
     let deleteDialogOpen = $state(false);
@@ -99,7 +99,7 @@
     // Bulk delete confirmation dialog
     let bulkDeleteDialogOpen = $state(false);
     let deletingAssets = $state<AssetRow[]>([]);
-    let bulkDeleteResults = $state<{ label: string; success: boolean; detail?: string }[]>([]);
+    let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string}[]>([]);
 
     // Sync modal
     let syncModalOpen = $state(false);
@@ -117,11 +117,13 @@
     let filterActiveOnly = $state(true);
 
     // Date range for Δ columns
-    let dateStart = $state((() => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - 3);
-        return d.toISOString().slice(0, 10);
-    })());
+    let dateStart = $state(
+        (() => {
+            const d = new Date();
+            d.setMonth(d.getMonth() - 3);
+            return d.toISOString().slice(0, 10);
+        })(),
+    );
     let dateEnd = $state(new Date().toISOString().slice(0, 10));
     let activePreset: any = $state('3M');
 
@@ -136,21 +138,30 @@
 
     // Asset type → icon PNG filename mapping (used in type filter dropdown)
     const TYPE_ICON_MAP: Record<string, string> = {
-        STOCK: 'stock', ETF: 'etf', BOND: 'bond', CRYPTO: 'crypto',
-        FUND: 'fund', HOLD: 'hold', CROWDFUND_LOAN: 'crowdfunding', OTHER: 'other',
+        STOCK: 'stock',
+        ETF: 'etf',
+        BOND: 'bond',
+        CRYPTO: 'crypto',
+        FUND: 'fund',
+        HOLD: 'hold',
+        CROWDFUND_LOAN: 'crowdfunding',
+        OTHER: 'other',
     };
     const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'] as const;
 
     // Count assets per type (for E5b badge in type filter dropdown)
     let typeCounts = $derived(
-        assets.reduce((acc, a) => {
-            const t = a.asset_type ?? 'OTHER';
-            acc[t] = (acc[t] ?? 0) + 1;
-            return acc;
-        }, {} as Record<string, number>)
+        assets.reduce(
+            (acc, a) => {
+                const t = a.asset_type ?? 'OTHER';
+                acc[t] = (acc[t] ?? 0) + 1;
+                return acc;
+            },
+            {} as Record<string, number>,
+        ),
     );
     // Only show types that have at least 1 asset
-    let availableTypes = $derived(ALL_ASSET_TYPES.filter(t => (typeCounts[t] ?? 0) > 0));
+    let availableTypes = $derived(ALL_ASSET_TYPES.filter((t) => (typeCounts[t] ?? 0) > 0));
 
     // Debounce timer
     let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -168,9 +179,7 @@
     // Chart settings modal (D4)
     let settingsModalOpen = $state(false);
     let settingsTargetId = $state<string | null>(null);
-    let settingsForModal = $derived(
-        settingsTargetId ? getSettingsForPair(`asset-${settingsTargetId}`, 'assets') : getGlobalSettings('assets')
-    );
+    let settingsForModal = $derived(settingsTargetId ? getSettingsForPair(`asset-${settingsTargetId}`, 'assets') : getGlobalSettings('assets'));
 
     // FX pair slugs for cross-domain signal selection (loaded lazily)
     let fxPairSlugs = $state<string[]>([]);
@@ -180,42 +189,46 @@
     // =========================================================================
 
     // Extract unique currencies from all assets
-    let configuredCurrencies = $derived([...new Set(assets.map(a => a.currency))].sort());
+    let configuredCurrencies = $derived([...new Set(assets.map((a) => a.currency))].sort());
 
-    let filteredAssets = $derived(assets.filter(a => {
-        if (filterActiveOnly && !a.active) return false;
-        if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
-        if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
-        if (searchText) {
-            const q = searchText.toLowerCase();
-            if (!a.display_name.toLowerCase().includes(q)) return false;
-        }
-        return true;
-    }));
+    let filteredAssets = $derived(
+        assets.filter((a) => {
+            if (filterActiveOnly && !a.active) return false;
+            if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
+            if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
+            if (searchText) {
+                const q = searchText.toLowerCase();
+                if (!a.display_name.toLowerCase().includes(q)) return false;
+            }
+            return true;
+        }),
+    );
 
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(
-        DELTA_PERIODS.filter(p => {
+        DELTA_PERIODS.filter((p) => {
             const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
             const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
             return rangeDays >= p.days;
-        })
+        }),
     );
 
     // Map to AssetRow for table
-    let tableRows = $derived<AssetRow[]>(filteredAssets.map(a => ({
-        id: a.id,
-        display_name: a.display_name,
-        currency: a.currency,
-        icon_url: a.icon_url,
-        asset_type: a.asset_type,
-        provider_code: a.provider_code,
-        active: a.active,
-        lastPrice: a.lastPrice,
-        deltaAbs: a.deltaAbs,
-        deltaPercent: a.deltaPercent,
-        deltas: a.deltas,
-    })));
+    let tableRows = $derived<AssetRow[]>(
+        filteredAssets.map((a) => ({
+            id: a.id,
+            display_name: a.display_name,
+            currency: a.currency,
+            icon_url: a.icon_url,
+            asset_type: a.asset_type,
+            provider_code: a.provider_code,
+            active: a.active,
+            lastPrice: a.lastPrice,
+            deltaAbs: a.deltaAbs,
+            deltaPercent: a.deltaPercent,
+            deltas: a.deltas,
+        })),
+    );
 
     // =========================================================================
     // Lifecycle
@@ -278,10 +291,7 @@
      * Compute Δ% for a given period from chartData.
      * Pₙ = last data point, P_start = closest point <= (Pₙ - periodDays).
      */
-    function computePeriodDelta(
-        chartData: Array<{ date: string; value: number }>,
-        periodDays: number,
-    ): number | null {
+    function computePeriodDelta(chartData: Array<{date: string; value: number}>, periodDays: number): number | null {
         if (chartData.length === 0) return null;
 
         const pn = chartData[chartData.length - 1];
@@ -292,7 +302,7 @@
         const targetStr = targetDate.toISOString().slice(0, 10);
 
         // Backward-fill lookup: find closest point <= targetDate
-        let startPoint: { date: string; value: number } | null = null;
+        let startPoint: {date: string; value: number} | null = null;
         for (const point of chartData) {
             if (point.date <= targetStr) {
                 startPoint = point;
@@ -349,16 +359,16 @@
 
         refreshing = true;
         // Mark all as loading
-        assets = assets.map(a => ({...a, loadingPrices: true}));
+        assets = assets.map((a) => ({...a, loadingPrices: true}));
 
         try {
             // Build bulk query
-            const queries = assets.map(a => ({
+            const queries = assets.map((a) => ({
                 asset_id: a.id,
                 date_range: {start: dateStart, end: dateEnd},
             }));
 
-            const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries) as any;
+            const response = (await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries)) as any;
             const items = response.items ?? [];
 
             // Process results
@@ -367,13 +377,12 @@
                 resultMap.set(result.asset_id, result.prices ?? []);
             }
 
-            assets = assets.map(asset => {
+            assets = assets.map((asset) => {
                 const prices = resultMap.get(asset.id) ?? [];
 
                 if (prices.length > 0) {
                     const firstPrice = prices[0]?.close != null ? Number(prices[0].close) : null;
-                    const lastPrice = prices[prices.length - 1]?.close != null
-                        ? Number(prices[prices.length - 1].close) : null;
+                    const lastPrice = prices[prices.length - 1]?.close != null ? Number(prices[prices.length - 1].close) : null;
 
                     let deltaAbs: number | null = null;
                     let deltaPercent: number | null = null;
@@ -408,7 +417,7 @@
             });
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
-            assets = assets.map(a => ({...a, loadingPrices: false, deltas: {}}));
+            assets = assets.map((a) => ({...a, loadingPrices: false, deltas: {}}));
         } finally {
             refreshing = false;
         }
@@ -424,9 +433,9 @@
     async function fetchLivePrices() {
         if (assets.length === 0) return;
         try {
-            const ids = assets.map(a => a.id);
+            const ids = assets.map((a) => a.id);
             const results = await fetchCurrentPrices(ids);
-            const newMap = new Map<number, { value: number; direction: LivePriceDirection }>();
+            const newMap = new Map<number, {value: number; direction: LivePriceDirection}>();
             for (const r of results) {
                 if (r.value != null) {
                     const prev = livePriceMap.get(r.assetId)?.value ?? null;
@@ -469,37 +478,47 @@
     async function handleSyncAsset(asset: any) {
         syncingAssetIds = new Set([...syncingAssetIds, asset.id]);
         try {
-            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{
-                asset_id: asset.id,
-                date_range: {start: dateStart, end: dateEnd},
-            }]);
+            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
+                {
+                    asset_id: asset.id,
+                    date_range: {start: dateStart, end: dateEnd},
+                },
+            ]);
             const r = (response as any)?.results?.[0];
             if (r && (!r.errors || r.errors.length === 0)) {
                 const fetched = r.points_fetched ?? 0;
                 const inserted = r.inserted_count ?? 0;
                 const updated = r.updated_count ?? 0;
                 const changed = inserted + updated;
-                toasts.success($t('assets.sync.toastOk', {
-                    values: {name: asset.display_name, fetched, changed}
-                }));
+                toasts.success(
+                    $t('assets.sync.toastOk', {
+                        values: {name: asset.display_name, fetched, changed},
+                    }),
+                );
             } else {
-                toasts.error($t('assets.sync.toastFailed', {
-                    values: {name: asset.display_name}
-                }) + (r?.errors?.[0] ? ': ' + r.errors[0] : ''));
+                toasts.error(
+                    $t('assets.sync.toastFailed', {
+                        values: {name: asset.display_name},
+                    }) + (r?.errors?.[0] ? ': ' + r.errors[0] : ''),
+                );
             }
             await fetchAllPriceData();
         } catch (e: any) {
-            toasts.error($t('assets.sync.toastFailed', {
-                values: {name: asset.display_name}
-            }) + ': ' + (e?.message || 'unknown'));
+            toasts.error(
+                $t('assets.sync.toastFailed', {
+                    values: {name: asset.display_name},
+                }) +
+                    ': ' +
+                    (e?.message || 'unknown'),
+            );
         } finally {
-            syncingAssetIds = new Set([...syncingAssetIds].filter(id => id !== asset.id));
+            syncingAssetIds = new Set([...syncingAssetIds].filter((id) => id !== asset.id));
         }
     }
 
     /** Open sync modal for all assets that have a provider */
     function handleSyncAllAssets() {
-        syncModalAssets = assets.filter(a => !!a.provider_code);
+        syncModalAssets = assets.filter((a) => !!a.provider_code);
         syncModalOpen = true;
     }
 
@@ -522,7 +541,7 @@
             });
             const r = (response as any)?.results?.[0];
             if (r?.success) {
-                assets = assets.filter(a => a.id !== deletingAsset!.id);
+                assets = assets.filter((a) => a.id !== deletingAsset!.id);
                 toasts.success($t('assets.delete.toastOk', {values: {name: deletingAsset!.display_name}}));
             } else if (r?.error_code === 'HAS_TRANSACTIONS') {
                 toasts.error($t('assets.delete.hasTransactions', {values: {name: deletingAsset!.display_name}}));
@@ -543,7 +562,7 @@
     // =========================================================================
 
     function handleBulkSyncAssets() {
-        syncModalAssets = selectedAssetRows.filter(r => !!r.provider_code);
+        syncModalAssets = selectedAssetRows.filter((r) => !!r.provider_code);
         syncModalOpen = true;
     }
 
@@ -559,25 +578,21 @@
     }
 
     async function confirmBulkDeleteAssets() {
-        const ids = deletingAssets.map(r => r.id);
+        const ids = deletingAssets.map((r) => r.id);
         if (ids.length === 0) return;
         try {
             const response = await zodiosApi.delete_assets_bulk_api_v1_assets_delete(undefined, {
                 queries: {asset_ids: ids},
             });
-            const res = (response as any);
+            const res = response as any;
             const succeeded = res.results?.filter((r: any) => r.success).map((r: any) => r.asset_id) ?? [];
-            assets = assets.filter(a => !succeeded.includes(a.id));
+            assets = assets.filter((a) => !succeeded.includes(a.id));
 
             // Populate results for the ConfirmModal
             bulkDeleteResults = (res.results ?? []).map((r: any) => ({
                 label: r.display_name || `Asset #${r.asset_id}`,
                 success: r.success,
-                detail: r.success
-                    ? $t('assets.delete.resultDeleted')
-                    : r.error_code === 'HAS_TRANSACTIONS'
-                        ? $t('assets.delete.resultHasTransactions')
-                        : (r.message || 'Error'),
+                detail: r.success ? $t('assets.delete.resultDeleted') : r.error_code === 'HAS_TRANSACTIONS' ? $t('assets.delete.resultHasTransactions') : r.message || 'Error',
             }));
         } catch (e: any) {
             toasts.error('Delete failed: ' + (e?.message || 'unknown'));
@@ -590,8 +605,8 @@
 
     function closeBulkDeleteDialog() {
         // Show summary toast on close
-        const successes = bulkDeleteResults.filter(r => r.success).length;
-        const failures = bulkDeleteResults.filter(r => !r.success).length;
+        const successes = bulkDeleteResults.filter((r) => r.success).length;
+        const failures = bulkDeleteResults.filter((r) => !r.success).length;
         if (successes > 0) {
             toasts.success($t('assets.delete.bulkOk', {values: {count: successes}}));
         }
@@ -618,7 +633,7 @@
         }
     }
 
-    function handleCardSettings(asset: { id: number }) {
+    function handleCardSettings(asset: {id: number}) {
         settingsTargetId = String(asset.id);
         settingsModalOpen = true;
     }
@@ -647,16 +662,20 @@
             if (store.getAllSorted().length > 0) return; // Already has data
             try {
                 const [base, quote] = slug.split('-');
-                const convertRequests = [{
-                    from_amount: {code: base, amount: 1},
-                    to: quote,
-                    date_range: {start: dateStart, end: dateEnd},
-                }];
+                const convertRequests = [
+                    {
+                        from_amount: {code: base, amount: 1},
+                        to: quote,
+                        date_range: {start: dateStart, end: dateEnd},
+                    },
+                ];
                 const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
                 const results = (response as any)?.results || [];
                 const points: FxDataPoint[] = results.map((r: any) => apiResultToFxDataPoint(r));
                 store.merge(points);
-            } catch { /* graceful skip */ }
+            } catch {
+                /* graceful skip */
+            }
         });
         await Promise.allSettled(promises);
     }
@@ -669,8 +688,10 @@
                 const store = getFxStore(slug);
                 const data = store.getAllSorted();
                 if (data.length === 0) continue;
-                entries.push([slug, data.map(d => ({ date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0 }))]);
-            } catch { /* skip */ }
+                entries.push([slug, data.map((d) => ({date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0}))]);
+            } catch {
+                /* skip */
+            }
         }
         return Object.fromEntries(entries);
     }
@@ -679,11 +700,7 @@
      * Render overlay signals for an asset card. Called by AssetCard reactively
      * whenever cardViewMode changes. Receives absolute chart data.
      */
-    function getRenderedSignals(
-        assetId: number,
-        absoluteData: LineDataPoint[],
-        vm: 'absolute' | 'percentage'
-    ): RenderedSignal[] {
+    function getRenderedSignals(assetId: number, absoluteData: LineDataPoint[], vm: 'absolute' | 'percentage'): RenderedSignal[] {
         void getSettingsVersion();
         const settings = getSettingsForPair(`asset-${assetId}`, 'assets');
         if (!settings.signals.length) return [];
@@ -700,18 +717,20 @@
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
                     if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map(d => ({
+                    instance.params._resolvedData = storeData.map((d) => ({
                         date: d.date,
                         value: d.rate,
                     }));
-                } catch { continue; }
+                } catch {
+                    continue;
+                }
             }
 
             // Resolve AssetComparisonSignal data from local assets array
             if (cfg.signalType === 'asset-comparison') {
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId || targetId === assetId) continue;
-                const targetAsset = assets.find(a => a.id === targetId);
+                const targetAsset = assets.find((a) => a.id === targetId);
                 if (!targetAsset?.chartData?.length) continue;
                 instance.params._resolvedData = targetAsset.chartData;
                 instance.params._assetDisplayName = targetAsset.display_name;
@@ -741,8 +760,7 @@
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$t('assets.title')}
                 {#if assets.length > 0}
-                    <span data-testid="assets-count-badge"
-                          class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{assets.length}</span>
+                    <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{assets.length}</span>
                 {/if}
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$t('assets.subtitle')}</p>
@@ -750,38 +768,43 @@
         <div class="flex items-center gap-2">
             {#if viewMode === 'list' && selectedAssetRows.length > 0}
                 <DataTableToolbar
-                        selectedCount={selectedAssetRows.length}
-                        bulkActions={[
-                        { id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets() },
-                        { id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets() },
-                        { id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets() },
+                    selectedCount={selectedAssetRows.length}
+                    bulkActions={[
+                        {id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets()},
+                        {id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets()},
+                        {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
                     ]}
-                        onClearSelection={() => { assetTableComponent?.getTableRef()?.clearSelection(); selectedAssetRows = []; }}
+                    onClearSelection={() => {
+                        assetTableComponent?.getTableRef()?.clearSelection();
+                        selectedAssetRows = [];
+                    }}
                 />
             {/if}
             <!-- Currency filter badges — Opzione γ (D10+D11) -->
             {#if filterCurrencies.size > 0 && selectedAssetRows.length === 0}
                 <div class="flex items-center gap-1.5 flex-wrap">
                     {#each [...filterCurrencies] as currency}
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium
+                        <span
+                            class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium
                                      bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300
-                                     border border-amber-200 dark:border-amber-700 rounded-full">
-                            {getCurrencyInfo(currency).flag_emoji} {currency}
+                                     border border-amber-200 dark:border-amber-700 rounded-full"
+                        >
+                            {getCurrencyInfo(currency).flag_emoji}
+                            {currency}
                             <button
-                                    class="hover:text-red-500 transition-colors"
-                                    onclick={(e) => { e.stopPropagation(); filterCurrencies = new Set([...filterCurrencies].filter(c => c !== currency)); }}
-                            >×</button>
+                                class="hover:text-red-500 transition-colors"
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    filterCurrencies = new Set([...filterCurrencies].filter((c) => c !== currency));
+                                }}>×</button
+                            >
                         </span>
                     {/each}
                 </div>
             {/if}
-            <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode"/>
-            <button
-                    class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
-                    data-testid="assets-add-button"
-                    onclick={handleAddAsset}
-            >
-                <Plus size={16}/>
+            <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="assets-add-button" onclick={handleAddAsset}>
+                <Plus size={16} />
                 {$t('assets.modal.title')}
             </button>
         </div>
@@ -795,26 +818,18 @@
                    [ search active type currency ×  | btns ]
          mobile:   [ datepicker ][ search ][ active type × ][ currency ][ btns ] -->
     <div
-            bind:this={filterBarRef}
-            class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layoutMode === 'mobile' ? 'flex-col items-center'
-                : layoutMode === 'wide' ? 'flex-row items-center justify-between'
-                : 'flex-row items-start justify-between'}"
+        bind:this={filterBarRef}
+        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
+               {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center justify-between' : 'flex-row items-start justify-between'}"
     >
         <!-- Filters block -->
-        <div class="flex gap-3
-                    {layoutMode === 'mobile' ? 'flex-col items-center'
-                     : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1'
-                     : 'flex-row items-center flex-1 flex-wrap'}">
+        <div
+            class="flex gap-3
+                    {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1 flex-wrap'}"
+        >
             <!-- DateRangePicker -->
             <div class="max-w-md" data-testid="assets-date-range">
-                <DateRangePicker
-                        bind:activePreset
-                        bind:end={dateEnd}
-                        bind:start={dateStart}
-                        compact={true}
-                        onchange={handleDateRangeChange}
-                />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={dateStart} compact={true} onchange={handleDateRangeChange} />
             </div>
 
             <!-- Filters 2×2 block (tablet+tablet-s) / inline (wide) / stacked (mobile) -->
@@ -823,25 +838,25 @@
                 <div class="flex items-center gap-2">
                     <!-- Search -->
                     <div class="relative w-44">
-                        <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
+                        <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                         <input
-                                class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
-                                data-testid="assets-search-input"
-                                oninput={handleSearchInput}
-                                placeholder={$t('assets.searchPlaceholder')}
-                                type="text"
-                                value={searchText}
+                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
+                            data-testid="assets-search-input"
+                            oninput={handleSearchInput}
+                            placeholder={$t('assets.searchPlaceholder')}
+                            type="text"
+                            value={searchText}
                         />
                     </div>
 
                     <!-- Active toggle -->
                     <button
-                            class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
-                               {filterActiveOnly
-                                   ? 'bg-libre-green text-white border-libre-green'
-                                   : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                            data-testid="assets-active-toggle"
-                            onclick={() => { filterActiveOnly = !filterActiveOnly; }}
+                        class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                               {filterActiveOnly ? 'bg-libre-green text-white border-libre-green' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                        data-testid="assets-active-toggle"
+                        onclick={() => {
+                            filterActiveOnly = !filterActiveOnly;
+                        }}
                     >
                         {filterActiveOnly ? $t('assets.showActive') : $t('assets.showAll')}
                     </button>
@@ -852,13 +867,15 @@
                     <!-- Type multi-checkbox dropdown (D9) -->
                     <div class="relative">
                         <button
-                                bind:this={typeFilterTriggerEl}
-                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                            bind:this={typeFilterTriggerEl}
+                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
                                    {filterTypes.size > 0
-                                       ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
-                                       : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                                data-testid="assets-type-filter"
-                                onclick={() => { typeFilterOpen = !typeFilterOpen; }}
+                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                                : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                            data-testid="assets-type-filter"
+                            onclick={() => {
+                                typeFilterOpen = !typeFilterOpen;
+                            }}
                         >
                             {#if filterTypes.size > 0}
                                 {$t('common.type')} ({filterTypes.size})
@@ -866,50 +883,61 @@
                                 {$t('assets.allTypes')}
                             {/if}
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                                <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
                             </svg>
                         </button>
 
                         {#if typeFilterOpen}
                             <!-- svelte-ignore a11y_interactive_supports_focus -->
-                            <div class="absolute z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
-                                 onclick={(e) => e.stopPropagation()}
-                                 onkeydown={(e) => { if (e.key === 'Escape') typeFilterOpen = false; }}
-                                 role="listbox"
-                                 tabindex="0"
-                                 data-type-filter-panel>
+                            <div
+                                class="absolute z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                                onclick={(e) => e.stopPropagation()}
+                                onkeydown={(e) => {
+                                    if (e.key === 'Escape') typeFilterOpen = false;
+                                }}
+                                role="listbox"
+                                tabindex="0"
+                                data-type-filter-panel
+                            >
                                 <!-- Select All / Clear All buttons -->
                                 <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
-                                    <button type="button"
-                                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                                            onclick={() => { filterTypes = new Set(availableTypes); }}
-                                    >{$t('common.selectAll')}</button>
-                                    <button type="button"
-                                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                                            onclick={() => { filterTypes = new Set(); }}
-                                    >{$t('common.clearAll')}</button>
+                                    <button
+                                        type="button"
+                                        class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                                        onclick={() => {
+                                            filterTypes = new Set(availableTypes);
+                                        }}>{$t('common.selectAll')}</button
+                                    >
+                                    <button
+                                        type="button"
+                                        class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                                        onclick={() => {
+                                            filterTypes = new Set();
+                                        }}>{$t('common.clearAll')}</button
+                                    >
                                 </div>
                                 <!-- Option list -->
                                 <div class="max-h-52 overflow-y-auto border border-gray-100 dark:border-slate-700 mx-2.5 my-2 rounded-md">
                                     {#each availableTypes as typeVal}
-                                        <button type="button"
-                                                class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                                                onclick={() => {
+                                        <button
+                                            type="button"
+                                            class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                            onclick={() => {
                                                 const next = new Set(filterTypes);
                                                 if (next.has(typeVal)) next.delete(typeVal);
                                                 else next.add(typeVal);
                                                 filterTypes = next;
                                             }}
                                         >
-                                            <span class="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors shrink-0
-                                                         {filterTypes.has(typeVal)
-                                                             ? 'bg-libre-green border-libre-green text-white dark:bg-emerald-400 dark:border-emerald-400 dark:text-slate-900'
-                                                             : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-500'}">
+                                            <span
+                                                class="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors shrink-0
+                                                         {filterTypes.has(typeVal) ? 'bg-libre-green border-libre-green text-white dark:bg-emerald-400 dark:border-emerald-400 dark:text-slate-900' : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-500'}"
+                                            >
                                                 {#if filterTypes.has(typeVal)}
-                                                    <Check size={12}/>
+                                                    <Check size={12} />
                                                 {/if}
                                             </span>
-                                            <img src="/icons/asset-types/{TYPE_ICON_MAP[typeVal] ?? 'other'}.png" alt="" class="w-4 h-4 object-contain shrink-0"/>
+                                            <img src="/icons/asset-types/{TYPE_ICON_MAP[typeVal] ?? 'other'}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
                                             <span class="flex-1">{$t(`assets.types.${typeVal}`) || typeVal}</span>
                                             <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 tabular-nums">{typeCounts[typeVal] ?? 0}</span>
                                         </button>
@@ -922,27 +950,23 @@
                     <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set) -->
                     <div class="w-36">
                         <CurrencySearchSelect
-                                allowedCurrencies={configuredCurrencies}
-                                includeAll={true}
-                                maxVisibleItems={6}
-                                onchange={(v) => {
+                            allowedCurrencies={configuredCurrencies}
+                            includeAll={true}
+                            maxVisibleItems={6}
+                            onchange={(v) => {
                                 if (v && !filterCurrencies.has(v)) {
                                     filterCurrencies = new Set([...filterCurrencies, v]);
                                 }
                             }}
-                                placeholder={$t('common.allCurrencies')}
-                                value=""
+                            placeholder={$t('common.allCurrencies')}
+                            value=""
                         />
                     </div>
 
                     <!-- Reset filters -->
                     {#if hasActiveFilters}
-                        <button
-                                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
-                                onclick={clearFilters}
-                                title={$t('fx.filter.resetFilters')}
-                        >
-                            <X size={16}/>
+                        <button class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors" onclick={clearFilters} title={$t('fx.filter.resetFilters')}>
+                            <X size={16} />
                         </button>
                     {/if}
                 </div>
@@ -950,53 +974,53 @@
         </div>
 
         <!-- Actions: 2×2 grid (wide+tablet), column (tablet-s), horizontal row (mobile) -->
-        <div class="flex shrink-0 gap-1.5
-                    {layoutMode === 'mobile' ? 'flex-row justify-center'
-                     : layoutMode === 'tablet-s' ? 'flex-col'
-                     : 'grid grid-cols-2'}">
+        <div
+            class="flex shrink-0 gap-1.5
+                    {layoutMode === 'mobile' ? 'flex-row justify-center' : layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2'}"
+        >
             <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
             {#if viewMode === 'list'}
-                <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={showActionLabels}/>
+                <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={showActionLabels} />
             {:else}
                 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                     <button
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
-                            ? 'bg-libre-green text-white'
-                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            onclick={() => { globalViewMode = 'absolute'; }}
-                    >Abs
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => {
+                            globalViewMode = 'absolute';
+                        }}
+                        >Abs
                     </button>
                     <button
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
-                            ? 'bg-libre-green text-white'
-                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            onclick={() => { globalViewMode = 'percentage'; }}
-                    >%
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => {
+                            globalViewMode = 'percentage';
+                        }}
+                        >%
                     </button>
                 </div>
             {/if}
             <!-- Settings -->
             <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleGlobalSettings}
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                onclick={handleGlobalSettings}
             >
-                <Settings size={14}/>
+                <Settings size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
             </button>
             <!-- Sync All -->
             <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleSyncAllAssets}
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                onclick={handleSyncAllAssets}
             >
-                <RotateCw size={14}/>
+                <RotateCw size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
             <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={() => fetchAllPriceData()}
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                onclick={() => fetchAllPriceData()}
             >
-                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14}/>
+                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
             </button>
         </div>
@@ -1006,17 +1030,14 @@
     {#if loading}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32}/>
+                <RefreshCw class="text-libre-green animate-spin" size={32} />
             </div>
             <p class="text-gray-500 dark:text-gray-400">{$t('common.loading')}</p>
         </div>
     {:else if error}
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
             <p class="text-red-600 dark:text-red-400">{error}</p>
-            <button
-                    class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                    onclick={loadAssets}
-            >
+            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={loadAssets}>
                 {$t('common.retry')}
             </button>
         </div>
@@ -1024,16 +1045,13 @@
         <!-- Empty state -->
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full mb-4">
-                <BarChart3 class="text-green-600 dark:text-green-400" size={32}/>
+                <BarChart3 class="text-green-600 dark:text-green-400" size={32} />
             </div>
             {#if assets.length === 0}
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$t('assets.empty.noAssets')}</h3>
                 <p class="text-gray-500 dark:text-gray-400 mb-4">{$t('assets.empty.noAssetsDesc')}</p>
-                <button
-                        class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                        onclick={handleAddAsset}
-                >
-                    <Plus size={16} class="inline mr-1"/>
+                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleAddAsset}>
+                    <Plus size={16} class="inline mr-1" />
                     {$t('assets.modal.title')}
                 </button>
             {:else}
@@ -1046,7 +1064,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {#each filteredAssets as asset (asset.id)}
                 <AssetCard
-                        asset={{
+                    asset={{
                         id: asset.id,
                         display_name: asset.display_name,
                         currency: asset.currency,
@@ -1055,109 +1073,114 @@
                         provider_code: asset.provider_code,
                         active: asset.active,
                     }}
-                        livePrice={livePriceMap.get(asset.id)?.value ?? asset.lastPrice ?? null}
-                        livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
-                        deltaPercent={asset.deltaPercent}
-                        deltaAbs={asset.deltaAbs}
-                        globalViewMode={globalViewMode}
-                        chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
-                        renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
-                        chartData={asset.chartData}
-                        loading={asset.loadingPrices}
-                        syncing={syncingAssetIds.has(asset.id)}
-                        onsync={handleSyncAsset}
-                        onrefresh={handleRefreshAsset}
-                        ondelete={handleDeleteAsset}
-                        onsettings={handleCardSettings}
+                    livePrice={livePriceMap.get(asset.id)?.value ?? asset.lastPrice ?? null}
+                    livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
+                    deltaPercent={asset.deltaPercent}
+                    deltaAbs={asset.deltaAbs}
+                    {globalViewMode}
+                    chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
+                    renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
+                    chartData={asset.chartData}
+                    loading={asset.loadingPrices}
+                    syncing={syncingAssetIds.has(asset.id)}
+                    onsync={handleSyncAsset}
+                    onrefresh={handleRefreshAsset}
+                    ondelete={handleDeleteAsset}
+                    onsettings={handleCardSettings}
                 />
             {/each}
         </div>
     {:else}
         <!-- Table View -->
         <AssetTable
-                bind:this={assetTableComponent}
-                data={tableRows}
-                loading={false}
-                {visiblePeriods}
-                {livePriceMap}
-                onsync={handleSyncAsset}
-                onrefresh={handleRefreshAsset}
-                ondelete={handleDeleteAsset}
-                onselectionchange={(rows) => { selectedAssetRows = rows; }}
+            bind:this={assetTableComponent}
+            data={tableRows}
+            loading={false}
+            {visiblePeriods}
+            {livePriceMap}
+            onsync={handleSyncAsset}
+            onrefresh={handleRefreshAsset}
+            ondelete={handleDeleteAsset}
+            onselectionchange={(rows) => {
+                selectedAssetRows = rows;
+            }}
         />
     {/if}
 </div>
 
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
-        bind:open={settingsModalOpen}
-        mode={settingsTargetId ? 'pair' : 'global'}
-        onclose={() => { settingsModalOpen = false; settingsTargetId = null; }}
-        onsave={handleSettingsSave}
-        settings={settingsForModal}
-        pairData={settingsTargetId
-            ? assets.find(a => a.id === Number(settingsTargetId))?.chartData
-            : undefined}
-        availablePairs={fxPairSlugs}
-        availableAssets={assets.map(a => ({ id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type }))}
-        assetsDataMap={Object.fromEntries(
-            assets
-                .filter(a => a.chartData.length > 0)
-                .map(a => [String(a.id), a.chartData])
-        )}
-        pairsDataMap={buildPairsDataMap()}
+    bind:open={settingsModalOpen}
+    mode={settingsTargetId ? 'pair' : 'global'}
+    onclose={() => {
+        settingsModalOpen = false;
+        settingsTargetId = null;
+    }}
+    onsave={handleSettingsSave}
+    settings={settingsForModal}
+    pairData={settingsTargetId ? assets.find((a) => a.id === Number(settingsTargetId))?.chartData : undefined}
+    availablePairs={fxPairSlugs}
+    availableAssets={assets.map((a) => ({id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type}))}
+    assetsDataMap={Object.fromEntries(assets.filter((a) => a.chartData.length > 0).map((a) => [String(a.id), a.chartData]))}
+    pairsDataMap={buildPairsDataMap()}
 />
 
 <!-- Delete Asset Confirm Dialog (single) -->
 <ConfirmModal
-        confirmText={$t('common.delete')}
-        danger={true}
-        description={$t('assets.delete.confirmWarning')}
-        message={$t('assets.delete.confirmQuestion', { values: { name: deletingAsset?.display_name ?? '' } })}
-        onCancel={() => { deleteDialogOpen = false; deletingAsset = null; }}
-        onConfirm={confirmDeleteAsset}
-        open={deleteDialogOpen}
-        title={$t('common.confirmDelete')}
+    confirmText={$t('common.delete')}
+    danger={true}
+    description={$t('assets.delete.confirmWarning')}
+    message={$t('assets.delete.confirmQuestion', {values: {name: deletingAsset?.display_name ?? ''}})}
+    onCancel={() => {
+        deleteDialogOpen = false;
+        deletingAsset = null;
+    }}
+    onConfirm={confirmDeleteAsset}
+    open={deleteDialogOpen}
+    title={$t('common.confirmDelete')}
 />
 
 <!-- Bulk Delete Confirm Dialog -->
 <ConfirmModal
-        confirmText={$t('common.delete')}
-        danger={true}
-        items={deletingAssets.map(a => a.display_name)}
-        itemsLabel={`${deletingAssets.length} assets`}
-        message={$t('assets.delete.bulkConfirmMessage', { values: { count: deletingAssets.length } })}
-        onCancel={closeBulkDeleteDialog}
-        onConfirm={confirmBulkDeleteAssets}
-        open={bulkDeleteDialogOpen}
-        results={bulkDeleteResults}
-        title={$t('common.confirmDelete')}
+    confirmText={$t('common.delete')}
+    danger={true}
+    items={deletingAssets.map((a) => a.display_name)}
+    itemsLabel={`${deletingAssets.length} assets`}
+    message={$t('assets.delete.bulkConfirmMessage', {values: {count: deletingAssets.length}})}
+    onCancel={closeBulkDeleteDialog}
+    onConfirm={confirmBulkDeleteAssets}
+    open={bulkDeleteDialogOpen}
+    results={bulkDeleteResults}
+    title={$t('common.confirmDelete')}
 />
 
 <!-- Asset Sync Modal -->
 <AssetSyncModal
-        assets={syncModalAssets}
-        bind:open={syncModalOpen}
-        {dateEnd}
-        {dateStart}
-        onclose={() => { syncModalOpen = false; }}
-        onsynced={() => fetchAllPriceData()}
+    assets={syncModalAssets}
+    bind:open={syncModalOpen}
+    {dateEnd}
+    {dateStart}
+    onclose={() => {
+        syncModalOpen = false;
+    }}
+    onsynced={() => fetchAllPriceData()}
 />
 
 <!-- Asset Create/Edit Modal -->
 <AssetModal
-        bind:open={assetModalOpen}
-        editMode={assetModalEditMode}
-        editData={assetModalEditData}
-        oncreated={async (assetId) => {
-            await loadAssets();
-            // Auto-sync the newly created asset to fetch initial price data
-            const newAsset = assets.find(a => a.id === assetId);
-            if (newAsset?.provider_code) {
-                await handleSyncAsset(newAsset);
-            }
-        }}
-        onupdated={() => loadAssets()}
-        onclose={() => { assetModalOpen = false; }}
+    bind:open={assetModalOpen}
+    editMode={assetModalEditMode}
+    editData={assetModalEditData}
+    oncreated={async (assetId) => {
+        await loadAssets();
+        // Auto-sync the newly created asset to fetch initial price data
+        const newAsset = assets.find((a) => a.id === assetId);
+        if (newAsset?.provider_code) {
+            await handleSyncAsset(newAsset);
+        }
+    }}
+    onupdated={() => loadAssets()}
+    onclose={() => {
+        assetModalOpen = false;
+    }}
 />
-

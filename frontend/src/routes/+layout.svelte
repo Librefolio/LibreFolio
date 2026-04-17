@@ -31,6 +31,6 @@
     <div></div>
 {:else}
     <div class="min-h-screen">
-        <slot/>
+        <slot />
     </div>
 {/if}

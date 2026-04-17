@@ -26,12 +26,12 @@
     // =========================================================================
 
     export interface DiffItem {
-        field: string;          // "currency", "identifier_isin", "sector_area", etc.
-        label: string;          // Localized label
+        field: string; // "currency", "identifier_isin", "sector_area", etc.
+        label: string; // Localized label
         type: 'string' | 'distribution';
         currentValue: any;
         providerValue: any;
-        selected: boolean;      // Checkbox state
+        selected: boolean; // Checkbox state
     }
 
     // =========================================================================
@@ -77,12 +77,7 @@
         oncancel?: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        differences = [],
-        onapply,
-        oncancel,
-    }: Props = $props();
+    let {open = $bindable(false), differences = [], onapply, oncancel}: Props = $props();
 
     // =========================================================================
     // State — local copy for checkbox management
@@ -93,7 +88,7 @@
     // Sync from props when modal opens
     $effect(() => {
         if (open && differences.length > 0) {
-            items = differences.map(d => ({...d, selected: true}));
+            items = differences.map((d) => ({...d, selected: true}));
         }
     });
 
@@ -101,7 +96,7 @@
     // Derived
     // =========================================================================
 
-    let selectedCount = $derived(items.filter(i => i.selected).length);
+    let selectedCount = $derived(items.filter((i) => i.selected).length);
     let totalCount = $derived(items.length);
 
     /** Group items by section, preserving config order */
@@ -112,9 +107,7 @@
         for (const section of DIFF_FIELD_SECTIONS) {
             const sectionItems: Array<{item: DiffItem; index: number}> = [];
             items.forEach((item, idx) => {
-                const match = section.matchPrefix
-                    ? section.fields.some(p => item.field.startsWith(p))
-                    : section.fields.includes(item.field);
+                const match = section.matchPrefix ? section.fields.some((p) => item.field.startsWith(p)) : section.fields.includes(item.field);
                 if (match && !used.has(idx)) {
                     sectionItems.push({item, index: idx});
                     used.add(idx);
@@ -126,9 +119,7 @@
         }
 
         // Fallback: any unmatched fields go into "Other"
-        const remaining = items
-            .map((item, idx) => ({item, index: idx}))
-            .filter(({index: idx}) => !used.has(idx));
+        const remaining = items.map((item, idx) => ({item, index: idx})).filter(({index: idx}) => !used.has(idx));
         if (remaining.length > 0) {
             groups.push({title: 'Other', items: remaining});
         }
@@ -141,19 +132,19 @@
     // =========================================================================
 
     function selectAll() {
-        items = items.map(i => ({...i, selected: true}));
+        items = items.map((i) => ({...i, selected: true}));
     }
 
     function deselectAll() {
-        items = items.map(i => ({...i, selected: false}));
+        items = items.map((i) => ({...i, selected: false}));
     }
 
     function toggleItem(index: number) {
-        items = items.map((item, i) => i === index ? {...item, selected: !item.selected} : item);
+        items = items.map((item, i) => (i === index ? {...item, selected: !item.selected} : item));
     }
 
     function handleApply() {
-        const selectedFields = items.filter(i => i.selected).map(i => i.field);
+        const selectedFields = items.filter((i) => i.selected).map((i) => i.field);
         onapply?.(selectedFields);
         open = false;
     }
@@ -194,20 +185,14 @@
     }
 </script>
 
-<ModalBase
-        {open}
-        maxWidth="2xl"
-        onRequestClose={handleCancel}
-        zIndex={70}
->
+<ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} zIndex={70}>
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {$t('assets.comparison.title')}
         </h2>
-        <button type="button" onclick={handleCancel}
-                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <X size={20}/>
+        <button type="button" onclick={handleCancel} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <X size={20} />
         </button>
     </div>
 
@@ -224,16 +209,11 @@
                 {group.title}
             </div>
 
-            {#each group.items as {item, index}}
+            {#each group.items as { item, index }}
                 <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3">
                     <!-- Checkbox + label -->
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={item.selected}
-                            onchange={() => toggleItem(index)}
-                            class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
-                        />
+                        <input type="checkbox" checked={item.selected} onchange={() => toggleItem(index)} class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50" />
                         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
                     </label>
 
@@ -290,12 +270,10 @@
 
         <!-- Select All / Deselect All -->
         <div class="flex items-center gap-3 pt-2">
-            <button type="button" onclick={selectAll}
-                    class="text-xs text-libre-green hover:text-libre-green/80 font-medium transition-colors">
+            <button type="button" onclick={selectAll} class="text-xs text-libre-green hover:text-libre-green/80 font-medium transition-colors">
                 {$t('assets.comparison.selectAll')}
             </button>
-            <button type="button" onclick={deselectAll}
-                    class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors">
+            <button type="button" onclick={deselectAll} class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors">
                 {$t('assets.comparison.deselectAll')}
             </button>
         </div>
@@ -303,21 +281,11 @@
 
     <!-- Footer -->
     <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
-        <button
-                type="button"
-                onclick={handleCancel}
-                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-        >
+        <button type="button" onclick={handleCancel} class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
             {$t('common.cancel')}
         </button>
-        <button
-                type="button"
-                onclick={handleApply}
-                disabled={selectedCount === 0}
-                class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <button type="button" onclick={handleApply} disabled={selectedCount === 0} class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             ✅ {$t('assets.comparison.applySelected', {values: {count: selectedCount, total: totalCount}})}
         </button>
     </div>
 </ModalBase>
-

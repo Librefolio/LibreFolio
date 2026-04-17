@@ -21,19 +21,13 @@
         size?: 'sm' | 'md' | 'lg';
     }
 
-    let {
-        iconUrl = null,
-        portalUrl = null,
-        pluginCode = null,
-        altText = 'Broker icon',
-        size = 'md',
-    }: Props = $props();
+    let {iconUrl = null, portalUrl = null, pluginCode = null, altText = 'Broker icon', size = 'md'}: Props = $props();
 
     // Size mappings
     const sizes = {
         sm: {container: 'w-6 h-6', icon: 16},
         md: {container: 'w-10 h-10', icon: 20},
-        lg: {container: 'w-16 h-16', icon: 28}
+        lg: {container: 'w-16 h-16', icon: 28},
     };
 
     // ============================================================
@@ -54,7 +48,7 @@
     async function loadPluginIcon(code: string) {
         try {
             const plugins = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
-            const plugin = plugins.find(p => p.code === code);
+            const plugin = plugins.find((p) => p.code === code);
             pluginIconUrl = plugin?.icon_url ?? null;
         } catch {
             pluginIconUrl = null;
@@ -70,7 +64,9 @@
         const urls: string[] = [];
         if (iconUrl?.trim()) urls.push(iconUrl);
         if (portalUrl?.trim()) {
-            try { urls.push(new URL(portalUrl).origin + '/favicon.ico'); } catch {}
+            try {
+                urls.push(new URL(portalUrl).origin + '/favicon.ico');
+            } catch {}
         }
         if (pluginIconUrl) urls.push(pluginIconUrl);
         return urls;
@@ -80,7 +76,7 @@
     let failedUrls = $state(new Set<string>());
 
     /** First non-failed URL in the candidate chain, or null for Briefcase fallback */
-    let currentDisplayUrl = $derived(candidateUrls.find(u => !failedUrls.has(u)) ?? null);
+    let currentDisplayUrl = $derived(candidateUrls.find((u) => !failedUrls.has(u)) ?? null);
 
     /** Props key — reset failedUrls when props change */
     let mainPropsKey = $derived(`${iconUrl ?? ''}|${portalUrl ?? ''}|${pluginCode ?? ''}`);
@@ -125,19 +121,13 @@
 <div class="broker-icon {sizes[size].container} rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
     {#if currentDisplayUrl}
         {#key currentDisplayUrl}
-            <img
-                    src={currentDisplayUrl}
-                    alt={altText}
-                    class="w-full h-full object-cover {imageLoaded ? '' : 'opacity-0'}"
-                    onload={handleLoad}
-                    onerror={handleError}
-            />
+            <img src={currentDisplayUrl} alt={altText} class="w-full h-full object-cover {imageLoaded ? '' : 'opacity-0'}" onload={handleLoad} onerror={handleError} />
         {/key}
     {/if}
 
     {#if !imageLoaded || !currentDisplayUrl}
         <div class="absolute inset-0 flex items-center justify-center">
-            <Briefcase size={sizes[size].icon} class="text-libre-green dark:text-green-400"/>
+            <Briefcase size={sizes[size].icon} class="text-libre-green dark:text-green-400" />
         </div>
     {/if}
 </div>

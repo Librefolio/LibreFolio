@@ -4,7 +4,7 @@
     import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte';
 </script>
 
-<AnimatedBackground/>
+<AnimatedBackground />
 
 <div class="min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md bg-libre-beige rounded-2xl shadow-2xl overflow-hidden">
@@ -33,16 +33,10 @@
             </p>
 
             <div class="flex flex-col space-y-3">
-                <a
-                        class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:opacity-90 transition-all text-center"
-                        href="/dashboard"
-                >
+                <a class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:opacity-90 transition-all text-center" href="/dashboard">
                     {$_('error.goToDashboard')}
                 </a>
-                <a
-                        class="w-full border border-libre-green text-libre-green font-bold py-3 rounded-lg hover:bg-libre-green hover:text-white transition-all text-center"
-                        href="/"
-                >
+                <a class="w-full border border-libre-green text-libre-green font-bold py-3 rounded-lg hover:bg-libre-green hover:text-white transition-all text-center" href="/">
                     {$_('error.goToHome')}
                 </a>
             </div>
@@ -53,4 +47,3 @@
 <style>
     /* Inherits from app.css - no extra styles needed */
 </style>
-

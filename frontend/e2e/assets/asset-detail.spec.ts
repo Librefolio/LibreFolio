@@ -188,7 +188,10 @@ test.describe('Asset Detail Page', () => {
 
         // Currency selector should be within the filter bar (CurrencySearchSelect or similar)
         // It renders as a combobox or button with currency code
-        const currencyEl = filterBar.locator('[role="combobox"], button').filter({hasText: /[A-Z]{3}/}).first();
+        const currencyEl = filterBar
+            .locator('[role="combobox"], button')
+            .filter({hasText: /[A-Z]{3}/})
+            .first();
         const hasCurrency = await currencyEl.isVisible({timeout: 3000}).catch(() => false);
         if (hasCurrency) {
             await expect(currencyEl).toBeVisible();
@@ -242,4 +245,3 @@ test.describe('Asset Detail Page', () => {
         await expect(page.getByTestId('asset-detail-chart')).toBeVisible();
     });
 });
-

@@ -58,7 +58,7 @@ function createLanguageStore() {
          * Useful for language picker buttons
          */
         cycle: () => {
-            update(current => {
+            update((current) => {
                 const currentIndex = SUPPORTED_LOCALES.indexOf(current);
                 const nextIndex = (currentIndex + 1) % SUPPORTED_LOCALES.length;
                 const nextLang = SUPPORTED_LOCALES[nextIndex];
@@ -85,7 +85,7 @@ function createLanguageStore() {
                 locale.set(lang);
             } else {
                 // No stored value - sync with svelte-i18n's current locale
-                const unsub = locale.subscribe(currentLocale => {
+                const unsub = locale.subscribe((currentLocale) => {
                     if (currentLocale && SUPPORTED_LOCALES.includes(currentLocale as SupportedLocale)) {
                         set(currentLocale as SupportedLocale);
                     }
@@ -93,7 +93,7 @@ function createLanguageStore() {
                 // Only need to read once
                 unsub();
             }
-        }
+        },
     };
 }
 
@@ -102,18 +102,12 @@ export const currentLanguage = createLanguageStore();
 /**
  * Derived store for current language display name
  */
-export const currentLanguageName = derived(
-    currentLanguage,
-    $lang => LOCALE_NAMES[$lang]
-);
+export const currentLanguageName = derived(currentLanguage, ($lang) => LOCALE_NAMES[$lang]);
 
 /**
  * Derived store for current language flag emoji
  */
-export const currentLanguageFlag = derived(
-    currentLanguage,
-    $lang => LOCALE_FLAGS[$lang]
-);
+export const currentLanguageFlag = derived(currentLanguage, ($lang) => LOCALE_FLAGS[$lang]);
 
 /**
  * List of all available languages for UI selectors

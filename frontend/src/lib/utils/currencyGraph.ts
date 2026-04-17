@@ -70,10 +70,7 @@ export interface EdgeAttributes {
  *
  * MANUAL provider is excluded (sentinel, not a real data source).
  */
-export function buildCurrencyGraph(
-    providers: ProviderInfo[],
-    allCurrencyCodes: string[],
-): MultiDirectedGraph<Record<string, never>, EdgeAttributes> {
+export function buildCurrencyGraph(providers: ProviderInfo[], allCurrencyCodes: string[]): MultiDirectedGraph<Record<string, never>, EdgeAttributes> {
     const graph = new MultiDirectedGraph<Record<string, never>, EdgeAttributes>();
 
     // Add all currency codes as nodes
@@ -143,12 +140,7 @@ export function buildCurrencyGraph(
  * @returns Array of paths, sorted by length (shortest first).
  *          Each path is a ChainStep[] ready for chain_steps.
  */
-export function findAllPaths(
-    graph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>,
-    source: string,
-    target: string,
-    maxDepth: number = 4,
-): ChainStep[][] {
+export function findAllPaths(graph: MultiDirectedGraph<Record<string, never>, EdgeAttributes>, source: string, target: string, maxDepth: number = 4): ChainStep[][] {
     const validPaths: ChainStep[][] = [];
 
     // If source or target don't exist in the graph, no paths possible
@@ -165,12 +157,7 @@ export function findAllPaths(
      * @param visitedNodes - Nodes already in the current path (prevents cycles)
      * @param providerUseCount - Map<provider, count> uses in current path
      */
-    function dfs(
-        currentNode: string,
-        pathEdges: ChainStep[],
-        visitedNodes: Set<string>,
-        providerUseCount: Map<string, number>,
-    ): void {
+    function dfs(currentNode: string, pathEdges: ChainStep[], visitedNodes: Set<string>, providerUseCount: Map<string, number>): void {
         // Reached the target — record this path
         if (currentNode === target) {
             validPaths.push([...pathEdges]);
@@ -235,4 +222,3 @@ export function findAllPaths(
 
 // TODO: Web Worker parallelization — profile first, implement only if needed.
 // With ~4 providers × ~25 currencies, DFS completes in <1ms.
-

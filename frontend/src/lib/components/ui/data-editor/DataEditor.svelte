@@ -38,18 +38,12 @@
         /** Read-only mode */
         readonly?: boolean;
         /** Snippet that renders the import modal. Receives {open, onimport} props via callback. */
-        importModal?: Snippet<[{ open: boolean; setOpen: (v: boolean) => void; onimport: (rows: ParsedRow[]) => void }]>;
+        importModal?: Snippet<[{open: boolean; setOpen: (v: boolean) => void; onimport: (rows: ParsedRow[]) => void}]>;
         /** Emits only dirty rows (status !== 'original') */
         onchange?: (dirtyRows: DataRow[]) => void;
     }
 
-    let {
-        columns,
-        rows = $bindable([]),
-        readonly: isReadonly = false,
-        importModal,
-        onchange,
-    }: Props = $props();
+    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -65,22 +59,22 @@
     // =========================================================================
 
     /** Whether any rows have stale days (to decide if toggle should be shown) */
-    let hasStaleRows = $derived(rows.some(r => r.staleDays && r.staleDays > 0 && r.status === 'original'));
+    let hasStaleRows = $derived(rows.some((r) => r.staleDays && r.staleDays > 0 && r.status === 'original'));
 
     /** Dirty rows for emission */
-    let dirtyRows = $derived(rows.filter(r => r.status !== 'original'));
+    let dirtyRows = $derived(rows.filter((r) => r.status !== 'original'));
 
     /** Counts for toolbar */
-    let modifiedCount = $derived(rows.filter(r => r.status === 'edited').length);
-    let deletedCount = $derived(rows.filter(r => r.status === 'deleted').length);
-    let appendedCount = $derived(rows.filter(r => r.status === 'appended').length);
-    let staleCount = $derived(rows.filter(r => r.staleDays && r.staleDays > 0 && r.status === 'original').length);
+    let modifiedCount = $derived(rows.filter((r) => r.status === 'edited').length);
+    let deletedCount = $derived(rows.filter((r) => r.status === 'deleted').length);
+    let appendedCount = $derived(rows.filter((r) => r.status === 'appended').length);
+    let staleCount = $derived(rows.filter((r) => r.staleDays && r.staleDays > 0 && r.status === 'original').length);
 
     /** Sorted and optionally filtered rows for DataTable display */
     let sortedRows = $derived.by(() => {
         let filtered = [...rows];
         if (hideStale) {
-            filtered = filtered.filter(r => !(r.staleDays && r.staleDays > 0 && r.status === 'original'));
+            filtered = filtered.filter((r) => !(r.staleDays && r.staleDays > 0 && r.status === 'original'));
         }
         return filtered.sort((a, b) => a.date.localeCompare(b.date));
     });
@@ -109,7 +103,7 @@
             case 'appended':
                 return 'row-appended';
             default:
-                return (row.staleDays && row.staleDays > 0) ? 'row-stale' : '';
+                return row.staleDays && row.staleDays > 0 ? 'row-stale' : '';
         }
     }
 
@@ -127,7 +121,7 @@
     }
 
     /** Set of all existing dates for duplicate prevention */
-    let existingDates = $derived(new Set(rows.map(r => r.date)));
+    let existingDates = $derived(new Set(rows.map((r) => r.date)));
 
     let dtColumns: DTColumnDef<DataRow>[] = $derived.by(() => {
         const cols: DTColumnDef<DataRow>[] = [
@@ -235,12 +229,12 @@
                         id: col.key,
                         header: col.label,
                         type: 'enum',
-                        enumOptions: options.map(o => ({value: o.value, label: `${o.emoji ? o.emoji + ' ' : ''}${o.label}`})),
+                        enumOptions: options.map((o) => ({value: o.value, label: `${o.emoji ? o.emoji + ' ' : ''}${o.label}`})),
                         cell: (r) => {
                             if (r.readonly) {
-                                const opt = options.find(o => o.value === r.values[col.key]);
+                                const opt = options.find((o) => o.value === r.values[col.key]);
                                 if (opt?.tooltip) {
-                                    const lang = typeof localStorage !== 'undefined' ? localStorage.getItem('librefolio-locale') ?? 'en' : 'en';
+                                    const lang = typeof localStorage !== 'undefined' ? (localStorage.getItem('librefolio-locale') ?? 'en') : 'en';
                                     const prefix = lang !== 'en' ? `${lang}/` : '';
                                     const docsUrl = opt.docsPath ? `/mkdocs/${prefix}${opt.docsPath}/` : '';
                                     return {
@@ -257,7 +251,7 @@
                             return {
                                 type: 'editable-select',
                                 value: String(r.values[col.key] ?? ''),
-                                options: options.map(o => ({value: o.value, label: `${o.emoji ? o.emoji + ' ' : ''}${o.label}`})),
+                                options: options.map((o) => ({value: o.value, label: `${o.emoji ? o.emoji + ' ' : ''}${o.label}`})),
                                 onchange: (newValue) => handleCellEditByRowId(r.rowId, col.key, newValue),
                             };
                         },
@@ -368,8 +362,8 @@
     /** Change the date of an appended row (via SingleDatePicker) */
     function handleDateChange(oldDate: string, newDate: string) {
         if (oldDate === newDate) return;
-        if (rows.some(r => r.date === newDate && r.date !== oldDate)) return;
-        const row = rows.find(r => r.date === oldDate && r.status === 'appended');
+        if (rows.some((r) => r.date === newDate && r.date !== oldDate)) return;
+        const row = rows.find((r) => r.date === oldDate && r.status === 'appended');
         if (!row) return;
         row.date = newDate;
         row.rowId = newDate; // keep rowId synced for price rows
@@ -378,7 +372,7 @@
     }
 
     function handleCellEditByRowId(rowId: string, colKey: string, newValue: unknown) {
-        const rowIdx = rows.findIndex(r => r.rowId === rowId);
+        const rowIdx = rows.findIndex((r) => r.rowId === rowId);
         if (rowIdx < 0 || isReadonly) return;
 
         const row = rows[rowIdx];
@@ -390,7 +384,7 @@
             if (!row._originalValues) {
                 row._originalValues = oldValues;
             }
-            const allMatch = columns.every(c => {
+            const allMatch = columns.every((c) => {
                 const orig = row._originalValues?.[c.key];
                 const curr = row.values[c.key];
                 return String(orig ?? '') === String(curr ?? '');
@@ -403,7 +397,7 @@
     }
 
     function handleStatusChangeByRowId(rowId: string, newStatus: string) {
-        const rowIdx = rows.findIndex(r => r.rowId === rowId);
+        const rowIdx = rows.findIndex((r) => r.rowId === rowId);
         if (rowIdx < 0 || isReadonly) return;
 
         const row = rows[rowIdx];
@@ -428,7 +422,7 @@
     }
 
     function handleAddRow() {
-        const existingDates = new Set(rows.map(r => r.date));
+        const existingDates = new Set(rows.map((r) => r.date));
         const todayStr = new Date().toISOString().slice(0, 10);
         let newDate: string;
         if (rows.length > 0) {
@@ -458,7 +452,7 @@
             date: newDate,
             status: 'appended',
             originalStatus: 'appended',
-            values: Object.fromEntries(columns.map(c => [c.key, undefined])),
+            values: Object.fromEntries(columns.map((c) => [c.key, undefined])),
             selected: false,
         };
         rows = [...rows, newRow];
@@ -475,7 +469,7 @@
 
     function handleBulkDelete(selectedIds: string[]) {
         for (const rowId of selectedIds) {
-            const row = rows.find(r => r.rowId === rowId);
+            const row = rows.find((r) => r.rowId === rowId);
             if (row && row.status !== 'deleted') {
                 row.status = 'deleted';
             }
@@ -490,7 +484,7 @@
 
     function handleImport(importedRows: ParsedRow[]) {
         for (const pr of importedRows) {
-            const existingIdx = rows.findIndex(r => r.date === pr.date);
+            const existingIdx = rows.findIndex((r) => r.date === pr.date);
             if (existingIdx >= 0) {
                 const existing = rows[existingIdx];
                 if (existing.readonly) continue; // skip readonly rows
@@ -542,13 +536,13 @@
     /** Scroll to a specific date in the table (finds by rowId first, then by date field) */
     export function scrollToDate(date: string) {
         // Try direct rowId match first (works for prices where rowId = date)
-        const directMatch = rows.find(r => r.rowId === date);
+        const directMatch = rows.find((r) => r.rowId === date);
         if (directMatch) {
             dataTableRef?.navigateToRowId(date);
             return;
         }
         // Fallback: find first row with matching date (for events where rowId = numeric id)
-        const dateMatch = rows.find(r => r.date === date);
+        const dateMatch = rows.find((r) => r.date === date);
         if (dateMatch) {
             dataTableRef?.navigateToRowId(dateMatch.rowId);
         }
@@ -565,19 +559,19 @@
         <div class="flex items-center gap-2">
             {#if !isReadonly}
                 <button
-                        class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                        onclick={() => importModalOpen = true}
-                        data-testid="fx-data-import-btn"
+                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={() => (importModalOpen = true)}
+                    data-testid="fx-data-import-btn"
                 >
-                    <Upload size={13}/>
+                    <Upload size={13} />
                     Import CSV
                 </button>
                 <button
-                        class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                        onclick={handleAddRow}
-                        data-testid="fx-data-add-row-btn"
+                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={handleAddRow}
+                    data-testid="fx-data-add-row-btn"
                 >
-                    <Plus size={13}/>
+                    <Plus size={13} />
                     Add Row
                 </button>
             {/if}
@@ -592,15 +586,17 @@
                     </Tooltip>
                     <!-- Horizontal switch lever -->
                     <button
-                            class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
+                        class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
                                    {hideStale ? 'bg-amber-500 dark:bg-amber-600' : 'bg-gray-300 dark:bg-slate-600'}"
-                            onclick={() => hideStale = !hideStale}
-                            role="switch"
-                            aria-checked={hideStale}
-                            aria-label={hideStale ? `Show ${staleCount} stale rows` : `Hide ${staleCount} stale rows`}
+                        onclick={() => (hideStale = !hideStale)}
+                        role="switch"
+                        aria-checked={hideStale}
+                        aria-label={hideStale ? `Show ${staleCount} stale rows` : `Hide ${staleCount} stale rows`}
                     >
-                        <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform
-                                     {hideStale ? 'translate-x-4.5' : 'translate-x-0.5'}"></span>
+                        <span
+                            class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform
+                                     {hideStale ? 'translate-x-4.5' : 'translate-x-0.5'}"
+                        ></span>
                     </button>
                 </div>
             {/if}
@@ -615,23 +611,31 @@
             {/if}
             {#if selectedIds.length > 0}
                 <button
-                        type="button"
-                        class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-libre-green/10 text-libre-green dark:bg-emerald-400/10 dark:text-emerald-400 font-medium hover:bg-libre-green/20 dark:hover:bg-emerald-400/20 transition-colors"
-                        onclick={() => { dataTableRef?.clearSelection(); selectedIds = []; }}
-                        title={$t('dataEditor.clearSelection')}
+                    type="button"
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-libre-green/10 text-libre-green dark:bg-emerald-400/10 dark:text-emerald-400 font-medium hover:bg-libre-green/20 dark:hover:bg-emerald-400/20 transition-colors"
+                    onclick={() => {
+                        dataTableRef?.clearSelection();
+                        selectedIds = [];
+                    }}
+                    title={$t('dataEditor.clearSelection')}
                 >
-                    {selectedIds.length} {$t('common.selected')} <span class="opacity-60">×</span>
+                    {selectedIds.length}
+                    {$t('common.selected')} <span class="opacity-60">×</span>
                 </button>
                 <button
-                        type="button"
-                        class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-                        onclick={() => { handleBulkDelete(selectedIds); dataTableRef?.clearSelection(); selectedIds = []; }}
-                        title={$t('common.deleteSelected')}
+                    type="button"
+                    class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                    onclick={() => {
+                        handleBulkDelete(selectedIds);
+                        dataTableRef?.clearSelection();
+                        selectedIds = [];
+                    }}
+                    title={$t('common.deleteSelected')}
                 >
-                    <Trash2 size={14}/>
+                    <Trash2 size={14} />
                 </button>
             {/if}
-            <ColumnVisibilityToggle tableRef={dataTableRef}/>
+            <ColumnVisibilityToggle tableRef={dataTableRef} />
         </div>
     </div>
 
@@ -641,31 +645,30 @@
 
     <div class="max-h-[500px] overflow-y-auto">
         <DataTable
-                bind:this={dataTableRef}
-                columns={dtColumns}
-                data={sortedRows}
-                defaultPageSize={10}
-                emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
-                enableActions={!isReadonly}
-                enableColumnFilters={true}
-                enableColumnResize={true}
-                enableColumnVisibility={true}
-                enablePagination={true}
-                enableSelection={!isReadonly}
-                enableSorting={true}
-                getRowClass={rowBgClass}
-                getRowId={(r) => r.rowId}
-                getRowStyle={rowStyleFn}
-                onSelectionChange={(ids) => selectedIds = ids}
-                pageSizeOptions={[10, 25, 50, 100, 0]}
-                rowActions={dtRowActions}
-                storageKey="data-editor"
+            bind:this={dataTableRef}
+            columns={dtColumns}
+            data={sortedRows}
+            defaultPageSize={10}
+            emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
+            enableActions={!isReadonly}
+            enableColumnFilters={true}
+            enableColumnResize={true}
+            enableColumnVisibility={true}
+            enablePagination={true}
+            enableSelection={!isReadonly}
+            enableSorting={true}
+            getRowClass={rowBgClass}
+            getRowId={(r) => r.rowId}
+            getRowStyle={rowStyleFn}
+            onSelectionChange={(ids) => (selectedIds = ids)}
+            pageSizeOptions={[10, 25, 50, 100, 0]}
+            rowActions={dtRowActions}
+            storageKey="data-editor"
         />
     </div>
 </div>
 
 <!-- Import Modal (injected via snippet) -->
 {#if importModal}
-    {@render importModal({open: importModalOpen, setOpen: (v) => importModalOpen = v, onimport: handleImport})}
+    {@render importModal({open: importModalOpen, setOpen: (v) => (importModalOpen = v), onimport: handleImport})}
 {/if}
-

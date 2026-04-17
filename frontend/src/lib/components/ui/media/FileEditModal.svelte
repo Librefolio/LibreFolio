@@ -23,9 +23,9 @@
     export let zIndex: number = 60;
 
     const dispatch = createEventDispatcher<{
-        complete: { url: string | null; file: File };
+        complete: {url: string | null; file: File};
         cancel: void;
-        error: { message: string };
+        error: {message: string};
     }>();
 
     // Internal state
@@ -37,8 +37,8 @@
     // File name editing
     let editedBaseName: string = '';
     let fileExtension: string = '';
-    let originalBaseName: string = '';  // For restore
-    let initializedForFile: File | null = null;  // Track which file we've initialized for
+    let originalBaseName: string = ''; // For restore
+    let initializedForFile: File | null = null; // Track which file we've initialized for
 
     // Initialize when file changes (not on every re-render)
     $: if (file && open && file !== initializedForFile) {
@@ -125,36 +125,21 @@
 </script>
 
 {#if file}
-    <ModalBase
-            {open}
-            {zIndex}
-            maxWidth="max-w-md"
-            onRequestClose={requestClose}
-    >
+    <ModalBase {open} {zIndex} maxWidth="max-w-md" onRequestClose={requestClose}>
         <!-- Header -->
         <div class="modal-header" data-testid="file-edit-modal">
             <h2 class="modal-title">
-                <FileIcon size={20}/>
+                <FileIcon size={20} />
                 {$_('uploads.editFile') || 'Edit File'}
             </h2>
             <div class="header-actions">
                 {#if hasChanges}
-                    <button
-                            type="button"
-                            class="restore-btn"
-                            on:click={restoreOriginal}
-                            title={$_('uploads.resetAll') || 'Reset All'}
-                    >
-                        <RefreshCw size={16}/>
+                    <button type="button" class="restore-btn" on:click={restoreOriginal} title={$_('uploads.resetAll') || 'Reset All'}>
+                        <RefreshCw size={16} />
                     </button>
                 {/if}
-                <button
-                        type="button"
-                        class="close-btn"
-                        on:click={requestClose}
-                        title={$_('common.close') || 'Close'}
-                >
-                    <X size={20}/>
+                <button type="button" class="close-btn" on:click={requestClose} title={$_('common.close') || 'Close'}>
+                    <X size={20} />
                 </button>
             </div>
         </div>
@@ -168,15 +153,7 @@
                 </label>
                 <div class="filename-input-group">
                     <!-- svelte-ignore a11y_autofocus -->
-                    <input
-                            id="file-edit-name"
-                            type="text"
-                            class="filename-input"
-                            bind:value={editedBaseName}
-                            placeholder="file"
-                            on:input={handleNameChange}
-                            autofocus
-                    />
+                    <input id="file-edit-name" type="text" class="filename-input" bind:value={editedBaseName} placeholder="file" on:input={handleNameChange} autofocus />
                     <span class="file-extension">{fileExtension}</span>
                 </div>
             </div>
@@ -199,26 +176,15 @@
 
         <!-- Footer -->
         <div class="modal-footer">
-            <button
-                    type="button"
-                    class="btn btn-secondary"
-                    on:click={requestClose}
-                    disabled={isUploading}
-            >
+            <button type="button" class="btn btn-secondary" on:click={requestClose} disabled={isUploading}>
                 {$_('common.cancel') || 'Cancel'}
             </button>
-            <button
-                    type="button"
-                    class="btn btn-primary"
-                    on:click={handleConfirm}
-                    disabled={isUploading}
-                    data-testid="file-edit-confirm"
-            >
+            <button type="button" class="btn btn-primary" on:click={handleConfirm} disabled={isUploading} data-testid="file-edit-confirm">
                 {#if isUploading}
-                    <Loader2 size={16} class="animate-spin"/>
+                    <Loader2 size={16} class="animate-spin" />
                     {$_('common.uploading') || 'Uploading...'}
                 {:else}
-                    <Check size={16}/>
+                    <Check size={16} />
                     {#if uploadOnComplete}
                         {$_('uploads.renameAndUpload') || 'Rename & Upload'}
                     {:else}
@@ -231,12 +197,7 @@
 {/if}
 
 <!-- Confirmation dialog (uses ModalBase at higher z-index) -->
-<ModalBase
-        maxWidth="max-w-sm"
-        onRequestClose={cancelClose}
-        open={showCloseConfirm}
-        zIndex={zIndex + 10}
->
+<ModalBase maxWidth="max-w-sm" onRequestClose={cancelClose} open={showCloseConfirm} zIndex={zIndex + 10}>
     <div class="confirm-content">
         <div class="confirm-header">
             <span class="confirm-icon">⚠️</span>
@@ -578,4 +539,3 @@
         background: #d97706;
     }
 </style>
-

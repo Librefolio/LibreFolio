@@ -75,11 +75,10 @@ test.describe('FX Chart Settings', () => {
                 // Look for the preview chart canvas
                 const canvas = modal.locator('canvas');
                 // Preview should render even without signals (shows sine wave)
-                if (await canvas.count() > 0) {
+                if ((await canvas.count()) > 0) {
                     await expect(canvas.first()).toBeVisible();
                 }
             }
         }
     });
 });
-

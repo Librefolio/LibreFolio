@@ -19,7 +19,7 @@ import {schemas} from '$lib/api/generated';
 type Scalar<T> = T extends (infer U)[] ? U : T;
 
 /** Mapped helper: flatten every field of a type */
-type FlattenZodUnions<T> = { [K in keyof T]: Scalar<T[K]> };
+type FlattenZodUnions<T> = {[K in keyof T]: Scalar<T[K]>};
 
 // =============================================================================
 // TYPES DERIVED FROM ZOD SCHEMAS

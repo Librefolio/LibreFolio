@@ -15,7 +15,6 @@ function pt(date: string, value: number): TestPoint {
 }
 
 describe('EditBuffer', () => {
-
     // =========================================================================
     // Test 1: add new entry
     // =========================================================================
@@ -190,4 +189,3 @@ describe('EditBuffer', () => {
         expect(buf.size).toBe(3); // 1 click + 2 new csv
     });
 });
-

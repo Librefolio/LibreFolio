@@ -26,7 +26,7 @@ const __dirname = path.dirname(__filename);
 
 const GALLERY_ROOT = path.join(__dirname, '../../mkdocs_src/docs/gallery');
 const THEMES = ['light', 'dark'] as const;
-type Theme = typeof THEMES[number];
+type Theme = (typeof THEMES)[number];
 
 function ensureDir(dir: string) {
     if (!fs.existsSync(dir)) {
@@ -50,7 +50,7 @@ async function freezeAnimations(page: Page) {
                 animation-delay: -0.1s !important;
                 transition-duration: 0s !important;
             }
-        `
+        `,
     });
 }
 
@@ -77,29 +77,19 @@ async function waitForNetworkSettled(page: Page) {
     await page.waitForTimeout(200);
 }
 
-async function screenshot(
-    page: Page,
-    viewport: 'desktop' | 'mobile',
-    lang: Language,
-    theme: Theme,
-    category: string,
-    name: string
-) {
+async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string, name: string) {
     await waitForNetworkSettled(page);
     const dir = getGalleryPath(viewport, lang, theme, category);
     ensureDir(dir);
     await page.screenshot({
         path: path.join(dir, `${name}.png`),
-        fullPage: false
+        fullPage: false,
     });
     console.log(`  📸 ${viewport}/${lang}/${theme}/${category}/${name}.png`);
 }
 
 // Helper to run for all languages and themes
-async function forEachLanguageAndTheme(
-    page: Page,
-    callback: (lang: Language, theme: Theme) => Promise<void>
-) {
+async function forEachLanguageAndTheme(page: Page, callback: (lang: Language, theme: Theme) => Promise<void>) {
     for (const lang of SUPPORTED_LANGUAGES) {
         await setLanguage(page, lang);
         for (const theme of THEMES) {
@@ -730,12 +720,15 @@ test.describe('Gallery Screenshots', () => {
                     await routeSelect.waitFor({state: 'visible', timeout: 10_000});
 
                     // Open route picker to show discovered routes
-                    const addRouteBtn = routeSelect.locator('button').filter({hasText: /add|aggiungi|ajouter|añadir/i}).first();
+                    const addRouteBtn = routeSelect
+                        .locator('button')
+                        .filter({hasText: /add|aggiungi|ajouter|añadir/i})
+                        .first();
                     await addRouteBtn.waitFor({state: 'visible', timeout: 5000});
                     await addRouteBtn.click();
 
                     // Scroll modal body to bottom so picker content is in view
-                    await modal.locator('.overflow-y-auto').evaluate(el => el.scrollTop = el.scrollHeight);
+                    await modal.locator('.overflow-y-auto').evaluate((el) => (el.scrollTop = el.scrollHeight));
 
                     // Wait for direct routes section to render
                     await modal.locator('[data-testid="fx-route-direct-section"]').waitFor({state: 'visible', timeout: 5000});
@@ -793,13 +786,16 @@ test.describe('Gallery Screenshots', () => {
                     await routeSelect.waitFor({state: 'visible', timeout: 10_000});
 
                     // Open route picker to show discovered chain routes
-                    const addRouteBtn = routeSelect.locator('button').filter({hasText: /add|aggiungi|ajouter|añadir/i}).first();
+                    const addRouteBtn = routeSelect
+                        .locator('button')
+                        .filter({hasText: /add|aggiungi|ajouter|añadir/i})
+                        .first();
                     await addRouteBtn.waitFor({state: 'visible', timeout: 5000});
                     await addRouteBtn.click();
                     await page.waitForTimeout(500); // Let Svelte render the picker
 
                     // Scroll modal body to bottom so picker content is in view
-                    await modal.locator('.overflow-y-auto').evaluate(el => el.scrollTop = el.scrollHeight);
+                    await modal.locator('.overflow-y-auto').evaluate((el) => (el.scrollTop = el.scrollHeight));
 
                     // Wait for chain routes section to render
                     await modal.locator('[data-testid^="fx-route-chain-section"]').first().waitFor({state: 'visible', timeout: 5000});

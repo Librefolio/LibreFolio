@@ -98,9 +98,7 @@
     }: Props = $props();
 
     // Derived: effective selection mode
-    let effectiveSelectionMode = $derived(
-        !enableSelection ? 'none' : selectionMode
-    );
+    let effectiveSelectionMode = $derived(!enableSelection ? 'none' : selectionMode);
 
     // ============ State ============
 
@@ -145,10 +143,10 @@
 
     // Row action confirmation modal
     let showRowActionModal = $state(false);
-    let pendingRowAction = $state<{ action: RowAction<T>; row: T } | null>(null);
+    let pendingRowAction = $state<{action: RowAction<T>; row: T} | null>(null);
 
     // Resize state
-    let resizing = $state<{ columnId: string; startX: number; startWidth: number } | null>(null);
+    let resizing = $state<{columnId: string; startX: number; startWidth: number} | null>(null);
 
     // Highlighted row (set by navigateToRowId, cleared on user interaction)
     let highlightedRowId = $state<string | null>(null);
@@ -176,36 +174,25 @@
         if (typeof window === 'undefined') return;
         try {
             localStorage.setItem(key, JSON.stringify(value));
-        } catch {
-        }
+        } catch {}
     }
 
     // ============ Derived State ============
 
     // Default column order
-    let defaultColumnOrder = $derived(columns.map(c => c.id));
+    let defaultColumnOrder = $derived(columns.map((c) => c.id));
 
     // Default column visibility (respects hiddenByDefault)
-    let defaultColumnVisibility = $derived(
-        Object.fromEntries(columns.map(c => [c.id, !c.hiddenByDefault]))
-    );
+    let defaultColumnVisibility = $derived(Object.fromEntries(columns.map((c) => [c.id, !c.hiddenByDefault])));
 
     // Default column widths
-    let defaultColumnWidths = $derived(
-        Object.fromEntries(columns.map(c => [c.id, c.width ?? 150]))
-    );
+    let defaultColumnWidths = $derived(Object.fromEntries(columns.map((c) => [c.id, c.width ?? 150])));
 
     // All columns in current order (for toolbar dropdown)
-    let orderedColumns = $derived(
-        columnOrder
-            .map(id => columns.find(c => c.id === id))
-            .filter((c): c is ColumnDef<T> => c !== undefined)
-    );
+    let orderedColumns = $derived(columnOrder.map((id) => columns.find((c) => c.id === id)).filter((c): c is ColumnDef<T> => c !== undefined));
 
     // Visible and ordered columns (for table rendering)
-    let visibleColumns = $derived(
-        orderedColumns.filter(c => columnVisibility[c.id] !== false)
-    );
+    let visibleColumns = $derived(orderedColumns.filter((c) => columnVisibility[c.id] !== false));
 
     // Filtered data
     let filteredData = $derived.by(() => {
@@ -213,22 +200,20 @@
 
         // Apply "show selected only" filter
         if (showSelectedOnly) {
-            result = result.filter(row => rowSelection[getRowId(row)]);
+            result = result.filter((row) => rowSelection[getRowId(row)]);
         }
 
         // Apply column filters
         for (const [columnId, filterValue] of Object.entries(columnFilters)) {
             if (!filterValue) continue;
 
-            const column = columns.find(c => c.id === columnId);
+            const column = columns.find((c) => c.id === columnId);
             if (!column) continue;
 
-            result = result.filter(row => {
+            result = result.filter((row) => {
                 const getValue = column.getValue ?? column.cell;
                 const cellValue = getValue(row);
-                const rawValue = typeof cellValue === 'object' && cellValue !== null && 'type' in cellValue
-                    ? String(cellValue)
-                    : cellValue;
+                const rawValue = typeof cellValue === 'object' && cellValue !== null && 'type' in cellValue ? String(cellValue) : cellValue;
 
                 if (filterValue.type === 'text') {
                     const str = String(rawValue).toLowerCase();
@@ -250,16 +235,12 @@
                     return true;
                 } else if (filterValue.type === 'size') {
                     // Size filter - rawValue should be bytes (from SizeCell)
-                    const bytes = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as { type: string }).type === 'size'
-                        ? (rawValue as unknown as { bytes: number }).bytes
-                        : Number(rawValue);
+                    const bytes = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as {type: string}).type === 'size' ? (rawValue as unknown as {bytes: number}).bytes : Number(rawValue);
                     if (filterValue.minBytes !== undefined && bytes < filterValue.minBytes) return false;
                     if (filterValue.maxBytes !== undefined && bytes > filterValue.maxBytes) return false;
                     return true;
                 } else if (filterValue.type === 'date') {
-                    const dateStr = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as { type: string }).type === 'date'
-                        ? String((rawValue as unknown as { value: Date | string }).value)
-                        : String(rawValue);
+                    const dateStr = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as {type: string}).type === 'date' ? String((rawValue as unknown as {value: Date | string}).value) : String(rawValue);
                     const date = new Date(dateStr);
                     if (filterValue.from && date < new Date(filterValue.from)) return false;
                     if (filterValue.to && date > new Date(filterValue.to)) return false;
@@ -278,7 +259,7 @@
     let sortedData = $derived.by(() => {
         if (!sortState || !enableSorting) return filteredData;
 
-        const column = columns.find(c => c.id === sortState!.columnId);
+        const column = columns.find((c) => c.id === sortState!.columnId);
         if (!column) return filteredData;
 
         return [...filteredData].sort((a, b) => {
@@ -313,20 +294,18 @@
     // Selected rows
     let selectedRows = $derived(
         Object.keys(rowSelection)
-            .filter(id => rowSelection[id])
-            .map(id => data.find(row => getRowId(row) === id))
-            .filter((r): r is T => r !== undefined)
+            .filter((id) => rowSelection[id])
+            .map((id) => data.find((row) => getRowId(row) === id))
+            .filter((r): r is T => r !== undefined),
     );
 
     // Check if all rows on current page are selected
     let isAllPageSelected = $derived.by(() => {
         if (paginatedData.length === 0) return false;
-        return paginatedData.every(row => rowSelection[getRowId(row)]);
+        return paginatedData.every((row) => rowSelection[getRowId(row)]);
     });
 
-    let isSomePageSelected = $derived(
-        paginatedData.some(row => rowSelection[getRowId(row)]) && !isAllPageSelected
-    );
+    let isSomePageSelected = $derived(paginatedData.some((row) => rowSelection[getRowId(row)]) && !isAllPageSelected);
 
     // Total pages
     let totalPages = $derived(Math.ceil(filteredData.length / pagination.pageSize));
@@ -365,7 +344,7 @@
     }
 
     // Calculate min/max values for a column (used for number/size filters)
-    function getColumnMinMax(column: ColumnDef<T>): { min: number; max: number } {
+    function getColumnMinMax(column: ColumnDef<T>): {min: number; max: number} {
         let min = Infinity;
         let max = -Infinity;
 
@@ -375,7 +354,7 @@
             let numValue: number;
 
             if (typeof cellValue === 'object' && cellValue !== null && 'type' in cellValue) {
-                const typed = cellValue as unknown as { type: string; bytes?: number };
+                const typed = cellValue as unknown as {type: string; bytes?: number};
                 if (typed.type === 'size' && typeof typed.bytes === 'number') {
                     numValue = typed.bytes;
                 } else {
@@ -401,15 +380,17 @@
         return {min, max};
     }
 
-
     function formatDate(value: Date | string, format?: string): string {
         const date = value instanceof Date ? value : new Date(value);
         if (format === 'time') {
             return date.toLocaleTimeString();
         } else if (format === 'datetime') {
             return date.toLocaleString(undefined, {
-                year: 'numeric', month: 'short', day: 'numeric',
-                hour: '2-digit', minute: '2-digit'
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
             });
         } else if (format === 'relative') {
             const now = new Date();
@@ -448,7 +429,7 @@
 
     function toggleSort(columnId: string) {
         if (!enableSorting) return;
-        const column = columns.find(c => c.id === columnId);
+        const column = columns.find((c) => c.id === columnId);
         if (!column || column.sortable === false) return;
 
         if (sortState?.columnId === columnId) {
@@ -463,21 +444,19 @@
     }
 
     function toggleAllPageRows() {
-        const selectableRows = isRowSelectable
-            ? paginatedData.filter(row => isRowSelectable!(row))
-            : paginatedData;
+        const selectableRows = isRowSelectable ? paginatedData.filter((row) => isRowSelectable!(row)) : paginatedData;
         if (isAllPageSelected) {
             // Deselect all on current page
             const newSelection = {...rowSelection};
-            selectableRows.forEach(row => delete newSelection[getRowId(row)]);
+            selectableRows.forEach((row) => delete newSelection[getRowId(row)]);
             rowSelection = newSelection;
         } else {
             // Select all on current page (clear previous selection)
             const newSelection: SelectionState = {};
-            selectableRows.forEach(row => newSelection[getRowId(row)] = true);
+            selectableRows.forEach((row) => (newSelection[getRowId(row)] = true));
             rowSelection = newSelection;
         }
-        onSelectionChange?.(Object.keys(rowSelection).filter(id => rowSelection[id]));
+        onSelectionChange?.(Object.keys(rowSelection).filter((id) => rowSelection[id]));
     }
 
     function toggleRowSelection(rowId: string) {
@@ -495,13 +474,13 @@
             }
             rowSelection = newSelection;
         }
-        onSelectionChange?.(Object.keys(rowSelection).filter(id => rowSelection[id]));
+        onSelectionChange?.(Object.keys(rowSelection).filter((id) => rowSelection[id]));
     }
 
     // Sync external selectedRowId prop (for single mode controlled by parent)
     $effect(() => {
         if (effectiveSelectionMode === 'single' && selectedRowId !== undefined && selectedRowId !== null) {
-            const currentSelected = Object.keys(rowSelection).find(id => rowSelection[id]);
+            const currentSelected = Object.keys(rowSelection).find((id) => rowSelection[id]);
             if (currentSelected !== selectedRowId) {
                 rowSelection = {[selectedRowId]: true};
             }
@@ -510,7 +489,7 @@
 
     // Auto-deactivate "show selected only" when selection becomes empty
     $effect(() => {
-        const selectedCount = Object.keys(rowSelection).filter(id => rowSelection[id]).length;
+        const selectedCount = Object.keys(rowSelection).filter((id) => rowSelection[id]).length;
         if (selectedCount === 0 && showSelectedOnly) {
             showSelectedOnly = false;
         }
@@ -628,7 +607,7 @@
         resizing = {
             columnId,
             startX: event.clientX,
-            startWidth: columnWidths[columnId] || columns.find(c => c.id === columnId)?.width || 150,
+            startWidth: columnWidths[columnId] || columns.find((c) => c.id === columnId)?.width || 150,
         };
         document.addEventListener('mousemove', handleResize);
         document.addEventListener('mouseup', stopResize);
@@ -636,7 +615,7 @@
 
     function handleResize(event: MouseEvent) {
         if (!resizing) return;
-        const col = columns.find(c => c.id === resizing!.columnId);
+        const col = columns.find((c) => c.id === resizing!.columnId);
         const minWidth = col?.minWidth ?? 50;
         const maxWidth = col?.maxWidth ?? 600;
         const diff = event.clientX - resizing.startX;
@@ -687,7 +666,7 @@
             const filtersByColumnId: Record<string, FilterValue> = {};
             for (const [urlKey, value] of Object.entries(initialFilters)) {
                 // Find column by urlKey or id
-                const col = columns.find(c => (c.urlKey ?? c.id) === urlKey);
+                const col = columns.find((c) => (c.urlKey ?? c.id) === urlKey);
                 if (col) {
                     filtersByColumnId[col.id] = value;
                 }
@@ -704,7 +683,7 @@
             const filtersWithUrlKeys: Record<string, FilterValue> = {};
             for (const [columnId, value] of Object.entries(columnFilters)) {
                 if (!value) continue;
-                const col = columns.find(c => c.id === columnId);
+                const col = columns.find((c) => c.id === columnId);
                 const urlKey = col?.urlKey ?? columnId;
                 filtersWithUrlKeys[urlKey] = value;
             }
@@ -715,23 +694,23 @@
     // Sync column order/visibility/widths when columns change dynamically
     // (e.g. delta period columns added/removed when date range changes)
     $effect(() => {
-        const currentIds = new Set(columns.map(c => c.id));
+        const currentIds = new Set(columns.map((c) => c.id));
         const orderedIds = new Set(columnOrder);
 
         // Detect new columns (not in current order)
-        const newIds = columns.filter(c => !orderedIds.has(c.id)).map(c => c.id);
+        const newIds = columns.filter((c) => !orderedIds.has(c.id)).map((c) => c.id);
         // Remove stale columns (no longer in definition)
-        const filtered = columnOrder.filter(id => currentIds.has(id));
+        const filtered = columnOrder.filter((id) => currentIds.has(id));
 
         if (newIds.length > 0 || filtered.length !== columnOrder.length) {
             // Insert new columns at their correct position based on the columns array order
             // (not appended at end). This ensures delta columns stay grouped and ordered.
             for (const newId of newIds) {
-                const colIndex = columns.findIndex(c => c.id === newId);
+                const colIndex = columns.findIndex((c) => c.id === newId);
                 // Find the last column in filtered that precedes newId in columns order
                 let insertAfterIdx = -1;
                 for (let i = 0; i < filtered.length; i++) {
-                    const existingColIdx = columns.findIndex(c => c.id === filtered[i]);
+                    const existingColIdx = columns.findIndex((c) => c.id === filtered[i]);
                     if (existingColIdx !== -1 && existingColIdx < colIndex) insertAfterIdx = i;
                 }
                 filtered.splice(insertAfterIdx + 1, 0, newId);
@@ -742,7 +721,7 @@
             // Set visibility for new columns (respect hiddenByDefault)
             const updatedVisibility = {...columnVisibility};
             for (const id of newIds) {
-                const col = columns.find(c => c.id === id);
+                const col = columns.find((c) => c.id === id);
                 updatedVisibility[id] = col ? !col.hiddenByDefault : true;
             }
             // Remove stale visibility entries
@@ -755,7 +734,7 @@
             // Update widths for new columns
             const updatedWidths = {...columnWidths};
             for (const id of newIds) {
-                const col = columns.find(c => c.id === id);
+                const col = columns.find((c) => c.id === id);
                 updatedWidths[id] = col?.width ?? 150;
             }
             for (const id of Object.keys(updatedWidths)) {
@@ -783,7 +762,7 @@
      * Reusable: called from DataEditor's "Add Row", chart point click, etc.
      */
     export function navigateToRowId(rowId: string) {
-        const index = sortedData.findIndex(row => getRowId(row) === rowId);
+        const index = sortedData.findIndex((row) => getRowId(row) === rowId);
         if (index < 0) return;
         if (enablePagination) {
             const targetPage = Math.floor(index / pagination.pageSize);
@@ -794,18 +773,20 @@
         // Set highlight — will be cleared on user interaction
         highlightedRowId = rowId;
         // After pagination update, scroll to the row
-        import('svelte').then(({tick}) => tick()).then(() => {
-            // Find the row in the visible table by scanning for matching row ID
-            const rows = document.querySelectorAll('.datatable tbody tr');
-            const positionInPage = enablePagination ? index % pagination.pageSize : index;
-            const targetRow = rows[positionInPage];
-            targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
-        });
+        import('svelte')
+            .then(({tick}) => tick())
+            .then(() => {
+                // Find the row in the visible table by scanning for matching row ID
+                const rows = document.querySelectorAll('.datatable tbody tr');
+                const positionInPage = enablePagination ? index % pagination.pageSize : index;
+                const targetRow = rows[positionInPage];
+                targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
+            });
     }
 
     /** Get ordered columns info for external visibility control */
-    export function getColumnsForVisibility(): Array<{ id: string; header: string | (() => string); visible: boolean }> {
-        return orderedColumns.map(c => ({id: c.id, header: c.header, visible: columnVisibility[c.id] !== false}));
+    export function getColumnsForVisibility(): Array<{id: string; header: string | (() => string); visible: boolean}> {
+        return orderedColumns.map((c) => ({id: c.id, header: c.header, visible: columnVisibility[c.id] !== false}));
     }
 
     /** Toggle a column's visibility (external access) */
@@ -840,7 +821,7 @@
 
     /** Execute a bulk action by ID (triggers confirm modal if required) */
     export function executeBulkAction(actionId: string) {
-        const action = bulkActions.find(a => a.id === actionId);
+        const action = bulkActions.find((a) => a.id === actionId);
         if (action) handleBulkAction(action);
     }
 </script>
@@ -848,255 +829,229 @@
 <div class="datatable-container">
     <!-- Table -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="table-wrapper" onkeydown={() => { highlightedRowId = null; }}>
+    <div
+        class="table-wrapper"
+        onkeydown={() => {
+            highlightedRowId = null;
+        }}
+    >
         <table class="datatable {tableLayout === 'auto' ? 'layout-auto' : ''}">
             <thead>
-            <tr>
-                <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
-                {#if effectiveSelectionMode === 'multi'}
-                    <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
-                        <div class="flex items-center justify-center gap-1">
-                            <button type="button" class="checkbox-btn" onclick={toggleAllPageRows}>
-                                {#if isAllPageSelected}
-                                    <Check size={16} class="check-icon checked"/>
-                                {:else if isSomePageSelected}
-                                    <Check size={16} class="check-icon partial"/>
-                                {:else}
-                                    <span class="check-box"></span>
-                                {/if}
-                            </button>
-                            <button
+                <tr>
+                    <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
+                    {#if effectiveSelectionMode === 'multi'}
+                        <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
+                            <div class="flex items-center justify-center gap-1">
+                                <button type="button" class="checkbox-btn" onclick={toggleAllPageRows}>
+                                    {#if isAllPageSelected}
+                                        <Check size={16} class="check-icon checked" />
+                                    {:else if isSomePageSelected}
+                                        <Check size={16} class="check-icon partial" />
+                                    {:else}
+                                        <span class="check-box"></span>
+                                    {/if}
+                                </button>
+                                <button
                                     type="button"
                                     class="filter-btn"
                                     class:active={showSelectedOnly}
-                                    onclick={() => { showSelectedOnly = !showSelectedOnly; }}
+                                    onclick={() => {
+                                        showSelectedOnly = !showSelectedOnly;
+                                    }}
                                     title="Show selected only"
-                            >
-                                <Filter size={12}/>
-                            </button>
-                        </div>
-                    </th>
-                {/if}
+                                >
+                                    <Filter size={12} />
+                                </button>
+                            </div>
+                        </th>
+                    {/if}
 
-                <!-- Data columns -->
-                {#each visibleColumns as column}
-                    {@const isSorted = sortState?.columnId === column.id}
-                    {@const sortDir = isSorted ? sortState?.direction : null}
-                    {@const hasFilter = columnFilters[column.id] !== undefined}
-                    <th
-                            class="th-data"
-                            class:sortable={column.sortable !== false && enableSorting}
-                            style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;"
-                    >
-                        <div class="header-content">
-                            <button
-                                    type="button"
-                                    class="header-sort-btn"
-                                    onclick={() => toggleSort(column.id)}
-                                    disabled={column.sortable === false || !enableSorting}
-                            >
-                                <span class="header-text">{getColumnLabel(column)}</span>
-                                {#if column.sortable !== false && enableSorting}
-										<span class="sort-icon">
-											{#if sortDir === 'asc'}
-												<ChevronUp size={14}/>
-											{:else if sortDir === 'desc'}
-												<ChevronDown size={14}/>
-											{:else}
-												<ChevronsUpDown size={14}/>
-											{/if}
-										</span>
-                                {/if}
-                            </button>
-
-                            <!-- Header tooltip (info icon) -->
-                            {#if getColumnTooltip(column)}
-                                {@const tooltipText = getColumnTooltip(column) ?? ''}
-                                {@const tooltipUrl = getColumnTooltipUrl(column)}
-                                <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
-                                    {#if tooltipUrl}
-                                        <a href={tooltipUrl} target="_blank" rel="noopener noreferrer"
-                                           class="header-tooltip-icon header-tooltip-link"
-                                           onclick={(e) => e.stopPropagation()}>
-                                            <Info size={12}/>
-                                        </a>
-                                    {:else}
-                                        <span class="header-tooltip-icon">
-                                            <Info size={12}/>
+                    <!-- Data columns -->
+                    {#each visibleColumns as column}
+                        {@const isSorted = sortState?.columnId === column.id}
+                        {@const sortDir = isSorted ? sortState?.direction : null}
+                        {@const hasFilter = columnFilters[column.id] !== undefined}
+                        <th class="th-data" class:sortable={column.sortable !== false && enableSorting} style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;">
+                            <div class="header-content">
+                                <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
+                                    <span class="header-text">{getColumnLabel(column)}</span>
+                                    {#if column.sortable !== false && enableSorting}
+                                        <span class="sort-icon">
+                                            {#if sortDir === 'asc'}
+                                                <ChevronUp size={14} />
+                                            {:else if sortDir === 'desc'}
+                                                <ChevronDown size={14} />
+                                            {:else}
+                                                <ChevronsUpDown size={14} />
+                                            {/if}
                                         </span>
                                     {/if}
-                                </Tooltip>
-                            {/if}
-
-                            <!-- Filter button -->
-                            {#if column.filterable !== false && enableColumnFilters}
-                                <button
-                                        bind:this={filterBtnRefs[column.id]}
-                                        type="button"
-                                        class="filter-btn"
-                                        class:active={hasFilter}
-                                        onclick={() => openFilterColumnId = openFilterColumnId === column.id ? null : column.id}
-                                >
-                                    <Filter size={12}/>
                                 </button>
-                            {/if}
 
-                            <!-- Resize handle -->
-                            {#if column.resizable !== false && enableColumnResize}
-                                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                <span
-                                        class="resize-handle"
-                                        class:resizing={resizing?.columnId === column.id}
-                                        onmousedown={(e) => startResize(column.id, e)}
-                                ></span>
-                            {/if}
+                                <!-- Header tooltip (info icon) -->
+                                {#if getColumnTooltip(column)}
+                                    {@const tooltipText = getColumnTooltip(column) ?? ''}
+                                    {@const tooltipUrl = getColumnTooltipUrl(column)}
+                                    <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
+                                        {#if tooltipUrl}
+                                            <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" onclick={(e) => e.stopPropagation()}>
+                                                <Info size={12} />
+                                            </a>
+                                        {:else}
+                                            <span class="header-tooltip-icon">
+                                                <Info size={12} />
+                                            </span>
+                                        {/if}
+                                    </Tooltip>
+                                {/if}
 
-                            <!-- Filter popover -->
-                            {#if openFilterColumnId === column.id}
-                                {@const minMax = (column.type === 'number' || column.type === 'size') ? getColumnMinMax(column) : {min: 0, max: 100}}
-                                <DataTableColumnFilter
+                                <!-- Filter button -->
+                                {#if column.filterable !== false && enableColumnFilters}
+                                    <button bind:this={filterBtnRefs[column.id]} type="button" class="filter-btn" class:active={hasFilter} onclick={() => (openFilterColumnId = openFilterColumnId === column.id ? null : column.id)}>
+                                        <Filter size={12} />
+                                    </button>
+                                {/if}
+
+                                <!-- Resize handle -->
+                                {#if column.resizable !== false && enableColumnResize}
+                                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                    <span class="resize-handle" class:resizing={resizing?.columnId === column.id} onmousedown={(e) => startResize(column.id, e)}></span>
+                                {/if}
+
+                                <!-- Filter popover -->
+                                {#if openFilterColumnId === column.id}
+                                    {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column) : {min: 0, max: 100}}
+                                    <DataTableColumnFilter
                                         type={column.type}
                                         enumOptions={column.enumOptions}
                                         numberMin={minMax.min}
                                         numberMax={minMax.max}
                                         initialValue={columnFilters[column.id]}
                                         onApply={(filter) => applyColumnFilter(column.id, filter)}
-                                        onClose={() => openFilterColumnId = null}
+                                        onClose={() => (openFilterColumnId = null)}
                                         anchorElement={filterBtnRefs[column.id] ?? null}
-                                />
-                            {/if}
-                        </div>
-                    </th>
-                {/each}
+                                    />
+                                {/if}
+                            </div>
+                        </th>
+                    {/each}
 
-                <!-- Actions column -->
-                {#if enableActions && rowActions.length > 0}
-                    <th class="th-fixed th-actions" style="width: {actionsColumnWidth};">
-                        {$t('table.actions') || 'Actions'}
-                    </th>
-                {/if}
-            </tr>
+                    <!-- Actions column -->
+                    {#if enableActions && rowActions.length > 0}
+                        <th class="th-fixed th-actions" style="width: {actionsColumnWidth};">
+                            {$t('table.actions') || 'Actions'}
+                        </th>
+                    {/if}
+                </tr>
             </thead>
             <tbody>
-            {#if isLoading}
-                <tr>
-                    <td
-                            colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)}
-                            class="td-loading"
-                    >
-                        <div class="loading-spinner"></div>
-                        <span>{$t('common.loading') || 'Loading...'}</span>
-                    </td>
-                </tr>
-            {:else if paginatedData.length === 0}
-                <tr>
-                    <td
-                            colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)}
-                            class="td-empty"
-                    >
-                        {emptyMessage || $t('common.noData') || 'No data available'}
-                    </td>
-                </tr>
-            {:else}
-                {#each paginatedData as row}
-                    {@const rowId = getRowId(row)}
-                    {@const isSelected = rowSelection[rowId]}
-                    <tr class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
-                        style={getRowStyle?.(row) ?? ''}
-                        onclick={() => { if (isRowSelectable && !isRowSelectable(row)) return; highlightedRowId = null; handleRowClick(row); }}
-                        ondblclick={() => { if (isRowSelectable && !isRowSelectable(row)) return; handleRowDoubleClick(row); }}
-                    >
-                        <!-- Selection cell (multi mode only - shows checkboxes) -->
-                        {#if effectiveSelectionMode === 'multi'}
-                            <td class="td-fixed td-select">
-                                <div class="flex items-center justify-center gap-1">
-                                {#if !isRowSelectable || isRowSelectable(row)}
-                                <button
-                                        type="button"
-                                        class="checkbox-btn"
-                                        onclick={(e) => { e.stopPropagation(); toggleRowSelection(rowId); }}
-                                >
-                                    {#if isSelected}
-                                        <Check size={16} class="check-icon checked"/>
-                                    {:else}
-                                        <span class="check-box"></span>
-                                    {/if}
-                                </button>
-                                {:else}
-                                <div style="width:28px"></div>
-                                {/if}
-                                <!-- Invisible spacer matching filter button width for alignment -->
-                                <div class="invisible" style="width:20px" aria-hidden="true"></div>
-                                </div>
-                            </td>
-                        {/if}
+                {#if isLoading}
+                    <tr>
+                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)} class="td-loading">
+                            <div class="loading-spinner"></div>
+                            <span>{$t('common.loading') || 'Loading...'}</span>
+                        </td>
+                    </tr>
+                {:else if paginatedData.length === 0}
+                    <tr>
+                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)} class="td-empty">
+                            {emptyMessage || $t('common.noData') || 'No data available'}
+                        </td>
+                    </tr>
+                {:else}
+                    {#each paginatedData as row}
+                        {@const rowId = getRowId(row)}
+                        {@const isSelected = rowSelection[rowId]}
+                        <tr
+                            class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
+                            style={getRowStyle?.(row) ?? ''}
+                            onclick={() => {
+                                if (isRowSelectable && !isRowSelectable(row)) return;
+                                highlightedRowId = null;
+                                handleRowClick(row);
+                            }}
+                            ondblclick={() => {
+                                if (isRowSelectable && !isRowSelectable(row)) return;
+                                handleRowDoubleClick(row);
+                            }}
+                        >
+                            <!-- Selection cell (multi mode only - shows checkboxes) -->
+                            {#if effectiveSelectionMode === 'multi'}
+                                <td class="td-fixed td-select">
+                                    <div class="flex items-center justify-center gap-1">
+                                        {#if !isRowSelectable || isRowSelectable(row)}
+                                            <button
+                                                type="button"
+                                                class="checkbox-btn"
+                                                onclick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleRowSelection(rowId);
+                                                }}
+                                            >
+                                                {#if isSelected}
+                                                    <Check size={16} class="check-icon checked" />
+                                                {:else}
+                                                    <span class="check-box"></span>
+                                                {/if}
+                                            </button>
+                                        {:else}
+                                            <div style="width:28px"></div>
+                                        {/if}
+                                        <!-- Invisible spacer matching filter button width for alignment -->
+                                        <div class="invisible" style="width:20px" aria-hidden="true"></div>
+                                    </div>
+                                </td>
+                            {/if}
 
-                        <!-- Data cells -->
-                        {#each visibleColumns as column}
-                            {@const cellContent = column.cell(row)}
-                            <td class="td-data">
-                                {#if typeof cellContent === 'string' || typeof cellContent === 'number'}
-                                    {cellContent}
-                                {:else if cellContent && typeof cellContent === 'object' && 'type' in cellContent}
-                                    {#if cellContent.type === 'icon-text'}
-                                        <div class="cell-icon-text">
-                                            <div class="cell-icon-box">
-                                                <cellContent.icon size={16} class={cellContent.iconClass || ''}/>
+                            <!-- Data cells -->
+                            {#each visibleColumns as column}
+                                {@const cellContent = column.cell(row)}
+                                <td class="td-data">
+                                    {#if typeof cellContent === 'string' || typeof cellContent === 'number'}
+                                        {cellContent}
+                                    {:else if cellContent && typeof cellContent === 'object' && 'type' in cellContent}
+                                        {#if cellContent.type === 'icon-text'}
+                                            <div class="cell-icon-text">
+                                                <div class="cell-icon-box">
+                                                    <cellContent.icon size={16} class={cellContent.iconClass || ''} />
+                                                </div>
+                                                <span>{cellContent.text}</span>
                                             </div>
-                                            <span>{cellContent.text}</span>
-                                        </div>
-                                    {:else if cellContent.type === 'badge'}
-											<span
-                                                    class="cell-badge {cellContent.variant}"
-                                                    class:custom-style={cellContent.customStyle}
-                                                    style={cellContent.customStyle || undefined}
-                                            >{cellContent.text}</span>
-                                    {:else if cellContent.type === 'date'}
-                                        {formatDate(cellContent.value, cellContent.format)}
-                                    {:else if cellContent.type === 'size'}
-                                        {formatBytes(cellContent.bytes)}
-                                    {:else if cellContent.type === 'link'}
-                                        <a
-                                                href={cellContent.href}
-                                                class="cell-link"
-                                                target={cellContent.external ? '_blank' : undefined}
-                                                rel={cellContent.external ? 'noopener noreferrer' : undefined}
-                                        >
-                                            {cellContent.text}
-                                            {#if cellContent.external}
-                                                <ExternalLink size={12}/>
-                                            {/if}
-                                        </a>
-                                    {:else if cellContent.type === 'custom'}
-                                        {@const CustomComponent = cellContent.component}
-                                        <CustomComponent {...cellContent.props}/>
-                                    {:else if cellContent.type === 'image'}
-                                        <div class="cell-image-text">
-                                            <div class="cell-image" class:circle={cellContent.circle}
-                                                 style="width:{cellContent.size || 32}px;height:{cellContent.size || 32}px;">
-                                                <img
-                                                        src={cellContent.src}
-                                                        alt={cellContent.alt}
-                                                        width={cellContent.size || 32}
-                                                        height={cellContent.size || 32}
-                                                        loading="lazy"
-                                                        onerror={handleImageError}
-                                                />
-                                                <span class="image-fallback hidden">
-                                                    {#if cellContent.fallbackIcon}
-                                                        {@const FallbackIcon = cellContent.fallbackIcon}
-                                                        <FallbackIcon size={cellContent.size ? cellContent.size * 0.6 : 20}/>
-                                                    {:else}
-                                                        <ImageIcon size={cellContent.size ? cellContent.size * 0.6 : 20}/>
-                                                    {/if}
-                                                </span>
+                                        {:else if cellContent.type === 'badge'}
+                                            <span class="cell-badge {cellContent.variant}" class:custom-style={cellContent.customStyle} style={cellContent.customStyle || undefined}>{cellContent.text}</span>
+                                        {:else if cellContent.type === 'date'}
+                                            {formatDate(cellContent.value, cellContent.format)}
+                                        {:else if cellContent.type === 'size'}
+                                            {formatBytes(cellContent.bytes)}
+                                        {:else if cellContent.type === 'link'}
+                                            <a href={cellContent.href} class="cell-link" target={cellContent.external ? '_blank' : undefined} rel={cellContent.external ? 'noopener noreferrer' : undefined}>
+                                                {cellContent.text}
+                                                {#if cellContent.external}
+                                                    <ExternalLink size={12} />
+                                                {/if}
+                                            </a>
+                                        {:else if cellContent.type === 'custom'}
+                                            {@const CustomComponent = cellContent.component}
+                                            <CustomComponent {...cellContent.props} />
+                                        {:else if cellContent.type === 'image'}
+                                            <div class="cell-image-text">
+                                                <div class="cell-image" class:circle={cellContent.circle} style="width:{cellContent.size || 32}px;height:{cellContent.size || 32}px;">
+                                                    <img src={cellContent.src} alt={cellContent.alt} width={cellContent.size || 32} height={cellContent.size || 32} loading="lazy" onerror={handleImageError} />
+                                                    <span class="image-fallback hidden">
+                                                        {#if cellContent.fallbackIcon}
+                                                            {@const FallbackIcon = cellContent.fallbackIcon}
+                                                            <FallbackIcon size={cellContent.size ? cellContent.size * 0.6 : 20} />
+                                                        {:else}
+                                                            <ImageIcon size={cellContent.size ? cellContent.size * 0.6 : 20} />
+                                                        {/if}
+                                                    </span>
+                                                </div>
+                                                {#if cellContent.text}
+                                                    <span class="cell-image-label">{cellContent.text}</span>
+                                                {/if}
                                             </div>
-                                            {#if cellContent.text}
-                                                <span class="cell-image-label">{cellContent.text}</span>
-                                            {/if}
-                                        </div>
-                                    {:else if cellContent.type === 'editable-number'}
-                                        <input
+                                        {:else if cellContent.type === 'editable-number'}
+                                            <input
                                                 type="number"
                                                 class="cell-editable-number"
                                                 value={cellContent.value ?? ''}
@@ -1105,34 +1060,40 @@
                                                 max={cellContent.max}
                                                 placeholder={cellContent.placeholder ?? ''}
                                                 oninput={(e) => {
-                                                const raw = e.currentTarget.value;
-                                                if (raw === '') { cellContent.onchange(null); return; }
-                                                let num = Number(raw);
-                                                if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
-                                                if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
-                                                cellContent.onchange(num);
-                                            }}
+                                                    const raw = e.currentTarget.value;
+                                                    if (raw === '') {
+                                                        cellContent.onchange(null);
+                                                        return;
+                                                    }
+                                                    let num = Number(raw);
+                                                    if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
+                                                    if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
+                                                    cellContent.onchange(num);
+                                                }}
                                                 onblur={(e) => {
-                                                const raw = e.currentTarget.value;
-                                                if (raw === '') { cellContent.onchange(null); return; }
-                                                let num = Number(raw);
-                                                if (cellContent.min !== undefined && num < cellContent.min) {
-                                                    num = cellContent.min;
-                                                    e.currentTarget.value = String(num);
-                                                }
-                                                if (cellContent.max !== undefined && num > cellContent.max) {
-                                                    num = cellContent.max;
-                                                    e.currentTarget.value = String(num);
-                                                }
-                                                cellContent.onchange(num);
-                                            }}
+                                                    const raw = e.currentTarget.value;
+                                                    if (raw === '') {
+                                                        cellContent.onchange(null);
+                                                        return;
+                                                    }
+                                                    let num = Number(raw);
+                                                    if (cellContent.min !== undefined && num < cellContent.min) {
+                                                        num = cellContent.min;
+                                                        e.currentTarget.value = String(num);
+                                                    }
+                                                    if (cellContent.max !== undefined && num > cellContent.max) {
+                                                        num = cellContent.max;
+                                                        e.currentTarget.value = String(num);
+                                                    }
+                                                    cellContent.onchange(num);
+                                                }}
                                                 onkeydown={(e) => {
-                                                if (e.key === 'Enter') e.currentTarget.blur();
-                                            }}
+                                                    if (e.key === 'Enter') e.currentTarget.blur();
+                                                }}
                                                 onclick={(e) => e.stopPropagation()}
-                                        />
-                                    {:else if cellContent.type === 'editable-text'}
-                                        <input
+                                            />
+                                        {:else if cellContent.type === 'editable-text'}
+                                            <input
                                                 type="text"
                                                 class="cell-editable-text"
                                                 value={cellContent.value}
@@ -1140,28 +1101,21 @@
                                                 maxlength={cellContent.maxLength}
                                                 onblur={(e) => cellContent.onchange(e.currentTarget.value)}
                                                 onkeydown={(e) => {
-                                                if (e.key === 'Enter') e.currentTarget.blur();
-                                            }}
+                                                    if (e.key === 'Enter') e.currentTarget.blur();
+                                                }}
                                                 onclick={(e) => e.stopPropagation()}
-                                        />
-                                    {:else if cellContent.type === 'editable-select'}
-                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                        <div class="cell-editable-select-wrapper" onclick={(e) => e.stopPropagation()}>
-                                            <SimpleSelect
-                                                    value={cellContent.value}
-                                                    options={cellContent.options}
-                                                    compact
-                                                    showChevron={false}
-                                                    dropdownPosition="auto"
-                                                    onchange={(v) => cellContent.onchange(v)}
                                             />
-                                        </div>
-                                    {:else if cellContent.type === 'editable-checkbox'}
-                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                        <div class="cell-checkbox-wrapper flex justify-center" onclick={(e) => e.stopPropagation()}>
-                                            <button
+                                        {:else if cellContent.type === 'editable-select'}
+                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                            <div class="cell-editable-select-wrapper" onclick={(e) => e.stopPropagation()}>
+                                                <SimpleSelect value={cellContent.value} options={cellContent.options} compact showChevron={false} dropdownPosition="auto" onchange={(v) => cellContent.onchange(v)} />
+                                            </div>
+                                        {:else if cellContent.type === 'editable-checkbox'}
+                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                            <div class="cell-checkbox-wrapper flex justify-center" onclick={(e) => e.stopPropagation()}>
+                                                <button
                                                     type="button"
                                                     onclick={() => cellContent.onchange(!cellContent.value)}
                                                     aria-label="Toggle"
@@ -1169,88 +1123,78 @@
                                                            {cellContent.value ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-600'}
                                                            cursor-pointer"
                                                     aria-pressed={cellContent.value}
-                                            >
-                                                <span class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
-                                                             {cellContent.value ? 'translate-x-[18px]' : 'translate-x-[3px]'}"></span>
-                                            </button>
-                                        </div>
-                                    {:else if cellContent.type === 'html'}
-                                        {@html cellContent.html}
+                                                >
+                                                    <span
+                                                        class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
+                                                             {cellContent.value ? 'translate-x-[18px]' : 'translate-x-[3px]'}"
+                                                    ></span>
+                                                </button>
+                                            </div>
+                                        {:else if cellContent.type === 'html'}
+                                            {@html cellContent.html}
+                                        {/if}
                                     {/if}
-                                {/if}
-                            </td>
-                        {/each}
+                                </td>
+                            {/each}
 
-                        <!-- Actions cell -->
-                        {#if enableActions && rowActions.length > 0}
-                            <td class="td-fixed td-actions">
-                                <div class="actions-row">
-                                    {#each rowActions as action}
-                                        {#if !action.visible || action.visible(row)}
-                                            <button
+                            <!-- Actions cell -->
+                            {#if enableActions && rowActions.length > 0}
+                                <td class="td-fixed td-actions">
+                                    <div class="actions-row">
+                                        {#each rowActions as action}
+                                            {#if !action.visible || action.visible(row)}
+                                                <button
                                                     type="button"
                                                     class="action-btn"
                                                     class:danger={action.variant === 'danger'}
                                                     disabled={action.disabled?.(row)}
-                                                    onclick={(e) => { e.stopPropagation(); handleRowAction(action, row); }}
+                                                    onclick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRowAction(action, row);
+                                                    }}
                                                     title={typeof action.label === 'function' ? action.label() : action.label}
-                                            >
-                                                <action.icon size={16} class={action.iconClass?.(row) ?? ''}/>
-                                            </button>
-                                        {/if}
-                                    {/each}
-                                </div>
-                            </td>
-                        {/if}
-                    </tr>
-                {/each}
-            {/if}
+                                                >
+                                                    <action.icon size={16} class={action.iconClass?.(row) ?? ''} />
+                                                </button>
+                                            {/if}
+                                        {/each}
+                                    </div>
+                                </td>
+                            {/if}
+                        </tr>
+                    {/each}
+                {/if}
             </tbody>
         </table>
     </div>
 
     <!-- Pagination - show only when enabled and items exceed smallest page size -->
-    {#if enablePagination && filteredData.length > 0 && filteredData.length > Math.min(...pageSizeOptions.filter(x => x > 0))}
-        <DataTablePagination
-                pageIndex={pagination.pageIndex}
-                pageSize={pagination.pageSize}
-                totalItems={filteredData.length}
-                {pageSizeOptions}
-                onPageChange={handlePageChange}
-                onPageSizeChange={handlePageSizeChange}
-        />
+    {#if enablePagination && filteredData.length > 0 && filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0))}
+        <DataTablePagination pageIndex={pagination.pageIndex} pageSize={pagination.pageSize} totalItems={filteredData.length} {pageSizeOptions} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
     {/if}
 </div>
 
 <!-- Confirm modal for bulk actions -->
 <ConfirmModal
-        danger={pendingBulkAction?.variant === 'danger'}
-        items={selectedRows.map(row => getRowDisplayName ? getRowDisplayName(row) : String(getRowId(row)))}
-        itemsLabel={`${selectedRows.length} ${$t('table.items')}`}
-        message={pendingBulkAction?.confirmMessage
-		? (typeof pendingBulkAction.confirmMessage === 'function'
-			? pendingBulkAction.confirmMessage(selectedRows.length)
-			: pendingBulkAction.confirmMessage)
-		: `${$t('table.confirmBulkAction')} ${selectedRows.length} ${$t('table.items')}?`}
-        onCancel={cancelBulkAction}
-        onConfirm={confirmBulkAction}
-        open={showDeleteModal}
-        title={$t('common.confirm')}
+    danger={pendingBulkAction?.variant === 'danger'}
+    items={selectedRows.map((row) => (getRowDisplayName ? getRowDisplayName(row) : String(getRowId(row))))}
+    itemsLabel={`${selectedRows.length} ${$t('table.items')}`}
+    message={pendingBulkAction?.confirmMessage ? (typeof pendingBulkAction.confirmMessage === 'function' ? pendingBulkAction.confirmMessage(selectedRows.length) : pendingBulkAction.confirmMessage) : `${$t('table.confirmBulkAction')} ${selectedRows.length} ${$t('table.items')}?`}
+    onCancel={cancelBulkAction}
+    onConfirm={confirmBulkAction}
+    open={showDeleteModal}
+    title={$t('common.confirm')}
 />
 
 <!-- Confirm modal for single row actions -->
 <ConfirmModal
-        danger={pendingRowAction?.action.variant === 'danger'}
-        items={pendingRowAction ? [getRowDisplayName ? getRowDisplayName(pendingRowAction.row) : String(getRowId(pendingRowAction.row))] : []}
-        message={pendingRowAction?.action.confirmMessage
-		? (typeof pendingRowAction.action.confirmMessage === 'function'
-			? pendingRowAction.action.confirmMessage(pendingRowAction.row)
-			: pendingRowAction.action.confirmMessage)
-		: $t('common.confirmDelete')}
-        onCancel={cancelRowAction}
-        onConfirm={confirmRowAction}
-        open={showRowActionModal}
-        title={$t('common.confirm')}
+    danger={pendingRowAction?.action.variant === 'danger'}
+    items={pendingRowAction ? [getRowDisplayName ? getRowDisplayName(pendingRowAction.row) : String(getRowId(pendingRowAction.row))] : []}
+    message={pendingRowAction?.action.confirmMessage ? (typeof pendingRowAction.action.confirmMessage === 'function' ? pendingRowAction.action.confirmMessage(pendingRowAction.row) : pendingRowAction.action.confirmMessage) : $t('common.confirmDelete')}
+    onCancel={cancelRowAction}
+    onConfirm={confirmRowAction}
+    open={showRowActionModal}
+    title={$t('common.confirm')}
 />
 
 <style>
@@ -1451,7 +1395,8 @@
         background: #cbd5e1;
     }
 
-    .resize-handle.resizing, .resize-handle:active {
+    .resize-handle.resizing,
+    .resize-handle:active {
         opacity: 1;
         background: #1a4031;
     }
@@ -1589,7 +1534,8 @@
         white-space: normal;
     }
 
-    .td-empty, .td-loading {
+    .td-empty,
+    .td-loading {
         text-align: center;
         padding: 3rem 2rem;
         color: #94a3b8;
@@ -1654,7 +1600,8 @@
         color: #64748b;
     }
 
-    :global(.dark) .td-empty, :global(.dark) .td-loading {
+    :global(.dark) .td-empty,
+    :global(.dark) .td-loading {
         background: #0f172a;
     }
 
@@ -1909,7 +1856,8 @@
 
     /* Responsive: hide sticky actions on mobile */
     @media (max-width: 768px) {
-        .th-actions, .td-actions {
+        .th-actions,
+        .td-actions {
             position: static;
         }
     }
@@ -1992,7 +1940,7 @@
     }
 
     :global(.dark) :global(tr.row-deleted) td {
-        background: rgba(239, 68, 68, 0.20) !important;
+        background: rgba(239, 68, 68, 0.2) !important;
         opacity: 0.55;
     }
 
@@ -2001,7 +1949,7 @@
     }
 
     :global(.dark) :global(tr.row-edited) td {
-        background: rgba(59, 130, 246, 0.20) !important;
+        background: rgba(59, 130, 246, 0.2) !important;
     }
 
     :global(tr.row-appended) td {
@@ -2009,7 +1957,7 @@
     }
 
     :global(.dark) :global(tr.row-appended) td {
-        background: rgba(16, 185, 129, 0.20) !important;
+        background: rgba(16, 185, 129, 0.2) !important;
     }
 
     :global(tr.row-stale) td {

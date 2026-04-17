@@ -34,26 +34,14 @@
 <div class="toolbar">
     <div class="toolbar-right">
         {#if selectedCount > 0}
-            <button
-                    type="button"
-                    class="selected-count-btn"
-                    onclick={() => onClearSelection?.()}
-                    title={$t('table.clearSelection') || 'Clear selection'}
-            >
+            <button type="button" class="selected-count-btn" onclick={() => onClearSelection?.()} title={$t('table.clearSelection') || 'Clear selection'}>
                 <span class="count-text">{selectedCount} {$t('common.selected')}</span>
                 <span class="clear-icon">×</span>
             </button>
             <div class="bulk-actions">
                 {#each bulkActions as action}
-                    <button
-                            type="button"
-                            class="bulk-btn"
-                            class:danger={action.variant === 'danger'}
-                            onclick={action.onClick}
-                            title={getActionLabel(action)}
-                            disabled={action.disabled}
-                    >
-                        <action.icon size={16} class={action.iconClass || ''}/>
+                    <button type="button" class="bulk-btn" class:danger={action.variant === 'danger'} onclick={action.onClick} title={getActionLabel(action)} disabled={action.disabled}>
+                        <action.icon size={16} class={action.iconClass || ''} />
                     </button>
                 {/each}
             </div>

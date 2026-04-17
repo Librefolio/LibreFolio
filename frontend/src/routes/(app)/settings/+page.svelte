@@ -15,18 +15,18 @@
     $: isSuperuser = $auth.user?.is_superuser ?? false;
 
     // All tabs - Admin visible to everyone but editable only by superuser
-    const tabs: { id: TabId; icon: typeof User; labelKey: string }[] = [
+    const tabs: {id: TabId; icon: typeof User; labelKey: string}[] = [
         {id: 'profile', icon: User, labelKey: 'settings.profile'},
         {id: 'preferences', icon: Sliders, labelKey: 'settings.preferences'},
         {id: 'about', icon: Info, labelKey: 'settings.about'},
-        {id: 'admin', icon: Shield, labelKey: 'settings.admin'}
+        {id: 'admin', icon: Shield, labelKey: 'settings.admin'},
     ];
 </script>
 
 <div class="space-y-6" data-testid="settings-page">
     <!-- Page Title - shows active tab name on mobile -->
     <h1 class="text-2xl font-bold text-gray-900 sm:hidden">
-        {$_(tabs.find(t => t.id === activeTab)?.labelKey ?? 'settings.profile')}
+        {$_(tabs.find((t) => t.id === activeTab)?.labelKey ?? 'settings.profile')}
     </h1>
 
     <!-- Tabs Navigation -->
@@ -34,18 +34,16 @@
         <div class="flex border-b border-gray-200" role="tablist">
             {#each tabs as tab (tab.id)}
                 <button
-                        on:click={() => (activeTab = tab.id)}
-                        class="flex items-center justify-center gap-2 px-3 py-4 sm:px-6 text-sm font-medium transition-all flex-1 sm:flex-none
-						{activeTab === tab.id
-						? 'text-libre-green border-b-2 border-libre-green bg-libre-green/5'
-						: 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}
+                    on:click={() => (activeTab = tab.id)}
+                    class="flex items-center justify-center gap-2 px-3 py-4 sm:px-6 text-sm font-medium transition-all flex-1 sm:flex-none
+						{activeTab === tab.id ? 'text-libre-green border-b-2 border-libre-green bg-libre-green/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}
 						{tab.id === 'admin' ? 'sm:ml-auto' : ''}"
-                        data-testid="settings-tab-{tab.id}"
-                        role="tab"
-                        aria-selected={activeTab === tab.id}
-                        title={$_(tab.labelKey)}
+                    data-testid="settings-tab-{tab.id}"
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    title={$_(tab.labelKey)}
                 >
-                    <svelte:component this={tab.icon} size={18}/>
+                    <svelte:component this={tab.icon} size={18} />
                     <span class="hidden sm:inline">{$_(tab.labelKey)}</span>
                 </button>
             {/each}
@@ -54,13 +52,13 @@
         <!-- Tab Content -->
         <div class="p-4 sm:p-6">
             {#if activeTab === 'profile'}
-                <ProfileTab/>
+                <ProfileTab />
             {:else if activeTab === 'preferences'}
-                <PreferencesTab/>
+                <PreferencesTab />
             {:else if activeTab === 'about'}
-                <AboutTab/>
+                <AboutTab />
             {:else if activeTab === 'admin'}
-                <GlobalSettingsTab canEdit={isSuperuser}/>
+                <GlobalSettingsTab canEdit={isSuperuser} />
             {/if}
         </div>
     </div>

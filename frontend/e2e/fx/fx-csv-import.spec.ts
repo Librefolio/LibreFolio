@@ -211,7 +211,7 @@ test.describe('FX CSV Import', () => {
 
         // The header should be updated but user data lines remain
         const csvText = await getCsvText(modal);
-        const lines = csvText.split('\n').filter(l => l.trim());
+        const lines = csvText.split('\n').filter((l) => l.trim());
         expect(lines[0]).toBe('date;USD>EUR');
         // Data lines should still be there (though they might now be invalid
         // because the header changed — that's expected behavior for user data)
@@ -291,7 +291,7 @@ test.describe('FX CSV Import', () => {
 
         // Initial: info banner should mention EUR and USD
         const infoBanner = modal.locator('[class*="bg-blue"]');
-        if (await infoBanner.count() > 0) {
+        if ((await infoBanner.count()) > 0) {
             const bannerText = await infoBanner.first().textContent();
             expect(bannerText).toContain('EUR');
             expect(bannerText).toContain('USD');
@@ -303,7 +303,7 @@ test.describe('FX CSV Import', () => {
         await page.waitForTimeout(200);
 
         // After swap: should mention USD → EUR direction
-        if (await infoBanner.count() > 0) {
+        if ((await infoBanner.count()) > 0) {
             const bannerText = await infoBanner.first().textContent();
             expect(bannerText).toContain('USD');
             expect(bannerText).toContain('EUR');
@@ -367,7 +367,7 @@ test.describe('FX CSV Import', () => {
 
         // Header stays as typed
         const csvText = await getCsvText(modal);
-        const lines = csvText.split('\n').filter(l => l.trim());
+        const lines = csvText.split('\n').filter((l) => l.trim());
         expect(lines[0]).toBe('date;EUR<USD');
         expect(lines.length).toBe(3);
 

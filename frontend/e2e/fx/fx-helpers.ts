@@ -34,11 +34,7 @@ export async function openAddPairModal(page: import('@playwright/test').Page) {
  * @param container - The parent container that wraps the CurrencySearchSelect
  * @param currencyCode - ISO currency code to search for (e.g. "EUR")
  */
-export async function selectCurrency(
-    page: import('@playwright/test').Page,
-    container: import('@playwright/test').Locator,
-    currencyCode: string,
-) {
+export async function selectCurrency(page: import('@playwright/test').Page, container: import('@playwright/test').Locator, currencyCode: string) {
     // Click the combobox trigger to open dropdown
     await container.locator('[role="combobox"]').click();
     await page.waitForTimeout(200);
@@ -66,4 +62,3 @@ export async function goToFxDetailPage(page: import('@playwright/test').Page, pa
     await page.waitForSelector('[data-testid="fx-detail-page"]', {timeout: 15_000});
     await page.waitForTimeout(1000);
 }
-

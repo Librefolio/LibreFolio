@@ -85,7 +85,7 @@ test.describe('Asset Modal', () => {
         await goToAssetsPage(page);
         // Navigate to first asset detail
         const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        if (!await firstCard.isVisible({timeout: 5000}).catch(() => false)) {
+        if (!(await firstCard.isVisible({timeout: 5000}).catch(() => false))) {
             test.skip(true, 'No assets available');
             return;
         }
@@ -143,8 +143,16 @@ test.describe('Asset Modal', () => {
 
         // Should show either results dropdown, loading spinner, or "no results"
         const form = page.getByTestId('asset-modal-form');
-        const hasDropdown = await form.locator('.shadow-lg, [class*="shadow-lg"]').first().isVisible().catch(() => false);
-        const hasLoading = await form.locator('.animate-spin').first().isVisible().catch(() => false);
+        const hasDropdown = await form
+            .locator('.shadow-lg, [class*="shadow-lg"]')
+            .first()
+            .isVisible()
+            .catch(() => false);
+        const hasLoading = await form
+            .locator('.animate-spin')
+            .first()
+            .isVisible()
+            .catch(() => false);
 
         // At least one of: results dropdown appeared or loading showed
         expect(hasDropdown || hasLoading).toBeTruthy();
@@ -158,7 +166,7 @@ test.describe('Asset Modal', () => {
     test('edit modal shows additional fields (currency, type)', async ({page}) => {
         await goToAssetsPage(page);
         const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        if (!await firstCard.isVisible({timeout: 5000}).catch(() => false)) {
+        if (!(await firstCard.isVisible({timeout: 5000}).catch(() => false))) {
             test.skip(true, 'No assets available');
             return;
         }
@@ -177,7 +185,11 @@ test.describe('Asset Modal', () => {
         expect(value.length).toBeGreaterThan(0);
 
         // Should have currency selector (combobox or select with currency code)
-        const hasCurrency = await form.locator('[role="combobox"], select').first().isVisible().catch(() => false);
+        const hasCurrency = await form
+            .locator('[role="combobox"], select')
+            .first()
+            .isVisible()
+            .catch(() => false);
         expect(hasCurrency).toBeTruthy();
 
         await page.getByTestId('asset-modal-cancel').click();
@@ -194,10 +206,9 @@ test.describe('Asset Modal', () => {
         await expect(form).toBeVisible();
 
         // Form should have overflow-y-auto (scrollable when content exceeds max-height)
-        const overflowY = await form.evaluate(el => getComputedStyle(el).overflowY);
+        const overflowY = await form.evaluate((el) => getComputedStyle(el).overflowY);
         expect(overflowY).toBe('auto');
 
         await page.getByTestId('asset-modal-cancel').click();
     });
 });
-

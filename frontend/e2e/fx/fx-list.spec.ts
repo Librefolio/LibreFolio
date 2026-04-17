@@ -203,4 +203,3 @@ test.describe('FX List Page', () => {
         await expect(syncBtn).toBeVisible();
     });
 });
-

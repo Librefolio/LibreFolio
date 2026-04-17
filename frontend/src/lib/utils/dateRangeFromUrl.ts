@@ -14,10 +14,7 @@
  * @param defaultMonths - Number of months back for the default start date (default: 3)
  * @returns { start, end, hasCustomRange } — start/end dates and whether custom params were found
  */
-export function parseDateRangeFromUrl(
-    searchParams: URLSearchParams,
-    defaultMonths = 3,
-): { start: string; end: string; hasCustomRange: boolean } {
+export function parseDateRangeFromUrl(searchParams: URLSearchParams, defaultMonths = 3): {start: string; end: string; hasCustomRange: boolean} {
     const qEnd = searchParams.get('end');
     const qStart = searchParams.get('start');
 
@@ -34,4 +31,3 @@ export function parseDateRangeFromUrl(
 
     return {start, end, hasCustomRange: !!qStart};
 }
-

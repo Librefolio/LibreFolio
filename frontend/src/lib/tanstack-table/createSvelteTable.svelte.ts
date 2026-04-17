@@ -12,7 +12,7 @@
  * @see TODO_FUTURI.md per la nota sulla migrazione a v9 quando sarà stabile
  */
 
-import {createTable, type RowData, type Table, type TableOptions, type TableOptionsResolved,} from '@tanstack/table-core';
+import {createTable, type RowData, type Table, type TableOptions, type TableOptionsResolved} from '@tanstack/table-core';
 
 /**
  * Crea una tabella TanStack Table reattiva per Svelte 5.
@@ -38,14 +38,11 @@ import {createTable, type RowData, type Table, type TableOptions, type TableOpti
  * </script>
  * ```
  */
-export function createSvelteTable<TData extends RowData>(
-    options: TableOptions<TData>
-): Table<TData> {
+export function createSvelteTable<TData extends RowData>(options: TableOptions<TData>): Table<TData> {
     // Risolvi le opzioni con i default
     const resolvedOptions: TableOptionsResolved<TData> = {
         state: {},
-        onStateChange: () => {
-        },
+        onStateChange: () => {},
         renderFallbackValue: null,
         ...options,
     };

@@ -7,8 +7,8 @@
     import {ArrowDownLeft, ArrowUpRight} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
-        deposit: { currency: string };
-        withdraw: { currency: string };
+        deposit: {currency: string};
+        withdraw: {currency: string};
     }>();
 
     // Props
@@ -22,7 +22,7 @@
         style: 'currency',
         currency: code,
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
     }).format(amount);
 
     $: isPositive = amount > 0;
@@ -53,24 +53,15 @@
         <!-- Actions -->
         {#if canEdit}
             <div class="flex items-center space-x-1">
-                <button
-                        class="flex items-center space-x-1 px-3 py-1.5 text-sm text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
-                        on:click={() => dispatch('deposit', { currency: code })}
-                        title={$_('brokers.deposit')}
-                >
-                    <ArrowDownLeft size={16}/>
+                <button class="flex items-center space-x-1 px-3 py-1.5 text-sm text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors" on:click={() => dispatch('deposit', {currency: code})} title={$_('brokers.deposit')}>
+                    <ArrowDownLeft size={16} />
                     <span class="hidden sm:inline">{$_('brokers.deposit')}</span>
                 </button>
-                <button
-                        class="flex items-center space-x-1 px-3 py-1.5 text-sm text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors"
-                        on:click={() => dispatch('withdraw', { currency: code })}
-                        title={$_('brokers.withdraw')}
-                >
-                    <ArrowUpRight size={16}/>
+                <button class="flex items-center space-x-1 px-3 py-1.5 text-sm text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors" on:click={() => dispatch('withdraw', {currency: code})} title={$_('brokers.withdraw')}>
+                    <ArrowUpRight size={16} />
                     <span class="hidden sm:inline">{$_('brokers.withdraw')}</span>
                 </button>
             </div>
         {/if}
     </div>
 </div>
-

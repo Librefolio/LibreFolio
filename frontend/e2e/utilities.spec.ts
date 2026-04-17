@@ -23,7 +23,6 @@ import {goToAssetsPage} from './assets/assets-helpers';
 const API = '/api/v1/utilities';
 
 test.describe('Utilities API — Currencies', () => {
-
     test('currency list has major currencies', async ({page}) => {
         await login(page, TEST_USER);
         const response = await page.request.get(`${API}/currencies`);
@@ -64,9 +63,7 @@ test.describe('Utilities API — Currencies', () => {
 
     test('normalize € resolves to EUR', async ({page}) => {
         await login(page, TEST_USER);
-        const response = await page.request.get(
-            `${API}/currencies/normalize?name=${encodeURIComponent('€')}`
-        );
+        const response = await page.request.get(`${API}/currencies/normalize?name=${encodeURIComponent('€')}`);
         expect(response.ok()).toBeTruthy();
         const data = await response.json();
 
@@ -84,9 +81,7 @@ test.describe('Utilities API — Currencies', () => {
 
     test('normalize $ is ambiguous', async ({page}) => {
         await login(page, TEST_USER);
-        const response = await page.request.get(
-            `${API}/currencies/normalize?name=${encodeURIComponent('$')}`
-        );
+        const response = await page.request.get(`${API}/currencies/normalize?name=${encodeURIComponent('$')}`);
         const data = await response.json();
 
         expect(data.match_type).toBe('symbol_ambiguous');
@@ -114,7 +109,6 @@ test.describe('Utilities API — Currencies', () => {
 });
 
 test.describe('Utilities API — Countries', () => {
-
     test('country list has flags for all entries', async ({page}) => {
         await login(page, TEST_USER);
         const response = await page.request.get(`${API}/countries`);
@@ -191,7 +185,6 @@ test.describe('Utilities API — Countries', () => {
 });
 
 test.describe('Utilities API — Sectors', () => {
-
     test('sector list has standard sectors', async ({page}) => {
         await login(page, TEST_USER);
         const response = await page.request.get(`${API}/sectors`);
@@ -221,7 +214,6 @@ test.describe('Utilities API — Sectors', () => {
 });
 
 test.describe('Utilities — UI Rendering', () => {
-
     test('FX page shows currency flag emojis on cards', async ({page}) => {
         await login(page, TEST_USER);
         await goToFxPage(page);
@@ -253,7 +245,7 @@ test.describe('Utilities — UI Rendering', () => {
 
         // Try to open edit modal on first asset (has currency selector)
         const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        if (!await firstCard.isVisible({timeout: 5000}).catch(() => false)) {
+        if (!(await firstCard.isVisible({timeout: 5000}).catch(() => false))) {
             test.skip(true, 'No assets available');
             return;
         }
@@ -283,4 +275,3 @@ test.describe('Utilities — UI Rendering', () => {
         await page.getByTestId('asset-modal-cancel').click();
     });
 });
-

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
 
 /* dark: variant uses html.dark class (set by anti-FOUC script in app.html) */
@@ -170,7 +170,6 @@ html.dark textarea {
     /* NO background override - let component styles work */
     border-color: #546175;
     color: var(--theme-text-primary);
-
 }
 
 html.dark input::placeholder,
@@ -242,5 +241,3 @@ html.dark .bg-libre-green {
 html.dark .animated-bg-gradient {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
 }
-
-

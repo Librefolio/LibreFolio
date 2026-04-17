@@ -159,4 +159,3 @@ test.describe('FX Detail Page', () => {
         await expect(page).toHaveURL(/\/fx$/);
     });
 });
-

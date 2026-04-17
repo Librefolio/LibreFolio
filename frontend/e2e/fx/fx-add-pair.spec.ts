@@ -85,4 +85,3 @@ test.describe('FX Add Pair Modal', () => {
         }
     });
 });
-

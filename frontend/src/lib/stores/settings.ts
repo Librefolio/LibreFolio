@@ -18,7 +18,7 @@ const defaultSettings: UserSettings = {
     language: 'en',
     base_currency: 'EUR',
     theme: 'auto',
-    avatar_url: null
+    avatar_url: null,
 };
 
 /**
@@ -69,7 +69,7 @@ function createUserSettingsStore() {
             try {
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({[key]: value});
 
-                update(current => {
+                update((current) => {
                     const updated = {...current, [key]: value} as UserSettings;
                     if (browser) {
                         localStorage.setItem('user_settings', JSON.stringify(updated));
@@ -110,9 +110,8 @@ function createUserSettingsStore() {
             if (browser) {
                 localStorage.setItem('user_settings', JSON.stringify(settings));
             }
-        }
+        },
     };
 }
 
 export const userSettings = createUserSettingsStore();
-

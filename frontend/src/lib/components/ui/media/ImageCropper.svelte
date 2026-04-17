@@ -13,12 +13,12 @@
 
     // Props
     export let imageSrc: string;
-    export let aspectRatio: number = 1;  // NaN or 0 = free, 1 = square, 16/9, etc.
+    export let aspectRatio: number = 1; // NaN or 0 = free, 1 = square, 16/9, etc.
     export let showZoomSlider: boolean = true;
     export let showRotateControls: boolean = true;
 
     const dispatch = createEventDispatcher<{
-        change: { selection: { x: number; y: number; width: number; height: number } };
+        change: {selection: {x: number; y: number; width: number; height: number}};
     }>();
 
     /** Helper to emit current selection state as a 'change' event */
@@ -32,8 +32,8 @@
                     x: sel.x || 0,
                     y: sel.y || 0,
                     width: cropWidth,
-                    height: cropHeight
-                }
+                    height: cropHeight,
+                },
             });
         }
     }
@@ -100,12 +100,12 @@
     });
 
     // Placeholder for active clamping cleanup (set in initCropper)
-    let stopActiveClamping: () => void = () => {
-    };
+    let stopActiveClamping: () => void = () => {};
 
     // Middle mouse button handlers for panning
     function handleMiddleMouseDown(event: MouseEvent) {
-        if (event.button === 1) {  // Middle button
+        if (event.button === 1) {
+            // Middle button
             event.preventDefault();
             isMiddleDragging = true;
             lastMouseX = event.clientX;
@@ -173,7 +173,7 @@
         }
 
         // Determine aspect ratio (0 or NaN = free)
-        const effectiveAspect = (currentAspect === 0 || isNaN(currentAspect)) ? NaN : currentAspect;
+        const effectiveAspect = currentAspect === 0 || isNaN(currentAspect) ? NaN : currentAspect;
 
         // Create image element first (cropperjs v2 needs an element, not a URL)
         const imgElement = document.createElement('img');
@@ -211,7 +211,7 @@
         containerElement.appendChild(imgElement);
 
         // Small delay to ensure DOM is ready
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 50));
 
         // Create new Cropper instance with v2 API
         cropper = new Cropper(imgElement, {
@@ -234,7 +234,7 @@
             cropperSelection.zoomable = false;
             cropperSelection.multiple = false;
             cropperSelection.keyboard = false;
-            cropperSelection.slottable = false;  // Prevent drawing new selections
+            cropperSelection.slottable = false; // Prevent drawing new selections
 
             // Configure image - allow dragging
             cropperImage.rotatable = true;
@@ -243,7 +243,7 @@
 
             // Configure canvas
             cropperCanvas.background = true;
-            cropperCanvas.slottable = false;  // Prevent drawing new selections on canvas
+            cropperCanvas.slottable = false; // Prevent drawing new selections on canvas
 
             // Change "select" handle to "move" so clicking outside selection moves the image
             // instead of creating a new selection
@@ -290,11 +290,7 @@
                 if (y + h > maxH) y = Math.max(0, maxH - h);
 
                 // Check if anything actually changed (tight threshold)
-                const needsUpdate =
-                    Math.abs(x - cropperSelection.x) > 0.1 ||
-                    Math.abs(y - cropperSelection.y) > 0.1 ||
-                    Math.abs(w - cropperSelection.width) > 0.1 ||
-                    Math.abs(h - cropperSelection.height) > 0.1;
+                const needsUpdate = Math.abs(x - cropperSelection.x) > 0.1 || Math.abs(y - cropperSelection.y) > 0.1 || Math.abs(w - cropperSelection.width) > 0.1 || Math.abs(h - cropperSelection.height) > 0.1;
 
                 if (needsUpdate) {
                     // Use atomic $change to avoid triggering multiple change events
@@ -356,8 +352,8 @@
                         x: cropperSelection.x || 0,
                         y: cropperSelection.y || 0,
                         width: cropWidth,
-                        height: cropHeight
-                    }
+                        height: cropHeight,
+                    },
                 });
                 // Update ellipse overlay position
                 updateEllipseOverlay();
@@ -380,8 +376,8 @@
     }
 
     // Zoom thresholds for unified zoom behavior (percentages)
-    const MIN_SELECTION_COVERAGE = 0.50;  // Minimum 50% coverage before switching to image dezoom
-    const MAX_SELECTION_COVERAGE = 0.90;  // Maximum 90% coverage before switching to image zoom
+    const MIN_SELECTION_COVERAGE = 0.5; // Minimum 50% coverage before switching to image dezoom
+    const MAX_SELECTION_COVERAGE = 0.9; // Maximum 90% coverage before switching to image zoom
 
     /**
      * Unified zoom system:
@@ -515,7 +511,6 @@
         cropHeight = Math.round(newHeight);
     }
 
-
     function rotateLeft() {
         rotateImage(-15);
     }
@@ -550,8 +545,8 @@
             const imgRect = img.getBoundingClientRect();
 
             // Image center in canvas coordinates (relative to canvas top-left)
-            const imgCenterX = (imgRect.left + imgRect.width / 2) - canvasRect.left;
-            const imgCenterY = (imgRect.top + imgRect.height / 2) - canvasRect.top;
+            const imgCenterX = imgRect.left + imgRect.width / 2 - canvasRect.left;
+            const imgCenterY = imgRect.top + imgRect.height / 2 - canvasRect.top;
 
             // Selection center in canvas coordinates
             const selCenterX = sel.x + sel.width / 2;
@@ -587,7 +582,6 @@
         // Notify parent of change
         dispatchCurrentChange();
     }
-
 
     function flipH() {
         const img = cropper?.getCropperImage();
@@ -680,7 +674,7 @@
         const sel = cropper?.getCropperSelection();
         if (!sel) return;
 
-        const effectiveAspect = (value === 0 || isNaN(value)) ? NaN : value;
+        const effectiveAspect = value === 0 || isNaN(value) ? NaN : value;
 
         // Get current selection dimensions and center
         const oldWidth = sel.width;
@@ -723,10 +717,9 @@
         return cropper;
     }
 
-    export function getImageDimensions(): { width: number; height: number } {
+    export function getImageDimensions(): {width: number; height: number} {
         return {width: imageWidth, height: imageHeight};
     }
-
 
     // Preview ellipse overlay
     export let showPreviewEllipse: boolean = false;
@@ -751,18 +744,12 @@
     // React to showPreviewEllipse changes + selection changes
     $: if (showPreviewEllipse) updateEllipseOverlay();
     $: if (cropWidth || cropHeight) updateEllipseOverlay();
-
 </script>
 
 <div class="image-cropper" data-cropper-ready={cropperReady || undefined} data-testid="image-cropper">
     <!-- Crop Area with controls overlay -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-            bind:this={cropWrapperElement}
-            class="crop-wrapper"
-            on:contextmenu|preventDefault
-            on:mousedown={handleMiddleMouseDown}
-    >
+    <div bind:this={cropWrapperElement} class="crop-wrapper" on:contextmenu|preventDefault on:mousedown={handleMiddleMouseDown}>
         <div bind:this={containerElement} class="crop-container">
             <!-- Cropper v2 creates its own DOM structure here -->
         </div>
@@ -777,30 +764,28 @@
             <div class="controls-overlay">
                 {#if showZoomSlider}
                     <button type="button" class="overlay-btn" on:click={zoomOut} title={$_('uploads.zoomOut') || 'Zoom out'} data-testid="cropper-zoom-out">
-                        <ZoomOut size={16}/>
+                        <ZoomOut size={16} />
                     </button>
                     <button type="button" class="overlay-btn" on:click={zoomIn} title={$_('uploads.zoomIn') || 'Zoom in'} data-testid="cropper-zoom-in">
-                        <ZoomIn size={16}/>
+                        <ZoomIn size={16} />
                     </button>
                 {/if}
 
                 {#if showRotateControls}
                     <button type="button" class="overlay-btn" on:click={rotateLeft} title="-15°" data-testid="cropper-rotate-left">
-                        <RotateCcw size={16}/>
+                        <RotateCcw size={16} />
                     </button>
                     <button type="button" class="overlay-btn" on:click={rotateRight} title="+15°" data-testid="cropper-rotate-right">
-                        <RotateCw size={16}/>
+                        <RotateCw size={16} />
                     </button>
 
                     <div class="overlay-separator"></div>
 
-                    <button type="button" class="overlay-btn" class:active={scaleX === -1} on:click={flipH} title={$_('uploads.flipHorizontal') || 'Flip H'}
-                            data-testid="cropper-flip-h">
-                        <FlipHorizontal size={16}/>
+                    <button type="button" class="overlay-btn" class:active={scaleX === -1} on:click={flipH} title={$_('uploads.flipHorizontal') || 'Flip H'} data-testid="cropper-flip-h">
+                        <FlipHorizontal size={16} />
                     </button>
-                    <button type="button" class="overlay-btn" class:active={scaleY === -1} on:click={flipV} title={$_('uploads.flipVertical') || 'Flip V'}
-                            data-testid="cropper-flip-v">
-                        <FlipVertical size={16}/>
+                    <button type="button" class="overlay-btn" class:active={scaleY === -1} on:click={flipV} title={$_('uploads.flipVertical') || 'Flip V'} data-testid="cropper-flip-v">
+                        <FlipVertical size={16} />
                     </button>
                 {/if}
             </div>
@@ -883,7 +868,6 @@
         z-index: 5;
     }
 
-
     .crop-container {
         position: relative;
         width: 100%;
@@ -904,7 +888,6 @@
         width: 100%;
         height: 100%;
     }
-
 
     /* ==========================================================================
        CROPPERJS V2 - CLEAN CORNER HANDLES STYLE (like reference image)
@@ -952,9 +935,8 @@
         display: none !important;
     }
 
-
     /* Corner handles - L-shaped white lines */
-    .crop-container :global(cropper-handle[action="nw-resize"]) {
+    .crop-container :global(cropper-handle[action='nw-resize']) {
         width: 20px !important;
         height: 20px !important;
         background: transparent !important;
@@ -964,7 +946,7 @@
         border-bottom: none !important;
     }
 
-    .crop-container :global(cropper-handle[action="ne-resize"]) {
+    .crop-container :global(cropper-handle[action='ne-resize']) {
         width: 20px !important;
         height: 20px !important;
         background: transparent !important;
@@ -974,7 +956,7 @@
         border-bottom: none !important;
     }
 
-    .crop-container :global(cropper-handle[action="sw-resize"]) {
+    .crop-container :global(cropper-handle[action='sw-resize']) {
         width: 20px !important;
         height: 20px !important;
         background: transparent !important;
@@ -984,7 +966,7 @@
         border-right: none !important;
     }
 
-    .crop-container :global(cropper-handle[action="se-resize"]) {
+    .crop-container :global(cropper-handle[action='se-resize']) {
         width: 20px !important;
         height: 20px !important;
         background: transparent !important;
@@ -995,8 +977,8 @@
     }
 
     /* Side handles - thin white lines */
-    .crop-container :global(cropper-handle[action="n-resize"]),
-    .crop-container :global(cropper-handle[action="s-resize"]) {
+    .crop-container :global(cropper-handle[action='n-resize']),
+    .crop-container :global(cropper-handle[action='s-resize']) {
         width: 40px !important;
         height: 3px !important;
         background-color: white !important;
@@ -1004,8 +986,8 @@
         border-radius: 0 !important;
     }
 
-    .crop-container :global(cropper-handle[action="e-resize"]),
-    .crop-container :global(cropper-handle[action="w-resize"]) {
+    .crop-container :global(cropper-handle[action='e-resize']),
+    .crop-container :global(cropper-handle[action='w-resize']) {
         width: 3px !important;
         height: 40px !important;
         background-color: white !important;
@@ -1032,17 +1014,16 @@
         outline-color: rgba(255, 255, 255, 0.9) !important;
     }
 
-
     /* Dark mode handles - keep white, no green */
     :global(.dark) .crop-container :global(cropper-handle) {
         background-color: transparent !important;
         border-color: white !important;
     }
 
-    :global(.dark) .crop-container :global(cropper-handle[action="n-resize"]),
-    :global(.dark) .crop-container :global(cropper-handle[action="s-resize"]),
-    :global(.dark) .crop-container :global(cropper-handle[action="e-resize"]),
-    :global(.dark) .crop-container :global(cropper-handle[action="w-resize"]) {
+    :global(.dark) .crop-container :global(cropper-handle[action='n-resize']),
+    :global(.dark) .crop-container :global(cropper-handle[action='s-resize']),
+    :global(.dark) .crop-container :global(cropper-handle[action='e-resize']),
+    :global(.dark) .crop-container :global(cropper-handle[action='w-resize']) {
         background-color: white !important;
     }
 </style>

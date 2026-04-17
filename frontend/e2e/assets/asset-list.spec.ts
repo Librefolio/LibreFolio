@@ -140,7 +140,11 @@ test.describe('Asset List Page', () => {
         await page.waitForTimeout(500);
 
         // Table should be visible OR cards should disappear (depending on data)
-        const tableVisible = await page.locator('[data-testid="assets-table"], table').first().isVisible().catch(() => false);
+        const tableVisible = await page
+            .locator('[data-testid="assets-table"], table')
+            .first()
+            .isVisible()
+            .catch(() => false);
         const cardsAfterToggle = await page.locator('[data-testid^="asset-card-"]').count();
 
         // Either table appeared or cards disappeared (view switched)
@@ -210,4 +214,3 @@ test.describe('Asset List Page', () => {
         expect(parseInt(allBadge || '0')).toBeGreaterThanOrEqual(parseInt(activeBadge || '0'));
     });
 });
-

@@ -55,4 +55,3 @@ export const ASSET_TYPE_ICONS = {
     OTHER: '/icons/asset-types/other.png',
     STOCK: '/icons/asset-types/stock.png',
 } as const;
-
