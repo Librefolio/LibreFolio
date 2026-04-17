@@ -50,7 +50,7 @@ export interface SignalLabelInfo {
  * 3. Icon: `iconUrl` → `<img>` (custom) or `assetType` → PNG fallback
  * 4. Label text
  */
-export function signalLabelToHtml(info: SignalLabelInfo): string {
+export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number): string {
     const parts: string[] = [];
 
     // Crown prefix (fixed-width slot — matches dot slot width for table alignment)
@@ -72,8 +72,9 @@ export function signalLabelToHtml(info: SignalLabelInfo): string {
         parts.push(`<img src="${url}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
     }
 
-    // Label text
-    parts.push(`<span style="vertical-align:middle">${info.label}</span>`);
+    // Label text — optionally truncated (tooltip uses truncateAt=15, tables rely on CSS overflow)
+    const displayLabel = truncateAt && info.label.length > truncateAt ? info.label.slice(0, truncateAt) + '…' : info.label;
+    parts.push(`<span style="vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px)" title="${info.label}">${displayLabel}</span>`);
 
     return parts.join('');
 }
