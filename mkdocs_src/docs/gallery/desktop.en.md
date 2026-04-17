@@ -91,13 +91,6 @@ Manage your profile information, avatar, and account settings.
     <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab">
 </div>
 
-### ✏️ Broker Edit
-
-Edit broker details — name, icon, base currency, and configuration.
-
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Broker Edit Modal">
-</div>
 
 ---
 

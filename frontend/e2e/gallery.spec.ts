@@ -68,6 +68,15 @@ async function setTheme(page: Page, theme: Theme) {
     }
 }
 
+/**
+ * Wait until all pending network requests to the backend API have settled.
+ * Uses networkidle + a small buffer to handle late-arriving responses.
+ */
+async function waitForNetworkSettled(page: Page) {
+    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+    await page.waitForTimeout(200);
+}
+
 async function screenshot(
     page: Page,
     viewport: 'desktop' | 'mobile',
@@ -76,6 +85,7 @@ async function screenshot(
     category: string,
     name: string
 ) {
+    await waitForNetworkSettled(page);
     const dir = getGalleryPath(viewport, lang, theme, category);
     ensureDir(dir);
     await page.screenshot({
@@ -228,12 +238,13 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
+                await waitForNetworkSettled(page);
                 await freezeAnimations(page);
                 // Click preferences tab explicitly (default tab may be profile)
                 const prefsTab = page.getByTestId('settings-tab-preferences');
                 if (await prefsTab.isVisible().catch(() => false)) {
                     await prefsTab.click();
-                    await page.waitForTimeout(300);
+                    await waitForNetworkSettled(page);
                 }
                 await screenshot(page, viewport, lang, theme, 'settings', 'user-preferences');
             });
@@ -245,9 +256,10 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
+                await waitForNetworkSettled(page);
                 await freezeAnimations(page);
                 await page.getByTestId('settings-tab-admin').click();
-                await page.waitForTimeout(300);
+                await waitForNetworkSettled(page);
                 await screenshot(page, viewport, lang, theme, 'settings', 'global-settings');
             });
         });
@@ -258,9 +270,10 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
+                await waitForNetworkSettled(page);
                 await freezeAnimations(page);
                 await page.getByTestId('settings-tab-about').click();
-                await page.waitForTimeout(300);
+                await waitForNetworkSettled(page);
                 await screenshot(page, viewport, lang, theme, 'settings', 'about');
             });
         });
@@ -400,26 +413,23 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     // Wait for cards to load
-                    await page.waitForTimeout(1000);
+                    await waitForNetworkSettled(page);
 
                     const card = page.locator('[data-testid^="broker-card-"]').first();
-                    await expect(card).toBeVisible({timeout: 3000});
+                    await expect(card).toBeVisible({timeout: 5000});
                     await card.click();
-                    await page.waitForLoadState('networkidle');
-                    await page.waitForTimeout(500);
+                    await waitForNetworkSettled(page);
 
                     // Click edit button to open BrokerModal
                     const editBtn = page.getByTestId('broker-edit-button');
-                    if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
-                        await editBtn.click();
-                        await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 3000});
-                        await page.waitForTimeout(500);
-                        await screenshot(page, viewport, lang, theme, 'brokers', 'edit-modal');
+                    await expect(editBtn).toBeVisible({timeout: 5000});
+                    await editBtn.click();
+                    await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 5000});
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'edit-modal');
 
-                        // Close modal
-                        await page.keyboard.press('Escape');
-                        await page.waitForTimeout(200);
-                    }
+                    // Close modal
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
                 }
             }
         });

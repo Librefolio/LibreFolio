@@ -24,7 +24,7 @@ Nous accueillons les contributions de toutes tailles :
 2. **Créez une branche** pour votre fonctionnalité ou correction
 3. **Soumettez une Pull Request** avec une description claire
 
-Consultez le [Guide Développeur](../developer/) pour les détails d'architecture, les conventions et les directives de test.
+Consultez le [Guide Développeur](../developer/index.md) pour les détails d'architecture, les conventions et les directives de test.
 
 ---
 

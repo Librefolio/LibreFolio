@@ -95,13 +95,6 @@ Il tuo profilo, avatar e impostazioni dell'account su mobile.
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Scheda Profilo">
 </div>
 
-### ✏️ Modifica Broker
-
-Modifica i dettagli del broker: nome, icona, valuta di base e configurazione.
-
-<div class="screenshot-container mobile">
- <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Modale Modifica Broker">
-</div>
 
 ---
 

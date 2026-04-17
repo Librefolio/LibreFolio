@@ -95,13 +95,6 @@ Su perfil, avatar y ajustes de cuenta en el móvil.
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Pestaña de Perfil">
 </div>
 
-### ✏️ Editar Bróker
-
-Edite los detalles del bróker: nombre, icono, moneda base y configuración.
-
-<div class="screenshot-container mobile">
- <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Modal de Edición de Bróker">
-</div>
 
 ---
 

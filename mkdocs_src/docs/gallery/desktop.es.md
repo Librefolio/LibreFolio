@@ -91,13 +91,6 @@ Administre la información de su perfil, avatar y ajustes de la cuenta.
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Pestaña de Perfil">
 </div>
 
-### ✏️ Editar bróker
-
-Edite los detalles del bróker: nombre, icono, moneda base y configuración.
-
-<div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Modal de Edición de Bróker">
-</div>
 
 ---
 

@@ -24,7 +24,7 @@ Accogliamo contributi di ogni dimensione:
 2. **Crea un branch** per la tua feature o fix
 3. **Invia una Pull Request** con una descrizione chiara
 
-Consulta il [Manuale Sviluppatore](../developer/) per dettagli sull'architettura, convenzioni e linee guida per i test.
+Consulta il [Manuale Sviluppatore](../developer/index.md) per dettagli sull'architettura, convenzioni e linee guida per i test.
 
 ---
 

@@ -95,13 +95,6 @@ Votre profil, avatar et paramètres de compte sur mobile.
  <img class="gallery-img" data-category="settings" data-name="profile" alt="Onglet Profil">
 </div>
 
-### ✏️ Édition du Courtier
-
-Modifier les détails du courtier — nom, icône, devise de base et configuration.
-
-<div class="screenshot-container mobile">
- <img class="gallery-img" data-category="settings" data-name="edit-modal" alt="Fenêtre modale d'édition du courtier">
-</div>
 
 ---
 
