@@ -424,6 +424,12 @@
                     }
                 }
                 clearLongPress();
+                // Hide ECharts tooltip after finger lift (fade out)
+                if (chartInstance) {
+                    setTimeout(() => {
+                        chartInstance?.dispatchAction({type: 'hideTip'});
+                    }, 3000);
+                }
             }
 
             chartContainer.addEventListener('touchstart', onTouchStart, {passive: true});
@@ -878,9 +884,20 @@
                         let labelHtml: string;
                         let isGhostRow = false;
                         if (isGhost) {
-                            // Ghost label is already formatted as "💱 Name (🇺🇸 USD)"
+                             // Ghost label: "💱 Name (flag CUR)" — truncate Name to same length as main (15)
                             const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                            labelHtml = `${ghostDot}${ghostLabel}`;
+                            // Extract name part from ghostLabel format "💱 Name (flag CUR)"
+                            const nameMatch = ghostLabel.match(/^💱\s*(.+?)\s*(\([^)]+\))$/);
+                            let truncatedGhost: string;
+                            if (nameMatch) {
+                                const name = nameMatch[1];
+                                const currPart = nameMatch[2];
+                                const truncName = name.length > 15 ? name.slice(0, 15) + '…' : name;
+                                truncatedGhost = `💱 ${truncName} ${currPart}`;
+                            } else {
+                                truncatedGhost = ghostLabel.length > 30 ? ghostLabel.slice(0, 30) + '…' : ghostLabel;
+                            }
+                            labelHtml = `${ghostDot}<span title="${ghostLabel}">${truncatedGhost}</span>`;
                             isGhostRow = true;
                         } else {
                             const sigInfo = overlaySignalInfoMap?.get(p.seriesName);
@@ -896,10 +913,10 @@
                                 let currSuffix = '';
                                 if (conversionActive) {
                                     mainLabel = mainSeriesName;
-                                    currSuffix = ` <span style="font-size:10px;opacity:0.7">💱(${displayCurrencyFlag} ${displayCurrencyProp})</span>`;
+                                    currSuffix = ` <span style="font-size:10px">(${displayCurrencyFlag} ${displayCurrencyProp}) 💱</span>`;
                                 } else if (mainCurrencyProp) {
                                     mainLabel = mainSeriesName;
-                                    currSuffix = ` <span style="font-size:10px;opacity:0.7">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                                    currSuffix = ` <span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
                                 } else {
                                     mainLabel = mainSeriesName;
                                 }
