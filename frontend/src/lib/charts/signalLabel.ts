@@ -35,6 +35,8 @@ export interface SignalLabelInfo {
     currencyFlag?: string;
     /** True for ghost/watermark signals (opacity < 1) — currency already in label */
     isGhost?: boolean;
+    /** Non-truncatable suffix rendered after the label (e.g. currency badge) */
+    suffix?: string;
 }
 
 // =============================================================================
@@ -74,7 +76,12 @@ export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number): s
 
     // Label text — optionally truncated (tooltip uses truncateAt=15, tables rely on CSS overflow)
     const displayLabel = truncateAt && info.label.length > truncateAt ? info.label.slice(0, truncateAt) + '…' : info.label;
-    parts.push(`<span style="vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px)" title="${info.label}">${displayLabel}</span>`);
+    parts.push(`<span style="vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px);min-width:0;flex-shrink:1" title="${info.label}">${displayLabel}</span>`);
+
+    // Non-truncatable suffix (e.g. currency badge) — always visible
+    if (info.suffix) {
+        parts.push(`<span style="vertical-align:middle;white-space:nowrap;flex-shrink:0">${info.suffix}</span>`);
+    }
 
     return parts.join('');
 }

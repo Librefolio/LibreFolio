@@ -305,9 +305,9 @@
             header: () => $t('measure.table.signal'),
             type: 'text',
             cell: (r) => {
-                const wrapped = wrapGhost(signalLabelToHtml(r.signalInfo), r.isGhost);
-                const innerHtml = typeof wrapped === 'object' && wrapped.html ? wrapped.html : String(wrapped);
-                return {type: 'html' as const, html: `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${innerHtml}</div>`};
+                const labelHtml = signalLabelToHtml(r.signalInfo);
+                const opacity = r.isGhost ? 'opacity:0.7;' : '';
+                return {type: 'html' as const, html: `<div style="${opacity}display:flex;align-items:center;overflow:hidden;white-space:nowrap">${labelHtml}</div>`};
             },
             sortable: false,
             filterable: false,
@@ -381,10 +381,13 @@
         // When no conversion, add (native currency) suffix
         const conversionActive = originalChartData.length > 0 && displayCurrencyProp && displayCurrencyFlagProp;
         let mainLabel: string;
+        let mainSuffix: string | undefined;
         if (conversionActive) {
-            mainLabel = `${mainSignalInfo.label ?? 'Main'} 💱(${displayCurrencyFlagProp} ${displayCurrencyProp})`;
+            mainLabel = mainSignalInfo.label ?? 'Main';
+            mainSuffix = ` <span style="font-size:10px">(${displayCurrencyFlagProp} ${displayCurrencyProp}) 💱</span>`;
         } else if (mainCurrencyProp) {
-            mainLabel = `${mainSignalInfo.label ?? 'Main'} (${mainCurrencyFlagProp || ''} ${mainCurrencyProp})`;
+            mainLabel = mainSignalInfo.label ?? 'Main';
+            mainSuffix = ` <span style="font-size:10px;opacity:0.7">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
         } else {
             mainLabel = mainSignalInfo.label ?? 'Main';
         }
@@ -392,7 +395,7 @@
         const rows: MeasureSummaryRow[] = [
             {
                 id: 'main',
-                signalInfo: {...mainSignalInfo, label: mainLabel},
+                signalInfo: {...mainSignalInfo, label: mainLabel, suffix: mainSuffix},
                 valueStart: result.startValue,
                 valueEnd: result.endValue,
                 deltaAbs: result.deltaAbs,
@@ -409,7 +412,8 @@
                 rows.push({
                     id: 'main-original',
                     signalInfo: {
-                        label: `${mainSignalInfo.label ?? 'Main'} (${origFlag} ${originalCurrencyCode})`,
+                        label: mainSignalInfo.label ?? 'Main',
+                        suffix: ` <span style="font-size:10px;opacity:0.7">(${origFlag} ${originalCurrencyCode})</span>`,
                         isCrown: false,
                         color: mainSignalInfo.color,
                         iconUrl: mainSignalInfo.iconUrl,
@@ -432,13 +436,15 @@
             if (sigResult) {
                 // Build label with currency suffix (ghost labels already include currency)
                 let sigLabel = signal.label;
+                let sigSuffix: string | undefined;
                 if (!isGhost && signal.currency) {
-                    sigLabel = `${signal.label} (${signal.currencyFlag || ''} ${signal.currency})`;
+                    sigSuffix = ` <span style="font-size:10px;opacity:0.7">(${signal.currencyFlag || ''} ${signal.currency})</span>`;
                 }
                 rows.push({
                     id: `sig-${signal.label}`,
                     signalInfo: {
                         label: sigLabel,
+                        suffix: sigSuffix,
                         color: signal.color,
                         iconUrl: isGhost ? undefined : signal.iconUrl,
                         assetType: isGhost ? undefined : signal.assetType,
