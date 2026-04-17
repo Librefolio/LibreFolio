@@ -54,4 +54,5 @@ Para sostener la infraestructura, el mantenimiento y el desarrollo continuo, la 
 ---
 
 !!! tip "¡Gracias!"
+
     Toda forma de apoyo — código, ideas, reportes de errores o donaciones — es profundamente apreciada. ¡Juntos podemos construir el mejor portfolio tracker autoalojado! :rocket:

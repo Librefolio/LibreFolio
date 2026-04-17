@@ -77,7 +77,16 @@ async function waitForNetworkSettled(page: Page) {
     await page.waitForTimeout(200);
 }
 
+/**
+ * Wait until the app splash screen (logo + spinner) has been removed.
+ * The splash lives in app.html as #app-splash and is removed once i18n loads.
+ */
+async function waitForSplashGone(page: Page) {
+    await page.waitForFunction(() => !document.getElementById('app-splash'), {timeout: 10_000}).catch(() => {});
+}
+
 async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string, name: string) {
+    await waitForSplashGone(page);
     await waitForNetworkSettled(page);
     const dir = getGalleryPath(viewport, lang, theme, category);
     ensureDir(dir);
@@ -228,7 +237,10 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
+                await waitForSplashGone(page);
                 await waitForNetworkSettled(page);
+                // Wait for settings page to be fully rendered
+                await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
                 await freezeAnimations(page);
                 // Click preferences tab explicitly (default tab may be profile)
                 const prefsTab = page.getByTestId('settings-tab-preferences');
@@ -236,6 +248,7 @@ test.describe('Gallery Screenshots', () => {
                     await prefsTab.click();
                     await waitForNetworkSettled(page);
                 }
+                await page.waitForTimeout(500); // Let tab content render
                 await screenshot(page, viewport, lang, theme, 'settings', 'user-preferences');
             });
         });
@@ -247,9 +260,18 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
                 await waitForNetworkSettled(page);
+                await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
                 await freezeAnimations(page);
                 await page.getByTestId('settings-tab-admin').click();
+                // Wait for admin tab content to finish loading
+                await page.getByTestId('global-settings-tab').waitFor({state: 'visible', timeout: 10_000});
+                // Wait for LoadingSpinner (role="status") to disappear inside admin tab
+                await page
+                    .locator('[data-testid="global-settings-tab"] [role="status"]')
+                    .waitFor({state: 'hidden', timeout: 15_000})
+                    .catch(() => {});
                 await waitForNetworkSettled(page);
+                await page.waitForTimeout(500);
                 await screenshot(page, viewport, lang, theme, 'settings', 'global-settings');
             });
         });
@@ -261,9 +283,19 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
                 await waitForNetworkSettled(page);
+                await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
                 await freezeAnimations(page);
                 await page.getByTestId('settings-tab-about').click();
+                // Wait for about tab to render and system info to load
+                await page.getByTestId('about-tab').waitFor({state: 'visible', timeout: 10_000});
+                await page
+                    .locator('[data-testid="about-tab"] [role="status"]')
+                    .waitFor({state: 'hidden', timeout: 15_000})
+                    .catch(() => {});
+                // Also wait for version string to replace placeholder "..."
+                await page.getByTestId('about-version').filter({hasNotText: '...'}).waitFor({state: 'visible', timeout: 10_000});
                 await waitForNetworkSettled(page);
+                await page.waitForTimeout(500);
                 await screenshot(page, viewport, lang, theme, 'settings', 'about');
             });
         });
@@ -274,6 +306,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
+                await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
                 await freezeAnimations(page);
                 // Click change password button
                 await page.getByTestId('change-password-button').click();
@@ -291,6 +324,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
+                await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
                 await freezeAnimations(page);
                 const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
                 if (await profileTab.isVisible().catch(() => false)) {
@@ -359,8 +393,11 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/brokers');
+                await waitForSplashGone(page);
                 await freezeAnimations(page);
-                // Wait for broker icons to load (favicon fetching)
+                // Wait for at least one broker card to be rendered
+                await page.locator('[data-testid^="broker-card-"]').first().waitFor({state: 'visible', timeout: 10_000});
+                // Extra time for broker icons to load (favicon fetching)
                 await page.waitForTimeout(2000);
                 await screenshot(page, viewport, lang, theme, 'brokers', 'list');
             });

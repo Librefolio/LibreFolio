@@ -54,4 +54,5 @@ Per sostenere l'infrastruttura, la manutenzione e lo sviluppo continuo, la piatt
 ---
 
 !!! tip "Grazie!"
+
     Ogni forma di supporto — codice, idee, segnalazioni di bug o donazioni — è profondamente apprezzata. Insieme possiamo costruire il miglior portfolio tracker self-hosted! :rocket:

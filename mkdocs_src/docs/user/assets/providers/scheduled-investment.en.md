@@ -57,6 +57,7 @@ Events are configured in the editor and affect the calculated price from their d
 4. The current value = `initial_value` + accrued interest - Σ(INTEREST events) + Σ(PRICE_ADJUSTMENT events)
 
 !!! note "Pure Deterministic Engine"
+
     The provider is completely deterministic — given the same configuration, it always produces the same prices. It does NOT access the database or read transactions. All inputs come from `provider_params`.
 
 ## 🎯 Use Cases

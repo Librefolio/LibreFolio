@@ -54,4 +54,5 @@ Pour soutenir l'infrastructure, la maintenance et le développement continu, la 
 ---
 
 !!! tip "Merci !"
+
     Toute forme de soutien — code, idées, signalements de bugs ou dons — est profondément appréciée. Ensemble, nous pouvons construire le meilleur portfolio tracker auto-hébergé ! :rocket:
