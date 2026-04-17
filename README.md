@@ -1,161 +1,106 @@
-# LibreFolio
+<p align="center">
+  <img src="mkdocs_src/docs/static/logo.png" alt="LibreFolio Logo" width="180">
+</p>
 
-**LibreFolio** is a self-hosted financial portfolio tracker for managing investments, cash accounts, and loans across multiple brokers.
+<h1 align="center">LibreFolio</h1>
 
-## 📚 Documentation
+<p align="center">
+  <strong>Free to understand, free to act.</strong><br>
+  A self-hosted, open-source financial portfolio tracker.
+</p>
 
-The full documentation is available at: **[https://alfystar.github.io/LibreFolio/](https://alfystar.github.io/LibreFolio/)**
+<p align="center">
+  <a href="https://www.buymeacoffee.com/librefolio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me a Coffee" height="40"></a>
+</p>
 
-It includes:
-- 🚀 **Getting Started**: Installation and setup guides.
-- 📖 **User Manual**: How to use the application.
-- 👨‍💻 **Developer Manual**: Architecture, API reference, and contribution guides.
-- 🧮 **Financial Math**: Explanation of calculations used.
+---
 
-## 🏗️ Architecture
+Bring all your investments into one private, secure dashboard. Track stocks, ETFs, crypto, bonds, and loans across multiple brokers — with automated pricing, FX conversion, and technical analysis tools.
 
-- **Backend**: Python (FastAPI + SQLModel + SQLite + Alembic)
-  - **Async-first**: High-performance concurrent request handling (5-10x throughput)
-  - **Dual Engine Pattern**: Sync for migrations/scripts, async for API
-- **Frontend**: SvelteKit (TypeScript + TailwindCSS)
-- **Deployment**: Docker Compose
+Your data stays on your server. No third-party cloud. No tracking.
 
-## 📋 Features
-
-- **Multi-Broker Support**: Import data from Interactive Brokers, Degiro, eToro, Trading212, and many others via CSV.
-- **Asset Tracking**: Track Stocks, ETFs, Cryptocurrencies, and P2P Loans.
-- **Automated Pricing**: Fetch prices from Yahoo Finance, JustETF, or custom web scrapers.
-- **FX Handling**: Automatic currency conversion using official rates (ECB, FED, etc.).
-- **Privacy First**: Your data stays on your server. No third-party cloud storage.
+📚 **Full Documentation**: [https://alfystar.github.io/LibreFolio/](https://alfystar.github.io/LibreFolio/)
 
 ## 🚀 Quick Start
 
-### Prerequisites
+<details>
+<summary><strong>Local Development (Pipenv)</strong></summary>
 
-- Python 3.13+
-- [Pipenv](https://pipenv.pypa.io/en/latest/installation.html)
-- [Node.js](https://nodejs.org/en/download) 20.19+ (includes npm)
-- Docker (optional, for deployment)
+**Prerequisites**: Python 3.13+, [Pipenv](https://pipenv.pypa.io/en/latest/installation.html), [Node.js](https://nodejs.org/) 20.19+
 
-### Installation
-
-1. Clone the repository:
 ```bash
 git clone https://github.com/Alfystar/LibreFolio.git
 cd LibreFolio
-```
 
-2. Install Python dependencies and activate the virtual environment:
-```bash
 pipenv install --dev
 pipenv shell
+
+./dev.py install        # Install all dependencies (backend + frontend)
+cp .env.example .env    # Configure environment
+./dev.py db upgrade     # Run database migrations
+./dev.py server         # Start development server
 ```
 
-3. Install all dependencies (backend + frontend):
-```bash
-./dev.py install
-```
+Access: **http://localhost:8000** — API Docs: **http://localhost:8000/api/v1/docs**
 
-4. Create environment file:
-```bash
-cp .env.example .env
-```
+`./dev.py --help` shows all available commands.
 
-5. Run database migrations:
-```bash
-./dev.py db upgrade
-```
+For full setup details see the [Developer Installation Guide](https://alfystar.github.io/LibreFolio/developer/dev-installation/).
 
-6. Start the development server:
-```bash
-./dev.py server
-```
+</details>
 
-7. Access the application:
-   - **Dashboard**: http://localhost:8000
-   - **API Docs**: http://localhost:8000/api/v1/docs
-
-### Helper Script (`dev.py`)
-
-The `./dev.py` script is your main tool for development (activate the virtual environment first with `pipenv shell`):
-
-- `./dev.py install` - Install all dependencies (backend + frontend)
-- `./dev.py server` - Start backend + frontend build
-- `./dev.py test all` - Run all tests
-- `./dev.py db migrate "msg"` - Create migration
-- `./dev.py mkdocs serve` - Serve documentation locally
-- `./dev.py --help` - Show all available commands
-
-### 🐳 Docker Deployment
-
-> **Prerequisites (Linux):** Your user must be in the `docker` group:
-> ```bash
-> sudo usermod -aG docker $USER && newgrp docker
-> ```
-
-1. **Configure environment** (required):
+<details>
+<summary><strong>Docker Deployment</strong></summary>
 
 ```bash
-cp .env.example .env
-$EDITOR .env              # review and customize parameters
-```
+git clone https://github.com/Alfystar/LibreFolio.git
+cd LibreFolio
 
-2. **Build and run:**
-
-```bash
+cp .env.example .env       # Configure environment
 ./dev.py docker build      # Build image (auto-builds frontend + docs)
 docker compose up -d       # Start container
 ```
 
-3. **Access** at **http://localhost:8000** — the first user registered becomes the administrator.
+Access: **http://localhost:8000** — The first registered user becomes administrator.
 
-Use `./dev.py docker rebuild` to build a new image and restart containers in one step.
+For reverse proxy, test mode, and advanced options see the [Docker Guide](https://alfystar.github.io/LibreFolio/admin/docker_advanced/).
 
-Data is persisted in `./LibreFolio-data/` alongside `docker-compose.yml` (bind mount — back it up directly from the host).
+</details>
 
-For reverse proxy, custom ports, test mode, and more, see the [Advanced Docker Guide](https://alfystar.github.io/LibreFolio/admin/docker_advanced/).
+## 🤝 Contribute
 
-#### 🧪 Docker Test Mode
+LibreFolio values **every form of contribution equally** — code, ideas, and donations all drive the project forward.
 
-You can start a test server alongside the production one to explore the app with mock data:
+### 💡 High-Impact Contributions
 
-```bash
-./dev.py docker exec test db populate --force --with-static   # Populate test DB
-./dev.py docker exec server --test                            # Start test server on :8001
-```
+- **New Plugins** — LibreFolio uses a [Registry & Plugin System](https://alfystar.github.io/LibreFolio/developer/architecture/patterns/registry_pattern/) with three plugin types:
+  - 📥 **[BRIM Plugins](https://alfystar.github.io/LibreFolio/developer/architecture/patterns/brim_plugin_guide/)** — Import from a new broker (CSV/Excel)
+  - 📈 **[Asset Plugins](https://alfystar.github.io/LibreFolio/developer/architecture/patterns/asset_plugin_guide/)** — Fetch prices from a new data source
+  - 💱 **[FX Plugins](https://alfystar.github.io/LibreFolio/developer/architecture/patterns/fx_plugin_guide/)** — Add a new exchange rate provider
+- **Chart Signal Plugins** — New technical indicators and chart overlays
+- **UI/UX Ideas** — Aesthetic improvements and design suggestions
+- **Bug Reports** — Finding and reporting issues on [GitHub Issues](https://github.com/Alfystar/LibreFolio/issues)
 
-Access: **http://localhost:8001** — Test users: `e2e_test_user` / `E2eTestPass123!`
+### 🛠️ How to Contribute Code
 
-> ⚠️ The test database lives inside the container's writable layer (not on a persistent volume). It is lost when the container is removed (`docker compose down`). Use `docker compose stop` / `docker compose start` to preserve it across restarts.
+1. **Fork** the [repository](https://github.com/Alfystar/LibreFolio)
+2. **Create a branch** for your feature or fix
+3. **Submit a Pull Request** with a clear description
 
-## 🌍 Internationalization
-
-- **Code**: All code, comments, and docs are in English.
-- **UI**: Frontend supports English, Italian, French, and Spanish.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read the **[Developer Manual](https://alfystar.github.io/LibreFolio/developer/)** before starting.
-
-### For New Contributors
-
-1. **Start with tests**: Run `./dev.py test all` to understand the project.
-2. **Read the guides**: Check the "Developer Manual" section in the documentation.
-3. **Code Standards**:
-   - Use **type hints** everywhere.
-   - Follow **async/await** pattern.
-   - Write **tests** for new features.
+See the [Developer Manual](https://alfystar.github.io/LibreFolio/developer/) for architecture, conventions, and testing guidelines.
 
 ## 📄 License
 
-LibreFolio is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0).
+LibreFolio is licensed under **GNU Affero General Public License v3.0** (AGPL-3.0).
+You can use, modify, and distribute it freely — if you distribute modifications (including over a network), you must release your source under AGPL-3.0.
 
-This means:
-- ✅ You can use, modify, and distribute this software freely
-- ✅ You can use it for commercial purposes
-- ⚠️ If you modify and distribute (including over a network), you must release your source code under AGPL-3.0
-- ⚠️ You must include the original copyright and license notices
+See [LICENSE](LICENSE) for the full text and the [Credits & Legal](https://alfystar.github.io/LibreFolio/community/credits-legal/) page for details.
 
-See the [LICENSE](LICENSE) file for the full license text.
+---
 
-**GitHub Repository**: [https://github.com/Alfystar/LibreFolio](https://github.com/Alfystar/LibreFolio)
+<p align="center">
+  If LibreFolio helps you manage your investments, consider supporting its development:<br><br>
+  <a href="https://www.buymeacoffee.com/librefolio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me a Coffee" height="40"></a>
+  <br><br>
+  ⭐ <a href="https://github.com/Alfystar/LibreFolio">Star on GitHub</a> · 💡 <a href="https://github.com/Alfystar/LibreFolio/discussions">Share Ideas</a> · 🐛 <a href="https://github.com/Alfystar/LibreFolio/issues">Report Bugs</a>
+</p>
