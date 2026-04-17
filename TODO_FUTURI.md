@@ -120,16 +120,15 @@ La visibilità dei dati di altri utenti da parte del superuser deve essere ripen
 ## 📈 Asset Page — Prezzo e Transazioni
 
 **Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
+**Status**: 🔄 PARZIALMENTE COMPLETATO (Phase 6)  
 **Priorità**: Alta (Phase 6)
 
 ### Contesto
-La pagina dell'asset dovrebbe mostrare il prezzo corrente in alto con la possibilità, cliccando su un punto del grafico, di aprire un'interfaccia piccola per modificare il valore di quel giorno. Sotto il grafico, per ogni transazione (slot per slot), mostrare il prezzo d'acquisto e la variazione rispetto ad oggi (guadagno/perdita), con uno storico del guadagno di quella transazione.
+~~La pagina dell'asset dovrebbe mostrare il prezzo corrente in alto~~ ✅ con ~~la possibilità, cliccando su un punto del grafico, di aprire un'interfaccia piccola per modificare il valore di quel giorno.~~ ✅ Data Editor implementato. ~~Sotto il grafico, per ogni transazione (slot per slot), mostrare il prezzo d'acquisto e la variazione rispetto ad oggi (guadagno/perdita), con uno storico del guadagno di quella transazione.~~ ❌ Richiede Phase 7 (Transazioni).
 
-### Dettagli UI
-- Prezzo in alto, editabile cliccando sul punto nel grafico
-- Sotto: lista slot transazioni con prezzo d'acquisto, variazione %, storico
-- Grafico ECharts con click-to-edit
+### Dettagli UI — Parti mancanti
+- Lista slot transazioni con prezzo d'acquisto, variazione %, storico guadagno
+- Richiede Phase 7 completata (import transazioni + linking asset)
 
 ---
 
@@ -158,31 +157,17 @@ Import riga → Cerca asset matching
 
 ---
 
-## 💱 FX Page — Grafico e Priorità Provider
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Alta (Phase 5)
-
-### Contesto
-La pagina dei tassi di cambio dovrebbe avere un grafico editabile come quello dell'asset:
-- Click su un punto per modificare il valore di quel giorno
-- Sotto il grafico, una tabella con le priorità dei provider (ECB, FED, BOE, SNB)
-- Parametri configurabili per ciascun provider
-
----
-
 ## 📊 Aggiornamento Automatico Prezzi/FX
 
 **Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
+**Status**: 🔄 PARZIALMENTE COMPLETATO  
 **Priorità**: Media
 
 ### Contesto
-Sia per i prezzi degli asset che per i tassi di cambio, il grafico deve avere un pulsante per richiedere l'aggiornamento automatico dei valori. Nella finestra di dialogo:
-- Scegliere un frame temporale di richiesta
-- Warning che l'operazione sovrascrive tutti i valori attuali nel range
-- Progress bar durante l'aggiornamento
+~~Sia per i prezzi degli asset che per i tassi di cambio, il grafico deve avere un pulsante per richiedere l'aggiornamento automatico dei valori.~~ Implementato: Sync button con progress modal (FX Sync All, Asset sync individuale). Resta da implementare:
+- Dialog con selezione frame temporale specifico
+- Warning che l'operazione sovrascrive valori nel range
+- Progress bar granulare durante l'aggiornamento
 
 ---
 
@@ -348,21 +333,6 @@ Oltre l'attuale visualizzazione a segmenti spezzati, indagare se si possono most
 ### 📊 Grafico Asset con rendimento a N
 Con i dati degli asset ha senso mostrare i grafici oltre che per abs e % da P0, anche il rendimento a N (anni o giorni, parametrico) con il significato che ogni punto rappresenta il guadagno/perdita di valore percentuale dell'asset se vosse stato comprato N giorni prima e venduto nel giorno attuale.
 Questo da applicare sia all'asset principale che a quelli di confronto messi nel grafico, da mettere nella pagina di detail per le analisi di dettaglio.
-
----
-
-## 🪵 Riorganizzazione livelli di log backend
-
-**Data aggiunta**: 12 Marzo 2026  
-**Status**: ⏳ Da fare  
-**Priorità**: Media
-
-Analizzare tutti i log generati dal backend e riorganizzarli in una struttura sensata con livelli appropriati. Attualmente i log del servizio FX (sync, backfill, convert) usano livelli inconsistenti:
-- Log informativi di routine (es. "Syncing FX rates...") sono a INFO ma dovrebbero essere a DEBUG
-- I log di backward-fill ripetitivi sono già stati spostati a DEBUG/livello 5, ma servono ulteriori verifiche
-- I log di sync per singola coppia/currency generano molto output anche a INFO
-
-**Azione**: Fare un audit completo dei livelli di log (DEBUG, INFO, WARNING, ERROR) in tutto il backend, definire una policy chiara e applicarla uniformemente.
 
 ---
 
@@ -614,4 +584,3 @@ Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa 
 - `backend/app/utils/cache_utils.py` (adattare `NamedCache`)
 - `backend/app/main.py` (spawn/shutdown cache process)
 
----

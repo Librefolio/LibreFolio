@@ -944,11 +944,7 @@
     async function handleAssetUpdated() {
         editModalOpen = false;
         await reloadMetadata();
-        if (providerAssignment) {
-            await handleSync();
-        } else {
-            await handleRefresh();
-        }
+        await handleRefresh();
     }
 
     function buildEditData() {
@@ -999,7 +995,7 @@
             <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3" data-testid="asset-detail-info">
                 <div class="flex items-center gap-3">
                     <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
-                    <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{assetInfo.display_name}</h2>
+                    <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 truncate max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
                 </div>
 
                 <div class="flex items-center gap-2 flex-wrap ml-0 sm:ml-0">

@@ -287,6 +287,11 @@
             // Global click handler for measure mode — catches clicks anywhere on the chart area
             chartInstance.getZr().on('click', (params: any) => {
                 if (!measureMode || !onMeasureClick || !chartInstance) return;
+                // Skip if already handled by touchEnd (prevents double-fire on mobile)
+                if (touchMeasureHandled) {
+                    touchMeasureHandled = false;
+                    return;
+                }
                 const pointInPixel = [params.offsetX, params.offsetY];
                 if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                     const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
@@ -338,6 +343,8 @@
             let longPressTimer: ReturnType<typeof setTimeout> | null = null;
             let touchStartPos: {x: number; y: number} | null = null;
             let touchStartTime = 0;
+            /** Guard: set by onTouchEnd to suppress the synthetic click event that follows */
+            let touchMeasureHandled = false;
 
             function clearLongPress() {
                 if (longPressTimer) {
@@ -410,6 +417,7 @@
                                 if (dateIdx >= 0 && dateIdx < displayData.length) {
                                     const point = displayData[dateIdx];
                                     handlePointClick(point.date, point.value);
+                                    touchMeasureHandled = true; // suppress following synthetic click
                                 }
                             }
                         }
@@ -803,32 +811,31 @@
             dataZoom: [{type: 'inside', xAxisIndex: [0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, zoomOnMouseWheel: true, moveOnMouseMove: true}],
             tooltip: {
                 trigger: 'axis',
-                appendToBody: true,
                 backgroundColor: isDark ? '#1e293b' : '#ffffff',
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
-                confine: false,
+                confine: true,
                 position: (point: any, _params: any, _dom: any, _rect: any, size: any) => {
-                    // Center tooltip above the cursor, clamped to viewport edges
+                    // Center tooltip horizontally on cursor, vertically pinned above finger
                     const tooltipW = size.contentSize[0];
                     const tooltipH = size.contentSize[1];
                     const viewW = size.viewSize[0];
                     let x = point[0] - tooltipW / 2;
-                    // ALWAYS above the finger/cursor — never below
-                    // Adaptive gap: larger on touch devices to avoid finger obstruction
+                    // On touch devices, pin tooltip to top of chart to avoid scroll-offset issues
+                    // On desktop, position above cursor with adaptive gap
                     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-                    const gap = isTouch ? 60 : 30;
-                    let y = point[1] - tooltipH - gap;
+                    let y: number;
+                    if (isTouch) {
+                        // Always pin to top of chart area (8px margin)
+                        y = 8;
+                    } else {
+                        const gap = 30;
+                        y = point[1] - tooltipH - gap;
+                        if (y < 0) y = 0;
+                    }
                     // Clamp horizontal to chart bounds
                     if (x < 8) x = 8;
                     if (x + tooltipW > viewW - 8) x = viewW - tooltipW - 8;
-                    // Clamp Y: allow going above chart boundary, but stay within viewport
-                    // The chart container offset from viewport top — tooltip uses appendToBody
-                    // so coordinates are relative to the chart container.
-                    // Let Y go negative (above chart) but not above viewport.
-                    const chartRect = chartContainer?.getBoundingClientRect();
-                    const viewportMinY = chartRect ? -chartRect.top : 0;
-                    if (y < viewportMinY) y = viewportMinY;
                     return [x, y];
                 },
                 formatter: (params: any) => {
@@ -879,7 +886,7 @@
                                 // Append (flag currency) to overlay signal labels
                                 // Skip for ghost signals — currency is already embedded in their label
                                 const currSuffix = sigInfo.currency && !sigInfo.isGhost ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${sigInfo.currency})</span>` : '';
-                                labelHtml = signalLabelToHtml(sigInfo) + currSuffix;
+                                labelHtml = signalLabelToHtml(sigInfo, 15) + currSuffix;
                                 if (sigInfo.isGhost) isGhostRow = true;
                             } else if (p.seriesName === mainSeriesName) {
                                 // Main signal: 💱(flag currency) when conversion active, (flag currency) when not
@@ -900,7 +907,7 @@
                                         iconUrl: mainIconUrl,
                                         assetType: mainAssetType,
                                         isCrown: true,
-                                    }) + currSuffix;
+                                    }, 15) + currSuffix;
                             } else {
                                 const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                                 labelHtml = `${colorDot}${p.seriesName}`;

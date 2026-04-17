@@ -166,3 +166,19 @@ Se l'utente non vuole auto-generare eventi di penale, lascia `generate_interest=
 
 ---
 
+## 💱 FX Page — Grafico e Priorità Provider ✅
+
+**Data aggiunta**: 20 Febbraio 2026  
+**Data completamento**: 17 Aprile 2026 (Phase 5 + Phase 9)  
+**Status**: ✅ COMPLETATO
+
+### Completato
+- Grafico ECharts interattivo con Data Editor (click-to-edit punti)
+- Gestione provider con priorità e route (direct + chain), modal di configurazione
+- Sync con progress modal (singola coppia e Sync All)
+- Segnali tecnici overlay (EMA, MACD, RSI, Bollinger Bands)
+- Pannello misure con tabella riepilogativa
+- Add Pair modal con route discovery (direct + chain)
+- Chart settings modal per personalizzazione grafico
+- CSV import/export dati
+- Multi-lingua (EN/IT/FR/ES) completa

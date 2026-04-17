@@ -298,10 +298,14 @@
             id: 'signal',
             header: () => $t('measure.table.signal'),
             type: 'text',
-            cell: (r) => wrapGhost(signalLabelToHtml(r.signalInfo), r.isGhost),
+            cell: (r) => {
+                const wrapped = wrapGhost(signalLabelToHtml(r.signalInfo), r.isGhost);
+                const innerHtml = typeof wrapped === 'object' && wrapped.html ? wrapped.html : String(wrapped);
+                return {type: 'html' as const, html: `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${innerHtml}</div>`};
+            },
             sortable: false,
             filterable: false,
-            width: 100,
+            width: 480,
         },
         {
             id: 'valueStart',
