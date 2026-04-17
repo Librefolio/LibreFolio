@@ -83,9 +83,9 @@ export class BollingerSignal extends ChartSignal {
             const p0 = baseData[0].value;
             if (p0 !== 0) {
                 rendered.bandData = {
-                    upper: upper.map(v => ((v - p0) / p0) * 100),
-                    middle: middle.map(p => ((p.value - p0) / p0) * 100),
-                    lower: lower.map(v => ((v - p0) / p0) * 100),
+                    upper: upper.map((v) => ((v - p0) / p0) * 100),
+                    middle: middle.map((p) => ((p.value - p0) / p0) * 100),
+                    lower: lower.map((v) => ((v - p0) / p0) * 100),
                 };
                 return rendered;
             }
@@ -93,7 +93,7 @@ export class BollingerSignal extends ChartSignal {
 
         rendered.bandData = {
             upper,
-            middle: middle.map(p => p.value),
+            middle: middle.map((p) => p.value),
             lower,
         };
         return rendered;
@@ -106,9 +106,7 @@ export class BollingerSignal extends ChartSignal {
     }
 
     /** Compute upper, middle, lower arrays in one O(N) pass (absolute values) */
-    private _computeAllBands(
-        baseData: LineDataPoint[],
-    ): { upper: number[]; middle: LineDataPoint[]; lower: number[] } {
+    private _computeAllBands(baseData: LineDataPoint[]): {upper: number[]; middle: LineDataPoint[]; lower: number[]} {
         const period = Math.max(2, Math.round(Number(this.params.period ?? 20)));
         const k = Number(this.params.multiplier ?? 2);
 

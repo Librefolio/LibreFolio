@@ -54,4 +54,4 @@ export const TEST_USER_EVE = {
 };
 
 export const SUPPORTED_LANGUAGES = ['en', 'it', 'fr', 'es'] as const;
-export type Language = typeof SUPPORTED_LANGUAGES[number];
+export type Language = (typeof SUPPORTED_LANGUAGES)[number];

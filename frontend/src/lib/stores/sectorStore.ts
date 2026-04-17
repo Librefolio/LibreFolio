@@ -63,4 +63,3 @@ export function getSectorKeys(): string[] {
 export function isSectorsLoaded(): boolean {
     return loaded;
 }
-

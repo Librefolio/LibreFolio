@@ -25,7 +25,7 @@ import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class EmaSignal extends ChartSignal {
     static override signalType = 'ema';
-    static override displayName = 'EMA';                       // i18n: 'signals.ema'
+    static override displayName = 'EMA'; // i18n: 'signals.ema'
     static override icon = '📉';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
     static docsPath = 'financial-theory/technical-analysis/indicators/ema/';
@@ -34,7 +34,7 @@ export class EmaSignal extends ChartSignal {
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
             key: 'period',
-            label: 'Period',                           // i18n: 'chartSettings.params.period'
+            label: 'Period', // i18n: 'chartSettings.params.period'
             type: 'number',
             default: 14,
             min: 2,
@@ -45,7 +45,7 @@ export class EmaSignal extends ChartSignal {
         },
         {
             key: 'offset',
-            label: 'Offset',                           // i18n: 'chartSettings.params.offset'
+            label: 'Offset', // i18n: 'chartSettings.params.offset'
             type: 'number',
             default: 0,
             min: -100,
@@ -92,4 +92,3 @@ export class EmaSignal extends ChartSignal {
         return `EMA(${period})${offsetStr}`;
     }
 }
-

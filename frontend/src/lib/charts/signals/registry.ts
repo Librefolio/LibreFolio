@@ -9,7 +9,7 @@
  */
 
 import type {SignalParamDescriptor} from './ChartSignal';
-import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalStyle,} from './ChartSignal';
+import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalStyle} from './ChartSignal';
 import {generateUUID} from '$lib/utils/uuid';
 import {FxPairSignal} from './FxPairSignal';
 import {AssetComparisonSignal} from './AssetComparisonSignal';
@@ -53,13 +53,15 @@ function hexToHue(hex: string): number {
     const r = parseInt(hex.slice(1, 3), 16) / 255;
     const g = parseInt(hex.slice(3, 5), 16) / 255;
     const b = parseInt(hex.slice(5, 7), 16) / 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    const max = Math.max(r, g, b),
+        min = Math.min(r, g, b),
+        d = max - min;
     if (d === 0) return 0;
     let h: number;
     if (max === r) h = ((g - b) / d) % 6;
     else if (max === g) h = (b - r) / d + 2;
     else h = (r - g) / d + 4;
-    return ((h * 60) + 360) % 360;
+    return (h * 60 + 360) % 360;
 }
 
 /**
@@ -74,10 +76,12 @@ function pickBestColor(usedColors: string[]): string {
     let bestDist = -1;
     for (const c of DEFAULT_SIGNAL_COLORS) {
         const h = hexToHue(c);
-        const minDist = Math.min(...usedHues.map(uh => {
-            const d = Math.abs(h - uh);
-            return Math.min(d, 360 - d);  // circular hue distance
-        }));
+        const minDist = Math.min(
+            ...usedHues.map((uh) => {
+                const d = Math.abs(h - uh);
+                return Math.min(d, 360 - d); // circular hue distance
+            }),
+        );
         if (minDist > bestDist) {
             bestDist = minDist;
             bestColor = c;
@@ -102,7 +106,7 @@ export interface SignalTypeInfo {
 
 /** All registered signal types (for "Add signal" dropdown in ChartSettingsModal). */
 export function getRegisteredSignalTypes(): SignalTypeInfo[] {
-    return [...SIGNAL_REGISTRY.values()].map(Cls => ({
+    return [...SIGNAL_REGISTRY.values()].map((Cls) => ({
         type: Cls.signalType,
         displayName: Cls.displayName,
         icon: Cls.icon,
@@ -117,30 +121,16 @@ export function getRegisteredSignalTypes(): SignalTypeInfo[] {
  * Colors are chosen to maximize perceptual distance from already-used colors.
  * Returns null if signalType is not registered.
  */
-export function createSignal(
-    signalType: string,
-    existingCount: number,
-    usedColors: string[] = [],
-): ChartSignal | null {
+export function createSignal(signalType: string, existingCount: number, usedColors: string[] = []): ChartSignal | null {
     const Cls = SIGNAL_REGISTRY.get(signalType);
     if (!Cls) return null;
 
     const id = generateUUID();
     // Line width: indicator=1, benchmark=1, fx-pair=1, asset-comparison=2
-    const defaultWidth =
-        Cls.category === 'indicator' ? 1
-        : Cls.category === 'benchmark' ? 1
-        : Cls.signalType === 'fx-pair' ? 1
-        : 2;  // asset-comparison
+    const defaultWidth = Cls.category === 'indicator' ? 1 : Cls.category === 'benchmark' ? 1 : Cls.signalType === 'fx-pair' ? 1 : 2; // asset-comparison
     // Line type: indicator=dotted, benchmark=dashed, comparison=solid, MACD=solid
-    const defaultLineType: 'solid' | 'dashed' | 'dotted' =
-        Cls.signalType === 'macd' ? 'solid'
-        : Cls.category === 'indicator' ? 'dotted'
-        : Cls.category === 'benchmark' ? 'dashed'
-        : 'solid';  // comparison
-    const color = usedColors.length > 0
-        ? pickBestColor(usedColors)
-        : DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length];
+    const defaultLineType: 'solid' | 'dashed' | 'dotted' = Cls.signalType === 'macd' ? 'solid' : Cls.category === 'indicator' ? 'dotted' : Cls.category === 'benchmark' ? 'dashed' : 'solid'; // comparison
+    const color = usedColors.length > 0 ? pickBestColor(usedColors) : DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length];
     const style: SignalStyle = {
         color,
         lineWidth: defaultWidth,
@@ -156,9 +146,9 @@ export function createSignal(
 
     // MACD composite: set signal-line defaults so they match renderMulti() and the UI
     if (Cls.signalType === 'macd') {
-        params._signalColor = style.color;              // same color as primary
-        params._signalLineWidth = 1;                    // thinner than MACD line
-        params._signalLineType = 'dashed';              // dashed to distinguish
+        params._signalColor = style.color; // same color as primary
+        params._signalLineWidth = 1; // thinner than MACD line
+        params._signalLineType = 'dashed'; // dashed to distinguish
         params._signalMarkerStart = null;
         params._signalMarkerEnd = null;
     }
@@ -177,5 +167,3 @@ export function signalFromConfig(config: SignalConfig): ChartSignal | null {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return new (Cls as any)(config.id, config.style, config.params);
 }
-
-

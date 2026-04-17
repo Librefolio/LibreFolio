@@ -31,4 +31,3 @@ export async function resetDatabaseForGallery(): Promise<void> {
     await execAsync('cd .. && ./dev.py test db populate --force --clean --with-static --with-reports');
     console.log('[E2E] Gallery database reset complete');
 }
-

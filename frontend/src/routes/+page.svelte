@@ -51,7 +51,7 @@
         currentView = 'forgot-password';
     }
 
-    function handleGotoLogin(event: CustomEvent<{ message?: string }>) {
+    function handleGotoLogin(event: CustomEvent<{message?: string}>) {
         auth.clearError();
         successMessage = event.detail?.message || '';
         currentView = 'login';
@@ -64,7 +64,7 @@
     }
 </script>
 
-<AnimatedBackground/>
+<AnimatedBackground />
 
 {#if checkingAuth}
     <!-- Loading while checking authentication -->
@@ -75,32 +75,21 @@
     <div class="min-h-screen flex items-center justify-center p-4" data-testid="login-page">
         <!-- Language & Theme Selector (top right) -->
         <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
-            <a
-                    href="https://www.buymeacoffee.com/librefolio"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-amber-600 dark:text-amber-400"
-                    title={$_('help.buyMeACoffee')}
-            >
+            <a href="https://www.buymeacoffee.com/librefolio" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-amber-600 dark:text-amber-400" title={$_('help.buyMeACoffee')}>
                 <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
-                <Coffee size={20} class="flex-shrink-0"/>
+                <Coffee size={20} class="flex-shrink-0" />
             </a>
-            <LanguageSelector/>
-            <ThemeToggle/>
+            <LanguageSelector />
+            <ThemeToggle />
         </div>
 
         <!-- Card Container - Cambio istantaneo senza transizione -->
         {#if currentView === 'login'}
-            <LoginCard
-                    {redirectTo}
-                    {successMessage}
-                    on:gotoRegister={handleGotoRegister}
-                    on:gotoForgot={handleGotoForgot}
-            />
+            <LoginCard {redirectTo} {successMessage} on:gotoRegister={handleGotoRegister} on:gotoForgot={handleGotoForgot} />
         {:else if currentView === 'register'}
-            <RegisterCard on:gotoLogin={handleGotoLogin}/>
+            <RegisterCard on:gotoLogin={handleGotoLogin} />
         {:else if currentView === 'forgot-password'}
-            <ForgotPasswordCard on:gotoLogin={handleGotoLoginSimple}/>
+            <ForgotPasswordCard on:gotoLogin={handleGotoLoginSimple} />
         {/if}
     </div>
 {/if}

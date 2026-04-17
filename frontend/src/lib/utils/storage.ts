@@ -52,4 +52,3 @@ export function setUserStorage(baseKey: string, value: string): void {
         // Ignore storage errors (e.g., quota exceeded in private browsing)
     }
 }
-

@@ -38,11 +38,7 @@
         language?: string;
     }
 
-    let {
-        data = {},
-        height = '320px',
-        language = 'en',
-    }: Props = $props();
+    let {data = {}, height = '320px', language = 'en'}: Props = $props();
 
     // =========================================================================
     // State
@@ -122,7 +118,7 @@
             // Build ISO A3 ↔ GeoJSON name mappings from the enriched GeoJSON
             iso3ToGeoName = {};
             geoNameToIso3 = {};
-            for (const feature of (geoJson.features ?? [])) {
+            for (const feature of geoJson.features ?? []) {
                 const name: string = feature.properties?.name ?? '';
                 const iso3: string = feature.properties?.ISO_A3 ?? '';
                 if (name && iso3) {
@@ -153,14 +149,14 @@
         const isDark = document.documentElement.classList.contains('dark');
 
         // Convert ISO A3 → GeoJSON country name + percentage
-        const chartData: Array<{ name: string; value: number }> = [];
+        const chartData: Array<{name: string; value: number}> = [];
         for (const [code, weight] of Object.entries(data)) {
             if (weight <= 0) continue;
             const countryName = iso3ToGeoName[code] ?? code;
             chartData.push({name: countryName, value: +(weight * 100).toFixed(2)});
         }
 
-        const maxValue = chartData.length > 0 ? Math.max(...chartData.map(d => d.value)) : 100;
+        const maxValue = chartData.length > 0 ? Math.max(...chartData.map((d) => d.value)) : 100;
 
         const option: echarts.EChartsOption = {
             tooltip: {
@@ -188,9 +184,7 @@
                 realtime: false,
                 calculable: false,
                 inRange: {
-                    color: isDark
-                        ? ['#1e3a2f', '#22543d', '#276749', '#2f855a', '#38a169', '#48bb78']
-                        : ['#f0fdf4', '#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'],
+                    color: isDark ? ['#1e3a2f', '#22543d', '#276749', '#2f855a', '#38a169', '#48bb78'] : ['#f0fdf4', '#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'],
                 },
                 textStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11},
                 left: 'left',
@@ -199,24 +193,26 @@
                 itemWidth: 12,
                 itemHeight: 80,
             },
-            series: [{
-                name: 'Distribution',
-                type: 'map',
-                map: 'world',
-                roam: true,
-                scaleLimit: {min: 1, max: 5},
-                emphasis: {
-                    label: {show: true, color: isDark ? '#e2e8f0' : '#1e293b'},
-                    itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
+            series: [
+                {
+                    name: 'Distribution',
+                    type: 'map',
+                    map: 'world',
+                    roam: true,
+                    scaleLimit: {min: 1, max: 5},
+                    emphasis: {
+                        label: {show: true, color: isDark ? '#e2e8f0' : '#1e293b'},
+                        itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
+                    },
+                    itemStyle: {
+                        areaColor: isDark ? '#334155' : '#e2e8f0',
+                        borderColor: isDark ? '#1e293b' : '#cbd5e1',
+                        borderWidth: 0.5,
+                    },
+                    label: {show: false},
+                    data: chartData,
                 },
-                itemStyle: {
-                    areaColor: isDark ? '#334155' : '#e2e8f0',
-                    borderColor: isDark ? '#1e293b' : '#cbd5e1',
-                    borderWidth: 0.5,
-                },
-                label: {show: false},
-                data: chartData,
-            }],
+            ],
         };
 
         chartInstance.setOption(option, true);
@@ -229,10 +225,5 @@
         {mapError}
     </div>
 {:else}
-    <div
-        bind:this={chartContainer}
-        class="w-full"
-        style="height: {height};"
-    ></div>
+    <div bind:this={chartContainer} class="w-full" style="height: {height};"></div>
 {/if}
-

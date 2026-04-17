@@ -51,10 +51,7 @@
 
             try {
                 // Race between auth check and timeout
-                const isAuth = await Promise.race([
-                    auth.checkAuth(),
-                    timeoutPromise
-                ]);
+                const isAuth = await Promise.race([auth.checkAuth(), timeoutPromise]);
 
                 debug.log('AppLayout', 'Auth check result:', isAuth);
 
@@ -64,17 +61,11 @@
                 } else {
                     // Load settings stores after successful auth
                     debug.log('AppLayout', 'Loading user and global settings');
-                    await Promise.all([
-                        userSettings.load(),
-                        globalSettings.load()
-                    ]);
+                    await Promise.all([userSettings.load(), globalSettings.load()]);
 
                     // Preload JS for common routes in background so navigation
                     // is instant — only code is prefetched, data is still lazy.
-                    Promise.all([
-                        '/dashboard', '/fx', '/assets', '/brokers',
-                        '/transactions', '/settings', '/files',
-                    ].map(r => preloadCode(r).catch(() => {}))).catch(() => {});
+                    Promise.all(['/dashboard', '/fx', '/assets', '/brokers', '/transactions', '/settings', '/files'].map((r) => preloadCode(r).catch(() => {}))).catch(() => {});
                 }
             } catch (error) {
                 debug.error('AppLayout', 'Auth check failed:', error);
@@ -102,24 +93,23 @@
 {:else if $isAuthenticated}
     <div class="min-h-screen bg-libre-beige dark:bg-slate-900">
         <!-- Sidebar -->
-        <Sidebar bind:isOpen={sidebarOpen} bind:collapsed={sidebarCollapsed}/>
+        <Sidebar bind:isOpen={sidebarOpen} bind:collapsed={sidebarCollapsed} />
 
         <!-- Main Content Area -->
         <div class="min-h-screen flex flex-col transition-all duration-300 {sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}">
             <!-- Header -->
-            <Header on:toggleSidebar={toggleSidebar}/>
+            <Header on:toggleSidebar={toggleSidebar} />
 
             <!-- Page Content -->
             <main class="flex-1 p-4 lg:p-6">
-                <slot/>
+                <slot />
             </main>
         </div>
     </div>
-    <ToastContainer/>
+    <ToastContainer />
 {:else}
     <!-- Loading while checking auth -->
     <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
         <div class="text-libre-green dark:text-green-400 text-xl">Checking authentication...</div>
     </div>
 {/if}
-

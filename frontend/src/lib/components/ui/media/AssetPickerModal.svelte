@@ -31,7 +31,7 @@
     export let circularPreview: boolean = false;
 
     const dispatch = createEventDispatcher<{
-        select: { url: string };
+        select: {url: string};
         cancel: void;
     }>();
 
@@ -54,9 +54,7 @@
     let lastTabBeforeUpload: TabType = 'existing';
 
     // Computed
-    $: filteredFiles = searchQuery
-        ? existingFiles.filter(f => f.original_name.toLowerCase().includes(searchQuery.toLowerCase()))
-        : existingFiles;
+    $: filteredFiles = searchQuery ? existingFiles.filter((f) => f.original_name.toLowerCase().includes(searchQuery.toLowerCase())) : existingFiles;
 
     $: modalTitle = title || $_('uploads.selectAsset') || 'Select Image';
 
@@ -105,7 +103,7 @@
             let files = (data.items || []) as UploadedFile[];
             // Filter to images if required
             if (filterImages) {
-                files = files.filter(f => f.mime_type?.startsWith('image/'));
+                files = files.filter((f) => f.mime_type?.startsWith('image/'));
             }
             existingFiles = files;
         } catch (e) {
@@ -223,43 +221,31 @@
     }
 </script>
 
-<ModalBase
-        maxWidth="600px"
-        onRequestClose={close}
-        {open}
-        zIndex={50}
->
+<ModalBase maxWidth="600px" onRequestClose={close} {open} zIndex={50}>
     <div aria-modal="true" class="picker-modal-inner" data-testid="asset-picker-modal" role="dialog" tabindex="-1">
         <!-- Header -->
         <div class="picker-header">
             <h2 class="picker-title">{modalTitle}</h2>
             <button class="close-btn" on:click={close} type="button">
-                <X size={20}/>
+                <X size={20} />
             </button>
         </div>
 
         <!-- Tabs -->
         <div class="picker-tabs">
-            <button class="tab-btn" class:active={activeTab === 'existing'} data-testid="asset-picker-existing-tab"
-                    on:click={() => activeTab = 'existing'}
-                    type="button">
-                <FolderOpen size={14}/>
+            <button class="tab-btn" class:active={activeTab === 'existing'} data-testid="asset-picker-existing-tab" on:click={() => (activeTab = 'existing')} type="button">
+                <FolderOpen size={14} />
                 {$_('uploads.existingFiles') || 'Existing'}
             </button>
-            <button class="tab-btn" class:active={activeTab === 'url'} data-testid="asset-picker-url-tab"
-                    on:click={() => activeTab = 'url'}
-                    type="button">
-                <Link size={14}/>
+            <button class="tab-btn" class:active={activeTab === 'url'} data-testid="asset-picker-url-tab" on:click={() => (activeTab = 'url')} type="button">
+                <Link size={14} />
                 {$_('uploads.fromUrl') || 'URL'}
             </button>
-            <button class="tab-btn" class:active={activeTab === 'upload'} data-testid="asset-picker-upload-tab"
-                    on:click={handleUploadClick}
-                    type="button">
-                <Upload size={14}/>
+            <button class="tab-btn" class:active={activeTab === 'upload'} data-testid="asset-picker-upload-tab" on:click={handleUploadClick} type="button">
+                <Upload size={14} />
                 {$_('uploads.upload') || 'Upload'}
             </button>
-            <input accept="image/*" bind:this={uploadInput} class="hidden-input"
-                   on:change={handleFileSelected} type="file"/>
+            <input accept="image/*" bind:this={uploadInput} class="hidden-input" on:change={handleFileSelected} type="file" />
         </div>
 
         <!-- Body -->
@@ -269,11 +255,17 @@
                 <div class="url-section">
                     <label class="url-label" for="asset-url-input">{$_('uploads.imageUrl') || 'Image URL'}</label>
                     <div style="display:flex; gap:0.5rem; align-items:center;">
-                        <input type="url" id="asset-url-input" class="url-input" style="flex:1;" bind:value={urlInput}
-                               placeholder="https://example.com/image.png"/>
+                        <input type="url" id="asset-url-input" class="url-input" style="flex:1;" bind:value={urlInput} placeholder="https://example.com/image.png" />
                         {#if urlInput}
-                            <button type="button" class="btn btn-secondary" style="white-space:nowrap; padding:0.375rem 0.75rem; font-size:0.8125rem; color:#dc2626;" on:click={() => { urlInput = ''; }}>
-                                <X size={14}/>
+                            <button
+                                type="button"
+                                class="btn btn-secondary"
+                                style="white-space:nowrap; padding:0.375rem 0.75rem; font-size:0.8125rem; color:#dc2626;"
+                                on:click={() => {
+                                    urlInput = '';
+                                }}
+                            >
+                                <X size={14} />
                             </button>
                         {/if}
                     </div>
@@ -281,8 +273,7 @@
                     {#if urlInput && urlValid}
                         <div class="url-preview" class:circular={circularPreview}>
                             <div class="url-preview-img-wrapper">
-                                <LazyImage src={urlInput} alt="Preview" placeholder="generic"
-                                           width="100%" height="auto"/>
+                                <LazyImage src={urlInput} alt="Preview" placeholder="generic" width="100%" height="auto" />
                                 {#if circularPreview}
                                     <div class="url-preview-circle-overlay"></div>
                                 {/if}
@@ -290,31 +281,26 @@
                         </div>
                     {/if}
                 </div>
-
             {:else if activeTab === 'existing'}
                 <!-- Existing files browser -->
                 <div class="existing-section">
                     <!-- Toolbar: search + view toggle -->
                     <div class="existing-toolbar">
                         <div class="search-box">
-                            <Search size={14}/>
-                            <input type="text" class="search-input" bind:value={searchQuery}
-                                   placeholder={$_('common.search') || 'Search...'}
-                                   data-testid="asset-picker-search"/>
+                            <Search size={14} />
+                            <input type="text" class="search-input" bind:value={searchQuery} placeholder={$_('common.search') || 'Search...'} data-testid="asset-picker-search" />
                             {#if searchQuery}
-                                <button type="button" class="search-clear" on:click={() => searchQuery = ''}>
-                                    <X size={12}/>
+                                <button type="button" class="search-clear" on:click={() => (searchQuery = '')}>
+                                    <X size={12} />
                                 </button>
                             {/if}
                         </div>
                         <div class="view-toggle">
-                            <button type="button" class="toggle-btn" class:active={existingViewMode === 'grid'}
-                                    on:click={() => existingViewMode = 'grid'}>
-                                <LayoutGrid size={14}/>
+                            <button type="button" class="toggle-btn" class:active={existingViewMode === 'grid'} on:click={() => (existingViewMode = 'grid')}>
+                                <LayoutGrid size={14} />
                             </button>
-                            <button type="button" class="toggle-btn" class:active={existingViewMode === 'list'}
-                                    on:click={() => existingViewMode = 'list'}>
-                                <List size={14}/>
+                            <button type="button" class="toggle-btn" class:active={existingViewMode === 'list'} on:click={() => (existingViewMode = 'list')}>
+                                <List size={14} />
                             </button>
                         </div>
                     </div>
@@ -324,45 +310,31 @@
                         <div class="empty-state">{$_('common.loading') || 'Loading...'}</div>
                     {:else if filteredFiles.length === 0}
                         <div class="empty-state">
-                            {searchQuery
-                                ? ($_('common.noResults') || 'No results')
-                                : ($_('uploads.noFiles') || 'No files')}
+                            {searchQuery ? $_('common.noResults') || 'No results' : $_('uploads.noFiles') || 'No files'}
                         </div>
                     {:else if existingViewMode === 'grid'}
-                        <FileGrid
-                                files={filteredFiles}
-                                mode="select"
-                                cardSize="compact"
-                                showSearch={false}
-                                showActions={false}
-                                selectedFileId={selectedFile?.id || null}
-                                previewSize="120x120"
-                                on:select={(e) => selectExistingFile(e.detail.file)}
-                                on:dblselect={() => confirmSelection()}
-                        />
+                        <FileGrid files={filteredFiles} mode="select" cardSize="compact" showSearch={false} showActions={false} selectedFileId={selectedFile?.id || null} previewSize="120x120" on:select={(e) => selectExistingFile(e.detail.file)} on:dblselect={() => confirmSelection()} />
                     {:else}
                         <!-- List/table view using DataTable -->
                         <div class="list-table-wrapper">
                             <DataTable
-                                    data={filteredFiles}
-                                    columns={listColumns}
-                                    getRowId={(row) => row.id}
-                                    storageKey="asset-picker-list"
-                                    enableSelection={true}
-                                    selectionMode="single"
-                                    selectedRowId={selectedFile?.id || null}
-                                    onRowClick={handleRowClick}
-                                    onRowDoubleClick={handleRowDoubleClick}
-                                    enableActions={false}
-                                    enableSorting={true}
-                                    enableColumnFilters={false}
-                                    enableColumnResize={false}
-                                    enablePagination={false}
-                                    enableColumnVisibility={false}
-                                    emptyMessage={searchQuery
-                                        ? ($_('common.noResults') || 'No results')
-                                        : ($_('uploads.noFiles') || 'No files')}
-                                    isLoading={loadingFiles}
+                                data={filteredFiles}
+                                columns={listColumns}
+                                getRowId={(row) => row.id}
+                                storageKey="asset-picker-list"
+                                enableSelection={true}
+                                selectionMode="single"
+                                selectedRowId={selectedFile?.id || null}
+                                onRowClick={handleRowClick}
+                                onRowDoubleClick={handleRowDoubleClick}
+                                enableActions={false}
+                                enableSorting={true}
+                                enableColumnFilters={false}
+                                enableColumnResize={false}
+                                enablePagination={false}
+                                enableColumnVisibility={false}
+                                emptyMessage={searchQuery ? $_('common.noResults') || 'No results' : $_('uploads.noFiles') || 'No files'}
+                                isLoading={loadingFiles}
                             />
                         </div>
                     {/if}
@@ -375,9 +347,7 @@
             <button class="btn btn-secondary" on:click={close} type="button">
                 {$_('common.cancel') || 'Cancel'}
             </button>
-            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile)}
-                    on:click={confirmSelection}
-                    type="button">
+            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile)} on:click={confirmSelection} type="button">
                 {$_('uploads.useSelected') || 'Use Selected'}
             </button>
         </div>
@@ -816,4 +786,3 @@
         background: #4b5563;
     }
 </style>
-

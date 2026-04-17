@@ -44,13 +44,13 @@ export function parseProviderChain(providerUsed: string | null | undefined): str
 /** Get FX provider icon_url from the FX provider cache (currencyGraphStore). */
 export function getFxProviderIconUrl(code: string): string | null {
     const fxProviders = getCachedFxProviders();
-    return fxProviders.find(p => p.code === code)?.icon_url ?? null;
+    return fxProviders.find((p) => p.code === code)?.icon_url ?? null;
 }
 
 /** Build a single FX provider badge as HTML (icon or 2-char initials). */
 export function fxProviderBadgeHtml(providerCode: string): string {
     const providers = getCachedFxProviders();
-    const info = providers.find(p => p.code === providerCode);
+    const info = providers.find((p) => p.code === providerCode);
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
     if (info?.icon_url) {
         return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${info.icon_url}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
@@ -97,7 +97,7 @@ export async function ensureAssetProvidersCached(): Promise<void> {
         } finally {
             assetProvidersFetched = true;
             assetProvidersFetchPromise = null;
-            assetProvidersVersion.update(v => v + 1);
+            assetProvidersVersion.update((v) => v + 1);
         }
     })();
     return assetProvidersFetchPromise;
@@ -150,10 +150,7 @@ export interface LegDetail {
  * Format per-leg detail from a sync response into a human-readable text string.
  * Uses the provided translation function for UI strings.
  */
-export function formatSyncDetail(
-    r: { detail?: LegDetail[] | null; message?: string | null },
-    tr: (key: string, opts?: Record<string, unknown>) => string,
-): string {
+export function formatSyncDetail(r: {detail?: LegDetail[] | null; message?: string | null}, tr: (key: string, opts?: Record<string, unknown>) => string): string {
     if (!r.detail?.length) return r.message ? '\n' + r.message : '';
     let out = '\n── ' + tr('fx.sync.legBreakdown') + ' ──';
     for (const leg of r.detail) {

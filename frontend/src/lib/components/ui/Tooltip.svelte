@@ -27,14 +27,7 @@
         children?: Snippet;
     }
 
-    let {
-        text = '',
-        html = '',
-        math = false,
-        position = 'top',
-        maxWidth = '400px',
-        children,
-    }: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement = $state<HTMLDivElement | undefined>(undefined);
@@ -157,11 +150,7 @@
 
     /** Escape HTML entities for safe rendering when using plain text */
     function escapeHtml(str: string): string {
-        return str
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     /**
@@ -186,16 +175,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-        bind:this={triggerElement}
-        class="tooltip-wrapper"
-        onclick={toggle}
-        onkeydown={handleKeydown}
-        onmouseenter={show}
-        onmouseleave={hide}
-        role="button"
-        tabindex="0"
->
+<div bind:this={triggerElement} class="tooltip-wrapper" onclick={toggle} onkeydown={handleKeydown} onmouseenter={show} onmouseleave={hide} role="button" tabindex="0">
     {#if children}
         {@render children()}
     {/if}
@@ -203,12 +183,7 @@
 
 {#if visible}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-            bind:this={tooltipElement}
-            class="tooltip-fixed"
-            style="max-width: {maxWidth}; top: {fixedTop}px; left: {fixedLeft}px;"
-            role="tooltip"
-    >
+    <div bind:this={tooltipElement} class="tooltip-fixed" style="max-width: {maxWidth}; top: {fixedTop}px; left: {fixedLeft}px;" role="tooltip">
         {#if math || html}
             {@html renderedContent}
         {:else}
@@ -237,7 +212,9 @@
         color: white;
         background-color: #1f2937;
         border-radius: 0.375rem;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        box-shadow:
+            0 4px 6px -1px rgb(0 0 0 / 0.1),
+            0 2px 4px -2px rgb(0 0 0 / 0.1);
         white-space: pre-line;
         word-wrap: break-word;
         pointer-events: auto;
@@ -248,7 +225,6 @@
         cursor: default;
         user-select: text;
     }
-
 
     /* Dark mode tooltip */
     :global(html.dark) .tooltip-fixed {

@@ -42,7 +42,7 @@
         error = null;
         try {
             const response = await zodiosApi.list_files_api_v1_brokers_import_files_get({
-                queries: {broker_ids: [brokerId]}
+                queries: {broker_ids: [brokerId]},
             });
             // API returns array directly
             files = response as BrimFile[];
@@ -81,7 +81,7 @@
 
     async function handleDelete(fileId: string) {
         // Find file name for confirmation message
-        const file = files.find(f => f.file_id === fileId);
+        const file = files.find((f) => f.file_id === fileId);
         pendingDeleteFileId = fileId;
         pendingDeleteFileName = file?.filename ?? '';
         showDeleteConfirm = true;
@@ -92,7 +92,7 @@
 
         try {
             await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
-                params: {file_id: pendingDeleteFileId}
+                params: {file_id: pendingDeleteFileId},
             });
             await loadFiles();
         } catch (e) {
@@ -117,7 +117,7 @@
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
         });
     }
 
@@ -145,33 +145,21 @@
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center space-x-2 text-gray-700">
-            <FileUp size={20}/>
+            <FileUp size={20} />
             <h2 class="font-semibold">{$_('brokers.importFiles')}</h2>
         </div>
         <div class="flex items-center space-x-2">
-            <button
-                    class="p-1.5 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded transition-colors disabled:opacity-50"
-                    disabled={loading}
-                    onclick={loadFiles}
-                    title="Refresh"
-            >
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={16}/>
+            <button class="p-1.5 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded transition-colors disabled:opacity-50" disabled={loading} onclick={loadFiles} title="Refresh">
+                <RefreshCw class={loading ? 'animate-spin' : ''} size={16} />
             </button>
             <label class="cursor-pointer">
-                <input
-                        accept=".csv,.xlsx,.xls"
-                        bind:this={fileInputRef}
-                        class="hidden"
-                        disabled={uploading}
-                        onchange={handleUpload}
-                        type="file"
-                />
+                <input accept=".csv,.xlsx,.xls" bind:this={fileInputRef} class="hidden" disabled={uploading} onchange={handleUpload} type="file" />
                 <span class="flex items-center space-x-1 px-3 py-1.5 bg-libre-green text-white text-sm rounded-lg hover:bg-libre-green/90 transition-colors {uploading ? 'opacity-50 cursor-wait' : ''}">
                     {#if uploading}
-                        <RefreshCw size={14} class="animate-spin"/>
+                        <RefreshCw size={14} class="animate-spin" />
                         <span>{$_('common.uploading')}</span>
                     {:else}
-                        <FileUp size={14}/>
+                        <FileUp size={14} />
                         <span>{$_('uploads.upload')}</span>
                     {/if}
                 </span>
@@ -179,15 +167,15 @@
         </div>
     </div>
 
-    <InfoBanner class="mb-3" dismissible message={error} ondismiss={() => error = ''} variant="error"/>
+    <InfoBanner class="mb-3" dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
     {#if loading && files.length === 0}
         <div class="flex items-center justify-center py-8 text-gray-400">
-            <RefreshCw size={24} class="animate-spin"/>
+            <RefreshCw size={24} class="animate-spin" />
         </div>
     {:else if files.length === 0}
         <div class="text-center py-8">
-            <FileText size={32} class="mx-auto text-gray-300 mb-2"/>
+            <FileText size={32} class="mx-auto text-gray-300 mb-2" />
             <p class="text-gray-400 text-sm">{$_('brokers.noImportFiles')}</p>
             <p class="text-gray-400 text-xs mt-1">{$_('brokers.uploadHint')}</p>
         </div>
@@ -196,7 +184,7 @@
             {#each files as file}
                 <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group">
                     <div class="flex items-center space-x-3 min-w-0 flex-1">
-                        <FileText size={18} class="text-gray-400 flex-shrink-0"/>
+                        <FileText size={18} class="text-gray-400 flex-shrink-0" />
                         <div class="min-w-0">
                             <p class="text-sm font-medium text-gray-700 truncate">{file.filename}</p>
                             <div class="flex items-center space-x-2 text-xs text-gray-500">
@@ -209,20 +197,13 @@
                             </div>
                         </div>
                     </div>
-                    <button
-                            onclick={() => handleDelete(file.file_id)}
-                            class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                            title={$_('common.delete')}
-                    >
-                        <Trash2 size={14}/>
+                    <button onclick={() => handleDelete(file.file_id)} class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100" title={$_('common.delete')}>
+                        <Trash2 size={14} />
                     </button>
                 </div>
             {/each}
         </div>
-        <a
-                href="/files?tab=brim&broker={brokerId}"
-                class="block mt-3 text-center text-sm text-libre-green hover:underline"
-        >
+        <a href="/files?tab=brim&broker={brokerId}" class="block mt-3 text-center text-sm text-libre-green hover:underline">
             {$_('brokers.manageFiles')} →
         </a>
     {/if}
@@ -230,14 +211,13 @@
 
 <!-- Delete Confirmation Modal -->
 <ConfirmModal
-        confirmText={$_('common.delete')}
-        danger={true}
-        items={pendingDeleteFileName ? [pendingDeleteFileName] : undefined}
-        itemsLabel={$_('uploads.filesToDelete')}
-        message={$_('uploads.deleteConfirm')}
-        onCancel={cancelDelete}
-        onConfirm={confirmDelete}
-        open={showDeleteConfirm}
-        title={$_('common.confirmDelete')}
+    confirmText={$_('common.delete')}
+    danger={true}
+    items={pendingDeleteFileName ? [pendingDeleteFileName] : undefined}
+    itemsLabel={$_('uploads.filesToDelete')}
+    message={$_('uploads.deleteConfirm')}
+    onCancel={cancelDelete}
+    onConfirm={confirmDelete}
+    open={showDeleteConfirm}
+    title={$_('common.confirmDelete')}
 />
-

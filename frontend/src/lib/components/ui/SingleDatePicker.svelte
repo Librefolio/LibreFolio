@@ -15,21 +15,25 @@
     // i18n
     // =========================================================================
 
-    const WEEKDAY_KEYS = [
-        'datePicker.weekdays.mo', 'datePicker.weekdays.tu', 'datePicker.weekdays.we',
-        'datePicker.weekdays.th', 'datePicker.weekdays.fr', 'datePicker.weekdays.sa',
-        'datePicker.weekdays.su',
-    ];
+    const WEEKDAY_KEYS = ['datePicker.weekdays.mo', 'datePicker.weekdays.tu', 'datePicker.weekdays.we', 'datePicker.weekdays.th', 'datePicker.weekdays.fr', 'datePicker.weekdays.sa', 'datePicker.weekdays.su'];
 
     const MONTH_KEYS = [
-        'datePicker.months.january', 'datePicker.months.february', 'datePicker.months.march',
-        'datePicker.months.april', 'datePicker.months.may', 'datePicker.months.june',
-        'datePicker.months.july', 'datePicker.months.august', 'datePicker.months.september',
-        'datePicker.months.october', 'datePicker.months.november', 'datePicker.months.december',
+        'datePicker.months.january',
+        'datePicker.months.february',
+        'datePicker.months.march',
+        'datePicker.months.april',
+        'datePicker.months.may',
+        'datePicker.months.june',
+        'datePicker.months.july',
+        'datePicker.months.august',
+        'datePicker.months.september',
+        'datePicker.months.october',
+        'datePicker.months.november',
+        'datePicker.months.december',
     ];
 
-    let weekdayLabels: string[] = $derived(WEEKDAY_KEYS.map(k => $_(k)));
-    let monthLabels: string[] = $derived(MONTH_KEYS.map(k => $_(k)));
+    let weekdayLabels: string[] = $derived(WEEKDAY_KEYS.map((k) => $_(k)));
+    let monthLabels: string[] = $derived(MONTH_KEYS.map((k) => $_(k)));
 
     // =========================================================================
     // Props
@@ -50,14 +54,7 @@
         allowFuture?: boolean;
     }
 
-    let {
-        value = $bindable(''),
-        label = 'Date',
-        compact = false,
-        onchange,
-        disabledDates,
-        allowFuture = false,
-    }: Props = $props();
+    let {value = $bindable(''), label = 'Date', compact = false, onchange, disabledDates, allowFuture = false}: Props = $props();
 
     // =========================================================================
     // State
@@ -187,38 +184,26 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<svelte:window onkeydown={handleKeydown}/>
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="relative sdp-trigger inline-block">
     <button
-            bind:this={triggerEl}
-            class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
-            onclick={(e) => { e.stopPropagation(); openCalendar(); }}
-            type="button"
+        bind:this={triggerEl}
+        class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
+        onclick={(e) => {
+            e.stopPropagation();
+            openCalendar();
+        }}
+        type="button"
     >
-        <Calendar class="text-libre-green flex-shrink-0" size={compact ? 12 : 14}/>
+        <Calendar class="text-libre-green flex-shrink-0" size={compact ? 12 : 14} />
         {#if label}<span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{label}</span>{/if}
         <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(value)}</span>
     </button>
 
     {#if calendarOpen}
         <div class="sdp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 w-[280px]" style={popoverStyle}>
-            <CalendarMonth
-                    year={calYear}
-                    month={calMonth}
-                    {weekdayLabels}
-                    {monthLabels}
-                    onDayClick={handleDayClick}
-                    onPrevMonth={prevMonth}
-                    onNextMonth={nextMonth}
-                    onSetMonth={setMonth}
-                    onSetYear={setYear}
-                    onGoToToday={goToToday}
-                    highlights={{ selected: value }}
-                    {disabledDates}
-                    {allowFuture}
-            />
+            <CalendarMonth year={calYear} month={calMonth} {weekdayLabels} {monthLabels} onDayClick={handleDayClick} onPrevMonth={prevMonth} onNextMonth={nextMonth} onSetMonth={setMonth} onSetYear={setYear} onGoToToday={goToToday} highlights={{selected: value}} {disabledDates} {allowFuture} />
         </div>
     {/if}
 </div>
-

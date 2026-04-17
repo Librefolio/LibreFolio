@@ -23,11 +23,7 @@
 </script>
 
 <Tooltip {math} maxWidth="320px" position="top" text={label}>
-    <button
-            class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors"
-            onclick={() => window.open(getDocsUrl(), '_blank')}
-            type="button"
-    >
-        <HelpCircle {size}/>
+    <button class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors" onclick={() => window.open(getDocsUrl(), '_blank')} type="button">
+        <HelpCircle {size} />
     </button>
 </Tooltip>

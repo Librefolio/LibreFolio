@@ -17,12 +17,7 @@
         onchange?: (value: string) => void;
     }
 
-    let {
-        value = $bindable(''),
-        disabled = false,
-        placeholder = '',
-        onchange
-    }: Props = $props();
+    let {value = $bindable(''), disabled = false, placeholder = '', onchange}: Props = $props();
 
     let plugins = $state<BrimPlugin[]>([]);
     let loading = $state(true);
@@ -30,17 +25,17 @@
 
     // Convert plugins to SelectOption format with icon_url in data
     let pluginOptions = $derived<SelectOption[]>(
-        plugins.map(p => ({
+        plugins.map((p) => ({
             value: p.code,
             label: p.name,
             searchText: p.description,
             icon: p.icon_url || undefined,
-            data: p
-        }))
+            data: p,
+        })),
     );
 
     // Get selected plugin info
-    let selectedPlugin = $derived(plugins.find(p => p.code === value));
+    let selectedPlugin = $derived(plugins.find((p) => p.code === value));
 
     // Load plugins on component initialization
     $effect(() => {
@@ -69,23 +64,11 @@
 </script>
 
 <div class="import-plugin-select" data-testid="import-plugin-select">
-    <SearchSelect
-            bind:value
-            {disabled}
-            inlineSearch={true}
-            {loading}
-            onchange={handleChange}
-            options={pluginOptions}
-            placeholder={placeholder || $_('brokers.selectPlugin')}
-    >
+    <SearchSelect bind:value {disabled} inlineSearch={true} {loading} onchange={handleChange} options={pluginOptions} placeholder={placeholder || $_('brokers.selectPlugin')}>
         {#snippet item(option)}
             {@const plugin = option.data as BrimPlugin | undefined}
             <div class="flex items-center gap-2">
-                <BrokerIcon
-                        iconUrl={option.icon}
-                        altText={option.label}
-                        size="sm"
-                />
+                <BrokerIcon iconUrl={option.icon} altText={option.label} size="sm" />
                 <div class="min-w-0 flex-1">
                     <div class="text-sm font-medium">{option.label}</div>
                     {#if plugin?.description}
@@ -96,11 +79,7 @@
         {/snippet}
         {#snippet selectedItem(option)}
             <div class="flex items-center gap-2">
-                <BrokerIcon
-                        iconUrl={option.icon}
-                        altText={option.label}
-                        size="sm"
-                />
+                <BrokerIcon iconUrl={option.icon} altText={option.label} size="sm" />
                 <span class="truncate">{option.label}</span>
             </div>
         {/snippet}
@@ -114,4 +93,3 @@
         <p class="text-xs text-gray-500 mt-1">{selectedPlugin.description}</p>
     {/if}
 </div>
-

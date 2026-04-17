@@ -16,32 +16,23 @@
 
     export let maxSizeMB: number = 10;
     export let multiple: boolean = true;
-    export let accept: string = '';  // e.g. ".csv,.xlsx,.xls" or "image/*"
+    export let accept: string = ''; // e.g. ".csv,.xlsx,.xls" or "image/*"
 
     // Blocked extensions (same as backend)
-    const BLOCKED_EXTENSIONS = new Set([
-        '.exe', '.dll', '.so', '.dylib',
-        '.bat', '.cmd', '.ps1', '.vbs', '.vbe',
-        '.sh', '.bash', '.csh', '.zsh',
-        '.py', '.pyc', '.pyo',
-        '.pl', '.pm', '.rb',
-        '.php', '.php3', '.php4', '.php5', '.phtml',
-        '.js', '.mjs', '.cjs',
-        '.jar', '.class', '.com', '.scr', '.pif'
-    ]);
+    const BLOCKED_EXTENSIONS = new Set(['.exe', '.dll', '.so', '.dylib', '.bat', '.cmd', '.ps1', '.vbs', '.vbe', '.sh', '.bash', '.csh', '.zsh', '.py', '.pyc', '.pyo', '.pl', '.pm', '.rb', '.php', '.php3', '.php4', '.php5', '.phtml', '.js', '.mjs', '.cjs', '.jar', '.class', '.com', '.scr', '.pif']);
 
     const dispatch = createEventDispatcher<{
-        upload: { files: File[] };
-        error: { message: string };
-        change: { files: File[] };  // Emitted when files are selected/changed
-        editImage: { file: File; index: number };  // Emitted when user wants to edit an image
-        editFile: { file: File; index: number };   // Emitted when user wants to edit a non-image file
+        upload: {files: File[]};
+        error: {message: string};
+        change: {files: File[]}; // Emitted when files are selected/changed
+        editImage: {file: File; index: number}; // Emitted when user wants to edit an image
+        editFile: {file: File; index: number}; // Emitted when user wants to edit a non-image file
     }>();
 
     let isDragging = false;
     let selectedFiles: File[] = [];
-    let originalFiles: Record<number, File> = {};  // Store original files for restore (object for reactivity)
-    let editedIndices: number[] = [];  // Track which files have been edited (array for reactivity)
+    let originalFiles: Record<number, File> = {}; // Store original files for restore (object for reactivity)
+    let editedIndices: number[] = []; // Track which files have been edited (array for reactivity)
     let fileInput: HTMLInputElement;
     let errors: string[] = [];
 
@@ -139,7 +130,6 @@
         }
     }
 
-
     function openFileBrowser() {
         fileInput?.click();
     }
@@ -165,11 +155,7 @@
             }
 
             // Replace file in selectedFiles
-            selectedFiles = [
-                ...selectedFiles.slice(0, index),
-                newFile,
-                ...selectedFiles.slice(index + 1)
-            ];
+            selectedFiles = [...selectedFiles.slice(0, index), newFile, ...selectedFiles.slice(index + 1)];
             dispatch('change', {files: selectedFiles});
         }
     }
@@ -178,16 +164,12 @@
     function restoreFile(index: number) {
         const original = originalFiles[index];
         if (original) {
-            selectedFiles = [
-                ...selectedFiles.slice(0, index),
-                original,
-                ...selectedFiles.slice(index + 1)
-            ];
+            selectedFiles = [...selectedFiles.slice(0, index), original, ...selectedFiles.slice(index + 1)];
             // Remove from originalFiles
             const {[index]: _, ...rest} = originalFiles;
             originalFiles = rest;
             // Remove from editedIndices
-            editedIndices = editedIndices.filter(i => i !== index);
+            editedIndices = editedIndices.filter((i) => i !== index);
             dispatch('change', {files: selectedFiles});
         }
     }
@@ -202,85 +184,55 @@
     <!-- Drop zone -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-            class="drop-zone"
-            class:dragging={isDragging}
-            class:has-files={selectedFiles.length > 0}
-            data-testid="file-drop-zone"
-            on:click={openFileBrowser}
-            on:dragleave={handleDragLeave}
-            on:dragover={handleDragOver}
-            on:drop={handleDrop}
-            on:keydown={(e) => e.key === 'Enter' && openFileBrowser()}
-            role="button"
-            tabindex="0"
+        class="drop-zone"
+        class:dragging={isDragging}
+        class:has-files={selectedFiles.length > 0}
+        data-testid="file-drop-zone"
+        on:click={openFileBrowser}
+        on:dragleave={handleDragLeave}
+        on:dragover={handleDragOver}
+        on:drop={handleDrop}
+        on:keydown={(e) => e.key === 'Enter' && openFileBrowser()}
+        role="button"
+        tabindex="0"
     >
-        <input
-                accept={accept || undefined}
-                bind:this={fileInput}
-                data-testid="file-input"
-                hidden
-                {multiple}
-                on:change={handleFileSelect}
-                type="file"
-        />
+        <input accept={accept || undefined} bind:this={fileInput} data-testid="file-input" hidden {multiple} on:change={handleFileSelect} type="file" />
 
         {#if selectedFiles.length === 0}
-            <Upload size={32} class="upload-icon"/>
+            <Upload size={32} class="upload-icon" />
             <p class="drop-text">{$t('uploads.dropOrClick')}</p>
             <p class="drop-hint">
                 {$t('common.max') || 'Max'}: {maxSizeMB}MB
-                {#if multiple} • {$t('common.multipleFiles')}{/if}
+                {#if multiple}
+                    • {$t('common.multipleFiles')}{/if}
             </p>
         {:else}
             <div class="selected-files">
                 {#each selectedFiles as file, index (file.name + index)}
                     <div class="file-item" class:edited={editedIndices.includes(index)}>
                         {#if isImageFile(file)}
-                            <ImageIcon size={16} class="file-icon image"/>
+                            <ImageIcon size={16} class="file-icon image" />
                         {:else}
-                            <FileIcon size={16} class="file-icon"/>
+                            <FileIcon size={16} class="file-icon" />
                         {/if}
                         <span class="file-name">{file.name}</span>
                         {#if editedIndices.includes(index)}
-                            <button
-                                    type="button"
-                                    class="restore-btn"
-                                    on:click|stopPropagation={() => restoreFile(index)}
-                                    title={$t('common.restore') || 'Restore original'}
-                                    data-testid="file-restore-btn"
-                            >
-                                <RefreshCw size={14}/>
+                            <button type="button" class="restore-btn" on:click|stopPropagation={() => restoreFile(index)} title={$t('common.restore') || 'Restore original'} data-testid="file-restore-btn">
+                                <RefreshCw size={14} />
                             </button>
                         {/if}
                         {#if isImageFile(file)}
-                            <button
-                                    type="button"
-                                    class="edit-btn"
-                                    on:click|stopPropagation={() => editImage(file, index)}
-                                    title={$t('common.edit') || 'Edit'}
-                                    data-testid="file-edit-btn"
-                            >
-                                <Pencil size={14}/>
+                            <button type="button" class="edit-btn" on:click|stopPropagation={() => editImage(file, index)} title={$t('common.edit') || 'Edit'} data-testid="file-edit-btn">
+                                <Pencil size={14} />
                             </button>
                         {:else}
-                            <button
-                                    type="button"
-                                    class="edit-btn"
-                                    on:click|stopPropagation={() => editFile(file, index)}
-                                    title={$t('uploads.rename') || 'Rename'}
-                                    data-testid="file-edit-btn"
-                            >
-                                <Pencil size={14}/>
+                            <button type="button" class="edit-btn" on:click|stopPropagation={() => editFile(file, index)} title={$t('uploads.rename') || 'Rename'} data-testid="file-edit-btn">
+                                <Pencil size={14} />
                             </button>
                         {/if}
                         <span class="file-size">{formatBytes(file.size)}</span>
-                        <button
-                                type="button"
-                                class="remove-btn"
-                                on:click|stopPropagation={() => removeFile(index)}
-                                title={$t('common.remove') || 'Remove'}
-                        >
-                            <X size={14}/>
+                        <button type="button" class="remove-btn" on:click|stopPropagation={() => removeFile(index)} title={$t('common.remove') || 'Remove'}>
+                            <X size={14} />
                         </button>
                     </div>
                 {/each}
@@ -291,7 +243,7 @@
     <!-- Errors -->
     {#if errors.length > 0}
         <div class="errors">
-            <AlertTriangle size={16}/>
+            <AlertTriangle size={16} />
             <div class="error-list">
                 {#each errors as error}
                     <p>{error}</p>
@@ -307,7 +259,7 @@
                 {$t('common.clear') || 'Clear'}
             </button>
             <button type="button" class="btn btn-primary" on:click={uploadFiles} data-testid="file-upload-submit">
-                <Upload size={16}/>
+                <Upload size={16} />
                 {$t('uploads.upload')} ({selectedFiles.length})
             </button>
         </div>

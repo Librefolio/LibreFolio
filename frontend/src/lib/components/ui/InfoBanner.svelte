@@ -32,20 +32,15 @@
         children?: Snippet;
     }
 
-    let {
-        variant = 'info',
-        showIcon = true,
-        message = undefined,
-        dismissible = false,
-        ondismiss,
-        class: extraClass = '',
-        children,
-    }: Props = $props();
+    let {variant = 'info', showIcon = true, message = undefined, dismissible = false, ondismiss, class: extraClass = '', children}: Props = $props();
 
-    const variantStyles: Record<Variant, {
-        container: string;
-        icon: string;
-    }> = {
+    const variantStyles: Record<
+        Variant,
+        {
+            container: string;
+            icon: string;
+        }
+    > = {
         warning: {
             container: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-200/60',
             icon: 'text-amber-500 dark:text-amber-500/50',
@@ -80,7 +75,7 @@
 {#if hasContent}
     <div class="flex items-start gap-2 p-3 rounded-lg border text-xs {styles.container} {extraClass}" role={variant === 'error' ? 'alert' : 'status'}>
         {#if showIcon}
-            <IconComponent size={16} class="{styles.icon} mt-0.5 shrink-0"/>
+            <IconComponent size={16} class="{styles.icon} mt-0.5 shrink-0" />
         {/if}
         <div class="flex-1 min-w-0">
             {#if message}
@@ -90,15 +85,9 @@
             {/if}
         </div>
         {#if dismissible && ondismiss}
-            <button
-                    type="button"
-                    class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity"
-                    onclick={ondismiss}
-                    aria-label="Dismiss"
-            >
-                <X size={14}/>
+            <button type="button" class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity" onclick={ondismiss} aria-label="Dismiss">
+                <X size={14} />
             </button>
         {/if}
     </div>
 {/if}
-

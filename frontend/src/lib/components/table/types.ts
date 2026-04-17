@@ -144,7 +144,7 @@ export interface EditableSelectCell {
     /** Current selected value */
     value: string;
     /** Available options */
-    options: Array<{ value: string; label: string }>;
+    options: Array<{value: string; label: string}>;
     /** Callback when selection changes */
     onchange: (newValue: string) => void;
 }
@@ -164,20 +164,7 @@ export interface EditableCheckboxCell {
 /**
  * All possible cell content types
  */
-export type CellContent =
-    | SimpleCellContent
-    | IconTextCell
-    | BadgeCell
-    | DateCell
-    | SizeCell
-    | LinkCell
-    | CustomCell
-    | ImageCell
-    | EditableNumberCell
-    | EditableTextCell
-    | HtmlCell
-    | EditableSelectCell
-    | EditableCheckboxCell;
+export type CellContent = SimpleCellContent | IconTextCell | BadgeCell | DateCell | SizeCell | LinkCell | CustomCell | ImageCell | EditableNumberCell | EditableTextCell | HtmlCell | EditableSelectCell | EditableCheckboxCell;
 
 // ============ Column Definition Types ============
 

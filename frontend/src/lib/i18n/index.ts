@@ -22,7 +22,7 @@ register('es', () => import('./es.json'));
 
 // Supported locales
 export const SUPPORTED_LOCALES = ['en', 'it', 'fr', 'es'] as const;
-export type SupportedLocale = typeof SUPPORTED_LOCALES[number];
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 // Default locale
 export const DEFAULT_LOCALE: SupportedLocale = 'en';
@@ -32,7 +32,7 @@ export const LOCALE_NAMES: Record<SupportedLocale, string> = {
     en: 'English',
     it: 'Italiano',
     fr: 'Français',
-    es: 'Español'
+    es: 'Español',
 };
 
 // Locale flags (emoji)
@@ -40,7 +40,7 @@ export const LOCALE_FLAGS: Record<SupportedLocale, string> = {
     en: '🇬🇧',
     it: '🇮🇹',
     fr: '🇫🇷',
-    es: '🇪🇸'
+    es: '🇪🇸',
 };
 
 /**
@@ -53,10 +53,10 @@ export interface LanguageOption {
     name: string;
 }
 
-export const LANGUAGE_OPTIONS: LanguageOption[] = SUPPORTED_LOCALES.map(code => ({
+export const LANGUAGE_OPTIONS: LanguageOption[] = SUPPORTED_LOCALES.map((code) => ({
     code,
     flag: LOCALE_FLAGS[code],
-    name: LOCALE_NAMES[code]
+    name: LOCALE_NAMES[code],
 }));
 
 /**
@@ -105,12 +105,4 @@ export function saveLocalePreference(locale: SupportedLocale) {
 }
 
 // Re-export commonly used functions from svelte-i18n
-export {
-    locale,
-    t,
-    _,
-    date,
-    time,
-    number,
-    isLoading as i18nLoading
-} from 'svelte-i18n';
+export {locale, t, _, date, time, number, isLoading as i18nLoading} from 'svelte-i18n';

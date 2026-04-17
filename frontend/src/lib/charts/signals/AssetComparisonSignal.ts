@@ -38,7 +38,7 @@ export class AssetComparisonSignal extends ChartSignal {
         if (!resolvedData?.length || !baseData.length) return [];
 
         // Build date→value lookup, then align to base chart's date axis
-        const lookup = new Map(resolvedData.map(d => [d.date, d.value]));
+        const lookup = new Map(resolvedData.map((d) => [d.date, d.value]));
         const points: LineDataPoint[] = [];
         for (const bd of baseData) {
             const val = lookup.get(bd.date);
@@ -64,9 +64,9 @@ export class AssetComparisonSignal extends ChartSignal {
 
         let data = absData;
         if (viewMode === 'percentage' && absData.length > 0) {
-            const p0 = absData[0].value;   // OWN first value, not base chart's
+            const p0 = absData[0].value; // OWN first value, not base chart's
             if (p0 !== 0) {
-                data = absData.map(d => ({
+                data = absData.map((d) => ({
                     ...d,
                     value: ((d.value - p0) / p0) * 100,
                 }));
@@ -76,9 +76,9 @@ export class AssetComparisonSignal extends ChartSignal {
         // Determine effective currency: if conversion happened → target currency,
         // otherwise → asset's native currency
         const resolvedData = this.params._resolvedData as LineDataPoint[] | undefined;
-        const hasOriginals = resolvedData?.some(d => d.originalValue !== undefined) ?? false;
+        const hasOriginals = resolvedData?.some((d) => d.originalValue !== undefined) ?? false;
         const nativeCurrency = (this.params._assetCurrency as string | undefined) ?? '';
-        const targetCurrency = (this.params._targetCurrency as string | undefined);
+        const targetCurrency = this.params._targetCurrency as string | undefined;
         const currency = hasOriginals && targetCurrency ? targetCurrency : nativeCurrency;
         const currencyFlag = currency ? getCurrencyInfo(currency).flag_emoji : '';
 
@@ -117,10 +117,10 @@ export class AssetComparisonSignal extends ChartSignal {
         // Ghost: when original values are present (FX conversion active)
         const resolvedData = this.params._resolvedData as LineDataPoint[] | undefined;
         if (resolvedData?.length) {
-            const hasOriginals = resolvedData.some(d => d.originalValue !== undefined);
+            const hasOriginals = resolvedData.some((d) => d.originalValue !== undefined);
             if (hasOriginals) {
                 // Build aligned original points using the same date alignment as computePoints
-                const lookup = new Map(resolvedData.map(d => [d.date, d]));
+                const lookup = new Map(resolvedData.map((d) => [d.date, d]));
                 const origPoints: LineDataPoint[] = [];
                 for (const bd of baseData) {
                     const rd = lookup.get(bd.date);
@@ -134,19 +134,15 @@ export class AssetComparisonSignal extends ChartSignal {
                     if (viewMode === 'percentage') {
                         // Normalize to own p0
                         const origP0 = origPoints[0].value;
-                        ghostData = origP0 !== 0
-                            ? origPoints.map(d => ({...d, value: ((d.value - origP0) / origP0) * 100}))
-                            : origPoints;
+                        ghostData = origP0 !== 0 ? origPoints.map((d) => ({...d, value: ((d.value - origP0) / origP0) * 100})) : origPoints;
                     } else {
                         // Abs mode: raw original values
                         ghostData = origPoints;
                     }
 
-                    const origCurrency = resolvedData.find(d => d.originalCurrency)?.originalCurrency ?? '';
-                    const origFlag = resolvedData.find(d => (d as any).originalCurrencyFlag)?.originalCurrencyFlag ?? '';
-                    const ghostLabelText = origFlag
-                        ? `💱 ${this.getLabel()} (${origFlag} ${origCurrency})`
-                        : `💱 ${this.getLabel()} (${origCurrency})`;
+                    const origCurrency = resolvedData.find((d) => d.originalCurrency)?.originalCurrency ?? '';
+                    const origFlag = resolvedData.find((d) => (d as any).originalCurrencyFlag)?.originalCurrencyFlag ?? '';
+                    const ghostLabelText = origFlag ? `💱 ${this.getLabel()} (${origFlag} ${origCurrency})` : `💱 ${this.getLabel()} (${origCurrency})`;
                     results.push({
                         id: `${this.id}__ghost`,
                         label: ghostLabelText,
@@ -176,4 +172,3 @@ export class AssetComparisonSignal extends ChartSignal {
         return 'Asset';
     }
 }
-

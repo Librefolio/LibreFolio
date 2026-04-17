@@ -37,10 +37,10 @@
     export let previewSize: string = '240x240';
 
     const dispatch = createEventDispatcher<{
-        select: { file: UploadedFile };
-        dblselect: { file: UploadedFile };
-        delete: { id: string };
-        copyLink: { file: UploadedFile };
+        select: {file: UploadedFile};
+        dblselect: {file: UploadedFile};
+        delete: {id: string};
+        copyLink: {file: UploadedFile};
     }>();
 
     // Internal state
@@ -48,9 +48,7 @@
     let copiedFileId: string | null = null;
 
     // Filtered files
-    $: filteredFiles = searchQuery
-        ? files.filter(f => f.original_name.toLowerCase().includes(searchQuery.toLowerCase()))
-        : files;
+    $: filteredFiles = searchQuery ? files.filter((f) => f.original_name.toLowerCase().includes(searchQuery.toLowerCase())) : files;
 
     // Helpers
     function isImage(contentType: string): boolean {
@@ -70,7 +68,7 @@
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
         });
     }
 
@@ -107,7 +105,8 @@
             setTimeout(() => {
                 copiedFileId = null;
             }, 2000);
-        } catch { /* ignore */
+        } catch {
+            /* ignore */
         }
     }
 
@@ -119,16 +118,11 @@
 <!-- Search bar -->
 {#if showSearch}
     <div class="grid-search">
-        <Search size={16} class="grid-search-icon"/>
-        <input
-                type="text"
-                class="grid-search-input"
-                placeholder={$t('common.search') || 'Search...'}
-                bind:value={searchQuery}
-        />
+        <Search size={16} class="grid-search-icon" />
+        <input type="text" class="grid-search-input" placeholder={$t('common.search') || 'Search...'} bind:value={searchQuery} />
         {#if searchQuery}
-            <button class="grid-search-clear" on:click={() => searchQuery = ''}>
-                <X size={14}/>
+            <button class="grid-search-clear" on:click={() => (searchQuery = '')}>
+                <X size={14} />
             </button>
         {/if}
     </div>
@@ -137,8 +131,8 @@
 <!-- Empty state -->
 {#if filteredFiles.length === 0}
     <div class="empty-state">
-        <Search size={32}/>
-        <p>{searchQuery ? ($t('common.noResults') || 'No results') : ($t('uploads.noFiles') || 'No files')}</p>
+        <Search size={32} />
+        <p>{searchQuery ? $t('common.noResults') || 'No results' : $t('uploads.noFiles') || 'No files'}</p>
     </div>
 {:else}
     <!-- Grid -->
@@ -146,31 +140,19 @@
         {#each filteredFiles as file}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="file-card"
-                 class:selectable={mode === 'select'}
-                 class:selected={selectedFileId === file.id}
-                 on:click={() => handleCardClick(file)}
-                 on:dblclick={() => handleCardDblClick(file)}
-            >
+            <div class="file-card" class:selectable={mode === 'select'} class:selected={selectedFileId === file.id} on:click={() => handleCardClick(file)} on:dblclick={() => handleCardDblClick(file)}>
                 <div class="file-preview" class:compact={cardSize === 'compact'}>
                     {#if isImage(file.mime_type)}
-                        <LazyImage
-                                src={getPreviewUrl(file, cardSize === 'compact' ? '120x120' : previewSize)}
-                                alt={file.original_name}
-                                placeholder="generic"
-                                width="100%"
-                                height={cardSize === 'compact' ? '80px' : '120px'}
-                        />
+                        <LazyImage src={getPreviewUrl(file, cardSize === 'compact' ? '120x120' : previewSize)} alt={file.original_name} placeholder="generic" width="100%" height={cardSize === 'compact' ? '80px' : '120px'} />
                     {:else}
                         <div class="file-icon-wrapper">
-                            <svelte:component this={getFileIcon(file.mime_type, file.original_name)}
-                                              size={cardSize === 'compact' ? 24 : 32}/>
+                            <svelte:component this={getFileIcon(file.mime_type, file.original_name)} size={cardSize === 'compact' ? 24 : 32} />
                         </div>
                     {/if}
                     <!-- Selected badge (select mode only) -->
                     {#if mode === 'select' && selectedFileId === file.id}
                         <div class="selected-badge">
-                            <Check size={14}/>
+                            <Check size={14} />
                         </div>
                     {/if}
                 </div>
@@ -183,38 +165,25 @@
                 <!-- Meta -->
                 <div class="card-meta" class:compact={cardSize === 'compact'}>
                     {formatBytes(file.size_bytes)}
-                    {#if mode === 'browse'} • {formatDate(file.uploaded_at)}{/if}
+                    {#if mode === 'browse'}
+                        • {formatDate(file.uploaded_at)}{/if}
                 </div>
 
                 <!-- Actions (browse mode only) -->
                 {#if showActions && mode === 'browse'}
                     <div class="card-actions">
-                        <a
-                                href={`${file.url}?download=true`}
-                                download={file.original_name}
-                                class="action-btn"
-                                title={$t('uploads.download') || 'Download'}
-                                on:click|stopPropagation
-                        >
-                            <Download size={14}/>
+                        <a href={`${file.url}?download=true`} download={file.original_name} class="action-btn" title={$t('uploads.download') || 'Download'} on:click|stopPropagation>
+                            <Download size={14} />
                         </a>
-                        <button
-                                class="action-btn"
-                                on:click|stopPropagation={() => handleCopyLink(file)}
-                                title={$t('uploads.copyLink') || 'Copy Link'}
-                        >
+                        <button class="action-btn" on:click|stopPropagation={() => handleCopyLink(file)} title={$t('uploads.copyLink') || 'Copy Link'}>
                             {#if copiedFileId === file.id}
-                                <Check size={14} class="text-green-500"/>
+                                <Check size={14} class="text-green-500" />
                             {:else}
-                                <Link2 size={14}/>
+                                <Link2 size={14} />
                             {/if}
                         </button>
-                        <button
-                                class="action-btn danger"
-                                on:click|stopPropagation={() => handleDelete(file)}
-                                title={$t('common.delete') || 'Delete'}
-                        >
-                            <Trash2 size={14}/>
+                        <button class="action-btn danger" on:click|stopPropagation={() => handleDelete(file)} title={$t('common.delete') || 'Delete'}>
+                            <Trash2 size={14} />
                         </button>
                     </div>
                 {/if}
@@ -495,4 +464,3 @@
         border-color: rgba(220, 38, 38, 0.4);
     }
 </style>
-

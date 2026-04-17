@@ -23,7 +23,7 @@ const initialState: AuthState = {
     user: null,
     isLoading: false,
     error: null,
-    isInitialized: false
+    isInitialized: false,
 };
 
 /**
@@ -39,29 +39,27 @@ function createAuthStore() {
          * Login with username/email and password
          */
         login: async (username: string, password: string): Promise<boolean> => {
-            update(state => ({...state, isLoading: true, error: null}));
+            update((state) => ({...state, isLoading: true, error: null}));
 
             try {
                 debug.log('AuthStore', 'Attempting login for:', username);
                 const response = await zodiosApi.login_api_v1_auth_login_post({
                     username,
-                    password
+                    password,
                 });
                 debug.log('AuthStore', 'Login response:', response);
 
-                update(state => ({
+                update((state) => ({
                     ...state,
                     user: response.user,
                     isLoading: false,
                     error: null,
-                    isInitialized: true
+                    isInitialized: true,
                 }));
 
                 // Apply user settings from login response (Bug 1 fix)
                 // Handle potential array type from openapi-zod-client
-                const settings = Array.isArray(response.user_settings)
-                    ? response.user_settings[0]
-                    : response.user_settings;
+                const settings = Array.isArray(response.user_settings) ? response.user_settings[0] : response.user_settings;
 
                 if (settings && browser) {
                     debug.log('AuthStore', 'Applying user settings:', settings);
@@ -99,12 +97,12 @@ function createAuthStore() {
                     }
                 }
 
-                update(state => ({
+                update((state) => ({
                     ...state,
                     user: null,
                     isLoading: false,
                     error: errorMessage,
-                    isInitialized: true
+                    isInitialized: true,
                 }));
 
                 return false;
@@ -115,7 +113,7 @@ function createAuthStore() {
          * Logout current user
          */
         logout: async (): Promise<void> => {
-            update(state => ({...state, isLoading: true}));
+            update((state) => ({...state, isLoading: true}));
 
             try {
                 await zodiosApi.logout_api_v1_auth_logout_post(undefined);
@@ -128,7 +126,7 @@ function createAuthStore() {
                 user: null,
                 isLoading: false,
                 error: null,
-                isInitialized: true
+                isInitialized: true,
             });
 
             // Redirect to login
@@ -142,29 +140,29 @@ function createAuthStore() {
          */
         checkAuth: async (): Promise<boolean> => {
             debug.log('AuthStore', 'checkAuth started');
-            update(state => ({...state, isLoading: true}));
+            update((state) => ({...state, isLoading: true}));
 
             try {
                 const response = await zodiosApi.get_me_api_v1_auth_me_get();
 
                 debug.log('AuthStore', 'checkAuth success', response.user?.username);
-                update(state => ({
+                update((state) => ({
                     ...state,
                     user: response.user,
                     isLoading: false,
                     error: null,
-                    isInitialized: true
+                    isInitialized: true,
                 }));
 
                 return true;
             } catch (error) {
                 debug.log('AuthStore', 'checkAuth failed', error);
-                update(state => ({
+                update((state) => ({
                     ...state,
                     user: null,
                     isLoading: false,
                     error: null,
-                    isInitialized: true
+                    isInitialized: true,
                 }));
 
                 return false;
@@ -175,7 +173,7 @@ function createAuthStore() {
          * Clear any error message
          */
         clearError: () => {
-            update(state => ({...state, error: null}));
+            update((state) => ({...state, error: null}));
         },
 
         /**
@@ -183,7 +181,7 @@ function createAuthStore() {
          */
         reset: () => {
             set(initialState);
-        }
+        },
     };
 }
 
@@ -191,11 +189,11 @@ function createAuthStore() {
 export const auth = createAuthStore();
 
 // Derived stores for convenience
-export const currentUser = derived(auth, $auth => $auth.user);
-export const isAuthenticated = derived(auth, $auth => $auth.user !== null);
-export const isAuthLoading = derived(auth, $auth => $auth.isLoading);
-export const authError = derived(auth, $auth => $auth.error);
-export const isAuthInitialized = derived(auth, $auth => $auth.isInitialized);
+export const currentUser = derived(auth, ($auth) => $auth.user);
+export const isAuthenticated = derived(auth, ($auth) => $auth.user !== null);
+export const isAuthLoading = derived(auth, ($auth) => $auth.isLoading);
+export const authError = derived(auth, ($auth) => $auth.error);
+export const isAuthInitialized = derived(auth, ($auth) => $auth.isInitialized);
 
 /**
  * Helper to get current auth state synchronously
@@ -210,4 +208,3 @@ export function getAuthState(): AuthState {
 export function isLoggedIn(): boolean {
     return get(isAuthenticated);
 }
-

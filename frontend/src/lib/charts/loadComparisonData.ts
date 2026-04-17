@@ -31,20 +31,11 @@ export interface ComparisonAssetMeta {
  * @param targetCurrency - Target currency for FX conversion (when display currency differs from asset native)
  * @returns Updated comparison events map
  */
-export async function loadComparisonAssetsData(
-    compSignals: SignalConfig[],
-    dateRange: { start: string; end: string },
-    allAssets: ComparisonAssetMeta[],
-    existingEvents: Map<number, any[]>,
-    excludeAssetId?: number,
-    targetCurrency?: string,
-): Promise<Map<number, any[]>> {
-    const idsToLoad = compSignals
-        .map(s => Number(s.params.assetId))
-        .filter(id => id > 0 && id !== excludeAssetId);
+export async function loadComparisonAssetsData(compSignals: SignalConfig[], dateRange: {start: string; end: string}, allAssets: ComparisonAssetMeta[], existingEvents: Map<number, any[]>, excludeAssetId?: number, targetCurrency?: string): Promise<Map<number, any[]>> {
+    const idsToLoad = compSignals.map((s) => Number(s.params.assetId)).filter((id) => id > 0 && id !== excludeAssetId);
     if (idsToLoad.length === 0) return existingEvents;
 
-    const queries = idsToLoad.map(id => ({
+    const queries = idsToLoad.map((id) => ({
         asset_id: id,
         date_range: {start: dateRange.start, end: dateRange.end},
         include_events: true,
@@ -57,7 +48,7 @@ export async function loadComparisonAssetsData(
     for (const result of items) {
         const aid = result.asset_id;
         const hasConversionError = Array.isArray(result.errors) && result.errors.length > 0;
-        const assetMeta = allAssets.find(a => a.id === aid);
+        const assetMeta = allAssets.find((a) => a.id === aid);
 
         // Map backend price points to LineDataPoint format.
         // When targetCurrency was requested, exclude points where conversion
@@ -94,4 +85,3 @@ export async function loadComparisonAssetsData(
 
     return newCompEvents;
 }
-

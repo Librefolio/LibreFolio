@@ -40,7 +40,7 @@
     let popoverStyle = $state('');
 
     // Size units conversion (labels are translated via getter)
-    const SIZE_UNITS_BASE: { unit: SizeUnit; bytes: number; labelKey: string }[] = [
+    const SIZE_UNITS_BASE: {unit: SizeUnit; bytes: number; labelKey: string}[] = [
         {unit: 'B', bytes: 1, labelKey: 'common.bytes'},
         {unit: 'KB', bytes: 1024, labelKey: 'common.kilobytes'},
         {unit: 'MB', bytes: 1024 * 1024, labelKey: 'common.megabytes'},
@@ -48,11 +48,13 @@
     ];
 
     // Reactive translated size units
-    let SIZE_UNITS = $derived(SIZE_UNITS_BASE.map(u => ({
-        unit: u.unit,
-        bytes: u.bytes,
-        label: $t(u.labelKey) || u.unit,
-    })));
+    let SIZE_UNITS = $derived(
+        SIZE_UNITS_BASE.map((u) => ({
+            unit: u.unit,
+            bytes: u.bytes,
+            label: $t(u.labelKey) || u.unit,
+        })),
+    );
 
     // Helper functions to get initial values
     function getInitialTextValue(): string {
@@ -64,31 +66,31 @@
     }
 
     function getInitialNumMin(): number {
-        return initialValue?.type === 'number' ? initialValue.min ?? numberMin : numberMin;
+        return initialValue?.type === 'number' ? (initialValue.min ?? numberMin) : numberMin;
     }
 
     function getInitialNumMax(): number {
-        return initialValue?.type === 'number' ? initialValue.max ?? numberMax : numberMax;
+        return initialValue?.type === 'number' ? (initialValue.max ?? numberMax) : numberMax;
     }
 
     function getInitialDateFrom(): string {
-        return initialValue?.type === 'date' ? initialValue.from ?? '' : '';
+        return initialValue?.type === 'date' ? (initialValue.from ?? '') : '';
     }
 
     function getInitialDateTo(): string {
-        return initialValue?.type === 'date' ? initialValue.to ?? '' : '';
+        return initialValue?.type === 'date' ? (initialValue.to ?? '') : '';
     }
 
     function getInitialEnums(): Set<string> {
-        return new Set(initialValue?.type === 'enum' ? initialValue.selected : enumOptions.map(o => o.value));
+        return new Set(initialValue?.type === 'enum' ? initialValue.selected : enumOptions.map((o) => o.value));
     }
 
     function getInitialSizeMin(): number {
-        return initialValue?.type === 'size' ? initialValue.minBytes ?? numberMin : numberMin;
+        return initialValue?.type === 'size' ? (initialValue.minBytes ?? numberMin) : numberMin;
     }
 
     function getInitialSizeMax(): number {
-        return initialValue?.type === 'size' ? initialValue.maxBytes ?? numberMax : numberMax;
+        return initialValue?.type === 'size' ? (initialValue.maxBytes ?? numberMax) : numberMax;
     }
 
     // Text filter state
@@ -158,25 +160,25 @@
     let sizeMaxBytes = $state(getInitialSizeMax());
 
     // Helper to convert bytes to display unit
-    function bytesToUnit(bytes: number): { value: number; unit: SizeUnit } {
-        if (bytes >= 1024 * 1024 * 1024) return {value: Math.round(bytes / (1024 * 1024 * 1024) * 10) / 10, unit: 'GB'};
-        if (bytes >= 1024 * 1024) return {value: Math.round(bytes / (1024 * 1024) * 10) / 10, unit: 'MB'};
-        if (bytes >= 1024) return {value: Math.round(bytes / 1024 * 10) / 10, unit: 'KB'};
+    function bytesToUnit(bytes: number): {value: number; unit: SizeUnit} {
+        if (bytes >= 1024 * 1024 * 1024) return {value: Math.round((bytes / (1024 * 1024 * 1024)) * 10) / 10, unit: 'GB'};
+        if (bytes >= 1024 * 1024) return {value: Math.round((bytes / (1024 * 1024)) * 10) / 10, unit: 'MB'};
+        if (bytes >= 1024) return {value: Math.round((bytes / 1024) * 10) / 10, unit: 'KB'};
         return {value: bytes, unit: 'B'};
     }
 
     // Helper to convert unit to bytes
     function unitToBytes(value: number, unit: SizeUnit): number {
-        const unitInfo = SIZE_UNITS.find(u => u.unit === unit);
+        const unitInfo = SIZE_UNITS.find((u) => u.unit === unit);
         return Math.round(value * (unitInfo?.bytes || 1));
     }
 
     // Size input values (displayed with units) - initialize from bytes immediately
-    function initializeMinFromBytes(): { value: number; unit: SizeUnit } {
+    function initializeMinFromBytes(): {value: number; unit: SizeUnit} {
         return bytesToUnit(getInitialSizeMin());
     }
 
-    function initializeMaxFromBytes(): { value: number; unit: SizeUnit } {
+    function initializeMaxFromBytes(): {value: number; unit: SizeUnit} {
         return bytesToUnit(getInitialSizeMax());
     }
 
@@ -199,12 +201,11 @@
 
         const maxResult = bytesToUnit(sizeMaxBytes);
         sizeMaxInputValue = maxResult.value;
-        sizeMaxUnit = maxResult.unit;  // Fixed: was minResult.unit
+        sizeMaxUnit = maxResult.unit; // Fixed: was minResult.unit
 
         sliderMinPos = bytesToSliderPos(sizeMinBytes);
         sliderMaxPos = bytesToSliderPos(sizeMaxBytes);
     }
-
 
     // LOGARITHMIC scale: size slider maps 0-100 position logarithmically to [numberMin, numberMax]
     function sliderPosToBytes(pos: number): number {
@@ -223,9 +224,8 @@
         const logMin = Math.log10(Math.max(numberMin, 1));
         const logMax = Math.log10(Math.max(numberMax, 1));
         const logVal = Math.log10(Math.max(bytes, 1));
-        return Math.round((logVal - logMin) / (logMax - logMin) * 100);
+        return Math.round(((logVal - logMin) / (logMax - logMin)) * 100);
     }
-
 
     // Update bytes from input change
     function updateSizeMinFromInput() {
@@ -318,7 +318,7 @@
         numSliderMaxPos = 100;
         dateFrom = '';
         dateTo = '';
-        selectedEnums = new Set(enumOptions.map(o => o.value));
+        selectedEnums = new Set(enumOptions.map((o) => o.value));
         sizeMinBytes = numberMin;
         sizeMaxBytes = numberMax;
         initSizeInputs();
@@ -336,7 +336,7 @@
     }
 
     function selectAllEnums() {
-        selectedEnums = new Set(enumOptions.map(o => o.value));
+        selectedEnums = new Set(enumOptions.map((o) => o.value));
         applyFilter();
     }
 
@@ -419,11 +419,11 @@
     });
 </script>
 
-<div bind:this={popoverElement} class="filter-popover" style={popoverStyle} transition:fade={{ duration: 100 }}>
+<div bind:this={popoverElement} class="filter-popover" style={popoverStyle} transition:fade={{duration: 100}}>
     <div class="filter-header">
         <span class="filter-title">{$t('table.filter')}</span>
         <button class="reset-btn" onclick={clearFilter} title={$t('common.clear')} type="button">
-            <RotateCcw size={14}/>
+            <RotateCcw size={14} />
         </button>
     </div>
 
@@ -431,18 +431,18 @@
         {#if type === 'text'}
             <div class="text-filter">
                 <div class="search-input-wrapper">
-                    <Search size={14} class="search-icon"/>
-                    <input
-                            type="text"
-                            class="filter-input"
-                            placeholder={$t('common.search')}
-                            bind:value={textValue}
-                            oninput={autoApplyTextFilter}
-                            id="text-filter-input"
-                    />
+                    <Search size={14} class="search-icon" />
+                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={textValue} oninput={autoApplyTextFilter} id="text-filter-input" />
                     {#if textValue}
-                        <button type="button" class="clear-input-btn" onclick={() => { textValue = ''; applyFilter(); }}>
-                            <X size={12}/>
+                        <button
+                            type="button"
+                            class="clear-input-btn"
+                            onclick={() => {
+                                textValue = '';
+                                applyFilter();
+                            }}
+                        >
+                            <X size={12} />
                         </button>
                     {/if}
                 </div>
@@ -457,41 +457,44 @@
             <div class="number-filter">
                 <div class="range-row">
                     <label class="range-label" for="number-min-input">{$t('common.min')}</label>
-                    <input type="number" class="range-input" bind:value={numMin} min={numberMin} max={numMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }}
-                           id="number-min-input"/>
+                    <input
+                        type="number"
+                        class="range-input"
+                        bind:value={numMin}
+                        min={numberMin}
+                        max={numMax}
+                        onchange={() => {
+                            syncNumSlidersFromInput();
+                            applyFilter();
+                        }}
+                        id="number-min-input"
+                    />
                 </div>
                 <div class="range-row">
                     <label class="range-label" for="number-max-input">{$t('common.max')}</label>
-                    <input type="number" class="range-input" bind:value={numMax} min={numMin} max={numberMax} onchange={() => { syncNumSlidersFromInput(); applyFilter(); }}
-                           id="number-max-input"/>
+                    <input
+                        type="number"
+                        class="range-input"
+                        bind:value={numMax}
+                        min={numMin}
+                        max={numberMax}
+                        onchange={() => {
+                            syncNumSlidersFromInput();
+                            applyFilter();
+                        }}
+                        id="number-max-input"
+                    />
                 </div>
                 <!-- Dual range slider -->
                 <div class="size-slider-container">
                     <div class="size-slider-track">
-                        <div
-                                class="size-slider-range"
-                                style="left: {numSliderMinPos}%; right: {100 - numSliderMaxPos}%"
-                        ></div>
+                        <div class="size-slider-range" style="left: {numSliderMinPos}%; right: {100 - numSliderMaxPos}%"></div>
                         <div class="slider-tick" style="left: 25%"></div>
                         <div class="slider-tick" style="left: 50%"></div>
                         <div class="slider-tick" style="left: 75%"></div>
                     </div>
-                    <input
-                            type="range"
-                            class="size-slider size-slider-min"
-                            min="0"
-                            max="100"
-                            bind:value={numSliderMinPos}
-                            oninput={updateNumMinFromSlider}
-                    />
-                    <input
-                            type="range"
-                            class="size-slider size-slider-max"
-                            min="0"
-                            max="100"
-                            bind:value={numSliderMaxPos}
-                            oninput={updateNumMaxFromSlider}
-                    />
+                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={numSliderMinPos} oninput={updateNumMinFromSlider} />
+                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={numSliderMaxPos} oninput={updateNumMaxFromSlider} />
                 </div>
 
                 <!-- Slider labels with intermediate values -->
@@ -509,14 +512,7 @@
                 <div class="size-row">
                     <label class="size-label" for="size-min-input">{$t('common.min')}</label>
                     <div class="size-input-group">
-                        <input
-                                type="number"
-                                class="size-input"
-                                id="size-min-input"
-                                bind:value={sizeMinInputValue}
-                                min="0"
-                                onchange={updateSizeMinFromInput}
-                        />
+                        <input type="number" class="size-input" id="size-min-input" bind:value={sizeMinInputValue} min="0" onchange={updateSizeMinFromInput} />
                         <select class="size-unit-select" bind:value={sizeMinUnit} onchange={updateSizeMinFromInput}>
                             {#each SIZE_UNITS as u}
                                 <option value={u.unit}>{u.label}</option>
@@ -529,14 +525,7 @@
                 <div class="size-row">
                     <label class="size-label" for="size-max-input">{$t('common.max')}</label>
                     <div class="size-input-group">
-                        <input
-                                type="number"
-                                class="size-input"
-                                id="size-max-input"
-                                bind:value={sizeMaxInputValue}
-                                min="0"
-                                onchange={updateSizeMaxFromInput}
-                        />
+                        <input type="number" class="size-input" id="size-max-input" bind:value={sizeMaxInputValue} min="0" onchange={updateSizeMaxFromInput} />
                         <select class="size-unit-select" bind:value={sizeMaxUnit} onchange={updateSizeMaxFromInput}>
                             {#each SIZE_UNITS as u}
                                 <option value={u.unit}>{u.label}</option>
@@ -548,31 +537,14 @@
                 <!-- Dual range slider -->
                 <div class="size-slider-container">
                     <div class="size-slider-track">
-                        <div
-                                class="size-slider-range"
-                                style="left: {sliderMinPos}%; right: {100 - sliderMaxPos}%"
-                        ></div>
+                        <div class="size-slider-range" style="left: {sliderMinPos}%; right: {100 - sliderMaxPos}%"></div>
                         <!-- Tick marks at 25%, 50%, 75% -->
                         <div class="slider-tick" style="left: 25%"></div>
                         <div class="slider-tick" style="left: 50%"></div>
                         <div class="slider-tick" style="left: 75%"></div>
                     </div>
-                    <input
-                            type="range"
-                            class="size-slider size-slider-min"
-                            min="0"
-                            max="100"
-                            bind:value={sliderMinPos}
-                            oninput={updateSizeMinFromSlider}
-                    />
-                    <input
-                            type="range"
-                            class="size-slider size-slider-max"
-                            min="0"
-                            max="100"
-                            bind:value={sliderMaxPos}
-                            oninput={updateSizeMaxFromSlider}
-                    />
+                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={sliderMinPos} oninput={updateSizeMinFromSlider} />
+                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={sliderMaxPos} oninput={updateSizeMaxFromSlider} />
                 </div>
 
                 <!-- Slider labels with intermediate values -->
@@ -587,13 +559,17 @@
         {:else if type === 'date'}
             <div class="date-filter">
                 <DateRangePicker
-                        start={dateFrom}
-                        end={dateTo}
-                        showPresets={false}
-                        showCustomWindow={false}
-                        compact={true}
-                        stacked={true}
-                        onchange={(s, e) => { dateFrom = s; dateTo = e; applyFilter(); }}
+                    start={dateFrom}
+                    end={dateTo}
+                    showPresets={false}
+                    showCustomWindow={false}
+                    compact={true}
+                    stacked={true}
+                    onchange={(s, e) => {
+                        dateFrom = s;
+                        dateTo = e;
+                        applyFilter();
+                    }}
                 />
             </div>
         {:else if type === 'enum'}
@@ -605,11 +581,11 @@
                 <div class="enum-list">
                     {#each enumOptions as option}
                         <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)}>
-							<span class="enum-checkbox" class:checked={selectedEnums.has(option.value)}>
-								{#if selectedEnums.has(option.value)}
-									<Check size={12}/>
-								{/if}
-							</span>
+                            <span class="enum-checkbox" class:checked={selectedEnums.has(option.value)}>
+                                {#if selectedEnums.has(option.value)}
+                                    <Check size={12} />
+                                {/if}
+                            </span>
                             <span class="enum-label">{option.label}</span>
                         </button>
                     {/each}
@@ -629,7 +605,9 @@
         background: white;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        box-shadow:
+            0 10px 15px -3px rgba(0, 0, 0, 0.1),
+            0 4px 6px -4px rgba(0, 0, 0, 0.1);
         z-index: 9999;
     }
 
@@ -777,7 +755,8 @@
     }
 
     /* Number/Date filter */
-    .number-filter, .date-filter {
+    .number-filter,
+    .date-filter {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;

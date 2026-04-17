@@ -112,9 +112,7 @@
     ]);
 
     /** Event type options for SimpleSelect (pre-translated) */
-    let eventTypeSelectOptions = $derived(
-        EVENT_TYPE_OPTIONS.map(o => ({value: o.value, label: $t(o.labelKey)}))
-    );
+    let eventTypeSelectOptions = $derived(EVENT_TYPE_OPTIONS.map((o) => ({value: o.value, label: $t(o.labelKey)})));
 
     // =========================================================================
     // Date Helpers
@@ -153,7 +151,12 @@
 
     /** Minimum period duration (in days) for each maturation frequency. */
     const MATURATION_MIN_DAYS: Record<string, number> = {
-        DAILY: 0, WEEKLY: 7, MONTHLY: 28, QUARTERLY: 90, SEMIANNUAL: 180, ANNUAL: 365,
+        DAILY: 0,
+        WEEKLY: 7,
+        MONTHLY: 28,
+        QUARTERLY: 90,
+        SEMIANNUAL: 180,
+        ANNUAL: 365,
     };
 
     /** Check if a maturation frequency is valid for a given period length. */
@@ -165,7 +168,7 @@
     function filteredMaturationOptions(row: ScheduleRow) {
         if (row.isLate) return MATURATION_FREQ_OPTIONS; // late interest: all options
         const days = daysBetween(row.start_date, row.end_date);
-        return MATURATION_FREQ_OPTIONS.filter(o => isMaturationFrequencyValid(o.value, days));
+        return MATURATION_FREQ_OPTIONS.filter((o) => isMaturationFrequencyValid(o.value, days));
     }
 
     // =========================================================================
@@ -234,15 +237,15 @@
         indices: number[];
         headIndices: number[];
         tailIndices: number[];
-        middleGroups: { indices: number[]; prevIdx: number; nextIdx: number }[];
+        middleGroups: {indices: number[]; prevIdx: number; nextIdx: number}[];
     } | null>(null);
 
     // =========================================================================
     // Derived
     // =========================================================================
 
-    let normalRows = $derived(rows.filter(r => !r.isLate));
-    let lateRow = $derived(rows.find(r => r.isLate));
+    let normalRows = $derived(rows.filter((r) => !r.isLate));
+    let lateRow = $derived(rows.find((r) => r.isLate));
 
     /** All rows for DataTable: normal periods + late interest (only when enabled) */
     let tableData = $derived.by(() => {
@@ -251,15 +254,13 @@
         return result;
     });
 
-    let selectedNormalRows = $derived(
-        normalRows.filter(r => selectedIds.includes(r.id))
-    );
+    let selectedNormalRows = $derived(normalRows.filter((r) => selectedIds.includes(r.id)));
 
     let selectedNormalIndices = $derived(
         selectedNormalRows
-            .map(r => normalRows.findIndex(p => p.id === r.id))
-            .filter(i => i >= 0)
-            .sort((a, b) => a - b)
+            .map((r) => normalRows.findIndex((p) => p.id === r.id))
+            .filter((i) => i >= 0)
+            .sort((a, b) => a - b),
     );
 
     let areSelectedContiguous = $derived.by(() => {
@@ -350,8 +351,8 @@
 
     function serialize(allRows: ScheduleRow[]): Record<string, any> {
         const schedule = allRows
-            .filter(r => !r.isLate)
-            .map(r => ({
+            .filter((r) => !r.isLate)
+            .map((r) => ({
                 start_date: r.start_date,
                 end_date: r.end_date,
                 annual_rate: (r.annual_rate / 100).toFixed(4),
@@ -359,16 +360,18 @@
                 generate_interest: r.generate_interest,
             }));
 
-        const lr = allRows.find(r => r.isLate && r.enabled);
-        const late_interest = lr ? {
-            annual_rate: (lr.annual_rate / 100).toFixed(4),
-            grace_period_days: lr.grace_period_days,
-            interest_type: lr.lateInterestType,
-            maturation_frequency: lr.maturation_frequency,
-            generate_interest: lr.generate_interest,
-        } : null;
+        const lr = allRows.find((r) => r.isLate && r.enabled);
+        const late_interest = lr
+            ? {
+                  annual_rate: (lr.annual_rate / 100).toFixed(4),
+                  grace_period_days: lr.grace_period_days,
+                  interest_type: lr.lateInterestType,
+                  maturation_frequency: lr.maturation_frequency,
+                  generate_interest: lr.generate_interest,
+              }
+            : null;
 
-        const serializedEvents = assetEvents.map(e => ({
+        const serializedEvents = assetEvents.map((e) => ({
             date: e.date,
             type: e.type,
             value: {code: currencyValue, amount: e.value.toString()},
@@ -420,7 +423,7 @@
     }
 
     function handleRangeChange(rowIndex: number, newStart: string, newEnd: string): void {
-        const periods = rows.filter(r => !r.isLate);
+        const periods = rows.filter((r) => !r.isLate);
         const row = periods[rowIndex];
         if (!row) return;
         if (newEnd < newStart) return;
@@ -472,7 +475,7 @@
         }
 
         // Rebuild rows: updated normals + late
-        const late = rows.find(r => r.isLate);
+        const late = rows.find((r) => r.isLate);
         rows = [...periods, ...(late ? [late] : [])];
         emitChange();
     }
@@ -500,7 +503,7 @@
             id: generateUUID(),
             start_date: newStart,
             end_date: newEnd,
-            annual_rate: lastPeriod?.annual_rate ?? 5.00,
+            annual_rate: lastPeriod?.annual_rate ?? 5.0,
             maturation_frequency: lastPeriod?.maturation_frequency ?? 'MONTHLY',
             generate_interest: lastPeriod?.generate_interest ?? false,
             isLate: false,
@@ -509,7 +512,7 @@
             lateInterestType: 'COMPOUND',
         };
 
-        const late = rows.find(r => r.isLate);
+        const late = rows.find((r) => r.isLate);
         rows = [...normalRows, newRow, ...(late ? [late] : [])];
         emitChange();
     }
@@ -690,8 +693,8 @@
         if (selectedNormalRows.length === 0) return;
         const periods = [...normalRows];
         const indices = selectedNormalRows
-            .map(r => periods.findIndex(p => p.id === r.id))
-            .filter(i => i >= 0)
+            .map((r) => periods.findIndex((p) => p.id === r.id))
+            .filter((i) => i >= 0)
             .sort((a, b) => a - b);
 
         if (indices.length === 0) return;
@@ -709,7 +712,7 @@
         // Classify each group: HEAD (no prev), TAIL (no next), MIDDLE (both)
         const headIndices: number[] = [];
         const tailIndices: number[] = [];
-        const middleGroups: { indices: number[]; prevIdx: number; nextIdx: number }[] = [];
+        const middleGroups: {indices: number[]; prevIdx: number; nextIdx: number}[] = [];
 
         for (const group of groups) {
             const first = group[0];
@@ -769,14 +772,12 @@
                 minDate: blockStart,
                 maxDate: blockEnd,
                 defaultDate: midpointDate(blockStart, blockEnd),
-                label: middleGroups.length > 1
-                    ? `Gap ${i + 1}: ${blockStart} → ${blockEnd}`
-                    : undefined,
+                label: middleGroups.length > 1 ? `Gap ${i + 1}: ${blockStart} → ${blockEnd}` : undefined,
             };
         });
 
         // Store data for confirm
-        pendingBulkDeleteData = { indices, headIndices, tailIndices, middleGroups };
+        pendingBulkDeleteData = {indices, headIndices, tailIndices, middleGroups};
         pendingBulkGaps = gaps;
         pendingActionIndex = -1;
         boundaryModalMode = 'delete';
@@ -801,7 +802,7 @@
     /** Confirm bulk delete with multiple boundary dates (one per middle group) */
     function confirmBulkDeleteMulti(boundaryDates: string[]): void {
         if (!pendingBulkDeleteData) return;
-        const { indices, headIndices, tailIndices, middleGroups } = pendingBulkDeleteData;
+        const {indices, headIndices, tailIndices, middleGroups} = pendingBulkDeleteData;
         const periods = [...normalRows];
 
         // Apply HEAD auto-expansion
@@ -844,7 +845,7 @@
     }
 
     function rebuildAndEmit(periods: ScheduleRow[]): void {
-        const late = rows.find(r => r.isLate);
+        const late = rows.find((r) => r.isLate);
         rows = [...periods, ...(late ? [late] : [])];
         emitChange();
     }
@@ -854,7 +855,7 @@
     // =========================================================================
 
     function updateRow(id: string, field: keyof ScheduleRow, val: any): void {
-        rows = rows.map(r => {
+        rows = rows.map((r) => {
             if (r.id !== id) return r;
             const updated = {...r, [field]: val};
             // Auto-fallback: if date change invalidates current maturation_frequency, clear it
@@ -870,7 +871,7 @@
     }
 
     function toggleLateInterest(): void {
-        rows = rows.map(r => {
+        rows = rows.map((r) => {
             if (!r.isLate) return r;
             return {...r, enabled: !r.enabled};
         });
@@ -902,7 +903,7 @@
                     graceDays: row.grace_period_days,
                     onchange: (s: string, e: string) => {
                         if (row.isLate) return;
-                        const idx = normalRows.findIndex(r => r.id === row.id);
+                        const idx = normalRows.findIndex((r) => r.id === row.id);
                         if (idx >= 0) handleRangeChange(idx, s, e);
                     },
                     onGraceDaysChange: (days: number) => {
@@ -971,7 +972,7 @@
             visible: (row) => !row.isLate,
             disabled: (row) => disabled || readonly || daysBetween(row.start_date, row.end_date) < 2,
             onClick: (row) => {
-                const idx = normalRows.findIndex(r => r.id === row.id);
+                const idx = normalRows.findIndex((r) => r.id === row.id);
                 if (idx >= 0) handleSplitRequest(idx);
             },
         },
@@ -983,7 +984,7 @@
             visible: (row) => !row.isLate,
             disabled: () => disabled || readonly,
             onClick: (row) => {
-                const idx = normalRows.findIndex(r => r.id === row.id);
+                const idx = normalRows.findIndex((r) => r.id === row.id);
                 if (idx >= 0) handleDelete(idx);
             },
         },
@@ -1018,7 +1019,7 @@
 
     function handleSelectionChange(ids: string[]) {
         // Exclude late interest from selection
-        selectedIds = ids.filter(id => id !== 'late-interest');
+        selectedIds = ids.filter((id) => id !== 'late-interest');
     }
 
     // =========================================================================
@@ -1026,14 +1027,17 @@
     // =========================================================================
 
     function handleAddEvent(): void {
-        assetEvents = [...assetEvents, {
-            id: generateUUID(),
-            date: todayISO(),
-            type: 'INTEREST',
-            value: 0,
-            currency: currencyValue,
-            notes: '',
-        }];
+        assetEvents = [
+            ...assetEvents,
+            {
+                id: generateUUID(),
+                date: todayISO(),
+                type: 'INTEREST',
+                value: 0,
+                currency: currencyValue,
+                notes: '',
+            },
+        ];
         emitChange();
     }
 
@@ -1091,7 +1095,10 @@
                     bind:value={currencyValue}
                     disabled={disabled || readonly}
                     compact={true}
-                    onchange={(v) => { currencyValue = v; emitChange(); }}
+                    onchange={(v) => {
+                        currencyValue = v;
+                        emitChange();
+                    }}
                 />
             </div>
         </div>
@@ -1103,11 +1110,8 @@
                         📐 {$t('assets.schedule.interestType')}
                     </span>
                     <Tooltip text={$t('assets.schedule.interestTypeTooltip')} position="top">
-                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#how-value-is-calculated"
-                           target="_blank" rel="noopener noreferrer"
-                           class="text-gray-400 hover:text-libre-green transition-colors"
-                           onclick={(e) => e.stopPropagation()}>
-                            <Info size={12}/>
+                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#how-value-is-calculated" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-libre-green transition-colors" onclick={(e) => e.stopPropagation()}>
+                            <Info size={12} />
                         </a>
                     </Tooltip>
                 </div>
@@ -1115,7 +1119,10 @@
                     bind:value={interestType}
                     options={INTEREST_TYPE_OPTIONS}
                     disabled={disabled || readonly}
-                    onchange={(v) => { interestType = v; emitChange(); }}
+                    onchange={(v) => {
+                        interestType = v;
+                        emitChange();
+                    }}
                 />
             </div>
             <div class="flex-1 min-w-0">
@@ -1124,11 +1131,8 @@
                         📆 {$t('assets.schedule.dayCount')}
                     </span>
                     <Tooltip text={$t('assets.schedule.dayCountTooltip')} position="top">
-                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#interest-schedule-editor"
-                           target="_blank" rel="noopener noreferrer"
-                           class="text-gray-400 hover:text-libre-green transition-colors"
-                           onclick={(e) => e.stopPropagation()}>
-                            <Info size={12}/>
+                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#interest-schedule-editor" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-libre-green transition-colors" onclick={(e) => e.stopPropagation()}>
+                            <Info size={12} />
                         </a>
                     </Tooltip>
                 </div>
@@ -1136,7 +1140,10 @@
                     bind:value={dayCount}
                     options={DAY_COUNT_OPTIONS}
                     disabled={disabled || readonly}
-                    onchange={(v) => { dayCount = v; emitChange(); }}
+                    onchange={(v) => {
+                        dayCount = v;
+                        emitChange();
+                    }}
                 />
             </div>
         </div>
@@ -1145,7 +1152,7 @@
     <!-- Header: title + bulk toolbar + Add button (all inline) -->
     <div class="flex items-center gap-2 flex-wrap">
         <div class="flex items-center gap-2">
-            <CalendarDays size={16} class="text-gray-400"/>
+            <CalendarDays size={16} class="text-gray-400" />
             <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {$t('assets.schedule.title')}
             </span>
@@ -1162,7 +1169,9 @@
                     class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md
                            bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300
                            hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                    onclick={() => { selectedIds = []; }}
+                    onclick={() => {
+                        selectedIds = [];
+                    }}
                     title={$t('table.clearSelection') || 'Clear selection'}
                 >
                     <span>{selectedIds.length}</span>
@@ -1177,11 +1186,9 @@
                         title={typeof action.label === 'function' ? action.label() : action.label}
                         class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors
                                disabled:opacity-40 disabled:cursor-not-allowed
-                               {action.variant === 'danger'
-                                   ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
-                                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
+                               {action.variant === 'danger' ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                     >
-                        <action.icon size={14}/>
+                        <action.icon size={14} />
                         <span class="hidden sm:inline">
                             {typeof action.label === 'function' ? action.label() : action.label}
                         </span>
@@ -1200,12 +1207,11 @@
                        text-gray-600 dark:text-gray-300 bg-white dark:bg-slate-800
                        hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
             >
-                <Plus size={14}/>
+                <Plus size={14} />
                 <span class="hidden sm:inline">{$t('assets.schedule.addPeriod')}</span>
             </button>
         {/if}
     </div>
-
 
     <!-- DataTable or Empty State -->
     {#if normalRows.length === 0 && (!lateRow || !lateRow.enabled)}
@@ -1225,7 +1231,7 @@
                     class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg
                            bg-libre-green text-white hover:bg-libre-green-dark transition-colors"
                 >
-                    <Plus size={14}/>
+                    <Plus size={14} />
                     {$t('assets.schedule.addFirstPeriod')}
                 </button>
             {/if}
@@ -1233,20 +1239,20 @@
     {:else}
         <DataTable
             data={tableData}
-            columns={columns}
+            {columns}
             {getRowId}
             storageKey="schedule-editor"
             enableSelection={!readonly && !disabled}
             selectionMode="multi"
             onSelectionChange={handleSelectionChange}
             enableActions={!readonly && !disabled}
-            rowActions={rowActions}
+            {rowActions}
             enableSorting={false}
             enableColumnFilters={false}
             enableColumnResize={true}
             enableColumnVisibility={false}
             enablePagination={false}
-            getRowClass={getRowClass}
+            {getRowClass}
             tableLayout="auto"
             isRowSelectable={(row) => !row.isLate}
         />
@@ -1257,13 +1263,7 @@
         <div class="flex items-center justify-end gap-2 text-xs text-gray-500 dark:text-gray-400">
             {#if lateRow.enabled}
                 <div class="w-36">
-                    <SimpleSelect
-                        value={lateRow.lateInterestType}
-                        options={INTEREST_TYPE_OPTIONS}
-                        disabled={disabled || readonly}
-                        compact={true}
-                        onchange={(v) => updateRow('late-interest', 'lateInterestType', v)}
-                    />
+                    <SimpleSelect value={lateRow.lateInterestType} options={INTEREST_TYPE_OPTIONS} disabled={disabled || readonly} compact={true} onchange={(v) => updateRow('late-interest', 'lateInterestType', v)} />
                 </div>
             {/if}
             <span>⚡ {$t('assets.schedule.lateInterest')}</span>
@@ -1276,8 +1276,10 @@
                        {lateRow.enabled ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
                        disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <span class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
-                             {lateRow.enabled ? 'translate-x-[18px]' : 'translate-x-[3px]'}"></span>
+                <span
+                    class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
+                             {lateRow.enabled ? 'translate-x-[18px]' : 'translate-x-[3px]'}"
+                ></span>
             </button>
         </div>
     {/if}
@@ -1286,7 +1288,7 @@
     <div class="space-y-2">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-1.5">
-                <CalendarClock size={14} class="text-gray-400"/>
+                <CalendarClock size={14} class="text-gray-400" />
                 <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{$t('assets.schedule.assetEvents')}</span>
             </div>
             {#if !readonly && !disabled}
@@ -1298,7 +1300,7 @@
                            text-gray-600 dark:text-gray-300 bg-white dark:bg-slate-800
                            hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
                 >
-                    <Plus size={12}/>
+                    <Plus size={12} />
                     <span class="hidden sm:inline">{$t('assets.schedule.addEvent')}</span>
                 </button>
             {/if}
@@ -1319,24 +1321,16 @@
                         {#each assetEvents as evt, idx}
                             <tr class="border-t border-gray-100 dark:border-slate-700">
                                 <td class="px-2 py-1">
-                                    <SingleDatePicker
-                                        value={evt.date}
-                                        label=""
-                                        compact={true}
-                                        allowFuture={true}
-                                        onchange={(d) => handleEventFieldChange(idx, 'date', d)}
-                                    />
+                                    <SingleDatePicker value={evt.date} label="" compact={true} allowFuture={true} onchange={(d) => handleEventFieldChange(idx, 'date', d)} />
                                 </td>
                                 <td class="px-2 py-1 min-w-[130px]">
-                                    <SimpleSelect
-                                        value={evt.type}
-                                        options={eventTypeSelectOptions}
-                                        compact={true}
-                                        onchange={(v) => handleEventFieldChange(idx, 'type', v)}
-                                    />
+                                    <SimpleSelect value={evt.type} options={eventTypeSelectOptions} compact={true} onchange={(v) => handleEventFieldChange(idx, 'type', v)} />
                                 </td>
                                 <td class="px-2 py-1">
-                                    <input type="number" value={evt.value} step={evt.type === 'MATURITY_SETTLEMENT' ? '100' : '0.01'}
+                                    <input
+                                        type="number"
+                                        value={evt.value}
+                                        step={evt.type === 'MATURITY_SETTLEMENT' ? '100' : '0.01'}
                                         oninput={(e) => handleEventFieldChange(idx, 'value', Number(e.currentTarget.value))}
                                         disabled={disabled || readonly}
                                         class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
@@ -1345,7 +1339,10 @@
                                     />
                                 </td>
                                 <td class="px-2 py-1">
-                                    <input type="text" value={evt.notes} placeholder="optional"
+                                    <input
+                                        type="text"
+                                        value={evt.notes}
+                                        placeholder="optional"
                                         oninput={(e) => handleEventFieldChange(idx, 'notes', e.currentTarget.value)}
                                         disabled={disabled || readonly}
                                         class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
@@ -1355,9 +1352,8 @@
                                 </td>
                                 <td class="px-2 py-1">
                                     {#if !readonly && !disabled}
-                                        <button type="button" onclick={() => handleDeleteEvent(idx)}
-                                            class="text-red-400 hover:text-red-600 transition-colors">
-                                            <X size={14}/>
+                                        <button type="button" onclick={() => handleDeleteEvent(idx)} class="text-red-400 hover:text-red-600 transition-colors">
+                                            <X size={14} />
                                         </button>
                                     {/if}
                                 </td>
@@ -1396,11 +1392,14 @@
         }
     }}
     onconfirmMulti={handleBoundaryConfirmMulti}
-    oncancel={() => { showBoundaryModal = false; pendingBulkDeleteData = null; pendingBulkGaps = []; }}
+    oncancel={() => {
+        showBoundaryModal = false;
+        pendingBulkDeleteData = null;
+        pendingBulkGaps = [];
+    }}
 />
 
 <style>
-
     :global(.late-row) {
         border-top: 2px dashed rgb(209 213 219);
     }
@@ -1409,4 +1408,3 @@
         border-top: 2px dashed rgb(71 85 105);
     }
 </style>
-

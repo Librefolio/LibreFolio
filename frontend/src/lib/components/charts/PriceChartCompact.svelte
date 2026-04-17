@@ -27,32 +27,10 @@
         overlaySignals?: RenderedSignal[];
     }
 
-    let {
-        data = [],
-        height = '80px',
-        lineColor = '#1a4031',
-        areaFill = true,
-        viewMode = 'absolute',
-        showMiniAxis = true,
-        colorByBaseline,
-        showGridLines,
-        showGradient = false,
-        overlaySignals = [],
-    }: Props = $props();
+    let {data = [], height = '80px', lineColor = '#1a4031', areaFill = true, viewMode = 'absolute', showMiniAxis = true, colorByBaseline, showGridLines, showGradient = false, overlaySignals = []}: Props = $props();
 
     // Default colorByBaseline to true only in percentage mode
-    let effectiveColorByBaseline = $derived(colorByBaseline ?? (viewMode === 'percentage'));
+    let effectiveColorByBaseline = $derived(colorByBaseline ?? viewMode === 'percentage');
 </script>
-<LineChart
-        areaFill={areaFill}
-        colorByBaseline={effectiveColorByBaseline}
-        compact={true}
-        {data}
-        {height}
-        {lineColor}
-        {overlaySignals}
-        showGradient={showGradient}
-        showGridLines={showGridLines}
-        {showMiniAxis}
-        {viewMode}
-/>
+
+<LineChart {areaFill} colorByBaseline={effectiveColorByBaseline} compact={true} {data} {height} {lineColor} {overlaySignals} {showGradient} {showGridLines} {showMiniAxis} {viewMode} />

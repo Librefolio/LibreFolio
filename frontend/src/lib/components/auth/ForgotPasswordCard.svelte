@@ -9,12 +9,11 @@
 </script>
 
 <div class="w-full max-w-lg bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="forgot-modal">
-
     <!-- Header Section (Dark Green) -->
     <div class="bg-libre-green p-8 flex flex-col items-center justify-center space-y-2">
         <div class="flex items-center space-x-3 text-white">
             <div class="w-10 h-10 rounded-lg flex items-center justify-center p-1" style="background:#fff">
-                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png"/>
+                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
             </div>
             <span class="text-2xl font-bold tracking-wide">LibreFolio</span>
         </div>
@@ -23,10 +22,9 @@
 
     <!-- Body Section -->
     <div class="p-8 pt-6 space-y-4">
-
         <!-- Warning Box -->
         <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 flex items-start space-x-3">
-            <AlertTriangle class="text-yellow-600 flex-shrink-0 mt-0.5" size={20}/>
+            <AlertTriangle class="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
             <p class="text-sm text-yellow-800">
                 {$_('auth.emailRecoveryNotAvailable')}
             </p>
@@ -35,7 +33,7 @@
         <!-- Instructions Box -->
         <div class="bg-gray-100 rounded-lg p-4 space-y-3">
             <div class="flex items-center space-x-2 text-gray-700">
-                <Terminal size={18}/>
+                <Terminal size={18} />
                 <span class="font-medium text-sm">{$_('auth.serverTerminalInstructions')}</span>
             </div>
 
@@ -49,16 +47,9 @@
         </div>
 
         <!-- Back to Login Button -->
-        <button
-                class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] flex items-center justify-center space-x-2"
-                data-testid="forgot-back-to-login"
-                on:click={() => dispatch('gotoLogin')}
-                type="button"
-        >
-            <ArrowLeft size={18}/>
+        <button class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] flex items-center justify-center space-x-2" data-testid="forgot-back-to-login" on:click={() => dispatch('gotoLogin')} type="button">
+            <ArrowLeft size={18} />
             <span>{$_('auth.backToLogin')}</span>
         </button>
-
     </div>
 </div>
-

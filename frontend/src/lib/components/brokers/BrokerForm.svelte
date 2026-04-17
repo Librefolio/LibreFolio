@@ -23,7 +23,7 @@
             allow_asset_shorting: boolean;
             is_active: boolean;
             opened_at?: string;
-            initial_balances?: Array<{ code: string; amount: number }>;
+            initial_balances?: Array<{code: string; amount: number}>;
         };
         cancel: void;
     }>();
@@ -105,11 +105,10 @@
     }
 
     // Initial balances (only for create mode)
-    let initialBalances: Array<{ code: string; amount: number }> = [];
+    let initialBalances: Array<{code: string; amount: number}> = [];
 
     // Load user settings on mount
     onMount(async () => {
-
         // Bug 2 fix: Load user settings if not already available
         // This ensures base_currency is available for the initial balance selector
         if (!$userSettings) {
@@ -121,7 +120,7 @@
     $: isValid = name.trim().length >= 1 && name.trim().length <= 100;
 
     // Check for duplicate currencies in initial balances
-    $: hasDuplicateCurrencies = new Set(initialBalances.map(b => b.code)).size !== initialBalances.length;
+    $: hasDuplicateCurrencies = new Set(initialBalances.map((b) => b.code)).size !== initialBalances.length;
 
     // Get user's default currency
     $: defaultCurrency = $userSettings?.base_currency ?? 'EUR';
@@ -134,23 +133,25 @@
         showImagePicker = false;
     }
 
-
     function addBalance() {
         // First balance uses user's default currency, subsequent ones find unused
-        const usedCodes = new Set(initialBalances.map(b => b.code));
+        const usedCodes = new Set(initialBalances.map((b) => b.code));
         let newCode = defaultCurrency;
 
         if (usedCodes.has(defaultCurrency)) {
             // Find a common currency not already used
             const commonCurrencies = ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'CNY'];
-            const available = commonCurrencies.find(c => !usedCodes.has(c));
+            const available = commonCurrencies.find((c) => !usedCodes.has(c));
             newCode = available ?? 'EUR';
         }
 
-        initialBalances = [...initialBalances, {
-            code: newCode,
-            amount: 0
-        }];
+        initialBalances = [
+            ...initialBalances,
+            {
+                code: newCode,
+                amount: 0,
+            },
+        ];
     }
 
     function removeBalance(index: number) {
@@ -161,7 +162,7 @@
         if (!isValid || loading) return;
 
         // Filter out zero/negative amounts
-        const validBalances = initialBalances.filter(b => b.amount > 0);
+        const validBalances = initialBalances.filter((b) => b.amount > 0);
 
         // For edit mode: send empty string "" to clear fields, undefined to skip update
         // For create mode: undefined means "don't include field"
@@ -174,23 +175,15 @@
             name: name.trim(),
             // In edit mode, empty string means "clear field"
             // In create mode, undefined means "don't include"
-            description: mode === 'edit'
-                ? (trimmedDescription || "")
-                : (trimmedDescription || undefined),
-            portal_url: mode === 'edit'
-                ? (trimmedPortalUrl || "")
-                : (trimmedPortalUrl || undefined),
-            icon_url: mode === 'edit'
-                ? (trimmedIconUrl || "")
-                : (trimmedIconUrl || undefined),
-            default_import_plugin: mode === 'edit'
-                ? (trimmedPlugin || "")
-                : (trimmedPlugin || undefined),
+            description: mode === 'edit' ? trimmedDescription || '' : trimmedDescription || undefined,
+            portal_url: mode === 'edit' ? trimmedPortalUrl || '' : trimmedPortalUrl || undefined,
+            icon_url: mode === 'edit' ? trimmedIconUrl || '' : trimmedIconUrl || undefined,
+            default_import_plugin: mode === 'edit' ? trimmedPlugin || '' : trimmedPlugin || undefined,
             allow_cash_overdraft: allowOverdraft,
             allow_asset_shorting: allowShorting,
             is_active: isActive,
             opened_at: openedAt || undefined,
-            initial_balances: mode === 'create' && validBalances.length > 0 ? validBalances : undefined
+            initial_balances: mode === 'create' && validBalances.length > 0 ? validBalances : undefined,
         });
     }
 
@@ -206,16 +199,16 @@
             {$_('common.name')} *
         </label>
         <input
-                bind:value={name}
-                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
-                class:border-red-300={name.length > 0 && name.trim().length === 0}
-                data-testid="broker-name-input"
-                id="broker-name"
-                maxlength="100"
-                minlength="1"
-                placeholder={$_('brokers.namePlaceholder')}
-                required
-                type="text"
+            bind:value={name}
+            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+            class:border-red-300={name.length > 0 && name.trim().length === 0}
+            data-testid="broker-name-input"
+            id="broker-name"
+            maxlength="100"
+            minlength="1"
+            placeholder={$_('brokers.namePlaceholder')}
+            required
+            type="text"
         />
     </div>
 
@@ -224,14 +217,7 @@
         <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-description">
             {$_('brokers.description')}
         </label>
-        <textarea
-                bind:value={description}
-                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors resize-none"
-                id="broker-description"
-                maxlength="500"
-                placeholder={$_('brokers.descriptionPlaceholder')}
-                rows="3"
-        ></textarea>
+        <textarea bind:value={description} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors resize-none" id="broker-description" maxlength="500" placeholder={$_('brokers.descriptionPlaceholder')} rows="3"></textarea>
     </div>
 
     <!-- Default Import Plugin (moved up) -->
@@ -239,10 +225,7 @@
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="broker-plugin">
             {$_('brokers.defaultImportPlugin')}
         </label>
-        <ImportPluginSelect
-                bind:value={defaultImportPlugin}
-                placeholder={$_('brokers.selectPlugin')}
-        />
+        <ImportPluginSelect bind:value={defaultImportPlugin} placeholder={$_('brokers.selectPlugin')} />
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.defaultImportPluginHint')}</p>
     </div>
 
@@ -251,13 +234,7 @@
         <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-portal">
             {$_('brokers.portalUrl')}
         </label>
-        <input
-                bind:value={portalUrl}
-                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
-                id="broker-portal"
-                placeholder={$_('brokers.portalUrlPlaceholder')}
-                type="url"
-        />
+        <input bind:value={portalUrl} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors" id="broker-portal" placeholder={$_('brokers.portalUrlPlaceholder')} type="url" />
     </div>
 
     <!-- Icon -->
@@ -269,19 +246,10 @@
             <!-- Clickable Icon Preview - opens AssetPickerModal -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="icon-picker-trigger group relative cursor-pointer"
-                 data-testid="broker-icon-trigger"
-                 on:click={() => showImagePicker = true}
-                 title={$_('uploads.selectIcon') || 'Select Icon'}>
-                <BrokerIcon
-                        altText="Icon"
-                        iconUrl={iconUrl}
-                        pluginCode={defaultImportPlugin}
-                        portalUrl={portalUrl}
-                        size="lg"
-                />
+            <div class="icon-picker-trigger group relative cursor-pointer" data-testid="broker-icon-trigger" on:click={() => (showImagePicker = true)} title={$_('uploads.selectIcon') || 'Select Icon'}>
+                <BrokerIcon altText="Icon" {iconUrl} pluginCode={defaultImportPlugin} {portalUrl} size="lg" />
                 <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <Upload class="text-white" size={16}/>
+                    <Upload class="text-white" size={16} />
                 </div>
             </div>
             <div class="flex-1 min-w-0">
@@ -298,10 +266,12 @@
         <!-- Opened At -->
         <div class="flex-1">
             <SingleDatePicker
-                    value={openedAt}
-                    onchange={(d) => { openedAt = d; }}
-                    label={$_('brokers.openedAt')}
-                    allowFuture={false}
+                value={openedAt}
+                onchange={(d) => {
+                    openedAt = d;
+                }}
+                label={$_('brokers.openedAt')}
+                allowFuture={false}
             />
         </div>
 
@@ -309,20 +279,16 @@
         <div class="flex items-center gap-3 pb-2">
             <span class="text-sm text-gray-700">{$_('brokers.isActive')}</span>
             <button
-                    aria-checked={isActive}
-                    aria-label={$_('brokers.isActive')}
-                    class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
-                    class:bg-gray-300={!isActive}
-                    class:bg-libre-green={isActive}
-                    on:click={() => isActive = !isActive}
-                    role="switch"
-                    type="button"
+                aria-checked={isActive}
+                aria-label={$_('brokers.isActive')}
+                class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
+                class:bg-gray-300={!isActive}
+                class:bg-libre-green={isActive}
+                on:click={() => (isActive = !isActive)}
+                role="switch"
+                type="button"
             >
-                <span
-                        class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                        class:translate-x-0={!isActive}
-                        class:translate-x-5={isActive}
-                ></span>
+                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" class:translate-x-0={!isActive} class:translate-x-5={isActive}></span>
             </button>
         </div>
     </div>
@@ -334,17 +300,13 @@
         <!-- Allow Leveraged Buying -->
         <div class="flex items-start gap-3">
             <label class="flex items-center gap-2 cursor-pointer flex-1">
-                <input
-                        bind:checked={allowOverdraft}
-                        class="w-4 h-4 text-libre-green rounded focus:ring-libre-green"
-                        type="checkbox"
-                />
+                <input bind:checked={allowOverdraft} class="w-4 h-4 text-libre-green rounded focus:ring-libre-green" type="checkbox" />
                 <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowOverdraft')}</span>
             </label>
             {#if !allowOverdraft}
                 <Tooltip text={$_('brokers.allowOverdraftHint')} position="left" maxWidth="320px">
                     <span class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
-                        <Info size={16}/>
+                        <Info size={16} />
                     </span>
                 </Tooltip>
             {/if}
@@ -356,17 +318,13 @@
         <!-- Allow Short Selling -->
         <div class="flex items-start gap-3">
             <label class="flex items-center gap-2 cursor-pointer flex-1">
-                <input
-                        bind:checked={allowShorting}
-                        class="w-4 h-4 text-libre-green rounded focus:ring-libre-green"
-                        type="checkbox"
-                />
+                <input bind:checked={allowShorting} class="w-4 h-4 text-libre-green rounded focus:ring-libre-green" type="checkbox" />
                 <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowShorting')}</span>
             </label>
             {#if !allowShorting}
                 <Tooltip text={$_('brokers.allowShortingHint')} position="left" maxWidth="320px">
                     <span class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
-                        <Info size={16}/>
+                        <Info size={16} />
                     </span>
                 </Tooltip>
             {/if}
@@ -384,12 +342,8 @@
                     <h4 class="text-sm font-medium text-gray-700">{$_('brokers.initialBalances')}</h4>
                     <p class="text-xs text-gray-500 mt-0.5">{$_('brokers.initialBalancesHint')}</p>
                 </div>
-                <button
-                        type="button"
-                        on:click={addBalance}
-                        class="flex items-center space-x-1 px-3 py-1.5 text-sm bg-libre-green/10 text-libre-green rounded-lg hover:bg-libre-green/20 transition-colors disabled:opacity-50"
-                >
-                    <Plus size={16}/>
+                <button type="button" on:click={addBalance} class="flex items-center space-x-1 px-3 py-1.5 text-sm bg-libre-green/10 text-libre-green rounded-lg hover:bg-libre-green/20 transition-colors disabled:opacity-50">
+                    <Plus size={16} />
                     <span>{$_('brokers.addCurrency')}</span>
                 </button>
             </div>
@@ -400,32 +354,17 @@
                         <div class="flex items-center gap-2">
                             <!-- Amount first (60% width) -->
                             <div class="flex-[6]">
-                                <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        bind:value={balance.amount}
-                                        placeholder={$_('brokers.amount')}
-                                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green h-[42px]"
-                                />
+                                <input type="number" step="0.01" min="0" bind:value={balance.amount} placeholder={$_('brokers.amount')} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green h-[42px]" />
                             </div>
 
                             <!-- Currency Select (40% width, dropdown opens upward) -->
                             <div class="flex-[4] min-w-[120px]">
-                                <CurrencySearchSelect
-                                        bind:value={balance.code}
-                                        placeholder={$_('settings.selectCurrency')}
-                                        dropdownPosition="top"
-                                />
+                                <CurrencySearchSelect bind:value={balance.code} placeholder={$_('settings.selectCurrency')} dropdownPosition="top" />
                             </div>
 
                             <!-- Remove -->
-                            <button
-                                    type="button"
-                                    on:click={() => removeBalance(i)}
-                                    class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-                            >
-                                <Trash2 size={18}/>
+                            <button type="button" on:click={() => removeBalance(i)} class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0">
+                                <Trash2 size={18} />
                             </button>
                         </div>
                     {/each}
@@ -440,34 +379,14 @@
 </form>
 
 <!-- Image Picker (AssetPicker + ImageEditModal combined) -->
-<ImagePickerWrapper
-        circularPreview={true}
-        filterImages={true}
-        initialUrl={iconUrl}
-        oncancel={() => showImagePicker = false}
-        onchange={handleImagePickerChange}
-        open={showImagePicker}
-        preset="broker-icon"
-        title={$_('uploads.selectIcon') || 'Select Icon'}
-/>
+<ImagePickerWrapper circularPreview={true} filterImages={true} initialUrl={iconUrl} oncancel={() => (showImagePicker = false)} onchange={handleImagePickerChange} open={showImagePicker} preset="broker-icon" title={$_('uploads.selectIcon') || 'Select Icon'} />
 
 <!-- Actions (sempre visibili - fuori dal form scrollabile) -->
 <div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky bottom-0 pb-4 px-4 -mx-4 -mb-4 rounded-b-2xl">
-    <button
-            class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            disabled={loading}
-            on:click={handleCancel}
-            type="button"
-    >
+    <button class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" disabled={loading} on:click={handleCancel} type="button">
         {$_('common.cancel')}
     </button>
-    <button
-            class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            data-testid="broker-form-submit"
-            disabled={!isValid || loading || hasDuplicateCurrencies}
-            on:click={handleSubmit}
-            type="button"
-    >
+    <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="broker-form-submit" disabled={!isValid || loading || hasDuplicateCurrencies} on:click={handleSubmit} type="button">
         {#if loading}
             <span class="inline-flex items-center space-x-2">
                 <span class="animate-spin">⏳</span>

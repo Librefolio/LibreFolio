@@ -77,7 +77,7 @@ export async function ensureCurrenciesLoaded(language: string = 'en'): Promise<v
                 country_codes: c.country_codes ?? [],
                 country_names: c.country_names ?? [],
             }));
-            currencyMap = new Map(allCurrencies.map(c => [c.code, c]));
+            currencyMap = new Map(allCurrencies.map((c) => [c.code, c]));
             loaded = true;
             lastLoadedLanguage = language;
         } catch (e) {
@@ -104,14 +104,16 @@ export function getAllCurrencies(): CurrencyInfo[] {
  * Returns a sensible fallback if not found or not yet loaded.
  */
 export function getCurrencyInfo(code: string): CurrencyInfo {
-    return currencyMap.get(code) ?? {
-        code,
-        name: code,
-        symbol: code,
-        flag_emoji: '🏳️',
-        country_codes: [],
-        country_names: [],
-    };
+    return (
+        currencyMap.get(code) ?? {
+            code,
+            name: code,
+            symbol: code,
+            flag_emoji: '🏳️',
+            country_codes: [],
+            country_names: [],
+        }
+    );
 }
 
 /** Check if currencies have been loaded. */

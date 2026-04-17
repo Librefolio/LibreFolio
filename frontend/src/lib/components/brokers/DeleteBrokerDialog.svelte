@@ -9,7 +9,7 @@
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
-        confirm: { force: boolean };
+        confirm: {force: boolean};
         cancel: void;
     }>();
 
@@ -32,27 +32,15 @@
     }
 </script>
 
-<ModalBase
-        closeOnBackdropClick={!loading}
-        closeOnEscape={!loading}
-        maxWidth="md"
-        onRequestClose={handleCancel}
-        open={isOpen}
-        testId="delete-broker-dialog"
-        zIndex={60}
->
+<ModalBase closeOnBackdropClick={!loading} closeOnEscape={!loading} maxWidth="md" onRequestClose={handleCancel} open={isOpen} testId="delete-broker-dialog" zIndex={60}>
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-center space-x-2 text-red-600">
-            <AlertTriangle size={24}/>
+            <AlertTriangle size={24} />
             <h2 class="text-xl font-semibold">{$_('brokers.deleteBroker')}</h2>
         </div>
-        <button
-                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-                disabled={loading}
-                on:click={handleCancel}
-        >
-            <X size={20}/>
+        <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={loading} on:click={handleCancel}>
+            <X size={20} />
         </button>
     </div>
 
@@ -75,30 +63,15 @@
 
     <!-- Actions -->
     <div class="flex items-center justify-end space-x-3 p-4 border-t border-gray-100 dark:border-slate-700">
-        <button
-                class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                data-testid="delete-broker-cancel"
-                disabled={loading}
-                on:click={handleCancel}
-        >
+        <button class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" data-testid="delete-broker-cancel" disabled={loading} on:click={handleCancel}>
             {$_('common.cancel')}
         </button>
         {#if hasTransactions}
-            <button
-                    on:click={() => handleConfirm(true)}
-                    disabled={loading}
-                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                    data-testid="delete-broker-confirm"
-            >
+            <button on:click={() => handleConfirm(true)} disabled={loading} class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50" data-testid="delete-broker-confirm">
                 {loading ? $_('common.loading') : $_('brokers.forceDelete')}
             </button>
         {:else}
-            <button
-                    on:click={() => handleConfirm(false)}
-                    disabled={loading}
-                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                    data-testid="delete-broker-confirm"
-            >
+            <button on:click={() => handleConfirm(false)} disabled={loading} class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50" data-testid="delete-broker-confirm">
                 {loading ? $_('common.loading') : $_('common.delete')}
             </button>
         {/if}

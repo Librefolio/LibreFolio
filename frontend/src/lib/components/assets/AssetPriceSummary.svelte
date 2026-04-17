@@ -11,7 +11,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {_  as t} from '$lib/i18n';
+    import {_ as t} from '$lib/i18n';
     import {TrendingUp, TrendingDown, AlertTriangle, Coins, RotateCw} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
@@ -44,24 +44,9 @@
         fxSyncing?: boolean;
     }
 
-    let {
-        lastPrice,
-        deltaPercent,
-        deltaAbs,
-        displayCurrency = $bindable(),
-        assetCurrency,
-        fxConversionMissing,
-        fxPairSlug,
-        layoutMode,
-        onAddFxPair,
-        livePriceConversionFailed = false,
-        onsyncfx,
-        fxSyncing = false,
-    }: Props = $props();
+    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, fxConversionMissing, fxPairSlug, layoutMode, onAddFxPair, livePriceConversionFailed = false, onsyncfx, fxSyncing = false}: Props = $props();
 
-    let showFxPairLink = $derived(
-        displayCurrency && assetCurrency && displayCurrency !== assetCurrency && fxPairSlug && !fxConversionMissing
-    );
+    let showFxPairLink = $derived(displayCurrency && assetCurrency && displayCurrency !== assetCurrency && fxPairSlug && !fxConversionMissing);
 </script>
 
 <div class="flex {layoutMode === 'wide' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
@@ -73,11 +58,11 @@
                 <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
                     {lastPrice.toFixed(2)}
                 </span>
-                <span class="text-xs text-gray-400 dark:text-gray-500">{(livePriceConversionFailed || fxConversionMissing) ? assetCurrency : displayCurrency}</span>
+                <span class="text-xs text-gray-400 dark:text-gray-500">{livePriceConversionFailed || fxConversionMissing ? assetCurrency : displayCurrency}</span>
                 {#if livePriceConversionFailed}
                     <Tooltip text={$t('assetDetail.livePriceConversionFailed', {values: {currency: assetCurrency}})} position="bottom">
                         <span class="text-amber-500 dark:text-amber-400">
-                            <AlertTriangle size={13}/>
+                            <AlertTriangle size={13} />
                         </span>
                     </Tooltip>
                 {/if}
@@ -91,7 +76,7 @@
             <!-- Right half: delta % -->
             {#if deltaPercent !== null}
                 <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                    {#if deltaPercent >= 0}<TrendingUp size={12}/>{:else}<TrendingDown size={12}/>{/if}
+                    {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
                     {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
                 </span>
             {/if}
@@ -104,49 +89,30 @@
             {$t('assetDetail.displayCurrency')}
         </span>
         <div class="w-28 sm:w-32">
-            <CurrencySearchSelect
-                    bind:value={displayCurrency}
-                    compact={true}
-                    originalCurrency={assetCurrency}
-                    placeholder={$t('assetDetail.displayCurrency')}
-            />
+            <CurrencySearchSelect bind:value={displayCurrency} compact={true} originalCurrency={assetCurrency} placeholder={$t('assetDetail.displayCurrency')} />
         </div>
 
         <!-- FX warning or link -->
         {#if fxConversionMissing}
             <Tooltip text={$t('assetDetail.fxPairMissing', {values: {base: assetCurrency, quote: displayCurrency}})} position="bottom">
                 <span class="p-1 text-amber-500 dark:text-amber-400">
-                    <AlertTriangle size={16}/>
+                    <AlertTriangle size={16} />
                 </span>
             </Tooltip>
             {#if onAddFxPair}
-                <button
-                    class="p-1 rounded text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 cursor-pointer transition-colors"
-                    onclick={onAddFxPair}
-                    title={$t('assetDetail.addFxPair')}
-                >
-                    <Coins size={14}/>
+                <button class="p-1 rounded text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 cursor-pointer transition-colors" onclick={onAddFxPair} title={$t('assetDetail.addFxPair')}>
+                    <Coins size={14} />
                 </button>
             {/if}
         {:else if showFxPairLink}
-            <a
-                href="/fx/{fxPairSlug}"
-                class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors"
-                title={$t('assetDetail.goToFxPair')}
-            >
-                <Coins size={14}/>
+            <a href="/fx/{fxPairSlug}" class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors" title={$t('assetDetail.goToFxPair')}>
+                <Coins size={14} />
             </a>
             {#if onsyncfx}
-                <button
-                    class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors disabled:opacity-50"
-                    disabled={fxSyncing}
-                    onclick={onsyncfx}
-                    title={$t('common.sync') + ' FX'}
-                >
-                    <RotateCw size={13} class={fxSyncing ? 'animate-spin' : ''}/>
+                <button class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors disabled:opacity-50" disabled={fxSyncing} onclick={onsyncfx} title={$t('common.sync') + ' FX'}>
+                    <RotateCw size={13} class={fxSyncing ? 'animate-spin' : ''} />
                 </button>
             {/if}
         {/if}
     </div>
 </div>
-

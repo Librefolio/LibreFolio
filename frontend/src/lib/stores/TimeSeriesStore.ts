@@ -29,7 +29,7 @@ export interface TimeSeriesPoint {
 /** A contiguous date interval where data is missing */
 export interface DateGap {
     start: string; // ISO YYYY-MM-DD (inclusive)
-    end: string;   // ISO YYYY-MM-DD (inclusive)
+    end: string; // ISO YYYY-MM-DD (inclusive)
 }
 
 /** Result of querying a date range from the store */
@@ -197,4 +197,3 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
         return Array.from(this.data.values()).sort((a, b) => a.date.localeCompare(b.date));
     }
 }
-

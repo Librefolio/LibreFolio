@@ -21,4 +21,3 @@ export function setCardInverted(slug: string, inverted: boolean): void {
         invertedCards.delete(slug);
     }
 }
-

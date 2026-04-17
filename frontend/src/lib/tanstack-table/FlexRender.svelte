@@ -1,12 +1,3 @@
-/**
-* FlexRender - Componente per il rendering flessibile delle celle TanStack Table
-*
-* Permette di renderizzare contenuti di celle che possono essere:
-* - Stringhe semplici
-* - Componenti Svelte
-* - Funzioni che ritornano contenuto
-*/
-
 <script generics="TProps" lang="ts">
     type Props = {
         /** Il contenuto da renderizzare (stringa, componente, o funzione) */
@@ -17,6 +8,8 @@
 
     let {content, props}: Props = $props();
 </script>
+
+/** * FlexRender - Componente per il rendering flessibile delle celle TanStack Table * * Permette di renderizzare contenuti di celle che possono essere: * - Stringhe semplici * - Componenti Svelte * - Funzioni che ritornano contenuto */
 
 {#if typeof content === 'string'}
     {content}

@@ -94,7 +94,7 @@ export class RsiSignal extends ChartSignal {
                 avgLoss = alpha * loss + (1 - alpha) * avgLoss;
             }
 
-            const rsi = avgLoss === 0 ? 100 : avgGain === 0 ? 0 : 100 * avgGain / (avgGain + avgLoss);
+            const rsi = avgLoss === 0 ? 100 : avgGain === 0 ? 0 : (100 * avgGain) / (avgGain + avgLoss);
             result.push({date: baseData[i].date, value: rsi});
         }
 

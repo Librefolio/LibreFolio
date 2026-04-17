@@ -103,7 +103,7 @@ export class MacdSignal extends ChartSignal {
         if (macdLine.length === 0) return [];
 
         const label = this.getLabel();
-        const signalColor = this.params._signalColor as string || this.style.color;
+        const signalColor = (this.params._signalColor as string) || this.style.color;
         const signalLineWidth = Number(this.params._signalLineWidth ?? Math.max(1, this.style.lineWidth - 1));
         const signalLineType = (this.params._signalLineType as 'solid' | 'dashed' | 'dotted') || 'dashed';
         const signalMarkerStart = (this.params._signalMarkerStart as MarkerType) ?? null;

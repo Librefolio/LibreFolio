@@ -57,8 +57,11 @@
 
     interface Props {
         data: {
-            urlBase: string; urlQuote: string;
-            canonicalBase: string; canonicalQuote: string; canonicalSlug: string;
+            urlBase: string;
+            urlQuote: string;
+            canonicalBase: string;
+            canonicalQuote: string;
+            canonicalSlug: string;
             inverted: boolean;
         };
     }
@@ -94,8 +97,8 @@
     let viewMode: ViewMode = $state('percentage');
 
     // Provider config
-    let providers: Array<{ providerCode: string; priority: number; chainSteps?: Array<{ from: string; to: string; provider: string }> }> = $state([]);
-    let availableProviders: Array<{ code: string; name: string }> = $state([]);
+    let providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}> = $state([]);
+    let availableProviders: Array<{code: string; name: string}> = $state([]);
 
     // Foldable panels
     let showAesthetics = $state(false);
@@ -129,13 +132,13 @@
     let allConfiguredSlugs: string[] = $state([]);
 
     // All assets (for asset comparison signals in ChartSignalsSection)
-    let allAssets: Array<{ id: number; display_name: string; icon_url?: string | null; asset_type?: string | null }> = $state([]);
+    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}> = $state([]);
 
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
 
     // Panel states before edit mode (to restore when exiting)
-    let savedPanelStates: { aesthetics: boolean; measures: boolean; signals: boolean } | null = $state(null);
+    let savedPanelStates: {aesthetics: boolean; measures: boolean; signals: boolean} | null = $state(null);
 
     /** Incremented to force overlay signals recomputation after store data changes */
     let overlayDataVersion = $state(0);
@@ -165,7 +168,7 @@
             const aid = Number(cfg.params.assetId);
             if (!aid || seenIds.has(aid)) continue;
             seenIds.add(aid);
-            const meta = allAssets.find(a => a.id === aid);
+            const meta = allAssets.find((a) => a.id === aid);
             if (meta) {
                 items.push({id: aid, display_name: meta.display_name, icon_url: meta.icon_url ?? undefined, asset_type: meta.asset_type ?? null, provider_code: 'unknown'});
             }
@@ -196,18 +199,18 @@
         return inverted ? -pct : pct;
     });
 
-    let lineData: LineDataPoint[] = $derived(chartData.map((d) => ({
-        date: d.date,
-        value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
-        staleDays: d.backwardFillInfo?.daysBack ?? 0,
-    })));
+    let lineData: LineDataPoint[] = $derived(
+        chartData.map((d) => ({
+            date: d.date,
+            value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
+            staleDays: d.backwardFillInfo?.daysBack ?? 0,
+        })),
+    );
 
     /** First data point date — used for "no data before" banner */
     let firstDataDate = $derived(chartData.length > 0 ? chartData[0].date : null);
     /** True when the selected date range starts before the first available data point */
-    let rangeStartsBeforeData = $derived(
-        firstDataDate != null && dateStart < firstDataDate
-    );
+    let rangeStartsBeforeData = $derived(firstDataDate != null && dateStart < firstDataDate);
 
     // True when no real provider is configured (MANUAL sentinel is already filtered out)
     let isManualOnly = $derived(providers.length === 0);
@@ -228,7 +231,7 @@
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
                     if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map(d => ({
+                    instance.params._resolvedData = storeData.map((d) => ({
                         date: d.date,
                         value: d.rate,
                     }));
@@ -241,7 +244,7 @@
             if (cfg.signalType === 'asset-comparison') {
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId) continue;
-                const targetAsset = allAssets.find(a => a.id === targetId);
+                const targetAsset = allAssets.find((a) => a.id === targetId);
                 instance.params._assetDisplayName = targetAsset?.display_name ?? `Asset #${targetId}`;
                 instance.params._assetIconUrl = targetAsset?.icon_url ?? null;
                 instance.params._assetType = targetAsset?.asset_type ?? null;
@@ -257,11 +260,7 @@
     });
 
     /** Combined overlay signals: computed from settings + measure signals */
-    let allOverlaySignals: RenderedSignal[] = $derived([
-        ...overlaySignals,
-        ...measureSignals,
-        ...(pendingPreviewSignal ? [pendingPreviewSignal] : []),
-    ]);
+    let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
 
     // Trigger flag re-evaluation when currencies finish loading
     let flagVersion = $state(0);
@@ -287,9 +286,9 @@
     let chartEventMarkers: EventMarker[] = $derived.by(() => {
         const markers: EventMarker[] = [];
         for (const [aid, evts] of comparisonEvents) {
-            const targetAsset = allAssets.find(a => a.id === aid);
+            const targetAsset = allAssets.find((a) => a.id === aid);
             const label = targetAsset?.display_name ?? `Asset #${aid}`;
-            const sigColor = overlaySignals.find(s => s.label === label)?.color;
+            const sigColor = overlaySignals.find((s) => s.label === label)?.color;
             for (const ev of evts) {
                 markers.push({
                     date: ev.date,
@@ -337,7 +336,7 @@
                         firstDate: storeData.length > 0 ? storeData[0].date : null,
                     });
                 } catch {
-                    result.set(cfg.id, { pointCount: 0, eventCounts: {}, firstDate: null });
+                    result.set(cfg.id, {pointCount: 0, eventCounts: {}, firstDate: null});
                 }
             }
         }
@@ -346,7 +345,7 @@
 
     // Provider config: build editRoutes for the modal
     let editRoutes = $derived.by(() => {
-        return providers.map(p => p.chainSteps ?? [{from: data.canonicalBase, to: data.canonicalQuote, provider: p.providerCode}]);
+        return providers.map((p) => p.chainSteps ?? [{from: data.canonicalBase, to: data.canonicalQuote, provider: p.providerCode}]);
     });
 
     // =========================================================================
@@ -357,13 +356,7 @@
         // Persist the inversion state from the URL so FxCard reflects it on back-navigation
         setCardInverted(data.canonicalSlug, data.inverted);
 
-        await Promise.all([
-            ensureCurrenciesLoaded(get(currentLanguage)),
-            loadChartData(),
-            loadProviders(),
-            loadAvailableProviders(),
-            loadAssetList(),
-        ]);
+        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), loadChartData(), loadProviders(), loadAvailableProviders(), loadAssetList()]);
         // Force flag reactivity after currencies load
         flagVersion++;
         // Load comparison asset data after initial data is ready
@@ -377,7 +370,6 @@
         layout.attach(el);
         return () => layout.detach();
     });
-
 
     // =========================================================================
     // Data Loading (same as before, unchanged logic)
@@ -396,7 +388,7 @@
         }
 
         try {
-            const convertRequests = gaps.map(gap => ({
+            const convertRequests = gaps.map((gap) => ({
                 from_amount: {code: data.canonicalBase, amount: 1},
                 to: data.canonicalQuote,
                 date_range: {start: gap.start, end: gap.end},
@@ -440,18 +432,12 @@
 
             // Filter routes for current pair only
             providers = items
-                .filter((i: any) =>
-                    ((i.base === data.canonicalBase && i.quote === data.canonicalQuote) ||
-                        (i.base === data.canonicalQuote && i.quote === data.canonicalBase)) &&
-                    !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')
-                )
+                .filter((i: any) => ((i.base === data.canonicalBase && i.quote === data.canonicalQuote) || (i.base === data.canonicalQuote && i.quote === data.canonicalBase)) && !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL'))
                 .sort((a: any, b: any) => a.priority - b.priority)
                 .map((i: any) => {
                     const steps = i.chain_steps ?? [];
                     return {
-                        providerCode: steps.length === 1
-                            ? steps[0].provider
-                            : 'CHAIN:' + steps.map((s: any) => s.provider).join('+'),
+                        providerCode: steps.length === 1 ? steps[0].provider : 'CHAIN:' + steps.map((s: any) => s.provider).join('+'),
                         priority: i.priority,
                         chainSteps: steps,
                     };
@@ -474,10 +460,14 @@
         try {
             const response = await zodiosApi.get_all_assets_api_v1_assets_all_get();
             allAssets = (response as any[]).map((a: any) => ({
-                id: a.id, display_name: a.display_name,
-                icon_url: a.icon_url ?? null, asset_type: a.asset_type ?? null,
+                id: a.id,
+                display_name: a.display_name,
+                icon_url: a.icon_url ?? null,
+                asset_type: a.asset_type ?? null,
             }));
-        } catch (e) { console.error('Failed to load asset list:', e); }
+        } catch (e) {
+            console.error('Failed to load asset list:', e);
+        }
     }
 
     /**
@@ -485,19 +475,15 @@
      * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
      */
     async function maybeLoadComparison() {
-        const compSignals = signals.filter(s => s.signalType === 'asset-comparison');
+        const compSignals = signals.filter((s) => s.signalType === 'asset-comparison');
         if (compSignals.length === 0 || lineData.length === 0) return;
         try {
-            comparisonEvents = await loadComparisonAssetsData(
-                compSignals,
-                {start: dateStart, end: dateEnd},
-                allAssets,
-                comparisonEvents,
-            );
+            comparisonEvents = await loadComparisonAssetsData(compSignals, {start: dateStart, end: dateEnd}, allAssets, comparisonEvents);
             overlayDataVersion++;
-        } catch (e) { console.error('Failed to load comparison asset data:', e); }
+        } catch (e) {
+            console.error('Failed to load comparison asset data:', e);
+        }
     }
-
 
     // =========================================================================
     // Actions
@@ -515,16 +501,19 @@
                     const overlayStore = getFxStore(pairSlug);
                     overlayStore.invalidateRange(dateStart, dateEnd);
                     try {
-                        const convertRequests = [{
-                            from_amount: {code: pairSlug.split('-')[0], amount: 1},
-                            to: pairSlug.split('-')[1],
-                            date_range: {start: dateStart, end: dateEnd},
-                        }];
+                        const convertRequests = [
+                            {
+                                from_amount: {code: pairSlug.split('-')[0], amount: 1},
+                                to: pairSlug.split('-')[1],
+                                date_range: {start: dateStart, end: dateEnd},
+                            },
+                        ];
                         const resp = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
                         const results = (resp as any)?.results || [];
                         const points = results.map((r: any) => apiResultToFxDataPoint(r));
                         overlayStore.merge(points);
-                    } catch { /* best effort */
+                    } catch {
+                        /* best effort */
                     }
                 }
             }
@@ -559,11 +548,7 @@
         measurePanel?.addPoint(date, value);
     }
 
-    function handleAestheticsChange(values: {
-        colorByBaseline: boolean; areaFill: boolean; gridLines: boolean;
-        staleGradient: boolean; yAxisMode: 'auto' | 'include0' | 'custom';
-        yAxisMin: number | undefined; yAxisMax: number | undefined;
-    }) {
+    function handleAestheticsChange(values: {colorByBaseline: boolean; areaFill: boolean; gridLines: boolean; staleGradient: boolean; yAxisMode: 'auto' | 'include0' | 'custom'; yAxisMin: number | undefined; yAxisMax: number | undefined}) {
         setPairSettings(data.canonicalSlug, {...settings, ...values, signals: [...signals]});
     }
 
@@ -576,7 +561,9 @@
         try {
             syncing = true;
             const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                pairs: [slug], start: dateStart, end: dateEnd,
+                pairs: [slug],
+                start: dateStart,
+                end: dateEnd,
             });
             const r = (response as any)?.results?.[0];
             if (r) {
@@ -592,16 +579,19 @@
             } else {
                 // Overlay pair: re-fetch data from DB so the chart updates
                 try {
-                    const convertRequests = [{
-                        from_amount: {code: slug.split('-')[0], amount: 1},
-                        to: slug.split('-')[1],
-                        date_range: {start: dateStart, end: dateEnd},
-                    }];
+                    const convertRequests = [
+                        {
+                            from_amount: {code: slug.split('-')[0], amount: 1},
+                            to: slug.split('-')[1],
+                            date_range: {start: dateStart, end: dateEnd},
+                        },
+                    ];
                     const resp = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
                     const results = (resp as any)?.results || [];
                     const points = results.map((r: any) => apiResultToFxDataPoint(r));
                     store.merge(points);
-                } catch { /* best effort */
+                } catch {
+                    /* best effort */
                 }
                 overlayDataVersion++;
             }
@@ -618,10 +608,12 @@
 
     async function handleSyncAsset(assetId: number) {
         try {
-            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{
-                asset_id: assetId,
-                date_range: {start: dateStart, end: dateEnd},
-            }]);
+            const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
+                {
+                    asset_id: assetId,
+                    date_range: {start: dateStart, end: dateEnd},
+                },
+            ]);
             const r = (response as any)?.results?.[0];
             const tr = get(t);
             if (r) {
@@ -642,7 +634,7 @@
     }
 
     /** Handle provider modal save — reload providers and auto-sync rates */
-    async function handleProviderModalCreated(_detail: { base: string; quote: string; hasRealProvider: boolean }) {
+    async function handleProviderModalCreated(_detail: {base: string; quote: string; hasRealProvider: boolean}) {
         await loadProviders();
         showProviderModal = false;
         // Auto-sync to fetch rates from the newly added provider
@@ -684,13 +676,8 @@
     <!-- Header: pair info + back button -->
     <!-- ======================================================================= -->
     <div class="flex items-center gap-3" data-testid="fx-detail-header">
-        <button
-                class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors"
-                data-testid="fx-detail-back-btn"
-                onclick={() => goBack('/fx')}
-                title={$t('fxDetail.backToList')}
-        >
-            <ArrowLeft size={20}/>
+        <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors" data-testid="fx-detail-back-btn" onclick={() => goBack('/fx')} title={$t('fxDetail.backToList')}>
+            <ArrowLeft size={20} />
         </button>
         <div class="flex items-center gap-2" data-testid="fx-detail-pair-label">
             <span class="text-2xl">{baseFlag}</span>
@@ -698,13 +685,8 @@
             <span class="text-gray-400 dark:text-gray-500 text-lg">→</span>
             <span class="text-2xl">{quoteFlag}</span>
             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayQuote}</h2>
-            <button
-                    class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    data-testid="fx-detail-swap-btn"
-                    onclick={handleSwapDirection}
-                    title={$t('common.swapDirection')}
-            >
-                <ArrowLeftRight size={16}/>
+            <button class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" data-testid="fx-detail-swap-btn" onclick={handleSwapDirection} title={$t('common.swapDirection')}>
+                <ArrowLeftRight size={16} />
             </button>
         </div>
     </div>
@@ -713,7 +695,7 @@
     {#if error}
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
             <span>⚠️</span> <span>{errorMessage}</span>
-            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => error = null}>{$t('common.close')}</button>
+            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => (error = null)}>{$t('common.close')}</button>
         </div>
     {/if}
 
@@ -722,9 +704,11 @@
         <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2">
             <span>📊</span>
             <span class="font-medium inline-flex items-center gap-0.5">
-                <span class="emoji-flag">{baseFlag}</span> {displayBase}
-                <ArrowLeftRight size={10} class="shrink-0 opacity-60"/>
-                <span class="emoji-flag">{quoteFlag}</span> {displayQuote}
+                <span class="emoji-flag">{baseFlag}</span>
+                {displayBase}
+                <ArrowLeftRight size={10} class="shrink-0 opacity-60" />
+                <span class="emoji-flag">{quoteFlag}</span>
+                {displayQuote}
             </span>
             <span class="opacity-80">— {$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
         </div>
@@ -743,83 +727,73 @@
     <!--           [ actions ──── 1×4 ]                                                     -->
     <!-- ======================================================================= -->
     <div
-            bind:this={filterBarRef}
-            class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
+        bind:this={filterBarRef}
+        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
                {layout.layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
-            data-testid="fx-detail-filter-bar"
+        data-testid="fx-detail-filter-bar"
     >
         <!-- Filters block -->
         <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center' : layout.layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-start'}">
             <!-- DateRangePicker -->
             <div class="max-w-md">
-                <DateRangePicker
-                        bind:activePreset
-                        bind:end={dateEnd}
-                        bind:start={dateStart}
-                        compact={true}
-                        onchange={handleDateRangeChange}
-                />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={dateStart} compact={true} onchange={handleDateRangeChange} />
             </div>
 
             <!-- Pair Summary (rate + delta) -->
-            <FxPriceSummary
-                    {lastRate}
-                    {deltaPercent}
-                    layoutMode={layout.layoutMode}
-            />
+            <FxPriceSummary {lastRate} {deltaPercent} layoutMode={layout.layoutMode} />
         </div>
 
         <!-- Actions: 2×2 grid (wide+tablet), 4×1 column (tablet-s), 1×4 row (mobile) -->
-        <div class="flex shrink-0 gap-1.5 self-center
-                    {layout.layoutMode === 'mobile' ? 'flex-row items-center justify-center'
-                     : layout.layoutMode === 'tablet-s' ? 'flex-col'
-                     : 'grid grid-cols-2 ml-auto'}">
+        <div
+            class="flex shrink-0 gap-1.5 self-center
+                    {layout.layoutMode === 'mobile' ? 'flex-row items-center justify-center' : layout.layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2 ml-auto'}"
+        >
             <!-- Row 1, Col 1: Abs/% segmented toggle -->
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute'
-                        ? 'bg-libre-green text-white'
-                        : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { viewMode = 'absolute'; }}
-                >Abs
+                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                    onclick={() => {
+                        viewMode = 'absolute';
+                    }}
+                    >Abs
                 </button>
                 <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'percentage'
-                        ? 'bg-libre-green text-white'
-                        : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { viewMode = 'percentage'; }}
-                >%
+                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                    onclick={() => {
+                        viewMode = 'percentage';
+                    }}
+                    >%
                 </button>
             </div>
             <!-- Row 1, Col 2: Providers -->
             <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    data-testid="fx-detail-provider-btn"
-                    onclick={() => showProviderModal = true}
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                data-testid="fx-detail-provider-btn"
+                onclick={() => (showProviderModal = true)}
             >
-                <Wrench size={14}/>
+                <Wrench size={14} />
                 {#if layout.showActionLabels}<span>{$t('fx.providers')}</span>{/if}
             </button>
             <!-- Row 2, Col 1: Sync -->
             <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
                            {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
-                    data-testid="fx-detail-sync-btn"
-                    disabled={isManualOnly}
-                    onclick={handleSync}
-                    title={isManualOnly ? $t('fxDetail.syncDisabledManual') : ''}
+                data-testid="fx-detail-sync-btn"
+                disabled={isManualOnly}
+                onclick={handleSync}
+                title={isManualOnly ? $t('fxDetail.syncDisabledManual') : ''}
             >
-                <RotateCw size={14}/>
+                <RotateCw size={14} />
                 {#if layout.showActionLabels}<span>{$t('common.sync')}</span>{/if}
             </button>
             <!-- Row 2, Col 2: Refresh -->
             <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    data-testid="fx-detail-refresh-btn"
-                    disabled={loading}
-                    onclick={handleRefresh}
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                data-testid="fx-detail-refresh-btn"
+                disabled={loading}
+                onclick={handleRefresh}
             >
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={14}/>
+                <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
                 {#if layout.showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
         </div>
@@ -829,31 +803,27 @@
     <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <button
-                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                data-testid="fx-detail-signals-toggle"
-                onclick={() => showSignals = !showSignals}
-        >
+        <button class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl" data-testid="fx-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
             <span class="flex items-center gap-2">
-                <TrendingUp class="text-blue-500" size={15}/>
+                <TrendingUp class="text-blue-500" size={15} />
                 {$t('common.signals')}
             </span>
-            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15}/>
+            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
         </button>
         {#if showSignals}
             <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection
-                        signals={[...signals]}
-                        availablePairs={allConfiguredSlugs}
-                        availableAssets={allAssets}
-                        mainPairSlug={data.canonicalSlug}
-                        onchange={handleSignalsChange}
-                        onsyncpair={handleSyncPair}
-                        ondetailpair={handleDetailPair}
-                        onsyncasset={handleSyncAsset}
-                        ondetailasset={handleDetailAsset}
-                        {signalSummaries}
-                        {dateStart}
+                    signals={[...signals]}
+                    availablePairs={allConfiguredSlugs}
+                    availableAssets={allAssets}
+                    mainPairSlug={data.canonicalSlug}
+                    onchange={handleSignalsChange}
+                    onsyncpair={handleSyncPair}
+                    ondetailpair={handleDetailPair}
+                    onsyncasset={handleSyncAsset}
+                    ondetailasset={handleDetailAsset}
+                    {signalSummaries}
+                    {dateStart}
                 />
             </div>
         {/if}
@@ -866,7 +836,7 @@
         {#if loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
-                    <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2"/>
+                    <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
                     <p class="text-sm text-gray-500 dark:text-gray-400">{$t('fxDetail.loadingRates')}</p>
                 </div>
             </div>
@@ -874,22 +844,18 @@
             <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
             {#if showAesthetics}
                 <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
-                    <button
-                        class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
-                        onclick={() => showAesthetics = false}
-                        title={$t('common.close')}
-                    >
-                        <X size={16}/>
+                    <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
+                        <X size={16} />
                     </button>
                     <ChartAestheticsSection
-                            colorByBaseline={settings.colorByBaseline}
-                            areaFill={settings.areaFill}
-                            gridLines={settings.gridLines}
-                            staleGradient={settings.staleGradient}
-                            yAxisMode={settings.yAxisMode}
-                            yAxisMin={settings.yAxisMin}
-                            yAxisMax={settings.yAxisMax}
-                            onchange={handleAestheticsChange}
+                        colorByBaseline={settings.colorByBaseline}
+                        areaFill={settings.areaFill}
+                        gridLines={settings.gridLines}
+                        staleGradient={settings.staleGradient}
+                        yAxisMode={settings.yAxisMode}
+                        yAxisMin={settings.yAxisMin}
+                        yAxisMax={settings.yAxisMax}
+                        onchange={handleAestheticsChange}
                     />
                 </div>
             {/if}
@@ -898,11 +864,11 @@
                 <!-- Right toolbar -->
                 <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
                     <button
-                            data-testid="fx-detail-measure-btn"
-                            class="p-1.5 rounded-lg transition-colors {measureMode
+                        data-testid="fx-detail-measure-btn"
+                        class="p-1.5 rounded-lg transition-colors {measureMode
                             ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                            onclick={async () => {
+                        onclick={async () => {
                             if (measureMode) {
                                 measurePanel?.stopMeasureMode();
                             } else {
@@ -911,16 +877,16 @@
                                 measurePanel?.startMeasureMode();
                             }
                         }}
-                            title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
+                        title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
                     >
-                        <Ruler size={16}/>
+                        <Ruler size={16} />
                     </button>
                     <button
-                            data-testid="fx-detail-edit-btn"
-                            class="p-1.5 rounded-lg transition-colors {showDataEditor
+                        data-testid="fx-detail-edit-btn"
+                        class="p-1.5 rounded-lg transition-colors {showDataEditor
                             ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                            onclick={() => {
+                        onclick={() => {
                             if (showDataEditor) {
                                 showDataEditor = false;
                                 pendingPreviewSignal = null;
@@ -938,46 +904,46 @@
                                 showDataEditor = true;
                             }
                         }}
-                            title={showDataEditor ? $t('common.closeEditor') : $t('fxDetail.editRates')}
+                        title={showDataEditor ? $t('common.closeEditor') : $t('fxDetail.editRates')}
                     >
-                        <Pencil size={16}/>
+                        <Pencil size={16} />
                     </button>
                     <button
-                            data-testid="fx-detail-aesthetics-toggle"
-                            class="p-1.5 rounded-lg transition-colors {showAesthetics
+                        data-testid="fx-detail-aesthetics-toggle"
+                        class="p-1.5 rounded-lg transition-colors {showAesthetics
                             ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
-                            onclick={() => showAesthetics = !showAesthetics}
-                            title={$t('common.aesthetics')}
+                        onclick={() => (showAesthetics = !showAesthetics)}
+                        title={$t('common.aesthetics')}
                     >
-                        <Settings size={16}/>
+                        <Settings size={16} />
                     </button>
                 </div>
 
                 <PriceChartFull
-                        data={lineData}
-                        currency={displayQuote}
-                        mainSeriesLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
-                        chartHeight="400px"
-                        overlaySignals={allOverlaySignals}
-                        eventMarkers={chartEventMarkers}
-                        {overlaySignalInfoMap}
-                        colorByBaseline={settings.colorByBaseline}
-                        areaFill={settings.areaFill}
-                        showGridLines={settings.gridLines}
-                        showGradient={settings.staleGradient}
-                        yAxisMode={settings.yAxisMode}
-                        yAxisMin={settings.yAxisMin}
-                        yAxisMax={settings.yAxisMax}
-                        measureMode={measureMode}
-                        onMeasureClick={handleMeasureClick}
-                        onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
-                        hideToolbar={true}
-                        externalViewMode={viewMode}
-                        editMode={showDataEditor}
-                        onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
-                        staleLabel={$t('chart.tooltip.stale')}
-                        fxStaleLabel={$t('chart.tooltip.fxStale')}
+                    data={lineData}
+                    currency={displayQuote}
+                    mainSeriesLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
+                    chartHeight="400px"
+                    overlaySignals={allOverlaySignals}
+                    eventMarkers={chartEventMarkers}
+                    {overlaySignalInfoMap}
+                    colorByBaseline={settings.colorByBaseline}
+                    areaFill={settings.areaFill}
+                    showGridLines={settings.gridLines}
+                    showGradient={settings.staleGradient}
+                    yAxisMode={settings.yAxisMode}
+                    yAxisMin={settings.yAxisMin}
+                    yAxisMax={settings.yAxisMax}
+                    {measureMode}
+                    onMeasureClick={handleMeasureClick}
+                    onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
+                    hideToolbar={true}
+                    externalViewMode={viewMode}
+                    editMode={showDataEditor}
+                    onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
+                    staleLabel={$t('chart.tooltip.stale')}
+                    fxStaleLabel={$t('chart.tooltip.fxStale')}
                 />
             </div>
         {:else}
@@ -988,17 +954,16 @@
                             {$t('fxDetail.noDataManual')}
                         </p>
                         <button
-                                class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-                                onclick={() => { showDataEditor = true; }}
+                            class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                            onclick={() => {
+                                showDataEditor = true;
+                            }}
                         >
                             {$t('fxDetail.insertManually')}
                         </button>
                     {:else}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('fxDetail.noData')}</p>
-                        <button
-                                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                                onclick={handleSync}
-                        >
+                        <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync}>
                             {$t('fxDetail.syncRates')}
                         </button>
                     {/if}
@@ -1013,13 +978,13 @@
     {#if showDataEditor}
         <div data-testid="fx-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
             <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
-    <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
-                    <Pencil size={15}/>
-        {$t('fxDetail.editRates')}
+                <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+                    <Pencil size={15} />
+                    {$t('fxDetail.editRates')}
                 </span>
                 <button
-                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                        onclick={() => {
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    onclick={() => {
                         showDataEditor = false;
                         pendingPreviewSignal = null;
                         if (savedPanelStates) {
@@ -1029,19 +994,19 @@
                             savedPanelStates = null;
                         }
                     }}
-                        title={$t('common.closeEditor')}
-                >✕
+                    title={$t('common.closeEditor')}
+                    >✕
                 </button>
             </div>
             <div class="px-4 pb-4 pt-3">
                 <FxDataEditorSection
-                        bind:this={fxDataEditorRef}
-                        base={displayBase}
-                        quote={displayQuote}
-                        {chartData}
-                        bind:saving={savingEdit}
-                        bind:dirtyCount={editorDirtyCount}
-                        onsave={async (expandedRange) => {
+                    bind:this={fxDataEditorRef}
+                    base={displayBase}
+                    quote={displayQuote}
+                    {chartData}
+                    bind:saving={savingEdit}
+                    bind:dirtyCount={editorDirtyCount}
+                    onsave={async (expandedRange) => {
                         if (expandedRange) {
                             dateStart = expandedRange.start;
                             dateEnd = expandedRange.end;
@@ -1056,7 +1021,7 @@
                             savedPanelStates = null;
                         }
                     }}
-                        oncancel={() => {
+                    oncancel={() => {
                         showDataEditor = false;
                         pendingPreviewSignal = null;
                         if (savedPanelStates) {
@@ -1066,7 +1031,7 @@
                             savedPanelStates = null;
                         }
                     }}
-                        onpendingchange={(signal) => pendingPreviewSignal = signal}
+                    onpendingchange={(signal) => (pendingPreviewSignal = signal)}
                 />
             </div>
         </div>
@@ -1077,85 +1042,59 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <div class="flex items-center justify-between px-4 py-2.5">
-            <button
-                    class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white transition-colors"
-                    data-testid="fx-detail-measures-toggle"
-                    onclick={() => showMeasures = !showMeasures}
-            >
-                <Ruler class="text-violet-500" size={15}/>
+            <button class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white transition-colors" data-testid="fx-detail-measures-toggle" onclick={() => (showMeasures = !showMeasures)}>
+                <Ruler class="text-violet-500" size={15} />
                 {$t('common.measures')}
                 {#if measureMode}
                     <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
                 {/if}
-                <ChevronDown class="transition-transform {showMeasures ? 'rotate-180' : ''}" size={15}/>
+                <ChevronDown class="transition-transform {showMeasures ? 'rotate-180' : ''}" size={15} />
             </button>
             <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
+                type="button"
+                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
                            bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
                            hover:bg-violet-100 dark:hover:bg-violet-900/50
                            transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={lineData.length < 2}
-                    onclick={(e) => { e.stopPropagation(); showMeasures = true; measurePanel?.addMeasureFromChartData(); }}
-                    title={$t('common.addMeasure')}
+                disabled={lineData.length < 2}
+                onclick={(e) => {
+                    e.stopPropagation();
+                    showMeasures = true;
+                    measurePanel?.addMeasureFromChartData();
+                }}
+                title={$t('common.addMeasure')}
             >
                 <span class="text-sm leading-none">+</span>
             </button>
         </div>
         <!-- Single MeasurePanel instance — always mounted, hidden via CSS to preserve state -->
-        <div class={showMeasures ? "px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3" : "hidden"} data-testid="fx-detail-measures-panel">
-            <MeasurePanel
-                    bind:this={measurePanel}
-                    chartData={lineData}
-                    onmeasuremodechange={(active) => measureMode = active}
-                    onmeasureschange={(m) => measureSignals = m}
-                    overlaySignals={overlaySignals}
-                    {mainSignalInfo}
-                    {viewMode}
-            />
+        <div class={showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="fx-detail-measures-panel">
+            <MeasurePanel bind:this={measurePanel} chartData={lineData} onmeasuremodechange={(active) => (measureMode = active)} onmeasureschange={(m) => (measureSignals = m)} {overlaySignals} {mainSignalInfo} {viewMode} />
         </div>
     </div>
-
-
 
     <!-- ======================================================================= -->
     <!-- Provider Configuration Modal (reuses FxPairAddModal in editMode) -->
     <!-- ======================================================================= -->
     <div data-testid="fx-detail-provider-modal">
-        <FxPairAddModal
-                bind:open={showProviderModal}
-                dateEnd={dateEnd}
-                dateStart={dateStart}
-                editBase={data.canonicalBase}
-                editMode={true}
-                editQuote={data.canonicalQuote}
-                {editRoutes}
-                onclose={() => showProviderModal = false}
-                oncreated={handleProviderModalCreated}
-        />
+        <FxPairAddModal bind:open={showProviderModal} {dateEnd} {dateStart} editBase={data.canonicalBase} editMode={true} editQuote={data.canonicalQuote} {editRoutes} onclose={() => (showProviderModal = false)} oncreated={handleProviderModalCreated} />
     </div>
 
     <!-- Confirm modal for swap direction while editing -->
     <ConfirmModal
-            cancelText={$t('common.cancel')}
-            confirmText={$t('common.continue')}
-            message={$t('fxDetail.swapConfirmMessage')}
-            onCancel={() => showSwapConfirm = false}
-            onConfirm={() => { showSwapConfirm = false; doSwap(); }}
-            open={showSwapConfirm}
-            title={$t('fxDetail.swapConfirmTitle')}
-            warning={true}
+        cancelText={$t('common.cancel')}
+        confirmText={$t('common.continue')}
+        message={$t('fxDetail.swapConfirmMessage')}
+        onCancel={() => (showSwapConfirm = false)}
+        onConfirm={() => {
+            showSwapConfirm = false;
+            doSwap();
+        }}
+        open={showSwapConfirm}
+        title={$t('fxDetail.swapConfirmTitle')}
+        warning={true}
     />
 
     <!-- Page Sync Modal (sync all FX pairs + assets present on page) -->
-    <PageSyncModal
-            bind:open={showPageSyncModal}
-            {dateStart}
-            {dateEnd}
-            assets={syncAllAssets}
-            fxPairs={syncAllFxPairs}
-            onsynced={handlePageSyncComplete}
-            onclose={() => showPageSyncModal = false}
-    />
+    <PageSyncModal bind:open={showPageSyncModal} {dateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
 </div>
-

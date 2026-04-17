@@ -43,17 +43,7 @@
         oncancel: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        mode,
-        minDate = '',
-        maxDate = '',
-        defaultDate = '',
-        gaps = [],
-        onconfirm,
-        onconfirmMulti,
-        oncancel,
-    }: Props = $props();
+    let {open = $bindable(false), mode, minDate = '', maxDate = '', defaultDate = '', gaps = [], onconfirm, onconfirmMulti, oncancel}: Props = $props();
 
     // Single-gap state
     let boundaryDate = $state('');
@@ -67,7 +57,7 @@
     $effect(() => {
         if (open) {
             if (gaps.length > 0) {
-                boundaryDates = gaps.map(g => g.defaultDate);
+                boundaryDates = gaps.map((g) => g.defaultDate);
             } else {
                 boundaryDate = defaultDate;
             }
@@ -107,14 +97,14 @@
     let disabledDates = $derived.by(() => buildDisabledDates(minDate, maxDate));
 
     /** Multi-gap disabled dates (one set per gap) */
-    let multiDisabledDates = $derived.by(() => gaps.map(g => buildDisabledDates(g.minDate, g.maxDate)));
+    let multiDisabledDates = $derived.by(() => gaps.map((g) => buildDisabledDates(g.minDate, g.maxDate)));
 
     function handleDateSelected(date: string) {
         boundaryDate = date;
     }
 
     function handleMultiDateSelected(index: number, date: string) {
-        boundaryDates = boundaryDates.map((d, i) => i === index ? date : d);
+        boundaryDates = boundaryDates.map((d, i) => (i === index ? date : d));
     }
 
     let isValid = $derived.by(() => {
@@ -156,22 +146,26 @@
         tabindex="-1"
         aria-modal="true"
         onkeydown={handleKeydown}
-        onclick={(e) => { if (e.target === e.currentTarget) handleCancel(); }}
+        onclick={(e) => {
+            if (e.target === e.currentTarget) handleCancel();
+        }}
     >
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4 space-y-4
-                     {isMultiGap ? 'max-w-md' : 'max-w-sm'} max-h-[90vh] overflow-y-auto">
+        <div
+            class="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4 space-y-4
+                     {isMultiGap ? 'max-w-md' : 'max-w-sm'} max-h-[90vh] overflow-y-auto"
+        >
             <!-- Header -->
             <div class="flex items-center gap-3">
                 {#if mode === 'delete'}
                     <div class="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                        <Trash2 size={18} class="text-red-500"/>
+                        <Trash2 size={18} class="text-red-500" />
                     </div>
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
                         {$t('assets.schedule.deletePeriodTitle')}
                     </h3>
                 {:else}
                     <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                        <Scissors size={18} class="text-blue-500"/>
+                        <Scissors size={18} class="text-blue-500" />
                     </div>
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
                         {$t('assets.schedule.splitPeriodTitle')}
@@ -197,14 +191,7 @@
                                 {gap.label || `${$t('assets.schedule.boundaryDate')} ${i + 1}`}
                             </div>
                             <div class="flex justify-center">
-                                <SingleDatePicker
-                                    value={boundaryDates[i] ?? gap.defaultDate}
-                                    label={gap.label || $t('assets.schedule.boundaryDate')}
-                                    compact={true}
-                                    onchange={(d) => handleMultiDateSelected(i, d)}
-                                    disabledDates={multiDisabledDates[i]}
-                                    allowFuture={true}
-                                />
+                                <SingleDatePicker value={boundaryDates[i] ?? gap.defaultDate} label={gap.label || $t('assets.schedule.boundaryDate')} compact={true} onchange={(d) => handleMultiDateSelected(i, d)} disabledDates={multiDisabledDates[i]} allowFuture={true} />
                             </div>
                             <p class="text-center text-[10px] text-gray-400">
                                 {gap.minDate} → {gap.maxDate}
@@ -219,14 +206,7 @@
                         {$t('assets.schedule.boundaryDate')}
                     </div>
                     <div class="flex justify-center">
-                        <SingleDatePicker
-                            value={boundaryDate}
-                            label={$t('assets.schedule.boundaryDate')}
-                            compact={true}
-                            onchange={handleDateSelected}
-                            {disabledDates}
-                            allowFuture={true}
-                        />
+                        <SingleDatePicker value={boundaryDate} label={$t('assets.schedule.boundaryDate')} compact={true} onchange={handleDateSelected} {disabledDates} allowFuture={true} />
                     </div>
                     <p class="text-center text-[10px] text-gray-400">
                         {minDate} → {maxDate}
@@ -249,9 +229,7 @@
                     onclick={handleConfirm}
                     disabled={!isValid}
                     class="px-4 py-2 text-sm rounded-lg font-medium transition-colors disabled:opacity-50
-                           {mode === 'delete'
-                               ? 'bg-red-500 hover:bg-red-600 text-white'
-                               : 'bg-libre-green hover:bg-libre-green-dark text-white'}"
+                           {mode === 'delete' ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-libre-green hover:bg-libre-green-dark text-white'}"
                 >
                     {mode === 'delete' ? $t('common.confirmDelete') : $t('assets.schedule.confirmSplit')}
                 </button>

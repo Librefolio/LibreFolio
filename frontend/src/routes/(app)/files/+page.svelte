@@ -48,7 +48,6 @@
         {urlKey: 'date', type: 'date'},
     ];
 
-
     // LocalStorage keys (user-scoped via storage utils)
     const STORAGE_KEY_VIEW_MODE = 'filesPage_viewMode';
     const STORAGE_KEY_ACTIVE_TAB = 'filesPage_activeTab';
@@ -98,7 +97,7 @@
     let loading = true;
     let error: string | null = null;
     let showUploader = false;
-    let pendingStaticFiles: globalThis.File[] = [];  // Track files in static uploader
+    let pendingStaticFiles: globalThis.File[] = []; // Track files in static uploader
 
     // View mode with localStorage persistence (default: list/table)
     let viewMode: 'grid' | 'list' = 'list';
@@ -112,13 +111,11 @@
     let selectedBrokerIds: Set<number> = new Set();
 
     // Broker IDs where user is VIEWER (cannot upload — greyed out in selector)
-    $: viewerBrokerIds = new Set(
-        brokers.filter(b => (b as any).user_role === 'VIEWER').map(b => b.id)
-    );
+    $: viewerBrokerIds = new Set(brokers.filter((b) => (b as any).user_role === 'VIEWER').map((b) => b.id));
 
     // URL filter state
     let initialFilters: Record<string, FilterValue> = {};
-    let urlInitialized = false;  // Prevent URL update on initial load
+    let urlInitialized = false; // Prevent URL update on initial load
 
     // FilesTable refs for column visibility toggle
     let staticTableRef: FilesTable;
@@ -130,7 +127,7 @@
 
     // BRIM upload with broker selection
     let showBrimUploader = false;
-    let showBrimUploadModal = false;  // New modal for broker assignment
+    let showBrimUploadModal = false; // New modal for broker assignment
     let pendingBrimFiles: globalThis.File[] = [];
     // Map of file index -> broker_id for per-file assignment
     let fileBrokerAssignments: Map<number, number | null> = new Map();
@@ -138,8 +135,8 @@
     // Image edit modal state
     let showImageEditModal = false;
     let imageEditFile: globalThis.File | null = null;
-    let imageEditFileIndex: number | null = null;  // Index in pendingStaticFiles for replacement
-    let fileUploaderRef: FileUploader;  // Reference to FileUploader for replacing files
+    let imageEditFileIndex: number | null = null; // Index in pendingStaticFiles for replacement
+    let fileUploaderRef: FileUploader; // Reference to FileUploader for replacing files
 
     // Grid search & copy — now handled internally by FileGrid component
 
@@ -235,11 +232,11 @@
 
     async function loadBrokers() {
         try {
-            brokers = await zodiosApi.list_brokers_api_v1_brokers_get() as Broker[];
-            brokerMap = new Map(brokers.map(b => [b.id, {id: b.id, name: b.name}]));
+            brokers = (await zodiosApi.list_brokers_api_v1_brokers_get()) as Broker[];
+            brokerMap = new Map(brokers.map((b) => [b.id, {id: b.id, name: b.name}]));
             // If no filter selected, select all brokers by default
             if (selectedBrokerIds.size === 0 && brokers.length > 0) {
-                selectedBrokerIds = new Set(brokers.map(b => b.id));
+                selectedBrokerIds = new Set(brokers.map((b) => b.id));
                 saveBrokerFilter(selectedBrokerIds);
             }
         } catch (e) {
@@ -258,9 +255,9 @@
             } else {
                 // For BRIM, filter by selected broker IDs
                 const brokerIds = Array.from(selectedBrokerIds);
-                brimFiles = await zodiosApi.list_files_api_v1_brokers_import_files_get({
-                    queries: brokerIds.length > 0 ? {broker_ids: brokerIds} : undefined
-                }) as BrimFile[];
+                brimFiles = (await zodiosApi.list_files_api_v1_brokers_import_files_get({
+                    queries: brokerIds.length > 0 ? {broker_ids: brokerIds} : undefined,
+                })) as BrimFile[];
             }
         } catch (e) {
             error = e instanceof Error ? e.message : 'Failed to load files';
@@ -281,7 +278,7 @@
     }
 
     function selectAllBrokers() {
-        selectedBrokerIds = new Set(brokers.map(b => b.id));
+        selectedBrokerIds = new Set(brokers.map((b) => b.id));
         saveBrokerFilter(selectedBrokerIds);
         loadFiles();
     }
@@ -292,7 +289,7 @@
         loadFiles();
     }
 
-    async function handleUpload(event: CustomEvent<{ files: globalThis.File[] }>) {
+    async function handleUpload(event: CustomEvent<{files: globalThis.File[]}>) {
         const {files} = event.detail;
 
         try {
@@ -314,7 +311,7 @@
     let pendingImageFiles: globalThis.File[] = [];
 
     // Handle completion of image editing - process next image or finish
-    async function handleImageEditComplete(event: CustomEvent<{ url: string | null; file: File }>) {
+    async function handleImageEditComplete(event: CustomEvent<{url: string | null; file: File}>) {
         const {file: croppedFile} = event.detail;
 
         // Case 1: Edit from button (not during upload flow)
@@ -348,7 +345,7 @@
     }
 
     // Handle edit image button click from FileUploader
-    function handleEditImage(event: CustomEvent<{ file: globalThis.File; index: number }>) {
+    function handleEditImage(event: CustomEvent<{file: globalThis.File; index: number}>) {
         const {file, index} = event.detail;
         imageEditFile = file;
         imageEditFileIndex = index;
@@ -365,7 +362,7 @@
     }
 
     // Handle edit file (non-image) button click from FileUploader
-    function handleEditFile(event: CustomEvent<{ file: globalThis.File; index: number }>) {
+    function handleEditFile(event: CustomEvent<{file: globalThis.File; index: number}>) {
         const {file, index} = event.detail;
         fileEditFile = file;
         fileEditFileIndex = index;
@@ -373,7 +370,7 @@
     }
 
     // Handle completion of file editing (rename)
-    function handleFileEditComplete(event: CustomEvent<{ url: string | null; file: File }>) {
+    function handleFileEditComplete(event: CustomEvent<{url: string | null; file: File}>) {
         const {file: renamedFile} = event.detail;
 
         if (fileEditFileIndex !== null) {
@@ -400,7 +397,7 @@
     }
 
     // BRIM Upload handlers
-    function handleBrimFileSelect(event: CustomEvent<{ files: globalThis.File[] }>) {
+    function handleBrimFileSelect(event: CustomEvent<{files: globalThis.File[]}>) {
         const {files} = event.detail;
         pendingBrimFiles = files;
 
@@ -413,7 +410,7 @@
         // Initialize broker assignments - null means not assigned yet
         fileBrokerAssignments = new Map();
         // Brokers where user can upload (not VIEWER)
-        const editableBrokers = brokers.filter(b => !viewerBrokerIds.has(b.id));
+        const editableBrokers = brokers.filter((b) => !viewerBrokerIds.has(b.id));
         files.forEach((_, index) => {
             // If only one editable broker, auto-assign
             if (editableBrokers.length === 1) {
@@ -449,7 +446,7 @@
     }
 
     // Reactive derived: Svelte needs explicit var refs to track reactivity
-    $: canConfirmBrim = pendingBrimFiles.length > 0 && [...fileBrokerAssignments.values()].every(v => v !== null);
+    $: canConfirmBrim = pendingBrimFiles.length > 0 && [...fileBrokerAssignments.values()].every((v) => v !== null);
 
     async function confirmBrimUpload() {
         if (!canConfirmBrimUpload()) return;
@@ -471,7 +468,7 @@
             }
 
             // Add used broker IDs to selected filter so uploaded files are visible
-            usedBrokerIds.forEach(id => selectedBrokerIds.add(id));
+            usedBrokerIds.forEach((id) => selectedBrokerIds.add(id));
             selectedBrokerIds = new Set(selectedBrokerIds); // Trigger reactivity
             saveBrokerFilter(selectedBrokerIds);
 
@@ -495,7 +492,7 @@
     }
 
     // Handle static file selection change
-    function handleStaticFileChange(event: CustomEvent<{ files: globalThis.File[] }>) {
+    function handleStaticFileChange(event: CustomEvent<{files: globalThis.File[]}>) {
         pendingStaticFiles = event.detail.files;
     }
 
@@ -551,7 +548,6 @@
     }
 
     async function deleteFile(fileId: string, isBrim: boolean = false) {
-
         try {
             if (isBrim) {
                 await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}});
@@ -582,14 +578,13 @@
         }
     }
 
-
     function formatDate(dateStr: string): string {
         return new Date(dateStr).toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
         });
     }
 
@@ -613,41 +608,21 @@
             <!-- View mode toggle (only for static tab) -->
             {#if activeTab === 'static' && staticFiles.length > 0}
                 <div class="view-toggle" data-testid="view-mode-toggle">
-                    <button
-                            class="view-btn"
-                            class:active={viewMode === 'grid'}
-                            on:click={() => setViewMode('grid')}
-                            title="Grid view"
-                            data-testid="view-mode-grid"
-                    >
-                        <LayoutGrid size={18}/>
+                    <button class="view-btn" class:active={viewMode === 'grid'} on:click={() => setViewMode('grid')} title="Grid view" data-testid="view-mode-grid">
+                        <LayoutGrid size={18} />
                     </button>
-                    <button
-                            class="view-btn"
-                            class:active={viewMode === 'list'}
-                            on:click={() => setViewMode('list')}
-                            title="List view"
-                            data-testid="view-mode-list"
-                    >
-                        <List size={18}/>
+                    <button class="view-btn" class:active={viewMode === 'list'} on:click={() => setViewMode('list')} title="List view" data-testid="view-mode-list">
+                        <List size={18} />
                     </button>
                 </div>
             {/if}
 
             {#if activeTab === 'static'}
-                <button
-                        class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}"
-                        data-testid="upload-button"
-                        on:click={toggleStaticUploader}
-                >
+                <button class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}" data-testid="upload-button" on:click={toggleStaticUploader}>
                     {showUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
             {:else if activeTab === 'brim' && brokers.length > 0}
-                <button
-                        class="btn {showBrimUploader ? 'btn-secondary' : 'btn-primary'}"
-                        data-testid="upload-button"
-                        on:click={toggleBrimUploader}
-                >
+                <button class="btn {showBrimUploader ? 'btn-secondary' : 'btn-primary'}" data-testid="upload-button" on:click={toggleBrimUploader}>
                     {showBrimUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
             {/if}
@@ -657,79 +632,50 @@
     <!-- Tabs -->
     <div class="flex items-center gap-2">
         <div class="tabs flex-1" role="tablist">
-            <button
-                    aria-selected={activeTab === 'static'}
-                    class="tab"
-                    class:active={activeTab === 'static'}
-                    data-testid="files-tab-static"
-                    on:click={() => setActiveTab('static')}
-                    role="tab"
-            >
+            <button aria-selected={activeTab === 'static'} class="tab" class:active={activeTab === 'static'} data-testid="files-tab-static" on:click={() => setActiveTab('static')} role="tab">
                 {$t('uploads.staticResources')}
             </button>
-            <button
-                    aria-selected={activeTab === 'brim'}
-                    class="tab"
-                    class:active={activeTab === 'brim'}
-                    data-testid="files-tab-brim"
-                    on:click={() => setActiveTab('brim')}
-                    role="tab"
-            >
+            <button aria-selected={activeTab === 'brim'} class="tab" class:active={activeTab === 'brim'} data-testid="files-tab-brim" on:click={() => setActiveTab('brim')} role="tab">
                 {$t('uploads.brokerReports')}
             </button>
         </div>
         {#if viewMode === 'list'}
             <SelectionBar
-                    selectedCount={selectedFileIds.length}
-                    actions={[{
-                    id: 'delete',
-                    icon: Trash2,
-                    label: $t('common.delete') || 'Delete',
-                    variant: 'danger',
-                    onClick: handleBulkDeleteFiles,
-                }]}
-                    onClearSelection={() => {
+                selectedCount={selectedFileIds.length}
+                actions={[
+                    {
+                        id: 'delete',
+                        icon: Trash2,
+                        label: $t('common.delete') || 'Delete',
+                        variant: 'danger',
+                        onClick: handleBulkDeleteFiles,
+                    },
+                ]}
+                onClearSelection={() => {
                     selectedFileIds = [];
                     activeTableRef?.getTableRef()?.clearSelection();
                 }}
             />
-            <ColumnVisibilityToggle tableRef={activeTableRef?.getTableRef()}/>
+            <ColumnVisibilityToggle tableRef={activeTableRef?.getTableRef()} />
         {/if}
     </div>
-
 
     <!-- Upload area (static only) -->
     {#if showUploader && activeTab === 'static'}
         <div class="upload-area">
-            <FileUploader
-                    bind:this={fileUploaderRef}
-                    on:upload={handleUpload}
-                    on:change={handleStaticFileChange}
-                    on:editImage={handleEditImage}
-                    on:editFile={handleEditFile}
-                    on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
-                    multiple={true}
-                    maxSizeMB={maxUploadSizeMB}
-            />
+            <FileUploader bind:this={fileUploaderRef} on:upload={handleUpload} on:change={handleStaticFileChange} on:editImage={handleEditImage} on:editFile={handleEditFile} on:error={(e: CustomEvent<{message: string}>) => (error = e.detail.message)} multiple={true} maxSizeMB={maxUploadSizeMB} />
         </div>
     {/if}
 
     <!-- Upload area (BRIM) - just the file selector -->
     {#if showBrimUploader && activeTab === 'brim' && !showBrimUploadModal}
         <div class="upload-area brim-upload-area">
-            <FileUploader
-                    on:change={handleBrimFileSelect}
-                    on:editFile={handleEditFile}
-                    on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
-                    multiple={true}
-                    maxSizeMB={maxUploadSizeMB}
-                    accept=".csv,.xlsx,.xls"
-            />
+            <FileUploader on:change={handleBrimFileSelect} on:editFile={handleEditFile} on:error={(e: CustomEvent<{message: string}>) => (error = e.detail.message)} multiple={true} maxSizeMB={maxUploadSizeMB} accept=".csv,.xlsx,.xls" />
         </div>
     {/if}
 
     <!-- Error message -->
-    <InfoBanner dismissible message={error} ondismiss={() => error = null} variant="error"/>
+    <InfoBanner dismissible message={error} ondismiss={() => (error = null)} variant="error" />
 
     <!-- Content -->
     <div class="content">
@@ -739,49 +685,25 @@
             <!-- Static Files -->
             {#if staticFiles.length === 0}
                 <div class="empty-state">
-                    <FileIcon size={48}/>
+                    <FileIcon size={48} />
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else if viewMode === 'grid'}
-                <FileGrid
-                        files={staticFiles}
-                        mode="browse"
-                        cardSize="full"
-                        showSearch={true}
-                        showActions={true}
-                        on:delete={(e) => deleteFile(e.detail.id, false)}
-                />
+                <FileGrid files={staticFiles} mode="browse" cardSize="full" showSearch={true} showActions={true} on:delete={(e) => deleteFile(e.detail.id, false)} />
             {:else}
                 <!-- List View with New DataTable -->
-                <FilesTable
-                        bind:this={staticTableRef}
-                        files={staticFiles}
-                        type="static"
-                        onDelete={(id) => deleteFile(id, false)}
-                        {initialFilters}
-                        onFiltersChange={handleFiltersChange}
-                        onSelectionChange={(ids) => selectedFileIds = ids}
-                />
+                <FilesTable bind:this={staticTableRef} files={staticFiles} type="static" onDelete={(id) => deleteFile(id, false)} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
             {/if}
         {:else}
             <!-- BRIM Files -->
             {#if brimFiles.length === 0}
                 <div class="empty-state" data-testid="brim-empty-state">
-                    <FileText size={48}/>
+                    <FileText size={48} />
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else}
                 <!-- BRIM Table with New DataTable -->
-                <FilesTable
-                        bind:this={brimTableRef}
-                        files={brimFiles}
-                        type="brim"
-                        onDelete={(id) => deleteFile(id, true)}
-                        brokers={brokerMap}
-                        {initialFilters}
-                        onFiltersChange={handleFiltersChange}
-                        onSelectionChange={(ids) => selectedFileIds = ids}
-                />
+                <FilesTable bind:this={brimTableRef} files={brimFiles} type="brim" onDelete={(id) => deleteFile(id, true)} brokers={brokerMap} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
             {/if}
         {/if}
     </div>
@@ -789,9 +711,9 @@
 
 <!-- BRIM Upload Modal with per-file broker assignment -->
 <ModalBase
-        contentClass="upload-modal"
-        maxWidth="600px"
-        onRequestClose={() => {
+    contentClass="upload-modal"
+    maxWidth="600px"
+    onRequestClose={() => {
         if (pendingBrimFiles.length > 0) {
             showCloseUploaderConfirm = true;
             closeUploaderCallback = () => {
@@ -803,24 +725,27 @@
             closeBrimUploadModal();
         }
     }}
-        open={showBrimUploadModal}
-        zIndex={50}
+    open={showBrimUploadModal}
+    zIndex={50}
 >
     <div class="modal-header">
         <h3>{$t('uploads.assignBrokers') || 'Assign Brokers'}</h3>
-        <button class="modal-close" on:click={() => {
-                    if (pendingBrimFiles.length > 0) {
-                        showCloseUploaderConfirm = true;
-                        closeUploaderCallback = () => {
-                            cancelBrimUpload();
-                            showCloseUploaderConfirm = false;
-                            closeUploaderCallback = null;
-                        };
-                    } else {
-                        closeBrimUploadModal();
-                    }
-                }}>
-            <X size={20}/>
+        <button
+            class="modal-close"
+            on:click={() => {
+                if (pendingBrimFiles.length > 0) {
+                    showCloseUploaderConfirm = true;
+                    closeUploaderCallback = () => {
+                        cancelBrimUpload();
+                        showCloseUploaderConfirm = false;
+                        closeUploaderCallback = null;
+                    };
+                } else {
+                    closeBrimUploadModal();
+                }
+            }}
+        >
+            <X size={20} />
         </button>
     </div>
 
@@ -829,51 +754,47 @@
         <div class="assign-all-section">
             <span class="assign-all-label">{$t('uploads.assignAll') || 'Assign all to'}:</span>
             <BrokerSearchSelect
-                    brokers={brokers}
-                    disabledIds={viewerBrokerIds}
-                    dropdownPosition="bottom"
-                    onchange={(brokerId) => {
-                            if (brokerId != null) {
-                                assignAllBroker(brokerId);
-                            }
-                        }}
-                    placeholder={$t('uploads.chooseBroker') || '-- Choose broker --'}
-                    value={null}
+                {brokers}
+                disabledIds={viewerBrokerIds}
+                dropdownPosition="bottom"
+                onchange={(brokerId) => {
+                    if (brokerId != null) {
+                        assignAllBroker(brokerId);
+                    }
+                }}
+                placeholder={$t('uploads.chooseBroker') || '-- Choose broker --'}
+                value={null}
             />
         </div>
 
         <!-- File list with individual broker selection -->
         <div class="files-list">
             <p class="files-count">
-                {pendingBrimFiles.length} {pendingBrimFiles.length === 1 ? $t('uploads.file') || 'file' : $t('uploads.files') || 'files'} {$t('common.selected') || 'selected'}
+                {pendingBrimFiles.length}
+                {pendingBrimFiles.length === 1 ? $t('uploads.file') || 'file' : $t('uploads.files') || 'files'}
+                {$t('common.selected') || 'selected'}
             </p>
 
             {#each pendingBrimFiles as file, index}
                 <div class="file-row">
                     <div class="file-info">
-                        <FileSpreadsheet size={18} class="file-icon"/>
+                        <FileSpreadsheet size={18} class="file-icon" />
                         <span class="file-name" title={file.name}>{file.name}</span>
                         <button
-                                type="button"
-                                class="brim-edit-btn"
-                                title={$t('uploads.rename') || 'Rename'}
-                                on:click={() => {
-                                        fileEditFileIndex = index;
-                                        fileEditFile = file;
-                                        showFileEditModal = true;
-                                    }}
+                            type="button"
+                            class="brim-edit-btn"
+                            title={$t('uploads.rename') || 'Rename'}
+                            on:click={() => {
+                                fileEditFileIndex = index;
+                                fileEditFile = file;
+                                showFileEditModal = true;
+                            }}
                         >
-                            <Pencil size={12}/>
+                            <Pencil size={12} />
                         </button>
                         <span class="file-size">({formatBytes(file.size)})</span>
                     </div>
-                    <BrokerSearchSelect
-                            brokers={brokers}
-                            value={fileBrokerAssignments.get(index) ?? null}
-                            placeholder={$t('uploads.selectBroker') || '-- Select --'}
-                            disabledIds={viewerBrokerIds}
-                            onchange={(brokerId) => assignFileBroker(index, brokerId)}
-                    />
+                    <BrokerSearchSelect {brokers} value={fileBrokerAssignments.get(index) ?? null} placeholder={$t('uploads.selectBroker') || '-- Select --'} disabledIds={viewerBrokerIds} onchange={(brokerId) => assignFileBroker(index, brokerId)} />
                 </div>
             {/each}
         </div>
@@ -883,28 +804,18 @@
         <button class="btn btn-secondary" on:click={cancelBrimUpload}>
             {$t('common.cancel')}
         </button>
-        <button
-                class="btn btn-primary"
-                class:btn-disabled={!canConfirmBrim}
-                disabled={!canConfirmBrim}
-                on:click={confirmBrimUpload}
-        >
+        <button class="btn btn-primary" class:btn-disabled={!canConfirmBrim} disabled={!canConfirmBrim} on:click={confirmBrimUpload}>
             {$t('uploads.upload')} ({pendingBrimFiles.length})
         </button>
     </div>
 </ModalBase>
 
 <!-- Confirm close uploader modal -->
-<ModalBase
-        maxWidth="sm"
-        onRequestClose={cancelCloseUploader}
-        open={showCloseUploaderConfirm}
-        zIndex={60}
->
+<ModalBase maxWidth="sm" onRequestClose={cancelCloseUploader} open={showCloseUploaderConfirm} zIndex={60}>
     <div class="modal-header">
         <h3>{$t('common.confirm')}</h3>
         <button class="modal-close" on:click={cancelCloseUploader}>
-            <X size={20}/>
+            <X size={20} />
         </button>
     </div>
     <div class="modal-body">
@@ -923,27 +834,27 @@
 
 <!-- Image Edit Modal -->
 <ImageEditModal
-        file={imageEditFile}
-        on:cancel={handleImageEditCancel}
-        on:complete={handleImageEditComplete}
-        on:error={(e: CustomEvent<{message: string}>) => {
+    file={imageEditFile}
+    on:cancel={handleImageEditCancel}
+    on:complete={handleImageEditComplete}
+    on:error={(e: CustomEvent<{message: string}>) => {
         error = e.detail.message;
     }}
-        open={showImageEditModal}
-        preset="custom"
-        uploadOnComplete={imageEditFileIndex === null}
+    open={showImageEditModal}
+    preset="custom"
+    uploadOnComplete={imageEditFileIndex === null}
 />
 
 <!-- File Edit Modal (non-image files) -->
 <FileEditModal
-        file={fileEditFile}
-        on:cancel={handleFileEditCancel}
-        on:complete={handleFileEditComplete}
-        on:error={(e) => {
+    file={fileEditFile}
+    on:cancel={handleFileEditCancel}
+    on:complete={handleFileEditComplete}
+    on:error={(e) => {
         error = e.detail.message;
     }}
-        open={showFileEditModal}
-        uploadOnComplete={fileEditFileIndex === null}
+    open={showFileEditModal}
+    uploadOnComplete={fileEditFileIndex === null}
 />
 
 <style>
@@ -1098,7 +1009,6 @@
     :global(.dark) .upload-area {
         background: #374151;
     }
-
 
     .loading {
         text-align: center;
@@ -1291,7 +1201,6 @@
         flex-shrink: 0;
     }
 
-
     .files-list {
         display: flex;
         flex-direction: column;
@@ -1397,6 +1306,4 @@
             align-items: stretch;
         }
     }
-
 </style>
-

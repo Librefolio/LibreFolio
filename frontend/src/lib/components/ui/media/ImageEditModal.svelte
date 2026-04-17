@@ -16,34 +16,34 @@
     import {uploadFile} from '$lib/utils/upload';
     import ImageCropper from './ImageCropper.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName,} from '$lib/utils/imageCrop';
+    import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/imageCrop';
 
     // Props
     export let open: boolean = false;
     export let file: File | null = null;
     export let preset: PresetName = 'custom';
-    export let customConfig: Partial<{ aspectRatio: number; outputWidth: number | null; outputHeight: number | null; outputQuality: number }> | null = null;
+    export let customConfig: Partial<{aspectRatio: number; outputWidth: number | null; outputHeight: number | null; outputQuality: number}> | null = null;
     export let allowPresetChange: boolean = true;
     export let uploadOnComplete: boolean = true;
 
     const dispatch = createEventDispatcher<{
-        complete: { url: string | null; file: File };
+        complete: {url: string | null; file: File};
         cancel: void;
-        error: { message: string };
+        error: {message: string};
     }>();
 
-    const presetOptions: Array<{ value: PresetName; labelKey: string }> = [
+    const presetOptions: Array<{value: PresetName; labelKey: string}> = [
         {value: 'avatar', labelKey: 'common.avatar'},
         {value: 'broker-icon', labelKey: 'common.icon'},
         {value: 'custom', labelKey: 'common.custom'},
     ];
 
-    const aspectOptions: Array<{ value: number; label: string }> = [
+    const aspectOptions: Array<{value: number; label: string}> = [
         {value: 1, label: '1:1'},
         {value: 16 / 9, label: '16:9'},
         {value: 4 / 3, label: '4:3'},
         {value: 3 / 4, label: '3:4'},
-        {value: 0, label: 'Free'}
+        {value: 0, label: 'Free'},
     ];
 
     // Internal state
@@ -101,9 +101,7 @@
     }
 
     // Computed config from preset
-    $: config = customConfig
-        ? {...IMAGE_PRESETS[currentPreset], ...customConfig}
-        : IMAGE_PRESETS[currentPreset];
+    $: config = customConfig ? {...IMAGE_PRESETS[currentPreset], ...customConfig} : IMAGE_PRESETS[currentPreset];
 
     // Update output size when preset changes
     $: {
@@ -177,7 +175,7 @@
 
     let suppressChanges = false;
 
-    function handleCropperChange(e: CustomEvent<{ selection: { width: number; height: number } }>) {
+    function handleCropperChange(e: CustomEvent<{selection: {width: number; height: number}}>) {
         if (e.detail?.selection) {
             selectionWidth = Math.round(e.detail.selection.width);
             selectionHeight = Math.round(e.detail.selection.height);
@@ -196,7 +194,7 @@
             // Small delay to let cropper finish its initial setup
             setTimeout(() => {
                 cropper?.resetAll?.();
-                hasChanges = false;  // Reset the changes flag after init
+                hasChanges = false; // Reset the changes flag after init
                 // Keep suppressing for a bit longer to catch post-resetAll events
                 setTimeout(() => {
                     suppressChanges = false;
@@ -284,9 +282,7 @@
         error = null;
 
         try {
-            const blob = await getCroppedImageFromCropper(
-                cropperInstance, outputWidth, outputHeight, outputFormat, outputQuality / 100
-            );
+            const blob = await getCroppedImageFromCropper(cropperInstance, outputWidth, outputHeight, outputFormat, outputQuality / 100);
             const finalFileName = `${editedFileName || 'image'}.${outputFormat === 'jpeg' ? 'jpg' : outputFormat}`;
             const croppedFile = blobToFile(blob, finalFileName);
 
@@ -311,29 +307,19 @@
     $: modalTitle = $_(config.titleKey) || $_('uploads.editImage') || 'Edit Image';
 </script>
 
-<ModalBase
-        maxWidth="800px"
-        noTransition={false}
-        onRequestClose={requestClose}
-        open={open && !!imageSrc}
-        zIndex={50}
->
+<ModalBase maxWidth="800px" noTransition={false} onRequestClose={requestClose} open={open && !!imageSrc} zIndex={50}>
     <div aria-labelledby="modal-title" aria-modal="true" class="modal-content-inner" data-testid="image-edit-modal" role="dialog">
         <!-- Header -->
         <div class="modal-header">
             <h2 class="modal-title" id="modal-title">{modalTitle}</h2>
             <div class="header-actions">
                 {#if hasChanges}
-                    <button type="button" class="header-btn reset" on:click={() => cropper?.resetAll?.()}
-                            title={$_('uploads.resetAll') || 'Reset All'}
-                            data-testid="image-edit-reset">
-                        <RefreshCw size={16}/>
+                    <button type="button" class="header-btn reset" on:click={() => cropper?.resetAll?.()} title={$_('uploads.resetAll') || 'Reset All'} data-testid="image-edit-reset">
+                        <RefreshCw size={16} />
                     </button>
                 {/if}
-                <button class="header-btn" data-testid="image-edit-close" on:click={requestClose}
-                        title={$_('common.close') || 'Close'}
-                        type="button">
-                    <X size={20}/>
+                <button class="header-btn" data-testid="image-edit-close" on:click={requestClose} title={$_('common.close') || 'Close'} type="button">
+                    <X size={20} />
                 </button>
             </div>
         </div>
@@ -343,16 +329,8 @@
             <!-- Row 1: File name + quality (if JPEG/WebP) -->
             <div class="filename-row">
                 <div class="filename-editor">
-                    <input
-                            bind:value={editedFileName}
-                            class="filename-input"
-                            data-testid="image-edit-filename"
-                            on:input={() => hasChanges = true}
-                            placeholder="image"
-                            type="text"
-                    />
-                    <select bind:value={outputFormat} class="format-select"
-                            on:change={() => hasChanges = true}>
+                    <input bind:value={editedFileName} class="filename-input" data-testid="image-edit-filename" on:input={() => (hasChanges = true)} placeholder="image" type="text" />
+                    <select bind:value={outputFormat} class="format-select" on:change={() => (hasChanges = true)}>
                         <option value="png">.png</option>
                         <option value="jpeg">.jpg</option>
                         <option value="webp">.webp</option>
@@ -370,27 +348,15 @@
             <!-- Cropper with ellipse preview toggle on left -->
             <div class="cropper-section">
                 <!-- Ellipse toggle - LEFT side -->
-                <button class="ellipse-toggle" class:active={showEllipsePreview}
-                        data-testid="image-edit-ellipse-toggle"
-                        on:click={() => showEllipsePreview = !showEllipsePreview}
-                        title={showEllipsePreview ? 'Hide preview' : 'Show preview'}
-                        type="button">
+                <button class="ellipse-toggle" class:active={showEllipsePreview} data-testid="image-edit-ellipse-toggle" on:click={() => (showEllipsePreview = !showEllipsePreview)} title={showEllipsePreview ? 'Hide preview' : 'Show preview'} type="button">
                     {#if showEllipsePreview}
-                        <Eye size={16}/>
+                        <Eye size={16} />
                     {:else}
-                        <EyeOff size={16}/>
+                        <EyeOff size={16} />
                     {/if}
                 </button>
 
-                <ImageCropper
-                        aspectRatio={config.aspectRatio}
-                        bind:this={cropper}
-                        imageSrc={imageSrc || ''}
-                        on:change={handleCropperChange}
-                        showPreviewEllipse={showEllipsePreview}
-                        showRotateControls={true}
-                        showZoomSlider={true}
-                />
+                <ImageCropper aspectRatio={config.aspectRatio} bind:this={cropper} imageSrc={imageSrc || ''} on:change={handleCropperChange} showPreviewEllipse={showEllipsePreview} showRotateControls={true} showZoomSlider={true} />
             </div>
 
             <!-- === BOTTOM PANEL (2 columns) === -->
@@ -409,17 +375,11 @@
                     <div class="panel-row">
                         <span class="panel-label">{$_('uploads.outputSize') || 'Output'}:</span>
                         <div class="dimensions-group">
-                            <input class="dim-input" max={selectionWidth || 9999} min="1"
-                                   on:input={handleOutputWidthInput}
-                                   type="number"
-                                   value={effectiveOutputWidth}/>
+                            <input class="dim-input" max={selectionWidth || 9999} min="1" on:input={handleOutputWidthInput} type="number" value={effectiveOutputWidth} />
                             <span class="dim-sep">×</span>
-                            <input class="dim-input" max={selectionHeight || 9999} min="1"
-                                   on:input={handleOutputHeightInput}
-                                   type="number"
-                                   value={effectiveOutputHeight}/>
+                            <input class="dim-input" max={selectionHeight || 9999} min="1" on:input={handleOutputHeightInput} type="number" value={effectiveOutputHeight} />
                             <span class="dim-unit">px</span>
-                            <Lock class="lock-icon" size={12}/>
+                            <Lock class="lock-icon" size={12} />
                         </div>
                     </div>
 
@@ -429,10 +389,7 @@
                             <!-- Spacer to align with the Y (second) dim-input -->
                             <span class="scale-spacer"></span>
                             <span class="scale-x">×</span>
-                            <input class="scale-input" max="1"
-                                   min="0.01" on:input={handleScaleInput} step="0.01"
-                                   type="number"
-                                   value={scaleFactor.toFixed(2)}/>
+                            <input class="scale-input" max="1" min="0.01" on:input={handleScaleInput} step="0.01" type="number" value={scaleFactor.toFixed(2)} />
                         </div>
                     </div>
                 </div>
@@ -444,9 +401,7 @@
                             <span class="panel-label">{$_('uploads.outputPreset') || 'Preset'}:</span>
                             <div class="preset-buttons">
                                 {#each presetOptions as opt}
-                                    <button type="button" class="preset-btn"
-                                            class:active={currentPreset === opt.value}
-                                            on:click={() => selectPreset(opt.value)}>
+                                    <button type="button" class="preset-btn" class:active={currentPreset === opt.value} on:click={() => selectPreset(opt.value)}>
                                         {$_(opt.labelKey) || opt.value}
                                     </button>
                                 {/each}
@@ -459,9 +414,7 @@
                             <span class="panel-label">{$_('uploads.aspectRatio') || 'Ratio'}:</span>
                             <div class="aspect-buttons">
                                 {#each aspectOptions as opt}
-                                    <button type="button" class="aspect-btn"
-                                            class:active={currentAspect === opt.value}
-                                            on:click={() => selectAspectRatio(opt.value)}>
+                                    <button type="button" class="aspect-btn" class:active={currentAspect === opt.value} on:click={() => selectAspectRatio(opt.value)}>
                                         {opt.label}
                                     </button>
                                 {/each}
@@ -478,19 +431,15 @@
 
         <!-- Footer -->
         <div class="modal-footer">
-            <button class="btn btn-secondary" data-testid="image-edit-cancel" disabled={isUploading}
-                    on:click={requestClose}
-                    type="button">
+            <button class="btn btn-secondary" data-testid="image-edit-cancel" disabled={isUploading} on:click={requestClose} type="button">
                 {$_('common.cancel') || 'Cancel'}
             </button>
-            <button class="btn btn-primary" data-testid="image-edit-confirm" disabled={isUploading}
-                    on:click={handleUpload}
-                    type="button">
+            <button class="btn btn-primary" data-testid="image-edit-confirm" disabled={isUploading} on:click={handleUpload} type="button">
                 {#if isUploading}
-                    <Loader2 size={16} class="animate-spin"/>
+                    <Loader2 size={16} class="animate-spin" />
                     {$_('common.uploading') || 'Uploading...'}
                 {:else}
-                    <Upload size={16}/>
+                    <Upload size={16} />
                     {#if uploadOnComplete}
                         {$_('uploads.cropAndUpload') || 'Crop & Upload'}
                     {:else}
@@ -503,12 +452,7 @@
 </ModalBase>
 
 <!-- Confirmation dialog for closing with unsaved changes -->
-<ModalBase
-        maxWidth="sm"
-        onRequestClose={cancelClose}
-        open={showCloseConfirm}
-        zIndex={60}
->
+<ModalBase maxWidth="sm" onRequestClose={cancelClose} open={showCloseConfirm} zIndex={60}>
     <div class="confirm-dialog" data-testid="image-edit-confirm-dialog">
         <div class="confirm-header">
             <span class="confirm-icon">⚠️</span>
@@ -796,13 +740,15 @@
     }
 
     /* Preset buttons */
-    .preset-buttons, .aspect-buttons {
+    .preset-buttons,
+    .aspect-buttons {
         display: flex;
         gap: 0.25rem;
         flex-wrap: wrap;
     }
 
-    .preset-btn, .aspect-btn {
+    .preset-btn,
+    .aspect-btn {
         padding: 0.1875rem 0.5rem;
         font-size: 0.625rem;
         font-weight: 500;
@@ -814,29 +760,34 @@
         transition: all 0.15s;
     }
 
-    .preset-btn:hover, .aspect-btn:hover {
+    .preset-btn:hover,
+    .aspect-btn:hover {
         border-color: #1a4031;
         color: #1a4031;
     }
 
-    .preset-btn.active, .aspect-btn.active {
+    .preset-btn.active,
+    .aspect-btn.active {
         background: #1a4031;
         border-color: #1a4031;
         color: white;
     }
 
-    :global(.dark) .preset-btn, :global(.dark) .aspect-btn {
+    :global(.dark) .preset-btn,
+    :global(.dark) .aspect-btn {
         background: #374151;
         border-color: #4b5563;
         color: #d1d5db;
     }
 
-    :global(.dark) .preset-btn:hover, :global(.dark) .aspect-btn:hover {
+    :global(.dark) .preset-btn:hover,
+    :global(.dark) .aspect-btn:hover {
         border-color: #10b981;
         color: #10b981;
     }
 
-    :global(.dark) .preset-btn.active, :global(.dark) .aspect-btn.active {
+    :global(.dark) .preset-btn.active,
+    :global(.dark) .aspect-btn.active {
         background: #10b981;
         border-color: #10b981;
         color: white;
@@ -1111,4 +1062,3 @@
         }
     }
 </style>
-

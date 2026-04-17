@@ -28,15 +28,7 @@
         onGraceDaysChange?: (days: number) => void;
     }
 
-    let {
-        start,
-        end,
-        disabled = false,
-        isLateInterest = false,
-        graceDays = 0,
-        onchange,
-        onGraceDaysChange,
-    }: Props = $props();
+    let {start, end, disabled = false, isLateInterest = false, graceDays = 0, onchange, onGraceDaysChange}: Props = $props();
 
     let showGracePopover = $state(false);
     let anchorEl: HTMLElement | undefined = $state();
@@ -107,7 +99,9 @@
         const y = Math.max(0, Math.round(localY || 0));
         const m = Math.max(0, Math.round(localM || 0));
         const d = Math.max(0, Math.round(localD || 0));
-        localY = y; localM = m; localD = d;
+        localY = y;
+        localM = m;
+        localD = d;
         const total = ymdToDays(y, m, d);
         localGraceDays = total;
         onGraceDaysChange?.(total);
@@ -118,7 +112,7 @@
     }
 </script>
 
-<svelte:window onkeydown={handleKeydown}/>
+<svelte:window onkeydown={handleKeydown} />
 
 {#if isLateInterest}
     <!-- Late interest: special compact display with grace popover -->
@@ -139,13 +133,20 @@
         <div use:portal>
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="fixed inset-0" style="z-index:99998;" onclick={() => { showGracePopover = false; }}></div>
+            <div
+                class="fixed inset-0"
+                style="z-index:99998;"
+                onclick={() => {
+                    showGracePopover = false;
+                }}
+            ></div>
             <div style={gracePopoverStyle}>
-                <div class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600
-                            rounded-xl shadow-xl p-3 space-y-3" style="min-width:260px;">
-                    <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                        ⚡ Late Interest — Grace Period
-                    </div>
+                <div
+                    class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600
+                            rounded-xl shadow-xl p-3 space-y-3"
+                    style="min-width:260px;"
+                >
+                    <div class="text-xs font-medium text-gray-500 dark:text-gray-400">⚡ Late Interest — Grace Period</div>
                     <!-- Y / M / D inputs -->
                     <div class="flex items-center gap-1.5">
                         <input
@@ -181,9 +182,7 @@
                     </div>
                     <!-- Total days (also editable for convenience) -->
                     <div class="flex items-center gap-2">
-                        <label for="grace-days" class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                            = Total:
-                        </label>
+                        <label for="grace-days" class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap"> = Total: </label>
                         <input
                             id="grace-days"
                             type="number"
@@ -198,7 +197,9 @@
                     </div>
                     <button
                         type="button"
-                        onclick={() => { showGracePopover = false; }}
+                        onclick={() => {
+                            showGracePopover = false;
+                        }}
                         class="w-full px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-slate-700
                                text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
                     >
@@ -211,18 +212,7 @@
 {:else}
     <!-- Normal period: DateRangePicker embedded directly — 1 click to open calendar -->
     <div class="cell-drp-inline" class:opacity-50={disabled} class:pointer-events-none={disabled}>
-        <DateRangePicker
-            {start}
-            {end}
-            showPresets={false}
-            showCustomWindow={false}
-            showDateFields={true}
-            compact={true}
-            stacked={true}
-            usePortal={true}
-            allowFuture={true}
-            onchange={handleDateChange}
-        />
+        <DateRangePicker {start} {end} showPresets={false} showCustomWindow={false} showDateFields={true} compact={true} stacked={true} usePortal={true} allowFuture={true} onchange={handleDateChange} />
     </div>
 {/if}
 

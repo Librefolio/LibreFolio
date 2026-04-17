@@ -43,11 +43,7 @@
         height?: string;
     }
 
-    let {
-        data = [],
-        availableLabel = 'Available',
-        height = '180px',
-    }: Props = $props();
+    let {data = [], availableLabel = 'Available', height = '180px'}: Props = $props();
 
     // =========================================================================
     // State
@@ -163,7 +159,7 @@
         const borderWidth = 2;
 
         // Pre-load circular avatars in parallel
-        const avatarPromises: Array<{ index: number; promise: Promise<string> }> = [];
+        const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];
         data.forEach((slice, i) => {
             if (slice.avatarUrl && slice.percentage > 0) {
                 const url = slice.avatarUrl.includes('?') ? slice.avatarUrl : `${slice.avatarUrl}?img_preview=64x64`;
@@ -171,16 +167,14 @@
             }
         });
 
-        const resolvedAvatars = await Promise.all(
-            avatarPromises.map(async (p) => ({index: p.index, dataUrl: await p.promise}))
-        );
+        const resolvedAvatars = await Promise.all(avatarPromises.map(async (p) => ({index: p.index, dataUrl: await p.promise})));
         const avatarMap = new Map<number, string>();
-        resolvedAvatars.forEach(r => {
+        resolvedAvatars.forEach((r) => {
             if (r.dataUrl) avatarMap.set(r.index, r.dataUrl);
         });
 
         // Build chart data
-        const chartData: Array<{ value: number; name: string; itemStyle?: any; label?: any }> = [];
+        const chartData: Array<{value: number; name: string; itemStyle?: any; label?: any}> = [];
         const totalAllocated = data.reduce((sum, s) => sum + s.percentage, 0);
 
         data.forEach((slice, i) => {
@@ -265,36 +259,38 @@
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b'},
             },
-            series: [{
-                type: 'pie',
-                radius: ['55%', '95%'],
-                center: ['50%', '85%'],
-                startAngle: 180,
-                endAngle: 360,
-                padAngle: 2,
-                itemStyle: {
-                    borderRadius: 6,
-                    borderColor: isDark ? '#1e293b' : '#ffffff',
-                    borderWidth: 2,
+            series: [
+                {
+                    type: 'pie',
+                    radius: ['55%', '95%'],
+                    center: ['50%', '85%'],
+                    startAngle: 180,
+                    endAngle: 360,
+                    padAngle: 2,
+                    itemStyle: {
+                        borderRadius: 6,
+                        borderColor: isDark ? '#1e293b' : '#ffffff',
+                        borderWidth: 2,
+                    },
+                    label: {
+                        show: true,
+                        position: 'outside',
+                        distanceToLabelLine: 5,
+                        alignTo: 'labelLine',
+                    },
+                    labelLine: {
+                        show: true,
+                        length: 10,
+                        length2: 8,
+                        lineStyle: {color: isDark ? '#475569' : '#94a3b8'},
+                    },
+                    emphasis: {
+                        label: {show: true},
+                        scaleSize: 4,
+                    },
+                    data: chartData,
                 },
-                label: {
-                    show: true,
-                    position: 'outside',
-                    distanceToLabelLine: 5,
-                    alignTo: 'labelLine',
-                },
-                labelLine: {
-                    show: true,
-                    length: 10,
-                    length2: 8,
-                    lineStyle: {color: isDark ? '#475569' : '#94a3b8'},
-                },
-                emphasis: {
-                    label: {show: true},
-                    scaleSize: 4,
-                },
-                data: chartData,
-            }],
+            ],
         };
 
         chartInstance.setOption(option, true);
@@ -302,9 +298,4 @@
     }
 </script>
 
-<div
-        bind:this={chartContainer}
-        class="w-full"
-        style="height: {height};"
-></div>
-
+<div bind:this={chartContainer} class="w-full" style="height: {height};"></div>

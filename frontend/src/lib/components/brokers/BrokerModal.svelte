@@ -12,8 +12,8 @@
 
     const dispatch = createEventDispatcher<{
         close: void;
-        created: { id: number };
-        updated: { id: number };
+        created: {id: number};
+        updated: {id: number};
     }>();
 
     // Props
@@ -32,7 +32,6 @@
         opened_at?: string | null;
     } = {};
 
-
     let loading = false;
     let error: string | null = null;
     let formTouched = false;
@@ -43,18 +42,20 @@
         formTouched = true;
     }
 
-    async function handleSubmit(event: CustomEvent<{
-        name: string;
-        description?: string;
-        portal_url?: string;
-        icon_url?: string;
-        default_import_plugin?: string;
-        allow_cash_overdraft: boolean;
-        allow_asset_shorting: boolean;
-        is_active: boolean;
-        opened_at?: string;
-        initial_balances?: Array<{ code: string; amount: number }>;
-    }>) {
+    async function handleSubmit(
+        event: CustomEvent<{
+            name: string;
+            description?: string;
+            portal_url?: string;
+            icon_url?: string;
+            default_import_plugin?: string;
+            allow_cash_overdraft: boolean;
+            allow_asset_shorting: boolean;
+            is_active: boolean;
+            opened_at?: string;
+            initial_balances?: Array<{code: string; amount: number}>;
+        }>,
+    ) {
         loading = true;
         error = null;
 
@@ -76,17 +77,20 @@
             } else if (brokerId) {
                 // Update broker
                 // BrokerForm sends "" for cleared fields, value for set fields
-                await zodiosApi.update_broker_api_v1_brokers__broker_id__patch({
-                    name: event.detail.name,
-                    description: event.detail.description,
-                    portal_url: event.detail.portal_url,
-                    icon_url: event.detail.icon_url,
-                    default_import_plugin: event.detail.default_import_plugin,
-                    allow_cash_overdraft: event.detail.allow_cash_overdraft,
-                    allow_asset_shorting: event.detail.allow_asset_shorting,
-                    is_active: event.detail.is_active,
-                    opened_at: event.detail.opened_at || null
-                }, {params: {broker_id: brokerId}});
+                await zodiosApi.update_broker_api_v1_brokers__broker_id__patch(
+                    {
+                        name: event.detail.name,
+                        description: event.detail.description,
+                        portal_url: event.detail.portal_url,
+                        icon_url: event.detail.icon_url,
+                        default_import_plugin: event.detail.default_import_plugin,
+                        allow_cash_overdraft: event.detail.allow_cash_overdraft,
+                        allow_asset_shorting: event.detail.allow_asset_shorting,
+                        is_active: event.detail.is_active,
+                        opened_at: event.detail.opened_at || null,
+                    },
+                    {params: {broker_id: brokerId}},
+                );
 
                 formTouched = false;
                 dispatch('updated', {id: brokerId});
@@ -121,63 +125,37 @@
     }
 </script>
 
-<ModalBase
-        closeOnBackdropClick={!loading}
-        closeOnEscape={!loading}
-        maxWidth="lg"
-        onRequestClose={handleClose}
-        open={isOpen}
-        testId="broker-modal"
-        zIndex={50}
->
+<ModalBase closeOnBackdropClick={!loading} closeOnEscape={!loading} maxWidth="lg" onRequestClose={handleClose} open={isOpen} testId="broker-modal" zIndex={50}>
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div
-            class="flex flex-col max-h-[85vh]"
-            on:input={handleFormChange}
-    >
+    <div class="flex flex-col max-h-[85vh]" on:input={handleFormChange}>
         <!-- Header (sticky top) -->
         <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
                 {mode === 'create' ? $_('brokers.addBroker') : $_('brokers.editBroker')}
             </h2>
-            <button
-                    class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-                    disabled={loading}
-                    on:click={handleClose}
-            >
-                <X size={20}/>
+            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={loading} on:click={handleClose}>
+                <X size={20} />
             </button>
         </div>
 
         <!-- Error message -->
-        <InfoBanner class="mx-4 mt-4 shrink-0" dismissible message={error} ondismiss={() => error = ''} variant="error"/>
+        <InfoBanner class="mx-4 mt-4 shrink-0" dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
         <!-- Form (scrollable area with sticky footer inside) -->
         <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">
             <div class="p-4 pb-0">
-                <BrokerForm
-                        {initialData}
-                        {loading}
-                        {mode}
-                        on:cancel={handleClose}
-                        on:submit={handleSubmit}
-                />
+                <BrokerForm {initialData} {loading} {mode} on:cancel={handleClose} on:submit={handleSubmit} />
             </div>
         </div>
     </div>
 </ModalBase>
 
 <!-- Discard Changes Confirmation Modal -->
-<ModalBase
-        maxWidth="sm"
-        onRequestClose={cancelDiscard}
-        open={showDiscardConfirm}
-        zIndex={60}
->
+<ModalBase maxWidth="sm" onRequestClose={cancelDiscard} open={showDiscardConfirm} zIndex={60}>
     <div class="p-6">
         <div class="flex items-center gap-3 mb-3">
             <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
-                <AlertTriangle class="text-amber-600 dark:text-amber-400" size={20}/>
+                <AlertTriangle class="text-amber-600 dark:text-amber-400" size={20} />
             </div>
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
                 {$_('common.discardChanges')}
@@ -187,16 +165,10 @@
             {$_('brokers.discardChangesWarning')}
         </p>
         <div class="flex justify-end gap-3">
-            <button
-                    class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                    on:click={cancelDiscard}
-            >
+            <button class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" on:click={cancelDiscard}>
                 {$_('common.continueEditing')}
             </button>
-            <button
-                    class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-                    on:click={confirmDiscard}
-            >
+            <button class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors" on:click={confirmDiscard}>
                 {$_('common.discardAndClose')}
             </button>
         </div>

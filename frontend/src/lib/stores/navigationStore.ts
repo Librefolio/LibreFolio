@@ -5,7 +5,7 @@
  * when there IS previous SPA history, or fall back to a parent path
  * when the user arrived via direct link / bookmark.
  */
-import { goto } from '$app/navigation';
+import {goto} from '$app/navigation';
 
 let depth = 0;
 
@@ -44,4 +44,3 @@ export function goBack(fallbackPath: string) {
 export function resetNavDepth() {
     depth = 0;
 }
-

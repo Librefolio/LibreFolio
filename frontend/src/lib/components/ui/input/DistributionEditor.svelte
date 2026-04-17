@@ -47,7 +47,6 @@
         weight: number; // 0-100 display range
     }
 
-
     // =========================================================================
     // Props
     // =========================================================================
@@ -64,16 +63,7 @@
         onAskProvider?: () => void;
     }
 
-    let {
-        kind,
-        value = $bindable({}),
-        readonly: isReadonly = false,
-        disabled = false,
-        onchange,
-        hasProvider = false,
-        askingProvider = false,
-        onAskProvider,
-    }: Props = $props();
+    let {kind, value = $bindable({}), readonly: isReadonly = false, disabled = false, onchange, hasProvider = false, askingProvider = false, onAskProvider}: Props = $props();
 
     // =========================================================================
     // State
@@ -137,24 +127,18 @@
     let isValid = $derived(Math.abs(totalPercent - 100) < 0.005);
     let isExcess = $derived(totalPercent > 100.005);
     let isMissing = $derived(totalPercent < 99.995 && entries.length > 0);
-    let maxWeight = $derived(Math.max(...entries.map(e => e.weight), 1));
+    let maxWeight = $derived(Math.max(...entries.map((e) => e.weight), 1));
 
     let validBarClass = $derived(isValid ? 'bg-libre-green' : isExcess ? 'bg-red-400' : 'bg-amber-400');
 
     /** Sector select options (all keys, with i18n labels) */
-    let allSectorOptions = $derived(
-        getSectorKeysList().map(k => ({value: k, label: $t(`sectors.${sectorI18nKey(k)}`) || k}))
-    );
+    let allSectorOptions = $derived(getSectorKeysList().map((k) => ({value: k, label: $t(`sectors.${sectorI18nKey(k)}`) || k})));
 
     /** Country select options (all countries + 'Other' catch-all, with flag + name) */
-    let allCountryOptions = $derived([
-        ...countries.map(c => ({value: c.iso3, label: `${c.flag_emoji || ''} ${c.iso3} — ${c.name}`.trim()})),
-        {value: 'Other', label: `🏳️ Other — ${$t('common.other')}`},
-    ]
-    );
+    let allCountryOptions = $derived([...countries.map((c) => ({value: c.iso3, label: `${c.flag_emoji || ''} ${c.iso3} — ${c.name}`.trim()})), {value: 'Other', label: `🏳️ Other — ${$t('common.other')}`}]);
 
     /** Already-used keys for exclusion in "Add" logic */
-    let usedKeys = $derived(new Set(entries.map(e => e.key)));
+    let usedKeys = $derived(new Set(entries.map((e) => e.key)));
 
     // =========================================================================
     // Actions
@@ -171,26 +155,26 @@
     }
 
     function updateWeight(id: string, newVal: number) {
-        entries = entries.map(e => e.id === id ? {...e, weight: Math.max(0, Math.min(100, newVal))} : e);
+        entries = entries.map((e) => (e.id === id ? {...e, weight: Math.max(0, Math.min(100, newVal))} : e));
         emitChange();
     }
 
     function updateKey(id: string, newKey: string) {
-        entries = entries.map(e => e.id === id ? {...e, key: newKey} : e);
+        entries = entries.map((e) => (e.id === id ? {...e, key: newKey} : e));
         emitChange();
     }
 
     function removeEntry(id: string) {
-        entries = entries.filter(e => e.id !== id);
+        entries = entries.filter((e) => e.id !== id);
         emitChange();
     }
 
     function addEntry() {
         let defaultKey = '';
         if (kind === 'sector') {
-            defaultKey = getSectorKeysList().find(k => !usedKeys.has(k)) ?? '';
+            defaultKey = getSectorKeysList().find((k) => !usedKeys.has(k)) ?? '';
         } else {
-            const firstUnused = countries.find(c => !usedKeys.has(c.iso3));
+            const firstUnused = countries.find((c) => !usedKeys.has(c.iso3));
             defaultKey = firstUnused?.iso3 ?? '';
         }
         entries = [...entries, {id: generateUUID(), key: defaultKey, weight: 100}];
@@ -200,9 +184,7 @@
     /** Balance a single entry: assign all deficit/excess to this row */
     function balanceEntry(id: string) {
         const delta = 100 - totalPercent;
-        entries = entries.map(e =>
-            e.id === id ? {...e, weight: Math.max(0, Math.min(100, e.weight + delta))} : e
-        );
+        entries = entries.map((e) => (e.id === id ? {...e, weight: Math.max(0, Math.min(100, e.weight + delta))} : e));
         emitChange();
     }
 
@@ -211,12 +193,12 @@
         const delta = 100 - totalPercent;
         if (Math.abs(delta) < 0.005) return;
         const selectedSet = new Set(selectedIds);
-        const selectedEntries = entries.filter(e => selectedSet.has(e.id));
+        const selectedEntries = entries.filter((e) => selectedSet.has(e.id));
         if (selectedEntries.length === 0) return;
 
         const totalSelectedWeight = selectedEntries.reduce((s, e) => s + e.weight, 0);
 
-        entries = entries.map(e => {
+        entries = entries.map((e) => {
             if (!selectedSet.has(e.id)) return e;
             let share: number;
             if (totalSelectedWeight > 0) {
@@ -238,7 +220,7 @@
 
     function confirmBulkDelete() {
         const deleteSet = new Set(pendingDeleteIds);
-        entries = entries.filter(e => !deleteSet.has(e.id));
+        entries = entries.filter((e) => !deleteSet.has(e.id));
         selectedIds = [];
         pendingDeleteIds = [];
         showDeleteConfirm = false;
@@ -253,7 +235,7 @@
         }
         // Geographic: handle 'Other' specially, otherwise show flag + iso3
         if (key === 'Other') return `🏳️ Other`;
-        const c = countries.find(c => c.iso3 === key);
+        const c = countries.find((c) => c.iso3 === key);
         if (c) return `${c.flag_emoji || ''} ${c.iso3}`.trim();
         return key;
     }
@@ -268,14 +250,14 @@
         // Key / Name column — SearchSelect when not readonly
         cols.push({
             id: 'key',
-            header: () => kind === 'sector' ? $t('common.sectorDistribution') : $t('common.geoDistribution'),
+            header: () => (kind === 'sector' ? $t('common.sectorDistribution') : $t('common.geoDistribution')),
             type: 'custom' as const,
             cell: (row) => {
                 if (isReadonly || disabled) {
                     return {type: 'html' as const, html: `<span class="text-xs">${formatLabel(row.key)}</span>`};
                 }
                 if (kind === 'geographic') {
-                    const excluded = new Set([...usedKeys].filter(k => k !== row.key));
+                    const excluded = new Set([...usedKeys].filter((k) => k !== row.key));
                     return {
                         type: 'custom' as const,
                         component: CountrySearchSelect,
@@ -290,7 +272,7 @@
                     };
                 }
                 // Sector
-                const excluded = new Set([...usedKeys].filter(k => k !== row.key));
+                const excluded = new Set([...usedKeys].filter((k) => k !== row.key));
                 return {
                     type: 'custom' as const,
                     component: SectorSearchSelect,
@@ -351,22 +333,24 @@
     });
 
     let rowActions = $derived<RowAction<DistEntry>[]>(
-        isReadonly || disabled ? [] : [
-            {
-                id: 'balance',
-                icon: Scale,
-                label: () => $t('assets.distribution.balanceRow'),
-                onClick: (row) => balanceEntry(row.id),
-                disabled: () => isValid,
-            },
-            {
-                id: 'delete',
-                icon: XIcon,
-                label: 'Remove',
-                variant: 'danger',
-                onClick: (row) => removeEntry(row.id),
-            },
-        ]
+        isReadonly || disabled
+            ? []
+            : [
+                  {
+                      id: 'balance',
+                      icon: Scale,
+                      label: () => $t('assets.distribution.balanceRow'),
+                      onClick: (row) => balanceEntry(row.id),
+                      disabled: () => isValid,
+                  },
+                  {
+                      id: 'delete',
+                      icon: XIcon,
+                      label: 'Remove',
+                      variant: 'danger',
+                      onClick: (row) => removeEntry(row.id),
+                  },
+              ],
     );
 </script>
 
@@ -396,31 +380,36 @@
                             onClick: handleBulkDelete,
                         },
                     ]}
-                    onClearSelection={() => { selectedIds = []; }}
+                    onClearSelection={() => {
+                        selectedIds = [];
+                    }}
                 />
             {/if}
             {#if !isReadonly && !disabled}
-                <button type="button" onclick={addEntry}
-                        class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                        title={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}>
-                    <Plus size={10}/>
+                <button
+                    type="button"
+                    onclick={addEntry}
+                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                    title={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}
+                >
+                    <Plus size={10} />
                     <span class="hidden sm:inline">{kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}</span>
                 </button>
             {/if}
             {#if !isReadonly && !disabled && onAskProvider}
                 <button
-                        type="button"
-                        onclick={onAskProvider}
-                        disabled={!hasProvider || askingProvider}
-                        class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded
+                    type="button"
+                    onclick={onAskProvider}
+                    disabled={!hasProvider || askingProvider}
+                    class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded
                                text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200
                                disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        title={$t('assets.identifiers.askProvider')}
+                    title={$t('assets.identifiers.askProvider')}
                 >
                     {#if askingProvider}
-                        <Loader2 size={10} class="animate-spin"/>
+                        <Loader2 size={10} class="animate-spin" />
                     {:else}
-                        <RefreshCw size={10}/>
+                        <RefreshCw size={10} />
                     {/if}
                     <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
                 </button>
@@ -431,23 +420,25 @@
     <!-- DataTable -->
     {#if entries.length > 0}
         <DataTable
-                data={entries}
-                columns={dtColumns}
-                getRowId={(r) => r.id}
-                storageKey="dist-editor-{kind}"
-                enableSelection={!isReadonly && !disabled}
-                onSelectionChange={(ids) => { selectedIds = ids; }}
-                enablePagination={true}
-                defaultPageSize={5}
-                pageSizeOptions={[5, 10, 25, 0]}
-                enableColumnFilters={false}
-                enableSorting={true}
-                enableColumnResize={false}
-                enableColumnVisibility={false}
-                enableActions={!isReadonly && !disabled}
-                actionsColumnWidth="70px"
-                rowActions={rowActions}
-                tableLayout="auto"
+            data={entries}
+            columns={dtColumns}
+            getRowId={(r) => r.id}
+            storageKey="dist-editor-{kind}"
+            enableSelection={!isReadonly && !disabled}
+            onSelectionChange={(ids) => {
+                selectedIds = ids;
+            }}
+            enablePagination={true}
+            defaultPageSize={5}
+            pageSizeOptions={[5, 10, 25, 0]}
+            enableColumnFilters={false}
+            enableSorting={true}
+            enableColumnResize={false}
+            enableColumnVisibility={false}
+            enableActions={!isReadonly && !disabled}
+            actionsColumnWidth="70px"
+            {rowActions}
+            tableLayout="auto"
         />
 
         <!-- Total badge -->
@@ -478,7 +469,9 @@
     confirmText={$t('common.delete')}
     warning={true}
     onConfirm={confirmBulkDelete}
-    onCancel={() => { showDeleteConfirm = false; pendingDeleteIds = []; }}
+    onCancel={() => {
+        showDeleteConfirm = false;
+        pendingDeleteIds = [];
+    }}
     zIndex={80}
 />
-

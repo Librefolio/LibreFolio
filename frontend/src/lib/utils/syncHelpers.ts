@@ -20,7 +20,7 @@ import type {LegDetail} from '$lib/utils/providerHelpers';
 export type SyncStatus = 'ok' | 'partial' | 'failed' | 'skipped';
 
 export interface SyncResult {
-    id: string;               // pair slug for FX, asset_id.toString() for Asset
+    id: string; // pair slug for FX, asset_id.toString() for Asset
     status: SyncStatus;
     points_fetched: number;
     points_changed: number;
@@ -96,4 +96,3 @@ export function formatTime(sec: number): string {
     const s = sec % 60;
     return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`;
 }
-

@@ -41,7 +41,7 @@ export interface SignalParamDescriptor {
     suffix?: string;
     // ── For type === 'select' ──
     /** Static options list */
-    options?: Array<{ value: string; label: string }>;
+    options?: Array<{value: string; label: string}>;
     /**
      * If set, the modal resolves options at runtime using this key.
      * e.g. 'configuredFxPairs' → modal passes configured pairs as options
@@ -109,9 +109,7 @@ export interface SignalConfig {
 }
 
 /** Default color palette — cycled when adding new signals */
-export const DEFAULT_SIGNAL_COLORS = [
-    '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
-];
+export const DEFAULT_SIGNAL_COLORS = ['#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RENDERED SIGNAL — Output format for chart components
@@ -229,9 +227,7 @@ export abstract class ChartSignal {
      * @param baseData  Primary chart data (provides date axis + baseValue reference)
      * @returns         Points aligned to baseData dates (absolute values)
      */
-    abstract computePoints(
-        baseData: LineDataPoint[],
-    ): LineDataPoint[];
+    abstract computePoints(baseData: LineDataPoint[]): LineDataPoint[];
 
     /** Human-readable label for ECharts legend and tooltip */
     abstract getLabel(): string;
@@ -243,9 +239,7 @@ export abstract class ChartSignal {
      * are persistent style overrides and must be included.
      */
     toConfig(): SignalConfig {
-        const serializableParams = Object.fromEntries(
-            Object.entries(this.params).filter(([k]) => k !== '_resolvedData'),
-        );
+        const serializableParams = Object.fromEntries(Object.entries(this.params).filter(([k]) => k !== '_resolvedData'));
         return {
             id: this.id,
             signalType: (this.constructor as typeof ChartSignal).signalType,
@@ -282,7 +276,7 @@ export abstract class ChartSignal {
         if (viewMode === 'percentage' && yAxis === 0 && absData.length > 0 && baseData.length > 0) {
             const p0 = baseData[0].value;
             if (p0 !== 0) {
-                data = absData.map(d => ({
+                data = absData.map((d) => ({
                     ...d,
                     value: ((d.value - p0) / p0) * 100,
                 }));
@@ -317,4 +311,3 @@ export abstract class ChartSignal {
         return result.data.length > 0 ? [result] : [];
     }
 }
-

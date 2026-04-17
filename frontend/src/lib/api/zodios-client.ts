@@ -82,8 +82,8 @@ const axiosInstance = axios.create({
     timeout: DEFAULT_TIMEOUT,
     withCredentials: true, // Include session cookies in requests
     paramsSerializer: {
-        serialize: serializeParams
-    }
+        serialize: serializeParams,
+    },
 });
 
 // =============================================================================
@@ -105,7 +105,7 @@ axiosInstance.interceptors.request.use(
     },
     (error) => {
         return Promise.reject(error);
-    }
+    },
 );
 
 // =============================================================================
@@ -133,7 +133,7 @@ axiosInstance.interceptors.response.use(
 
         // Let the error propagate - Zodios will handle it
         return Promise.reject(error);
-    }
+    },
 );
 
 // =============================================================================
@@ -166,7 +166,7 @@ axiosInstance.interceptors.response.use(
  */
 export const zodiosApi = createApiClient(API_BASE, {
     axiosInstance,
-    validate: 'response' // Validate responses with Zod, trust request params
+    validate: 'response', // Validate responses with Zod, trust request params
 });
 
 // =============================================================================
@@ -207,4 +207,3 @@ export class ApiError extends Error {
 
 export {axiosInstance};
 export default zodiosApi;
-

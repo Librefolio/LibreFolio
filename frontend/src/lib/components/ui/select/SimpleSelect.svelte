@@ -40,21 +40,7 @@
         showChevron?: boolean;
     }
 
-    let {
-        value = $bindable(''),
-        options,
-        placeholder = '',
-        disabled = false,
-        loading = false,
-        dropdownPosition = 'bottom',
-        class: className = '',
-        testId,
-        item,
-        selectedItem,
-        onchange,
-        compact = false,
-        showChevron = true,
-    }: Props = $props();
+    let {value = $bindable(''), options, placeholder = '', disabled = false, loading = false, dropdownPosition = 'bottom', class: className = '', testId, item, selectedItem, onchange, compact = false, showChevron = true}: Props = $props();
 
     // Internal state
     let isOpen = $state(false);
@@ -69,7 +55,7 @@
     let fixedWidth = $state(0);
 
     // Derived state
-    let selectedOption = $derived(options.find(o => o.value === value));
+    let selectedOption = $derived(options.find((o) => o.value === value));
 
     // Compute dropdown position when opening
     function updateDropdownPosition() {
@@ -94,7 +80,7 @@
             computedPosition = 'bottom';
         } else {
             // auto
-            computedPosition = (spaceBelow < 200 && spaceAbove > spaceBelow) ? 'top' : 'bottom';
+            computedPosition = spaceBelow < 200 && spaceAbove > spaceBelow ? 'top' : 'bottom';
         }
 
         const available = computedPosition === 'top' ? spaceAbove : spaceBelow;
@@ -228,16 +214,16 @@
 <div bind:this={containerRef} class="relative {className}" data-testid={testId}>
     <!-- Trigger Button -->
     <button
-            class="w-full flex items-center justify-between {compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-2 text-sm'} border rounded-lg transition-all text-left
+        class="w-full flex items-center justify-between {compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-2 text-sm'} border rounded-lg transition-all text-left
                {disabled || loading
-                   ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-700'
-                   : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}
+            ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-700'
+            : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}
                {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
-            data-testid={testId ? `${testId}-button` : undefined}
-            {disabled}
-            onclick={toggleDropdown}
-            onkeydown={handleKeydown}
-            type="button"
+        data-testid={testId ? `${testId}-button` : undefined}
+        {disabled}
+        onclick={toggleDropdown}
+        onkeydown={handleKeydown}
+        type="button"
     >
         {#if selectedOption}
             {#if selectedItem}
@@ -251,10 +237,7 @@
             <span class="text-gray-400">{placeholder || $_('common.select')}</span>
         {/if}
         {#if showChevron}
-            <ChevronDown
-                    class="ml-2 flex-shrink-0 text-gray-400 transition-transform {isOpen ? 'rotate-180' : ''}"
-                    size={compact ? 12 : 16}
-            />
+            <ChevronDown class="ml-2 flex-shrink-0 text-gray-400 transition-transform {isOpen ? 'rotate-180' : ''}" size={compact ? 12 : 16} />
         {/if}
     </button>
 
@@ -262,13 +245,13 @@
     {#if isOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-                data-simpleselect-dropdown={_dropdownId}
-                class="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+            data-simpleselect-dropdown={_dropdownId}
+            class="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
                    rounded-lg shadow-lg overflow-y-auto"
-                style="top: {fixedTop}px; left: {fixedLeft}px; min-width: {fixedWidth}px; width: max-content; max-height: {dropdownMaxHeight};"
-                onwheel={(e) => e.stopPropagation()}
-                ontouchmove={(e) => e.stopPropagation()}
-                use:adjustFixedPositionAction
+            style="top: {fixedTop}px; left: {fixedLeft}px; min-width: {fixedWidth}px; width: max-content; max-height: {dropdownMaxHeight};"
+            onwheel={(e) => e.stopPropagation()}
+            ontouchmove={(e) => e.stopPropagation()}
+            use:adjustFixedPositionAction
         >
             {#if loading}
                 <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
@@ -281,12 +264,12 @@
             {:else}
                 {#each options as option, index (option.value)}
                     <button
-                            type="button"
-                            role="menuitem"
-                            onclick={() => selectOption(option)}
-                            onmouseenter={() => highlightedIndex = index}
-                            disabled={option.disabled}
-                            class="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors
+                        type="button"
+                        role="menuitem"
+                        onclick={() => selectOption(option)}
+                        onmouseenter={() => (highlightedIndex = index)}
+                        disabled={option.disabled}
+                        class="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors
                                {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                {index === highlightedIndex ? 'bg-libre-green/10 dark:bg-libre-green/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}
                                {value === option.value ? 'bg-libre-green/5 dark:bg-libre-green/10 text-libre-green dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}"
@@ -301,7 +284,7 @@
                             <span class="truncate">{option.label}</span>
                         {/if}
                         {#if value === option.value}
-                            <Check size={16} class="ml-2 flex-shrink-0 text-libre-green dark:text-green-400"/>
+                            <Check size={16} class="ml-2 flex-shrink-0 text-libre-green dark:text-green-400" />
                         {/if}
                     </button>
                 {/each}

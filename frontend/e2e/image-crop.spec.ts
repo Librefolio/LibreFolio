@@ -270,8 +270,8 @@ test.describe('ImageEditModal - Controls & Settings', () => {
         const formatSelect = page.locator('select').first();
         if (await formatSelect.isVisible().catch(() => false)) {
             const options = await formatSelect.locator('option').allTextContents();
-            if (options.some(o => o.toLowerCase().includes('jpg') || o.toLowerCase().includes('jpeg'))) {
-                await formatSelect.selectOption({label: options.find(o => o.toLowerCase().includes('jpg') || o.toLowerCase().includes('jpeg'))!});
+            if (options.some((o) => o.toLowerCase().includes('jpg') || o.toLowerCase().includes('jpeg'))) {
+                await formatSelect.selectOption({label: options.find((o) => o.toLowerCase().includes('jpg') || o.toLowerCase().includes('jpeg'))!});
                 await page.waitForTimeout(200);
                 // Quality control should appear
                 const qualityControl = page.locator('[class*="quality"], input[type="number"]');
@@ -310,7 +310,6 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
         // Click the close (X) button — this calls requestClose which checks hasChanges
         await page.getByTestId('image-edit-close').click();
         await page.waitForTimeout(500);
-
 
         // Confirmation dialog should appear
         await expect(page.getByTestId('image-edit-confirm-dialog')).toBeVisible({timeout: 8000});
@@ -642,7 +641,11 @@ test.describe('Dark Mode - Image Crop Components', () => {
         const themeToggle = page.getByTestId('theme-toggle');
         if (await themeToggle.isVisible().catch(() => false)) {
             // Check if already dark
-            const isDark = await page.locator('html.dark, body.dark, [class*="dark"]').first().isVisible().catch(() => false);
+            const isDark = await page
+                .locator('html.dark, body.dark, [class*="dark"]')
+                .first()
+                .isVisible()
+                .catch(() => false);
             if (!isDark) {
                 await themeToggle.click();
                 await page.waitForTimeout(300);
@@ -661,8 +664,16 @@ test.describe('Dark Mode - Image Crop Components', () => {
         // Modal should be visible
         await expect(page.getByTestId('image-edit-modal')).toBeVisible();
         // Dark mode class should be active on html or body
-        const hasDark = await page.locator('html.dark').isVisible().catch(() => false)
-            || await page.locator('[class*="dark"]').first().isVisible().catch(() => false);
+        const hasDark =
+            (await page
+                .locator('html.dark')
+                .isVisible()
+                .catch(() => false)) ||
+            (await page
+                .locator('[class*="dark"]')
+                .first()
+                .isVisible()
+                .catch(() => false));
         expect(hasDark).toBeTruthy();
     });
 
@@ -710,7 +721,10 @@ test.describe('Files Page - Grid View', () => {
 
     test('G1: grid view shows file cards with preview', async ({page}) => {
         // Only test if view toggle exists (files present)
-        const hasViewToggle = await page.getByTestId('view-mode-toggle').isVisible().catch(() => false);
+        const hasViewToggle = await page
+            .getByTestId('view-mode-toggle')
+            .isVisible()
+            .catch(() => false);
         if (hasViewToggle) {
             await page.getByTestId('view-mode-grid').click();
             await page.waitForTimeout(300);
@@ -727,7 +741,10 @@ test.describe('Files Page - Grid View', () => {
     });
 
     test('G2: search works in grid view', async ({page}) => {
-        const hasViewToggle = await page.getByTestId('view-mode-toggle').isVisible().catch(() => false);
+        const hasViewToggle = await page
+            .getByTestId('view-mode-toggle')
+            .isVisible()
+            .catch(() => false);
         if (hasViewToggle) {
             await page.getByTestId('view-mode-grid').click();
             await page.waitForTimeout(300);
@@ -746,7 +763,10 @@ test.describe('Files Page - Grid View', () => {
     });
 
     test('G3: grid cards have action buttons', async ({page}) => {
-        const hasViewToggle = await page.getByTestId('view-mode-toggle').isVisible().catch(() => false);
+        const hasViewToggle = await page
+            .getByTestId('view-mode-toggle')
+            .isVisible()
+            .catch(() => false);
         if (hasViewToggle) {
             await page.getByTestId('view-mode-grid').click();
             await page.waitForTimeout(300);
@@ -763,17 +783,24 @@ test.describe('Files Page - Grid View', () => {
     });
 
     test('G4: delete button styled as danger', async ({page}) => {
-        const hasViewToggle = await page.getByTestId('view-mode-toggle').isVisible().catch(() => false);
+        const hasViewToggle = await page
+            .getByTestId('view-mode-toggle')
+            .isVisible()
+            .catch(() => false);
         if (hasViewToggle) {
             await page.getByTestId('view-mode-grid').click();
             await page.waitForTimeout(300);
 
             const cards = page.locator('.file-card');
-            if (await cards.first().isVisible().catch(() => false)) {
+            if (
+                await cards
+                    .first()
+                    .isVisible()
+                    .catch(() => false)
+            ) {
                 const dangerBtn = cards.first().locator('.action-btn.danger');
                 await expect(dangerBtn).toBeVisible();
             }
         }
     });
 });
-

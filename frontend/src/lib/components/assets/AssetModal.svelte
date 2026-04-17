@@ -47,8 +47,8 @@
         active?: boolean;
         classification_params?: {
             short_description?: string | null;
-            sector_area?: { distribution: Record<string, number> } | null;
-            geographic_area?: { distribution: Record<string, number> } | null;
+            sector_area?: {distribution: Record<string, number>} | null;
+            geographic_area?: {distribution: Record<string, number>} | null;
         } | null;
         // Identifiers
         identifier_isin?: string | null;
@@ -80,14 +80,7 @@
         onclose?: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        editMode = false,
-        editData = null,
-        oncreated,
-        onupdated,
-        onclose,
-    }: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -165,7 +158,6 @@
     // Duplicate name detection
     let duplicateAssetName = $state<string | null>(null);
 
-
     // =========================================================================
     // Derived
     // =========================================================================
@@ -180,13 +172,19 @@
     /** Build form snapshot for dirty tracking — single source of truth */
     function buildFormSnapshot(): string {
         return JSON.stringify([
-            displayName, currency, assetType, iconUrl,
-            JSON.stringify(identifierRows.map(r => [r.type, r.value])),
+            displayName,
+            currency,
+            assetType,
+            iconUrl,
+            JSON.stringify(identifierRows.map((r) => [r.type, r.value])),
             shortDescription,
             JSON.stringify(sectorDistribution),
             JSON.stringify(geographicDistribution),
-            providerCode, providerIdentifier, providerIdentifierType,
-            providerNoProvider, fetchInterval,
+            providerCode,
+            providerIdentifier,
+            providerIdentifierType,
+            providerNoProvider,
+            fetchInterval,
         ]);
     }
 
@@ -222,17 +220,17 @@
 
     function addIdentifierRow() {
         // Find first unused type
-        const usedTypes = new Set(identifierRows.map(r => r.type));
-        const availableType = IDENTIFIER_TYPES.find(t => !usedTypes.has(t)) ?? 'TICKER';
+        const usedTypes = new Set(identifierRows.map((r) => r.type));
+        const availableType = IDENTIFIER_TYPES.find((t) => !usedTypes.has(t)) ?? 'TICKER';
         identifierRows = [...identifierRows, {id: generateUUID(), type: availableType, value: ''}];
     }
 
     function updateIdentifierRow(id: string, field: 'type' | 'value', val: string) {
-        identifierRows = identifierRows.map(r => r.id === id ? {...r, [field]: val} : r);
+        identifierRows = identifierRows.map((r) => (r.id === id ? {...r, [field]: val} : r));
     }
 
     function removeIdentifierRow(id: string) {
-        identifierRows = identifierRows.filter(r => r.id !== id);
+        identifierRows = identifierRows.filter((r) => r.id !== id);
     }
 
     /** Handle image picker change — empty string means remove */
@@ -249,7 +247,7 @@
 
     function confirmIdentifierBulkDelete() {
         const deleteSet = new Set(pendingIdentifierDeleteIds);
-        identifierRows = identifierRows.filter(r => !deleteSet.has(r.id));
+        identifierRows = identifierRows.filter((r) => !deleteSet.has(r.id));
         identifierSelectedIds = [];
         pendingIdentifierDeleteIds = [];
         showIdentifierDeleteConfirm = false;
@@ -257,14 +255,14 @@
 
     /** Get identifier value by type from rows */
     function getIdentifierByType(type: string): string {
-        return identifierRows.find(r => r.type === type)?.value ?? '';
+        return identifierRows.find((r) => r.type === type)?.value ?? '';
     }
 
     // =========================================================================
     // Identifier DataTable columns
     // =========================================================================
 
-    let idTypeOptions = $derived(IDENTIFIER_TYPES.map(t => ({value: t, label: t})));
+    let idTypeOptions = $derived(IDENTIFIER_TYPES.map((t) => ({value: t, label: t})));
 
     let identifierColumns = $derived.by<DTColumnDef<IdentifierRow>[]>(() => [
         {
@@ -446,9 +444,9 @@
         const idType = (result.identifier_type ?? '').toUpperCase();
         if (idType && result.identifier) {
             // Add or update the identifier row
-            const existing = identifierRows.find(r => r.type === idType);
+            const existing = identifierRows.find((r) => r.type === idType);
             if (existing) {
-                identifierRows = identifierRows.map(r => r.type === idType ? {...r, value: result.identifier} : r);
+                identifierRows = identifierRows.map((r) => (r.type === idType ? {...r, value: result.identifier} : r));
             } else {
                 identifierRows = [...identifierRows, {id: generateUUID(), type: idType, value: result.identifier}];
             }
@@ -479,17 +477,17 @@
         // We just need to trigger it — the section's testConfiguration method runs
         // via $effect watching testStatus. Instead, call the probe directly.
         try {
-            const response = await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
+            const response = (await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
                 provider_code: providerCode,
                 identifier: providerIdentifier,
                 identifier_type: providerIdentifierType as any,
                 provider_params: providerParams,
                 operations: ['current_price', 'history'],
-            }) as any;
+            })) as any;
 
             const cp = response.current_price;
             const h = response.history;
-            const allSuccess = (cp?.success ?? false) && (h?.success !== false);
+            const allSuccess = (cp?.success ?? false) && h?.success !== false;
             providerTestStatus = allSuccess ? 'passed' : 'failed';
 
             if (response.provider_url) providerUrl = response.provider_url;
@@ -509,9 +507,9 @@
 
     /** Set or update an identifier row by type */
     function setIdentifierByType(type: string, val: string) {
-        const existing = identifierRows.find(r => r.type === type);
+        const existing = identifierRows.find((r) => r.type === type);
         if (existing) {
-            identifierRows = identifierRows.map(r => r.type === type ? {...r, value: val, autoFilled: true} : r);
+            identifierRows = identifierRows.map((r) => (r.type === type ? {...r, value: val, autoFilled: true} : r));
         } else {
             identifierRows = [...identifierRows, {id: generateUUID(), type, value: val, autoFilled: true}];
         }
@@ -524,21 +522,19 @@
      *
      * @param scope Which fields to compare. 'all' = everything, others = section-specific.
      */
-    async function fetchAndCompareMetadata(
-        scope: 'all' | 'identifiers' | 'sector' | 'geographic'
-    ) {
+    async function fetchAndCompareMetadata(scope: 'all' | 'identifiers' | 'sector' | 'geographic') {
         if (!providerCode || !providerIdentifier) return;
         askingProvider = true;
         autoFilledFields = new Set();
 
         try {
-            const response = await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
+            const response = (await zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post({
                 provider_code: providerCode,
                 identifier: providerIdentifier,
                 identifier_type: providerIdentifierType as any,
                 provider_params: providerParams,
                 operations: ['metadata'],
-            }) as any;
+            })) as any;
 
             const meta = response.metadata;
             if (!meta?.success || !meta.patch_data) {
@@ -550,9 +546,7 @@
             const missingFields: string[] = [];
 
             // --- Helper: compare a string field — auto-fill if empty, diff if different ---
-            function compareStringField(
-                field: string, label: string, currentVal: string, providerVal: string | null | undefined
-            ) {
+            function compareStringField(field: string, label: string, currentVal: string, providerVal: string | null | undefined) {
                 if (!providerVal) return;
                 if (!currentVal) {
                     setFieldValue(field, providerVal);
@@ -565,10 +559,7 @@
             }
 
             // --- Helper: compare a distribution — auto-fill if empty, diff if different ---
-            function compareDistribution(
-                field: string, label: string,
-                currentDist: Record<string, number>, providerDist: Record<string, number>
-            ) {
+            function compareDistribution(field: string, label: string, currentDist: Record<string, number>, providerDist: Record<string, number>) {
                 const hasCurrent = Object.keys(currentDist).length > 0;
                 if (!hasCurrent) {
                     if (field === 'sector_area') sectorDistribution = providerDist;
@@ -639,7 +630,6 @@
                 // Only show success if nothing was missing — never both info + success
                 toasts.success($t('assets.comparison.allMatch'));
             }
-
         } catch (e: any) {
             console.error(`Ask Provider (${scope}) failed:`, e);
         } finally {
@@ -664,10 +654,18 @@
             setIdentifierByType(idType, value);
         } else {
             switch (field) {
-                case 'display_name': displayName = value; break;
-                case 'asset_type': assetType = value; break;
-                case 'currency': currency = value; break;
-                case 'short_description': shortDescription = value; break;
+                case 'display_name':
+                    displayName = value;
+                    break;
+                case 'asset_type':
+                    assetType = value;
+                    break;
+                case 'currency':
+                    currency = value;
+                    break;
+                case 'short_description':
+                    shortDescription = value;
+                    break;
             }
         }
     }
@@ -740,16 +738,18 @@
         if (Object.keys(geographicDistribution).length > 0) classificationParams.geographic_area = {distribution: geographicDistribution};
 
         // Step 1: Create asset
-        const createPayload = [{
-            display_name: displayName.trim(),
-            currency: currency,
-            asset_type: assetType,
-            icon_url: iconUrl || undefined,
-            classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : undefined,
-            ...identifierRowsToColumns(identifierRows),
-        }];
+        const createPayload = [
+            {
+                display_name: displayName.trim(),
+                currency: currency,
+                asset_type: assetType,
+                icon_url: iconUrl || undefined,
+                classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : undefined,
+                ...identifierRowsToColumns(identifierRows),
+            },
+        ];
 
-        const createResp = await zodiosApi.create_assets_bulk_api_v1_assets_post(createPayload as any) as any;
+        const createResp = (await zodiosApi.create_assets_bulk_api_v1_assets_post(createPayload as any)) as any;
         const result = createResp?.results?.[0];
         if (!result?.success) {
             throw new Error(result?.message || 'Failed to create asset');
@@ -761,14 +761,16 @@
         const skipProviderAssignment = providerCode === 'scheduled_investment' && (!providerParams || !providerParams.schedule?.length);
         if (hasProvider && !skipProviderAssignment) {
             try {
-                const assignPayload = [{
-                    asset_id: assetId,
-                    provider_code: providerCode,
-                    identifier: providerIdentifier,
-                    identifier_type: providerIdentifierType,
-                    provider_params: providerParams,
-                    fetch_interval: fetchInterval,
-                }];
+                const assignPayload = [
+                    {
+                        asset_id: assetId,
+                        provider_code: providerCode,
+                        identifier: providerIdentifier,
+                        identifier_type: providerIdentifierType,
+                        provider_params: providerParams,
+                        fetch_interval: fetchInterval,
+                    },
+                ];
                 await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
             } catch (assignErr: any) {
                 console.error('Provider assignment failed after asset creation:', assignErr);
@@ -793,22 +795,24 @@
 
         // Step 1: Patch asset
         const idCols = identifierRowsToColumns(identifierRows);
-        const patchPayload = [{
-            asset_id: assetId,
-            display_name: displayName.trim(),
-            currency: currency,
-            asset_type: assetType,
-            icon_url: iconUrl,
-            user_url: providerUserUrl || null,
-            classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
-            identifier_isin: idCols.identifier_isin || null,
-            identifier_ticker: idCols.identifier_ticker || null,
-            identifier_cusip: idCols.identifier_cusip || null,
-            identifier_sedol: idCols.identifier_sedol || null,
-            identifier_figi: idCols.identifier_figi || null,
-            identifier_uuid: idCols.identifier_uuid || null,
-            identifier_other: idCols.identifier_other || null,
-        }];
+        const patchPayload = [
+            {
+                asset_id: assetId,
+                display_name: displayName.trim(),
+                currency: currency,
+                asset_type: assetType,
+                icon_url: iconUrl,
+                user_url: providerUserUrl || null,
+                classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
+                identifier_isin: idCols.identifier_isin || null,
+                identifier_ticker: idCols.identifier_ticker || null,
+                identifier_cusip: idCols.identifier_cusip || null,
+                identifier_sedol: idCols.identifier_sedol || null,
+                identifier_figi: idCols.identifier_figi || null,
+                identifier_uuid: idCols.identifier_uuid || null,
+                identifier_other: idCols.identifier_other || null,
+            },
+        ];
 
         await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
 
@@ -819,14 +823,16 @@
                 queries: {asset_ids: [assetId]},
             });
         } else if (hasProvider) {
-            const assignPayload = [{
-                asset_id: assetId,
-                provider_code: providerCode,
-                identifier: providerIdentifier,
-                identifier_type: providerIdentifierType,
-                provider_params: providerParams,
-                fetch_interval: fetchInterval,
-            }];
+            const assignPayload = [
+                {
+                    asset_id: assetId,
+                    provider_code: providerCode,
+                    identifier: providerIdentifier,
+                    identifier_type: providerIdentifierType,
+                    provider_params: providerParams,
+                    fetch_interval: fetchInterval,
+                },
+            ];
             await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
         }
 
@@ -854,25 +860,19 @@
     }
 </script>
 
-<ModalBase
-        {open}
-        maxWidth="4xl"
-        allowOverflow={true}
-        onRequestClose={handleClose}
->
+<ModalBase {open} maxWidth="4xl" allowOverflow={true} onRequestClose={handleClose}>
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-        <button type="button" onclick={handleClose}
-                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <X size={20}/>
+        <button type="button" onclick={handleClose} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <X size={20} />
         </button>
     </div>
 
     <!-- Body -->
     <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto" data-testid="asset-modal-form">
         <!-- Search Online -->
-        <AssetSearchAutocomplete onselect={handleSearchSelect}/>
+        <AssetSearchAutocomplete onselect={handleSearchSelect} />
 
         <!-- Asset Details -->
         <div class="space-y-3">
@@ -882,19 +882,19 @@
                 </div>
                 <!-- Ask Provider global button -->
                 <button
-                        type="button"
-                        onclick={handleAskProvider}
-                        disabled={!hasProvider || askingProvider}
-                        class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md
+                    type="button"
+                    onclick={handleAskProvider}
+                    disabled={!hasProvider || askingProvider}
+                    class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md
                                bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
                                text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600
                                disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        title={!hasProvider ? $t('assets.identifiers.askProviderHint') : ''}
+                    title={!hasProvider ? $t('assets.identifiers.askProviderHint') : ''}
                 >
                     {#if askingProvider}
-                        <Loader2 size={12} class="animate-spin"/>
+                        <Loader2 size={12} class="animate-spin" />
                     {:else}
-                        <RefreshCw size={12}/>
+                        <RefreshCw size={12} />
                     {/if}
                     <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
                 </button>
@@ -905,13 +905,13 @@
                 <!-- Left: Icon (clickable) -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div class="group relative cursor-pointer"
-                     onclick={() => showImagePicker = true}
-                     title={$t('uploads.selectIcon')}>
-                    <AssetIcon iconUrl={iconUrl} assetType={assetType} size="lg" />
-                    <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100
-                                flex items-center justify-center transition-opacity">
-                        <Upload class="text-white" size={16}/>
+                <div class="group relative cursor-pointer" onclick={() => (showImagePicker = true)} title={$t('uploads.selectIcon')}>
+                    <AssetIcon {iconUrl} {assetType} size="lg" />
+                    <div
+                        class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100
+                                flex items-center justify-center transition-opacity"
+                    >
+                        <Upload class="text-white" size={16} />
                     </div>
                 </div>
 
@@ -924,22 +924,18 @@
                                 {$t('common.name')} *
                             </label>
                             <input
-                                    id="asset-display-name"
-                                    type="text"
-                                    bind:value={displayName}
-                                    placeholder="Apple Inc."
-                                    data-testid="asset-modal-display-name"
-                                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                id="asset-display-name"
+                                type="text"
+                                bind:value={displayName}
+                                placeholder="Apple Inc."
+                                data-testid="asset-modal-display-name"
+                                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
                                            placeholder-gray-400 dark:placeholder-gray-500
                                            focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
                             />
                             {#if duplicateAssetName}
-                                <Tooltip
-                                    text={$t('assets.modal.duplicateNameTooltip', {values: {name: duplicateAssetName}})}
-                                    position="bottom"
-                                    maxWidth="300px"
-                                >
+                                <Tooltip text={$t('assets.modal.duplicateNameTooltip', {values: {name: duplicateAssetName}})} position="bottom" maxWidth="300px">
                                     <span class="inline-flex items-center gap-1 mt-1 text-xs text-amber-600 dark:text-amber-400">
                                         ⚠️ {$t('assets.modal.duplicateNameWarning', {values: {name: duplicateAssetName}})}
                                     </span>
@@ -954,19 +950,18 @@
                             </label>
                             <div class="flex gap-1.5">
                                 <input
-                                        id="asset-user-url"
-                                        type="text"
-                                        bind:value={providerUserUrl}
-                                        placeholder="https://..."
-                                        class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                    id="asset-user-url"
+                                    type="text"
+                                    bind:value={providerUserUrl}
+                                    placeholder="https://..."
+                                    class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                                bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
                                                placeholder-gray-400 dark:placeholder-gray-500
                                                focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
                                 />
                                 {#if providerUserUrl}
-                                    <a href={providerUserUrl} target="_blank" rel="noopener noreferrer"
-                                       class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
-                                        <ExternalLink size={14}/>
+                                    <a href={providerUserUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
+                                        <ExternalLink size={14} />
                                     </a>
                                 {/if}
                             </div>
@@ -979,20 +974,16 @@
                             <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                                 {$t('assets.type')} *
                             </span>
-                            <SimpleSelect
-                                    bind:value={assetType}
-                                    options={assetTypeOptions}
-                                    dropdownPosition="auto"
-                            >
+                            <SimpleSelect bind:value={assetType} options={assetTypeOptions} dropdownPosition="auto">
                                 {#snippet item(opt)}
                                     <div class="flex items-center gap-2">
-                                        <img src={opt.icon} alt="" class="w-4 h-4 object-contain"/>
+                                        <img src={opt.icon} alt="" class="w-4 h-4 object-contain" />
                                         <span>{opt.label}</span>
                                     </div>
                                 {/snippet}
                                 {#snippet selectedItem(opt)}
                                     <div class="flex items-center gap-2">
-                                        <img src={opt.icon} alt="" class="w-4 h-4 object-contain"/>
+                                        <img src={opt.icon} alt="" class="w-4 h-4 object-contain" />
                                         <span>{opt.label}</span>
                                     </div>
                                 {/snippet}
@@ -1005,10 +996,12 @@
                                 {$t('common.currency')} *
                             </span>
                             <CurrencySearchSelect
-                                    value={currency}
-                                    onchange={(v) => { if (v) currency = v; }}
-                                    maxVisibleItems={6}
-                                    compact={true}
+                                value={currency}
+                                onchange={(v) => {
+                                    if (v) currency = v;
+                                }}
+                                maxVisibleItems={6}
+                                compact={true}
                             />
                         </div>
                     </div>
@@ -1022,11 +1015,11 @@
                 {$t('brokers.description')}
             </label>
             <textarea
-                    id="asset-description"
-                    bind:value={shortDescription}
-                    rows={2}
-                    placeholder="Brief description of the asset…"
-                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                id="asset-description"
+                bind:value={shortDescription}
+                rows={2}
+                placeholder="Brief description of the asset…"
+                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
                            placeholder-gray-400 dark:placeholder-gray-500
                            focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green resize-none"
@@ -1037,17 +1030,24 @@
         <div class="border border-gray-200 dark:border-slate-700 rounded-lg">
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer select-none"
-                    role="button"
-                    tabindex="0"
-                    onclick={() => { moreInfoExpanded = !moreInfoExpanded; }}
-                    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); moreInfoExpanded = !moreInfoExpanded; } }}
+                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer select-none"
+                role="button"
+                tabindex="0"
+                onclick={() => {
+                    moreInfoExpanded = !moreInfoExpanded;
+                }}
+                onkeydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        moreInfoExpanded = !moreInfoExpanded;
+                    }
+                }}
             >
                 <div class="flex items-center gap-2">
                     {#if moreInfoExpanded}
-                        <ChevronDown size={16}/>
+                        <ChevronDown size={16} />
                     {:else}
-                        <ChevronRight size={16}/>
+                        <ChevronRight size={16} />
                     {/if}
                     <span>{$t('assets.modal.moreInfo')}</span>
                 </div>
@@ -1074,40 +1074,50 @@
                                                 onClick: handleIdentifierBulkDelete,
                                             },
                                         ]}
-                                        onClearSelection={() => { identifierSelectedIds = []; }}
+                                        onClearSelection={() => {
+                                            identifierSelectedIds = [];
+                                        }}
                                     />
                                 {/if}
-                                <button type="button" onclick={addIdentifierRow}
-                                        class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                                        title={$t('assets.identifiers.addIdentifier')}>
-                                    <Plus size={10}/> <span class="hidden sm:inline">{$t('assets.identifiers.addIdentifier')}</span>
+                                <button
+                                    type="button"
+                                    onclick={addIdentifierRow}
+                                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                    title={$t('assets.identifiers.addIdentifier')}
+                                >
+                                    <Plus size={10} /> <span class="hidden sm:inline">{$t('assets.identifiers.addIdentifier')}</span>
                                 </button>
-                                <button type="button" onclick={() => handleAskProviderSection('identifiers')}
-                                        disabled={!hasProvider || askingProvider}
-                                        class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        title={$t('assets.identifiers.askProvider')}>
-                                    {#if askingProvider}<Loader2 size={10} class="animate-spin"/>{:else}<RefreshCw size={10}/>{/if}
+                                <button
+                                    type="button"
+                                    onclick={() => handleAskProviderSection('identifiers')}
+                                    disabled={!hasProvider || askingProvider}
+                                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title={$t('assets.identifiers.askProvider')}
+                                >
+                                    {#if askingProvider}<Loader2 size={10} class="animate-spin" />{:else}<RefreshCw size={10} />{/if}
                                     <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
                                 </button>
                             </div>
                         </div>
                         {#if identifierRows.length > 0}
                             <DataTable
-                                    data={identifierRows}
-                                    columns={identifierColumns}
-                                    getRowId={(r) => r.id}
-                                    storageKey="asset-modal-identifiers"
-                                    enableSelection={true}
-                                    onSelectionChange={(ids) => { identifierSelectedIds = ids; }}
-                                    enablePagination={false}
-                                    enableColumnFilters={false}
-                                    enableSorting={false}
-                                    enableColumnResize={false}
-                                    enableColumnVisibility={false}
-                                    enableActions={true}
-                                    actionsColumnWidth="40px"
-                                    rowActions={identifierRowActions}
-                                    tableLayout="auto"
+                                data={identifierRows}
+                                columns={identifierColumns}
+                                getRowId={(r) => r.id}
+                                storageKey="asset-modal-identifiers"
+                                enableSelection={true}
+                                onSelectionChange={(ids) => {
+                                    identifierSelectedIds = ids;
+                                }}
+                                enablePagination={false}
+                                enableColumnFilters={false}
+                                enableSorting={false}
+                                enableColumnResize={false}
+                                enableColumnVisibility={false}
+                                enableActions={true}
+                                actionsColumnWidth="40px"
+                                rowActions={identifierRowActions}
+                                tableLayout="auto"
                             />
                         {:else}
                             <div class="text-xs text-gray-400 italic py-1">{$t('assets.identifiers.askProviderHint')}</div>
@@ -1121,22 +1131,10 @@
                         </div>
 
                         <!-- Sector Distribution -->
-                        <DistributionEditor
-                                kind="sector"
-                                bind:value={sectorDistribution}
-                                {hasProvider}
-                                {askingProvider}
-                                onAskProvider={() => handleAskProviderSection('sector')}
-                        />
+                        <DistributionEditor kind="sector" bind:value={sectorDistribution} {hasProvider} {askingProvider} onAskProvider={() => handleAskProviderSection('sector')} />
 
                         <!-- Geographic Distribution -->
-                        <DistributionEditor
-                                kind="geographic"
-                                bind:value={geographicDistribution}
-                                {hasProvider}
-                                {askingProvider}
-                                onAskProvider={() => handleAskProviderSection('geographic')}
-                        />
+                        <DistributionEditor kind="geographic" bind:value={geographicDistribution} {hasProvider} {askingProvider} onAskProvider={() => handleAskProviderSection('geographic')} />
                     </div>
                 </div>
             {/if}
@@ -1146,21 +1144,28 @@
         <div class="border border-gray-200 dark:border-slate-700 rounded-lg">
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 transition-colors select-none {providerNoProvider ? '' : 'hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer'}"
-                    role="button"
-                    tabindex="0"
-                    onclick={() => { if (!providerNoProvider) providerExpanded = !providerExpanded; }}
-                    onkeydown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !providerNoProvider) { e.preventDefault(); providerExpanded = !providerExpanded; } }}
+                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 transition-colors select-none {providerNoProvider ? '' : 'hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer'}"
+                role="button"
+                tabindex="0"
+                onclick={() => {
+                    if (!providerNoProvider) providerExpanded = !providerExpanded;
+                }}
+                onkeydown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !providerNoProvider) {
+                        e.preventDefault();
+                        providerExpanded = !providerExpanded;
+                    }
+                }}
             >
                 <div class="flex items-center gap-2">
                     {#if !providerNoProvider}
                         {#if providerExpanded}
-                            <ChevronDown size={16}/>
+                            <ChevronDown size={16} />
                         {:else}
-                            <ChevronRight size={16}/>
+                            <ChevronRight size={16} />
                         {/if}
                     {:else}
-                        <Minus size={16} class="text-gray-400"/>
+                        <Minus size={16} class="text-gray-400" />
                     {/if}
                     <span>{$t('assets.provider.assignment')}</span>
                     {#if providerTestStatus === 'passed'}
@@ -1168,28 +1173,24 @@
                     {:else if providerTestStatus === 'failed'}
                         <span class="text-red-500 text-xs ml-1">❌</span>
                     {:else if providerTestStatus === 'testing'}
-                        <Loader2 size={12} class="animate-spin text-gray-400 ml-1"/>
+                        <Loader2 size={12} class="animate-spin text-gray-400 ml-1" />
                     {/if}
                 </div>
                 <!-- No Provider checkbox in header -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div
-                        class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer"
-                        onclick={(e) => e.stopPropagation()}
-                        onkeydown={(e) => e.stopPropagation()}
-                >
+                <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
                     <input
-                            type="checkbox"
-                            id="no-provider-checkbox"
-                            checked={providerNoProvider}
-                            onchange={() => {
-                                providerNoProvider = !providerNoProvider;
-                                if (providerNoProvider) {
-                                    providerExpanded = false;
-                                    providerTestStatus = 'not_tested';
-                                }
-                            }}
-                            class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
+                        type="checkbox"
+                        id="no-provider-checkbox"
+                        checked={providerNoProvider}
+                        onchange={() => {
+                            providerNoProvider = !providerNoProvider;
+                            if (providerNoProvider) {
+                                providerExpanded = false;
+                                providerTestStatus = 'not_tested';
+                            }
+                        }}
+                        class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
                     />
                     <label for="no-provider-checkbox">{$t('assets.provider.noProvider')}</label>
                 </div>
@@ -1198,16 +1199,16 @@
             {#if providerExpanded && !providerNoProvider}
                 <div class="px-4 py-3 border-t border-gray-200 dark:border-slate-700">
                     <ProviderAssignmentSection
-                            bind:providerCode
-                            bind:identifier={providerIdentifier}
-                            bind:identifierType={providerIdentifierType}
-                            bind:providerParams
-                            bind:providerUrl
-                            bind:noProvider={providerNoProvider}
-                            bind:fetchInterval
-                            onchange={(data) => {
-                                providerTestStatus = data.testStatus;
-                            }}
+                        bind:providerCode
+                        bind:identifier={providerIdentifier}
+                        bind:identifierType={providerIdentifierType}
+                        bind:providerParams
+                        bind:providerUrl
+                        bind:noProvider={providerNoProvider}
+                        bind:fetchInterval
+                        onchange={(data) => {
+                            providerTestStatus = data.testStatus;
+                        }}
                     />
                 </div>
             {/if}
@@ -1230,23 +1231,18 @@
 
     <!-- Footer -->
     <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
-        <button
-                type="button"
-                onclick={handleClose}
-                data-testid="asset-modal-cancel"
-                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-        >
+        <button type="button" onclick={handleClose} data-testid="asset-modal-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
             {$t('common.cancel')}
         </button>
         <button
-                type="button"
-                onclick={handleSave}
-                disabled={!isValid || saving}
-                data-testid="asset-modal-save"
-                class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            type="button"
+            onclick={handleSave}
+            disabled={!isValid || saving}
+            data-testid="asset-modal-save"
+            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
             {#if saving}
-                <Loader2 size={14} class="animate-spin"/>
+                <Loader2 size={14} class="animate-spin" />
             {/if}
             <span>{editMode ? $t('assets.modal.saveChanges') : $t('assets.modal.createAsset')}</span>
         </button>
@@ -1255,64 +1251,64 @@
 
 <!-- Confirmation: Save without test -->
 <ConfirmModal
-        open={showSaveWithoutTestConfirm}
-        title={$t('assets.confirm.saveWithoutTest')}
-        message={$t('assets.confirm.saveWithoutTestMessage')}
-        confirmText={$t('assets.confirm.saveAnyway')}
-        warning={true}
-        onConfirm={() => doSave()}
-        onCancel={() => { showSaveWithoutTestConfirm = false; }}
-        zIndex={70}
+    open={showSaveWithoutTestConfirm}
+    title={$t('assets.confirm.saveWithoutTest')}
+    message={$t('assets.confirm.saveWithoutTestMessage')}
+    confirmText={$t('assets.confirm.saveAnyway')}
+    warning={true}
+    onConfirm={() => doSave()}
+    onCancel={() => {
+        showSaveWithoutTestConfirm = false;
+    }}
+    zIndex={70}
 />
 
 <!-- Confirmation: Identifier change in edit mode -->
 <ConfirmModal
-        open={showIdentifierChangeConfirm}
-        title={$t('assets.confirm.identifierChanged')}
-        message={$t('assets.confirm.identifierChangedMessage')}
-        confirmText={$t('assets.confirm.confirmChange')}
-        warning={true}
-        onConfirm={() => {
-            showIdentifierChangeConfirm = false;
-            if (pendingSearchResult) applySearchResult(pendingSearchResult);
-            pendingSearchResult = null;
-        }}
-        onCancel={() => { showIdentifierChangeConfirm = false; pendingSearchResult = null; }}
-        zIndex={70}
+    open={showIdentifierChangeConfirm}
+    title={$t('assets.confirm.identifierChanged')}
+    message={$t('assets.confirm.identifierChangedMessage')}
+    confirmText={$t('assets.confirm.confirmChange')}
+    warning={true}
+    onConfirm={() => {
+        showIdentifierChangeConfirm = false;
+        if (pendingSearchResult) applySearchResult(pendingSearchResult);
+        pendingSearchResult = null;
+    }}
+    onCancel={() => {
+        showIdentifierChangeConfirm = false;
+        pendingSearchResult = null;
+    }}
+    zIndex={70}
 />
 
 <!-- Confirmation: Discard unsaved changes -->
 <ConfirmModal
-        open={showDiscardConfirm}
-        title={$t('common.discardChanges')}
-        message={$t('common.discardChangesMessage')}
-        confirmText={$t('common.discardAndClose')}
-        cancelText={$t('common.continueEditing')}
-        warning={true}
-        onConfirm={() => doClose()}
-        onCancel={() => { showDiscardConfirm = false; }}
-        zIndex={70}
+    open={showDiscardConfirm}
+    title={$t('common.discardChanges')}
+    message={$t('common.discardChangesMessage')}
+    confirmText={$t('common.discardAndClose')}
+    cancelText={$t('common.continueEditing')}
+    warning={true}
+    onConfirm={() => doClose()}
+    onCancel={() => {
+        showDiscardConfirm = false;
+    }}
+    zIndex={70}
 />
 
 <!-- Provider Comparison Modal -->
 <ProviderComparisonModal
-        bind:open={showComparisonModal}
-        differences={comparisonDifferences}
-        onapply={handleComparisonApply}
-        oncancel={() => { showComparisonModal = false; }}
+    bind:open={showComparisonModal}
+    differences={comparisonDifferences}
+    onapply={handleComparisonApply}
+    oncancel={() => {
+        showComparisonModal = false;
+    }}
 />
 
 <!-- Image Picker for asset icon -->
-<ImagePickerWrapper
-    open={showImagePicker}
-    preset="asset-icon"
-    title={$t('uploads.selectIcon')}
-    initialUrl={iconUrl ?? ''}
-    circularPreview={false}
-    filterImages={true}
-    onchange={handleImagePickerChange}
-    oncancel={() => showImagePicker = false}
-/>
+<ImagePickerWrapper open={showImagePicker} preset="asset-icon" title={$t('uploads.selectIcon')} initialUrl={iconUrl ?? ''} circularPreview={false} filterImages={true} onchange={handleImagePickerChange} oncancel={() => (showImagePicker = false)} />
 
 <!-- Confirmation: Bulk delete identifiers -->
 <ConfirmModal
@@ -1322,7 +1318,9 @@
     confirmText={$t('common.delete')}
     warning={true}
     onConfirm={confirmIdentifierBulkDelete}
-    onCancel={() => { showIdentifierDeleteConfirm = false; pendingIdentifierDeleteIds = []; }}
+    onCancel={() => {
+        showIdentifierDeleteConfirm = false;
+        pendingIdentifierDeleteIds = [];
+    }}
     zIndex={80}
 />
-

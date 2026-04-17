@@ -177,4 +177,3 @@ export function resetAllSettings(): void {
     pairOverrides.clear();
     bump();
 }
-

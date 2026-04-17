@@ -69,7 +69,7 @@
     // Derived
     // =========================================================================
 
-    let searchableProviders = $derived(providers.filter(p => p.supports_search));
+    let searchableProviders = $derived(providers.filter((p) => p.supports_search));
     let hasResults = $derived(results.length > 0);
 
     // =========================================================================
@@ -85,12 +85,11 @@
 
     async function loadProviders() {
         try {
-            const response = await zodiosApi.list_providers_api_v1_assets_provider_get() as any;
-            const items: ProviderInfo[] = (Array.isArray(response) ? response : [])
-                .filter((p: ProviderInfo) => p.code !== 'mockprov');
+            const response = (await zodiosApi.list_providers_api_v1_assets_provider_get()) as any;
+            const items: ProviderInfo[] = (Array.isArray(response) ? response : []).filter((p: ProviderInfo) => p.code !== 'mockprov');
             providers = items;
             // Select all searchable providers by default
-            selectedProviders = new Set(items.filter(p => p.supports_search).map(p => p.code));
+            selectedProviders = new Set(items.filter((p) => p.supports_search).map((p) => p.code));
             providersLoaded = true;
         } catch (e: any) {
             console.error('Failed to load providers:', e);
@@ -147,7 +146,10 @@
             while (true) {
                 const {done, value} = await reader.read();
                 if (done) break;
-                if (mySearchId !== searchId) { reader.cancel(); return; }
+                if (mySearchId !== searchId) {
+                    reader.cancel();
+                    return;
+                }
 
                 buffer += decoder.decode(value, {stream: true});
 
@@ -176,7 +178,9 @@
                         } else if (event.event === 'done') {
                             // Final event
                         }
-                    } catch { /* skip malformed SSE lines */ }
+                    } catch {
+                        /* skip malformed SSE lines */
+                    }
                 }
             }
 
@@ -187,9 +191,9 @@
             // Fallback to REST endpoint
             if (mySearchId !== searchId) return;
             try {
-                const response = await zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get({
+                const response = (await zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get({
                     queries: {q, providers: providerCodes},
-                }) as any;
+                })) as any;
 
                 if (mySearchId !== searchId) return;
 
@@ -257,7 +261,7 @@
 <div class="space-y-2" data-search-autocomplete>
     <!-- Section label -->
     <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-        <Search size={12}/>
+        <Search size={12} />
         <span>{$t('assets.modal.searchOnline')}</span>
     </div>
 
@@ -265,19 +269,19 @@
     <div class="relative">
         <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
             {#if loading}
-                <Loader2 size={16} class="text-gray-400 animate-spin"/>
+                <Loader2 size={16} class="text-gray-400 animate-spin" />
             {:else}
-                <Search size={16} class="text-gray-400"/>
+                <Search size={16} class="text-gray-400" />
             {/if}
         </div>
         <input
-                type="text"
-                value={query}
-                oninput={handleInput}
-                onfocusin={handleFocusIn}
-                placeholder={$t('assets.search.placeholder')}
-                {disabled}
-                class="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+            type="text"
+            value={query}
+            oninput={handleInput}
+            onfocusin={handleFocusIn}
+            placeholder={$t('assets.search.placeholder')}
+            {disabled}
+            class="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                        bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
                        placeholder-gray-400 dark:placeholder-gray-500
                        focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green
@@ -291,15 +295,13 @@
             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('assets.search.providers')}:</span>
             {#each searchableProviders as prov}
                 <button
-                        type="button"
-                        onclick={() => toggleProvider(prov.code)}
-                        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all
-                               {selectedProviders.has(prov.code)
-                                   ? 'bg-libre-green/15 dark:bg-libre-green/25 border-libre-green/40 text-libre-green dark:text-green-400'
-                                   : 'bg-gray-100/50 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-gray-500 opacity-60'}"
+                    type="button"
+                    onclick={() => toggleProvider(prov.code)}
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all
+                               {selectedProviders.has(prov.code) ? 'bg-libre-green/15 dark:bg-libre-green/25 border-libre-green/40 text-libre-green dark:text-green-400' : 'bg-gray-100/50 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-gray-500 opacity-60'}"
                 >
                     {#if prov.icon_url}
-                        <img src={prov.icon_url} alt="" class="w-3.5 h-3.5 rounded-sm object-contain {selectedProviders.has(prov.code) ? '' : 'grayscale opacity-50'}"/>
+                        <img src={prov.icon_url} alt="" class="w-3.5 h-3.5 rounded-sm object-contain {selectedProviders.has(prov.code) ? '' : 'grayscale opacity-50'}" />
                     {/if}
                     <span>{prov.name}</span>
                 </button>
@@ -309,11 +311,13 @@
 
     <!-- Results dropdown -->
     {#if showResults}
-        <div class="border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800
-                    shadow-lg max-h-60 overflow-y-auto">
+        <div
+            class="border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800
+                    shadow-lg max-h-60 overflow-y-auto"
+        >
             {#if loading && results.length === 0}
                 <div class="flex items-center justify-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
-                    <Loader2 size={16} class="animate-spin"/>
+                    <Loader2 size={16} class="animate-spin" />
                     <span>{$t('assets.search.searching')}{providersDone > 0 && providersTotal > 0 ? ` (${providersDone}/${providersTotal})` : ''}</span>
                 </div>
             {:else if error}
@@ -328,23 +332,14 @@
                 <!-- Loading banner (streaming partial results) -->
                 {#if loading}
                     <div class="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700">
-                        <Loader2 size={12} class="animate-spin"/>
+                        <Loader2 size={12} class="animate-spin" />
                         <span>{$t('assets.search.searching')} ({providersDone}/{providersTotal})</span>
                     </div>
                 {/if}
                 {#each results as result}
-                    <button
-                            type="button"
-                            class="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0"
-                            onclick={() => selectResult(result)}
-                    >
+                    <button type="button" class="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0" onclick={() => selectResult(result)}>
                         <!-- Icon placeholder -->
-                        <AssetIcon
-                                assetType={result.asset_type}
-                                iconUrl={null}
-                                altText={result.display_name}
-                                size="sm"
-                        />
+                        <AssetIcon assetType={result.asset_type} iconUrl={null} altText={result.display_name} size="sm" />
 
                         <!-- Info -->
                         <div class="flex-1 min-w-0">
@@ -360,16 +355,14 @@
                                 {#if result.asset_type}
                                     <span class="mx-0.5">·</span>
                                     <span class="inline-flex items-center gap-0.5">
-                                        <img src={getAssetTypeIconUrl(result.asset_type)} alt="" class="w-3 h-3 object-contain"/>
+                                        <img src={getAssetTypeIconUrl(result.asset_type)} alt="" class="w-3 h-3 object-contain" />
                                         <span>{$t('assets.types.' + (result.asset_type ?? 'OTHER').toUpperCase())}</span>
                                     </span>
                                 {/if}
                                 {#if getAssetProviderIconUrl(result.provider_code)}
                                     <span class="mx-0.5">·</span>
                                     <span class="inline-flex items-center gap-1 shrink-0">
-                                        <img src={getAssetProviderIconUrl(result.provider_code)} alt={result.provider_code}
-                                             class="w-3.5 h-3.5 rounded-sm object-contain"
-                                             title={result.provider_code}/>
+                                        <img src={getAssetProviderIconUrl(result.provider_code)} alt={result.provider_code} class="w-3.5 h-3.5 rounded-sm object-contain" title={result.provider_code} />
                                         <span class="text-gray-400 dark:text-gray-500">{result.provider_code}</span>
                                     </span>
                                 {/if}
@@ -378,15 +371,8 @@
 
                         <!-- Provider URL link -->
                         {#if result.provider_url}
-                            <a
-                                    href={result.provider_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="shrink-0 p-1 text-gray-400 hover:text-libre-green transition-colors"
-                                    onclick={(e) => e.stopPropagation()}
-                                    title="Open provider page"
-                            >
-                                <ExternalLink size={14}/>
+                            <a href={result.provider_url} target="_blank" rel="noopener noreferrer" class="shrink-0 p-1 text-gray-400 hover:text-libre-green transition-colors" onclick={(e) => e.stopPropagation()} title="Open provider page">
+                                <ExternalLink size={14} />
                             </a>
                         {/if}
                     </button>
@@ -395,5 +381,3 @@
         </div>
     {/if}
 </div>
-
-

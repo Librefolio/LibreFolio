@@ -46,7 +46,7 @@ export function buildAssetTypeOptions(t: (key: string) => string): Array<{
     label: string;
     icon: string;
 }> {
-    return ASSET_TYPES.map(at => ({
+    return ASSET_TYPES.map((at) => ({
         value: at,
         label: t(`assets.types.${at}`) || at,
         icon: getAssetTypeIconUrl(at),
@@ -76,9 +76,7 @@ function identifierLabel(type: string): string {
  * @example buildIdentifiersList(asset) → [['ISIN', 'IE00B4L5Y983'], ['Ticker', 'VWCE']]
  */
 export function buildIdentifiersList(asset: Record<string, unknown>): [string, string][] {
-    return IDENTIFIER_TYPES
-        .map(type => [identifierLabel(type), asset[`identifier_${type.toLowerCase()}`]])
-        .filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0);
+    return IDENTIFIER_TYPES.map((type) => [identifierLabel(type), asset[`identifier_${type.toLowerCase()}`]]).filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0);
 }
 
 // =============================================================================
@@ -92,11 +90,7 @@ import {getSectorKeys} from '$lib/stores/sectorStore';
  * Matches the backend FinancialSector enum — kept in sync manually
  * as a safety net for the brief window before the API call completes.
  */
-const SECTOR_KEYS_FALLBACK: readonly string[] = [
-    'Industrials', 'Technology', 'Financials', 'Consumer Discretionary',
-    'Health Care', 'Real Estate', 'Basic Materials', 'Energy',
-    'Consumer Staples', 'Telecommunication', 'Utilities', 'Other',
-];
+const SECTOR_KEYS_FALLBACK: readonly string[] = ['Industrials', 'Technology', 'Financials', 'Consumer Discretionary', 'Health Care', 'Real Estate', 'Basic Materials', 'Energy', 'Consumer Staples', 'Telecommunication', 'Utilities', 'Other'];
 
 /**
  * Get the standard financial sector keys.
@@ -109,7 +103,6 @@ export function getSectorKeysList(): readonly string[] {
     const keys = getSectorKeys();
     return keys.length > 0 ? keys : SECTOR_KEYS_FALLBACK;
 }
-
 
 /**
  * Convert a backend sector key (e.g. "Consumer Discretionary") to

@@ -10,15 +10,7 @@
  */
 
 // Base class & types
-export {
-    ChartSignal,
-    DEFAULT_SIGNAL_COLORS,
-    type MarkerType,
-    type SignalParamDescriptor,
-    type SignalStyle,
-    type SignalConfig,
-    type RenderedSignal,
-} from './ChartSignal';
+export {ChartSignal, DEFAULT_SIGNAL_COLORS, type MarkerType, type SignalParamDescriptor, type SignalStyle, type SignalConfig, type RenderedSignal} from './ChartSignal';
 
 // Concrete signal classes
 export {FxPairSignal} from './FxPairSignal';
@@ -35,10 +27,4 @@ export {BollingerSignal} from './BollingerSignal';
 export {MeasureSignal, type MeasurementResult} from './MeasureSignal';
 
 // Registry & factory
-export {
-    getRegisteredSignalTypes,
-    createSignal,
-    signalFromConfig,
-    type SignalTypeInfo,
-} from './registry';
-
+export {getRegisteredSignalTypes, createSignal, signalFromConfig, type SignalTypeInfo} from './registry';

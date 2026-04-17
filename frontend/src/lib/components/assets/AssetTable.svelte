@@ -13,7 +13,7 @@
     import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
-    import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached,} from '$lib/utils/providerHelpers';
+    import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
 
@@ -38,9 +38,9 @@
     interface Props {
         data: AssetRow[];
         loading?: boolean;
-        visiblePeriods?: ReadonlyArray<{ key: string; days: number }>;
+        visiblePeriods?: ReadonlyArray<{key: string; days: number}>;
         /** Live price data (asset_id → {value, direction}) for flash effect */
-        livePriceMap?: Map<number, { value: number; direction: LivePriceDirection }>;
+        livePriceMap?: Map<number, {value: number; direction: LivePriceDirection}>;
         onsync?: (asset: AssetRow) => void;
         onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
@@ -68,8 +68,7 @@
     // =========================================================================
 
     function assetIconHtml(row: AssetRow): string {
-        const iconSrc = row.icon_url
-            || (row.asset_type ? getAssetTypeIconUrl(row.asset_type) : null);
+        const iconSrc = row.icon_url || (row.asset_type ? getAssetTypeIconUrl(row.asset_type) : null);
         if (iconSrc) {
             return `<img src="${iconSrc}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`;
         }
@@ -85,9 +84,7 @@
 
     function deltaColorClass(val: number | null | undefined): string {
         if (val === null || val === undefined) return 'text-gray-400 dark:text-gray-500';
-        return Number(val) >= 0
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : 'text-red-500 dark:text-red-400';
+        return Number(val) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
     }
 
     function typeBadgeHtml(type: string | null | undefined): string {
@@ -112,122 +109,117 @@
     // Columns
     // =========================================================================
 
-    let columns = $derived<ColumnDef<AssetRow>[]>((
-        void $assetProvidersVersion, // trigger re-derive when asset provider icons are cached
-            [
-                {
-                    id: 'name',
-                    header: () => $t('assets.table.name'),
-                    cell: (row) => {
-                        const icon = assetIconHtml(row);
-                        const activeDot = row.active
-                            ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>'
-                            : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
-                        return {
-                            type: 'html',
-                            html: `<div class="flex items-center gap-2">${icon}<span class="font-medium text-gray-800 dark:text-gray-100">${row.display_name}</span>${activeDot}</div>`
-                        };
-                    },
-                    type: 'text',
-                    getValue: (row) => row.display_name,
-                    width: 220,
-                    minWidth: 150,
+    let columns = $derived<ColumnDef<AssetRow>[]>(
+        (void $assetProvidersVersion, // trigger re-derive when asset provider icons are cached
+        [
+            {
+                id: 'name',
+                header: () => $t('assets.table.name'),
+                cell: (row) => {
+                    const icon = assetIconHtml(row);
+                    const activeDot = row.active ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>' : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
+                    return {
+                        type: 'html',
+                        html: `<div class="flex items-center gap-2">${icon}<span class="font-medium text-gray-800 dark:text-gray-100">${row.display_name}</span>${activeDot}</div>`,
+                    };
                 },
-                {
-                    id: 'type',
-                    header: () => $t('common.type'),
-                    cell: (row) => ({type: 'html', html: typeBadgeHtml(row.asset_type)}),
-                    type: 'enum',
-                    enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'].map(v => ({value: v, label: $t(`assets.types.${v}`) || v})),
-                    getValue: (row) => row.asset_type ?? '',
-                    filterable: false,
-                    width: 70,
-                    minWidth: 40,
+                type: 'text',
+                getValue: (row) => row.display_name,
+                width: 220,
+                minWidth: 150,
+            },
+            {
+                id: 'type',
+                header: () => $t('common.type'),
+                cell: (row) => ({type: 'html', html: typeBadgeHtml(row.asset_type)}),
+                type: 'enum',
+                enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'].map((v) => ({value: v, label: $t(`assets.types.${v}`) || v})),
+                getValue: (row) => row.asset_type ?? '',
+                filterable: false,
+                width: 70,
+                minWidth: 40,
+            },
+            {
+                id: 'currency',
+                header: () => $t('common.currency'),
+                cell: (row) => {
+                    const info = getCurrencyInfo(row.currency);
+                    return {type: 'html', html: `<span class="emoji-flag">${info.flag_emoji}</span> ${row.currency}`};
                 },
-                {
-                    id: 'currency',
-                    header: () => $t('common.currency'),
-                    cell: (row) => {
-                        const info = getCurrencyInfo(row.currency);
-                        return {type: 'html', html: `<span class="emoji-flag">${info.flag_emoji}</span> ${row.currency}`};
-                    },
-                    type: 'text',
-                    getValue: (row) => row.currency,
-                    filterable: false,
-                    width: 90,
-                    minWidth: 70,
+                type: 'text',
+                getValue: (row) => row.currency,
+                filterable: false,
+                width: 90,
+                minWidth: 70,
+            },
+            {
+                id: 'lastPrice',
+                header: () => $t('assets.table.lastPrice'),
+                cell: (row) => {
+                    const live = livePriceMap.get(row.id);
+                    const price = live?.value ?? row.lastPrice;
+                    if (price == null) return '—';
+                    const dir = live?.direction ?? 'neutral';
+                    const colorCls = dir === 'up' ? 'text-emerald-600 dark:text-emerald-400' : dir === 'down' ? 'text-red-500 dark:text-red-400' : '';
+                    const info = getCurrencyInfo(row.currency);
+                    return {
+                        type: 'html',
+                        html: `<span class="font-mono transition-colors duration-300 ${colorCls}">${Number(price).toFixed(2)}</span> <span class="emoji-flag text-xs">${info.flag_emoji}</span> <span class="text-xs text-gray-400">${row.currency}</span>`,
+                    };
                 },
-                {
-                    id: 'lastPrice',
-                    header: () => $t('assets.table.lastPrice'),
-                    cell: (row) => {
-                        const live = livePriceMap.get(row.id);
-                        const price = live?.value ?? row.lastPrice;
-                        if (price == null) return '—';
-                        const dir = live?.direction ?? 'neutral';
-                        const colorCls = dir === 'up' ? 'text-emerald-600 dark:text-emerald-400'
-                            : dir === 'down' ? 'text-red-500 dark:text-red-400'
-                            : '';
-                        const info = getCurrencyInfo(row.currency);
-                        return {
-                            type: 'html',
-                            html: `<span class="font-mono transition-colors duration-300 ${colorCls}">${Number(price).toFixed(2)}</span> <span class="emoji-flag text-xs">${info.flag_emoji}</span> <span class="text-xs text-gray-400">${row.currency}</span>`
-                        };
-                    },
-                    type: 'number',
-                    getValue: (row) => livePriceMap.get(row.id)?.value ?? row.lastPrice ?? 0,
-                    width: 150,
-                    minWidth: 100,
-                },
-                // Dynamic Δ multi-period columns
-                ...visiblePeriods.map(period => ({
-                    id: `delta_${period.key}`,
-                    header: `Δ ${period.key}`,
-                    cell: (row: AssetRow) => {
-                        const val = row.deltas?.[period.key] ?? null;
-                        return {
-                            type: 'html' as const,
-                            html: `<span class="font-mono ${deltaColorClass(val)}">${formatDelta(val, '%')}</span>`,
-                        };
-                    },
-                    type: 'number' as const,
-                    getValue: (row: AssetRow) => row.deltas?.[period.key] ?? 0,
-                    width: 80,
-                    minWidth: 60,
-                })),
-                {
-                    id: 'provider',
-                    header: () => $t('assets.table.provider'),
-                    cell: (row) => ({
+                type: 'number',
+                getValue: (row) => livePriceMap.get(row.id)?.value ?? row.lastPrice ?? 0,
+                width: 150,
+                minWidth: 100,
+            },
+            // Dynamic Δ multi-period columns
+            ...visiblePeriods.map((period) => ({
+                id: `delta_${period.key}`,
+                header: `Δ ${period.key}`,
+                cell: (row: AssetRow) => {
+                    const val = row.deltas?.[period.key] ?? null;
+                    return {
                         type: 'html' as const,
-                        html: row.provider_code
-                            ? assetProviderBadgeHtml(row.provider_code)
-                            : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">✏️ Manual</span>',
-                    }),
-                    type: 'text',
-                    getValue: (row) => row.provider_code ?? '',
-                    width: 240,
-                    minWidth: 160,
-                    filterable: false,
+                        html: `<span class="font-mono ${deltaColorClass(val)}">${formatDelta(val, '%')}</span>`,
+                    };
                 },
-            ]));
+                type: 'number' as const,
+                getValue: (row: AssetRow) => row.deltas?.[period.key] ?? 0,
+                width: 80,
+                minWidth: 60,
+            })),
+            {
+                id: 'provider',
+                header: () => $t('assets.table.provider'),
+                cell: (row) => ({
+                    type: 'html' as const,
+                    html: row.provider_code ? assetProviderBadgeHtml(row.provider_code) : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">✏️ Manual</span>',
+                }),
+                type: 'text',
+                getValue: (row) => row.provider_code ?? '',
+                width: 240,
+                minWidth: 160,
+                filterable: false,
+            },
+        ]),
+    );
 </script>
 
 <DataTable
-        bind:this={tableRef}
-        {columns}
-        {data}
-        defaultPageSize={25}
-        emptyMessage={$t('assets.empty.noAssets')}
-        enableActions={true}
-        enableColumnFilters={true}
-        enablePagination={true}
-        enableSorting={true}
-        getRowId={(row) => String(row.id)}
-        isLoading={loading}
-        onRowClick={(row) => goto(`/assets/${row.id}`)}
-        onSelectionChange={(ids) => onselectionchange?.(data.filter(row => ids.includes(String(row.id))))}
-        rowActions={[
+    bind:this={tableRef}
+    {columns}
+    {data}
+    defaultPageSize={25}
+    emptyMessage={$t('assets.empty.noAssets')}
+    enableActions={true}
+    enableColumnFilters={true}
+    enablePagination={true}
+    enableSorting={true}
+    getRowId={(row) => String(row.id)}
+    isLoading={loading}
+    onRowClick={(row) => goto(`/assets/${row.id}`)}
+    onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
+    rowActions={[
         {
             id: 'sync',
             label: 'Sync',
@@ -235,11 +227,14 @@
             onClick: async (row) => {
                 const rid = String(row.id);
                 syncingRowIds = new Set([...syncingRowIds, rid]);
-                try { await onsync?.(row); }
-                finally { syncingRowIds = new Set([...syncingRowIds].filter(id => id !== rid)); }
+                try {
+                    await onsync?.(row);
+                } finally {
+                    syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== rid));
+                }
             },
             disabled: (row) => !row.provider_code,
-            iconClass: (row) => syncingRowIds.has(String(row.id)) ? 'animate-spin' : '',
+            iconClass: (row) => (syncingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
         },
         {
             id: 'refresh',
@@ -248,10 +243,13 @@
             onClick: async (row) => {
                 const rid = String(row.id);
                 refreshingRowIds = new Set([...refreshingRowIds, rid]);
-                try { await onrefresh?.(row); }
-                finally { refreshingRowIds = new Set([...refreshingRowIds].filter(id => id !== rid)); }
+                try {
+                    await onrefresh?.(row);
+                } finally {
+                    refreshingRowIds = new Set([...refreshingRowIds].filter((id) => id !== rid));
+                }
             },
-            iconClass: (row) => refreshingRowIds.has(String(row.id)) ? 'animate-spin' : '',
+            iconClass: (row) => (refreshingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
         },
         {
             id: 'delete',
@@ -261,5 +259,5 @@
             variant: 'danger',
         },
     ]}
-        storageKey="assetsTable"
+    storageKey="assetsTable"
 />

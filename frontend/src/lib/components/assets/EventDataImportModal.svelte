@@ -24,11 +24,7 @@
         onclose?: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        onimport,
-        onclose,
-    }: Props = $props();
+    let {open = $bindable(false), onimport, onclose}: Props = $props();
 
     // =========================================================================
     // Column definitions for asset events
@@ -48,13 +44,7 @@
     }
 </script>
 
-<DataImportModal
-        bind:open
-        columns={eventColumns}
-        {onclose}
-        {onimport}
-        title="📥 Import Events CSV"
->
+<DataImportModal bind:open columns={eventColumns} {onclose} {onimport} title="📥 Import Events CSV">
     {#snippet headerSlot()}
         <InfoBanner variant="info">
             <div class="flex items-start gap-2">
@@ -68,13 +58,8 @@
                         <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">MATURITY_SETTLEMENT</code>
                     </p>
                 </div>
-                <button
-                        class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0"
-                        onclick={openDocs}
-                        title="Open documentation"
-                        type="button"
-                >
-                    <BookOpen size={16}/>
+                <button class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0" onclick={openDocs} title="Open documentation" type="button">
+                    <BookOpen size={16} />
                 </button>
             </div>
         </InfoBanner>
@@ -95,4 +80,3 @@
         </ul>
     {/snippet}
 </DataImportModal>
-

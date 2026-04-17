@@ -55,19 +55,7 @@
         onchange?: (start: string, end: string) => void;
     }
 
-    let {
-        start = $bindable(''),
-        end = $bindable(''),
-        activePreset = $bindable(null),
-        showPresets = true,
-        showCustomWindow = true,
-        showDateFields = true,
-        compact = false,
-        stacked = false,
-        usePortal = false,
-        allowFuture = false,
-        onchange,
-    }: Props = $props();
+    let {start = $bindable(''), end = $bindable(''), activePreset = $bindable(null), showPresets = true, showCustomWindow = true, showDateFields = true, compact = false, stacked = false, usePortal = false, allowFuture = false, onchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -94,15 +82,7 @@
     // i18n Weekdays and Months
     // =========================================================================
 
-    const WEEKDAY_KEYS = [
-        'datePicker.weekdays.mo',
-        'datePicker.weekdays.tu',
-        'datePicker.weekdays.we',
-        'datePicker.weekdays.th',
-        'datePicker.weekdays.fr',
-        'datePicker.weekdays.sa',
-        'datePicker.weekdays.su',
-    ];
+    const WEEKDAY_KEYS = ['datePicker.weekdays.mo', 'datePicker.weekdays.tu', 'datePicker.weekdays.we', 'datePicker.weekdays.th', 'datePicker.weekdays.fr', 'datePicker.weekdays.sa', 'datePicker.weekdays.su'];
 
     const MONTH_KEYS = [
         'datePicker.months.january',
@@ -120,14 +100,14 @@
     ];
 
     // Pre-compute translated strings at top-level (Svelte 5 doesn't allow $_ inside snippets)
-    let weekdayLabels: string[] = $derived(WEEKDAY_KEYS.map(k => $_(k)));
-    let monthLabels: string[] = $derived(MONTH_KEYS.map(k => $_(k)));
+    let weekdayLabels: string[] = $derived(WEEKDAY_KEYS.map((k) => $_(k)));
+    let monthLabels: string[] = $derived(MONTH_KEYS.map((k) => $_(k)));
 
     // =========================================================================
     // Preset Definitions
     // =========================================================================
 
-    const presets: { key: QuickPreset; label: string; months?: number; weeks?: number; years?: number }[] = [
+    const presets: {key: QuickPreset; label: string; months?: number; weeks?: number; years?: number}[] = [
         {key: '1W', label: '1W', weeks: 1},
         {key: '1M', label: '1M', months: 1},
         {key: '3M', label: '3M', months: 3},
@@ -136,7 +116,7 @@
         {key: '2Y', label: '2Y', years: 2},
     ];
 
-    const granularityOptions: { value: Granularity; labelKey: string; shortKey: string }[] = [
+    const granularityOptions: {value: Granularity; labelKey: string; shortKey: string}[] = [
         {value: 'days', labelKey: 'datePicker.granularity.days', shortKey: 'datePicker.granularity.daysShort'},
         {value: 'weeks', labelKey: 'datePicker.granularity.weeks', shortKey: 'datePicker.granularity.weeksShort'},
         {value: 'months', labelKey: 'datePicker.granularity.months', shortKey: 'datePicker.granularity.monthsShort'},
@@ -144,9 +124,7 @@
     ];
 
     // Granularity short options for the compact native select (must be after granularityOptions)
-    let granularitySelectOptions = $derived(
-        granularityOptions.map(o => ({value: o.value, label: $_(o.shortKey).toUpperCase()}))
-    );
+    let granularitySelectOptions = $derived(granularityOptions.map((o) => ({value: o.value, label: $_(o.shortKey).toUpperCase()})));
 
     // =========================================================================
     // Helpers
@@ -503,64 +481,62 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown}/>
+<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
 <div class="flex flex-col gap-1.5 items-center">
     {#if showPresets}
         <div class="flex items-center gap-1 flex-wrap justify-center">
             {#each presets.slice(0, 4) as preset}
-                <button type="button"
-                        class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                        {activePreset === preset.key
-                            ? 'bg-libre-green text-white shadow-sm'
-                            : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                        onclick={() => handlePresetClick(preset.key)}
-                >{preset.label}</button>
+                <button
+                    type="button"
+                    class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                        {activePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                    onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
+                >
             {/each}
             <!-- Group: 1Y, 2Y, Custom, Info — wraps as a single unit -->
             <span class="inline-flex items-center gap-1">
                 {#each presets.slice(4) as preset}
-                    <button type="button"
-                            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                            {activePreset === preset.key
-                                ? 'bg-libre-green text-white shadow-sm'
-                                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                            onclick={() => handlePresetClick(preset.key)}
-                    >{preset.label}</button>
+                    <button
+                        type="button"
+                        class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                            {activePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                        onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
+                    >
                 {/each}
                 {#if showCustomWindow}
                     {#if customEditing}
                         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                        <div bind:this={customEditRef}
-                             class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger"
-                             role="group"
-                             onclick={(e) => e.stopPropagation()}
-                             onkeydown={(e) => { if (e.key === 'Escape') customEditing = false; }}>
-                            <input type="number" bind:value={customAmount} min="1" max="999"
-                                   class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
-                            <SimpleSelect
-                                    value={customGranularity}
-                                    options={granularitySelectOptions}
-                                    onchange={handleGranularityChange}
-                                    class="inline-block w-auto"
-                                    dropdownPosition="auto"
-                                    compact
-                                    showChevron={false}
+                        <div
+                            bind:this={customEditRef}
+                            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger"
+                            role="group"
+                            onclick={(e) => e.stopPropagation()}
+                            onkeydown={(e) => {
+                                if (e.key === 'Escape') customEditing = false;
+                            }}
+                        >
+                            <input
+                                type="number"
+                                bind:value={customAmount}
+                                min="1"
+                                max="999"
+                                class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
+                            <SimpleSelect value={customGranularity} options={granularitySelectOptions} onchange={handleGranularityChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} />
                         </div>
                     {:else}
-                        <button type="button"
-                                class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                                {activePreset === 'custom'
-                                    ? 'bg-amber-500 text-white shadow-sm'
-                                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                                onclick={(e) => toggleCustomEdit(e)}
-                        >{activePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find(o => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button>
+                        <button
+                            type="button"
+                            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                                {activePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                            onclick={(e) => toggleCustomEdit(e)}>{activePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
+                        >
                     {/if}
                 {/if}
                 <!-- Info tooltip -->
                 <Tooltip text={$_('datePicker.info')} position="bottom" maxWidth="280px">
-                    <Info size={14} class="text-gray-400 dark:text-gray-500 hover:text-libre-green transition-colors"/>
+                    <Info size={14} class="text-gray-400 dark:text-gray-500 hover:text-libre-green transition-colors" />
                 </Tooltip>
             </span>
         </div>
@@ -569,13 +545,15 @@
     {#if showDateFields}
         <div class="relative drp-trigger w-full">
             <button
-                    bind:this={triggerEl}
-                    type="button"
-                    class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
-                    onclick={openCalendar}
+                bind:this={triggerEl}
+                type="button"
+                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
+                    ? 'ring-1 ring-libre-green border-libre-green'
+                    : ''}"
+                onclick={openCalendar}
             >
                 <span class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
-                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0"/>
+                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
                     <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
                     <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(start)}</span>
                 </span>
@@ -585,7 +563,7 @@
                     <span class="block w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
                 {/if}
                 <span class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
-                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0"/>
+                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
                     <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
                     <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(end)}</span>
                 </span>
@@ -600,35 +578,39 @@
                         <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
                             <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                                 <CalendarMonth
-                                        year={calLeftYear}
-                                        month={calLeftMonth}
-                                        {weekdayLabels}
-                                        {monthLabels}
-                                        onDayClick={handleDayClick}
-                                        onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
-                                        onPrevMonth={leftPrevMonth}
-                                        onNextMonth={leftNextMonth}
-                                        onSetMonth={setLeftMonth}
-                                        onSetYear={setLeftYear}
-                                        onGoToToday={goToTodayLeft}
-                                        highlights={calHighlights}
-                                        {allowFuture}
+                                    year={calLeftYear}
+                                    month={calLeftMonth}
+                                    {weekdayLabels}
+                                    {monthLabels}
+                                    onDayClick={handleDayClick}
+                                    onDayHover={(iso) => {
+                                        if (pendingDate) hoveredDate = iso;
+                                    }}
+                                    onPrevMonth={leftPrevMonth}
+                                    onNextMonth={leftNextMonth}
+                                    onSetMonth={setLeftMonth}
+                                    onSetYear={setLeftYear}
+                                    onGoToToday={goToTodayLeft}
+                                    highlights={calHighlights}
+                                    {allowFuture}
                                 />
                                 <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
                                 <CalendarMonth
-                                        year={calRightYear}
-                                        month={calRightMonth}
-                                        {weekdayLabels}
-                                        {monthLabels}
-                                        onDayClick={handleDayClick}
-                                        onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
-                                        onPrevMonth={rightPrevMonth}
-                                        onNextMonth={rightNextMonth}
-                                        onSetMonth={setRightMonth}
-                                        onSetYear={setRightYear}
-                                        onGoToToday={goToTodayRight}
-                                        highlights={calHighlights}
-                                        {allowFuture}
+                                    year={calRightYear}
+                                    month={calRightMonth}
+                                    {weekdayLabels}
+                                    {monthLabels}
+                                    onDayClick={handleDayClick}
+                                    onDayHover={(iso) => {
+                                        if (pendingDate) hoveredDate = iso;
+                                    }}
+                                    onPrevMonth={rightPrevMonth}
+                                    onNextMonth={rightNextMonth}
+                                    onSetMonth={setRightMonth}
+                                    onSetYear={setRightYear}
+                                    onGoToToday={goToTodayRight}
+                                    highlights={calHighlights}
+                                    {allowFuture}
                                 />
                             </div>
                             {#if pendingDate}
@@ -642,35 +624,39 @@
                     <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
                         <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                             <CalendarMonth
-                                    year={calLeftYear}
-                                    month={calLeftMonth}
-                                    {weekdayLabels}
-                                    {monthLabels}
-                                    onDayClick={handleDayClick}
-                                    onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
-                                    onPrevMonth={leftPrevMonth}
-                                    onNextMonth={leftNextMonth}
-                                    onSetMonth={setLeftMonth}
-                                    onSetYear={setLeftYear}
-                                    onGoToToday={goToTodayLeft}
-                                    highlights={calHighlights}
-                                        {allowFuture}
+                                year={calLeftYear}
+                                month={calLeftMonth}
+                                {weekdayLabels}
+                                {monthLabels}
+                                onDayClick={handleDayClick}
+                                onDayHover={(iso) => {
+                                    if (pendingDate) hoveredDate = iso;
+                                }}
+                                onPrevMonth={leftPrevMonth}
+                                onNextMonth={leftNextMonth}
+                                onSetMonth={setLeftMonth}
+                                onSetYear={setLeftYear}
+                                onGoToToday={goToTodayLeft}
+                                highlights={calHighlights}
+                                {allowFuture}
                             />
                             <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
                             <CalendarMonth
-                                    year={calRightYear}
-                                    month={calRightMonth}
-                                    {weekdayLabels}
-                                    {monthLabels}
-                                    onDayClick={handleDayClick}
-                                    onDayHover={(iso) => { if (pendingDate) hoveredDate = iso; }}
-                                    onPrevMonth={rightPrevMonth}
-                                    onNextMonth={rightNextMonth}
-                                    onSetMonth={setRightMonth}
-                                    onSetYear={setRightYear}
-                                    onGoToToday={goToTodayRight}
-                                    highlights={calHighlights}
-                                        {allowFuture}
+                                year={calRightYear}
+                                month={calRightMonth}
+                                {weekdayLabels}
+                                {monthLabels}
+                                onDayClick={handleDayClick}
+                                onDayHover={(iso) => {
+                                    if (pendingDate) hoveredDate = iso;
+                                }}
+                                onPrevMonth={rightPrevMonth}
+                                onNextMonth={rightNextMonth}
+                                onSetMonth={setRightMonth}
+                                onSetYear={setRightYear}
+                                onGoToToday={goToTodayRight}
+                                highlights={calHighlights}
+                                {allowFuture}
                             />
                         </div>
                         {#if pendingDate}
@@ -684,4 +670,3 @@
         </div>
     {/if}
 </div>
-

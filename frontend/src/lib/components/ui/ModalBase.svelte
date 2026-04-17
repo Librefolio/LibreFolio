@@ -30,8 +30,7 @@
     /** Whether pressing Escape closes the modal */
     export let closeOnEscape: boolean = true;
     /** Called when the user requests to close (backdrop click or Escape) */
-    export let onRequestClose: () => void = () => {
-    };
+    export let onRequestClose: () => void = () => {};
     /** Extra CSS class for the modal-content div */
     export let contentClass: string = '';
     /** data-testid for testing */
@@ -43,12 +42,24 @@
 
     // Max-width preset map
     const maxWidthMap: Record<string, string> = {
-        'sm': '24rem', 'md': '28rem', 'lg': '32rem', 'xl': '36rem',
-        '2xl': '42rem', '3xl': '48rem', '4xl': '56rem', '5xl': '64rem',
-        'none': 'none',
+        sm: '24rem',
+        md: '28rem',
+        lg: '32rem',
+        xl: '36rem',
+        '2xl': '42rem',
+        '3xl': '48rem',
+        '4xl': '56rem',
+        '5xl': '64rem',
+        none: 'none',
         // Support legacy class-name format
-        'max-w-sm': '24rem', 'max-w-md': '28rem', 'max-w-lg': '32rem', 'max-w-xl': '36rem',
-        'max-w-2xl': '42rem', 'max-w-3xl': '48rem', 'max-w-4xl': '56rem', 'max-w-5xl': '64rem',
+        'max-w-sm': '24rem',
+        'max-w-md': '28rem',
+        'max-w-lg': '32rem',
+        'max-w-xl': '36rem',
+        'max-w-2xl': '42rem',
+        'max-w-3xl': '48rem',
+        'max-w-4xl': '56rem',
+        'max-w-5xl': '64rem',
         'max-w-none': 'none',
     };
 
@@ -102,47 +113,27 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     {#if noTransition}
-        <div
-                class="modal-backdrop"
-                style="z-index: {zIndex};"
-                bind:this={backdropEl}
-                tabindex="-1"
-                on:mousedown={handleBackdropMouseDown}
-                on:click={handleBackdropClick}
-                on:keydown|stopPropagation={handleKeydown}
-                role="dialog"
-                aria-modal="true"
-                data-testid={testId || undefined}
-        >
-            <div
-                    class="modal-content {contentClass}"
-                    style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
-                    on:click|stopPropagation
-            >
-                <slot/>
+        <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" on:mousedown={handleBackdropMouseDown} on:click={handleBackdropClick} on:keydown|stopPropagation={handleKeydown} role="dialog" aria-modal="true" data-testid={testId || undefined}>
+            <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" on:click|stopPropagation>
+                <slot />
             </div>
         </div>
     {:else}
         <div
-                class="modal-backdrop"
-                style="z-index: {zIndex};"
-                bind:this={backdropEl}
-                tabindex="-1"
-                on:mousedown={handleBackdropMouseDown}
-                on:click={handleBackdropClick}
-                on:keydown|stopPropagation={handleKeydown}
-                role="dialog"
-                aria-modal="true"
-                data-testid={testId || undefined}
-                transition:fade={{ duration: 150 }}
+            class="modal-backdrop"
+            style="z-index: {zIndex};"
+            bind:this={backdropEl}
+            tabindex="-1"
+            on:mousedown={handleBackdropMouseDown}
+            on:click={handleBackdropClick}
+            on:keydown|stopPropagation={handleKeydown}
+            role="dialog"
+            aria-modal="true"
+            data-testid={testId || undefined}
+            transition:fade={{duration: 150}}
         >
-            <div
-                    class="modal-content {contentClass}"
-                    style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
-                    on:click|stopPropagation
-                    transition:scale={{ duration: 200, start: 0.95 }}
-            >
-                <slot/>
+            <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" on:click|stopPropagation transition:scale={{duration: 200, start: 0.95}}>
+                <slot />
             </div>
         </div>
     {/if}

@@ -21,27 +21,9 @@
 
     <!-- Chart lines container - multiple lines that cycle -->
     <svg class="chart-svg" preserveAspectRatio="none" viewBox="0 0 1200 200">
-        <path
-                class="chart-line line-1"
-                d="M0,150 L100,130 L200,140 L300,100 L400,120 L500,80 L600,90 L700,60 L800,70 L900,40 L1000,55 L1100,30 L1200,45"
-                fill="none"
-                stroke="#1a4031"
-                stroke-width="2"
-        />
-        <path
-                class="chart-line line-2"
-                d="M0,120 L100,140 L200,100 L300,130 L400,90 L500,110 L600,70 L700,95 L800,55 L900,80 L1000,45 L1100,65 L1200,35"
-                fill="none"
-                stroke="#1a4031"
-                stroke-width="2"
-        />
-        <path
-                class="chart-line line-3"
-                d="M0,140 L100,110 L200,130 L300,85 L400,115 L500,75 L600,100 L700,50 L800,85 L900,60 L1000,75 L1100,40 L1200,55"
-                fill="none"
-                stroke="#1a4031"
-                stroke-width="2"
-        />
+        <path class="chart-line line-1" d="M0,150 L100,130 L200,140 L300,100 L400,120 L500,80 L600,90 L700,60 L800,70 L900,40 L1000,55 L1100,30 L1200,45" fill="none" stroke="#1a4031" stroke-width="2" />
+        <path class="chart-line line-2" d="M0,120 L100,140 L200,100 L300,130 L400,90 L500,110 L600,70 L700,95 L800,55 L900,80 L1000,45 L1100,65 L1200,35" fill="none" stroke="#1a4031" stroke-width="2" />
+        <path class="chart-line line-3" d="M0,140 L100,110 L200,130 L300,85 L400,115 L500,75 L600,100 L700,50 L800,85 L900,60 L1000,75 L1100,40 L1200,55" fill="none" stroke="#1a4031" stroke-width="2" />
     </svg>
 </div>
 
@@ -77,31 +59,24 @@
     .wave-1 {
         opacity: 0.25;
         animation: wave1 12s ease-in-out infinite;
-        clip-path: polygon(
-                0% 100%, 0% 60%, 15% 55%, 30% 65%, 45% 50%,
-                60% 60%, 75% 45%, 90% 55%, 100% 40%, 100% 100%
-        );
+        clip-path: polygon(0% 100%, 0% 60%, 15% 55%, 30% 65%, 45% 50%, 60% 60%, 75% 45%, 90% 55%, 100% 40%, 100% 100%);
     }
 
     .wave-2 {
         opacity: 0.18;
         animation: wave2 16s ease-in-out infinite;
-        clip-path: polygon(
-                0% 100%, 0% 70%, 20% 60%, 40% 70%, 60% 55%,
-                80% 65%, 100% 50%, 100% 100%
-        );
+        clip-path: polygon(0% 100%, 0% 70%, 20% 60%, 40% 70%, 60% 55%, 80% 65%, 100% 50%, 100% 100%);
     }
 
     .wave-3 {
         opacity: 0.12;
         animation: wave3 20s ease-in-out infinite;
-        clip-path: polygon(
-                0% 100%, 0% 55%, 25% 65%, 50% 50%, 75% 60%, 100% 45%, 100% 100%
-        );
+        clip-path: polygon(0% 100%, 0% 55%, 25% 65%, 50% 50%, 75% 60%, 100% 45%, 100% 100%);
     }
 
     @keyframes wave1 {
-        0%, 100% {
+        0%,
+        100% {
             transform: scaleY(1);
         }
         25% {
@@ -116,7 +91,8 @@
     }
 
     @keyframes wave2 {
-        0%, 100% {
+        0%,
+        100% {
             transform: scaleY(1);
         }
         33% {
@@ -128,7 +104,8 @@
     }
 
     @keyframes wave3 {
-        0%, 100% {
+        0%,
+        100% {
             transform: scaleY(1);
         }
         50% {

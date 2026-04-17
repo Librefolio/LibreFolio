@@ -24,7 +24,7 @@
     export let isNonDefault: boolean = false;
     export let isLocked: boolean = false;
 
-    const themeOptions: Array<{ value: 'light' | 'dark' | 'auto'; labelKey: string }> = [
+    const themeOptions: Array<{value: 'light' | 'dark' | 'auto'; labelKey: string}> = [
         {value: 'light', labelKey: 'settings.themeLight'},
         {value: 'dark', labelKey: 'settings.themeDark'},
         {value: 'auto', labelKey: 'settings.themeAuto'},
@@ -42,7 +42,7 @@
     <div class="flex-1 min-w-0">
         <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
             {#if icon}
-                <svelte:component this={icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                <svelte:component this={icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
             {/if}
             {label}
         </div>
@@ -57,31 +57,16 @@
         {#if !isLocked}
             <div class="flex items-center space-x-1">
                 {#if isModified}
-                    <button
-                            type="button"
-                            on:click={() => dispatch('save')}
-                            class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                            title={$_('common.save')}
-                    >
-                        <Save size={14}/>
+                    <button type="button" on:click={() => dispatch('save')} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" title={$_('common.save')}>
+                        <Save size={14} />
                     </button>
-                    <button
-                            type="button"
-                            on:click={() => dispatch('undo')}
-                            class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                            title={$_('common.undo')}
-                    >
-                        <Undo size={14}/>
+                    <button type="button" on:click={() => dispatch('undo')} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>
+                        <Undo size={14} />
                     </button>
                 {/if}
                 {#if isNonDefault && !isModified}
-                    <button
-                            type="button"
-                            on:click={() => dispatch('reset')}
-                            class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                            title={$_('common.reset')}
-                    >
-                        <RotateCcw size={14}/>
+                    <button type="button" on:click={() => dispatch('reset')} class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors" title={$_('common.reset')}>
+                        <RotateCcw size={14} />
                     </button>
                 {/if}
             </div>
@@ -91,13 +76,11 @@
         <div class="flex flex-wrap gap-2">
             {#each themeOptions as option}
                 <button
-                        type="button"
-                        on:click={() => selectTheme(option.value)}
-                        disabled={isLocked}
-                        class="px-3 sm:px-4 py-2 text-sm border rounded-lg transition-all
-                        {value === option.value
-                            ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20 text-libre-green dark:text-green-400'
-                            : 'border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500'}
+                    type="button"
+                    on:click={() => selectTheme(option.value)}
+                    disabled={isLocked}
+                    class="px-3 sm:px-4 py-2 text-sm border rounded-lg transition-all
+                        {value === option.value ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20 text-libre-green dark:text-green-400' : 'border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500'}
                         {isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
                 >
                     {$_(option.labelKey)}

@@ -30,7 +30,7 @@ const defaultGlobalSettings: GlobalSettings = {
     auto_sync_fx_rates: false,
     auto_sync_prices: false,
     price_sync_interval_hours: 24,
-    max_file_upload_mb: 10
+    max_file_upload_mb: 10,
 };
 
 /**
@@ -98,12 +98,9 @@ function createGlobalSettingsStore() {
         async updateSetting(key: keyof GlobalSettings, value: string | number | boolean): Promise<boolean> {
             try {
                 const stringValue = String(value);
-                await zodiosApi.update_global_setting_endpoint_api_v1_settings_global__key__put(
-                    {value: stringValue},
-                    {params: {key}}
-                );
+                await zodiosApi.update_global_setting_endpoint_api_v1_settings_global__key__put({value: stringValue}, {params: {key}});
 
-                update(current => {
+                update((current) => {
                     const updated = {...current};
                     // Parse value based on type
                     if (key === 'session_ttl_hours' || key === 'price_sync_interval_hours' || key === 'max_file_upload_mb') {
@@ -131,7 +128,7 @@ function createGlobalSettingsStore() {
          * Set all settings directly (used after bulk updates)
          */
         setDirect(settings: Partial<GlobalSettings>): void {
-            update(current => {
+            update((current) => {
                 const merged = {...current, ...settings};
                 if (browser) {
                     localStorage.setItem('global_settings', JSON.stringify(merged));
@@ -162,9 +159,8 @@ function createGlobalSettingsStore() {
             if (browser) {
                 localStorage.removeItem('global_settings');
             }
-        }
+        },
     };
 }
 
 export const globalSettings = createGlobalSettingsStore();
-

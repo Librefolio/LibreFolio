@@ -32,35 +32,24 @@
         onchange?: (brokerId: number | null) => void;
     }
 
-    let {
-        brokers,
-        value = $bindable(null),
-        placeholder = '',
-        disabled = false,
-        disabledIds = new Set(),
-        dropdownPosition = 'auto',
-        maxVisibleItems = 6,
-        onchange
-    }: Props = $props();
+    let {brokers, value = $bindable(null), placeholder = '', disabled = false, disabledIds = new Set(), dropdownPosition = 'auto', maxVisibleItems = 6, onchange}: Props = $props();
 
     // Convert brokers to SelectOption format
     let brokerOptions = $derived<SelectOption[]>(
-        brokers.map(b => ({
+        brokers.map((b) => ({
             value: String(b.id),
             label: b.name,
             searchText: b.name,
             data: b,
             disabled: disabledIds.has(b.id),
-        }))
+        })),
     );
 
     // Convert numeric value to string for SearchSelect
     let stringValue = $derived(value != null ? String(value) : '');
 
     // Get selected broker for display
-    let selectedBroker = $derived(
-        value != null ? brokers.find(b => b.id === value) : null
-    );
+    let selectedBroker = $derived(value != null ? brokers.find((b) => b.id === value) : null);
 
     function handleChange(newValue: string) {
         const numericValue = newValue ? parseInt(newValue, 10) : null;
@@ -69,39 +58,18 @@
     }
 </script>
 
-<SearchSelect
-        {disabled}
-        {dropdownPosition}
-        inlineSearch={true}
-        {maxVisibleItems}
-        onchange={handleChange}
-        options={brokerOptions}
-        placeholder={placeholder || $_('uploads.selectBroker')}
-        value={stringValue}
->
+<SearchSelect {disabled} {dropdownPosition} inlineSearch={true} {maxVisibleItems} onchange={handleChange} options={brokerOptions} placeholder={placeholder || $_('uploads.selectBroker')} value={stringValue}>
     {#snippet item(option)}
         {@const broker = option.data as BrokerSelectItem}
         <div class="flex items-center gap-2">
-            <BrokerIcon
-                    iconUrl={broker.icon_url}
-                    portalUrl={broker.portal_url}
-                    pluginCode={broker.default_import_plugin}
-                    altText={broker.name}
-                    size="sm"
-            />
+            <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
             <span class="truncate">{broker.name}</span>
         </div>
     {/snippet}
     {#snippet selectedItem(option)}
         {@const broker = option.data as BrokerSelectItem}
         <div class="flex items-center gap-2">
-            <BrokerIcon
-                    iconUrl={broker.icon_url}
-                    portalUrl={broker.portal_url}
-                    pluginCode={broker.default_import_plugin}
-                    altText={broker.name}
-                    size="sm"
-            />
+            <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
             <span class="truncate">{broker.name}</span>
         </div>
     {/snippet}

@@ -43,16 +43,7 @@
         oncsvtextchange?: (text: string) => void;
     }
 
-    let {
-        open = $bindable(false),
-        title = 'Import CSV Data',
-        columns,
-        headerSlot,
-        helpContent,
-        onimport,
-        onclose,
-        oncsvtextchange,
-    }: Props = $props();
+    let {open = $bindable(false), title = 'Import CSV Data', columns, headerSlot, helpContent, onimport, onclose, oncsvtextchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -76,14 +67,14 @@
     // =========================================================================
 
     /** Expected header for pre-population */
-    let expectedHeader = $derived('date;' + columns.map(c => c.label).join(';'));
+    let expectedHeader = $derived('date;' + columns.map((c) => c.label).join(';'));
 
     /** True when user has typed/pasted/dropped something beyond the initial header */
     let isDirty = $derived.by(() => {
         const trimmed = csvValue.trim();
         if (!trimmed) return false;
         if (trimmed === initialCsvValue.trim()) return false;
-        const lines = trimmed.split('\n').filter(l => l.trim());
+        const lines = trimmed.split('\n').filter((l) => l.trim());
         return lines.length > 1 || trimmed !== initialCsvValue.trim();
     });
 
@@ -207,59 +198,44 @@
         <div class="flex items-center gap-2">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
             {#if helpContent}
-                <button
-                        aria-label="Help"
-                        class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors"
-                        onclick={() => showHelp = !showHelp}
-                        title={$t('csvImport.helpTitle')}
-                >
-                    <HelpCircle size={18}/>
+                <button aria-label="Help" class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors" onclick={() => (showHelp = !showHelp)} title={$t('csvImport.helpTitle')}>
+                    <HelpCircle size={18} />
                 </button>
             {/if}
         </div>
-        <button
-                aria-label="Close"
-                class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded"
-                onclick={requestClose}
-        >✕
-        </button>
+        <button aria-label="Close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded" onclick={requestClose}>✕ </button>
     </div>
 
     <!-- Content -->
     <div class="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
         <!-- Help section (collapsible) -->
         {#if showHelp && helpContent}
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800
-                        rounded-lg px-4 py-3 text-sm text-blue-700 dark:text-blue-300 space-y-2">
+            <div
+                class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800
+                        rounded-lg px-4 py-3 text-sm text-blue-700 dark:text-blue-300 space-y-2"
+            >
                 {@render helpContent()}
             </div>
         {/if}
 
         <!-- Drop zone (compact) -->
         <div
-                class="relative border-2 border-dashed rounded-lg px-4 py-3 text-center transition-colors
-                {isDragOver
-                    ? 'border-libre-green bg-emerald-50 dark:bg-emerald-900/20'
-                    : 'border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}"
-                ondragleave={handleDragLeave}
-                ondragover={handleDragOver}
-                ondrop={handleDrop}
-                role="button"
-                tabindex="0"
+            class="relative border-2 border-dashed rounded-lg px-4 py-3 text-center transition-colors
+                {isDragOver ? 'border-libre-green bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}"
+            ondragleave={handleDragLeave}
+            ondragover={handleDragOver}
+            ondrop={handleDrop}
+            role="button"
+            tabindex="0"
         >
-            <input
-                    accept=".csv,.txt"
-                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    onchange={handleFileSelect}
-                    type="file"
-            />
+            <input accept=".csv,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange={handleFileSelect} type="file" />
             <div class="flex items-center justify-center gap-2">
                 {#if fileName}
-                    <FileText size={18} class="text-libre-green shrink-0"/>
+                    <FileText size={18} class="text-libre-green shrink-0" />
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{fileName}</span>
                     <span class="text-xs text-gray-400 dark:text-gray-500">— {$t('csvImport.dropReplace')}</span>
                 {:else}
-                    <Upload size={18} class="text-gray-400 dark:text-gray-500 shrink-0"/>
+                    <Upload size={18} class="text-gray-400 dark:text-gray-500 shrink-0" />
                     <span class="text-sm text-gray-600 dark:text-gray-400">{$t('csvImport.dropFile')}</span>
                 {/if}
             </div>
@@ -271,14 +247,7 @@
         {/if}
 
         <!-- CSV Editor -->
-        <CsvEditor
-                {columns}
-                bind:value={csvValue}
-                minHeight="250px"
-                onvalidchange={handleValidChange}
-                oninput={oncsvtextchange}
-                placeholder="Paste CSV data here or drop a file above..."
-        />
+        <CsvEditor {columns} bind:value={csvValue} minHeight="250px" onvalidchange={handleValidChange} oninput={oncsvtextchange} placeholder="Paste CSV data here or drop a file above..." />
     </div>
 
     <!-- Footer -->
@@ -297,26 +266,12 @@
             {/if}
         </div>
         <div class="flex gap-2">
-            <button
-                    class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
-                    onclick={requestClose}
-            >{$t('common.cancel')}</button>
-            <button
-                    class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    disabled={validRows.length === 0}
-                    onclick={handleConfirm}
-            >{$t('csvImport.import', {values: {count: validRows.length}})}</button>
+            <button class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" onclick={requestClose}>{$t('common.cancel')}</button>
+            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled={validRows.length === 0} onclick={handleConfirm}>{$t('csvImport.import', {values: {count: validRows.length}})}</button
+            >
         </div>
     </div>
 </ModalBase>
 
 <!-- Confirm discard modal (stacked above) -->
-<ConfirmModal
-        confirmText={$t('common.discardAndClose')}
-        message={$t('csvImport.discardMessage')}
-        onCancel={() => showDiscardConfirm = false}
-        onConfirm={doClose}
-        open={showDiscardConfirm}
-        title={$t('csvImport.discardTitle')}
-        warning={true}
-/>
+<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} title={$t('csvImport.discardTitle')} warning={true} />

@@ -41,13 +41,7 @@
         onclose?: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        displayBase,
-        displayQuote,
-        onimport,
-        onclose,
-    }: Props = $props();
+    let {open = $bindable(false), displayBase, displayQuote, onimport, onclose}: Props = $props();
 
     // =========================================================================
     // State
@@ -100,7 +94,7 @@
         if (modalRef) {
             const csv = modalRef.getCsvText();
             const lineArray = csv.split('\n');
-            const headerIdx = lineArray.findIndex(l => l.trim() !== '');
+            const headerIdx = lineArray.findIndex((l) => l.trim() !== '');
             if (headerIdx >= 0) {
                 const parts = lineArray[headerIdx].split(';');
                 for (let i = 1; i < parts.length; i++) {
@@ -137,7 +131,7 @@
      */
     function handleCsvTextChange(text: string) {
         const lineArray = text.split('\n');
-        const headerIdx = lineArray.findIndex(l => l.trim() !== '');
+        const headerIdx = lineArray.findIndex((l) => l.trim() !== '');
         if (headerIdx < 0) return;
 
         const headerParts = lineArray[headerIdx].split(';');
@@ -167,43 +161,29 @@
     }
 </script>
 
-<DataImportModal
-        bind:this={modalRef}
-        bind:open
-        columns={fxColumns}
-        onclose={handleClose}
-        onimport={handleImport}
-        oncsvtextchange={handleCsvTextChange}
-        title={$t('csvImport.title')}
->
+<DataImportModal bind:this={modalRef} bind:open columns={fxColumns} onclose={handleClose} onimport={handleImport} oncsvtextchange={handleCsvTextChange} title={$t('csvImport.title')}>
     {#snippet headerSlot()}
         <!-- Direction: currency badges (readonly CurrencySearchSelect, centered) -->
         <div class="flex items-center justify-center gap-2">
             <div class="w-44">
-                <CurrencySearchSelect
-                        disabled={true}
-                        value={displayFrom}
-                />
+                <CurrencySearchSelect disabled={true} value={displayFrom} />
             </div>
-            <ArrowRight class="text-gray-400 dark:text-gray-500 shrink-0" size={18}/>
+            <ArrowRight class="text-gray-400 dark:text-gray-500 shrink-0" size={18} />
             <div class="w-44">
-                <CurrencySearchSelect
-                        disabled={true}
-                        value={displayTo}
-                />
+                <CurrencySearchSelect disabled={true} value={displayTo} />
             </div>
         </div>
 
         <!-- Swap ⇄ + InfoBanner on the same row -->
         <div class="flex items-center gap-2">
             <button
-                    aria-label={$t('common.swapDirection')}
-                    class="flex items-center justify-center w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600
+                aria-label={$t('common.swapDirection')}
+                class="flex items-center justify-center w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600
                        text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200
                        transition-colors text-base font-bold shrink-0"
-                    onclick={handleSwap}
-                    title={$t('common.swapDirection')}
-            >⇄
+                onclick={handleSwap}
+                title={$t('common.swapDirection')}
+                >⇄
             </button>
             <div class="flex-1">
                 <InfoBanner variant="info">
@@ -228,4 +208,3 @@
         </ul>
     {/snippet}
 </DataImportModal>
-

@@ -73,7 +73,7 @@ export async function ensureCountriesLoaded(language: string = 'en'): Promise<vo
                 name: c.name ?? c.iso3 ?? '',
                 flag_emoji: c.flag_emoji ?? '🏳️',
             }));
-            countryMap = new Map(allCountries.map(c => [c.iso3, c]));
+            countryMap = new Map(allCountries.map((c) => [c.iso3, c]));
             loaded = true;
             lastLoadedLanguage = language;
         } catch (e) {
@@ -100,12 +100,14 @@ export function getAllCountries(): CountryInfo[] {
  * Returns a sensible fallback if not found or not yet loaded.
  */
 export function getCountryInfo(iso3: string): CountryInfo {
-    return countryMap.get(iso3) ?? {
-        iso3,
-        iso2: '',
-        name: iso3,
-        flag_emoji: '🏳️',
-    };
+    return (
+        countryMap.get(iso3) ?? {
+            iso3,
+            iso2: '',
+            name: iso3,
+            flag_emoji: '🏳️',
+        }
+    );
 }
 
 /** Check if countries have been loaded. */
@@ -117,4 +119,3 @@ export function isCountriesLoaded(): boolean {
 export function isCountriesLoading(): boolean {
     return loading;
 }
-

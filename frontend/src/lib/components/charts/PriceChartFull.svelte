@@ -14,7 +14,7 @@
     import ChartToolbar from './ChartToolbar.svelte';
     import type {LineDataPoint} from './LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations,} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
 
     // =========================================================================
@@ -23,14 +23,13 @@
 
     export interface EventMarker {
         date: string;
-        type: string;        // DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT, MATURITY_SETTLEMENT
+        type: string; // DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT, MATURITY_SETTLEMENT
         value?: number;
         currency?: string;
         notes?: string;
         assetLabel?: string; // only for comparison events
         signalColor?: string; // color of the overlay signal for comparison events
     }
-
 
     const EVENT_SYMBOLS: Record<string, string> = {
         INTEREST: 'diamond',
@@ -161,7 +160,7 @@
         if (viewMode === 'absolute' || data.length === 0) return data;
         const baseValue = data[0].value;
         if (baseValue === 0) return data;
-        return data.map(d => ({...d, value: ((d.value - baseValue) / baseValue) * 100}));
+        return data.map((d) => ({...d, value: ((d.value - baseValue) / baseValue) * 100}));
     });
 
     // =========================================================================
@@ -245,8 +244,7 @@
                     try {
                         chartInstance?.resize();
                         if (chartInstance) updateArrowRotations(chartInstance);
-                    } catch (_) {
-                    }
+                    } catch (_) {}
                 } else if (chartContainer && data.length > 0) {
                     renderChart();
                 }
@@ -271,7 +269,7 @@
                         if (dateIdx >= 0 && dateIdx < displayData.length) {
                             const point = displayData[dateIdx];
                             // Check if this date has an event marker
-                            const hasEvent = eventMarkers.find(e => e.date === point.date);
+                            const hasEvent = eventMarkers.find((e) => e.date === point.date);
                             if (hasEvent && onEventDblClick) {
                                 onEventDblClick(point.date, hasEvent.type);
                             } else if (onDblClick) {
@@ -338,7 +336,7 @@
             // Long-press handler for mobile (1s hold = double-click equivalent)
             // + Tap detection for measure mode (short tap = click)
             let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-            let touchStartPos: { x: number; y: number } | null = null;
+            let touchStartPos: {x: number; y: number} | null = null;
             let touchStartTime = 0;
 
             function clearLongPress() {
@@ -371,7 +369,7 @@
                                 const point = displayData[dateIdx];
                                 navigator.vibrate?.(50);
                                 // Mirror dblclick behavior: event marker → onEventDblClick, else → onDblClick
-                                const hasEvent = eventMarkers.find(e => e.date === point.date);
+                                const hasEvent = eventMarkers.find((e) => e.date === point.date);
                                 if (hasEvent && onEventDblClick) {
                                     onEventDblClick(point.date, hasEvent.type);
                                 } else if (onDblClick) {
@@ -398,7 +396,7 @@
 
             function onTouchEnd() {
                 // Detect quick tap for measure mode (touchStartPos still alive = movement < 10px)
-                if (measureMode && onMeasureClick && touchStartPos && longPressTimer && (Date.now() - touchStartTime < 400)) {
+                if (measureMode && onMeasureClick && touchStartPos && longPressTimer && Date.now() - touchStartTime < 400) {
                     const pos = touchStartPos;
                     if (chartInstance && chartContainer) {
                         const rect = chartContainer.getBoundingClientRect();
@@ -433,43 +431,38 @@
         const greenColor = isDark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = isDark ? COLORS.redDark : COLORS.redLight;
 
-        const dates = displayData.map(d => d.date);
+        const dates = displayData.map((d) => d.date);
         const useBaselineColoring = colorByBaseline;
         const baselineValue = isPercentage ? 0 : (displayData[0]?.value ?? 0);
-        const staleDaysArr = displayData.map(d => d.staleDays ?? 0);
+        const staleDaysArr = displayData.map((d) => d.staleDays ?? 0);
         const mainSeriesName = mainSeriesLabel || currency || 'Value';
 
         const series: any[] = [];
-        const values = displayData.map(d => d.value);
-        const mainSeriesList = buildMainSeries(
-            values, staleDaysArr, baseColor, greenColor, redColor, isDark,
-            areaFill, 2, mainSeriesName, useBaselineColoring, baselineValue, showGradient,
-        );
+        const values = displayData.map((d) => d.value);
+        const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, 2, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
         series.push(...mainSeriesList);
 
         // Ghost series — original (unconverted) values — inserted right after main, before overlays
-        const hasOriginalValues = data.some(d => d.originalValue !== undefined);
+        const hasOriginalValues = data.some((d) => d.originalValue !== undefined);
         let ghostSeriesData: (number | null)[] = [];
         let ghostLabel = '';
 
         if (hasOriginalValues) {
-            const origCur = data.find(d => d.originalCurrency)?.originalCurrency ?? '';
-            const origFlag = data.find(d => d.originalCurrencyFlag)?.originalCurrencyFlag ?? '';
-            ghostLabel = mainSeriesLabel
-                ? `💱 ${mainSeriesLabel} (${origFlag} ${origCur})`.trim()
-                : `💱 ${origCur}`;
+            const origCur = data.find((d) => d.originalCurrency)?.originalCurrency ?? '';
+            const origFlag = data.find((d) => d.originalCurrencyFlag)?.originalCurrencyFlag ?? '';
+            ghostLabel = mainSeriesLabel ? `💱 ${mainSeriesLabel} (${origFlag} ${origCur})`.trim() : `💱 ${origCur}`;
 
             if (isPercentage) {
                 // % mode: normalize original values to their own p0
-                const firstOrigIdx = data.findIndex(d => d.originalValue !== undefined);
+                const firstOrigIdx = data.findIndex((d) => d.originalValue !== undefined);
                 const origP0 = firstOrigIdx >= 0 ? data[firstOrigIdx].originalValue! : 1;
-                ghostSeriesData = data.map(d => {
+                ghostSeriesData = data.map((d) => {
                     if (d.originalValue === undefined) return null;
                     return origP0 !== 0 ? ((d.originalValue - origP0) / origP0) * 100 : 0;
                 });
             } else {
                 // Abs mode: use raw original values on shared yAxis[0]
-                ghostSeriesData = data.map(d => d.originalValue ?? null);
+                ghostSeriesData = data.map((d) => d.originalValue ?? null);
             }
 
             series.push({
@@ -498,13 +491,12 @@
             });
         }
 
-
         // Overlay signals
         if (overlaySignals && overlaySignals.length > 0) {
             for (const signal of overlaySignals) {
                 if (!signal.data.length) continue;
                 const sType = signal.seriesType ?? 'line';
-                const signalLookup = new Map(signal.data.map(d => [d.date, d.value]));
+                const signalLookup = new Map(signal.data.map((d) => [d.date, d.value]));
                 const signalSeriesData: any[] = dates.map((date) => signalLookup.get(date) ?? null);
 
                 if (sType === 'band' && signal.bandData) {
@@ -523,13 +515,20 @@
                 }
 
                 const overlaySeries: any = {
-                    type: 'line', name: signal.label, data: signalSeriesData,
-                    connectNulls: true, smooth: false, symbol: 'none', showSymbol: false,
+                    type: 'line',
+                    name: signal.label,
+                    data: signalSeriesData,
+                    connectNulls: true,
+                    smooth: false,
+                    symbol: 'none',
+                    showSymbol: false,
                     sampling: 'lttb',
-                    xAxisIndex: 0, yAxisIndex: signal.yAxisIndex ?? 0,
+                    xAxisIndex: 0,
+                    yAxisIndex: signal.yAxisIndex ?? 0,
                     lineStyle: {color: signal.color, width: signal.lineWidth, type: signal.lineType, opacity: signal.opacity ?? 1},
                     itemStyle: {color: signal.color, opacity: signal.opacity ?? 1},
-                    emphasis: {focus: 'none'}, z: signal.opacity != null && signal.opacity < 1 ? 0 : 1,
+                    emphasis: {focus: 'none'},
+                    z: signal.opacity != null && signal.opacity < 1 ? 0 : 1,
                 };
 
                 if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
@@ -574,13 +573,20 @@
         // Baseline reference line
         if (useBaselineColoring) {
             series.push({
-                type: 'line', name: '__baseline__',
+                type: 'line',
+                name: '__baseline__',
                 data: displayData.map(() => baselineValue),
-                xAxisIndex: 0, yAxisIndex: 0,
-                symbol: 'none', showSymbol: false, sampling: 'lttb',
+                xAxisIndex: 0,
+                yAxisIndex: 0,
+                symbol: 'none',
+                showSymbol: false,
+                sampling: 'lttb',
                 lineStyle: {color: isDark ? '#64748b' : '#9ca3af', type: 'dashed', width: 1},
                 itemStyle: {color: 'transparent'},
-                emphasis: {disabled: true}, tooltip: {show: false}, silent: true, z: 0,
+                emphasis: {disabled: true},
+                tooltip: {show: false},
+                silent: true,
+                z: 0,
             });
         }
 
@@ -593,13 +599,13 @@
             if (overlaySignals) {
                 for (const signal of overlaySignals) {
                     if (!signal.data.length) continue;
-                    const dateLookup = new Map(signal.data.map(d => [d.date, d.value]));
+                    const dateLookup = new Map(signal.data.map((d) => [d.date, d.value]));
                     overlayDataByLabel.set(signal.label, dateLookup);
                 }
             }
 
             // Group by composite key: main asset uses type, comparison uses "label::type"
-            const grouped = new Map<string, { markers: EventMarker[], color: string, label: string }>();
+            const grouped = new Map<string, {markers: EventMarker[]; color: string; label: string}>();
             for (const m of eventMarkers) {
                 const isComparison = !!m.assetLabel;
                 const groupKey = isComparison ? `${m.assetLabel}::${m.type}` : m.type;
@@ -607,13 +613,13 @@
                 const color = isComparison ? (m.signalColor ?? '#6b7280') : baseColor;
                 const seriesLabel = isComparison ? `${m.assetLabel} ${m.type}` : m.type;
                 if (!grouped.has(groupKey)) {
-                    grouped.set(groupKey, { markers: [], color, label: seriesLabel });
+                    grouped.set(groupKey, {markers: [], color, label: seriesLabel});
                 }
                 grouped.get(groupKey)!.markers.push(m);
             }
 
             for (const [, group] of grouped) {
-                const { markers, color: eventColor, label: seriesLabel } = group;
+                const {markers, color: eventColor, label: seriesLabel} = group;
                 const eventType = markers[0].type;
                 const scatterData: any[] = [];
                 for (const m of markers) {
@@ -663,9 +669,7 @@
                                 html += `<br/>📝 ${m.notes}`;
                             }
                             if (m.assetLabel) {
-                                const sigDot = m.signalColor
-                                    ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${m.signalColor};margin-right:3px;"></span>`
-                                    : '';
+                                const sigDot = m.signalColor ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${m.signalColor};margin-right:3px;"></span>` : '';
                                 html += `<br/>🔗 ${sigDot}${m.assetLabel}`;
                             }
                             return html;
@@ -680,10 +684,9 @@
         }
 
         // Check which overlay axes are active
-        const hasSecondaryAxis = overlaySignals.some(s => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
-        const hasTertiaryAxis = overlaySignals.some(s => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
+        const hasSecondaryAxis = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
+        const hasTertiaryAxis = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
         const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
-
 
         // Y-axis configuration
         const isCustom = yAxisMode === 'custom';
@@ -695,7 +698,7 @@
         }
 
         // Preserve zoom state across re-renders
-        let savedZoom: { start: number; end: number } | null = null;
+        let savedZoom: {start: number; end: number} | null = null;
         if (chartOptionSet && chartInstance) {
             try {
                 const opt = chartInstance.getOption() as any;
@@ -705,8 +708,7 @@
                         savedZoom = {start: dz.start, end: dz.end};
                     }
                 }
-            } catch (_) {
-            }
+            } catch (_) {}
         }
 
         // Pre-compute stale lookup map for O(1) tooltip access (instead of O(n) data.find per hover)
@@ -723,9 +725,7 @@
 
         const option: echarts.EChartsOption = {
             animation: false,
-            grid: [
-                {top: 20, right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12, bottom: 20, left: 10, containLabel: true},
-            ],
+            grid: [{top: 20, right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12, bottom: 20, left: 10, containLabel: true}],
             xAxis: [
                 {
                     type: 'category',
@@ -733,50 +733,77 @@
                     gridIndex: 0,
                     axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
                     axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11},
-                    splitLine: {show: false}
+                    splitLine: {show: false},
                 },
             ],
             yAxis: [
                 {
-                    type: 'value', gridIndex: 0, position: 'left', min: effectiveMin, max: effectiveMax,
-                    axisLine: {show: true, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}}, axisTick: {show: true},
+                    type: 'value',
+                    gridIndex: 0,
+                    position: 'left',
+                    min: effectiveMin,
+                    max: effectiveMax,
+                    axisLine: {show: true, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                    axisTick: {show: true},
                     axisLabel: {
-                        color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11, formatter: isPercentage ? (v: number) => `${v.toFixed(1)}%` : (v: number) => {
-                            if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-                            if (Math.abs(v) >= 1) return v.toFixed(2);
-                            return v.toFixed(4).replace(/\.?0+$/, '');
-                        }
+                        color: isDark ? '#94a3b8' : '#6b7280',
+                        fontSize: 11,
+                        formatter: isPercentage
+                            ? (v: number) => `${v.toFixed(1)}%`
+                            : (v: number) => {
+                                  if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+                                  if (Math.abs(v) >= 1) return v.toFixed(2);
+                                  return v.toFixed(4).replace(/\.?0+$/, '');
+                              },
                     },
-                    splitLine: {show: showGridLines, lineStyle: {color: isDark ? '#4b5563' : '#d1d5db', type: 'dashed'}}, scale: !isInclude0
+                    splitLine: {show: showGridLines, lineStyle: {color: isDark ? '#4b5563' : '#d1d5db', type: 'dashed'}},
+                    scale: !isInclude0,
                 },
                 {
-                    type: 'value', gridIndex: 0, position: 'right', name: hasSecondaryAxis ? 'RSI' : '', nameLocation: 'start', nameGap: 5,
+                    type: 'value',
+                    gridIndex: 0,
+                    position: 'right',
+                    name: hasSecondaryAxis ? 'RSI' : '',
+                    nameLocation: 'start',
+                    nameGap: 5,
                     nameTextStyle: {color: isDark ? '#94a3b8' : '#9ca3af', fontSize: 9, fontWeight: 'bold', align: 'center'},
-                    show: hasSecondaryAxis, min: hasSecondaryAxis ? undefined : 0, max: hasSecondaryAxis ? undefined : 100,
-                    axisLine: {show: hasSecondaryAxis, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}}, axisTick: {show: hasSecondaryAxis},
+                    show: hasSecondaryAxis,
+                    min: hasSecondaryAxis ? undefined : 0,
+                    max: hasSecondaryAxis ? undefined : 100,
+                    axisLine: {show: hasSecondaryAxis, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}},
+                    axisTick: {show: hasSecondaryAxis},
                     axisLabel: {show: hasSecondaryAxis, color: isDark ? '#94a3b8' : '#9ca3af', fontSize: 10, formatter: (v: number) => v.toFixed(0)},
-                    splitLine: {show: false}, scale: hasSecondaryAxis
+                    splitLine: {show: false},
+                    scale: hasSecondaryAxis,
                 },
                 {
-                    type: 'value', gridIndex: 0, position: 'right', name: hasTertiaryAxis ? 'MACD' : '', nameLocation: 'start', nameGap: 5,
+                    type: 'value',
+                    gridIndex: 0,
+                    position: 'right',
+                    name: hasTertiaryAxis ? 'MACD' : '',
+                    nameLocation: 'start',
+                    nameGap: 5,
                     nameTextStyle: {color: isDark ? '#a78bfa' : '#7c3aed', fontSize: 9, fontWeight: 'bold', align: 'center'},
-                    show: hasTertiaryAxis, offset: hasSecondaryAxis && hasTertiaryAxis ? 55 : 0,
-                    min: hasTertiaryAxis ? undefined : 0, max: hasTertiaryAxis ? undefined : 1,
-                    axisLine: {show: hasTertiaryAxis, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}}, axisTick: {show: hasTertiaryAxis},
+                    show: hasTertiaryAxis,
+                    offset: hasSecondaryAxis && hasTertiaryAxis ? 55 : 0,
+                    min: hasTertiaryAxis ? undefined : 0,
+                    max: hasTertiaryAxis ? undefined : 1,
+                    axisLine: {show: hasTertiaryAxis, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}},
+                    axisTick: {show: hasTertiaryAxis},
                     axisLabel: {
                         show: hasTertiaryAxis,
                         color: isDark ? '#a78bfa' : '#7c3aed',
                         fontSize: 10,
-                        formatter: (v: number) => Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(4).replace(/\.?0+$/, '')
+                        formatter: (v: number) => (Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(4).replace(/\.?0+$/, '')),
                     },
-                    splitLine: {show: false}, scale: hasTertiaryAxis
+                    splitLine: {show: false},
+                    scale: hasTertiaryAxis,
                 },
             ],
-            dataZoom: [
-                {type: 'inside', xAxisIndex: [0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, zoomOnMouseWheel: true, moveOnMouseMove: true},
-            ],
+            dataZoom: [{type: 'inside', xAxisIndex: [0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, zoomOnMouseWheel: true, moveOnMouseMove: true}],
             tooltip: {
-                trigger: 'axis', appendToBody: true,
+                trigger: 'axis',
+                appendToBody: true,
                 backgroundColor: isDark ? '#1e293b' : '#ffffff',
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
@@ -828,7 +855,7 @@
                         if (p.seriesName === 'Pending' || p.seriesName === '__baseline__' || p.seriesName === '__overview__') continue;
                         if (bandHelperNames.has(p.seriesName)) continue;
                         const rawVal = p.value;
-                        const value = (typeof rawVal === 'object' && rawVal?.value !== undefined) ? rawVal.value : rawVal;
+                        const value = typeof rawVal === 'object' && rawVal?.value !== undefined ? rawVal.value : rawVal;
                         if (value === null || value === undefined) continue;
                         if (shownNames.has(p.seriesName)) continue;
                         shownNames.add(p.seriesName);
@@ -851,9 +878,7 @@
                             if (sigInfo) {
                                 // Append (flag currency) to overlay signal labels
                                 // Skip for ghost signals — currency is already embedded in their label
-                                const currSuffix = sigInfo.currency && !sigInfo.isGhost
-                                    ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${sigInfo.currency})</span>`
-                                    : '';
+                                const currSuffix = sigInfo.currency && !sigInfo.isGhost ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${sigInfo.currency})</span>` : '';
                                 labelHtml = signalLabelToHtml(sigInfo) + currSuffix;
                                 if (sigInfo.isGhost) isGhostRow = true;
                             } else if (p.seriesName === mainSeriesName) {
@@ -869,12 +894,13 @@
                                 } else {
                                     mainLabel = mainSeriesName;
                                 }
-                                labelHtml = signalLabelToHtml({
-                                    label: mainLabel,
-                                    iconUrl: mainIconUrl,
-                                    assetType: mainAssetType,
-                                    isCrown: true,
-                                }) + currSuffix;
+                                labelHtml =
+                                    signalLabelToHtml({
+                                        label: mainLabel,
+                                        iconUrl: mainIconUrl,
+                                        assetType: mainAssetType,
+                                        isCrown: true,
+                                    }) + currSuffix;
                             } else {
                                 const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                                 labelHtml = `${colorDot}${p.seriesName}`;
@@ -906,18 +932,12 @@
                             // Price staleness is the staleDays minus FX contribution
                             // (staleDays = max(price_days_back, fx_days_back), but we show both separately)
                             const priceDaysBack = dataPoint; // already the combined max
-                            const label = staleLabel
-                                ? staleLabel.replace('{days}', String(priceDaysBack))
-                                : `Stale: ${priceDaysBack}d`;
+                            const label = staleLabel ? staleLabel.replace('{days}', String(priceDaysBack)) : `Stale: ${priceDaysBack}d`;
                             html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
-                            const fxLabel = fxStaleLabel
-                                ? fxStaleLabel.replace('{days}', String(fxStale))
-                                : `FX rate: ${fxStale}d old`;
+                            const fxLabel = fxStaleLabel ? fxStaleLabel.replace('{days}', String(fxStale)) : `FX rate: ${fxStale}d old`;
                             html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${fxLabel}</span>`;
                         } else {
-                            const label = staleLabel
-                                ? staleLabel.replace('{days}', String(dataPoint))
-                                : `Stale: ${dataPoint}d`;
+                            const label = staleLabel ? staleLabel.replace('{days}', String(dataPoint)) : `Stale: ${dataPoint}d`;
                             html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
                         }
                     }
@@ -938,28 +958,16 @@
 <div class="space-y-2">
     <!-- Toolbar (hidden when parent provides external controls) -->
     {#if !hideToolbar}
-        <ChartToolbar
-                {chartType}
-                {viewMode}
-                onChartTypeChange={handleChartTypeChange}
-                onViewModeChange={handleViewModeChange}
-                disableCandlestick={true}
-        />
+        <ChartToolbar {chartType} {viewMode} onChartTypeChange={handleChartTypeChange} onViewModeChange={handleViewModeChange} disableCandlestick={true} />
     {/if}
 
     <!-- Unified Chart -->
     <div class="relative">
         {#if chartType === 'line'}
-            <div
-                    bind:this={chartContainer}
-                    class="w-full"
-                    style="height: {chartHeight};"
-                    class:cursor-crosshair={measureMode}
-            ></div>
+            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode}></div>
         {:else}
             <!-- Candlestick stub — TODO Phase 6 (Assets) -->
-            <div class="flex items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-600"
-                 style="height: {chartHeight};">
+            <div class="flex items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-600" style="height: {chartHeight};">
                 <p class="text-gray-400 dark:text-slate-500 text-sm">Candlestick chart — Coming soon</p>
             </div>
         {/if}

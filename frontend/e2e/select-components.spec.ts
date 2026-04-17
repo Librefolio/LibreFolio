@@ -18,9 +18,7 @@ import {login} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 
 test.describe('Select Components', () => {
-
     test.describe('LanguageSelector (SimpleSelect style)', () => {
-
         test('opens dropdown on click', async ({page}) => {
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
@@ -80,7 +78,6 @@ test.describe('Select Components', () => {
     });
 
     test.describe('SearchSelect (Currency Selector in Settings)', () => {
-
         test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
             await page.goto('/settings');
@@ -133,7 +130,6 @@ test.describe('Select Components', () => {
     });
 
     test.describe('ImportPluginSelect (Broker Form)', () => {
-
         test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
             await page.goto('/brokers');
@@ -181,7 +177,6 @@ test.describe('Select Components', () => {
     });
 
     test.describe('Global Settings Selects (Admin)', () => {
-
         test.beforeEach(async ({page}) => {
             await login(page, TEST_ADMIN);
             await page.goto('/settings');
@@ -211,7 +206,6 @@ test.describe('Select Components', () => {
     });
 
     test.describe('BrokerSearchSelect (Files Page)', () => {
-
         test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
             await page.goto('/files');
@@ -229,7 +223,6 @@ test.describe('Select Components', () => {
     });
 
     test.describe('Accessibility', () => {
-
         test('language selector has proper menu role', async ({page}) => {
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});

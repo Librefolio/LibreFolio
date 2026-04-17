@@ -31,7 +31,7 @@ export interface ColumnDef {
     /** Placeholder text for empty cells */
     placeholder?: string;
     /** Options for type 'enum' — value shown in select, label for display, emoji prefix */
-    enumOptions?: { value: string; label: string; emoji?: string; tooltip?: string; docsPath?: string }[];
+    enumOptions?: {value: string; label: string; emoji?: string; tooltip?: string; docsPath?: string}[];
 }
 
 /** A single row in the DataEditor */
@@ -66,5 +66,4 @@ export interface GapRow {
 }
 
 /** Union type for table rendering */
-export type TableRow = (DataRow & { type: 'data' }) | GapRow;
-
+export type TableRow = (DataRow & {type: 'data'}) | GapRow;

@@ -38,12 +38,12 @@
     $: score = strength?.score ?? 0;
 
     // Check rules
-    $: ruleResults = rules.map(rule => ({
+    $: ruleResults = rules.map((rule) => ({
         key: rule.key,
         passed: password ? rule.check(password) : false,
     }));
 
-    $: allRulesPassed = ruleResults.every(r => r.passed);
+    $: allRulesPassed = ruleResults.every((r) => r.passed);
 
     // Strength labels and colors
     const strengthConfig = [
@@ -64,13 +64,13 @@
             <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden flex gap-0.5" data-testid="password-strength-bar" data-strength={score}>
                 {#each [0, 1, 2, 3, 4] as i}
                     <div
-                            class="flex-1 h-full transition-all duration-300 rounded-full"
-                            class:bg-gray-200={i > score}
-                            class:bg-red-500={i <= score && score === 0}
-                            class:bg-orange-500={i <= score && score === 1}
-                            class:bg-yellow-500={i <= score && score === 2}
-                            class:bg-lime-500={i <= score && score === 3}
-                            class:bg-green-500={i <= score && score === 4}
+                        class="flex-1 h-full transition-all duration-300 rounded-full"
+                        class:bg-gray-200={i > score}
+                        class:bg-red-500={i <= score && score === 0}
+                        class:bg-orange-500={i <= score && score === 1}
+                        class:bg-yellow-500={i <= score && score === 2}
+                        class:bg-lime-500={i <= score && score === 3}
+                        class:bg-green-500={i <= score && score === 4}
                     ></div>
                 {/each}
             </div>
@@ -89,10 +89,10 @@
                     {#each ruleResults as rule}
                         <div class="flex items-center gap-1.5 text-xs">
                             {#if rule.passed}
-                                <Check class="w-3.5 h-3.5 text-green-600"/>
+                                <Check class="w-3.5 h-3.5 text-green-600" />
                                 <span class="text-green-700">{$_(`auth.passwordStrength.rules.${rule.key}`)}</span>
                             {:else}
-                                <X class="w-3.5 h-3.5 text-gray-400"/>
+                                <X class="w-3.5 h-3.5 text-gray-400" />
                                 <span class="text-gray-500">{$_(`auth.passwordStrength.rules.${rule.key}`)}</span>
                             {/if}
                         </div>
@@ -102,4 +102,3 @@
         {/if}
     </div>
 {/if}
-

@@ -6,10 +6,10 @@
  */
 
 export interface LayoutThresholds {
-    wide: number;       // e.g., FX: 1030, Asset: 1240
-    tablet: number;     // e.g., FX: 700,  Asset: 920
-    tabletS: number;    // e.g., FX: 530,  Asset: 500
-    labelHide: number;  // Both: 460
+    wide: number; // e.g., FX: 1030, Asset: 1240
+    tablet: number; // e.g., FX: 700,  Asset: 920
+    tabletS: number; // e.g., FX: 530,  Asset: 500
+    labelHide: number; // Both: 460
 }
 
 export type LayoutMode = 'wide' | 'tablet' | 'tablet-s' | 'mobile';
@@ -65,4 +65,3 @@ export function createResponsiveLayout(thresholds: LayoutThresholds) {
         detach,
     };
 }
-

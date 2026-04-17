@@ -13,7 +13,7 @@
     import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {isCardInverted, setCardInverted} from '$lib/stores/fxCardInversionStore';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {fxProviderBadgeHtml,} from '$lib/utils/providerHelpers';
+    import {fxProviderBadgeHtml} from '$lib/utils/providerHelpers';
     import {currentLanguage} from '$lib/stores/language';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
@@ -28,17 +28,17 @@
         quote: string;
         data: FxDataPoint[];
         manualOnly: boolean;
-        providers: Array<{ providerCode: string; priority: number; chainSteps?: Array<{ from: string; to: string; provider: string }> }>;
+        providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}>;
         deltas?: Record<string, number | null>;
     }
 
     interface Props {
         data: FxRow[];
         loading?: boolean;
-        visiblePeriods?: ReadonlyArray<{ key: string; days: number }>;
-        onsync?: (info: { base: string; quote: string; slug: string }) => void;
-        onrefresh?: (info: { base: string; quote: string; slug: string }) => void;
-        ondelete?: (info: { base: string; quote: string; slug: string }) => void;
+        visiblePeriods?: ReadonlyArray<{key: string; days: number}>;
+        onsync?: (info: {base: string; quote: string; slug: string}) => void;
+        onrefresh?: (info: {base: string; quote: string; slug: string}) => void;
+        ondelete?: (info: {base: string; quote: string; slug: string}) => void;
         onselectionchange?: (rows: FxRow[]) => void;
     }
 
@@ -96,7 +96,7 @@
         return isCardInverted(row.slug) && last.rate !== 0 ? 1 / last.rate : last.rate;
     }
 
-    function getDelta(row: FxRow): { abs: number | null; pct: number | null } {
+    function getDelta(row: FxRow): {abs: number | null; pct: number | null} {
         void inversionVersion;
         if (row.data.length < 2) return {abs: null, pct: null};
         const first = row.data[0];
@@ -125,9 +125,7 @@
 
     function deltaColorClass(val: number | null): string {
         if (val === null) return 'text-gray-400 dark:text-gray-500';
-        return val >= 0
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : 'text-red-500 dark:text-red-400';
+        return val >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
     }
 
     // Provider chain rendering — constants & helpers from $lib/utils/fxSync
@@ -161,114 +159,111 @@
     // Columns
     // =========================================================================
 
-    let columns = $derived<ColumnDef<FxRow>[]>((
-        void $fxProvidersVersion, // trigger re-derive when FX provider icons are cached
-            [
-                {
-                    id: 'pair',
-                    header: () => $t('fx.filter.filterCurrency'),
-                    cell: (row) => {
-                        const db = getDisplayBase(row);
-                        const dq = getDisplayQuote(row);
-                        const bFlag = getCurrencyInfo(db).flag_emoji;
-                        const qFlag = getCurrencyInfo(dq).flag_emoji;
-                        const manualBadge = row.manualOnly
-                            ? ' <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 ml-1">✏️</span>'
-                            : '';
-                        return {
-                            type: 'html',
-                            html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-gray-400">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>${manualBadge}`
-                        };
-                    },
-                    type: 'text',
-                    getValue: (row) => `${getDisplayBase(row)}-${getDisplayQuote(row)}`,
-                    width: 180,
-                    minWidth: 140,
+    let columns = $derived<ColumnDef<FxRow>[]>(
+        (void $fxProvidersVersion, // trigger re-derive when FX provider icons are cached
+        [
+            {
+                id: 'pair',
+                header: () => $t('fx.filter.filterCurrency'),
+                cell: (row) => {
+                    const db = getDisplayBase(row);
+                    const dq = getDisplayQuote(row);
+                    const bFlag = getCurrencyInfo(db).flag_emoji;
+                    const qFlag = getCurrencyInfo(dq).flag_emoji;
+                    const manualBadge = row.manualOnly ? ' <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 ml-1">✏️</span>' : '';
+                    return {
+                        type: 'html',
+                        html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-gray-400">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>${manualBadge}`,
+                    };
                 },
-                {
-                    id: 'rate',
-                    header: 'Rate',
-                    cell: (row) => {
-                        const r = getRate(row);
-                        return r !== null
-                            ? {type: 'html', html: `<span class="font-mono font-bold">${r.toFixed(4)}</span>`}
-                            : '—';
-                    },
-                    type: 'number',
-                    getValue: (row) => getRate(row) ?? 0,
-                    width: 110,
-                    minWidth: 80,
+                type: 'text',
+                getValue: (row) => `${getDisplayBase(row)}-${getDisplayQuote(row)}`,
+                width: 180,
+                minWidth: 140,
+            },
+            {
+                id: 'rate',
+                header: 'Rate',
+                cell: (row) => {
+                    const r = getRate(row);
+                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${r.toFixed(4)}</span>`} : '—';
                 },
-                {
-                    id: 'deltaAbs',
-                    header: 'Δ Abs',
-                    cell: (row) => {
-                        const d = getDelta(row);
-                        return {type: 'html', html: `<span class="font-mono ${deltaColorClass(d.abs)}">${formatDelta(d.abs)}</span>`};
-                    },
-                    type: 'number',
-                    getValue: (row) => getDelta(row).abs ?? 0,
-                    width: 110,
-                    minWidth: 80,
+                type: 'number',
+                getValue: (row) => getRate(row) ?? 0,
+                width: 110,
+                minWidth: 80,
+            },
+            {
+                id: 'deltaAbs',
+                header: 'Δ Abs',
+                cell: (row) => {
+                    const d = getDelta(row);
+                    return {type: 'html', html: `<span class="font-mono ${deltaColorClass(d.abs)}">${formatDelta(d.abs)}</span>`};
                 },
-                {
-                    id: 'deltaPct',
-                    header: 'Δ %',
-                    cell: (row) => {
-                        const d = getDelta(row);
-                        return {type: 'html', html: `<span class="font-mono ${deltaColorClass(d.pct)}">${formatDeltaPct(d.pct)}</span>`};
-                    },
-                    type: 'number',
-                    getValue: (row) => getDelta(row).pct ?? 0,
-                    width: 90,
-                    minWidth: 70,
+                type: 'number',
+                getValue: (row) => getDelta(row).abs ?? 0,
+                width: 110,
+                minWidth: 80,
+            },
+            {
+                id: 'deltaPct',
+                header: 'Δ %',
+                cell: (row) => {
+                    const d = getDelta(row);
+                    return {type: 'html', html: `<span class="font-mono ${deltaColorClass(d.pct)}">${formatDeltaPct(d.pct)}</span>`};
                 },
-                // Dynamic delta period columns
-                ...visiblePeriods.map(p => ({
-                    id: `delta_${p.key}`,
-                    header: `Δ ${p.key}`,
-                    cell: (row: FxRow) => {
-                        const val = row.deltas?.[p.key] ?? null;
-                        return {type: 'html' as const, html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};
-                    },
-                    type: 'number' as const,
-                    getValue: (row: FxRow) => row.deltas?.[p.key] ?? 0,
-                    width: 90,
-                    minWidth: 70,
-                })),
-                {
-                    id: 'providers',
-                    header: () => $t('fx.providers'),
-                    cell: (row) => ({type: 'html', html: providerChainHtml(row)}),
-                    type: 'text',
-                    getValue: (row) => row.providers.map(p => p.providerCode).join(', '),
-                    width: 160,
-                    minWidth: 100,
-                    hiddenByDefault: true,
-                    filterable: false,
+                type: 'number',
+                getValue: (row) => getDelta(row).pct ?? 0,
+                width: 90,
+                minWidth: 70,
+            },
+            // Dynamic delta period columns
+            ...visiblePeriods.map((p) => ({
+                id: `delta_${p.key}`,
+                header: `Δ ${p.key}`,
+                cell: (row: FxRow) => {
+                    const val = row.deltas?.[p.key] ?? null;
+                    return {type: 'html' as const, html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};
                 },
-            ]));
+                type: 'number' as const,
+                getValue: (row: FxRow) => row.deltas?.[p.key] ?? 0,
+                width: 90,
+                minWidth: 70,
+            })),
+            {
+                id: 'providers',
+                header: () => $t('fx.providers'),
+                cell: (row) => ({type: 'html', html: providerChainHtml(row)}),
+                type: 'text',
+                getValue: (row) => row.providers.map((p) => p.providerCode).join(', '),
+                width: 160,
+                minWidth: 100,
+                hiddenByDefault: true,
+                filterable: false,
+            },
+        ]),
+    );
 </script>
 
 <DataTable
-        bind:this={tableRef}
-        {columns}
-        {data}
-        defaultPageSize={25}
-        emptyMessage={$t('fx.empty.noPairsDesc')}
-        enableActions={true}
-        enableColumnFilters={true}
-        enablePagination={true}
-        enableSorting={true}
-        getRowId={(row) => row.slug}
-        isLoading={loading}
-        onRowClick={(row) => {
+    bind:this={tableRef}
+    {columns}
+    {data}
+    defaultPageSize={25}
+    emptyMessage={$t('fx.empty.noPairsDesc')}
+    enableActions={true}
+    enableColumnFilters={true}
+    enablePagination={true}
+    enableSorting={true}
+    getRowId={(row) => row.slug}
+    isLoading={loading}
+    onRowClick={(row) => {
         const inv = isCardInverted(row.slug);
         const target = inv ? `${row.quote}-${row.base}` : row.slug;
         goto(`/fx/${target}`);
     }}
-        onSelectionChange={(ids) => onselectionchange?.(data.filter(row => ids.includes(row.slug)))}
-        rowActions={[
+    onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(row.slug)))}
+    rowActions={[
         {
             id: 'swap',
             label: () => $t('common.swapDirection'),
@@ -281,11 +276,14 @@
             icon: RotateCw,
             onClick: async (row) => {
                 syncingRowIds = new Set([...syncingRowIds, row.slug]);
-                try { await onsync?.({base: row.base, quote: row.quote, slug: row.slug}); }
-                finally { syncingRowIds = new Set([...syncingRowIds].filter(id => id !== row.slug)); }
+                try {
+                    await onsync?.({base: row.base, quote: row.quote, slug: row.slug});
+                } finally {
+                    syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== row.slug));
+                }
             },
             disabled: (row) => row.manualOnly,
-            iconClass: (row) => syncingRowIds.has(row.slug) ? 'animate-spin' : '',
+            iconClass: (row) => (syncingRowIds.has(row.slug) ? 'animate-spin' : ''),
         },
         {
             id: 'refresh',
@@ -293,10 +291,13 @@
             icon: RefreshCw,
             onClick: async (row) => {
                 refreshingRowIds = new Set([...refreshingRowIds, row.slug]);
-                try { await onrefresh?.({base: row.base, quote: row.quote, slug: row.slug}); }
-                finally { refreshingRowIds = new Set([...refreshingRowIds].filter(id => id !== row.slug)); }
+                try {
+                    await onrefresh?.({base: row.base, quote: row.quote, slug: row.slug});
+                } finally {
+                    refreshingRowIds = new Set([...refreshingRowIds].filter((id) => id !== row.slug));
+                }
             },
-            iconClass: (row) => refreshingRowIds.has(row.slug) ? 'animate-spin' : '',
+            iconClass: (row) => (refreshingRowIds.has(row.slug) ? 'animate-spin' : ''),
         },
         {
             id: 'delete',
@@ -306,7 +307,5 @@
             variant: 'danger',
         },
     ]}
-        storageKey="fxTable"
+    storageKey="fxTable"
 />
-
-

@@ -115,43 +115,30 @@ function roundOpacity(op: number): number {
     return op >= 1.0 ? 1.0 : 0.5;
 }
 
-export function buildMainSeries(
-    values: number[],
-    staleDays: number[],
-    baseColor: string,
-    greenColor: string,
-    redColor: string,
-    isDark: boolean,
-    areaFill: boolean,
-    lineWidth: number,
-    seriesName: string,
-    useBaseline: boolean,
-    baseline: number,
-    useStale: boolean,
-): any[] {
+export function buildMainSeries(values: number[], staleDays: number[], baseColor: string, greenColor: string, redColor: string, isDark: boolean, areaFill: boolean, lineWidth: number, seriesName: string, useBaseline: boolean, baseline: number, useStale: boolean): any[] {
     if (values.length === 0) return [];
 
     const n = values.length;
 
     // ── Single-point: render as circle marker (no line segment possible) ──
     if (n === 1) {
-        const color = useBaseline
-            ? (values[0] >= baseline ? greenColor : redColor)
-            : baseColor;
-        return [{
-            name: seriesName,
-            type: 'line',
-            data: [values[0]],
-            showSymbol: true,
-            symbol: 'circle',
-            symbolSize: 8,
-            itemStyle: {color},
-            lineStyle: {width: 0},
-            areaStyle: undefined,
-        }];
+        const color = useBaseline ? (values[0] >= baseline ? greenColor : redColor) : baseColor;
+        return [
+            {
+                name: seriesName,
+                type: 'line',
+                data: [values[0]],
+                showSymbol: true,
+                symbol: 'circle',
+                symbolSize: 8,
+                itemStyle: {color},
+                lineStyle: {width: 0},
+                areaStyle: undefined,
+            },
+        ];
     }
 
-    const hasStale = useStale && staleDays.some(d => d > 0);
+    const hasStale = useStale && staleDays.some((d) => d > 0);
 
     // ── Step 1: Assign per-point color and opacity ──
     // Each point gets a "color key" (which color) and an "opacity bucket".
@@ -174,9 +161,7 @@ export function buildMainSeries(
     const segments: Segment[] = [];
     let segStart = 0;
     for (let i = 1; i <= n; i++) {
-        const sameGroup = i < n
-            && pointColors[i] === pointColors[segStart]
-            && pointOpacities[i] === pointOpacities[segStart];
+        const sameGroup = i < n && pointColors[i] === pointColors[segStart] && pointOpacities[i] === pointOpacities[segStart];
         if (!sameGroup) {
             const isStale = pointOpacities[segStart] < 1.0;
             segments.push({
@@ -215,18 +200,14 @@ export function buildMainSeries(
         // Start: extend backward if previous segment had a DIFFERENT color
         // (so the line arriving at this segment's first point carries this color)
         const colorChangeAtStart = prevSeg != null && prevSeg.color !== seg.color;
-        const drawStart = colorChangeAtStart
-            ? Math.max(0, seg.start - 1)
-            : seg.start;
+        const drawStart = colorChangeAtStart ? Math.max(0, seg.start - 1) : seg.start;
 
         // End: extend forward ONLY if next segment has the SAME color
         // (opacity-only boundary → fresh segment paints the bridge at full opacity).
         // At color boundaries we do NOT extend forward — the next segment will
         // bridge backward instead.
         const colorChangeAtEnd = nextSeg != null && nextSeg.color !== seg.color;
-        const drawEnd = (!colorChangeAtEnd && nextSeg)
-            ? Math.min(n - 1, seg.end + 1)
-            : seg.end;
+        const drawEnd = !colorChangeAtEnd && nextSeg ? Math.min(n - 1, seg.end + 1) : seg.end;
 
         for (let i = drawStart; i <= drawEnd; i++) {
             segData[i] = values[i];
@@ -269,10 +250,8 @@ export function buildMainSeries(
         };
 
         if (areaFill) {
-            const avgOp = seg.isStale
-                ? (getStaleOpacity(seg.staleStart) + getStaleOpacity(seg.staleEnd)) / 2
-                : seg.opacity;
-            const areaTopOp = (isDark ? 0.15 : 0.10) * avgOp;
+            const avgOp = seg.isStale ? (getStaleOpacity(seg.staleStart) + getStaleOpacity(seg.staleEnd)) / 2 : seg.opacity;
+            const areaTopOp = (isDark ? 0.15 : 0.1) * avgOp;
             const areaBotOp = (isDark ? 0.03 : 0.02) * avgOp;
             if (seg.isStale) {
                 // Horizontal gradient for stale area fill too
@@ -280,7 +259,7 @@ export function buildMainSeries(
                 const opEnd = getStaleOpacity(seg.staleEnd);
                 s.areaStyle = {
                     color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        {offset: 0, color: hexToRgba(seg.color, (isDark ? 0.15 : 0.10) * opStart)},
+                        {offset: 0, color: hexToRgba(seg.color, (isDark ? 0.15 : 0.1) * opStart)},
                         {offset: 1, color: hexToRgba(seg.color, (isDark ? 0.03 : 0.02) * opEnd)},
                     ]),
                 };
@@ -312,18 +291,13 @@ export function buildMainSeries(
  * Uses explicit upper + lower lines instead of stacking to avoid ECharts
  * rendering artifacts when lower values go negative (common in % mode).
  */
-export function buildBandSeries(
-    signal: RenderedSignal,
-    dates: string[],
-    isDark: boolean,
-): any[] {
+export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark: boolean): any[] {
     if (!signal.bandData) return [];
     const {upper, middle, lower} = signal.bandData;
     const bandColor = signal.color;
     const bandOpacity = isDark ? 0.18 : 0.12;
 
     const signalDateIdx = new Map(signal.data.map((d, idx) => [d.date, idx]));
-
 
     const lowerData: any[] = dates.map((date) => {
         const idx = signalDateIdx.get(date);
@@ -341,7 +315,7 @@ export function buildBandSeries(
         if (idx === undefined) return null;
         const u = upper[idx];
         const l = lower[idx];
-        return (u !== undefined && l !== undefined) ? u - l : null;
+        return u !== undefined && l !== undefined ? u - l : null;
     });
 
     return [
@@ -396,19 +370,13 @@ export function buildBandSeries(
  * Build an ECharts bar series (MACD histogram style) with red/green per-bar
  * coloring based on value sign.
  */
-export function buildBarSeries(
-    signal: RenderedSignal,
-    signalSeriesData: any[],
-    isDark: boolean,
-): any {
+export function buildBarSeries(signal: RenderedSignal, signalSeriesData: any[], isDark: boolean): any {
     const barData: any[] = signalSeriesData.map((val) => {
         if (val === null || val === undefined) return val;
         return {
             value: val,
             itemStyle: {
-                color: val >= 0
-                    ? (isDark ? COLORS.greenDark : COLORS.greenLight)
-                    : (isDark ? COLORS.redDark : COLORS.redLight),
+                color: val >= 0 ? (isDark ? COLORS.greenDark : COLORS.greenLight) : isDark ? COLORS.redDark : COLORS.redLight,
             },
         };
     });
@@ -448,7 +416,7 @@ export function updateArrowRotations(chart: echarts.ECharts): void {
     const option = chart.getOption() as any;
     if (!option?.series) return;
 
-    const dates: string[] = Array.isArray(option.xAxis) ? option.xAxis[0]?.data ?? [] : [];
+    const dates: string[] = Array.isArray(option.xAxis) ? (option.xAxis[0]?.data ?? []) : [];
     let needsUpdate = false;
 
     for (const series of option.series) {
@@ -460,9 +428,7 @@ export function updateArrowRotations(chart: echarts.ECharts): void {
             if (marker.symbol !== 'arrow' || !marker.coord) continue;
 
             // Resolve the marker's index in the category axis
-            const markerIdx = typeof marker.coord[0] === 'number'
-                ? marker.coord[0]
-                : dates.indexOf(marker.coord[0]);
+            const markerIdx = typeof marker.coord[0] === 'number' ? marker.coord[0] : dates.indexOf(marker.coord[0]);
             if (markerIdx < 0) continue;
 
             // Find nearest non-null neighbor: backward first, forward fallback.
@@ -512,4 +478,3 @@ export function updateArrowRotations(chart: echarts.ECharts): void {
         chart.setOption({series: option.series}, false);
     }
 }
-

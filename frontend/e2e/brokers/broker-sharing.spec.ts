@@ -37,7 +37,6 @@ async function openSharingModal(page: Page) {
 }
 
 test.describe('Broker Sharing', () => {
-
     test.describe('Share Button Visibility', () => {
         test('S1: share button visible for OWNER on broker detail', async ({page}) => {
             await login(page, TEST_ADMIN);
@@ -205,4 +204,3 @@ test.describe('Broker Sharing', () => {
         });
     });
 });
-

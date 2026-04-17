@@ -21,8 +21,8 @@ const I18N_DIR = path.resolve(__dirname, '../../src/lib/i18n');
 function discoverLanguages(): string[] {
     const files = fs.readdirSync(I18N_DIR);
     return files
-        .filter(f => f.endsWith('.json'))
-        .map(f => f.replace('.json', ''))
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => f.replace('.json', ''))
         .sort();
 }
 
@@ -56,7 +56,7 @@ export function getTranslation(translations: Record<string, any>, key: string): 
 export const SUPPORTED_LANGUAGES = discoverLanguages();
 
 // Language display info (matches frontend/src/lib/i18n/index.ts)
-export const LANGUAGE_INFO: Record<string, { name: string; flag: string }> = {
+export const LANGUAGE_INFO: Record<string, {name: string; flag: string}> = {
     en: {name: 'English', flag: '🇬🇧'},
     it: {name: 'Italiano', flag: '🇮🇹'},
     fr: {name: 'Français', flag: '🇫🇷'},
@@ -84,7 +84,7 @@ export function t(lang: string, key: string): string {
  * Useful for parameterized tests
  */
 export function forAllLanguages<T>(fn: (lang: string, translations: Record<string, any>) => T): T[] {
-    return SUPPORTED_LANGUAGES.map(lang => fn(lang, TRANSLATIONS[lang]));
+    return SUPPORTED_LANGUAGES.map((lang) => fn(lang, TRANSLATIONS[lang]));
 }
 
 // Export default language

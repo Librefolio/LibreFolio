@@ -59,4 +59,3 @@ test.describe('FX Data Editor', () => {
         await expect(page.getByTestId('fx-detail-editor-panel')).not.toBeVisible();
     });
 });
-

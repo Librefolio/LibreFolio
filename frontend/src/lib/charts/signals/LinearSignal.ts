@@ -16,7 +16,7 @@ import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class LinearSignal extends ChartSignal {
     static override signalType = 'linear';
-    static override displayName = 'Linear Growth';             // i18n: 'signals.linear'
+    static override displayName = 'Linear Growth'; // i18n: 'signals.linear'
     static override icon = '📈';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
     static docsPath = 'financial-theory/technical-analysis/synthetic-benchmarks/linear/';
@@ -54,7 +54,7 @@ export class LinearSignal extends ChartSignal {
         const baseValue = baseData[0].value;
         const startDate = baseData[0].date;
 
-        return baseData.map(d => {
+        return baseData.map((d) => {
             const days = ChartSignal.daysBetween(startDate, d.date);
             const t = days / 365;
             return {
@@ -71,4 +71,3 @@ export class LinearSignal extends ChartSignal {
         return `Linear ${rate}%/yr${offsetStr}`;
     }
 }
-

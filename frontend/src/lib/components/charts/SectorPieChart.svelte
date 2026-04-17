@@ -28,10 +28,7 @@
         height?: string;
     }
 
-    let {
-        data = {},
-        height = '280px',
-    }: Props = $props();
+    let {data = {}, height = '280px'}: Props = $props();
 
     // =========================================================================
     // State
@@ -42,16 +39,8 @@
     let resizeObserver: ResizeObserver | null = null;
 
     // Diversified color palette — high chromatic distance
-    const PALETTE_LIGHT = [
-        '#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706',
-        '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c',
-        '#6366f1', '#0891b2', '#ca8a04', '#9333ea',
-    ];
-    const PALETTE_DARK = [
-        '#4ade80', '#60a5fa', '#a78bfa', '#f87171', '#fbbf24',
-        '#2dd4bf', '#f472b6', '#818cf8', '#34d399', '#fb923c',
-        '#a5b4fc', '#22d3ee', '#facc15', '#c084fc',
-    ];
+    const PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
+    const PALETTE_DARK = ['#4ade80', '#60a5fa', '#a78bfa', '#f87171', '#fbbf24', '#2dd4bf', '#f472b6', '#818cf8', '#34d399', '#fb923c', '#a5b4fc', '#22d3ee', '#facc15', '#c084fc'];
 
     // =========================================================================
     // Lifecycle
@@ -113,17 +102,17 @@
             return;
         }
 
-        const chartData = entries.map(([key, value]) => {
-            // Try i18n translation, fallback to raw key
-            const i18nKey = `sectors.${sectorI18nKey(key)}`;
-            const label = tr(i18nKey) !== i18nKey
-                ? tr(i18nKey)
-                : key.replace(/_/g, ' ');
-            return {
-                name: label,
-                value: +(value * 100).toFixed(2),
-            };
-        }).sort((a, b) => b.value - a.value);
+        const chartData = entries
+            .map(([key, value]) => {
+                // Try i18n translation, fallback to raw key
+                const i18nKey = `sectors.${sectorI18nKey(key)}`;
+                const label = tr(i18nKey) !== i18nKey ? tr(i18nKey) : key.replace(/_/g, ' ');
+                return {
+                    name: label,
+                    value: +(value * 100).toFixed(2),
+                };
+            })
+            .sort((a, b) => b.value - a.value);
 
         const option: echarts.EChartsOption = {
             color: palette,
@@ -148,33 +137,35 @@
                 pageIconColor: isDark ? '#94a3b8' : '#64748b',
                 pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
             },
-            series: [{
-                type: 'pie',
-                radius: ['35%', '70%'],
-                center: ['35%', '50%'],
-                avoidLabelOverlap: true,
-                padAngle: 1,
-                itemStyle: {
-                    borderRadius: 4,
-                    borderColor: isDark ? '#293548' : '#ffffff',
-                    borderWidth: 2,
-                },
-                label: {
-                    show: false,
-                },
-                emphasis: {
-                    label: {
-                        show: true,
-                        fontSize: 13,
-                        fontWeight: 'bold',
-                        formatter: '{b}\n{c}%',
-                        color: isDark ? '#e2e8f0' : '#1e293b',
+            series: [
+                {
+                    type: 'pie',
+                    radius: ['35%', '70%'],
+                    center: ['35%', '50%'],
+                    avoidLabelOverlap: true,
+                    padAngle: 1,
+                    itemStyle: {
+                        borderRadius: 4,
+                        borderColor: isDark ? '#293548' : '#ffffff',
+                        borderWidth: 2,
                     },
-                    scaleSize: 5,
+                    label: {
+                        show: false,
+                    },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            fontSize: 13,
+                            fontWeight: 'bold',
+                            formatter: '{b}\n{c}%',
+                            color: isDark ? '#e2e8f0' : '#1e293b',
+                        },
+                        scaleSize: 5,
+                    },
+                    labelLine: {show: false},
+                    data: chartData,
                 },
-                labelLine: {show: false},
-                data: chartData,
-            }],
+            ],
         };
 
         chartInstance.setOption(option, true);
@@ -182,9 +173,4 @@
     }
 </script>
 
-<div
-    bind:this={chartContainer}
-    class="w-full"
-    style="height: {height};"
-></div>
-
+<div bind:this={chartContainer} class="w-full" style="height: {height};"></div>

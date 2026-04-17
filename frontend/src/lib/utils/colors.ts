@@ -40,7 +40,7 @@ export function getIndexColor(
         darkTextLightness?: number;
     },
 ): ColorSet {
-    const sat = opts?.saturation ?? (35 + (index % 5) * 5); // 35-55%
+    const sat = opts?.saturation ?? 35 + (index % 5) * 5; // 35-55%
     const bgL = opts?.bgLightness ?? 92;
     const txtL = opts?.textLightness ?? 30;
     const dBgL = opts?.darkBgLightness ?? 20;
@@ -67,14 +67,14 @@ export function getIndexColor(
  * @param code  Provider code (e.g. "ECB", "FED", "BOE", "SNB")
  * @returns     Object with bg/darkBg/border/darkBorder CSS colors
  */
-export function getProviderColor(code: string): { bg: string; darkBg: string; border: string; darkBorder: string } {
+export function getProviderColor(code: string): {bg: string; darkBg: string; border: string; darkBorder: string} {
     // Well-separated hue assignments for known providers (90° apart)
     const KNOWN_HUES: Record<string, number> = {
-        ECB: 220,   // Blue
-        FED: 30,    // Orange
-        BOE: 150,   // Teal/Green
-        SNB: 340,   // Magenta/Pink
-        MANUAL: 0,  // Red
+        ECB: 220, // Blue
+        FED: 30, // Orange
+        BOE: 150, // Teal/Green
+        SNB: 340, // Magenta/Pink
+        MANUAL: 0, // Red
     };
 
     let hue: number;
@@ -121,8 +121,9 @@ export function hslToHex(h: number, s: number, l: number): string {
     const f = (n: number) => {
         const k = (n + h / 30) % 12;
         const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-        return Math.round(255 * color).toString(16).padStart(2, '0');
+        return Math.round(255 * color)
+            .toString(16)
+            .padStart(2, '0');
     };
     return `#${f(0)}${f(8)}${f(4)}`;
 }
-

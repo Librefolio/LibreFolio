@@ -36,16 +36,7 @@
         compact?: boolean;
     }
 
-    let {
-        value = $bindable(''),
-        excludedSectors,
-        placeholder = '',
-        disabled = false,
-        maxVisibleItems = 6,
-        dropdownPosition = 'auto',
-        onchange,
-        compact = false,
-    }: Props = $props();
+    let {value = $bindable(''), excludedSectors, placeholder = '', disabled = false, maxVisibleItems = 6, dropdownPosition = 'auto', onchange, compact = false}: Props = $props();
 
     let sectorsLoaded = $state(false);
 
@@ -69,14 +60,14 @@
     // Filter out excluded sectors
     let filteredKeys = $derived.by(() => {
         if (excludedSectors && excludedSectors.size > 0) {
-            return allSectorKeys.filter(k => !excludedSectors!.has(k));
+            return allSectorKeys.filter((k) => !excludedSectors!.has(k));
         }
         return allSectorKeys;
     });
 
     // Build SelectOption array — sector name localized, searchable by key + name
     let sectorOptions = $derived.by<SelectOption[]>(() => {
-        return filteredKeys.map(k => {
+        return filteredKeys.map((k) => {
             const i18nKey = `sectors.${sectorI18nKey(k)}`;
             const localized = $t(i18nKey);
             const label = localized !== i18nKey ? localized : k;
@@ -94,18 +85,7 @@
     }
 </script>
 
-<SearchSelect
-        bind:value
-        {compact}
-        {disabled}
-        {dropdownPosition}
-        inlineSearch={true}
-        loading={!sectorsLoaded}
-        {maxVisibleItems}
-        onchange={handleChange}
-        options={sectorOptions}
-        placeholder={placeholder || $t('assets.distribution.addSector')}
->
+<SearchSelect bind:value {compact} {disabled} {dropdownPosition} inlineSearch={true} loading={!sectorsLoaded} {maxVisibleItems} onchange={handleChange} options={sectorOptions} placeholder={placeholder || $t('assets.distribution.addSector')}>
     {#snippet item(option)}
         <div class="flex items-center min-w-0">
             <div class="min-w-0">
@@ -131,4 +111,3 @@
         {/if}
     {/snippet}
 </SearchSelect>
-

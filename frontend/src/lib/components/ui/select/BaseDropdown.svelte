@@ -13,9 +13,9 @@
         /** Position of dropdown (top/bottom/auto) */
         dropdownPosition?: 'top' | 'bottom' | 'auto';
         /** Trigger content */
-        trigger: Snippet<[{ isOpen: boolean }]>;
+        trigger: Snippet<[{isOpen: boolean}]>;
         /** Dropdown content */
-        content: Snippet<[{ close: () => void }]>;
+        content: Snippet<[{close: () => void}]>;
         /** Custom class for container */
         class?: string;
     }
@@ -93,22 +93,15 @@
 
 <div bind:this={containerRef} class="relative {className}">
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-            class:cursor-not-allowed={disabled}
-            class:opacity-50={disabled}
-            onclick={handleTriggerClick}
-            onkeydown={handleTriggerKeydown}
-            role="button"
-            tabindex={disabled ? -1 : 0}
-    >
+    <div class:cursor-not-allowed={disabled} class:opacity-50={disabled} onclick={handleTriggerClick} onkeydown={handleTriggerKeydown} role="button" tabindex={disabled ? -1 : 0}>
         {@render trigger({isOpen})}
     </div>
 
     {#if isOpen}
         <div
-                class="absolute z-50 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden
+            class="absolute z-50 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden
                    {dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}"
-                role="listbox"
+            role="listbox"
         >
             {@render content({close})}
         </div>

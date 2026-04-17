@@ -21,27 +21,27 @@ export interface ImageEditConfig {
     cropHeight: number;
 
     // Transform
-    rotation: number;    // degrees
-    scaleX: number;      // 1 or -1 (flip H)
-    scaleY: number;      // 1 or -1 (flip V)
+    rotation: number; // degrees
+    scaleX: number; // 1 or -1 (flip H)
+    scaleY: number; // 1 or -1 (flip V)
 
     // Output
     outputWidth: number | null;
     outputHeight: number | null;
     outputFormat: 'png' | 'jpeg' | 'webp';
-    outputQuality: number;  // 0-1
+    outputQuality: number; // 0-1
 
     // File name
     outputFileName: string;
 }
 
 export interface ImagePreset {
-    aspectRatio: number;      // 0 or NaN = free, 1 = square, 16/9, etc.
+    aspectRatio: number; // 0 or NaN = free, 1 = square, 16/9, etc.
     outputWidth: number | null;
     outputHeight: number | null;
     outputFormat: 'png' | 'jpeg' | 'webp' | 'auto';
-    outputQuality: number;    // 0-1
-    titleKey: string;         // i18n key for modal title
+    outputQuality: number; // 0-1
+    titleKey: string; // i18n key for modal title
 }
 
 export type PresetName = 'avatar' | 'broker-icon' | 'asset-icon' | 'custom';
@@ -52,7 +52,7 @@ export type PresetName = 'avatar' | 'broker-icon' | 'asset-icon' | 'custom';
 
 export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
     avatar: {
-        aspectRatio: 1,           // 1:1 square
+        aspectRatio: 1, // 1:1 square
         outputWidth: 200,
         outputHeight: 200,
         outputFormat: 'png',
@@ -60,7 +60,7 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
         titleKey: 'uploads.editAvatar',
     },
     'broker-icon': {
-        aspectRatio: 1,           // 1:1 square
+        aspectRatio: 1, // 1:1 square
         outputWidth: 64,
         outputHeight: 64,
         outputFormat: 'png',
@@ -68,7 +68,7 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
         titleKey: 'uploads.editIcon',
     },
     'asset-icon': {
-        aspectRatio: 1,           // 1:1 square
+        aspectRatio: 1, // 1:1 square
         outputWidth: 256,
         outputHeight: 256,
         outputFormat: 'png',
@@ -76,13 +76,13 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
         titleKey: 'uploads.editIcon',
     },
     custom: {
-        aspectRatio: 0,           // Free aspect ratio (NaN in cropperjs)
-        outputWidth: null,        // User can set
+        aspectRatio: 0, // Free aspect ratio (NaN in cropperjs)
+        outputWidth: null, // User can set
         outputHeight: null,
         outputFormat: 'auto',
         outputQuality: 0.9,
         titleKey: 'uploads.editImage',
-    }
+    },
 };
 
 // =============================================================================
@@ -93,13 +93,7 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
  * Get cropped image from cropperjs v2 instance as Blob
  * Uses CropperSelection.$toCanvas() method
  */
-export async function getCroppedImageFromCropper(
-    cropper: Cropper,
-    outputWidth: number | null = null,
-    outputHeight: number | null = null,
-    format: 'png' | 'jpeg' | 'webp' | 'auto' = 'png',
-    quality: number = 0.9
-): Promise<Blob> {
+export async function getCroppedImageFromCropper(cropper: Cropper, outputWidth: number | null = null, outputHeight: number | null = null, format: 'png' | 'jpeg' | 'webp' | 'auto' = 'png', quality: number = 0.9): Promise<Blob> {
     const selection = cropper.getCropperSelection();
 
     if (!selection) {
@@ -107,7 +101,7 @@ export async function getCroppedImageFromCropper(
     }
 
     // Build canvas options
-    const canvasOptions: { width?: number; height?: number } = {};
+    const canvasOptions: {width?: number; height?: number} = {};
     if (outputWidth) canvasOptions.width = outputWidth;
     if (outputHeight) canvasOptions.height = outputHeight;
 
@@ -131,7 +125,7 @@ export async function getCroppedImageFromCropper(
                 }
             },
             mimeType,
-            quality
+            quality,
         );
     });
 }
@@ -148,7 +142,7 @@ export function createImageEditConfig(
     outputQuality: number = 0.9,
     rotation: number = 0,
     scaleX: number = 1,
-    scaleY: number = 1
+    scaleY: number = 1,
 ): ImageEditConfig {
     const selection = cropper.getCropperSelection();
 
@@ -195,12 +189,7 @@ export function isImageFile(file: File): boolean {
 /**
  * Get supported image MIME types
  */
-export const SUPPORTED_IMAGE_TYPES = [
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/gif'
-];
+export const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 /**
  * Check if MIME type is supported for cropping

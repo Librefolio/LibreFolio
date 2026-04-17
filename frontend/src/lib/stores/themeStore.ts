@@ -79,4 +79,3 @@ export function initThemeListener(): () => void {
         mediaQuery.removeEventListener('change', handleChange);
     };
 }
-

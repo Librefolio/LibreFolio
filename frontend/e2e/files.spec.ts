@@ -88,7 +88,10 @@ test.describe('Files Page', () => {
             await page.getByTestId('files-tab-static').click();
 
             // Check if view mode toggle is visible (only shows when files exist)
-            const hasViewToggle = await page.getByTestId('view-mode-toggle').isVisible().catch(() => false);
+            const hasViewToggle = await page
+                .getByTestId('view-mode-toggle')
+                .isVisible()
+                .catch(() => false);
 
             if (hasViewToggle) {
                 await expect(page.getByTestId('view-mode-grid')).toBeVisible();
@@ -102,7 +105,10 @@ test.describe('Files Page', () => {
             await page.getByTestId('files-tab-static').click();
 
             // Only test if view toggle exists (files present)
-            const hasViewToggle = await page.getByTestId('view-mode-toggle').isVisible().catch(() => false);
+            const hasViewToggle = await page
+                .getByTestId('view-mode-toggle')
+                .isVisible()
+                .catch(() => false);
 
             if (hasViewToggle) {
                 // Click grid view
@@ -128,15 +134,27 @@ test.describe('Files Page', () => {
             await page.waitForTimeout(500);
 
             // Either files table is visible OR empty state is shown
-            const hasTable = await page.getByTestId('files-table-brim').isVisible().catch(() => false);
-            const hasEmptyState = await page.getByTestId('brim-empty-state').isVisible().catch(() => false);
+            const hasTable = await page
+                .getByTestId('files-table-brim')
+                .isVisible()
+                .catch(() => false);
+            const hasEmptyState = await page
+                .getByTestId('brim-empty-state')
+                .isVisible()
+                .catch(() => false);
 
             // If neither, check for loading state
             if (!hasTable && !hasEmptyState) {
                 // Maybe still loading - wait more
                 await page.waitForTimeout(1000);
-                const hasTableRetry = await page.getByTestId('files-table-brim').isVisible().catch(() => false);
-                const hasEmptyRetry = await page.getByTestId('brim-empty-state').isVisible().catch(() => false);
+                const hasTableRetry = await page
+                    .getByTestId('files-table-brim')
+                    .isVisible()
+                    .catch(() => false);
+                const hasEmptyRetry = await page
+                    .getByTestId('brim-empty-state')
+                    .isVisible()
+                    .catch(() => false);
                 expect(hasTableRetry || hasEmptyRetry).toBeTruthy();
             } else {
                 expect(hasTable || hasEmptyState).toBeTruthy();
@@ -170,7 +188,10 @@ test.describe('Files Page', () => {
 
             // The uploader should have cleared after successful upload
             // or show a success state. Check if file-item is gone (cleared)
-            const fileItemGone = await page.locator('.file-uploader .file-item').isHidden().catch(() => true);
+            const fileItemGone = await page
+                .locator('.file-uploader .file-item')
+                .isHidden()
+                .catch(() => true);
 
             // If file item is gone, upload likely succeeded
             if (fileItemGone) {
