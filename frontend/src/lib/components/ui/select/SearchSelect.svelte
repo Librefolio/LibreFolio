@@ -162,15 +162,35 @@
 
     function openDropdown() {
         if (disabled) return;
+        // Prevent immediate reopen after close (touch event race)
+        if (Date.now() - lastClosedAt < 200) return;
         updateDropdownPosition();
         isOpen = true;
         searchQuery = '';
         highlightedIndex = 0;
     }
 
+    /** Timestamp of last close — used to prevent immediate reopen on touch devices */
+    let lastClosedAt = 0;
+
     function closeDropdown() {
         isOpen = false;
         searchQuery = '';
+        lastClosedAt = Date.now();
+        // Return focus to the trigger so the next click works reliably
+        if (containerRef) {
+            const trigger = containerRef.querySelector<HTMLElement>('[role="combobox"]');
+            trigger?.focus();
+        }
+    }
+
+    function toggleDropdown() {
+        if (disabled) return;
+        if (isOpen) {
+            closeDropdown();
+        } else {
+            openDropdown();
+        }
     }
 
     function selectOption(option: SelectOption, advanceFocus = false) {
@@ -275,7 +295,7 @@
                transition-all text-left gap-2
                {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' : 'bg-white dark:bg-slate-700 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
                {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
-        onclick={() => !isOpen && openDropdown()}
+        onclick={() => toggleDropdown()}
         onfocus={() => {
             triggerFocusedAt = Date.now();
         }}

@@ -72,6 +72,8 @@
     let nextId = $state(0);
     let expandedIds = $state<Set<string>>(new Set());
     let measureTableRefs = $state<Record<string, DataTable<MeasureSummaryRow> | undefined>>({});
+    /** Debounce guard: timestamp of last addPoint call to prevent double-fire */
+    let lastAddPointTime = 0;
 
     // Responsive breakpoint for tablet layout (<640px)
     let isNarrow = $state(false);
@@ -124,6 +126,10 @@
 
     export function addPoint(date: string, value: number) {
         if (!measureActive) return;
+        // Debounce: ignore clicks within 300ms of each other (prevents double-fire on mobile)
+        const now = Date.now();
+        if (now - lastAddPointTime < 300) return;
+        lastAddPointTime = now;
 
         if (pendingStartDate === null) {
             pendingStartDate = date;
@@ -306,6 +312,7 @@
             sortable: false,
             filterable: false,
             width: 480,
+            minWidth: 180,
         },
         {
             id: 'valueStart',

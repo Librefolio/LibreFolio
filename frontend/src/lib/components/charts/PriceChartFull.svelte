@@ -821,13 +821,15 @@
                     const tooltipH = size.contentSize[1];
                     const viewW = size.viewSize[0];
                     let x = point[0] - tooltipW / 2;
-                    // On touch devices, pin tooltip to top of chart to avoid scroll-offset issues
+                    // On touch devices, position well above the finger to avoid occlusion
                     // On desktop, position above cursor with adaptive gap
                     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
                     let y: number;
                     if (isTouch) {
-                        // Always pin to top of chart area (8px margin)
-                        y = 8;
+                        // Position above finger with large gap (80px) so it's not covered
+                        const gap = 80;
+                        y = point[1] - tooltipH - gap;
+                        if (y < 0) y = 0;
                     } else {
                         const gap = 30;
                         y = point[1] - tooltipH - gap;
