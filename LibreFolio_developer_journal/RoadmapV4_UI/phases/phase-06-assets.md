@@ -9,12 +9,12 @@
 
 ## 📌 Piano di Riferimento
 
-> **Il piano di dettaglio attuale è**: [`plan-phase06-assets.md`](../plan-phase06-assets.md)
+> **Il piano di dettaglio attuale è**: [`plan-phase06-assets.md`](phase-06-subplan/plan-phase06-assets.md)
 >
 > Sotto-piani di implementazione:
-> - [`plan-phase06Step4AssetDetailPage.prompt.md`](../plan-phase06Step4AssetDetailPage.prompt.md) — Step 4 (Part 0, A, B, C)
+> - [`plan-phase06Step4AssetDetailPage.prompt.md`](phase-06-subplan/plan-phase06Step4AssetDetailPage.prompt.md) — Step 4 (Part 0, A, B, C)
 > - [`plan-partBDataEditorUnificato.prompt.md`](phase-06-subplan/Bugfix-Step4/PlanB/plan-partBDataEditorUnificato.prompt.md) — Part B (Data Editor + CSV Import + Test E2E) ✅
-> - [`plan-partCCurrencyConversion.prompt.md`](../phases/phase-06-subplan/Bugfix-Step4/PlanC/plan-partCCurrencyConversion.prompt.md) — Part C (Currency Conversion + Bugfix + Polish) ✅
+> - [`plan-partCCurrencyConversion.prompt.md`](phase-06-subplan/Bugfix-Step4/PlanC/plan-partCCurrencyConversion.prompt.md) — Part C (Currency Conversion + Bugfix + Polish) ✅
 > - [`plan-phase06Step6-Polish-Test-Docs.prompt.md`](phase-06-subplan/Bugfix-Step6/plan-phase06Step6-Polish-Test-Docs.prompt.md) — Step 6 (i18n, Test, Docs, Coverage, BMC) ✅
 
 ---

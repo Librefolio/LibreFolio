@@ -1,9 +1,23 @@
 # Plan: File Preview System
 
-**Data**: 18 Febbraio 2026  
-**Status**: 📋 PIANIFICATO → **Spostato a Phase 7.5**  
-**Priorità**: Media  
+**Data**: 18 Febbraio 2026
+**Status**: 🔀 **ASSORBITO in Phase 7 — Parte 4b**
+**Priorità**: Media
 **Dipende da**: Phase 7 (Transactions) completata, Image Crop Modal completato ✅
+
+> **📌 Aggiornamento 18 Aprile 2026**: questo piano autonomo è stato **incorporato** come
+> **Parte 4b** del macro-plan di Phase 7. Vedere:
+> - [`phases/phase-07-transactions.md` §Parte 4b](phases/phase-07-transactions.md)
+>
+> Il contenuto qui sotto resta come riferimento storico per il dettaglio tecnico (step
+> backend/frontend, librerie, tipi, test E2E). Quando si implementerà la Parte 4b, usare
+> questo documento come base per il **piano di dettaglio** `plan-phase07Part4b-FilePreviewSystem.prompt.md`,
+> aggiornando:
+> - Svelte 5 runes (`$state`, `$derived`, `$effect`) al posto di store
+> - `ModalBase` esistente per la modale
+> - `DataTable` esistente per preview tabellari
+> - `data-testid` per selettori E2E
+> - Integrazione in `BrokerImportFilesModal` (oltre a Files page)
 
 > **📌 Riferimento aggiornato**: [`plan-phase05-to-08-upgrade.md` §7](plan-phase05-to-08-upgrade.md)
 > Questo piano è stato **spostato** da Phase 4.9 a Phase 7.5 perché ha più senso dopo che tutte
