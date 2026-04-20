@@ -1,9 +1,243 @@
-# Phase 7 — Part 2: BRIM Plugin v2 (Events & UI Metadata)
+# Phase 7 — Part 2: BRIM come parser puro (Revisione 2)
 
-> **Status**: 📋 Pianificato
+> **Status**: ✅ Revisione 2 completata (apr 2026) — tutti i blocchi A/B/C chiusi, backend test-suite verde
 > **Predecessore**: [`plan-phase07-transaction-Part1.md`](./plan-phase07-transaction-Part1.md) (✅ completato)
 > **Phase overview**: [`phases/phase-07-transactions.md`](./phases/phase-07-transactions.md) — sezione "Parte 2"
-> **Giorni stimati**: 2
+> **Giorni stimati**: 2 (v1) + 0.5 (smantellamento + versioning)
+
+---
+
+## 🔄 REVISIONE 2 — Reset architettonico (aprile 2026)
+
+Una rilettura critica con l'utente dopo l'implementazione v1 (sezioni storiche
+più in basso) ha portato al **ridimensionamento** di Parte 2. Il BRIM torna
+al suo ruolo originario di **parser**, nient'altro.
+
+### Principio guida
+
+> **BRIM è un parser.**
+> Legge il file broker-specifico, produce `transactions[]` con `fake_asset_id`
+> negativi e l'elenco di `extracted_assets{fake_id → info}`.
+> **Nessun** commit atomico, **nessuna** emissione di `AssetEvent`, **nessuna**
+> capability UI dichiarativa. La risoluzione dei fake id, il matching
+> transazione↔evento e il commit sono responsabilità della **Staging Modal**
+> frontend (Parte 5), che usa l'endpoint standard TX (vedi nuova semantica
+> atomica per-broker in Parte 3).
+
+### Cosa viene RIMOSSO rispetto all'implementazione v1
+
+| Elemento | Motivazione |
+|---|---|
+| `BRIMCapabilities` (schema + property `BRIMProvider.capabilities` + campo in `BRIMPluginInfo` + uso in plugin) | Dead code: nessun flag aveva un consumer reale. Non è compito del BRIM dichiarare feature inutilizzate |
+| `BRIMParseOutput.asset_events` + `BRIMParseResponse.asset_events` | I dividendi come `AssetEvent` sono popolati dagli **asset source provider** (yfinance/JustETF/...) o manualmente dall'utente. Il plugin broker produce solo la TX di tipo `DIVIDEND` (flusso cash nel portafoglio) |
+| `broker_schwab.py`: emissione `FAAssetEventPoint` / `FAEventUpsert` | Segue la rimozione sopra |
+| `POST /brokers/import/commit` (endpoint) | Dopo la risoluzione dei fake id il frontend usa l'endpoint standard TX. Nessuna API BRIM-specifica per il commit |
+| `commit_import()` service function | Idem |
+| `BRIMCommitRequest` / `BRIMCommitResponse` / `BRIMCommitResultItem` schemi | Seguono la rimozione dell'endpoint |
+| `AssetCRUDService.bulk_upsert_events_strict()` | Era usato solo da `commit_import`; ora dead code |
+| `backend/test_scripts/test_services/test_brim_commit_import.py` | Testa codice rimosso |
+| `backend/test_scripts/test_api/test_brim_commit_api.py` | Idem |
+| Voci `TEST_REGISTRY["services"]["brim-commit"]` e `TEST_REGISTRY["api"]["brim-commit"]` in `scripts/test_runner.py` | Idem |
+| `test_capabilities_shape` e `test_schwab_dividend_populates_asset_events` in `test_external/test_brim_providers.py` | Testano codice rimosso |
+
+### Cosa viene AGGIUNTO (nuovo, oltre alla v1)
+
+| Elemento | Scopo |
+|---|---|
+| `BRIMProvider.plugin_version: str` (default `"1.0.0"`) | Cache invalidation: quando il plugin viene aggiornato, un parse cached può essere marcato come stantio e ri-eseguito |
+| `BRIMPluginInfo.plugin_version` (propagato da `to_plugin_info()`) | UI legge la versione attuale |
+| `BRIMFileInfo.parsed_plugin_version: Optional[str]` (persistito nel JSON sidecar via `save_parse_result`) | Traccia con quale versione è stato prodotto il parse cached |
+| `BRIMFileInfo.parse_is_stale: bool` (computed lazy in `get_file_info`/`list_files`) | `True` se `status==PARSED AND parsed_plugin_version != registry.get(parsed_plugin_code).plugin_version`. La UI può renderizzare la "quarta categoria" (parse vecchio) senza un nuovo stato persistito |
+
+### Cosa viene RINOMINATO
+
+| Prima | Dopo | Motivo |
+|---|---|---|
+| `AssetSourceManager.bulk_upsert_events_manual()` | `AssetSourceManager.bulk_upsert_events()` | Il suffisso `_manual` era ridondante: con `bulk_upsert_events_strict` morto, non c'è più ambiguità. L'endpoint pubblico `PUT /assets/events/bulk` denota già lo scope "eventi utente" |
+
+### Cosa VIVE (invariato)
+
+- `BRIMProvider.parse() → BRIMParseOutput` (ora con 3 campi: `transactions`, `warnings`, `extracted_assets`)
+- `BRIMPreviewColumn` + `preview_columns()` abstract method
+- `BRIMProvider.docs_url`
+- `search_asset_candidates()` + `BRIMAssetMapping` (backend suggerisce candidate; il frontend auto-assegna se 1 solo match, altrimenti fa decidere l'utente — **nota**: `selected_asset_id` resta pre-compilato come suggerimento, il frontend lo considera overridable)
+- `detect_tx_duplicates()` + `BRIMDuplicateReport`
+- `is_fake_asset_id()` + `FAKE_ASSET_ID_BASE`
+- Auto-transizione file: `move_to_parsed()` su parse OK / `move_to_failed()` su `BRIMParseError` (già chiamato dall'endpoint)
+- Cache del parse nel metadata sidecar (`save_parse_result`): riuso via `GET /brokers/import/files/{id}/last-parse`
+
+### Flusso finale (post-revisione 2)
+
+```text
+upload → POST /brokers/import/upload      → file_id
+parse  → POST /brokers/import/files/{id}/parse
+        plugin.parse() → BRIMParseOutput (transactions + extracted_assets + warnings)
+        + search_asset_candidates() → asset_mappings[]
+        + detect_tx_duplicates()    → duplicates
+        → BRIMParseResponse
+        auto: move_to_parsed() + save_parse_result(plugin_version)
+                    ▼
+Staging Modal (frontend — Parte 5)
+  • risolve fake_id → real asset_id
+  • match TX ↔ AssetEvent globale (slider ±0..7gg, POST /transactions/events/suggest)
+  • deseleziona duplicati
+  • sostituisce fake_ids con real_ids nelle TX
+                    ▼
+commit → POST /brokers/{broker_id}/transactions/bulk  (endpoint standard — Parte 3)
+        ATOMIC per-broker: all-or-nothing rispetto alle regole del broker
+        (no cash overdraft, no asset shorting, …)
+```
+
+### Blocchi di esecuzione (Revisione 2)
+
+L'esecuzione è suddivisa in 3 blocchi ordinati. `./dev.py format && ./dev.py lint`
+va eseguito al termine di ciascun blocco.
+
+#### Blocco A — Smantellamento + pulizia tecnica
+
+**A.1 Rimozione v1 (come già enumerato sopra)**
+
+- [x] `backend/app/schemas/brim.py`: rimossi `BRIMCapabilities`, `BRIMCommitRequest/Response/ResultItem`, campo `asset_events` in `BRIMParseOutput`/`BRIMParseResponse`; rimossa importazione `BaseBulkResponse`, `FAEventUpsert`. *(già fatto)*
+- [x] `backend/app/services/brim_provider.py`: rimossi import `BRIMCapabilities`/`BRIMCommit*`/`FAEventUpsert`, rimossa property `capabilities`, rimosso `commit_import()` + blocco "ATOMIC COMMIT SERVICE", rimosso `asset_event_count` dal log di `parse_file`.
+- [x] `backend/app/api/v1/brokers.py`: rimossi import `BRIMCommitRequest/Response` + `commit_import`, rimossa estrazione/passaggio `asset_events` dall'endpoint `/parse`, cancellato endpoint `POST /commit` (L786-827).
+- [x] `backend/app/services/brim_providers/broker_schwab.py`: rimossi import `BRIMCapabilities`/`FAAssetEventPoint`/`FAEventUpsert`, rimosso `_dividend_points_by_fake`, rimosso blocco dividend-point append, rimosso `grouped_events`, rimosso `asset_events=…` dal return di `BRIMParseOutput`, rimossa override `capabilities`.
+- [x] `backend/app/services/brim_providers/broker_degiro.py`: rimossa override `capabilities` + import `BRIMCapabilities`.
+- [x] `backend/app/services/asset_source.py`: rename `bulk_upsert_events_manual` → `bulk_upsert_events`; cancellato `bulk_upsert_events_strict` intero.
+- [x] `backend/app/api/v1/assets.py` (L932): aggiornato callsite al nuovo nome `bulk_upsert_events` (unico callsite pubblico).
+- [x] File eliminati: `backend/test_scripts/test_services/test_brim_commit_import.py`, `backend/test_scripts/test_api/test_brim_commit_api.py`.
+- [x] `scripts/test_runner.py`: cancellate funzioni `services_brim_commit()` e `api_brim_commit()` + entrambe le entry `"brim-commit"` in `TEST_REGISTRY["services"]` e `TEST_REGISTRY["api"]`.
+- [x] `backend/test_scripts/test_external/test_brim_providers.py`: rimosso import `BRIMCapabilities`, cancellati `test_capabilities_shape` e `test_schwab_dividend_populates_asset_events`. *(già fatto parzialmente: contratto aggiornato)*
+
+**A.2 Refactor interno `brim_provider.py` (pulizia tecnica — estratto dalla revisione di questa sezione)**
+
+Rimuovere duplicazioni identificate rileggendo il file: due inner function
+`_parse_metadata` (L540, dentro `list_files`) e `_try_parse_metadata`
+(L618, dentro `get_file_info`) hanno corpo identico a meno di un guard
+`meta_path.exists()`. Lo stesso pattern di ricerca metadata sidecar
+(scan root + `broker_*/`) è inoltre triplicato in `list_files`,
+`get_file_info`, `save_parse_result`.
+
+- [x] Estrarre in `brim_provider.py` un helper module-level
+  `_build_file_info_from_metadata(meta_path: Path) -> Optional[BRIMFileInfo]`
+  che include il guard `exists()` + il calcolo lazy di `parse_is_stale`.
+  Sostituire entrambi gli inner helper con chiamate a questo.
+- [x] Estrarre un helper `_find_metadata_path(file_id: str) -> Optional[Path]`
+  che incapsula la scansione `status → root + broker_*/`. Usarlo in
+  `get_file_info` e `save_parse_result`. (In `list_files` la scansione
+  è esaustiva e rimane inline.)
+- [x] Verificare visivamente che non restino altre duplicazioni simili
+  (ricerca `broker_*` nel file).
+
+#### Blocco B — Versioning plugin + caching semplificato
+
+- [x] `BRIMProvider.plugin_version: str` property (default `"1.0.0"`) nella classe base.
+- [x] `BRIMProvider.to_plugin_info()` propaga `plugin_version=self.plugin_version` in `BRIMPluginInfo` (già presente in schema).
+- [x] **Semplificazione `save_parse_result`** (single source of truth = registry):
+  ```python
+  def save_parse_result(
+      file_id: str,
+      parse_result: dict,
+      plugin_code: Optional[str] = None,
+  ) -> bool:
+      ...
+      if plugin_code is not None:
+          metadata["parsed_plugin_code"] = plugin_code
+          plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+          if plugin is not None:
+              metadata["parsed_plugin_version"] = plugin.plugin_version
+      ...
+  ```
+  Motivazione: nel sistema c'è **1 solo plugin per quella `code`**; la
+  versione è derivata, non un parametro che il chiamante debba calcolare
+  o mentire. Evita il doppio lookup lato `brokers.py`.
+- [x] `backend/app/api/v1/brokers.py` (L750-756): aggiornare il call-site a
+  `save_parse_result(file_id, response.model_dump(mode="json"), plugin_code=plugin_code)`
+  (rimuovere il lookup `plugin_obj = BRIMProviderRegistry.get_provider_instance(...)`
+  e l'argomento `plugin_version=…`).
+- [x] `BRIMFileInfo.parsed_plugin_code` + `parsed_plugin_version` + `parse_is_stale` (computed lazy, già nello schema) — validare che dopo A.2 la logica sia in un unico helper.
+
+#### Blocco C — Test coverage
+
+**Standardizzazione parametrization (pre-requisito)**
+
+Oggi `test_external/test_brim_providers.py` usa **due pattern misti** di
+`@pytest.mark.parametrize`:
+
+- **Pattern A** (`TestPluginInterface`): parametrizza su `"provider_code"` (stringa),
+  istanzia il plugin dentro ogni test via `BRIMProviderRegistry.get_provider_instance(code)`.
+  Sorgente: `get_all_brim_providers()` (che contiene anche un `pytest.skip()` interno —
+  antipattern).
+- **Pattern B** (`TestBRIMPluginsContract`): parametrizza su `("code", "plugin")` (tupla),
+  con istanza costruita a collection time + `ids=_PLUGIN_IDS` esplicito.
+
+**Standardizzare su Pattern B** (fail-fast a collection time, istanza riusata,
+coerente con `test_asset_providers.py` / `test_fx_providers.py`, compatibile con
+future estensioni dei parametri tipo `(code, plugin, sample_file)`).
+
+- [x] Fondere `TestPluginInterface` e `TestBRIMPluginsContract` in **un'unica**
+  classe `TestBRIMPlugin` parametrizzata con `(("code", "plugin"), _PLUGIN_PARAMS, ids=_PLUGIN_IDS)`.
+- [x] Rimuovere `get_all_brim_providers()` + il suo `pytest.skip()`; se non c'è
+  nessun plugin registrato, `_PLUGIN_PARAMS == []` e pytest stampa naturalmente
+  "no tests collected" per quella classe.
+- [x] I test che non hanno bisogno dell'istanza (es. `test_registry_discovers_plugins`)
+  restano in `TestPluginDiscovery` (non parametrizzata — OK così).
+
+**Contratto plugin (parametrizzato `(code, plugin)` su tutti i plugin registrati)**
+
+- [x] `test_plugin_version_is_non_empty_string` (già presente, verificato).
+- [x] `test_to_plugin_info_propagates_plugin_version` (già presente come `test_to_plugin_info_propagates_fields`).
+- [x] `test_parse_is_idempotent` — invocare `plugin.parse(sample, broker_id=1)` due volte sullo stesso file e verificare che `transactions`, `warnings`, `extracted_assets` siano uguali (tipo + contenuto). Importante dopo l'introduzione di `plugin_version`: se il parse cached diventa riutilizzabile, l'output deve essere deterministico.
+- [x] `test_parse_produces_negative_fake_ids` — tutti i `tx.asset_id` con `asset_id is not None AND not in DB` devono rispettare `is_fake_asset_id(id) == True`. Chiave `FAKE_ASSET_ID_BASE` importata da `brim_provider`.
+- [x] `test_parse_broker_id_propagated_on_all_tx` — oggi si verifica solo sul primo sample; estendere a **tutti** i sample compatibili di ogni plugin e su **ogni** TX (`tx.broker_id == 1`).
+- [x] `test_parse_warnings_for_malformed_row` — usa un piccolo sample intenzionalmente corrotto (una riga con data non parsabile o colonna mancante). Attesa: `len(warnings) > 0` e il parse non solleva, oppure solleva `BRIMParseError` se la riga è strutturale (scelta plugin-dipendente, documentata nel test via `expected_behavior` parametrizzato). Nota: richiede un nuovo file `sample_reports/generic_malformed_row.csv` minimo.
+
+**End-to-end `parse_is_stale`** (`test_brim_files_api.py` o nuovo `test_brim_versioning.py`)
+
+- [x] `test_parse_is_stale_detection`:
+  1. Upload + parse con plugin `broker_generic_csv` → verifica `parse_is_stale == False` e `parsed_plugin_version == "1.0.0"`.
+  2. `monkeypatch.setattr(GenericCSVProvider, "plugin_version", "2.0.0")` (o property dinamica).
+  3. `GET /brokers/import/files/{id}` → `parse_is_stale == True`, `parsed_plugin_version == "1.0.0"` (il sidecar non viene toccato).
+  4. Re-trigger `POST /parse` → sidecar aggiornato a `"2.0.0"`, `parse_is_stale == False`.
+
+**Fuori scope Revisione 2** (test utili ma non bloccanti, flag come TODO in phase-07):
+
+- `test_detect_method_per_plugin` — il metodo `detect()` del singolo plugin. **Skip**: la semantica è già coperta da `TestAutoDetection` che testa `auto_detect_plugin()` (consumer unico di `detect()`).
+- `test_fake_id_collision_across_plugins` — Part 5 (Staging Modal gestisce la fusione di parse multipli: non è problema del BRIM).
+
+#### Deliverable Revisione 2 (rollup)
+
+- [x] Blocchi A.1, A.2, B, C eseguiti e spuntati.
+- [x] `./dev.py api sync` rigenerato; `./dev.py front check` verde.
+- [x] `./dev.py test external brim-providers` verde (incluse novità C).
+- [x] `./dev.py test api brim` verde (incluso `test_parse_is_stale_detection`).
+- [x] `./dev.py test all-backend` verde.
+- [x] `phases/phase-07-transactions.md` aggiornato (Parte 2 ↔ Part 3/5 cross-link, tabella "piani di dettaglio ancora da scrivere").
+
+### Come validare (revisione 2)
+
+```bash
+./dev.py format && ./dev.py lint
+./dev.py api sync && ./dev.py front check
+./dev.py test external brim-providers
+./dev.py test api brim            # upload, files, parse, plugins (niente /commit)
+./dev.py test all-backend
+```
+
+---
+
+## ⚠️ NOTA — Le sezioni qui sotto sono STORICHE (v1)
+
+Tutto ciò che segue documenta l'implementazione v1 originale (completata e
+poi parzialmente smantellata). È conservato come traccia del percorso ma
+**non è più il piano operativo**. Il piano attivo è la Revisione 2 qui sopra.
+
+---
+
+# 📚 Sezioni storiche — Phase 7 Part 2 v1 (BRIM Plugin v2 "Events & UI Metadata")
+
+> **Status v1**: ✅ Completato (poi smantellato da Revisione 2)
+> **Giorni stimati v1**: 2
+> **Giorni effettivi v1**: 2
 
 ---
 
@@ -351,16 +585,64 @@ Verificare prima il comportamento attuale di `_upsert_asset_events` (update sile
 
 ## 📦 Deliverable
 
-- [ ] Classe base `BRIMProvider` estesa con `docs_url`, `capabilities`, `preview_columns`, `parse() → BRIMParseOutput`.
-- [ ] 11 plugin broker refactorati, nessun wrapper legacy.
-- [ ] Schemi `BRIMCapabilities`, `BRIMPreviewColumn`, `BRIMParseOutput`, `BRIMCommitRequest`, `BRIMCommitResultItem`, `BRIMCommitResponse` aggiunti.
-- [ ] `BRIMPluginInfo` e `BRIMParseResponse` estesi.
-- [ ] Nuovo helper `AssetCRUDService.bulk_upsert_events_strict` per validazione unicità.
-- [ ] Service `commit_import()` atomico con rollback esplicito.
-- [ ] Endpoint `POST /api/v1/brokers/import/commit` EDITOR-gated.
-- [ ] Endpoint `POST /files/{file_id}/parse` aggiornato per propagare `asset_events`.
-- [ ] Client TypeScript rigenerato via `./dev.py api sync`.
-- [ ] Test suite backend green: unit per 11 plugin + integration commit + API matrix.
+- [x] Classe base `BRIMProvider` estesa con `docs_url`, `capabilities`, `preview_columns`, `parse() → BRIMParseOutput`.
+- [x] 11 plugin broker refactorati, nessun wrapper legacy.
+- [x] Schemi `BRIMCapabilities`, `BRIMPreviewColumn`, `BRIMParseOutput`, `BRIMCommitRequest`, `BRIMCommitResultItem`, `BRIMCommitResponse` aggiunti.
+- [x] `BRIMPluginInfo` e `BRIMParseResponse` estesi.
+- [x] Nuovo helper `AssetCRUDService.bulk_upsert_events_strict` per validazione unicità.
+- [x] Service `commit_import()` atomico con rollback esplicito **+ risoluzione `fake_asset_id` via `asset_mappings`** per TX ed eventi.
+- [x] Endpoint `POST /api/v1/brokers/import/commit` EDITOR-gated.
+- [x] Endpoint `POST /files/{file_id}/parse` aggiornato per propagare `asset_events`.
+- [x] Client TypeScript rigenerato via `./dev.py api sync`.
+- [x] Test suite backend green: unit per 11 plugin + integration commit + API matrix.
+
+---
+
+## 🔍 Deviazioni dal piano originale (rilevate durante implementazione)
+
+1. **`BRIMParseOutput.asset_events` e `BRIMParseResponse.asset_events`**: il piano originale tipizzava questi campi come `List[FAAssetEventPoint]`. Questo è stato cambiato a `List[FAEventUpsert]` — cioè eventi **raggruppati per `asset_id`** — perché `FAAssetEventPoint` non contiene `asset_id` e un plugin ha bisogno di comunicare a quale asset (fake o reale) appartiene ciascun evento. Il tipo `FAEventUpsert` è lo stesso usato da `BRIMCommitRequest.asset_events`, rendendo il flusso parse → commit lineare e senza conversioni intermedie.
+
+2. **Risoluzione `fake_asset_id` in `commit_import`**: il piano non menzionava esplicitamente dove avvenisse la risoluzione dei fake ID. È stata implementata **lato backend** (`commit_import` → helper interno `_resolve`) leggendo `BRIMCommitRequest.asset_mappings`. Un fake_id non risolto genera un errore per-riga che trascina il rollback atomico globale. Valido sia per TX che per eventi. Questo fa sì che il frontend possa inviare i payload senza doversi occupare della risoluzione.
+
+3. **Schwab — asset_events per DIVIDEND**: il plugin Schwab ora popola parallelamente alla `TXCreateItem` di tipo `DIVIDEND` anche un `FAAssetEventPoint` (raggruppato nella `FAEventUpsert` corrispondente al fake_asset_id). Flag `supports_events=True` in `capabilities`. IBKR non contiene logica di parsing dividend nel codice attuale, quindi il suo flag resta `False` (follow-up quando/se IBKR aggiungerà dividend parsing — fuori scope di Part 2).
+
+4. **Merge dei test `test_brim_providers_v2.py` in `test_external/test_brim_providers.py`**: i 55 contract test v2 sono stati consolidati nel file external già registrato nel `test_runner.py` (voce `brim-providers`), insieme a un nuovo test `test_schwab_dividend_populates_asset_events` che verifica il comportamento Schwab. Il file separato in `test_services/` è stato rimosso.
+
+5. **Registrazione `test_runner.py`**: aggiunte due nuove voci di esecuzione CLI:
+    - `./dev.py test services brim-commit` → `test_brim_commit_import.py` (service layer).
+    - `./dev.py test api brim-commit` → `test_brim_commit_api.py` (endpoint permission + atomicity).
+
+6. **Bugfix collaterali scoperti durante `./dev.py test all-backend`** (pre-esistenti, non causati da Part 2):
+    - `test_fx_api.py::test_convert_currency` era **order-dependent**: tentava di convertire `USD→EUR` senza prima assicurare la presenza di una rate `EUR/USD`. Corretto inserendo esplicitamente un manual rate nel setup del test. Tracciamento: commit dedicato in Part 2.
+    - `test_assets_crud.py::test_list_asset_providers` assertava `mockprov ∈ GET /assets/provider`, ma l'endpoint filtra esplicitamente i provider "testing-only". Invertita l'asserzione per riflettere il comportamento corretto.
+
+---
+
+## ✅ Come validare esternamente
+
+```bash
+# 1) Contract v2 + dividend asset_events in Schwab (57 test)
+./dev.py test external brim-providers
+
+# 2) commit_import atomico (7 test — events, TX, rollback, fake_id)
+./dev.py test services brim-commit
+
+# 3) Endpoint /brokers/import/commit (4 test — permission + atomicity)
+./dev.py test api brim-commit
+
+# 4) Regressione completa backend (deve essere all-green)
+./dev.py test all-backend
+
+# 5) Frontend type-check (lo schema è cambiato: asset_events ora FAEventUpsert)
+./dev.py api sync && ./dev.py front check
+```
+
+Evidenze minime dall'esecuzione finale:
+- `external/brim-providers`: 157 passed, 1 skipped.
+- `services/brim-commit`: 7 passed.
+- `api/brim-commit`: 4 passed.
+- `all-backend`: 7/7 gruppi PASS (external, db, services, utils, schemas, api, e2e).
+- `front check`: 0 errors / 0 warnings.
 
 ---
 

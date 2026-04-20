@@ -29,7 +29,9 @@
             value: p.code,
             label: p.name,
             searchText: p.description,
-            icon: p.icon_url || undefined,
+            // Generator quirk: nullable fields get typed as (string | null) | Array<string | null>.
+            // At runtime the backend only ever produces (string | null).
+            icon: (p.icon_url as string | null | undefined) || undefined,
             data: p,
         })),
     );
@@ -57,6 +59,10 @@
         }
     }
 
+    function getDescription(option: SelectOption): string | undefined {
+        return (option.data as BrimPlugin | undefined)?.description;
+    }
+
     function handleChange(newValue: string) {
         value = newValue;
         onchange?.(newValue);
@@ -66,13 +72,12 @@
 <div class="import-plugin-select" data-testid="import-plugin-select">
     <SearchSelect bind:value {disabled} inlineSearch={true} {loading} onchange={handleChange} options={pluginOptions} placeholder={placeholder || $_('brokers.selectPlugin')}>
         {#snippet item(option)}
-            {@const plugin = option.data as BrimPlugin | undefined}
             <div class="flex items-center gap-2">
                 <BrokerIcon iconUrl={option.icon} altText={option.label} size="sm" />
                 <div class="min-w-0 flex-1">
                     <div class="text-sm font-medium">{option.label}</div>
-                    {#if plugin?.description}
-                        <div class="text-xs text-gray-500 truncate">{plugin.description}</div>
+                    {#if getDescription(option)}
+                        <div class="text-xs text-gray-500 truncate">{getDescription(option)}</div>
                     {/if}
                 </div>
             </div>

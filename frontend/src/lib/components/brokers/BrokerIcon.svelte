@@ -49,7 +49,10 @@
         try {
             const plugins = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
             const plugin = plugins.find((p) => p.code === code);
-            pluginIconUrl = plugin?.icon_url ?? null;
+            // Generator quirk: nullable fields get typed as (string | null) | Array<string | null>.
+            // At runtime the backend only ever produces (string | null).
+            const rawIcon = plugin?.icon_url as string | null | undefined;
+            pluginIconUrl = rawIcon ?? null;
         } catch {
             pluginIconUrl = null;
         }

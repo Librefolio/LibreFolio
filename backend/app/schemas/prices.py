@@ -340,8 +340,14 @@ class FAEventDeleteItemResult(BaseModel):
 
     event_id: int = Field(..., description="Event ID this result refers to")
     status: Literal["deleted", "not_found", "in_use"] = Field(..., description="Outcome for this event")
-    accessible_transactions: List[int] = Field(default_factory=list,description="Transaction IDs referencing this event that the current user can access",)
-    hidden_transactions_count: int = Field(default=0,description="Number of transactions referencing this event that belong to other users",)
+    accessible_transactions: List[int] = Field(
+        default_factory=list,
+        description="Transaction IDs referencing this event that the current user can access",
+    )
+    hidden_transactions_count: int = Field(
+        default=0,
+        description="Number of transactions referencing this event that belong to other users",
+    )
 
 
 class FAEventBulkDeleteResponse(BaseModel):
@@ -419,7 +425,10 @@ class FAPriceQueryResult(BaseModel):
 
     asset_id: int = Field(..., description="Asset ID queried")
     prices: List[FAPricePoint] = Field(default_factory=list, description="Price history with backward-fill")
-    events: List[FAAssetEventPointOut] = Field(default_factory=list,description="Asset events (if requested). Includes DB id + is_auto flag so the frontend editor can reference them by id.",)
+    events: List[FAAssetEventPointOut] = Field(
+        default_factory=list,
+        description="Asset events (if requested). Includes DB id + is_auto flag so the frontend editor can reference them by id.",
+    )
     errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. FX pair missing)")
 
 

@@ -37,12 +37,12 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -171,7 +171,7 @@ class FreetradeBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
         """Parse Freetrade CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -313,7 +313,21 @@ class FreetradeBrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return transactions, warnings, extracted_assets_typed
+        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=extracted_assets_typed)
+
+    @property
+    def docs_url(self) -> Optional[str]:
+        return "/mkdocs/user/brokers/freetrade/"
+
+    def preview_columns(self) -> List[BRIMPreviewColumn]:
+        return [
+            BRIMPreviewColumn(key="date", label="brim.preview.date", type="date", width="110px", align="left"),
+            BRIMPreviewColumn(key="type", label="brim.preview.type", type="enum", width="110px", align="left"),
+            BRIMPreviewColumn(key="quantity", label="brim.preview.quantity", type="number", width="110px", align="right"),
+            BRIMPreviewColumn(key="asset", label="brim.preview.asset", type="text", align="left"),
+            BRIMPreviewColumn(key="cash_amount", label="brim.preview.cash_amount", type="number", width="120px", align="right"),
+            BRIMPreviewColumn(key="cash_currency", label="brim.preview.cash_currency", type="text", width="70px", align="center"),
+        ]
 
     @property
     def test_file_pattern(self) -> Optional[str]:
