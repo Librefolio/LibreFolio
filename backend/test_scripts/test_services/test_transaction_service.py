@@ -31,7 +31,6 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import (
     TXCreateItem,
-    TXDeleteItem,
     TXQueryParams,
     TXUpdateItem,
 )
@@ -344,8 +343,9 @@ class TestCreateBulkLinkResolution:
 
         response = await service.create_bulk(items)
 
-        # Transaction created but error reported
-        assert response.success_count == 1
+        # Atomic semantics (Part 3): lone link_uuid fails the whole batch.
+        assert response.rolled_back is True
+        assert response.success_count == 0
         assert any("has 1 transactions (expected 2)" in err for err in response.errors)
 
 
@@ -380,8 +380,9 @@ class TestCreateBulkBalanceValidation:
 
         response = await service.create_bulk(items)
 
-        # Transactions created but validation error
-        assert response.success_count == 2
+        # Atomic semantics (Part 3): any balance violation → whole-batch rollback.
+        assert response.rolled_back is True
+        assert response.success_count == 0
         assert len(response.errors) > 0
         assert any("negative" in err.lower() for err in response.errors)
 
@@ -443,7 +444,8 @@ class TestCreateBulkBalanceValidation:
 
         response = await service.create_bulk(items)
 
-        assert response.success_count == 3
+        assert response.rolled_back is True
+        assert response.success_count == 0
         assert len(response.errors) > 0
         assert any("negative" in err.lower() for err in response.errors)
 
@@ -649,8 +651,8 @@ class TestQueryBidirectionalLink:
         tx2_id = response.results[1].transaction_id
 
         # Query both and check related_transaction_id (now bidirectional)
-        tx1_read = await service.get_by_id(tx1_id)
-        tx2_read = await service.get_by_id(tx2_id)
+        tx1_read = await session.get(Transaction, tx1_id)
+        tx2_read = await session.get(Transaction, tx2_id)
 
         # Both should point to each other (bidirectional FK)
         assert tx1_read.related_transaction_id == tx2_id
@@ -673,7 +675,7 @@ class TestQueryBidirectionalLink:
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
 
-        tx_read = await service.get_by_id(tx_id)
+        tx_read = await session.get(Transaction, tx_id)
 
         assert tx_read.related_transaction_id is None
 
@@ -756,7 +758,7 @@ class TestGetById:
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
 
-        result = await service.get_by_id(tx_id)
+        result = await session.get(Transaction, tx_id)
 
         assert result is not None
         assert result.id == tx_id
@@ -764,9 +766,8 @@ class TestGetById:
     @pytest.mark.asyncio
     async def test_get_by_id_not_found(self, session):
         """TX-U-051: Get non-existent ID returns None."""
-        service = TransactionService(session)
 
-        result = await service.get_by_id(999999)
+        result = await session.get(Transaction, 999999)
 
         assert result is None
 
@@ -871,8 +872,7 @@ class TestDeleteBulkBasic:
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
 
-        delete_items = [TXDeleteItem(id=tx_id)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk([tx_id])
 
         assert delete_response.success_count == 1
         assert delete_response.total_deleted == 1
@@ -932,8 +932,7 @@ class TestDeleteBulkLinkedEnforcement:
         tx1_id = response.results[0].transaction_id
 
         # Try to delete only the first one
-        delete_items = [TXDeleteItem(id=tx1_id)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk([tx1_id])
 
         # Should fail
         assert delete_response.results[0].success is False
@@ -982,8 +981,7 @@ class TestDeleteBulkLinkedEnforcement:
         tx2_id = response.results[1].transaction_id
 
         # Delete both
-        delete_items = [TXDeleteItem(id=tx1_id), TXDeleteItem(id=tx2_id)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk([tx1_id, tx2_id])
 
         assert delete_response.success_count == 2
         assert delete_response.total_deleted == 2
@@ -1042,8 +1040,7 @@ class TestDeleteBulkLinkedEnforcement:
         assert tx2_db.related_transaction_id == tx1_id, "Pre-condition: TX2 must point to TX1"
 
         # Delete both - this would FAIL without DEFERRABLE FK
-        delete_items = [TXDeleteItem(id=tx1_id), TXDeleteItem(id=tx2_id)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk([tx1_id, tx2_id])
 
         # Verify delete succeeded
         assert delete_response.success_count == 2, f"Delete should succeed. Errors: {[r.message for r in delete_response.results if not r.success]}"

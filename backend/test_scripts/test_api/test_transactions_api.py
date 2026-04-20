@@ -191,7 +191,7 @@ async def test_post_transactions_single(test_server, test_broker_id):
         ]
 
         response = await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=payload,
             timeout=TIMEOUT,
         )
@@ -247,7 +247,7 @@ async def test_post_transactions_bulk(test_server, test_broker_id):
         ]
 
         response = await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=payload,
             timeout=TIMEOUT,
         )
@@ -289,7 +289,7 @@ async def test_post_transactions_validation_error(test_server, test_broker_id):
         ]
 
         response = await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=payload,
             timeout=TIMEOUT,
         )
@@ -337,7 +337,7 @@ async def test_post_transactions_balance_error(test_server):
         ]
 
         response = await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=payload,
             timeout=TIMEOUT,
         )
@@ -382,7 +382,7 @@ async def test_get_transactions(test_server, test_broker_id):
 
         # Create a transaction
         await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=[
                 {
                     "broker_id": broker_id,
@@ -428,7 +428,7 @@ async def test_get_transactions_with_filters(test_server, test_broker_id):
 
         # Create transactions
         await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=[
                 {
                     "broker_id": broker_id,
@@ -486,7 +486,7 @@ async def test_get_transactions_pagination(test_server, test_broker_id):
 
         # Create several transactions
         await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=[
                 {
                     "broker_id": broker_id,
@@ -535,8 +535,8 @@ async def test_get_transactions_pagination(test_server, test_broker_id):
 
 @pytest.mark.asyncio
 async def test_get_transaction_by_id(test_server, test_broker_id):
-    """TX-A-013: GET /transactions/{id} returns single transaction."""
-    print_section("Test TX-A-013: GET /transactions/{id}")
+    """TX-A-013: GET /transactions?ids={id} returns single transaction (replacement for removed /{id} route)."""
+    print_section("Test TX-A-013: GET /transactions?ids={id}")
 
     async with httpx.AsyncClient() as client:
         # Authenticate first
@@ -562,42 +562,64 @@ async def test_get_transaction_by_id(test_server, test_broker_id):
             }
         ]
         create_resp = await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=payload,
             timeout=TIMEOUT,
         )
         tx_id = create_resp.json()["results"][0]["transaction_id"]
 
-        # Get by ID
+        # Get by ID via ?ids=N
         response = await client.get(
-            f"{API_BASE}/transactions/{tx_id}",
+            f"{API_BASE}/transactions",
+            params={"ids": [tx_id]},
             timeout=TIMEOUT,
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == tx_id
+        assert isinstance(data, list) and len(data) == 1
+        assert data[0]["id"] == tx_id
 
-        print_success(f"✓ Got transaction {tx_id}")
+        print_success(f"✓ Got transaction {tx_id} via ?ids")
 
 
 @pytest.mark.asyncio
 async def test_get_transaction_not_found(test_server):
-    """TX-A-014: GET /transactions/{id} returns 404 for non-existent."""
-    print_section("Test TX-A-014: GET /transactions/{id} - not found")
+    """TX-A-014: GET /transactions?ids=... returns empty list when no match (replaces 404 of old /{id})."""
+    print_section("Test TX-A-014: GET /transactions?ids=... - not found")
 
     async with httpx.AsyncClient() as client:
         # Authenticate first
         await create_test_user(client)
 
         response = await client.get(
-            f"{API_BASE}/transactions/999999",
+            f"{API_BASE}/transactions",
+            params={"ids": [999999]},
             timeout=TIMEOUT,
         )
 
+        # New behavior: empty list, not 404 (the route /{tx_id} has been removed).
+        assert response.status_code == 200
+        assert response.json() == []
+
+        print_success("✓ Got empty list as expected for missing ID")
+
+
+@pytest.mark.asyncio
+async def test_legacy_tx_id_route_is_removed(test_server):
+    """TX-A-014b: GET /transactions/{id} must now 404 (route removed, not a live tx)."""
+    print_section("Test TX-A-014b: GET /transactions/{id} removed")
+
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        response = await client.get(
+            f"{API_BASE}/transactions/999999",
+            timeout=TIMEOUT,
+        )
+        # FastAPI returns 404 because no route matches the path.
         assert response.status_code == 404
 
-        print_success("✓ Got 404 as expected")
+        print_success("✓ Legacy /{tx_id} route returns 404")
 
 
 @pytest.mark.asyncio
@@ -662,7 +684,7 @@ async def test_patch_transactions(test_server, test_broker_id):
             }
         ]
         create_resp = await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=payload,
             timeout=TIMEOUT,
         )
@@ -676,7 +698,7 @@ async def test_patch_transactions(test_server, test_broker_id):
             }
         ]
         response = await client.patch(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=update_payload,
             timeout=TIMEOUT,
         )
@@ -704,7 +726,7 @@ async def test_patch_transactions_not_found(test_server):
             }
         ]
         response = await client.patch(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=update_payload,
             timeout=TIMEOUT,
         )
@@ -756,7 +778,7 @@ async def test_delete_transactions(test_server, test_broker_id):
             },
         ]
         create_resp = await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=payload,
             timeout=TIMEOUT,
         )
@@ -764,7 +786,7 @@ async def test_delete_transactions(test_server, test_broker_id):
 
         # Delete them
         response = await client.delete(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             params={"ids": tx_ids},
             timeout=TIMEOUT,
         )
@@ -832,7 +854,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
                 "quantity": "100",
             }
         ]
-        await client.post(f"{API_BASE}/transactions", json=adj_payload, timeout=TIMEOUT)
+        await client.post(f"{API_BASE}/transactions/bulk", json=adj_payload, timeout=TIMEOUT)
 
         # Create linked transfer
         link_uuid = f"test-link-api-{uuid.uuid4().hex[:8]}"
@@ -855,7 +877,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
             },
         ]
         create_resp = await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=transfer_payload,
             timeout=TIMEOUT,
         )
@@ -863,7 +885,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
 
         # Try to delete only the first one
         response = await client.delete(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             params={"ids": [tx_ids[0]]},
             timeout=TIMEOUT,
         )
