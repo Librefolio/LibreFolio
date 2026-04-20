@@ -973,5 +973,11 @@
     "loading": "Cargando precios…",
     "errorFetching": "Error al cargar precios",
     "livePrices": "Precios en vivo"
+  },
+  "events": {
+    "deleteSuccess": "{count} evento(s) eliminado(s)",
+    "deleteNotFound": "Evento(s) no encontrado(s): {ids}",
+    "deletePartial": "{deleted} eliminado(s), {inUse} en uso, {notFound} no encontrado(s)",
+    "deleteBlocked": "No se puede eliminar: {count} evento(s) aún en uso por transacciones ({accessible} visibles para ti, {hidden} en carteras de otros usuarios)"
   }
 }
