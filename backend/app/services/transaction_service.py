@@ -28,12 +28,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
 from backend.app.schemas.transactions import (
+    EVENT_COMPATIBLE_TYPES,
     TXBulkCreateResponse,
     TXBulkDeleteResponse,
     TXBulkUpdateResponse,
     TXCreateItem,
     TXCreateResultItem,
     TXDeleteResult,
+    TXEventSuggestCandidate,
+    TXEventSuggestRequestItem,
+    TXEventSuggestResultItem,
     TXQueryParams,
     TXReadItem,
     TXUpdateItem,
@@ -783,3 +787,77 @@ class TransactionService:
         result = await self.session.execute(stmt)
         value = result.scalar_one_or_none()
         return abs(value or Decimal("0"))
+
+    # =========================================================================
+    # EVENTS SUGGEST (Block C.2)
+    # =========================================================================
+
+    async def suggest_events_bulk(self, requests: List[TXEventSuggestRequestItem]) -> List[TXEventSuggestResultItem]:
+        """
+        For each (asset_id, date, type, tolerance_days), return candidate
+        AssetEvent rows whose type maps to the tx.type and whose date is
+        within ±tolerance_days. Candidates are sorted by ascending |Δdays|.
+
+        Mapping (TransactionType → AssetEventType):
+        - DIVIDEND  → {DIVIDEND}
+        - INTEREST  → {INTEREST}
+        - ADJUSTMENT → {PRICE_ADJUSTMENT, SPLIT}
+        Any other tx.type → skipped_reason="type_not_event_compatible".
+
+        No side effects. The caller is responsible for auth.
+        """
+        from backend.app.db.models import AssetEventType as _AET  # noqa: PLC0415
+
+        type_map = {
+            TransactionType.DIVIDEND: {_AET.DIVIDEND},
+            TransactionType.INTEREST: {_AET.INTEREST},
+            TransactionType.ADJUSTMENT: {_AET.PRICE_ADJUSTMENT, _AET.SPLIT},
+        }
+
+        results: List[TXEventSuggestResultItem] = []
+        for req in requests:
+            if req.type not in EVENT_COMPATIBLE_TYPES:
+                results.append(
+                    TXEventSuggestResultItem(
+                        asset_id=req.asset_id,
+                        date=req.date,
+                        type=req.type,
+                        candidates=[],
+                        skipped_reason="type_not_event_compatible",
+                    )
+                )
+                continue
+
+            event_types = type_map.get(req.type, set())
+            lo = req.date - timedelta(days=req.tolerance_days)
+            hi = req.date + timedelta(days=req.tolerance_days)
+
+            stmt = select(AssetEvent).where(AssetEvent.asset_id == req.asset_id).where(AssetEvent.type.in_(event_types)).where(AssetEvent.date >= lo).where(AssetEvent.date <= hi)
+            rows = (await self.session.execute(stmt)).scalars().all()
+
+            candidates = [
+                TXEventSuggestCandidate(
+                    id=ev.id,
+                    asset_id=ev.asset_id,
+                    date=ev.date,
+                    type=str(ev.type),
+                    value=ev.value,
+                    currency=ev.currency,
+                    is_auto=ev.provider_assignment_id is not None,
+                    distance_days=abs((ev.date - req.date).days),
+                )
+                for ev in rows
+            ]
+            candidates.sort(key=lambda c: c.distance_days)
+
+            results.append(
+                TXEventSuggestResultItem(
+                    asset_id=req.asset_id,
+                    date=req.date,
+                    type=req.type,
+                    candidates=candidates,
+                    skipped_reason=None,
+                )
+            )
+
+        return results
