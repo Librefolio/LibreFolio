@@ -350,19 +350,28 @@
                             return !deletedIds.has(idNum);
                         });
 
-                        if (deletedIds.size > 0) parts.push(`${deletedIds.size} events deleted`);
+                        if (deletedIds.size > 0) {
+                            parts.push($t('events.deleteSuccess', {values: {count: deletedIds.size}}));
+                        }
                         if (blocked.length > 0) {
-                            const blockedMsg = blocked
-                                .map((b: any) => {
-                                    const visible = b.accessible_transactions.length;
-                                    const hidden = b.hidden_transactions_count;
-                                    return `#${b.event_id} (used by ${visible} of yours${hidden ? `, ${hidden} hidden` : ''})`;
-                                })
-                                .join(', ');
-                            toasts.warning(`Some events cannot be deleted: ${blockedMsg}`);
+                            const totalVisible = blocked.reduce((sum: number, b: any) => sum + b.accessible_transactions.length, 0);
+                            const totalHidden = blocked.reduce((sum: number, b: any) => sum + (b.hidden_transactions_count || 0), 0);
+                            toasts.warning(
+                                $t('events.deleteBlocked', {
+                                    values: {
+                                        count: blocked.length,
+                                        accessible: totalVisible,
+                                        hidden: totalHidden,
+                                    },
+                                }),
+                            );
                         }
                         if (notFound.length > 0) {
-                            toasts.warning(`Not found: ${notFound.map((r: any) => r.event_id).join(', ')}`);
+                            toasts.warning(
+                                $t('events.deleteNotFound', {
+                                    values: {ids: notFound.map((r: any) => r.event_id).join(', ')},
+                                }),
+                            );
                         }
                     }
                 }

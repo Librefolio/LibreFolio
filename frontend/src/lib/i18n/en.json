@@ -973,5 +973,11 @@
     "loading": "Loading prices…",
     "errorFetching": "Failed to load prices",
     "livePrices": "Live Prices"
+  },
+  "events": {
+    "deleteSuccess": "{count} event(s) deleted",
+    "deleteNotFound": "Event(s) not found: {ids}",
+    "deletePartial": "{deleted} deleted, {inUse} in use, {notFound} not found",
+    "deleteBlocked": "Cannot delete: {count} event(s) still in use by transactions ({accessible} visible to you, {hidden} in other users' portfolios)"
   }
 }
