@@ -1287,6 +1287,115 @@ def link_transactions_to_events(session: Session):
     print(f"       accessible_transactions=[{apple_div_tx.id}], hidden=0")
     print("     • UI must show a warning toast and keep the row visible.")
 
+    # ------------------------------------------------------------------
+    # Phase 7 Part 3 (Block D): link an INTEREST tx (bond) to its event
+    # ------------------------------------------------------------------
+    loan1 = session.exec(select(Asset).where(Asset.display_name.like("%Loan%"))).first()  # type: ignore[union-attr]
+    if loan1 is not None:
+        loan_int_event = session.exec(
+            select(AssetEvent)
+            .where(
+                AssetEvent.asset_id == loan1.id,
+                AssetEvent.type == AssetEventType.INTEREST,
+            )
+            .order_by(AssetEvent.date.desc())  # type: ignore[union-attr]
+        ).first()
+        loan_int_tx = session.exec(
+            select(Transaction)
+            .where(
+                Transaction.asset_id == loan1.id,
+                Transaction.type == TransactionType.INTEREST,
+            )
+            .order_by(Transaction.date.desc())  # type: ignore[union-attr]
+        ).first()
+        if loan_int_event is not None and loan_int_tx is not None:
+            loan_int_tx.asset_event_id = loan_int_event.id
+            session.add(loan_int_tx)
+            session.commit()
+            print(f"  ✅ Linked Transaction #{loan_int_tx.id} (INTEREST, {loan_int_tx.date}) " f"→ AssetEvent #{loan_int_event.id} ({loan1.display_name} INTEREST, {loan_int_event.date})")
+        else:
+            print("  ⚠️  Skipped bond INTEREST link — tx or event missing")
+
+    # ------------------------------------------------------------------
+    # Phase 7 Part 3 (Block D): add an admin-only broker with a DIVIDEND
+    # transaction linked to an Apple DIVIDEND event. This transaction MUST be
+    # hidden from `e2e_test_user` — the broker has no BrokerUserAccess row for
+    # them — so the RESTRICT-aware delete breakdown reports
+    # `hidden_transactions_count >= 1`.
+    # ------------------------------------------------------------------
+    # Prefer the explicit e2e_test_admin user (is_admin flag is not persisted
+    # because the User model field is `is_superuser`, not `is_admin` — this
+    # is an existing fixture quirk; we look up by username instead).
+    admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()
+    if admin is None:
+        admin = session.exec(select(User).where(User.is_superuser == True)).first()  # noqa: E712
+    if admin is None:
+        print("  ⚠️  No admin user found — skipping hidden-broker fixture")
+        return
+
+    hidden_broker = session.exec(select(Broker).where(Broker.name == "Hidden Admin Broker")).first()
+    if hidden_broker is None:
+        hidden_broker = Broker(
+            name="Hidden Admin Broker",
+            description="Admin-only broker — invisible to e2e_test_user",
+            allow_cash_overdraft=True,
+            allow_asset_shorting=True,
+        )
+        session.add(hidden_broker)
+        session.commit()
+        session.refresh(hidden_broker)
+
+    has_access = session.exec(
+        select(BrokerUserAccess).where(
+            BrokerUserAccess.user_id == admin.id,
+            BrokerUserAccess.broker_id == hidden_broker.id,
+        )
+    ).first()
+    if has_access is None:
+        session.add(
+            BrokerUserAccess(
+                user_id=admin.id,
+                broker_id=hidden_broker.id,
+                role=UserRole.OWNER,
+                share_percentage=Decimal("1.0"),
+            )
+        )
+        session.commit()
+
+    # Use ANOTHER Apple DIVIDEND event (different date) so the Apple event
+    # detail page shows two linked events when both hidden+visible txs exist.
+    other_apple_events = session.exec(
+        select(AssetEvent)
+        .where(
+            AssetEvent.asset_id == apple.id,
+            AssetEvent.type == AssetEventType.DIVIDEND,
+            AssetEvent.id != apple_div_event.id,
+        )
+        .order_by(AssetEvent.date.desc())  # type: ignore[union-attr]
+    ).first()
+
+    target_event = other_apple_events or apple_div_event
+    today = date.today()
+
+    hidden_tx = Transaction(
+        broker_id=hidden_broker.id,
+        asset_id=apple.id,
+        type=TransactionType.DIVIDEND,
+        date=today - timedelta(days=10),
+        quantity=Decimal("0"),
+        amount=Decimal("7.50"),
+        currency="USD",
+        description="Apple dividend (admin-only broker, hidden from e2e_test_user)",
+        asset_event_id=target_event.id,
+    )
+    session.add(hidden_tx)
+    session.commit()
+
+    print(f"  ✅ Created hidden broker #{hidden_broker.id} with DIVIDEND tx #{hidden_tx.id}")
+    print(f"     → linked to AssetEvent #{target_event.id} (Apple DIVIDEND, {target_event.date})")
+    print("     🧪 Deleting that event while logged in as e2e_test_user must")
+    print("        report `hidden_transactions_count >= 1`.")
+
 
 def populate_fx_rates(session: Session):
     """Populate FX rates for the last 30 days."""
