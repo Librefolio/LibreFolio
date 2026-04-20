@@ -589,6 +589,52 @@ class TXValidateResponse(BaseModel):
 
 
 # =============================================================================
+# EVENTS SUGGEST (Block C.2)
+# =============================================================================
+
+
+class TXEventSuggestRequestItem(BaseModel):
+    """
+    Single suggest request: given (asset_id, date, type), find candidate
+    AssetEvent rows within +/- tolerance_days whose type maps to the tx type.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., gt=0)
+    date: date_type
+    type: TransactionType
+    tolerance_days: int = Field(0, ge=0, le=7, description="Days window (+/-) around date")
+
+
+class TXEventSuggestCandidate(BaseModel):
+    """Lean AssetEvent projection returned as a candidate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    asset_id: int
+    date: date_type
+    type: str
+    value: Decimal
+    currency: str
+    is_auto: bool
+    distance_days: int = Field(..., ge=0, description="abs(event.date - request.date)")
+
+
+class TXEventSuggestResultItem(BaseModel):
+    """Result for one request — candidates sorted by ascending distance."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    date: date_type
+    type: TransactionType
+    candidates: List[TXEventSuggestCandidate] = Field(default_factory=list)
+    skipped_reason: Optional[Literal["type_not_event_compatible"]] = None
+
+
+# =============================================================================
 # TRANSACTION TYPE METADATA
 # =============================================================================
 

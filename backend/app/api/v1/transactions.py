@@ -32,10 +32,14 @@ from backend.app.schemas.transactions import (
     TXBulkDeleteResponse,
     TXBulkUpdateResponse,
     TXCreateItem,
+    TXEventSuggestRequestItem,
+    TXEventSuggestResultItem,
     TXQueryParams,
     TXReadItem,
     TXTypeMetadata,
     TXUpdateItem,
+    TXValidateBatch,
+    TXValidateResponse,
 )
 from backend.app.services.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
@@ -203,3 +207,65 @@ async def delete_transactions_bulk(
         logger.warning("Bulk delete rolled back: %s", response.errors, user_id=user_id)
 
     return response
+
+
+# =============================================================================
+# VALIDATE (dry-run mixed batch)
+# =============================================================================
+
+
+@tx_router.post("/validate", response_model=TXValidateResponse)
+async def validate_transactions(
+    batch: TXValidateBatch,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> TXValidateResponse:
+    """
+    Dry-run validator for a mixed batch (creates + updates + deletes).
+
+    Semantics:
+    - Applies `deletes -> updates -> creates` in a single session that is
+      ALWAYS rolled back at the end (never commits).
+    - Does NOT stop at the first error: collects the full set of issues so
+      the Staging Modal can show all problems at once.
+    - `would_rollback=True` whenever any issue OR a balance violation exists.
+    - `balance_preview` / `holdings_preview` are populated only when the
+      batch would succeed (empty issues and no balance violation).
+    """
+    service = TransactionService(session)
+    return await service.validate_batch(
+        creates=batch.creates,
+        updates=batch.updates,
+        deletes=batch.deletes,
+        user_id=current_user.id,
+    )
+
+
+# =============================================================================
+# EVENTS SUGGEST
+# =============================================================================
+
+
+@tx_router.post("/events/suggest", response_model=List[TXEventSuggestResultItem])
+async def suggest_events(
+    requests: List[TXEventSuggestRequestItem],
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+) -> List[TXEventSuggestResultItem]:
+    """
+    For each `(asset_id, date, type)` return candidate `AssetEvent`s whose
+    type maps to the tx type and whose date is within `±tolerance_days`.
+
+    Asset events are global, so no broker access check is needed — the
+    caller only has to be authenticated. Results preserve input order and
+    each list of candidates is sorted by ascending distance (days).
+    """
+    if len(requests) > 500:
+        # Defensive: Pydantic enforces the cap on the list model, but a raw
+        # list body needs an explicit check.
+        from fastapi import HTTPException  # noqa: PLC0415
+
+        raise HTTPException(status_code=422, detail="Max 500 requests per call")
+
+    service = TransactionService(session)
+    return await service.suggest_events_bulk(requests)
