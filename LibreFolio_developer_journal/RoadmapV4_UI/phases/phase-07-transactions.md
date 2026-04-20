@@ -211,10 +211,9 @@ Tracciamento dei sub-plan che servono ma non sono ancora stati redatti:
 |---|---|---|---|
 | Parte 1 | `plan-phase07-transaction-Part1.md` | ✅ scritto ed eseguito | — |
 | Parte 2 | `plan-phase07-transaction-Part2.prompt.md` (Revisione 2) | ✅ completato | Parte 1 |
-| Parte 3 | `plan-phase07-transaction-Part3.md` | ⏳ **da scrivere** | Parte 1 |
-| Parte 3b | `plan-phase07-transaction-Part3b-events-suggest.md` (nuovo endpoint `POST /transactions/events/suggest` con slider 0-7gg) | ⏳ **da scrivere** | Parte 1 |
+| Parte 3 (include 3b) | `plan-phase07-transaction-Part3.md` (API consolidation atomic per-broker + events/suggest + deferred da Part 1 §8/§9) | 📋 **scritto, pronto per esecuzione** | Parte 1, Parte 2 |
 | Parte 4 | (TBD — eventuale UX transactions page) | ⏳ da decidere | Parte 3 |
-| Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: resolve fake_id, event matching, `parse_is_stale` banner, commit via endpoint standard) | ⏳ **da scrivere** | Parte 2, Parte 3, Parte 3b |
+| Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: resolve fake_id, event matching, `parse_is_stale` banner, commit via endpoint standard) | ⏳ **da scrivere** | Parte 2, Parte 3 |
 
 ---
 
@@ -737,16 +736,16 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 phases/phase-07-subplan/
 ├── README.md
 ├── plan-phase07-transaction-Part1.md                       (Parte 1 — ✅ completata)
-├── plan-phase07-transaction-Part2.prompt.md                (Parte 2 — 📋 pianificata)
-├── plan-phase07Part3-ApiConsolidation.prompt.md            (Parte 3)
-├── plan-phase07Part4-TransactionsPage.prompt.md            (Parte 4)
-├── plan-phase07Part4b-FilePreviewSystem.prompt.md          (Parte 4b)
-└── plan-phase07Part5-StagingModal.prompt.md                (Parte 5)
+├── plan-phase07-transaction-Part2.prompt.md                (Parte 2 — ✅ completata, Revisione 2)
+├── plan-phase07-transaction-Part3.md                       (Parte 3 — 📋 pianificata, include 3b + deferred §8/§9)
+├── plan-phase07-transaction-Part4.md                       (Parte 4 — ⏳ da scrivere)
+├── plan-phase07-transaction-Part4b-filePreview.md          (Parte 4b — ⏳ da scrivere)
+└── plan-phase07-transaction-Part5-staging-modal.md         (Parte 5 — ⏳ da scrivere)
 ```
 
 ---
 
-**Prossimo passo**: eseguire la **Parte 2** — BRIM Plugin v2 (vedi
-[`plan-phase07-transaction-Part2.prompt.md`](../plan-phase07-transaction-Part2.prompt.md)).
-Parte 1 (DB schema realignment) è già stata completata; Parte 2 è pianificata e pronta per
-l'implementazione.
+**Prossimo passo**: eseguire la **Parte 3** — API Consolidation atomic per-broker + `events/suggest` + deferred da Parte 1 (vedi
+[`plan-phase07-transaction-Part3.md`](../plan-phase07-transaction-Part3.md)).
+Parte 1 (DB schema realignment) e Parte 2 (BRIM parser puro, Revisione 2) sono completate.
+Parte 3 è pianificata in un unico file (assorbe 3b events/suggest + deferred §8 price currency + §9 OHLC sentinel) e pronta per l'implementazione.
