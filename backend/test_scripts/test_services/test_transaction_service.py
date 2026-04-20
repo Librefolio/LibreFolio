@@ -1164,3 +1164,162 @@ class TestBalanceQueryMethods:
 
         # Should be absolute value of sum: |-500| + |-1200| = 1700
         assert cost_basis == Decimal("1700")
+
+
+# ============================================================================
+# 3.X ASSET EVENT LINK (Phase 7 Part 1)
+# ============================================================================
+
+
+class TestAssetEventLinkService:
+    """Cross-record validation of asset_event_id in TransactionService."""
+
+    @pytest_asyncio.fixture
+    async def test_asset_event(self, session, test_asset):
+        """Create a DIVIDEND AssetEvent on test_asset."""
+        from backend.app.db.models import AssetEvent, AssetEventType  # noqa: PLC0415
+
+        event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date.today() - timedelta(days=5),
+            type=AssetEventType.DIVIDEND,
+            value=Decimal("1.25"),
+            currency="EUR",
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        session.add(event)
+        await session.flush()
+        return event
+
+    @pytest.mark.asyncio
+    async def test_create_bulk_with_valid_asset_event_link(self, session, test_broker_overdraft, test_asset, test_asset_event):
+        """DIVIDEND tx linked to a matching AssetEvent is persisted with the link."""
+        service = TransactionService(session)
+        items = [
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                asset_id=test_asset.id,
+                type=TransactionType.DIVIDEND,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("1.25")),
+                asset_event_id=test_asset_event.id,
+            )
+        ]
+        resp = await service.create_bulk(items)
+        assert resp.success_count == 1
+        tx_id = resp.results[0].transaction_id
+        tx_row = await session.get(Transaction, tx_id)
+        assert tx_row is not None
+        assert tx_row.asset_event_id == test_asset_event.id
+
+    @pytest.mark.asyncio
+    async def test_create_bulk_with_mismatched_asset_event_rejected(self, session, test_broker_overdraft, test_asset, test_asset_event):
+        """Tx with asset_id != event.asset_id fails with a user-friendly error."""
+        # Create a SECOND asset so the linkage is mismatched.
+        other = Asset(
+            display_name=f"Other Stock {utcnow().timestamp()}",
+            asset_type=AssetType.STOCK,
+            currency="EUR",
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        session.add(other)
+        await session.flush()
+
+        service = TransactionService(session)
+        items = [
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                asset_id=other.id,
+                type=TransactionType.DIVIDEND,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("1.00")),
+                asset_event_id=test_asset_event.id,  # belongs to test_asset, not `other`
+            )
+        ]
+        resp = await service.create_bulk(items)
+        assert resp.success_count == 0
+        assert resp.results[0].success is False
+        assert "belongs to asset" in (resp.results[0].error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_bulk_with_nonexistent_asset_event_rejected(self, session, test_broker_overdraft, test_asset):
+        """Linking to a non-existent event id yields a clear error."""
+        service = TransactionService(session)
+        items = [
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                asset_id=test_asset.id,
+                type=TransactionType.DIVIDEND,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("1.00")),
+                asset_event_id=999_999,
+            )
+        ]
+        resp = await service.create_bulk(items)
+        assert resp.success_count == 0
+        assert "not found" in (resp.results[0].error or "")
+
+    @pytest.mark.asyncio
+    async def test_update_bulk_can_unlink_with_sentinel_zero(self, session, test_broker_overdraft, test_asset, test_asset_event):
+        """asset_event_id=0 on update unlinks the transaction."""
+        service = TransactionService(session)
+
+        create_resp = await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.DIVIDEND,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("1.25")),
+                    asset_event_id=test_asset_event.id,
+                )
+            ]
+        )
+        tx_id = create_resp.results[0].transaction_id
+
+        upd_resp = await service.update_bulk([TXUpdateItem(id=tx_id, asset_event_id=0)])
+        assert upd_resp.success_count == 1
+        tx_row = await session.get(Transaction, tx_id)
+        await session.refresh(tx_row)
+        assert tx_row.asset_event_id is None
+
+    @pytest.mark.asyncio
+    async def test_update_bulk_can_relink_to_different_event(self, session, test_broker_overdraft, test_asset, test_asset_event):
+        """A transaction can be relinked to another compatible event on the same asset."""
+        from backend.app.db.models import AssetEvent, AssetEventType  # noqa: PLC0415
+
+        other_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date.today() - timedelta(days=1),
+            type=AssetEventType.DIVIDEND,
+            value=Decimal("2.00"),
+            currency="EUR",
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        session.add(other_event)
+        await session.flush()
+
+        service = TransactionService(session)
+        create_resp = await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.DIVIDEND,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("1.25")),
+                    asset_event_id=test_asset_event.id,
+                )
+            ]
+        )
+        tx_id = create_resp.results[0].transaction_id
+
+        upd_resp = await service.update_bulk([TXUpdateItem(id=tx_id, asset_event_id=other_event.id)])
+        assert upd_resp.success_count == 1
+        tx_row = await session.get(Transaction, tx_id)
+        await session.refresh(tx_row)
+        assert tx_row.asset_event_id == other_event.id

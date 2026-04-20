@@ -48,6 +48,16 @@ LibreFolio/
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
 - **After modifying DB models** — run `./dev.py db create-clean`
 
+## Terminal Command Rules
+
+- **Long commands (>10 lines)** → do NOT paste them directly into the shell. Instead, write the command/script to a temporary file under `/tmp/` (e.g. `/tmp/libreFolio_<descr>.sh` or `.py`) and execute that file. This avoids quoting/escape issues and keeps the terminal log readable.
+- **Truncated output (`tail`, `head`, `grep -m`, `| head -n`, etc.)** → always `tee` the full output to a file in `/tmp/` *before* truncating, so the complete log can be re-inspected without re-running the command. Pattern:
+    ```bash
+    <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | tail -n 100
+    ```
+    Then, if more context is needed, read `/tmp/libreFolio_<descr>.log` instead of re-executing the command.
+- **Rationale**: avoid re-running expensive commands (tests, builds, db operations) just to see output that was truncated earlier.
+
 ## Async I/O Rule (Event Loop Safety)
 
 In `async def` handlers, **every sync library doing I/O** MUST be wrapped in `await asyncio.to_thread(...)`. Never call `requests.get()`, `yf.Ticker().info`, etc. directly — they block the entire event loop. If an endpoint only does light sync I/O (e.g. `Path.exists()`), define it as `def` (not `async def`).

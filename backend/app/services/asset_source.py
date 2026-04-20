@@ -41,9 +41,12 @@ from backend.app.db.models import (
     AssetEvent,
     AssetProviderAssignment,
     AssetType,
+    BrokerUserAccess,
     IdentifierType,
     PriceHistory,
     ProviderInputType,
+    Transaction,
+    User,
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import (
@@ -80,7 +83,7 @@ from backend.app.schemas.assets import (
     FAMetadataChangeDetail,
 )
 from backend.app.schemas.common import Currency, OldNew
-from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPoint, FAPriceQueryResult
+from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAPriceQueryResult
 from backend.app.schemas.provider import (
     FAProviderConfigBase,
     FAProviderProbeResponse,
@@ -1610,7 +1613,7 @@ class AssetSourceManager:
         event_requests = {req.asset_id for req in requests if getattr(req, "include_events", False)}
 
         # Query events if needed
-        event_maps: dict[int, list[FAAssetEventPoint]] = {}
+        event_maps: dict[int, list[FAAssetEventPointOut]] = {}
         if event_requests:
             evt_stmt = (
                 select(AssetEvent)
@@ -1628,11 +1631,13 @@ class AssetSourceManager:
                 if evt.asset_id not in event_maps:
                     event_maps[evt.asset_id] = []
                 event_maps[evt.asset_id].append(
-                    FAAssetEventPoint(
+                    FAAssetEventPointOut(
                         date=evt.date,
-                        type=evt.type,
+                        type=evt.type.value if hasattr(evt.type, "value") else str(evt.type),
                         value=Currency(code=evt.currency, amount=evt.value),
                         notes=evt.notes,
+                        id=evt.id,
+                        is_auto=evt.provider_assignment_id is not None,
                     )
                 )
 
@@ -2439,39 +2444,73 @@ class AssetSourceManager:
         return results
 
     @staticmethod
-    async def delete_event_by_id(event_id: int, session: AsyncSession) -> dict:
+    async def delete_events_bulk(
+        event_ids: list[int],
+        session: AsyncSession,
+        current_user: User,
+    ) -> FAEventBulkDeleteResponse:
         """
-        Delete a single event by its primary key (works for both auto and manual events).
+        Bulk delete asset events with RESTRICT-aware per-item result.
 
-        Args:
-            event_id: AssetEvent.id
-            session: Database session
+        For each requested id, returns one of:
+        - ``deleted`` — event removed
+        - ``not_found`` — id did not exist
+        - ``in_use`` — referenced by one or more transactions; response exposes
+          ``accessible_transactions`` (tx ids current user can see) and
+          ``hidden_transactions_count`` (refs owned by other users).
 
-        Returns:
-            dict with event_id, success, deleted_count, message
+        No partial rollback: deletable events are committed even if others are
+        blocked. HTTP layer always returns 200 — inspect ``results`` for outcome.
         """
-        stmt = select(AssetEvent).where(AssetEvent.id == event_id)
-        res = await session.execute(stmt)
-        event = res.scalar_one_or_none()
+        results: list[FAEventDeleteItemResult] = []
 
-        if not event:
-            return {
-                "event_id": event_id,
-                "success": False,
-                "deleted_count": 0,
-                "message": f"Event {event_id} not found",
-            }
+        for event_id in event_ids:
+            event = await session.get(AssetEvent, event_id)
+            if event is None:
+                results.append(FAEventDeleteItemResult(event_id=event_id, status="not_found"))
+                continue
 
-        del_stmt = delete(AssetEvent).where(AssetEvent.id == event_id)
-        await session.execute(del_stmt)
+            # RESTRICT pre-check: enumerate transactions that reference this event.
+            total_stmt = select(func.count(Transaction.id)).where(Transaction.asset_event_id == event_id)
+            total_count_row = await session.execute(total_stmt)
+            total_count = int(total_count_row.scalar_one() or 0)
+
+            if total_count > 0:
+                # Split by user accessibility via BrokerUserAccess join.
+                accessible_stmt = (
+                    select(Transaction.id)
+                    .join(BrokerUserAccess, Transaction.broker_id == BrokerUserAccess.broker_id)
+                    .where(
+                        Transaction.asset_event_id == event_id,
+                        BrokerUserAccess.user_id == current_user.id,
+                    )
+                )
+                acc_rows = await session.execute(accessible_stmt)
+                accessible_ids = [int(r[0]) for r in acc_rows.all()]
+                hidden = total_count - len(accessible_ids)
+
+                results.append(
+                    FAEventDeleteItemResult(
+                        event_id=event_id,
+                        status="in_use",
+                        accessible_transactions=accessible_ids,
+                        hidden_transactions_count=hidden,
+                    )
+                )
+                continue
+
+            # Safe to delete
+            await session.delete(event)
+            results.append(FAEventDeleteItemResult(event_id=event_id, status="deleted"))
+
         await session.commit()
 
-        return {
-            "event_id": event_id,
-            "success": True,
-            "deleted_count": 1,
-            "message": f"Deleted event {event_id}",
-        }
+        return FAEventBulkDeleteResponse(
+            results=results,
+            deleted_count=sum(1 for r in results if r.status == "deleted"),
+            not_found_count=sum(1 for r in results if r.status == "not_found"),
+            in_use_count=sum(1 for r in results if r.status == "in_use"),
+        )
 
 
 # ============================================================================

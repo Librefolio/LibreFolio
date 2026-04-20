@@ -630,3 +630,96 @@ class TestTagsUtilities:
         """tags_to_csv with None returns None."""
         result = tags_to_csv(None)
         assert result is None
+
+
+# ============================================================================
+# 1.9 ASSET EVENT LINK (Phase 7 Part 1)
+# ============================================================================
+
+
+class TestAssetEventLink:
+    """Validation of asset_event_id field on TXCreateItem / TXUpdateItem + metadata."""
+
+    def test_asset_event_id_on_dividend_ok(self):
+        """DIVIDEND accepts asset_event_id."""
+        tx = TXCreateItem(
+            broker_id=1,
+            asset_id=10,
+            type=TransactionType.DIVIDEND,
+            date=date.today(),
+            cash=Currency(code="USD", amount=Decimal("1.25")),
+            asset_event_id=42,
+        )
+        assert tx.asset_event_id == 42
+
+    def test_asset_event_id_on_buy_rejected(self):
+        """BUY is not event_compatible → asset_event_id must be rejected."""
+        with pytest.raises(ValidationError, match="cannot be linked to an asset_event"):
+            TXCreateItem(
+                broker_id=1,
+                asset_id=10,
+                type=TransactionType.BUY,
+                date=date.today(),
+                quantity=Decimal("1"),
+                cash=Currency(code="USD", amount=Decimal("-100")),
+                asset_event_id=42,
+            )
+
+    def test_asset_event_id_without_asset_id_rejected(self):
+        """asset_event_id requires asset_id even for event-compatible types."""
+        # INTEREST has asset_mode=OPTIONAL, so the only way asset_id is missing
+        # is when caller explicitly omits it.
+        with pytest.raises(ValidationError, match="asset_event_id requires asset_id"):
+            TXCreateItem(
+                broker_id=1,
+                type=TransactionType.INTEREST,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("5")),
+                asset_event_id=42,
+            )
+
+    def test_tx_read_item_roundtrip_with_asset_event_id(self):
+        """TXReadItem.from_db_model propagates asset_event_id."""
+        from backend.app.db.models import Transaction  # noqa: PLC0415
+        from backend.app.schemas.transactions import TXReadItem  # noqa: PLC0415
+        from backend.app.utils.datetime_utils import utcnow  # noqa: PLC0415
+
+        tx = Transaction(
+            id=1,
+            broker_id=1,
+            asset_id=10,
+            type=TransactionType.DIVIDEND,
+            date=date.today(),
+            quantity=Decimal("0"),
+            amount=Decimal("1.25"),
+            currency="USD",
+            asset_event_id=42,
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        read = TXReadItem.from_db_model(tx)
+        assert read.asset_event_id == 42
+
+    def test_tx_update_sentinel_zero_unlinks(self):
+        """TXUpdateItem accepts asset_event_id=0 as unlink sentinel."""
+        from backend.app.schemas.transactions import TXUpdateItem  # noqa: PLC0415
+
+        upd = TXUpdateItem(id=1, asset_event_id=0)
+        assert upd.asset_event_id == 0
+        # None = no change
+        upd_none = TXUpdateItem(id=1)
+        assert upd_none.asset_event_id is None
+        # Positive value = relink
+        upd_relink = TXUpdateItem(id=1, asset_event_id=99)
+        assert upd_relink.asset_event_id == 99
+
+    def test_tx_type_metadata_event_compatible_flags(self):
+        """Only DIVIDEND, INTEREST, ADJUSTMENT expose event_compatible=True."""
+        from backend.app.schemas.transactions import EVENT_COMPATIBLE_TYPES, TX_TYPE_METADATA  # noqa: PLC0415
+
+        expected_true = {TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.ADJUSTMENT}
+        assert EVENT_COMPATIBLE_TYPES == expected_true
+
+        true_in_meta = {t for t, m in TX_TYPE_METADATA.items() if m.event_compatible}
+        assert true_in_meta == expected_true
+        assert len(TX_TYPE_METADATA) == 11

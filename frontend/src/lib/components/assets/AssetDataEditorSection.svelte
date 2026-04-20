@@ -21,7 +21,7 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceDataImportModal from './PriceDataImportModal.svelte';
     import EventDataImportModal from './EventDataImportModal.svelte';
-    import {_ as t} from '$lib/i18n';
+    import {_ as t, locale} from '$lib/i18n';
 
     // =========================================================================
     // Props
@@ -123,7 +123,10 @@
 
     function eventsToEventRows(evts: any[]): DataRow[] {
         return evts.map((ev) => ({
-            rowId: ev.id != null ? String(ev.id) : crypto.randomUUID(),
+            // Use "new-<uuid>" for rows without a DB id so parseInt() cannot silently
+            // extract leading digits from a raw UUID (e.g. "83959abc-..." → 83959)
+            // and send a fake id to the delete endpoint.
+            rowId: ev.id != null ? String(ev.id) : `new-${crypto.randomUUID()}`,
             date: ev.date,
             status: 'original' as const,
             originalStatus: 'original' as const,
@@ -135,6 +138,7 @@
             },
             selected: false,
             readonly: ev.is_auto === true,
+            readonlyReason: ev.is_auto === true ? $t('dataEditor.autoEvent.tooltip') : undefined,
             _originalValues: {
                 type: ev.type ?? '',
                 amount: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
@@ -157,6 +161,15 @@
             prevEvents = events;
             eventRows = eventsToEventRows(events);
         }
+    });
+
+    // Re-translate readonlyReason on readonly rows whenever the UI language changes.
+    // We don't rebuild eventRows from scratch to preserve the user's pending edits/deletes.
+    $effect(() => {
+        // Depend on the locale store so this effect re-runs on language switch
+        $locale;
+        const newReason = $t('dataEditor.autoEvent.tooltip');
+        eventRows = eventRows.map((r) => (r.readonly ? {...r, readonlyReason: newReason} : r));
     });
 
     // =========================================================================
@@ -316,21 +329,51 @@
                         const id = parseInt(r.rowId, 10);
                         return !isNaN(id) && id > 0;
                     });
-                    // Delete in parallel (batch)
                     if (realDeletes.length > 0) {
-                        await Promise.all(
-                            realDeletes.map((r) =>
-                                zodiosApi.delete_event_api_v1_assets_events__event_id__delete(undefined, {
-                                    params: {event_id: parseInt(r.rowId, 10)},
-                                }),
-                            ),
+                        const idsToDelete = realDeletes.map((r) => parseInt(r.rowId, 10));
+                        // Single bulk call; backend returns per-item status (deleted/not_found/in_use).
+                        const bulkResp = await zodiosApi.delete_events_bulk_api_v1_assets_events_delete(undefined, {
+                            queries: {ids: idsToDelete},
+                        });
+                        const allResults = bulkResp.results ?? [];
+
+                        const deletedIds = new Set<number>(
+                            allResults.filter((r: any) => r.status === 'deleted').map((r: any) => r.event_id),
                         );
-                        parts.push(`${realDeletes.length} events deleted`);
+                        const blocked = allResults.filter((r: any) => r.status === 'in_use');
+                        const notFound = allResults.filter((r: any) => r.status === 'not_found');
+
+                        // Remove the deleted rows from the in-memory table so they don't linger.
+                        eventRows = eventRows.filter((row) => {
+                            const idNum = parseInt(row.rowId, 10);
+                            if (isNaN(idNum)) return true;
+                            return !deletedIds.has(idNum);
+                        });
+
+                        if (deletedIds.size > 0) parts.push(`${deletedIds.size} events deleted`);
+                        if (blocked.length > 0) {
+                            const blockedMsg = blocked
+                                .map((b: any) => {
+                                    const visible = b.accessible_transactions.length;
+                                    const hidden = b.hidden_transactions_count;
+                                    return `#${b.event_id} (used by ${visible} of yours${hidden ? `, ${hidden} hidden` : ''})`;
+                                })
+                                .join(', ');
+                            toasts.warning(`Some events cannot be deleted: ${blockedMsg}`);
+                        }
+                        if (notFound.length > 0) {
+                            toasts.warning(`Not found: ${notFound.map((r: any) => r.event_id).join(', ')}`);
+                        }
                     }
                 }
             }
 
-            toasts.success(`Asset data: ${parts.join(', ')}`);
+            // Only show success toast when there's something to report. Avoids the
+            // empty "Asset data:    " toast when an attempted delete was fully blocked
+            // by RESTRICT (in_use) — the warning toast already informs the user.
+            if (parts.length > 0) {
+                toasts.success(`Asset data: ${parts.join(', ')}`);
+            }
 
             // Compute expanded date range from appended price rows
             const appendedPrices = priceRows.filter((r) => r.status === 'appended');

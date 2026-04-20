@@ -355,5 +355,41 @@ def test_identifier_columns_match_enum():
     print(f"\n✅ All {total_checks} IdentifierType field mappings verified")
 
 
+def test_transactions_has_asset_event_fk_restrict():
+    """
+    Verify transactions.asset_event_id FK:
+    - Column exists and is nullable
+    - FK points to asset_events.id
+    - ON DELETE RESTRICT
+    - Dedicated index idx_transactions_asset_event is present
+    """
+    inspector = inspect(get_sync_engine())
+
+    # Column check
+    cols = {c["name"]: c for c in inspector.get_columns("transactions")}
+    assert "asset_event_id" in cols, "transactions.asset_event_id column missing"
+    assert cols["asset_event_id"]["nullable"] is True, "asset_event_id must be nullable"
+
+    # FK check
+    fks = inspector.get_foreign_keys("transactions")
+    target_fk = next(
+        (fk for fk in fks if fk["constrained_columns"] == ["asset_event_id"]),
+        None,
+    )
+    assert target_fk is not None, "FK on transactions.asset_event_id missing"
+    assert target_fk["referred_table"] == "asset_events"
+    assert target_fk["referred_columns"] == ["id"]
+    # SQLAlchemy exposes ondelete in options
+    on_delete = (target_fk.get("options") or {}).get("ondelete", "").upper()
+    assert on_delete == "RESTRICT", f"Expected ON DELETE RESTRICT, got '{on_delete}'"
+
+    # Index check
+    indexes = inspector.get_indexes("transactions")
+    index_names = {idx.get("name") for idx in indexes}
+    assert "idx_transactions_asset_event" in index_names, f"Expected index idx_transactions_asset_event, got: {index_names}"
+
+    print("✅ transactions.asset_event_id FK RESTRICT + index verified")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

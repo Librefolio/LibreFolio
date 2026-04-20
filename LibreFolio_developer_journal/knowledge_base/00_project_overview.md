@@ -69,8 +69,9 @@ LibreFolio/
 | Phase 5 | ✅ | FX Management, Charts, Signals, i18n Docs |
 | Phase 6 | ✅ | Asset Management (Steps 1-6, Part C, BMC integration) |
 | Phase 7 | 📋 | Transactions + BRIM Import UI |
-| Phase 8 | 📋 | Dashboard con KPI |
-| Phase 9 | 📋 | Polish & Responsive finale |
+| Phase 8 | 📋 | Market Data Scheduler (daemon + global settings) |
+| Phase 9 | 📋 | Dashboard con KPI |
+| Phase 10 | 📋 | Polish & Responsive finale |
 
 ---
 
