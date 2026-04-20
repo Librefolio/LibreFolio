@@ -147,7 +147,7 @@ class TestBRIME2EImport:
 
             # Step 3: Import via transactions endpoint
             import_response = await client.post(
-                f"{API_BASE}/transactions",
+                f"{API_BASE}/transactions/bulk",
                 json=transactions,
                 timeout=TIMEOUT,
             )
@@ -264,7 +264,7 @@ class TestBRIME2EImport:
             tx1 = parse1.json()["transactions"]
 
             # Import both
-            import1 = await client.post(f"{API_BASE}/transactions", json=tx1, timeout=TIMEOUT)
+            import1 = await client.post(f"{API_BASE}/transactions/bulk", json=tx1, timeout=TIMEOUT)
             assert import1.status_code == 200
 
             # Second upload with one new, one duplicate
@@ -298,7 +298,7 @@ class TestBRIME2EImport:
             # Import only unique
             if transactions_to_import:
                 import2 = await client.post(
-                    f"{API_BASE}/transactions",
+                    f"{API_BASE}/transactions/bulk",
                     json=transactions_to_import,
                     timeout=TIMEOUT,
                 )
@@ -343,7 +343,7 @@ class TestBRIME2EImport:
             tx1 = parse1.json()["transactions"]
 
             # Import first time
-            await client.post(f"{API_BASE}/transactions", json=tx1, timeout=TIMEOUT)
+            await client.post(f"{API_BASE}/transactions/bulk", json=tx1, timeout=TIMEOUT)
 
             # Second upload of same content
             files2 = {"file": (f"dup_test_{unique_id}_2.csv", io.BytesIO(csv_content), "text/csv")}

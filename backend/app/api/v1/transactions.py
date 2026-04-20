@@ -1,22 +1,24 @@
 """
 Transaction API endpoints for LibreFolio.
 
-Provides RESTful endpoints for transaction management:
-- POST /transactions: Bulk create transactions
-- GET /transactions: Query transactions with filters
-- GET /transactions/{id}: Get single transaction
-- PATCH /transactions: Bulk update transactions
-- DELETE /transactions: Bulk delete transactions
-- GET /transactions/types: Get transaction type metadata
+Part 3 atomic multi-broker API:
+- POST   /transactions/bulk           Atomic bulk create (spans multiple brokers)
+- PATCH  /transactions/bulk           Atomic bulk update
+- DELETE /transactions/bulk?ids=…     Atomic bulk delete
+- GET    /transactions                Query with filters (access-scoped)
+- GET    /transactions?ids=1,2,3      Batch read preserving input order
+- GET    /transactions/types          Transaction type metadata
 
-All endpoints require authentication. Users can only create/modify/delete
-transactions for brokers they have EDITOR or OWNER access to.
+Semantics:
+- Access control is EDITOR on every distinct `broker_id` touched by a batch.
+- Any failure → full session rollback, `rolled_back=True`, per-item `status`
+  diagnostic (`success | simulated | failed | not_attempted`).
+- GET /transactions is filtered to brokers the user can at least VIEW.
 """
 
-import traceback
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -30,7 +32,6 @@ from backend.app.schemas.transactions import (
     TXBulkDeleteResponse,
     TXBulkUpdateResponse,
     TXCreateItem,
-    TXDeleteItem,
     TXQueryParams,
     TXReadItem,
     TXTypeMetadata,
@@ -45,66 +46,45 @@ tx_router = APIRouter(prefix="/transactions", tags=["TX (Transactions)"])
 
 
 # =============================================================================
-# CREATE
+# CREATE (atomic bulk, multi-broker)
 # =============================================================================
 
 
-@tx_router.post("", response_model=TXBulkCreateResponse)
-async def create_transactions(
+@tx_router.post("/bulk", response_model=TXBulkCreateResponse)
+async def create_transactions_bulk(
     items: List[TXCreateItem],
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> TXBulkCreateResponse:
     """
-    Create multiple transactions.
+    Atomic bulk create of transactions spanning one or more brokers.
 
-    Requires EDITOR or OWNER role on each broker. For linked transactions
-    (TRANSFER, FX_CONVERSION), use the same link_uuid for both transactions.
+    Access check EDITOR is applied once per distinct `broker_id`.
+    Any failure (validation, balance, access) rolls back the entire batch
+    and returns `rolled_back=True` with per-item `status`. The router commits
+    only when `rolled_back=False`.
 
-    Args:
-        items: List of transactions to create
-
-    Returns:
-        TXBulkCreateResponse with results for each item
+    For linked transactions (TRANSFER, FX_CONVERSION) the two items must
+    share the same `link_uuid` and be in the same request — `link_uuid`
+    resolution is bidirectional (both rows point to each other).
     """
-    logger.info("Creating %d transactions", len(items), user_id=current_user.id)
+    # Cache user_id before session ops — rollback expires ORM objects, after
+    # which `current_user.id` would trigger a lazy-load and MissingGreenlet.
+    user_id = current_user.id
 
-    try:
-        logger.debug("Starting transaction creation service call", user_id=current_user.id)
-        service = TransactionService(session)
-        response = await service.create_bulk(items, user_id=current_user.id)
-        logger.debug(
-            "Service call completed, success_count=%d, errors=%d",
-            response.success_count,
-            len(response.errors),
-            user_id=current_user.id,
-        )
+    logger.info("Bulk create %d transactions", len(items), user_id=user_id)
 
-        # Commit if all succeeded
-        if response.success_count > 0 and not response.errors:
-            await session.commit()
-            logger.info(
-                "Created %d transactions successfully",
-                response.success_count,
-                user_id=current_user.id,
-            )
-        else:
-            await session.rollback()
-            if response.errors:
-                logger.warning("Transaction creation had errors: %s", response.errors, user_id=current_user.id)
+    service = TransactionService(session)
+    response = await service.create_bulk(items, user_id=user_id)
 
-        return response
-    except Exception as e:
-        # Catch any unexpected error and return it as a response instead of 500
-        import sys  # noqa: PLC0415 — lazy import / avoid circular
+    if not response.rolled_back:
+        await session.commit()
+        logger.info("Committed %d new transactions", response.success_count, user_id=user_id)
+    else:
+        await session.rollback()
+        logger.warning("Bulk create rolled back: %s", response.errors, user_id=user_id)
 
-        print(f"[CRITICAL] Transaction creation error: {e}", file=sys.stderr)
-        print(f"[CRITICAL] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
-        try:
-            await session.rollback()
-        except Exception as rollback_error:
-            print(f"[CRITICAL] Rollback error: {rollback_error}", file=sys.stderr)
-        return TXBulkCreateResponse(results=[], success_count=0, errors=[f"Unexpected error: {str(e)}"])
+    return response
 
 
 # =============================================================================
@@ -121,31 +101,19 @@ async def query_transactions(
     date_end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     tags: Optional[List[str]] = Query(None, description="Filter by tags"),
     currency: Optional[str] = Query(None, max_length=3, description="Filter by currency"),
+    ids: Optional[List[int]] = Query(None, description="Specific IDs to fetch, returned in input order (mutex with other filters)"),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> List[TXReadItem]:
     """
-    Query transactions with filters.
+    Query transactions with filters, scoped to brokers the user can VIEW.
 
-    All filters are optional. Results ordered by date desc, id desc.
-
-    Args:
-        broker_id: Filter by broker
-        asset_id: Filter by asset
-        types: Filter by transaction types
-        date_start: Filter by start date (inclusive)
-        date_end: Filter by end date (inclusive)
-        tags: Filter by tags (any match)
-        currency: Filter by currency code
-        limit: Max results (default 100, max 1000)
-        offset: Offset for pagination (first index to of list return (use if limit is low then the total size of the assets, to move the show window)
-
-    Returns:
-        List of matching transactions
+    When `ids` is provided, results are returned in the exact input order
+    (useful for preserving client-side sort); other filters besides access
+    are ignored.
     """
-    # Build date range if provided
     date_range = None
     if date_start:
         start = parse_ISO_date(date_start)
@@ -159,128 +127,79 @@ async def query_transactions(
         date_range=date_range,
         tags=tags,
         currency=currency,
+        ids=ids,
         limit=limit,
         offset=offset,
     )
 
     service = TransactionService(session)
-    return await service.query(params)
+    return await service.query(params, user_id=current_user.id)
 
 
 @tx_router.get("/types", response_model=List[TXTypeMetadata])
 async def get_transaction_types(_current_user: User = Depends(get_current_user)) -> List[TXTypeMetadata]:
-    """
-    Get metadata for all transaction types.
-
-    Returns icons, descriptions, and validation rules for each type.
-    Frontend uses this to validate user input and show correct UI.
-
-    Returns:
-        List of transaction type metadata
-    """
+    """Get metadata for all transaction types (icons, rules, signs)."""
     return list(TX_TYPE_METADATA.values())
 
 
-@tx_router.get("/{tx_id}", response_model=TXReadItem)
-async def get_transaction(
-    tx_id: int,
-    session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
-) -> TXReadItem:
-    """
-    Get a single transaction by ID.
-
-    Args:
-        tx_id: Transaction ID
-
-    Returns:
-        Transaction details
-
-    Raises:
-        HTTPException 404: If transaction not found
-    """
-    service = TransactionService(session)
-    result = await service.get_by_id(tx_id)
-
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Transaction {tx_id} not found")
-
-    return result
-
-
 # =============================================================================
-# UPDATE
+# UPDATE (atomic bulk, multi-broker)
 # =============================================================================
 
 
-@tx_router.patch("", response_model=TXBulkUpdateResponse)
-async def update_transactions(
+@tx_router.patch("/bulk", response_model=TXBulkUpdateResponse)
+async def update_transactions_bulk(
     items: List[TXUpdateItem],
     session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> TXBulkUpdateResponse:
     """
-    Update multiple transactions.
-
-    Only provided fields will be updated.
-    Type cannot be changed. related_transaction_id cannot be updated directly.
-
-    Args:
-        items: List of updates (each must include id)
-
-    Returns:
-        TXBulkUpdateResponse with results for each item
+    Atomic bulk update. Type cannot be changed; `related_transaction_id`
+    cannot be updated directly. `asset_event_id=0` unlinks (Part 1 sentinel).
     """
-    logger.info(f"Updating {len(items)} transactions")
+    user_id = current_user.id
+    logger.info("Bulk update %d transactions", len(items), user_id=user_id)
 
     service = TransactionService(session)
-    response = await service.update_bulk(items)
+    response = await service.update_bulk(items, user_id=user_id)
 
-    if not response.errors:
+    if not response.rolled_back:
         await session.commit()
-        logger.info(f"Updated {response.success_count} transactions successfully")
+        logger.info("Committed %d transaction updates", response.success_count, user_id=user_id)
     else:
         await session.rollback()
-        logger.warning(f"Transaction update had errors: {response.errors}")
+        logger.warning("Bulk update rolled back: %s", response.errors, user_id=user_id)
 
     return response
 
 
 # =============================================================================
-# DELETE
+# DELETE (atomic bulk, multi-broker)
 # =============================================================================
 
 
-@tx_router.delete("", response_model=TXBulkDeleteResponse)
-async def delete_transactions(
+@tx_router.delete("/bulk", response_model=TXBulkDeleteResponse)
+async def delete_transactions_bulk(
     ids: List[int] = Query(..., description="Transaction IDs to delete"),
     session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> TXBulkDeleteResponse:
     """
-    Delete multiple transactions.
-
-    For linked transactions, both must be included in the delete request.
-    Validates balances after deletion.
-
-    Args:
-        ids: List of transaction IDs to delete
-
-    Returns:
-        TXBulkDeleteResponse with results
+    Atomic bulk delete. Linked pairs (TRANSFER, FX_CONVERSION) must be
+    deleted together — include both IDs in `ids` or the whole batch is
+    rejected.
     """
-    logger.info(f"Deleting {len(ids)} transactions")
-
-    items = [TXDeleteItem(id=id_) for id_ in ids]
+    user_id = current_user.id
+    logger.info("Bulk delete %d transactions", len(ids), user_id=user_id)
 
     service = TransactionService(session)
-    response = await service.delete_bulk(items)
+    response = await service.delete_bulk(ids, user_id=user_id)
 
-    if not response.errors:
+    if not response.rolled_back:
         await session.commit()
-        logger.info(f"Deleted {response.total_deleted} transactions successfully")
+        logger.info("Committed %d transaction deletions", response.total_deleted, user_id=user_id)
     else:
         await session.rollback()
-        logger.warning(f"Transaction deletion had errors: {response.errors}")
+        logger.warning("Bulk delete rolled back: %s", response.errors, user_id=user_id)
 
     return response

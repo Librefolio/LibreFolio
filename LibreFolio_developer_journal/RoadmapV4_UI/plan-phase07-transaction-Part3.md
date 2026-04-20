@@ -9,6 +9,57 @@
 - [plan-phase07-transaction-Part1.md](./plan-phase07-transaction-Part1.md) ✅
 - [plan-phase07-transaction-Part2.prompt.md](./plan-phase07-transaction-Part2.prompt.md) ✅ (Revisione 2)
 
+---
+
+## 📌 Deviazioni dal piano originale
+
+### Dev-2026-04-20 — Multi-broker atomic (non broker-scoped)
+
+**Contesto**: il piano originale prevedeva `POST/PATCH/DELETE /brokers/{broker_id}/transactions/bulk`
+con rifiuto immediato di qualsiasi item con `broker_id ≠ path`. Conflitto scoperto con
+l'agent in sessione nuova: il test esistente `test_query_linked_tx_both_have_related_id`
+crea un `TRANSFER` cross-broker (`test_broker` + `test_broker_overdraft`) in un'unica
+`create_bulk` — caso d'uso reale perché la risoluzione `link_uuid → related_transaction_id`
+richiede DEFERRABLE FK all'interno della **stessa session DB**.
+
+**Use-case utente**: durante il rifinimento BRIM (parse di più file contemporaneamente)
+o un bonifico manuale da-a, è naturale avere un set di transazioni che tocca più broker
+come unica unità logica. BRIM non dirà mai "transazione linkata", lato utente è un
+insert unico.
+
+**Decisione**: gli endpoint bulk tornano su `/transactions/*` (non broker-scoped),
+accettano item su più broker, l'atomicità è a livello di batch:
+- Ogni `broker_id` distinto nel batch → access check `EDITOR`.
+- `_validate_broker_balances` chiamato per ogni broker toccato.
+- Qualsiasi violazione (FK, balance, access, broker mismatch su update) → rollback
+  totale + `rolled_back=True`.
+- Per-item `status: Literal["success","simulated","failed","not_attempted"]`.
+
+**Endpoint finali**:
+- `POST /transactions/bulk` (ex `POST /transactions`).
+- `PATCH /transactions/bulk` (ex `PATCH /transactions`).
+- `DELETE /transactions/bulk?ids=...` (ex `DELETE /transactions?ids=...`).
+- `POST /transactions/validate` (nuovo, non broker-scoped).
+- `GET /transactions?ids=...` (come da piano, con filtro broker accessibili).
+- `POST /transactions/events/suggest` (come da piano).
+- `GET /transactions/{tx_id}` **rimosso**.
+
+**Frontend TODO per Part 4/5**: la Staging Modal deve gestire draft multi-broker
+in un singolo set atomico (es. tabs per broker, preview bilanci multi-broker,
+indicazione visiva quando una coppia `link_uuid` attraversa broker).
+
+**Decisione break-API**: utente conferma pre-beta, posso rompere senza wrapper
+legacy. `TXCreateResultItem/TXUpdateResultItem/TXDeleteResult` ottengono un nuovo
+campo `status` tri-state + `success` resta per retro-logica semplice.
+
+### Dev-2026-04-20 — Commit A+B fusi
+
+Blocchi A (service) e B (router) sono inseparabili: cambiare le firme del
+service senza aggiornare il router lascia il backend non-compilante. Vengono
+committati insieme come "Part 3 Block A+B — multi-broker atomic transactions".
+
+---
+
 > **📌 Contesto**: piano unificato che raccoglie **Parte 3 API consolidation**
 > (full-bulk + atomic per-broker, come Revisione 2 del macro-plan), il sotto-piano
 > **3b events/suggest** (slider tolerance 0–7gg), e tutti i **deferred da Parte 1**
