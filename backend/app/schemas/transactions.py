@@ -38,6 +38,19 @@ from backend.app.utils.datetime_utils import UTCDateTime
 # =============================================================================
 
 
+# Transaction types that can be linked to an AssetEvent.
+# Rationale:
+# - DIVIDEND / INTEREST: direct cash realization of a global payout event
+# - ADJUSTMENT: captures SPLIT / PRICE_ADJUSTMENT asset-level effects
+EVENT_COMPATIBLE_TYPES: frozenset[TransactionType] = frozenset(
+    {
+        TransactionType.DIVIDEND,
+        TransactionType.INTEREST,
+        TransactionType.ADJUSTMENT,
+    }
+)
+
+
 def validate_tags_list(v) -> Optional[List[str]]:
     """
     Shared validator for tags field.
@@ -109,20 +122,18 @@ class TXCreateItem(BaseModel):
     cash: Optional[Currency] = Field(default=None, description="Cash movement (code + amount). Required for cash operations.")
 
     # Temporary linking for bulk create (not persisted)
-    link_uuid: Optional[str] = Field(
-        default=None,
-        max_length=36,
-        description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)",
-    )
+    link_uuid: Optional[str] = Field(default=None,max_length=36,description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)",)
 
     tags: Optional[List[str]] = Field(default=None, description="List of tags for filtering/grouping")
     description: Optional[str] = Field(default=None, max_length=500, description="Transaction notes")
 
     # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time
-    cost_basis_override: Optional[Decimal] = Field(
-        default=None,
-        description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
-    )
+    cost_basis_override: Optional[Decimal] = Field(default=None,description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",)
+
+    # Link to AssetEvent (realization of a global asset event in this portfolio).
+    # Only valid for event-compatible types (see EVENT_COMPATIBLE_TYPES).
+    # Cross-record check (asset_id must match event.asset_id) is done in service layer.
+    asset_event_id: Optional[int] = Field(default=None,gt=0,description="Link to AssetEvent (DIVIDEND/INTEREST/ADJUSTMENT only)")
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -133,6 +144,12 @@ class TXCreateItem(BaseModel):
     def validate_transaction_rules(self) -> TXCreateItem:
         """Validate transaction business rules based on 1.4 Constraint Analysis table."""
 
+        # TODO(frozenset): the inline tuples below (TRANSFER/FX_CONVERSION,
+        # DEPOSIT/WITHDRAWAL) and the local sets `asset_required_types` /
+        # `cash_required_types` are rebuilt on every validate call. Promote to
+        # module-level `frozenset[TransactionType]` constants (next to
+        # EVENT_COMPATIBLE_TYPES) for O(1) membership + immutability + no
+        # per-call allocation. Purely a cleanup: no behavior change.
         # Rule 1: TRANSFER and FX_CONVERSION require link_uuid
         if self.type in (TransactionType.TRANSFER, TransactionType.FX_CONVERSION):
             if not self.link_uuid:
@@ -198,6 +215,14 @@ class TXCreateItem(BaseModel):
             if self.cash is not None and not self.cash.is_zero():
                 raise ValueError("ADJUSTMENT should not have cash movement")
 
+        # Rule 9: asset_event_id requires event-compatible type + asset_id present.
+        # NOTE: cross-record check (asset_id == asset_event.asset_id) is in service layer.
+        if self.asset_event_id is not None:
+            if self.type not in EVENT_COMPATIBLE_TYPES:
+                raise ValueError(f"{self.type.value} cannot be linked to an asset_event " f"(only {sorted(t.value for t in EVENT_COMPATIBLE_TYPES)} can)")
+            if self.asset_id is None:
+                raise ValueError("asset_event_id requires asset_id")
+
         return self
 
     def get_amount(self) -> Decimal:
@@ -255,6 +280,9 @@ class TXReadItem(BaseModel):
     # Frozen cost basis for TRANSFER_IN (None for normal transactions)
     cost_basis_override: Optional[Decimal] = None
 
+    # Link to the AssetEvent realized by this transaction (None = stand-alone)
+    asset_event_id: Optional[int] = None
+
     created_at: UTCDateTime
     updated_at: UTCDateTime
 
@@ -294,6 +322,7 @@ class TXReadItem(BaseModel):
             tags=tags,
             description=tx.description,
             cost_basis_override=tx.cost_basis_override,
+            asset_event_id=tx.asset_event_id,
             created_at=tx.created_at,
             updated_at=tx.updated_at,
         )
@@ -339,6 +368,12 @@ class TXUpdateItem(BaseModel):
         default=None,
         description="Frozen cost basis for TRANSFER_IN. Set to override calculated cost basis.",
     )
+
+    # Link/unlink to AssetEvent:
+    # - None   -> leave asset_event_id unchanged
+    # - 0      -> UNLINK (set to NULL)
+    # - n > 0  -> link to the given AssetEvent (validated in service layer)
+    asset_event_id: Optional[int] = Field(default=None,ge=0,description="Link/unlink to AssetEvent. Use 0 to unlink, None to leave unchanged.")
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -501,6 +536,9 @@ class TXTypeMetadata(BaseModel):
     allowed_quantity_sign: SignType = Field(..., description="Allowed quantity sign")
     allowed_cash_sign: SignType = Field(..., description="Allowed cash amount sign")
 
+    # Whether this type can be linked to an AssetEvent (see EVENT_COMPATIBLE_TYPES)
+    event_compatible: bool = Field(..., description="Can be linked to an AssetEvent")
+
 
 # TODO: aggiornare le Icone passando le immagini di icone che svilupperemo
 # Precomputed metadata for all transaction types
@@ -515,6 +553,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="+",
         allowed_cash_sign="-",
+        event_compatible=False,
     ),
     TransactionType.SELL: TXTypeMetadata(
         code="SELL",
@@ -526,6 +565,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="-",
         allowed_cash_sign="+",
+        event_compatible=False,
     ),
     TransactionType.DIVIDEND: TXTypeMetadata(
         code="DIVIDEND",
@@ -537,6 +577,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="+",
+        event_compatible=True,
     ),
     TransactionType.INTEREST: TXTypeMetadata(
         code="INTEREST",
@@ -548,6 +589,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="+",
+        event_compatible=True,
     ),
     TransactionType.DEPOSIT: TXTypeMetadata(
         code="DEPOSIT",
@@ -559,6 +601,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="+",
+        event_compatible=False,
     ),
     TransactionType.WITHDRAWAL: TXTypeMetadata(
         code="WITHDRAWAL",
@@ -570,6 +613,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="-",
+        event_compatible=False,
     ),
     TransactionType.FEE: TXTypeMetadata(
         code="FEE",
@@ -581,6 +625,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="-",
+        event_compatible=False,
     ),
     TransactionType.TAX: TXTypeMetadata(
         code="TAX",
@@ -592,6 +637,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="-",
+        event_compatible=False,
     ),
     TransactionType.TRANSFER: TXTypeMetadata(
         code="TRANSFER",
@@ -603,6 +649,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=False,
         allowed_quantity_sign="+/-",
         allowed_cash_sign="0",
+        event_compatible=False,
     ),
     TransactionType.FX_CONVERSION: TXTypeMetadata(
         code="FX_CONVERSION",
@@ -614,6 +661,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="+/-",
+        event_compatible=False,
     ),
     TransactionType.ADJUSTMENT: TXTypeMetadata(
         code="ADJUSTMENT",
@@ -625,5 +673,6 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=False,
         allowed_quantity_sign="+/-",
         allowed_cash_sign="0",
+        event_compatible=True,
     ),
 }
