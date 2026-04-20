@@ -417,6 +417,25 @@ async def test_convert_currency(test_server):
             timeout=TIMEOUT,
         )
 
+        # Ensure a EUR/USD rate exists so the USD→EUR conversion below is
+        # self-contained (no implicit dependency on residual state from other
+        # tests). We insert a MANUAL rate for the window we will query.
+        manual_upsert = [
+            FXUpsertItem(
+                **{"date": today - timedelta(days=d)},
+                base="EUR",
+                quote="USD",
+                rate=Decimal("1.10"),
+                source="MANUAL",
+            )
+            for d in range(0, 3)
+        ]
+        await client.post(
+            f"{API_BASE}/fx/currencies/rate",
+            json=[r.model_dump(mode="json") for r in manual_upsert],
+            timeout=TIMEOUT,
+        )
+
         # Now convert (use List directly)
         conversions = [
             FXConversionRequest(

@@ -1,0 +1,5 @@
+date,type,quantity,amount,currency,asset,description
+2025-01-01,DEPOSIT,0,10000.00,EUR,,Initial funding
+NOT_A_DATE,BUY,10,-1000.00,EUR,AAPL,Row with unparseable date
+2025-01-03,SELL,-5,500.00,EUR,AAPL,Sell 5 shares
+

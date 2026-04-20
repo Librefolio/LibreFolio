@@ -1279,16 +1279,13 @@ def link_transactions_to_events(session: Session):
     session.add(apple_div_tx)
     session.commit()
 
-    print(
-        f"  ✅ Linked Transaction #{apple_div_tx.id} (DIVIDEND, {apple_div_tx.date}) "
-        f"→ AssetEvent #{apple_div_event.id} (Apple DIVIDEND, {apple_div_event.date})"
-    )
+    print(f"  ✅ Linked Transaction #{apple_div_tx.id} (DIVIDEND, {apple_div_tx.date}) " f"→ AssetEvent #{apple_div_event.id} (Apple DIVIDEND, {apple_div_event.date})")
     print("\n  🧪 Testing tip — RESTRICT-aware delete:")
     print(f"     • Open Asset detail for 'Apple Inc.' (asset_id={apple.id})")
     print(f"     • In the Events tab, try to delete event #{apple_div_event.id}")
-    print(f"     • Backend must respond status='in_use' with")
+    print("     • Backend must respond status='in_use' with")
     print(f"       accessible_transactions=[{apple_div_tx.id}], hidden=0")
-    print(f"     • UI must show a warning toast and keep the row visible.")
+    print("     • UI must show a warning toast and keep the row visible.")
 
 
 def populate_fx_rates(session: Session):

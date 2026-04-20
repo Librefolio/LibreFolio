@@ -929,7 +929,7 @@ async def upsert_events_bulk(
     are NOT affected — dedup is scoped by provider_assignment_id.
     """
     try:
-        result = await AssetSourceManager.bulk_upsert_events_manual(assets, session)
+        result = await AssetSourceManager.bulk_upsert_events(assets, session)
         results_list = [FAEventUpsertResult(**r) for r in result["results"]]
         return FABulkEventUpsertResponse(
             results=results_list,

@@ -45,6 +45,7 @@ export type BrimPlugin = z.infer<typeof schemas.BRIMPluginInfo>;
 export type BrimParseResponse = z.infer<typeof schemas.BRIMParseResponse>;
 
 /**
+/**
  * Asset mapping from parsed BRIM file.
  */
 export type BrimAssetMapping = z.infer<typeof schemas.BRIMAssetMapping>;

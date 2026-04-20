@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from typing import List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -128,6 +128,14 @@ class BRIMFileInfo(BaseModel):
         uploaded_by_user_id: ID of user who uploaded the file
         target_broker_id: ID of broker this file belongs to
         last_parse_result: Cached result from last successful parse
+        parsed_plugin_code: Plugin code used at last successful parse
+        parsed_plugin_version: Plugin version at last successful parse
+        parse_is_stale: Computed flag. True iff status==PARSED and
+            parsed_plugin_version differs from the plugin's current
+            version (i.e., the plugin code has been updated since the
+            cached parse was produced). The UI can use this to surface a
+            "Re-parse available" hint without introducing a new
+            persisted status.
     """
 
     file_id: str = Field(..., description="UUID identifier for the file")
@@ -142,6 +150,10 @@ class BRIMFileInfo(BaseModel):
     uploaded_by_user_id: Optional[int] = Field(default=None, description="ID of user who uploaded the file")
     target_broker_id: Optional[int] = Field(default=None, description="ID of broker this file belongs to")
     last_parse_result: Optional[dict] = Field(default=None, description="Cached result from last successful parse")
+    # Plugin versioning (for cache invalidation)
+    parsed_plugin_code: Optional[str] = Field(default=None, description="Plugin code used at last successful parse")
+    parsed_plugin_version: Optional[str] = Field(default=None, description="Plugin version at last successful parse")
+    parse_is_stale: bool = Field(default=False, description="True if cached parse was produced by an older plugin version and a re-parse is recommended")
 
 
 # =============================================================================
@@ -169,6 +181,27 @@ class BRIMExtractedAssetInfo(BaseModel):
     extracted_name: Optional[str] = Field(default=None, description="Asset name/description from report")
 
 
+# =============================================================================
+# PLUGIN PREVIEW METADATA
+# =============================================================================
+
+
+class BRIMPreviewColumn(BaseModel):
+    """Column metadata for the Staging Modal preview table.
+
+    The frontend uses this to render a dynamic table per plugin with
+    appropriate widths/alignments and i18n labels.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(..., description="Field key in the TX / event row")
+    label: str = Field(..., description="Column label (frontend passes through i18n)")
+    type: Literal["text", "number", "date", "currency", "enum", "boolean"] = Field(..., description="Data type of the column")
+    width: Optional[str] = Field(None, description="CSS width (e.g., '120px', '10%')")
+    align: Optional[Literal["left", "center", "right"]] = Field(None, description="Text alignment")
+
+
 class BRIMPluginInfo(BaseModel):
     """
     Information about an available import plugin.
@@ -179,6 +212,12 @@ class BRIMPluginInfo(BaseModel):
         description: Plugin description for UI
         supported_extensions: List of supported file extensions
         icon_url: URL to the broker's icon/logo (optional)
+        docs_url: URL to plugin documentation (optional)
+        plugin_version: Semver of the parsing logic. Bumped when the output
+            for the same file would change. The frontend compares this
+            with ``BRIMFileInfo.parsed_plugin_version`` to decide whether a
+            cached parse is stale.
+        preview_columns: Columns metadata for the Staging Modal preview
     """
 
     code: str = Field(..., description="Unique plugin identifier")
@@ -186,6 +225,9 @@ class BRIMPluginInfo(BaseModel):
     description: str = Field(..., description="Plugin description for UI")
     supported_extensions: List[str] = Field(default_factory=list, description="Supported file extensions (e.g., ['.csv', '.xlsx'])")
     icon_url: Optional[str] = Field(None, description="URL to broker icon/logo (absolute URL or relative path)")
+    docs_url: Optional[str] = Field(None, description="URL to the plugin documentation page")
+    plugin_version: str = Field(..., description="Semver of the parsing logic; bumped when plugin output would change for the same input")
+    preview_columns: List[BRIMPreviewColumn] = Field(default_factory=list, description="Columns metadata for the Staging Modal preview table")
 
 
 # =============================================================================
@@ -322,8 +364,35 @@ class BRIMParseResponse(BaseModel):
     warnings: List[str] = Field(default_factory=list, description="Parser warnings (skipped rows, ambiguous data, etc.)")
 
 
-# NOTE: No BRIMImportRequest schema needed.
+# =============================================================================
+# PARSE OUTPUT (plugin return value)
+# =============================================================================
+
+
+class BRIMParseOutput(BaseModel):
+    """Return type of ``BRIMProvider.parse()``.
+
+    Plugins must populate ``transactions`` and ``extracted_assets``.
+    ``warnings`` is optional (default empty list).
+
+    The plugin is a pure parser: it does NOT emit asset-level events.
+    Dividends as cash movements become ``TXCreateItem`` of type DIVIDEND;
+    dividends as asset metadata (per-share, market-wide) are populated by
+    the asset source providers (yfinance/JustETF/...) or manually by the
+    user from the asset UI, not by BRIM plugins.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    transactions: List[TXCreateItem] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    extracted_assets: Dict[int, BRIMExtractedAssetInfo] = Field(default_factory=dict)
+
+
+# NOTE: No atomic commit schema / endpoint.
 # After parsing, the client should:
-# 1. Resolve fake asset IDs to real asset IDs
-# 2. Submit transactions to POST /transactions (standard endpoint)
-# 3. Call PATCH /import/files/{file_id}/status to mark file as imported/failed
+# 1. Resolve fake asset IDs to real asset IDs (Staging Modal)
+# 2. Submit transactions to POST /brokers/{broker_id}/transactions/bulk
+#    (standard endpoint, atomic per-broker — see Phase 7 Part 3).
+# 3. The BRIM file status auto-transitions to PARSED/FAILED right after
+#    the /parse call; no additional state change is needed after commit.
