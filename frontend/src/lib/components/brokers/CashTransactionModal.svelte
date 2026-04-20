@@ -74,7 +74,7 @@
             // Create transaction - use cash object for cash movement
             // DEPOSIT: cash.amount > 0, WITHDRAWAL: cash.amount < 0
             const cashAmount = type === 'DEPOSIT' ? amount : -amount;
-            await zodiosApi.create_transactions_api_v1_transactions_post([
+			await zodiosApi.create_transactions_bulk_api_v1_transactions_bulk_post([
                 {
                     broker_id: brokerId,
                     type: type,

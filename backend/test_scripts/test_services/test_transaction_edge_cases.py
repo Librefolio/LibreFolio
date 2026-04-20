@@ -29,7 +29,7 @@ setup_test_database()
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetType, Broker, TransactionType
+from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem, TXQueryParams
@@ -119,9 +119,9 @@ class TestDecimalPrecision:
         tx_id = result.results[0].transaction_id
 
         # Retrieve and verify
-        tx = await service.get_by_id(tx_id)
+        tx = await session.get(Transaction, tx_id)
         assert tx is not None
-        assert tx.cash.amount == Decimal("0.000001")
+        assert tx.amount == Decimal("0.000001")
 
     @pytest.mark.asyncio
     async def test_decimal_precision_quantity(self, session, test_broker, test_asset):
@@ -159,7 +159,7 @@ class TestDecimalPrecision:
         tx_id = result.results[0].transaction_id
 
         # Retrieve and verify
-        tx = await service.get_by_id(tx_id)
+        tx = await session.get(Transaction, tx_id)
         assert tx is not None
         assert tx.quantity == Decimal("0.000001")
 
@@ -194,10 +194,10 @@ class TestDecimalPrecision:
         tx_id = result.results[0].transaction_id
 
         # Retrieve and verify
-        tx = await service.get_by_id(tx_id)
+        tx = await session.get(Transaction, tx_id)
         assert tx is not None
         # Should be exact for this size of number
-        assert tx.cash.amount == large_amount
+        assert tx.amount == large_amount
 
 
 # ============================================================================
@@ -452,7 +452,7 @@ class TestEmptyNullHandling:
         tx_id = result.results[0].transaction_id
 
         # Retrieve and verify
-        tx = await service.get_by_id(tx_id)
+        tx = await session.get(Transaction, tx_id)
         assert tx is not None
         assert tx.tags is None
 
@@ -478,7 +478,7 @@ class TestEmptyNullHandling:
         tx_id = result.results[0].transaction_id
 
         # Retrieve and verify
-        tx = await service.get_by_id(tx_id)
+        tx = await session.get(Transaction, tx_id)
         assert tx is not None
         assert tx.tags is None
 
@@ -504,7 +504,7 @@ class TestEmptyNullHandling:
         tx_id = result.results[0].transaction_id
 
         # Retrieve and verify
-        tx = await service.get_by_id(tx_id)
+        tx = await session.get(Transaction, tx_id)
         assert tx is not None
         assert tx.description is None
 

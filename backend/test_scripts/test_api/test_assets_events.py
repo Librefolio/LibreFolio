@@ -300,7 +300,7 @@ async def test_delete_event_bulk_in_use_returns_breakdown(test_server):
                 "asset_event_id": event_id,
             }
         ]
-        tx_resp = await client.post(f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT)
+        tx_resp = await client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
         assert tx_resp.status_code == 200, tx_resp.text
         tx_body = tx_resp.json()
         assert tx_body["success_count"] == 1, tx_body
@@ -348,7 +348,7 @@ async def test_delete_event_bulk_partial_success(test_server):
         )
         broker_id = br_resp.json()["results"][0]["broker_id"]
         await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=[
                 {
                     "broker_id": broker_id,
@@ -401,7 +401,7 @@ async def test_delete_event_bulk_no_partial_rollback(test_server):
         )
         broker_id = br_resp.json()["results"][0]["broker_id"]
         await client.post(
-            f"{API_BASE}/transactions",
+            f"{API_BASE}/transactions/bulk",
             json=[
                 {
                     "broker_id": broker_id,

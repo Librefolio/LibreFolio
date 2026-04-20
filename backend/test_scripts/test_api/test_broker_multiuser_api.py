@@ -266,7 +266,7 @@ class TestMultiUserRoles:
                 }
             ]
 
-            resp = await editor_client.post(f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT)
+            resp = await editor_client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
 
             assert resp.status_code == 200
             assert resp.json()["success_count"] == 1
@@ -296,13 +296,11 @@ class TestMultiUserRoles:
                 }
             ]
 
-            resp = await viewer_client.post(f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT)
+            resp = await viewer_client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
 
-            # Should fail - viewer has read-only access, EDITOR required
-            assert resp.status_code == 200
-            assert resp.json()["success_count"] == 0
-            assert resp.json()["results"][0]["success"] is False
-            assert "access denied" in resp.json()["results"][0]["error"].lower()
+            # Part 3: access check is batch-level → HTTP 403 (not per-item error).
+            assert resp.status_code == 403
+            assert "editor" in resp.json()["detail"].lower() or "access" in resp.json()["detail"].lower()
 
             print_success("✓ Viewer correctly blocked from creating transactions")
 
