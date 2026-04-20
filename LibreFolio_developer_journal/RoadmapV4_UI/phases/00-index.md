@@ -21,7 +21,8 @@ Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facil
 |------|-------------------|--------|
 | **Phase 6** | [→ plan-phase06-assets.md](../plan-phase06-assets.md) | 📋 Pianificato |
 | **Phase 7** | `plan-phase07-transactions.md` (da creare) | ⏳ |
-| **Phase 8** | `plan-phase08-dashboard.md` (da creare) | ⏳ |
+| **Phase 8** | `plan-phase08-scheduler.md` (da creare) | ⏳ |
+| **Phase 9** | `plan-phase09-dashboard.md` (da creare) | ⏳ |
 
 I sotto-piani di implementazione per ogni fase vanno in `phases/phase-XX-subplan/`.
 
@@ -40,18 +41,19 @@ I sotto-piani di implementazione per ogni fase vanno in `phases/phase-XX-subplan
 | **5**   | [phase-05-fx.md](./phase-05-fx.md)                                 | FX Currencies, Pair Sources, Sync          | ⏳      | 3      |
 | **6**   | [phase-06-assets.md](./phase-06-assets.md)                         | Assets: Dual View, Chart, Signals, Wizard  | 📋      | 7      |
 | **7**   | phase-07-transactions.md                                           | Transactions List, Add/Edit, Import        | ⏳      | 5      |
-| **8**   | [phase-08-dashboard.md](./phase-08-dashboard.md)                   | Dashboard con KPI e Charts                 | ⏳      | 3      |
-| **9**   | [phase-09-polish.md](./phase-09-polish.md)                         | UI Components, Responsive                  | ⏳      | 2      |
+| **8**   | [phase-08-scheduler.md](./phase-08-scheduler.md)                   | Market Data Scheduler (daemon + settings)  | ⏳      | 2      |
+| **9**   | [phase-09-dashboard.md](./phase-09-dashboard.md)                   | Dashboard con KPI e Charts                 | ⏳      | 3      |
+| **10**  | [phase-10-polish.md](./phase-10-polish.md)                         | UI Components, Responsive                  | ⏳      | 2      |
 
-**Totale stimato**: ~6 settimane (~31 giorni)
+**Totale stimato**: ~6,5 settimane (~33 giorni)
 
 ---
 
 ## 🎯 Priorità
 
 - **P0 (MVP)**: Phase 0, 1, 2, 2.5, 3, 4, 6, 7 (core funzionalità)
-- **P1 (Important)**: Phase 5, 8 (FX, Dashboard)
-- **P2 (Nice-to-have)**: Phase 9 (polish - fatto incrementalmente)
+- **P1 (Important)**: Phase 5, 8, 9 (FX, Scheduler, Dashboard)
+- **P2 (Nice-to-have)**: Phase 10 (polish - fatto incrementalmente)
 
 ---
 
@@ -97,10 +99,11 @@ I sotto-piani di implementazione per ogni fase vanno in `phases/phase-XX-subplan
 | 6         | 6        | Assets: Dual View, Chart, Signals, Wizard    |
 | 7-8       | 7        | Transactions + Fiscal + Multi-Import         |
 | 8         | 7.5      | File Preview                                 |
-| 9         | 8        | Dashboard + KPI + Dual Axis Charts           |
-| 10        | 9        | Polish & Responsive                          |
+| 9         | 8        | Market Data Scheduler (daemon + settings)    |
+| 10        | 9        | Dashboard + KPI + Dual Axis Charts           |
+| 11        | 10       | Polish & Responsive                          |
 
-**Totale stimato**: ~10 settimane (incluse fasi completate)
+**Totale stimato**: ~11 settimane (incluse fasi completate)
 
 ---
 

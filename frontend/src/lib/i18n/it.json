@@ -895,10 +895,16 @@
       "high": "Massimo",
       "low": "Minimo",
       "volume": "Volume",
-      "amount": "Importo"
+      "amount": "Importo",
+      "currency": "Valuta",
+      "type": "Tipo",
+      "notes": "Note"
     },
     "save": "Salva ({count})",
-    "saving": "Salvataggio…"
+    "saving": "Salvataggio…",
+    "autoEvent": {
+      "tooltip": "Generato automaticamente da un provider di prezzi. Le modifiche sono disabilitate perché verrebbero sovrascritte alla prossima sincronizzazione. Anche l'eliminazione è temporanea — il provider ricreerà l'evento alla prossima sync. Per rimuoverlo definitivamente, modifica la configurazione del provider dell'asset."
+    }
   },
   "sharedResource": {
     "syncAll": "Sinc. Tutto",

@@ -577,6 +577,7 @@ class Transaction(SQLModel, table=True):
         Index("idx_transactions_broker_date", "broker_id", "date", "id"),
         Index("idx_transactions_asset_date", "asset_id", "date"),
         Index("idx_transactions_related", "related_transaction_id"),
+        Index("idx_transactions_asset_event", "asset_event_id"),
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -647,6 +648,22 @@ class Transaction(SQLModel, table=True):
         default=None,
         sa_column=Column(Numeric(18, 6), nullable=True),
         description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
+    )
+
+    # Link to AssetEvent (global asset-level event realized in this portfolio).
+    # NULL = stand-alone transaction. When set, validates that
+    # asset_id == asset_event.asset_id (via service layer DB lookup) and
+    # that transaction type is "event_compatible" (DIVIDEND, INTEREST, ADJUSTMENT).
+    # ondelete=RESTRICT: event cannot be deleted while referenced by transactions.
+    # This is consistent with Asset↔Transaction integrity policy (preserves user data).
+    asset_event_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("asset_events.id", ondelete="RESTRICT"),
+            nullable=True,
+        ),
+        description="FK to AssetEvent this transaction realizes. RESTRICT on delete.",
     )
 
     created_at: datetime = Field(default_factory=utcnow)

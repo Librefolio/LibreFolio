@@ -231,6 +231,16 @@
                         type: 'enum',
                         enumOptions: options.map((o) => ({value: o.value, label: `${o.emoji ? o.emoji + ' ' : ''}${o.label}`})),
                         cell: (r) => {
+                            // Build a small "🔒" badge appended to the readonly label when the row
+                            // has a `readonlyReason` (e.g. auto-generated events). The actual
+                            // explanatory text is shown via the proper Tooltip component (see
+                            // DataTable HtmlCell.tooltip), not via the native HTML title attribute.
+                            const readonlyBadge = r.readonlyReason
+                                ? ` <span class="ml-1 inline-flex items-center align-middle opacity-70 cursor-help">🔒</span>`
+                                : '';
+                            const tooltipMeta = r.readonlyReason
+                                ? {text: r.readonlyReason, position: 'top' as const, maxWidth: '360px'}
+                                : undefined;
                             if (r.readonly) {
                                 const opt = options.find((o) => o.value === r.values[col.key]);
                                 if (opt?.tooltip) {
@@ -239,13 +249,15 @@
                                     const docsUrl = opt.docsPath ? `/mkdocs/${prefix}${opt.docsPath}/` : '';
                                     return {
                                         type: 'html',
-                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${opt.tooltip}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${docsUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}</span>`,
+                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${opt.tooltip}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${docsUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
+                                        tooltip: tooltipMeta,
                                     };
                                 }
                                 const label = opt ? `${opt.emoji ? opt.emoji + ' ' : ''}${opt.label}` : String(r.values[col.key] ?? '—');
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${label}</span>`,
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${label}${readonlyBadge}</span>`,
+                                    tooltip: tooltipMeta,
                                 };
                             }
                             return {

@@ -1224,6 +1224,73 @@ def populate_asset_events(session: Session):
     print(f"\n  📊 Total: {len(events_data)} events created")
 
 
+def link_transactions_to_events(session: Session):
+    """
+    Link a few existing DIVIDEND/INTEREST transactions to their corresponding AssetEvent.
+
+    This produces fixture data needed to test the RESTRICT-aware delete flow on
+    AssetEvent (Phase 7 Part 1):
+    - The linked AssetEvent cannot be deleted via DELETE /assets/events?ids=...
+      and the response must include the referencing transaction id in
+      `accessible_transactions` (since the referencing tx belongs to a broker
+      the test user can access).
+
+    Strategy: take the most recent manual Apple DIVIDEND event and link the
+    Apple DIVIDEND transaction (Interactive Brokers, ~8 days ago) to it.
+    """
+    print("\n🔗 Linking sample transactions to AssetEvents...")
+    print("-" * 60)
+
+    apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
+    if apple is None:
+        print("  ⚠️  Apple asset not found — skipping link step")
+        return
+
+    # Pick the most recent manual DIVIDEND event for Apple (provider_assignment_id IS NULL)
+    apple_div_event = session.exec(
+        select(AssetEvent)
+        .where(
+            AssetEvent.asset_id == apple.id,
+            AssetEvent.type == AssetEventType.DIVIDEND,
+            AssetEvent.provider_assignment_id.is_(None),  # type: ignore[union-attr]
+        )
+        .order_by(AssetEvent.date.desc())  # type: ignore[union-attr]
+    ).first()
+
+    if apple_div_event is None:
+        print("  ⚠️  No manual DIVIDEND event for Apple — skipping link step")
+        return
+
+    # Pick a DIVIDEND transaction on Apple (any broker)
+    apple_div_tx = session.exec(
+        select(Transaction)
+        .where(
+            Transaction.asset_id == apple.id,
+            Transaction.type == TransactionType.DIVIDEND,
+        )
+        .order_by(Transaction.date.desc())  # type: ignore[union-attr]
+    ).first()
+
+    if apple_div_tx is None:
+        print("  ⚠️  No DIVIDEND transaction for Apple — skipping link step")
+        return
+
+    apple_div_tx.asset_event_id = apple_div_event.id
+    session.add(apple_div_tx)
+    session.commit()
+
+    print(
+        f"  ✅ Linked Transaction #{apple_div_tx.id} (DIVIDEND, {apple_div_tx.date}) "
+        f"→ AssetEvent #{apple_div_event.id} (Apple DIVIDEND, {apple_div_event.date})"
+    )
+    print("\n  🧪 Testing tip — RESTRICT-aware delete:")
+    print(f"     • Open Asset detail for 'Apple Inc.' (asset_id={apple.id})")
+    print(f"     • In the Events tab, try to delete event #{apple_div_event.id}")
+    print(f"     • Backend must respond status='in_use' with")
+    print(f"       accessible_transactions=[{apple_div_tx.id}], hidden=0")
+    print(f"     • UI must show a warning toast and keep the row visible.")
+
+
 def populate_fx_rates(session: Session):
     """Populate FX rates for the last 30 days."""
     print("\n💱 Creating FX Rates...")
@@ -1728,6 +1795,7 @@ def main():
             populate_transactions(session)
             populate_price_history(session)
             populate_asset_events(session)
+            link_transactions_to_events(session)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
             configure_user_avatars(session)

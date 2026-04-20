@@ -24,7 +24,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
+from backend.app.db.models import Asset, AssetEvent, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
 from backend.app.schemas.transactions import (
     TXBulkCreateResponse,
     TXBulkDeleteResponse,
@@ -76,6 +76,26 @@ class TransactionService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    # =========================================================================
+    # CROSS-RECORD VALIDATION HELPERS
+    # =========================================================================
+
+    async def _validate_asset_event_link(self, asset_event_id: int, expected_asset_id: int) -> None:
+        """
+        Verify that the referenced AssetEvent exists and belongs to expected_asset_id.
+
+        Pydantic covers type/asset_id presence rules; this helper handles the
+        cross-record check that requires a DB lookup.
+
+        Raises:
+            ValueError: if the event is missing or belongs to another asset.
+        """
+        event = await self.session.get(AssetEvent, asset_event_id)
+        if event is None:
+            raise ValueError(f"asset_event_id={asset_event_id} not found")
+        if event.asset_id != expected_asset_id:
+            raise ValueError(f"asset_event_id={asset_event_id} belongs to asset {event.asset_id}, " f"not {expected_asset_id}")
 
     # =========================================================================
     # ACCESS CONTROL
@@ -172,6 +192,12 @@ class TransactionService:
                         )
                         continue
 
+                # Cross-record validation for asset_event_id (type/asset_id
+                # presence already enforced by Pydantic).
+                if item.asset_event_id is not None:
+                    assert item.asset_id is not None  # Guaranteed by Pydantic Rule 9
+                    await self._validate_asset_event_link(item.asset_event_id, item.asset_id)
+
                 tx = Transaction(
                     broker_id=item.broker_id,
                     asset_id=item.asset_id,
@@ -183,6 +209,7 @@ class TransactionService:
                     tags=item.get_tags_csv(),
                     description=item.description,
                     cost_basis_override=item.cost_basis_override,
+                    asset_event_id=item.asset_event_id,
                     created_at=utcnow(),
                     updated_at=utcnow(),
                 )
@@ -351,6 +378,17 @@ class TransactionService:
 
                 if item.cost_basis_override is not None:
                     tx.cost_basis_override = item.cost_basis_override
+
+                # asset_event_id update with sentinel 0 = unlink
+                if item.asset_event_id is not None:
+                    if item.asset_event_id == 0:
+                        tx.asset_event_id = None
+                    else:
+                        # Validate that the event belongs to this tx's asset.
+                        if tx.asset_id is None:
+                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
+                        await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
+                        tx.asset_event_id = item.asset_event_id
 
                 tx.updated_at = utcnow()
 

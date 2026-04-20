@@ -1,4 +1,6 @@
-# Phase 9: Polish & Responsive
+# Phase 10: Polish & Responsive
+
+> **Renumbering note (2026-04-20)**: this phase was originally Phase 9. After the insertion of Phase 8 (Market Data Scheduler) it has been renumbered to Phase 10.
 
 **Status**: ⏳ ONGOING (fatto incrementalmente)  
 **Durata**: 2 giorni (distribuiti)  

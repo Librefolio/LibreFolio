@@ -2,7 +2,7 @@ Note migliorative da fare ma alla fine:
 
 > **📌 Riferimento generale**: [`plan-phase05-to-08-upgrade.md`](../plan-phase05-to-08-upgrade.md) per la roadmap completa.
 > Molte delle note sotto sono state **parzialmente risolte** durante Phase 4.5–4.8 (Image Crop, Code Dedup, MkDocs).
-> Le note restanti (🔲) sono candidate per Phase 9+ o fasi successive.
+> Le note restanti (🔲) sono candidate per Phase 10+ o fasi successive.
 > Per i **TODO futuri** non legati direttamente alle fasi, vedi anche `TODO_FUTURI.md` nella root del progetto.
 
 1. ✅ COMPLETATO (14-01-2026): Quando si cambia pw o si crea un utente, aggiungere un componente che indica il livello di sicurezza della pw, e quando non si rispettano i parametri,
@@ -176,7 +176,7 @@ Note migliorative da fare ma alla fine:
 
 4. ✅ **Unificazione PreferencesTab/GlobalSettingsTab**: Parzialmente completata
     - `ModalBase.svelte` creato e usato ovunque
-    - Rif. `plan-phase05-to-08-upgrade.md` Phase 9 per ulteriore polish
+    - Rif. `plan-phase05-to-08-upgrade.md` Phase 10 per ulteriore polish (era Phase 9, rinumerata dopo l'inserimento di Phase 8 — Scheduler)
 
 ### Media Priorità
 
@@ -186,8 +186,8 @@ Note migliorative da fare ma alla fine:
     - Da implementare DOPO Phase 7 per avere contesto BRIM completo
 
 6. 🔲 **Plugin Settings Tab**: Mostrare info sui plugin (brim, fx, asset)
-    - Rif. `TODO_FUTURI.md` — candidato per Phase 9+
+    - Rif. `TODO_FUTURI.md` — candidato per Phase 10+
 
 7. 🔲 **Documentazione multilingua**: Scrivere docs in tutte le lingue frontend
-    - Rif. `TODO_FUTURI.md` — candidato per Phase 9+
+    - Rif. `TODO_FUTURI.md` — candidato per Phase 10+
 

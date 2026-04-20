@@ -895,10 +895,16 @@
       "high": "Máximo",
       "low": "Mínimo",
       "volume": "Volumen",
-      "amount": "Importe"
+      "amount": "Importe",
+      "currency": "Divisa",
+      "type": "Tipo",
+      "notes": "Notas"
     },
     "save": "Guardar ({count})",
-    "saving": "Guardando…"
+    "saving": "Guardando…",
+    "autoEvent": {
+      "tooltip": "Generado automáticamente por un proveedor de precios. Las ediciones están deshabilitadas porque se sobrescribirían en la próxima sincronización. La eliminación también es temporal — el proveedor volverá a crear el evento en la próxima sync. Para eliminarlo de forma permanente, modifica la configuración del proveedor del activo."
+    }
   },
   "sharedResource": {
     "syncAll": "Sinc. Todo",

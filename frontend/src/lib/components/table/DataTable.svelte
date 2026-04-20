@@ -1131,7 +1131,13 @@
                                                 </button>
                                             </div>
                                         {:else if cellContent.type === 'html'}
-                                            {@html cellContent.html}
+                                            {#if cellContent.tooltip}
+                                                <Tooltip text={cellContent.tooltip.text} position={cellContent.tooltip.position ?? 'top'} maxWidth={cellContent.tooltip.maxWidth ?? '320px'}>
+                                                    <span>{@html cellContent.html}</span>
+                                                </Tooltip>
+                                            {:else}
+                                                {@html cellContent.html}
+                                            {/if}
                                         {/if}
                                     {/if}
                                 </td>

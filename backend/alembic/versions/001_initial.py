@@ -273,21 +273,24 @@ def upgrade() -> None:
                    tags                   TEXT,
                    description            TEXT,
                    cost_basis_override    NUMERIC(18, 6),
+                   asset_event_id         INTEGER,
                    created_at             DATETIME       NOT NULL,
                    updated_at             DATETIME       NOT NULL,
                    FOREIGN KEY (broker_id) REFERENCES brokers (id),
                    FOREIGN KEY (asset_id) REFERENCES assets (id),
                    FOREIGN KEY (related_transaction_id) REFERENCES transactions (id)
-                       DEFERRABLE INITIALLY DEFERRED
+                       DEFERRABLE INITIALLY DEFERRED,
+                   FOREIGN KEY (asset_event_id) REFERENCES asset_events (id) ON DELETE RESTRICT
                )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE INDEX idx_transactions_broker_date ON transactions (broker_id, date, id)"))
     conn.execute(sa.text("CREATE INDEX idx_transactions_asset_date ON transactions (asset_id, date)"))
     conn.execute(sa.text("CREATE INDEX idx_transactions_related ON transactions (related_transaction_id)"))
+    conn.execute(sa.text("CREATE INDEX idx_transactions_asset_event ON transactions (asset_event_id)"))
     conn.execute(sa.text("CREATE INDEX ix_transactions_broker_id ON transactions (broker_id)"))
     conn.execute(sa.text("CREATE INDEX ix_transactions_asset_id ON transactions (asset_id)"))
     conn.execute(sa.text("CREATE INDEX ix_transactions_date ON transactions (date)"))
-    print("  ✓ 6 Indexes created")
+    print("  ✓ 7 Indexes created")
 
     print("=" * 60)
     print("✅ Migration 001_initial completed successfully!")

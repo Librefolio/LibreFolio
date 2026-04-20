@@ -895,10 +895,16 @@
       "high": "Haut",
       "low": "Bas",
       "volume": "Volume",
-      "amount": "Montant"
+      "amount": "Montant",
+      "currency": "Devise",
+      "type": "Type",
+      "notes": "Notes"
     },
     "save": "Enregistrer ({count})",
-    "saving": "Enregistrement…"
+    "saving": "Enregistrement…",
+    "autoEvent": {
+      "tooltip": "Généré automatiquement par un fournisseur de prix. Les modifications sont désactivées car elles seraient écrasées à la prochaine synchronisation. La suppression est également temporaire — le fournisseur recréera l'événement à la prochaine sync. Pour le retirer définitivement, modifiez la configuration du fournisseur de l'actif."
+    }
   },
   "sharedResource": {
     "syncAll": "Sync. Tout",

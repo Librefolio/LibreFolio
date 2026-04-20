@@ -35,7 +35,7 @@ from backend.app.schemas.prices import (
     FABulkEventUpsertResponse,
     FABulkUpsertResponse,
     FACurrentPriceResponse,
-    FAEventDeleteResult,
+    FAEventBulkDeleteResponse,
     FAEventQueryItem,
     FAEventQueryResponse,
     # Event schemas
@@ -940,22 +940,28 @@ async def upsert_events_bulk(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@event_router.delete("/{event_id}", response_model=FAEventDeleteResult)
-async def delete_event(
-    event_id: int,
+@event_router.delete("", response_model=FAEventBulkDeleteResponse)
+async def delete_events_bulk(
+    ids: List[int] = Query(..., description="Event IDs to delete"),
     session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete a single event by its primary key.
+    """Bulk delete asset events with RESTRICT-aware response.
 
-    Works for both auto-generated and manual events.
-    Auto events will be recreated on next provider sync.
+    For each id, returns one of:
+    - ``deleted``: event removed
+    - ``not_found``: id didn't match any event
+    - ``in_use``: blocked by FK because referenced by transactions; response
+      includes ``accessible_transactions`` (tx ids current user can access)
+      and ``hidden_transactions_count`` (refs owned by other users).
+
+    Always returns HTTP 200. Successful deletions are committed even if others
+    are blocked (no partial rollback). Frontend inspects per-item ``results``.
     """
     try:
-        result = await AssetSourceManager.delete_event_by_id(event_id, session)
-        return FAEventDeleteResult(**result)
+        return await AssetSourceManager.delete_events_bulk(ids, session, current_user)
     except Exception as e:
-        logger.error(f"Error deleting event {event_id}: {e}")
+        logger.error(f"Error in bulk delete events: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
