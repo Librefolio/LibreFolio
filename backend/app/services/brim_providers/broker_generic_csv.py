@@ -31,12 +31,12 @@ import csv
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -354,7 +354,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
         """
         Parse CSV file and return transactions, warnings, and extracted assets.
 
@@ -418,7 +418,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         if not transactions:
             warnings.append("No valid transactions found in file")
 
-        return transactions, warnings, self._extracted_assets_raw
+        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=self._extracted_assets_raw)
 
     def _detect_columns(self, fieldnames: List[str]) -> Dict[str, str]:
         """
@@ -589,3 +589,17 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         # Otherwise treat as name
         return BRIMExtractedAssetInfo(extracted_symbol=None, extracted_isin=None, extracted_name=identifier)
+
+    @property
+    def docs_url(self) -> Optional[str]:
+        return "/mkdocs/user/brokers/generic-csv/"
+
+    def preview_columns(self) -> List[BRIMPreviewColumn]:
+        return [
+            BRIMPreviewColumn(key="date", label="brim.preview.date", type="date", width="110px", align="left"),
+            BRIMPreviewColumn(key="type", label="brim.preview.type", type="enum", width="110px", align="left"),
+            BRIMPreviewColumn(key="quantity", label="brim.preview.quantity", type="number", width="110px", align="right"),
+            BRIMPreviewColumn(key="asset", label="brim.preview.asset", type="text", align="left"),
+            BRIMPreviewColumn(key="cash_amount", label="brim.preview.cash_amount", type="number", width="120px", align="right"),
+            BRIMPreviewColumn(key="cash_currency", label="brim.preview.cash_currency", type="text", width="70px", align="center"),
+        ]

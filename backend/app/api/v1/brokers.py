@@ -694,7 +694,10 @@ async def parse_file(
 
     try:
         # 1. Parse file using plugin (plugin only reads file format)
-        transactions, warnings, extracted_assets = brim_provider.parse_file(file_id=file_id, plugin_code=plugin_code, broker_id=request.broker_id)
+        parse_output = brim_provider.parse_file(file_id=file_id, plugin_code=plugin_code, broker_id=request.broker_id)
+        transactions = parse_output.transactions
+        warnings = parse_output.warnings
+        extracted_assets = parse_output.extracted_assets
 
         # 2. Build asset mappings (CORE responsibility)
         # Search DB for candidates for each extracted asset
@@ -741,8 +744,16 @@ async def parse_file(
             warnings=warnings,
         )
 
-        # Cache the parse result in file metadata for later retrieval
-        brim_provider.save_parse_result(file_id, response.model_dump(mode="json"))
+        # Cache the parse result in file metadata for later retrieval.
+        # The current plugin_version is resolved by save_parse_result via
+        # the registry (single source of truth) and persisted alongside
+        # plugin_code so BRIMFileInfo can compute parse_is_stale if the
+        # plugin is bumped later.
+        brim_provider.save_parse_result(
+            file_id,
+            response.model_dump(mode="json"),
+            plugin_code=plugin_code,
+        )
 
         logger.info(
             "File parsed with asset mapping and duplicate detection",

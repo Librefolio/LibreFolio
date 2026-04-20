@@ -1,5 +1,11 @@
 # Git Commit Message Format
 
+## Language
+
+- **Always write commit messages in English**, including subject and body.
+  This applies to every commit regardless of the language used in the
+  conversation, the plan files, or the codebase comments.
+
 ## Structure
 
 ```
@@ -81,4 +87,5 @@ feat(phase6-step3): Round 5 complete — testing feedback plan ready
 - ❌ Don't end with period: `fix: something.` → `fix: something`
 - ❌ Don't use past tense: `fixed bug` → `fix bug`
 - ❌ Don't write generic messages: `update files` → describe what changed
+- ❌ Don't write in Italian or any non-English language: `fix: correggi bug` → `fix: correct bug`
 

@@ -47,11 +47,12 @@ from backend.app.schemas.brim import (
     BRIMDuplicateLevel,
     BRIMDuplicateMatch,
     BRIMDuplicateReport,
-    BRIMExtractedAssetInfo,
     BRIMFileInfo,
     BRIMFileStatus,
     BRIMMatchConfidence,
+    BRIMParseOutput,
     BRIMPluginInfo,
+    BRIMPreviewColumn,
     BRIMTXDuplicateCandidate,
     is_fake_asset_id,
 )
@@ -271,9 +272,10 @@ class BRIMProvider(ABC):
         pass
 
     @abstractmethod
-    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
         """
-        Parse file and return transactions, warnings, and extracted asset info.
+        Parse file and return a ``BRIMParseOutput`` with transactions, warnings,
+        extracted assets and optional asset-level events.
 
         **Plugin Responsibility:**
         - Read the broker-specific file format
@@ -281,6 +283,8 @@ class BRIMProvider(ABC):
         - Extract asset identifiers (symbol, ISIN, name) from the file
         - Group same-asset transactions under the same fake_asset_id
         - Collect warnings for skipped/problematic rows
+        - Optionally populate ``asset_events`` for plugins that extract
+          asset-level events (e.g. dividends in IBKR / Schwab reports)
 
         **Core Responsibility (NOT plugin):**
         - Search DB for asset candidates using extracted info
@@ -292,13 +296,44 @@ class BRIMProvider(ABC):
             broker_id: Target broker ID for all transactions
 
         Returns:
-            Tuple of (transactions, warnings, extracted_assets)
-            - transactions: List of TXCreateItem DTOs (with fake asset IDs)
-            - warnings: List of warning messages (skipped rows, etc.)
-            - extracted_assets: Dict mapping fake_asset_id -> BRIMExtractedAssetInfo
+            BRIMParseOutput with:
+              - transactions: List[TXCreateItem] (with fake asset IDs)
+              - warnings: List[str]
+              - extracted_assets: Dict[int, BRIMExtractedAssetInfo]
 
         Raises:
             BRIMParseError: If file cannot be parsed
+        """
+        pass
+
+    @property
+    def docs_url(self) -> Optional[str]:
+        """URL to the plugin's documentation page. Default: None.
+
+        Override in subclasses to provide a user-facing doc link, e.g.
+        to the MkDocs page describing the expected file format.
+        """
+        return None
+
+    @property
+    def plugin_version(self) -> str:
+        """Semver of the parsing logic. Default: "1.0.0".
+
+        **Contract:** bump this string whenever the plugin's output for
+        the same input would change (new columns, different row
+        filtering, fixed bug in type detection, etc.). The frontend
+        compares this value with ``BRIMFileInfo.parsed_plugin_version``
+        to surface a "re-parse available" hint for files whose cached
+        parse was produced by an older version.
+        """
+        return "1.0.0"
+
+    @abstractmethod
+    def preview_columns(self) -> List[BRIMPreviewColumn]:
+        """Columns metadata used by the Staging Modal preview table.
+
+        Mandatory — every plugin must declare at least the baseline
+        columns (date, type, quantity, asset, cash_amount, cash_currency).
         """
         pass
 
@@ -317,20 +352,16 @@ class BRIMProvider(ABC):
         return None
 
     def to_plugin_info(self) -> BRIMPluginInfo:
-        """Convert provider to BRIMPluginInfo DTO.
-
-        # TODO: Add a `docs_url` property (like AssetSourceProvider.provider_help_url
-        #  and FXProvider.docs_url) so each BRIM plugin can expose its own
-        #  documentation URL.  When implemented, update:
-        #  - BRIMPluginInfo schema (backend/app/schemas/brim.py)
-        #  - AboutTab.svelte to use the API field instead of getDocsUrl()
-        """
+        """Convert provider to BRIMPluginInfo DTO."""
         return BRIMPluginInfo(
             code=self.provider_code,
             name=self.provider_name,
             description=self.description,
             supported_extensions=self.supported_extensions,
             icon_url=self.icon_url,
+            docs_url=self.docs_url,
+            plugin_version=self.plugin_version,
+            preview_columns=self.preview_columns(),
         )
 
     def shutdown(self) -> None:  # pragma: no cover  # noqa: B027 — intentional no-op default
@@ -474,6 +505,81 @@ def save_uploaded_file(
     )
 
 
+def _build_file_info_from_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
+    """
+    Parse a metadata JSON sidecar into a :class:`BRIMFileInfo`.
+
+    Returns ``None`` if the file does not exist or the JSON is malformed.
+    Computes ``parse_is_stale`` lazily by comparing the persisted
+    ``parsed_plugin_version`` with the current plugin version in the registry.
+
+    This is the single source of truth for metadata deserialization;
+    it replaces the previously duplicated inner helpers in ``list_files``
+    and ``get_file_info``.
+    """
+    if not meta_path.exists():
+        return None
+    try:
+        metadata = json.loads(meta_path.read_text())
+        status = BRIMFileStatus(metadata["status"])
+        parsed_plugin_code = metadata.get("parsed_plugin_code")
+        parsed_plugin_version = metadata.get("parsed_plugin_version")
+
+        parse_is_stale = False
+        if status == BRIMFileStatus.PARSED and parsed_plugin_code and parsed_plugin_version:
+            plugin = BRIMProviderRegistry.get_provider_instance(parsed_plugin_code)
+            if plugin is not None and plugin.plugin_version != parsed_plugin_version:
+                parse_is_stale = True
+
+        return BRIMFileInfo(
+            file_id=metadata["file_id"],
+            filename=metadata["filename"],
+            size_bytes=metadata["size_bytes"],
+            status=status,
+            uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
+            processed_at=(datetime.fromisoformat(metadata["processed_at"]) if metadata.get("processed_at") else None),
+            compatible_plugins=metadata.get("compatible_plugins", []),
+            error_message=metadata.get("error_message"),
+            uploaded_by_user_id=metadata.get("uploaded_by_user_id"),
+            target_broker_id=metadata.get("target_broker_id"),
+            last_parse_result=metadata.get("last_parse_result"),
+            parsed_plugin_code=parsed_plugin_code,
+            parsed_plugin_version=parsed_plugin_version,
+            parse_is_stale=parse_is_stale,
+        )
+    except Exception as e:
+        logger.warning("Error reading file metadata", meta_path=str(meta_path), error=str(e))
+        return None
+
+
+def _find_metadata_path(file_id: str) -> Optional[Path]:
+    """
+    Find the sidecar JSON metadata path for a given ``file_id`` by scanning
+    every status folder and its ``broker_*`` subdirectories.
+
+    Returns the first match, or ``None`` if the file is not present anywhere.
+    Used by :func:`get_file_info` and :func:`save_parse_result` to avoid
+    triplicating the scan logic. ``list_files`` performs an exhaustive
+    scan and intentionally keeps its own loop.
+    """
+    broker_reports_dir = get_broker_reports_dir()
+    for status in BRIMFileStatus:
+        status_folder = broker_reports_dir / status.value
+
+        # Root folder (backward compatibility)
+        candidate = status_folder / f"{file_id}.json"
+        if candidate.exists():
+            return candidate
+
+        # Broker subdirectories
+        for broker_dir in status_folder.glob("broker_*"):
+            if broker_dir.is_dir():
+                candidate = broker_dir / f"{file_id}.json"
+                if candidate.exists():
+                    return candidate
+    return None
+
+
 def list_files(
     status: Optional[BRIMFileStatus] = None,
     broker_ids: Optional[List[int]] = None,
@@ -504,28 +610,7 @@ def list_files(
     else:
         status_folders = [broker_reports_dir / s.value for s in BRIMFileStatus]
 
-    files = []
-
-    def _parse_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
-        """Parse a metadata JSON file into BRIMFileInfo."""
-        try:
-            metadata = json.loads(meta_path.read_text())
-            return BRIMFileInfo(
-                file_id=metadata["file_id"],
-                filename=metadata["filename"],
-                size_bytes=metadata["size_bytes"],
-                status=BRIMFileStatus(metadata["status"]),
-                uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
-                processed_at=(datetime.fromisoformat(metadata["processed_at"]) if metadata.get("processed_at") else None),
-                compatible_plugins=metadata.get("compatible_plugins", []),
-                error_message=metadata.get("error_message"),
-                uploaded_by_user_id=metadata.get("uploaded_by_user_id"),
-                target_broker_id=metadata.get("target_broker_id"),
-                last_parse_result=metadata.get("last_parse_result"),
-            )
-        except Exception as e:
-            logger.warning("Error reading file metadata", meta_path=str(meta_path), error=str(e))
-            return None
+    files: List[BRIMFileInfo] = []
 
     for folder in status_folders:
         if not folder.exists():
@@ -533,7 +618,7 @@ def list_files(
 
         # Scan root folder (files without broker_id, backward compatibility)
         for meta_path in folder.glob("*.json"):
-            file_info = _parse_metadata(meta_path)
+            file_info = _build_file_info_from_metadata(meta_path)
             if file_info:
                 files.append(file_info)
 
@@ -541,7 +626,7 @@ def list_files(
         for broker_dir in folder.glob("broker_*"):
             if broker_dir.is_dir():
                 for meta_path in broker_dir.glob("*.json"):
-                    file_info = _parse_metadata(meta_path)
+                    file_info = _build_file_info_from_metadata(meta_path)
                     if file_info:
                         files.append(file_info)
 
@@ -570,49 +655,10 @@ def get_file_info(file_id: str) -> Optional[BRIMFileInfo]:
         BRIMFileInfo or None if not found
     """
     _ensure_dirs()
-
-    def _try_parse_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
-        """Try to parse a metadata file."""
-        if not meta_path.exists():
-            return None
-        try:
-            metadata = json.loads(meta_path.read_text())
-            return BRIMFileInfo(
-                file_id=metadata["file_id"],
-                filename=metadata["filename"],
-                size_bytes=metadata["size_bytes"],
-                status=BRIMFileStatus(metadata["status"]),
-                uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
-                processed_at=(datetime.fromisoformat(metadata["processed_at"]) if metadata.get("processed_at") else None),
-                compatible_plugins=metadata.get("compatible_plugins", []),
-                error_message=metadata.get("error_message"),
-                uploaded_by_user_id=metadata.get("uploaded_by_user_id"),
-                target_broker_id=metadata.get("target_broker_id"),
-                last_parse_result=metadata.get("last_parse_result"),
-            )
-        except Exception as e:
-            logger.warning("Error reading file metadata", file_id=file_id, error=str(e))
-            return None
-
-    broker_reports_dir = get_broker_reports_dir()
-    for status in BRIMFileStatus:
-        status_folder = broker_reports_dir / status.value
-
-        # Try root folder first (backward compatibility)
-        meta_path = status_folder / f"{file_id}.json"
-        result = _try_parse_metadata(meta_path)
-        if result:
-            return result
-
-        # Try broker subdirectories
-        for broker_dir in status_folder.glob("broker_*"):
-            if broker_dir.is_dir():
-                meta_path = broker_dir / f"{file_id}.json"
-                result = _try_parse_metadata(meta_path)
-                if result:
-                    return result
-
-    return None
+    meta_path = _find_metadata_path(file_id)
+    if meta_path is None:
+        return None
+    return _build_file_info_from_metadata(meta_path)
 
 
 def get_file_path(file_id: str) -> Optional[Path]:
@@ -733,54 +779,56 @@ def move_to_failed(file_id: str, error_message: str) -> bool:
     return _move_file(file_id, BRIMFileStatus.FAILED, error_message)
 
 
-def save_parse_result(file_id: str, parse_result: dict) -> bool:
+def save_parse_result(
+    file_id: str,
+    parse_result: dict,
+    plugin_code: Optional[str] = None,
+) -> bool:
     """
     Save the parse result to the file's metadata for caching.
 
     This allows the frontend to reload a previous parse result without
-    re-parsing the file.
+    re-parsing the file. If ``plugin_code`` is provided, the current
+    plugin version is resolved via :class:`BRIMProviderRegistry` and
+    persisted as ``parsed_plugin_version`` so that :class:`BRIMFileInfo`
+    can compute ``parse_is_stale`` later when the plugin is bumped.
+
+    The registry is the single source of truth for ``plugin_version``:
+    callers pass only the plugin code; this function derives the version.
 
     Args:
         file_id: UUID of the file
         parse_result: Dictionary containing transactions, warnings, etc.
+        plugin_code: Plugin code used to produce ``parse_result``
 
     Returns:
         True if saved successfully, False otherwise
     """
     _ensure_dirs()
 
-    # Search for the metadata file in all status folders and broker subfolders
-    broker_reports_dir = get_broker_reports_dir()
-    meta_path = None
-    for status in BRIMFileStatus:
-        status_folder = broker_reports_dir / status.value
-
-        # Try root folder first
-        candidate = status_folder / f"{file_id}.json"
-        if candidate.exists():
-            meta_path = candidate
-            break
-
-        # Try broker subdirectories
-        for broker_dir in status_folder.glob("broker_*"):
-            if broker_dir.is_dir():
-                candidate = broker_dir / f"{file_id}.json"
-                if candidate.exists():
-                    meta_path = candidate
-                    break
-        if meta_path:
-            break
-
-    if not meta_path:
+    meta_path = _find_metadata_path(file_id)
+    if meta_path is None:
         logger.warning("Metadata file not found for caching parse result", file_id=file_id)
         return False
 
     # Load, update, and save metadata
     metadata = json.loads(meta_path.read_text())
     metadata["last_parse_result"] = parse_result
+    plugin_version: Optional[str] = None
+    if plugin_code is not None:
+        metadata["parsed_plugin_code"] = plugin_code
+        plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+        if plugin is not None:
+            plugin_version = plugin.plugin_version
+            metadata["parsed_plugin_version"] = plugin_version
     meta_path.write_text(json.dumps(metadata, indent=2))
 
-    logger.info("Saved parse result to metadata", file_id=file_id)
+    logger.info(
+        "Saved parse result to metadata",
+        file_id=file_id,
+        plugin_code=plugin_code,
+        plugin_version=plugin_version,
+    )
     return True
 
 
@@ -870,7 +918,7 @@ def _move_file(file_id: str, target_status: BRIMFileStatus, error_message: Optio
 # =============================================================================
 
 
-def parse_file(file_id: str, plugin_code: str, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutput:
     """
     Parse a file using the specified plugin (preview only, no DB persistence).
 
@@ -881,12 +929,8 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> Tuple[List[TXC
        - Raise ValueError if plugin not found
     3. Call plugin.can_parse(file_path)
        - Raise ValueError if plugin cannot parse this file type
-    4. Call plugin.parse(file_path, broker_id)
-       - Returns Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]
-       - Transactions are standard DTOs ready for TransactionService
-       - Warnings include skipped rows, ambiguous data, etc.
-       - Extracted assets is the mapping fake_id -> BRIMExtractedAssetInfo
-    5. Return (transactions, warnings, extracted_assets)
+    4. Call plugin.parse(file_path, broker_id) → BRIMParseOutput
+    5. Return the BRIMParseOutput as-is
 
     IMPORTANT: This function does NOT persist anything to DB.
     It's used for preview so user can review/edit before confirming.
@@ -897,10 +941,7 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> Tuple[List[TXC
         broker_id: Target broker ID for the transactions
 
     Returns:
-        Tuple of (transactions, warnings, extracted_assets)
-        - transactions: List[TXCreateItem] with fake asset IDs where applicable
-        - warnings: List[str] parser warnings
-        - extracted_assets: Dict[fake_id -> {extracted_symbol, extracted_isin, extracted_name}]
+        BRIMParseOutput with transactions, warnings, extracted_assets, asset_events
 
     Raises:
         FileNotFoundError: File not found
@@ -924,19 +965,18 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> Tuple[List[TXC
     # Parse file
     logger.info("Parsing file with plugin", file_id=file_id, plugin_code=plugin_code, broker_id=broker_id)
 
-    # Plugin returns (transactions, warnings, extracted_assets)
-    transactions, warnings, extracted_assets = plugin.parse(file_path, broker_id)
+    output: BRIMParseOutput = plugin.parse(file_path, broker_id)
 
     logger.info(
         "File parsed successfully",
         file_id=file_id,
         plugin_code=plugin_code,
-        transaction_count=len(transactions),
-        warning_count=len(warnings),
-        extracted_asset_count=len(extracted_assets),
+        transaction_count=len(output.transactions),
+        warning_count=len(output.warnings),
+        extracted_asset_count=len(output.extracted_assets),
     )
 
-    return transactions, warnings, extracted_assets
+    return output
 
 
 # =============================================================================

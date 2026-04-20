@@ -982,6 +982,7 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "BRIM parse error tests", verbose=verbose)
 
 
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: get_session_ttl_sync."""
     print_section("Services: Settings Service")
@@ -1366,6 +1367,7 @@ def api_brim(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_brim_api.py", test_names)
     return run_command(cmd, "BRIM API tests", verbose=verbose)
+
 
 
 def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:

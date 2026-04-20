@@ -122,18 +122,25 @@ class TXCreateItem(BaseModel):
     cash: Optional[Currency] = Field(default=None, description="Cash movement (code + amount). Required for cash operations.")
 
     # Temporary linking for bulk create (not persisted)
-    link_uuid: Optional[str] = Field(default=None,max_length=36,description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)",)
+    link_uuid: Optional[str] = Field(
+        default=None,
+        max_length=36,
+        description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)",
+    )
 
     tags: Optional[List[str]] = Field(default=None, description="List of tags for filtering/grouping")
     description: Optional[str] = Field(default=None, max_length=500, description="Transaction notes")
 
     # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time
-    cost_basis_override: Optional[Decimal] = Field(default=None,description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",)
+    cost_basis_override: Optional[Decimal] = Field(
+        default=None,
+        description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
+    )
 
     # Link to AssetEvent (realization of a global asset event in this portfolio).
     # Only valid for event-compatible types (see EVENT_COMPATIBLE_TYPES).
     # Cross-record check (asset_id must match event.asset_id) is done in service layer.
-    asset_event_id: Optional[int] = Field(default=None,gt=0,description="Link to AssetEvent (DIVIDEND/INTEREST/ADJUSTMENT only)")
+    asset_event_id: Optional[int] = Field(default=None, gt=0, description="Link to AssetEvent (DIVIDEND/INTEREST/ADJUSTMENT only)")
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -373,7 +380,7 @@ class TXUpdateItem(BaseModel):
     # - None   -> leave asset_event_id unchanged
     # - 0      -> UNLINK (set to NULL)
     # - n > 0  -> link to the given AssetEvent (validated in service layer)
-    asset_event_id: Optional[int] = Field(default=None,ge=0,description="Link/unlink to AssetEvent. Use 0 to unlink, None to leave unchanged.")
+    asset_event_id: Optional[int] = Field(default=None, ge=0, description="Link/unlink to AssetEvent. Use 0 to unlink, None to leave unchanged.")
 
     @field_validator("tags", mode="before")
     @classmethod

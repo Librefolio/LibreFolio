@@ -1,6 +1,6 @@
 # Phase 7: Transactions System — Macro Plan
 
-**Status**: ⏳ TODO
+**Status**: 🔄 In corso (Part 1 ✅, Part 2 ✅ Revisione 2 completata, Part 3–5 TODO)
 **Durata stimata**: ~11 giorni (multi-sprint, Parti 1+2+3+4+4b+5 = 1+2+2+2+1+3)
 **Priorità**: P0 (MVP)
 **Dipendenze**:
@@ -62,10 +62,11 @@ auto-linking massivo degli eventi retroattivi.
 |---|-----|---------|
 | 1 | Link `Transaction ↔ AssetEvent` assente | Una `DIVIDEND` tx non sa da quale `AssetEvent` globale deriva. Blocca smart assistant. |
 | 2 | Access control incoerente | `GET/PATCH/DELETE /transactions` non filtrano per `BrokerUserAccess` dell'utente corrente. Solo `POST` verifica `EDITOR`. |
-| 3 | BRIM non emette eventi | I plugin ritornano solo `List[TXCreateItem]`. Uno SPLIT globale in un estratto conto non viene propagato come `AssetEvent`. |
+| 3 | BRIM non espone `plugin_version` per cache invalidation | Un aggiornamento del parser non re-triggera un re-parse dei file già elaborati |
 | 4 | Frontend `/transactions` è un placeholder | Nessuna lista, nessun filtro, nessun import UI. |
 | 5 | Nessuna "Staging Area" | BRIM popola stato locale del componente e invia a `POST /transactions`. Manca modale unificata con validazione bulk + preview bilanci + asset resolver. |
-| 6 | `BRIMProvider` non espone metadata UI | No `docs_url`, no `capabilities`, no `preview_columns`. Il frontend non può renderizzare colonne broker-specifiche. |
+| 6 | `BRIMProvider` non espone metadata UI per preview dinamica | No `docs_url`, no `preview_columns`. Il frontend non può renderizzare colonne broker-specifiche. |
+| 7 | Bulk TX oggi è multi-broker + best-effort | Un import inconsistente lascia il portafoglio in uno stato intermedio. Serve semantica atomic per-broker (Parte 3) |
 
 ### Endpoint già esistenti da **riusare** (nessuna duplicazione)
 
@@ -93,12 +94,12 @@ auto-linking massivo degli eventi retroattivi.
 
 | # | Parte | Area | Target | Effort | Dettaglio |
 |---|-------|------|--------|--------|-----------|
-| **1** | Backend DB & Schema Realignment | models, schemas, migration | Link `Transaction ↔ AssetEvent`, access control uniforme | 1g | **Dettagliato** (prossimo piano) |
-| **2** | BRIM Plugin v2 — Events & UI Metadata | `BRIMProvider` base + refactor 11 plugin | Plugin emettono eventi, espongono capability UI | 2g | **Dettagliato** |
-| **3** | API Consolidation — full-bulk | endpoints, service, pytest | Visibilità per-utente, `validate` dry-run, `events/suggest`, test ≥85% | 2g | **Dettagliato** |
+| **1** | Backend DB & Schema Realignment | models, schemas, migration | Link `Transaction ↔ AssetEvent`, access control uniforme | 1g | ✅ Completato |
+| **2** | BRIM come parser puro (Revisione 2) | `BRIMProvider` base + refactor 11 plugin | Plugin emettono solo TX + preview metadata; `plugin_version` per cache | 2g v1 + 0.5g revisione | ✅ Completato |
+| **3** | API Consolidation — bulk atomic per-broker | endpoints, service, pytest | `POST/PATCH/DELETE /brokers/{id}/transactions/bulk` atomic, `validate` dry-run, `events/suggest`, test ≥85% | 2g | **Dettagliato** |
 | **4** | Frontend — Pagina `/transactions` | route, DataTable, filtri colonna | Lista utente con filtri header, GoTo linked pair, bulk actions | 2g | **Alto livello** |
 | **4b** | Frontend — File Preview System | backend service + modale multi-tipo | Preview inline (image/text/table/markdown/code) su Files page + BRIM files | 1g | **Alto livello** |
-| **5** | Frontend — Staging Modal | modale unificata, asset resolver | Manual + BRIM + Clone, grouping colorato, tolerance slider | 3g | **Alto livello** |
+| **5** | Frontend — Staging Modal | modale unificata, asset resolver | Manual + BRIM + Clone, grouping colorato, tolerance slider 0-7, commit via /brokers/{id}/tx/bulk atomic | 3g | **Alto livello** |
 
 Le Parti 1–3 sono **dettagliate** (alta confidenza, basso rischio di cambio).
 Le Parti 4 / 4b / 5 restano **alto livello** (ASCII art + principi UX) — target e situazione
@@ -149,60 +150,134 @@ Punti **rinviati** durante l'esecuzione di Part 1 (vedi [`plan-phase07-transacti
 
 ---
 
-## 🔷 Parte 2 — BRIM Plugin v2: Events & UI Metadata
+## 🔷 Parte 2 — BRIM come parser puro (Revisione 2)
 
-### Situazione di partenza
-- `BRIMProvider.parse()` ritorna `Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]`
-- Nessun metodo per eventi
-- Nessun `params_schema` / `docs_url` (TODO esistente a L319 di `brim_provider.py`)
+> **Nota storica**: in una prima iterazione ("v1 — BRIM Plugin v2: Events & UI
+> Metadata") si era introdotto un endpoint `POST /brokers/import/commit`
+> atomico, il dispatcher `BRIMCapabilities`, e l'emissione di `asset_events`
+> dai plugin. Una rilettura critica ha portato al smantellamento di queste
+> astrazioni (vedi [plan-phase07-transaction-Part2.prompt.md §Revisione 2](../plan-phase07-transaction-Part2.prompt.md)).
+> Il blocco che segue descrive lo **stato finale post-Revisione 2**.
+
+### Situazione di partenza (dopo v1 smantellata)
+- `BRIMProvider.parse()` ritorna `BRIMParseOutput` con `transactions`, `warnings`, `extracted_assets` (NO `asset_events`).
+- `BRIMPreviewColumn` + `preview_columns()` abstract già in piedi.
+- `docs_url` property già in piedi.
+- `search_asset_candidates()` + `BRIMAssetMapping` + `detect_tx_duplicates()` già in piedi.
+- Nessun `BRIMCapabilities`, nessun `commit_import()`, nessun `/import/commit`.
+
+### Principio
+**BRIM è un parser.** Legge il file broker-specifico, produce TX con fake
+asset id + elenco asset estratti + warnings. Non committa nulla, non
+crea eventi, non dichiara capability UI. La risoluzione fake→real e il
+commit sono responsabilità della Staging Modal frontend (Parte 5) che
+usa l'endpoint standard TX (Parte 3, semantica atomica per-broker).
 
 ### Attività
-1. **Evolvere la classe base `BRIMProvider`**:
-   - Cambiare firma `parse()` → ritorna `BRIMParseOutput` (nuovo schema) con:
-     `transactions`, `warnings`, `extracted_assets`, `asset_events: List[FAAssetEventPoint]`.
-   - `@property docs_url: Optional[str]` (default `None`).
-   - `@property capabilities: BRIMCapabilities` (dataclass: `supports_events`, `supports_fees_aggregation`, `multi_broker_file`, …).
-   - `@abstractmethod preview_columns() -> List[BRIMPreviewColumn]` per colonne custom nella Staging.
-2. **Refactor 11 plugin** broker: adeguare alla nuova firma. Default `asset_events=[]`. **Nessuna legacy wrapper** (rompi e risolvi — la v1 non è mai andata in produzione).
-3. Estendere `BRIMParseResponse` con `asset_events` e propagare in `parse_file()` / endpoint `POST /brokers/import/files/{id}/parse`.
-4. **Nuovo endpoint** `POST /api/v1/brokers/import/commit`:
-   accetta payload unificato `{transactions, asset_events, asset_mappings}` e committa **atomicamente** creando prima eventi, poi transazioni con FK risolte. Rollback totale se una qualsiasi `TXCreateItem` fallisce.
-5. Schema additivi in `backend/app/schemas/brim.py`:
-   `BRIMCapabilities`, `BRIMPreviewColumn`, `BRIMCommitRequest`, `BRIMCommitResponse`.
+1. **Aggiungere `plugin_version` al `BRIMProvider` base class**:
+   - `@property plugin_version: str` con default `"1.0.0"`.
+   - Docstring: "bump quando l'output del parser cambierebbe per lo stesso file".
+   - Propagato in `BRIMPluginInfo.plugin_version` via `to_plugin_info()`.
+2. **Persistere `plugin_version` nel metadata sidecar (via registry)**:
+   - `save_parse_result(file_id, parse_result, plugin_code)` riceve solo `plugin_code` e deriva la versione dal registry (single source of truth, niente parametro `plugin_version` esposto).
+   - `BRIMFileInfo` espone `parsed_plugin_code`, `parsed_plugin_version`, `parse_is_stale: bool` (computed lazy in `get_file_info`/`list_files`: `True` sse `status==PARSED && parsed_plugin_version != registry.get(plugin_code).plugin_version`).
+3. **Rinominare `AssetSourceManager.bulk_upsert_events_manual` → `bulk_upsert_events`** e aggiornare callsite in `api/v1/assets.py` (unico callsite pubblico). Cancellare `bulk_upsert_events_strict` (dead code dopo smantellamento v1).
+4. **Refactor tecnico `brim_provider.py`** (pulizia rilevata post-v1):
+   - Estrarre helper module-level `_build_file_info_from_metadata(meta_path)` per eliminare la duplicazione tra gli inner `_parse_metadata` (in `list_files`) e `_try_parse_metadata` (in `get_file_info`).
+   - Estrarre helper `_find_metadata_path(file_id)` per eliminare la tripla scansione `status → root + broker_*/` in `list_files`, `get_file_info`, `save_parse_result`.
+5. **Test aggiornati**:
+   - Rimossi: `test_capabilities_shape`, `test_schwab_dividend_populates_asset_events`.
+   - Confermati: `test_plugin_version_is_non_empty_string`, `test_to_plugin_info_propagates_fields` (contratto per ogni plugin).
+   - **Standardizzazione parametrization**: fondere le due classi parametrizzate (`TestPluginInterface` su `provider_code` e `TestBRIMPluginsContract` su `(code, plugin)`) in **un'unica** `TestBRIMPlugin` con pattern `@pytest.mark.parametrize(("code", "plugin"), _PLUGIN_PARAMS, ids=_PLUGIN_IDS)` — fail-fast a collection time, coerente con `test_asset_providers.py`/`test_fx_providers.py`.
+   - **Nuovi** (contratto, parametrizzato `(code, plugin)` su tutti i plugin registrati):
+     - `test_parse_is_idempotent` — stesso input → stesso output (determinismo richiesto dal caching via `plugin_version`).
+     - `test_parse_produces_negative_fake_ids` — fake id nel range `< FAKE_ASSET_ID_BASE` / `is_fake_asset_id(id) == True`.
+     - `test_parse_broker_id_propagated_on_all_tx` — estendere il check `broker_id` a tutti i sample e a tutte le TX.
+     - `test_parse_warnings_for_malformed_row` — richiede nuovo sample `sample_reports/generic_malformed_row.csv`.
+   - **Nuovo** (end-to-end API, in `test_brim_versioning.py`):
+     - `test_parse_is_stale_detection` — upload + parse con v`1.0.0`, monkeypatch a v`2.0.0`, verifica `parse_is_stale` passi da `False` a `True` in `GET /files/{id}`; re-parse riallinea a `False`.
+   - **Fuori scope** (Parte 5 o non pianificati): `test_detect_method_per_plugin` (coperto indirettamente da `TestAutoDetection`), `test_fake_id_collision_across_plugins` (gestione multi-parse è responsabilità Staging Modal).
 
 ### Deliverable
-Classe base estesa, 11 plugin allineati, endpoint `commit` atomico, frontend può leggere `capabilities` + `preview_columns` per rendering dinamico.
+BRIM è un parser puro; ogni plugin espone `plugin_version`; la UI può
+rilevare parse cached stantii; nessun endpoint `/commit`, nessuna
+capability, nessun `asset_events` nel BRIM.
+
+### 📋 Piani di dettaglio ancora da scrivere (status Phase 7)
+
+Tracciamento dei sub-plan che servono ma non sono ancora stati redatti:
+
+| Parte | Plan file | Status | Dipendenze |
+|---|---|---|---|
+| Parte 1 | `plan-phase07-transaction-Part1.md` | ✅ scritto ed eseguito | — |
+| Parte 2 | `plan-phase07-transaction-Part2.prompt.md` (Revisione 2) | ✅ completato | Parte 1 |
+| Parte 3 | `plan-phase07-transaction-Part3.md` | ⏳ **da scrivere** | Parte 1 |
+| Parte 3b | `plan-phase07-transaction-Part3b-events-suggest.md` (nuovo endpoint `POST /transactions/events/suggest` con slider 0-7gg) | ⏳ **da scrivere** | Parte 1 |
+| Parte 4 | (TBD — eventuale UX transactions page) | ⏳ da decidere | Parte 3 |
+| Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: resolve fake_id, event matching, `parse_is_stale` banner, commit via endpoint standard) | ⏳ **da scrivere** | Parte 2, Parte 3, Parte 3b |
 
 ---
 
-## 🔷 Parte 3 — API Consolidation (full-bulk)
+## 🔷 Parte 3 — API Consolidation (full-bulk, atomic per-broker)
 
 ### Principi
 - **Niente endpoint singoli**: no `GET /transactions/{id}`, no `DELETE /transactions/{id}`. Tutto via liste di ID.
 - **Niente endpoint duplicati**: `GET /api/v1/brokers` già ritorna i broker accessibili.
 - **Access control uniforme** su ogni verbo, derivato da `BrokerUserAccess`.
+- **Bulk TX atomico per-broker** (🆕 Revisione 2): ogni bulk-create/update/delete è **broker-scoped**. Se UNA riga viola access o regole di coerenza del broker (overdraft, shorting, FK asset_event), tutto il batch viene **rigettato** (rollback). Niente più best-effort per-row.
+
+### 🆕 Nuova semantica atomic per-broker (Revisione 2)
+
+**Motivazione**: un utente che carica una serie di transazioni su un broker
+specifico si aspetta che "tutte quelle transazioni assieme" siano coerenti
+con le regole del broker. Se il set è inconsistente (cash overdraft, short,
+asset_event mismatch, access denied), vuole un **unico verdetto** e la
+possibilità di correggere il blocco, non un import parziale che lascia il
+portafoglio in uno stato intermedio difficile da ripulire.
+
+**Endpoint**: spostare il bulk TX da `POST /transactions` (multi-broker,
+best-effort) a `POST /brokers/{broker_id}/transactions/bulk` (single-broker,
+atomic). Stesso pattern già usato da `/brokers/import/upload?broker_id=...`
+e `/brokers/{id}/summary`.
+
+**Contratto**:
+- Request: `List[TXCreateItem]` (il `broker_id` interno all'item deve **matchare** `{broker_id}` di path; mismatch → 400 immediato, nessun insert).
+- Validazione pre-commit (in memoria) con lo stesso motore usato da `POST .../validate` (dry-run): access check, INDEX reject, asset_event FK check, balance simulation.
+- Se tutte le righe passano → `create_bulk` inserisce tutto, `_validate_broker_balances` conferma post-insert, la dependency FastAPI committa.
+- Se anche **una sola** riga fallisce → `session.rollback()` esplicito, response con `rolled_back=True`, `results[]` per debug (quale riga ha rotto cosa), `errors[]`, **nessun** record creato.
+- Stessa semantica per `PATCH /brokers/{broker_id}/transactions/bulk` e `DELETE /brokers/{broker_id}/transactions/bulk?ids=...`.
+
+**Impatto su `TransactionService`**:
+- `create_bulk`, `update_bulk`, `delete_bulk` continuano a vivere ma diventano **broker-scoped** (nuovo parametro `broker_id`); internamente validano e, su qualsiasi errore, fanno `rollback`+ritornano `rolled_back=True`.
+- L'attuale semantica multi-broker best-effort non serve a nessuno (BRIM è mono-broker, la manual entry è mono-broker). La rimuoviamo senza wrapper legacy.
+
+**Impatto su frontend**:
+- Staging Modal commit usa `POST /brokers/{broker_id}/transactions/bulk`.
+- Banner rosso se `rolled_back=True` con elenco `results` per-riga (riusa pattern già visto nei toast di delete eventi Part 1).
 
 ### Attività
 1. **Rimuovere** `GET /api/v1/transactions/{tx_id}`.
    Sostituito da `GET /api/v1/transactions?ids=1,2,3` (query list param), che ordina la risposta nello **stesso ordine** degli ID richiesti (pattern già adottato in `/api/v1/assets`).
 2. **Uniformare access control**:
    - `GET /transactions` → filtra automaticamente per broker accessibili dall'utente (JOIN con `BrokerUserAccess`).
-   - `PATCH /transactions` → per-item check `EDITOR` su ogni broker coinvolto.
-   - `DELETE /transactions?ids=...` → per-item check `EDITOR`.
+   - `POST /brokers/{broker_id}/transactions/bulk` → check `EDITOR` su `{broker_id}` (1 sola volta, non per-item).
+   - `PATCH /brokers/{broker_id}/transactions/bulk` → idem.
+   - `DELETE /brokers/{broker_id}/transactions/bulk?ids=...` → idem + verifica che ogni `id` appartenga al broker.
    - Tutto gestito in `TransactionService` (generalizzare helper `_check_broker_access`).
-3. **Nuovo endpoint** `POST /api/v1/transactions/validate` (body: `List[TXCreateItem]`):
-   dry-run di `create_bulk` **senza commit**. Ritorna `validation_errors` per item + `balance_preview` per broker coinvolto. Consumato in live dalla Staging Modal (debounced 500ms).
-4. **Nuovo endpoint** `POST /api/v1/transactions/events/suggest`
+3. **Refactor `create_bulk/update_bulk/delete_bulk`**: broker-scoped + atomic. Ogni eccezione o balance violation → `session.rollback()` + response con `rolled_back=True`. Rimuovere la semantica multi-broker / best-effort.
+4. **Nuovo endpoint** `POST /brokers/{broker_id}/transactions/validate` (body: `List[TXCreateItem]`):
+   dry-run atomico **senza commit**. Usa lo stesso motore del bulk-create ma ritorna senza insert. Risposta: `validation_errors` per item + `balance_preview` per il broker. Consumato in live dalla Staging Modal (debounced 500ms).
+5. **Nuovo endpoint** `POST /api/v1/transactions/events/suggest`
    (body: `[{asset_id, date, type, tolerance_days}]`):
-   ricerca eventi candidati entro ±tolerance. Risposta per-item: lista `AssetEvent` ordinata per distanza temporale dalla data richiesta. Usato in Staging/Edit quando l'utente cambia asset su righe DIVIDEND/INTEREST/ADJUSTMENT.
-5. **Ampliamento schemi**: `asset_event_id` (da Parte 1) propagato in `create_bulk` / `update_bulk`.
-6. **[deferred da Part 1] i18n del flow delete eventi**: attualmente i toast in `AssetDataEditorSection.svelte` usano stringhe letterali EN. Centralizzare con `./dev.py i18n add`:
+   ricerca eventi candidati entro ±tolerance. Risposta per-item: lista `AssetEvent` ordinata per distanza temporale dalla data richiesta. Usato in Staging/Edit quando l'utente cambia asset su righe DIVIDEND/INTEREST/ADJUSTMENT. **Range `tolerance_days` consigliato: 0-7** (slider UI).
+6. **Ampliamento schemi**: `asset_event_id` (da Parte 1) propagato in `create_bulk` / `update_bulk`.
+7. **[deferred da Part 1] i18n del flow delete eventi**: attualmente i toast in `AssetDataEditorSection.svelte` usano stringhe letterali EN. Centralizzare con `./dev.py i18n add`:
    - `events.deleteBlocked` (placeholder `{count}`, `{accessible}`, `{hidden}`),
    - `events.deleteNotFound`,
    - `events.deletePartial`.
    Sostituire i letterali nel componente. Vedi [plan-phase07-transaction-Part1.md](../plan-phase07-transaction-Part1.md) §Deferred.
-7. **[deferred da Part 1] populate_mock_data**: aggiungere 1–2 transazioni (DIVIDEND / INTEREST) con `asset_event_id` valorizzato in `backend/test_scripts/test_db/populate_mock_data.py`, così da coprire `validate` dry-run, `events/suggest` e il rendering ●evt (Part 4) senza fixture ad-hoc. ✅ **Fatto in Part 1 testing** — funzione `link_transactions_to_events()` linka la tx DIVIDEND di Apple al primo `AssetEvent` manuale Apple e stampa testing tip. Da espandere qui con almeno una INTEREST e (se serve in Part 4 per testare il caso "hidden") una tx su un broker non accessibile dall'utente di test.
-8. **[deferred da Part 1] Validazione coerenza valuta nei prezzi**: oggi `upsert_prices_bulk` accetta righe con `currency` qualsiasi, anche diversa da `Asset.currency`. Una serie storica con valute miste produce un grafico semanticamente sbagliato e **non triggera** alcun banner FX (il sistema non sa che è un errore). Aggiungere in Parte 3 (è il punto in cui consolidiamo le validazioni server-side):
+8. **[deferred da Part 1] populate_mock_data**: aggiungere 1–2 transazioni (DIVIDEND / INTEREST) con `asset_event_id` valorizzato in `backend/test_scripts/test_db/populate_mock_data.py`, così da coprire `validate` dry-run, `events/suggest` e il rendering ●evt (Part 4) senza fixture ad-hoc. ✅ **Fatto in Part 1 testing** — funzione `link_transactions_to_events()` linka la tx DIVIDEND di Apple al primo `AssetEvent` manuale Apple e stampa testing tip. Da espandere qui con almeno una INTEREST e (se serve in Part 4 per testare il caso "hidden") una tx su un broker non accessibile dall'utente di test.
+9. **[deferred da Part 1] Validazione coerenza valuta nei prezzi**: oggi `upsert_prices_bulk` accetta righe con `currency` qualsiasi, anche diversa da `Asset.currency`. Una serie storica con valute miste produce un grafico semanticamente sbagliato e **non triggera** alcun banner FX (il sistema non sa che è un errore). Aggiungere in Parte 3 (è il punto in cui consolidiamo le validazioni server-side):
    - **Backend — esposizione raw currency per-point (sempre)**: `FAPricePoint.original_currency` deve essere **sempre** popolato (anche quando non c'è conversione, nel qual caso = `currency`). `FAPricePoint.backward_fill_info` resta **Optional**: è `None` nel caso "tutto ok" (95%+ dei data-point, niente stale, niente FX, niente errori), popolato solo quando c'è qualcosa da comunicare — la sola presenza dell'oggetto è il segnale "attenzione" per il frontend.
    - **Backend — discriminazione cause FX-missing (`fx_error`)**: aggiungere a `AssetBackwardFillInfo` un campo `fx_error: Optional[Literal["pair_missing", "no_rate_at_date"]] = None`. `backward_fill_info` è popolato se e solo se **almeno uno** dei seguenti è vero: (a) `days_back > 0` (price backward-filled), (b) `fx_rate_date` valorizzato (FX conversion applicata), (c) `fx_error` valorizzato (FX mancante). Semantica a 5 casi del campo:
      - (A) no-conversion + no-stale: `backward_fill_info = None` (non serializzato)
@@ -219,7 +294,6 @@ Classe base estesa, 11 plugin allineati, endpoint `commit` atomico, frontend pu�
    - **Frontend — data-editor prezzi**: pre-fillare la colonna `currency` con `asset.currency` sui nuovi append e mostrare ⚠️ se l'utente cambia il valore (quasi sempre un errore).
    - **Eventi**: la currency diversa è **legittima** (ETF EUR con dividendi USD). Niente vincolo hard, ma aggiungere al path `query_events_bulk` un parametro opzionale `target_currency` parallelo a quello dei prezzi per convertire `event.value` a display-currency alla data dell'evento. Se la FX rate manca → entry in `result.errors[]` con "Missing FX rate for event on <date>".
 9. **[deferred da Part 1] Upsert parziale OHLC + sentinel `-1` + current-price auto-extend** (affine a sync/import, quindi in Parte 3):
-   - **Merge parziale**: verificare che `upsert_prices_bulk` preservi i campi OHLC/volume già in DB quando il client passa solo un sottoinsieme (es. current-price da JustETF → solo `close`). Se oggi il servizio fa overwrite con `None`, fix a **merge parziale**: `null` / campo omesso nel payload = **no-op** su quel campo.
    - **Principio chiave**: sui prezzi **provider > utente**. Nessun `manual_override_fields`: se il provider in futuro fornisce un valore per un campo, è autorevole e sovrascrive liberamente (anche campi precedentemente cancellati dall'utente via `-1`). L'utente può ri-cancellare se serve, ma è raro e accettabile.
    - **Feature "current-price bootstrap OHLC"** (row nuova): quando il current-price inserisce un datapoint che **non esiste ancora** con solo `close`, popolare `open=high=low=close`, `volume=None`. Facilita il rendering del grafico per il giorno in corso.
    - **Feature "current-price auto-extend min/max"** (row esistente) — **nuovo, richiesto**:
@@ -245,8 +319,10 @@ Classe base estesa, 11 plugin allineati, endpoint `commit` atomico, frontend pu�
 10. **Test matrix**:
    - OWNER / EDITOR / VIEWER × GET / POST / PATCH / DELETE × owned / foreign broker
    - `validate` senza side-effect (DB invariato)
-   - `events/suggest` con tolleranza 0 / 3 / 7 / 14 giorni
+   - `events/suggest` con tolleranza 0 / 3 / 7 giorni
    - Link `asset_event_id` rifiutato se `asset_id` mismatch
+   - **Atomic per-broker**: una sola riga che viola (overdraft / shorting / asset_event mismatch) → rollback totale del batch, DB invariato, `rolled_back=True` in response
+   - **Broker mismatch nel body**: `broker_id` dell'item ≠ `{broker_id}` del path → 400 immediato, nessun insert
    - Copertura ≥85% su `transaction_service` e `brim_provider`
 
 ### Deliverable
@@ -415,7 +491,7 @@ Sistema preview funzionante in 3 punti di accesso (Files Static, Files BRIM, Bro
 
 ## 🔷 Parte 5 — Frontend: Staging Modal (Alto Livello)
 
-### Flusso BRIM completo
+### Flusso BRIM completo (post-Revisione 2)
 
 ```
 1. User apre Import ▾ → "From broker file…"
@@ -424,11 +500,15 @@ Sistema preview funzionante in 3 punti di accesso (Files Static, Files BRIM, Bro
 3. User clicca "Parse" sulla riga file → POST /brokers/import/files/{id}/parse
    con { plugin_code, broker_id }
 4. Backend ritorna BRIMParseResponse (transactions + asset_mappings + duplicates
-   + warnings + asset_events — propagati da Parte 2)
+   + warnings). Il file viene auto-marcato PARSED (o FAILED su errore) e il
+   risultato cachato nel metadata sidecar con la `plugin_version` corrente.
 5. Frontend auto-apre Staging Modal pre-popolata
-6. In Staging: user risolve asset, rivede duplicati, auto-linka eventi,
-   commit via POST /brokers/import/commit
-7. File marcato PARSED dal backend a fine commit
+6. In Staging: user risolve asset (fake_id → real_id), rivede duplicati,
+   fa match TX ↔ AssetEvent (slider ±0..7gg via POST /transactions/events/suggest),
+   commit via POST /brokers/{broker_id}/transactions/bulk (endpoint standard,
+   atomic per-broker — vedi Parte 3)
+7. Se `rolled_back=True` → banner rosso con `results[]`, Staging resta aperta
+   con stato invariato. Se ok → Staging si chiude, toast "N transactions imported".
 ```
 
 ### Principi UX aggiuntivi
@@ -436,14 +516,18 @@ Sistema preview funzionante in 3 punti di accesso (Files Static, Files BRIM, Bro
 - **Asset grouping per colore**: ogni `asset_id` unico in staging riceve un colore distintivo (pastello, ~8 colori ciclici). Le righe con stesso asset condividono il colore. Modificare l'asset di una riga la sposta nel gruppo-colore corrispondente.
 - **SearchSelect globale per colore**: sopra la tabella, un `SearchSelect` per ogni colore attivo che modifica **in bulk** tutte le righe di quel gruppo.
 - **Split asset**: bottone 🎨 in row-actions per "slegare" una riga da un gruppo e metterla in un gruppo nuovo (utile quando BRIM raggruppa male).
-- **SearchSelect manuale**: oltre al resolver automatico (da `extracted_symbol`/`isin`/`name`), l'utente può aprire `SearchSelect.svelte` (riuso da `AssetCompare`) per selezionare esplicitamente tra gli asset del DB, OPPURE cliccare "+ Create new" → apre `AssetModal` esistente (o `AssetMatchingWizard` quando completato).
-- **Event matching automatico**:
-  - Quando user seleziona asset su riga DIVIDEND/INTEREST/ADJUSTMENT → frontend chiama `POST /transactions/events/suggest` con `tolerance_days` (default 7, slider 0–14).
-  - 1 match → auto-link. N>1 → popover con scelta. 0 → nessun link (user può aprire ricerca manuale).
+- **SearchSelect manuale**: oltre al resolver automatico (da `extracted_symbol`/`isin`/`name`), l'utente può aprire `SearchSelect.svelte` (riuso da `AssetCompare`) per selezionare esplicitamente tra gli asset del DB, OPPURE cliccare "+ Create new" → apre `AssetModal` esistente (o `AssetMatchingWizard` quando completato). Il frontend **auto-assegna** `selected_asset_id` se `BRIMAssetMapping.candidates` contiene esattamente 1 elemento (suggerimento del backend, overridable).
+- **Event matching parametrico** (post-asset-resolve):
+  - Per ogni riga DIVIDEND / INTEREST / ADJUSTMENT con asset risolto, il frontend chiama `POST /transactions/events/suggest` con `tolerance_days` (default 7, slider 0..7).
+  - 1 match → auto-link. N>1 → popover con scelta. 0 → nessun link.
+  - L'utente può sempre: (a) accettare il match, (b) aprire ricerca manuale, (c) cliccare "+ Create new event" per crearlo al volo, (d) lasciare la TX "orfana" (nessun `asset_event_id`).
   - Slider tolerance visibile in un settings popover ⚙ della modale.
 - **Auto-pair TRANSFER/FX_CONVERSION** (strutturalmente identici: entrambi usano `related_transaction_id` + `link_uuid`): quando user sceglie `type=TRANSFER` o `type=FX_CONVERSION` → auto-genera riga-coppia con `link_uuid` condiviso e segni invertiti. Le due righe sono editate insieme.
 - **Duplicate banner** (da `BRIMDuplicateReport`): chip `⚠ 2 possible duplicates` → click espande pannello con checklist ignora/importa.
-- **Validazione live**: debounced 500ms → `POST /transactions/validate` → banner errori per-riga + balance preview aggiornato.
+- **Validazione live**: debounced 500ms → `POST /brokers/{broker_id}/transactions/validate` → banner errori per-riga + balance preview aggiornato.
+- **Rollback banner**: se il commit ritorna `rolled_back=True`, banner rosso persistente con elenco `results[]` (quale riga ha rotto cosa). Nessuna modifica al DB, Staging resta aperta con stato invariato.
+- **Parse stantio**: se `BRIMFileInfo.parse_is_stale=true`, la UI mostra "Plugin updated — re-parse available" con pulsante per ri-triggerare `POST /files/{id}/parse`.
+- **Preview columns dinamiche**: la tabella legge `BRIMPluginInfo.preview_columns` del plugin usato e costruisce le colonne a runtime (key/label/type/width/align).
 - **Modalità-solo** (no route dedicata, sempre modale larga ~95vw × 90vh).
 
 ### Wireframe ASCII
@@ -497,10 +581,13 @@ Icone: ⚙ row-actions (split asset, remove, duplicate, open event matcher)
 
 | Modalità | Origine | Commit endpoint |
 |----------|---------|-----------------|
-| `create-manual` | Start vuoto, `+ Add row` | `POST /transactions` |
-| `create-brim` | Pre-popolato da `BRIMParseResponse` | `POST /brokers/import/commit` (atomico + eventi) |
-| `edit-bulk` | Pre-popolato da N `TXReadItem` → `TXUpdateItem` draft | `PATCH /transactions` |
-| `clone-bulk` | Clone di N righe (id stripped) | `POST /transactions` |
+| `create-manual` | Start vuoto, `+ Add row` | `POST /brokers/{broker_id}/transactions/bulk` (atomic) |
+| `create-brim` | Pre-popolato da `BRIMParseResponse` | `POST /brokers/{broker_id}/transactions/bulk` (atomic) |
+| `edit-bulk` | Pre-popolato da N `TXReadItem` → `TXUpdateItem` draft | `PATCH /brokers/{broker_id}/transactions/bulk` (atomic) |
+| `clone-bulk` | Clone di N righe (id stripped) | `POST /brokers/{broker_id}/transactions/bulk` (atomic) |
+
+Tutte e 4 le modalità usano lo **stesso** endpoint broker-scoped (Parte 3):
+un commit = un broker = all-or-nothing. Niente più endpoint BRIM-specifico.
 
 ### Deliverable
 Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWizard`, con validazione server live e commit atomico broker-aware.
@@ -510,16 +597,13 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 - **Event link/unlink nella Staging Modal**: la Staging deve esporre un controllo per impostare `asset_event_id` (tramite `POST /transactions/events/suggest`, già schedulato in Parte 3) **e** per rimuovere il link usando la sentinel `asset_event_id = 0` di `TXUpdateItem` (implementata in Part 1). Da coprire nello spec E2E `asset-event-delete.spec.ts` (allocato in Parte 4) esteso con il caso "unlink via Staging edit-bulk".
 - **Blocco delete evento in-use**: se l'utente apre il popover evento da una tx e tenta di cancellare l'evento globale, il backend può rispondere `status=in_use`. La Staging / popover deve mostrare il breakdown `accessible_transactions` + `hidden_transactions_count` (stesso UX pattern del data-editor eventi Part 1).
 
-### 📌 Deferred from Part 2 — ricadute in Parte 5
+### 📌 Deferred from Part 2 — ricadute in Parte 5 (Revisione 2)
 
-- **Rendering dinamico `preview_columns`**: la Staging Modal deve leggere `BRIMPluginInfo.preview_columns` dal plugin usato per il parse e costruire le colonne della `DataTable` a runtime (invece di un set hard-coded). Ogni colonna porta `key`, `label` (passata a i18n), `type`, `width`, `align`. Vedi [plan-phase07-transaction-Part2.prompt.md](../plan-phase07-transaction-Part2.prompt.md) §Step 1.
-- **Capabilities-driven UX**: leggere `BRIMPluginInfo.capabilities` per abilitare/disabilitare sezioni della modale:
-  - `supports_events=true` → mostra tab/sezione "Asset Events" con le righe di `BRIMParseResponse.asset_events`.
-  - `supports_fees_aggregation=true` → tooltip informativo sulla colonna Fee ("aggregated by plugin").
-  - `multi_broker_file=true` → abilita `SearchSelect` per broker per-riga invece del broker globale.
-- **Commit tramite `POST /brokers/import/commit`** (non più via `POST /transactions`): il client invia `BRIMCommitRequest` con `{file_id, broker_id, transactions, asset_events, asset_mappings}` e riceve `BRIMCommitResponse` con `rolled_back: bool`, `created_tx_ids`, `created_event_ids`, `results[]`.
-- **Gestione `rolled_back=true`**: banner rosso persistente con il dettaglio dei `results` falliti (per-kind: `tx` / `event`). Nessuna modifica al DB, quindi la Staging Modal resta aperta con lo stato invariato e l'utente può correggere (tipicamente un evento duplicato esistente o un broker senza access).
-- **E2E `brim-commit-atomic.spec.ts`**: nuovo spec Playwright che verifica rollback atomico simulando un evento duplicato → nessuna TX creata in DB, banner mostrato, stato Staging preservato.
+- **Rendering dinamico `preview_columns`**: la Staging Modal deve leggere `BRIMPluginInfo.preview_columns` dal plugin usato per il parse e costruire le colonne della `DataTable` a runtime (invece di un set hard-coded). Ogni colonna porta `key`, `label` (passata a i18n), `type`, `width`, `align`.
+- **`plugin_version` + `parse_is_stale`**: se `BRIMFileInfo.parse_is_stale=true`, mostrare banner "Plugin updated since last parse — [Re-parse]" che ri-triggera `POST /brokers/import/files/{id}/parse`. Altrimenti la Staging può usare direttamente `GET /brokers/import/files/{id}/last-parse` cachato senza re-parsare.
+- **Commit via `POST /brokers/{broker_id}/transactions/bulk`** (non più via un endpoint BRIM-specifico): il client invia il payload TX **dopo** aver sostituito i fake id con i real id. Risposta con `rolled_back: bool`, `results[]`, `created_tx_ids`, `errors[]`. Vedi Parte 3 per la semantica atomica per-broker.
+- **Gestione `rolled_back=true`**: banner rosso persistente con il dettaglio dei `results` falliti. Nessuna modifica al DB, quindi la Staging Modal resta aperta con lo stato invariato e l'utente può correggere.
+- **E2E `brim-atomic-commit.spec.ts`**: nuovo spec Playwright che verifica rollback atomico simulando un'overdraft violation → nessuna TX creata in DB, banner mostrato, stato Staging preservato.
 
 ---
 
@@ -532,12 +616,13 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 | `backend/app/db/models.py` | `Transaction.asset_event_id` FK + index | 1 |
 | `backend/app/schemas/transactions.py` | `asset_event_id` in TXCreate/Update/Read, validator, `event_compatible` in `TX_TYPE_METADATA` | 1 |
 | `backend/alembic/versions/001_initial.py` | Aggiungere colonna + indice | 1 |
-| `backend/app/services/brim_provider.py` | Base class v2: `BRIMParseOutput`, `capabilities`, `preview_columns`, `docs_url` | 2 |
-| `backend/app/services/brim_providers/*.py` (×11) | Refactor parse() alla nuova firma | 2 |
-| `backend/app/schemas/brim.py` | `BRIMCapabilities`, `BRIMPreviewColumn`, `BRIMCommitRequest/Response`, `asset_events` in `BRIMParseResponse` | 2 |
-| `backend/app/api/v1/brokers.py` | `POST /brokers/import/commit` atomico | 2 |
-| `backend/app/api/v1/transactions.py` | Rimuovere `GET /{tx_id}`, uniformare access control, `POST /validate`, `POST /events/suggest` | 3 |
-| `backend/app/services/transaction_service.py` | Generalizzare `_check_broker_access`, `validate_bulk`, `suggest_events` | 3 |
+| `backend/app/services/brim_provider.py` | Base class: `plugin_version`, `docs_url`, `preview_columns` abstract, `BRIMParseOutput` (senza asset_events). **NO** `capabilities`, **NO** `commit_import` | 2 |
+| `backend/app/services/brim_providers/*.py` (×11) | Refactor parse() alla nuova firma; Schwab NON emette più asset_events | 2 |
+| `backend/app/schemas/brim.py` | `BRIMPreviewColumn`, `plugin_version`/`parsed_plugin_version`/`parse_is_stale` in `BRIMFileInfo`. **Rimossi**: `BRIMCapabilities`, `BRIMCommitRequest/Response/ResultItem`, `asset_events` da `BRIMParseOutput/Response` | 2 |
+| `backend/app/services/asset_source.py` | Rinomina `bulk_upsert_events_manual` → `bulk_upsert_events`; rimuovi `bulk_upsert_events_strict` | 2 |
+| `backend/app/api/v1/brokers.py` | **Rimuovi** `POST /brokers/import/commit`. Verifica auto-transition `move_to_parsed/failed` post-parse | 2 |
+| `backend/app/api/v1/transactions.py` | Rimuovere `GET /{tx_id}`. Spostare bulk a `POST/PATCH/DELETE /brokers/{broker_id}/transactions/bulk` atomic. Aggiungere `POST /brokers/{broker_id}/transactions/validate` + `POST /transactions/events/suggest` | 3 |
+| `backend/app/services/transaction_service.py` | `create_bulk/update_bulk/delete_bulk` → broker-scoped + atomic (rollback su qualsiasi errore) | 3 |
 | `backend/app/services/file_preview.py` | **Nuovo**: dispatch preview per tipo (image/text/table/markdown/code) | 4b |
 | `backend/app/schemas/uploads.py` | `FilePreviewResponse` + `FilePreviewMetadata` | 4b |
 | `backend/app/api/v1/uploads.py` | `GET /files/{file_id}/preview` | 4b |
@@ -592,6 +677,9 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 | 8 | **Smart assistant retroattivo** (matching eventi ↔ transazioni storiche) | Posticipato a Phase 8+ |
 | 9 | **Regimi fiscali / Cash Split / Over-Sell Protection** | Posticipati a Phase 8+ (erano nel piano originale `plan-phase05-to-08-upgrade.md §6` ma fuori scope MVP) |
 | 10 | **File Preview System** incorporato come Parte 4b | Assorbe il vecchio `plan-phase7b-filePreview.md`. Allineato a Svelte 5 runes + `ModalBase` + `DataTable` esistenti. Autonomo rispetto al modello transazioni: può essere implementato in parallelo a Parti 1–3 se ci sono risorse |
+| 11 | **🆕 BRIM = parser puro** (Revisione 2) | Smantellata l'implementazione v1 con `BRIMCapabilities` + `asset_events` + `/import/commit` atomico. Il BRIM produce solo transazioni con fake id + asset estratti. Il commit è responsabilità del frontend via endpoint standard TX. `plugin_version` introdotta per invalidare parse cached |
+| 12 | **🆕 Bulk TX atomic per-broker** (Revisione 2) | `POST/PATCH/DELETE /brokers/{broker_id}/transactions/bulk` sostituisce il precedente `POST /transactions` multi-broker best-effort. Un commit = un broker = all-or-nothing. Risposta con `rolled_back: bool`. Coerente con il principio "un import è un'unità coerente" |
+| 13 | **🆕 `bulk_upsert_events_manual` → `bulk_upsert_events`** (Revisione 2) | Rimosso suffisso `_manual` ridondante (lo scope "user events" è già implicito nell'endpoint `PUT /assets/events/bulk`) |
 
 ---
 
@@ -621,10 +709,12 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 
 ### Test backend
 - [ ] Access matrix OWNER/EDITOR/VIEWER × verb × owned/foreign broker
-- [ ] `POST /transactions/validate` senza side-effect
-- [ ] `POST /transactions/events/suggest` tolleranze varie
+- [ ] `POST /brokers/{broker_id}/transactions/validate` senza side-effect
+- [ ] `POST /transactions/events/suggest` tolleranze varie (0, 3, 7 giorni)
 - [ ] `asset_event_id` validator rifiuta mismatch
-- [ ] `POST /brokers/import/commit` rollback atomico su failure
+- [ ] **Bulk TX atomic per-broker**: una riga violata → rollback totale, DB invariato, `rolled_back=True`
+- [ ] **Broker mismatch**: `broker_id` item ≠ path → 400, nessun insert
+- [ ] **`plugin_version`**: ogni plugin espone la property; parse cached con versione obsoleta → `parse_is_stale=true`
 - [ ] Copertura ≥85% su `transaction_service` e `brim_provider`
 
 ---

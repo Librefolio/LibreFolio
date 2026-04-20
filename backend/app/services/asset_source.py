@@ -2331,7 +2331,7 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def bulk_upsert_events_manual(data: list, session: AsyncSession) -> dict:
+    async def bulk_upsert_events(data: list, session: AsyncSession) -> dict:
         """
         Bulk upsert manual events (provider_assignment_id = NULL).
 

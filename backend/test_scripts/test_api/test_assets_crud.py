@@ -577,9 +577,11 @@ async def test_list_asset_providers(test_server):
             assert "description" in provider, "Provider should have 'description'"
             assert "supports_search" in provider, "Provider should have 'supports_search'"
 
-        # Check that mockprov exists (used for testing)
+        # Note: `mockprov` is intentionally hidden from the public /assets/provider
+        # list (see backend/app/api/v1/assets.py::list_providers). It remains usable
+        # internally by tests that reference it by code, but must NOT appear here.
         mock_provider = next((p for p in providers if p["code"] == "mockprov"), None)
-        assert mock_provider is not None, "mockprov should be available for testing"
+        assert mock_provider is None, "mockprov must be hidden from the public provider list"
 
         print_success(f"✓ Listed {len(providers)} providers")
         print_info(f"  Providers: {', '.join([p['code'] for p in providers])}")

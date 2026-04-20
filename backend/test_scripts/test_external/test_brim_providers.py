@@ -1,13 +1,19 @@
 """
-BRIM Provider Tests - Parametrized Test Suite.
+BRIM Provider Tests — Unified Parametrized Test Suite.
 
-Tests all registered BRIM (Broker Report Import Manager) plugins with uniform test suite.
-Pattern similar to test_asset_providers.py and test_fx_providers.py.
+Tests all registered BRIM (Broker Report Import Manager) plugins with a
+single uniform suite, parametrized over every plugin via
+``@pytest.mark.parametrize(("code", "plugin"), _PLUGIN_PARAMS, ids=_PLUGIN_IDS)``.
+
+Pattern is consistent with ``test_asset_providers.py`` and
+``test_fx_providers.py``: instances are built at collection time
+(fail-fast for broken constructors), ids are explicit.
 
 Test Categories:
-1. Plugin Discovery & Registration (run once)
-2. Parametrized tests for each plugin (run for ALL registered plugins)
-3. Sample File Coverage (ensure all samples are processed)
+1. Plugin Discovery & Registration (not parametrized — tests on the registry itself)
+2. Per-plugin contract + behaviour (parametrized over all plugins)
+3. Auto-detection (not parametrized — tests the detector)
+4. Generic CSV specific (non-plugin-loop tests)
 
 These tests do NOT require a database connection.
 """
@@ -20,307 +26,317 @@ from typing import List, Set
 import pytest
 
 from backend.app.config import PROJECT_ROOT
+from backend.app.schemas.brim import (
+    BRIMExtractedAssetInfo,
+    BRIMParseOutput,
+    BRIMPluginInfo,
+    BRIMPreviewColumn,
+    is_fake_asset_id,
+)
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
 # =============================================================================
-# CONSTANTS
+# CONSTANTS & HELPERS
 # =============================================================================
 
 SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 
+_BASELINE_COLUMN_KEYS = {
+    "date",
+    "type",
+    "quantity",
+    "asset",
+    "cash_amount",
+    "cash_currency",
+}
 
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
 
+def _all_plugins() -> list[tuple[str, BRIMProvider]]:
+    """Return (code, instance) pairs for every registered BRIM plugin.
 
-def get_all_brim_providers() -> List[str]:
-    """
-    Get all registered BRIM providers for parametrization.
-
-    This ensures tests run for ALL registered providers dynamically.
+    Built once at collection time: any constructor failure fails the
+    whole file immediately, which is what we want.
     """
     BRIMProviderRegistry.auto_discover()
-    providers = BRIMProviderRegistry.list_plugin_info()
-
-    if not providers:
-        pytest.skip("No BRIM providers registered")
-
-    return [p.code for p in providers]
+    return [(code, cls()) for code, cls in BRIMProviderRegistry._providers.items()]
 
 
-def get_sample_files_for_plugin(plugin_code: str) -> List[Path]:
-    """
-    Get sample files that a plugin can parse.
-
-    Returns list of sample files the plugin claims to be able to parse.
-    """
-    if not SAMPLE_DIR.exists():
-        return []
-
-    plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
-    if not plugin:
-        return []
-
-    parseable_files = []
-    for sample_file in SAMPLE_DIR.glob("*.csv"):
-        if plugin.can_parse(sample_file):
-            parseable_files.append(sample_file)
-
-    return parseable_files
+_PLUGIN_PARAMS = _all_plugins()
+_PLUGIN_IDS = [code for code, _ in _PLUGIN_PARAMS]
 
 
 def get_all_sample_files() -> List[Path]:
-    """Get all sample files in the sample_reports directory."""
+    """Get all sample files (valid ones) in sample_reports/.
+
+    Excludes the ``malformed/`` subdirectory which holds deliberately
+    broken fixtures used by :class:`TestGenericMalformedRow`.
+    """
     if not SAMPLE_DIR.exists():
         return []
-    return [f for ext in ["csv", "xlsx", "xls", "json"] for f in SAMPLE_DIR.glob(f"**/*.{ext}")]
+    files: list[Path] = []
+    for ext in ["csv", "xlsx", "xls", "json"]:
+        for f in SAMPLE_DIR.glob(f"**/*.{ext}"):
+            if "malformed" in f.parts:
+                continue
+            files.append(f)
+    return files
+
+
+def get_sample_files_for_plugin(plugin: BRIMProvider) -> List[Path]:
+    """Get sample files that a plugin can parse."""
+    if not SAMPLE_DIR.exists():
+        return []
+    return [f for f in SAMPLE_DIR.glob("*.csv") if plugin.can_parse(f)]
+
+
+def _first_sample_for_plugin(plugin: BRIMProvider) -> Path | None:
+    """Pick a single representative sample for this plugin (pattern-based or any parseable)."""
+    pattern = plugin.test_file_pattern
+    if pattern:
+        for candidate in SAMPLE_DIR.iterdir():
+            if candidate.is_file() and pattern in candidate.name.lower():
+                return candidate
+    if plugin.provider_code == "broker_generic_csv":
+        sample = SAMPLE_DIR / "generic_simple.csv"
+        if sample.exists():
+            return sample
+    for candidate in sorted(SAMPLE_DIR.iterdir()):
+        if candidate.is_file() and candidate.suffix.lower() == ".csv":
+            try:
+                if plugin.can_parse(candidate):
+                    return candidate
+            except Exception:
+                continue
+    return None
 
 
 # =============================================================================
-# CATEGORY 1: PLUGIN DISCOVERY & REGISTRATION (run once, not parametrized)
+# CATEGORY 1: PLUGIN DISCOVERY & REGISTRATION (not parametrized)
 # =============================================================================
 
 
 class TestPluginDiscovery:
-    """Tests for plugin auto-discovery and registration."""
+    """Tests for plugin auto-discovery and registration (registry-level)."""
 
     def test_registry_discovers_plugins(self):
-        """PD-001: Verify auto-discovery finds at least 1 plugin."""
         plugins = BRIMProviderRegistry.list_plugin_info()
         assert len(plugins) >= 1, "No plugins discovered"
-        print(f"✓ Discovered {len(plugins)} plugins")
 
     def test_all_plugins_have_required_properties(self):
-        """PD-002: Verify all plugins have code, name, description."""
         plugins = BRIMProviderRegistry.list_plugin_info()
-
-        for plugin_info in plugins:
-            assert plugin_info.code, "Plugin missing code"
-            assert plugin_info.name, f"Plugin {plugin_info.code} missing name"
-            assert plugin_info.description, f"Plugin {plugin_info.code} missing description"
-            assert plugin_info.supported_extensions, f"Plugin {plugin_info.code} missing extensions"
-
-        print(f"✓ All {len(plugins)} plugins have required properties")
+        for info in plugins:
+            assert info.code, "Plugin missing code"
+            assert info.name, f"Plugin {info.code} missing name"
+            assert info.description, f"Plugin {info.code} missing description"
+            assert info.supported_extensions, f"Plugin {info.code} missing extensions"
 
     def test_plugin_codes_are_unique(self):
-        """PD-003: Verify no duplicate plugin codes."""
         plugins = BRIMProviderRegistry.list_plugin_info()
         codes = [p.code for p in plugins]
-
-        duplicates = [code for code in codes if codes.count(code) > 1]
+        duplicates = [c for c in codes if codes.count(c) > 1]
         assert not duplicates, f"Duplicate plugin codes: {set(duplicates)}"
-        print(f"✓ All {len(codes)} plugin codes are unique")
 
     def test_get_nonexistent_provider_returns_none(self):
-        """PD-005: Returns None for unknown code."""
-        instance = BRIMProviderRegistry.get_provider_instance("nonexistent_xyz_plugin")
-        assert instance is None, "Expected None for nonexistent plugin"
-        print("✓ Nonexistent provider returns None")
+        assert BRIMProviderRegistry.get_provider_instance("nonexistent_xyz_plugin") is None
 
     def test_all_sample_files_have_compatible_plugin(self):
-        """AD-003: Every sample file should be parseable by at least one plugin."""
         sample_files = get_all_sample_files()
         assert len(sample_files) > 0, "No sample files found"
-
-        uncovered_files = []
-        for sample_file in sample_files:
-            detected = BRIMProviderRegistry.auto_detect_plugin(sample_file)
-            if not detected:
-                uncovered_files.append(sample_file.name)
-
-        assert not uncovered_files, f"Files without compatible plugin: {uncovered_files}"
-        print(f"✓ All {len(sample_files)} sample files have a compatible plugin")
+        uncovered = [f.name for f in sample_files if not BRIMProviderRegistry.auto_detect_plugin(f)]
+        assert not uncovered, f"Files without compatible plugin: {uncovered}"
 
     def test_all_plugins_used_at_least_once(self):
-        """AD-003b: Every registered plugin should parse at least 1 sample file."""
         plugins = BRIMProviderRegistry.list_plugin_info()
         sample_files = get_all_sample_files()
 
-        used_plugins: Set[str] = set()
-        for sample_file in sample_files:
-            detected = BRIMProviderRegistry.auto_detect_plugin(sample_file)
+        used: Set[str] = set()
+        for f in sample_files:
+            detected = BRIMProviderRegistry.auto_detect_plugin(f)
             if detected:
-                used_plugins.add(detected)
+                used.add(detected)
 
-        # Generic CSV is always a fallback, so we exclude it from "must be used" check
         registered = {p.code for p in plugins}
-        unused = registered - used_plugins - {"broker_generic_csv"}
-
-        # Plugins without samples should be flagged - we want full coverage
+        unused = registered - used - {"broker_generic_csv"}
         assert not unused, f"Plugins without sample files (add samples!): {unused}"
 
-        print(f"✓ All {len(used_plugins)} non-generic plugins have sample files")
-
 
 # =============================================================================
-# CATEGORY 2: PARAMETRIZED PLUGIN TESTS (run for each plugin)
+# CATEGORY 2: PER-PLUGIN CONTRACT + BEHAVIOUR (parametrized over all plugins)
 # =============================================================================
 
 
-@pytest.mark.parametrize("provider_code", get_all_brim_providers())
-class TestPluginInterface:
-    """Parametrized tests that run for EACH registered plugin."""
+@pytest.mark.parametrize(("code", "plugin"), _PLUGIN_PARAMS, ids=_PLUGIN_IDS)
+class TestBRIMPlugin:
+    """Unified parametrized suite running for each registered BRIM plugin.
 
-    def test_provider_instance_creation(self, provider_code: str):
-        """PD-004: Verify instance creation works for plugin."""
-        instance = BRIMProviderRegistry.get_provider_instance(provider_code)
+    Merges the former ``TestPluginInterface`` + ``TestBRIMPluginsContract``
+    into a single class with consistent parametrization: each test receives
+    ``(code, plugin)`` directly — no per-test registry lookup.
+    """
 
-        assert instance is not None, f"Failed to get instance for {provider_code}"
-        assert isinstance(instance, BRIMProvider), "Instance is not BRIMProvider"
-        assert instance.provider_code == provider_code, "Code mismatch"
-        print(f"✓ {provider_code}: Instance created successfully")
+    # --- Identity & metadata ---
 
-    def test_provider_has_valid_metadata(self, provider_code: str):
-        """Verify provider metadata is valid."""
-        plugin = BRIMProviderRegistry.get_provider_instance(provider_code)
+    def test_provider_instance_identity(self, code: str, plugin: BRIMProvider):
+        assert isinstance(plugin, BRIMProvider)
+        assert plugin.provider_code == code
 
+    def test_provider_metadata_is_valid(self, code: str, plugin: BRIMProvider):
         assert plugin.provider_code, "Empty provider_code"
         assert plugin.provider_name, "Empty provider_name"
         assert plugin.description, "Empty description"
         assert plugin.supported_extensions, "No supported extensions"
-        assert all(ext.startswith(".") for ext in plugin.supported_extensions), "Extensions should start with '.'"
+        assert all(ext.startswith(".") for ext in plugin.supported_extensions)
 
-        print(f"✓ {provider_code}: Valid metadata")
+    def test_plugin_version_is_non_empty_string(self, code: str, plugin: BRIMProvider):
+        version = plugin.plugin_version
+        assert isinstance(version, str) and version.strip(), f"{code}: plugin_version must be non-empty string"
 
-    def test_provider_can_parse_at_least_one_sample(self, provider_code: str):
-        """Verify plugin can parse at least one sample file (if not generic fallback)."""
-        if provider_code == "broker_generic_csv":
-            pytest.skip("Generic CSV is a fallback, always parseable")
+    def test_docs_url_is_string_or_none(self, code: str, plugin: BRIMProvider):
+        url = plugin.docs_url
+        if url is not None:
+            assert isinstance(url, str) and url.strip()
 
-        parseable = get_sample_files_for_plugin(provider_code)
+    def test_preview_columns_baseline(self, code: str, plugin: BRIMProvider):
+        cols = plugin.preview_columns()
+        assert isinstance(cols, list) and cols, f"{code} preview_columns must be a non-empty list"
+        for col in cols:
+            assert isinstance(col, BRIMPreviewColumn)
+        keys = {c.key for c in cols}
+        missing = _BASELINE_COLUMN_KEYS - keys
+        assert not missing, f"{code} missing baseline columns: {missing}"
 
-        # Non-generic plugins should have sample files
-        if not parseable:
-            pytest.skip(f"{provider_code} has no sample files yet")
+    def test_to_plugin_info_propagates_fields(self, code: str, plugin: BRIMProvider):
+        info = plugin.to_plugin_info()
+        assert isinstance(info, BRIMPluginInfo)
+        assert info.code == code
+        assert info.plugin_version == plugin.plugin_version
+        assert info.preview_columns == plugin.preview_columns()
+        assert info.docs_url == plugin.docs_url
 
-        print(f"✓ {provider_code}: Can parse {len(parseable)} sample file(s)")
+    # --- Parse behaviour ---
 
-    def test_parse_returns_correct_types(self, provider_code: str):
-        """Verify parse() returns (List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo])."""
-        parseable = get_sample_files_for_plugin(provider_code)
+    def test_parse_returns_brim_parse_output(self, code: str, plugin: BRIMProvider):
+        sample = _first_sample_for_plugin(plugin)
+        if sample is None:
+            pytest.skip(f"No compatible sample report for {code}")
+        out = plugin.parse(sample, broker_id=1)
+        assert isinstance(out, BRIMParseOutput)
+        assert isinstance(out.transactions, list)
+        assert isinstance(out.warnings, list)
+        assert isinstance(out.extracted_assets, dict)
 
-        if not parseable:
-            pytest.skip(f"{provider_code} has no parseable sample files")
+    def test_parse_produces_transactions(self, code: str, plugin: BRIMProvider):
+        sample = _first_sample_for_plugin(plugin)
+        if sample is None:
+            pytest.skip(f"No compatible sample report for {code}")
+        out = plugin.parse(sample, broker_id=1)
+        assert len(out.transactions) > 0, f"No transactions parsed from {sample.name}"
+        assert all(isinstance(tx, TXCreateItem) for tx in out.transactions)
 
-        plugin = BRIMProviderRegistry.get_provider_instance(provider_code)
-        sample_file = parseable[0]
+    def test_extracted_assets_consistent_with_transactions(self, code: str, plugin: BRIMProvider):
+        sample = _first_sample_for_plugin(plugin)
+        if sample is None:
+            pytest.skip(f"No compatible sample report for {code}")
+        out = plugin.parse(sample, broker_id=1)
+        for fake_id, info in out.extracted_assets.items():
+            assert isinstance(fake_id, int)
+            assert isinstance(info, BRIMExtractedAssetInfo)
+        tx_asset_ids = {tx.asset_id for tx in out.transactions if tx.asset_id is not None}
+        missing = tx_asset_ids - set(out.extracted_assets.keys())
+        assert not missing, f"{code}: transaction asset_ids not in extracted_assets: {missing}"
 
-        result = plugin.parse(sample_file, broker_id=1)
+    def test_parse_is_idempotent(self, code: str, plugin: BRIMProvider):
+        """Same input → same output. Required for plugin_version-driven caching.
 
-        assert isinstance(result, tuple), "parse() should return tuple"
-        assert len(result) == 3, "parse() should return 3 values"
+        Compares ``.model_dump(mode="json")`` of BRIMParseOutput to avoid
+        false negatives from object identity.
+        """
+        sample = _first_sample_for_plugin(plugin)
+        if sample is None:
+            pytest.skip(f"No compatible sample report for {code}")
+        out1 = plugin.parse(sample, broker_id=1)
+        out2 = plugin.parse(sample, broker_id=1)
+        assert out1.model_dump(mode="json") == out2.model_dump(mode="json"), f"{code}: parse() is not idempotent on {sample.name}"
 
-        transactions, warnings, extracted_assets = result
-        assert isinstance(transactions, list), "First return should be list"
-        assert isinstance(warnings, list), "Second return should be list"
-        assert isinstance(extracted_assets, dict), "Third return should be dict"
+    def test_parse_produces_valid_fake_ids(self, code: str, plugin: BRIMProvider):
+        """Every asset_id key in extracted_assets must be a recognized fake id."""
+        sample = _first_sample_for_plugin(plugin)
+        if sample is None:
+            pytest.skip(f"No compatible sample report for {code}")
+        out = plugin.parse(sample, broker_id=1)
+        for fake_id in out.extracted_assets.keys():
+            assert is_fake_asset_id(fake_id), f"{code}: extracted_assets key {fake_id} is not a valid fake id"
 
-        if transactions:
-            assert isinstance(transactions[0], TXCreateItem), "Transactions should be TXCreateItem instances"
-
-        print(f"✓ {provider_code}: parse() returns correct types")
-
-    def test_parse_produces_transactions(self, provider_code: str):
-        """Verify parse() produces at least one transaction."""
-        parseable = get_sample_files_for_plugin(provider_code)
-
-        if not parseable:
-            pytest.skip(f"{provider_code} has no parseable sample files")
-
-        plugin = BRIMProviderRegistry.get_provider_instance(provider_code)
-        sample_file = parseable[0]
-
-        transactions, warnings, _ = plugin.parse(sample_file, broker_id=1)
-
-        assert len(transactions) > 0, f"No transactions parsed from {sample_file.name}"
-
-        print(f"✓ {provider_code}: Parsed {len(transactions)} transactions from {sample_file.name}")
-
-    def test_transactions_have_required_fields(self, provider_code: str):
-        """Verify all transactions have required fields populated."""
-        parseable = get_sample_files_for_plugin(provider_code)
-
-        if not parseable:
-            pytest.skip(f"{provider_code} has no parseable sample files")
-
-        plugin = BRIMProviderRegistry.get_provider_instance(provider_code)
-        sample_file = parseable[0]
-
-        transactions, _, _ = plugin.parse(sample_file, broker_id=1)
-
-        for i, tx in enumerate(transactions):
-            assert tx.broker_id == 1, f"TX {i}: broker_id not set"
-            assert tx.type is not None, f"TX {i}: type is None"
-            assert tx.date is not None, f"TX {i}: date is None"
-            # quantity can be 0 for deposits
-            # cash can be None for adjustments
-
-        print(f"✓ {provider_code}: All {len(transactions)} transactions have required fields")
-
-    def test_get_extracted_assets_from_parse(self, provider_code: str):
-        """Verify parse() returns extracted_assets dict with correct structure."""
-        parseable = get_sample_files_for_plugin(provider_code)
-
-        if not parseable:
-            pytest.skip(f"{provider_code} has no parseable sample files")
-
-        plugin = BRIMProviderRegistry.get_provider_instance(provider_code)
-        sample_file = parseable[0]
-
-        # Parse returns (transactions, warnings, extracted_assets)
-        transactions, warnings, assets = plugin.parse(sample_file, broker_id=1)
-
-        assert isinstance(assets, dict), "extracted_assets should be dict"
-
-        # Each value should be BRIMExtractedAssetInfo
-        from backend.app.schemas.brim import BRIMExtractedAssetInfo  # noqa: PLC0415 — test setup — imports after sys.path/db config
-
-        for fake_id, info in assets.items():
-            assert isinstance(fake_id, int), "Fake ID should be int"
-            assert isinstance(info, BRIMExtractedAssetInfo), f"Asset info should be BRIMExtractedAssetInfo, got {type(info)}"
-
-        # Verify consistency: every asset_id in transactions should be in extracted_assets
-        # (except None for non-asset transactions like deposits)
-        tx_asset_ids = {tx.asset_id for tx in transactions if tx.asset_id is not None}
-        missing_from_assets = tx_asset_ids - set(assets.keys())
-        assert not missing_from_assets, f"Transaction asset_ids not in extracted_assets: {missing_from_assets}"
-
-        print(f"✓ {provider_code}: parse() returns {len(assets)} extracted assets, all consistent with transactions")
-
-    def test_all_parseable_samples_succeed(self, provider_code: str):
-        """Verify plugin can parse ALL its compatible sample files without error."""
-        # For generic CSV, only test files that are auto-detected as generic
-        # (not files that have a specific plugin)
-        if provider_code == "broker_generic_csv":
-            sample_files = get_all_sample_files()
-            parseable = []
-            for f in sample_files:
-                detected = BRIMProviderRegistry.auto_detect_plugin(f)
-                if detected == "broker_generic_csv":
-                    parseable.append(f)
+    def test_broker_id_propagated_on_all_samples_and_all_tx(self, code: str, plugin: BRIMProvider):
+        """broker_id must be propagated on every TX of every compatible sample."""
+        if code == "broker_generic_csv":
+            samples = [f for f in get_all_sample_files() if BRIMProviderRegistry.auto_detect_plugin(f) == "broker_generic_csv"]
         else:
-            parseable = get_sample_files_for_plugin(provider_code)
+            samples = get_sample_files_for_plugin(plugin)
 
-        if not parseable:
-            pytest.skip(f"{provider_code} has no parseable sample files")
+        if not samples:
+            pytest.skip(f"{code} has no compatible sample files")
 
-        plugin = BRIMProviderRegistry.get_provider_instance(provider_code)
+        for sample in samples:
+            out = plugin.parse(sample, broker_id=1)
+            for i, tx in enumerate(out.transactions):
+                assert tx.broker_id == 1, f"{code} [{sample.name}] tx[{i}] broker_id={tx.broker_id} != 1"
 
-        for sample_file in parseable:
+    def test_all_parseable_samples_succeed(self, code: str, plugin: BRIMProvider):
+        """Plugin must parse ALL its compatible sample files without raising."""
+        if code == "broker_generic_csv":
+            samples = [f for f in get_all_sample_files() if BRIMProviderRegistry.auto_detect_plugin(f) == "broker_generic_csv"]
+        else:
+            samples = get_sample_files_for_plugin(plugin)
+
+        if not samples:
+            pytest.skip(f"{code} has no compatible sample files")
+
+        for sample in samples:
             try:
-                transactions, warnings, _ = plugin.parse(sample_file, broker_id=1)
-                assert len(transactions) > 0, f"No transactions from {sample_file.name}"
+                out = plugin.parse(sample, broker_id=1)
+                assert len(out.transactions) > 0, f"No transactions from {sample.name}"
             except Exception as e:
-                pytest.fail(f"Failed to parse {sample_file.name}: {e}")
-
-        print(f"✓ {provider_code}: Successfully parsed all {len(parseable)} sample files")
+                pytest.fail(f"{code} failed to parse {sample.name}: {e}")
 
 
 # =============================================================================
-# CATEGORY 3: AUTO-DETECTION TESTS
+# CATEGORY 2b: MALFORMED INPUT — parser-level warnings (not parametrized)
+# =============================================================================
+
+
+class TestGenericMalformedRow:
+    """Validate that the generic CSV plugin surfaces warnings or raises
+    :class:`BRIMParseError` on a deliberately corrupt row, without
+    crashing with a raw exception.
+
+    Scope limited to the generic plugin because the malformed sample is
+    format-agnostic; broker-specific plugins have their own structural
+    constraints (tested via ``test_all_parseable_samples_succeed``).
+    """
+
+    MALFORMED_SAMPLE = SAMPLE_DIR / "malformed" / "generic_malformed_row.csv"
+
+    def test_malformed_sample_file_exists(self):
+        assert self.MALFORMED_SAMPLE.exists(), f"Required sample missing: {self.MALFORMED_SAMPLE.name}. " "Add a minimal CSV with one row that has an unparseable date or missing required column."
+
+    def test_parse_malformed_either_warns_or_raises_brim_error(self):
+        plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
+        assert plugin is not None
+
+        try:
+            out = plugin.parse(self.MALFORMED_SAMPLE, broker_id=1)
+        except BRIMParseError:
+            # Acceptable: structural error raised as BRIMParseError
+            return
+        # Non-raising path: must surface at least one warning
+        assert len(out.warnings) > 0, "Malformed row should produce a warning or raise BRIMParseError"
+
+
+# =============================================================================
+# CATEGORY 3: AUTO-DETECTION TESTS (not parametrized)
 # =============================================================================
 
 
@@ -328,77 +344,41 @@ class TestAutoDetection:
     """Tests for plugin auto-detection functionality."""
 
     def test_auto_detect_returns_valid_plugin(self):
-        """Verify auto_detect_plugin returns a valid plugin code."""
         sample_files = get_all_sample_files()
         assert len(sample_files) > 0, "No sample files to test"
-
         for sample_file in sample_files:
             detected = BRIMProviderRegistry.auto_detect_plugin(sample_file)
             assert detected is not None, f"No plugin detected for {sample_file.name}"
-
-            # Verify detected plugin exists
-            plugin = BRIMProviderRegistry.get_provider_instance(detected)
-            assert plugin is not None, f"Detected plugin {detected} doesn't exist"
-
-        print(f"✓ Auto-detection works for all {len(sample_files)} sample files")
+            assert BRIMProviderRegistry.get_provider_instance(detected) is not None
 
     def test_detection_prefers_specific_over_generic(self):
-        """Verify specific plugins are preferred over generic CSV."""
         sample_files = get_all_sample_files()
-
-        specific_detections = 0
-        generic_detections = 0
-
-        for sample_file in sample_files:
-            detected = BRIMProviderRegistry.auto_detect_plugin(sample_file)
-            if detected == "broker_generic_csv":
-                generic_detections += 1
-            else:
-                specific_detections += 1
-
-        # Should have some specific detections if broker-specific samples exist
-        print(f"  Specific: {specific_detections}, Generic: {generic_detections}")
-
-        # At least directa, degiro, etc. should be detected specifically
-        assert specific_detections > 0, "No broker-specific plugins detected"
-        print(f"✓ Specific plugins preferred: {specific_detections} specific, {generic_detections} generic")
+        specific = sum(1 for f in sample_files if BRIMProviderRegistry.auto_detect_plugin(f) != "broker_generic_csv")
+        assert specific > 0, "No broker-specific plugins detected"
 
     def test_specific_broker_detection_via_plugin_pattern(self):
-        """Verify plugins with test_file_pattern are correctly detected for matching files."""
         sample_files = get_all_sample_files()
-        plugins = BRIMProviderRegistry.list_plugin_info()
-
-        for plugin_info in plugins:
-            plugin = BRIMProviderRegistry.get_provider_instance(plugin_info.code)
+        for info in BRIMProviderRegistry.list_plugin_info():
+            plugin = BRIMProviderRegistry.get_provider_instance(info.code)
             pattern = plugin.test_file_pattern
-
             if pattern is None:
-                # Generic plugin or no test pattern defined
                 continue
-
-            # Find sample files matching this pattern
             matching = [f for f in sample_files if pattern in f.name.lower()]
-
             if not matching:
-                # No sample file for this plugin's pattern
                 continue
-
-            # Verify the plugin is detected for its matching files
             for sample_file in matching:
                 detected = BRIMProviderRegistry.auto_detect_plugin(sample_file)
-                assert detected == plugin_info.code, f"{sample_file.name} detected as {detected}, expected {plugin_info.code}"
-                print(f"✓ {sample_file.name} → {detected}")
+                assert detected == info.code, f"{sample_file.name} detected as {detected}, expected {info.code}"
 
 
 # =============================================================================
-# CATEGORY 4: GENERIC CSV SPECIFIC TESTS
+# CATEGORY 4: GENERIC CSV SPECIFIC TESTS (not parametrized)
 # =============================================================================
 
 
 class TestGenericCSVPlugin:
     """Specific tests for the generic CSV fallback plugin."""
 
-    # Required generic sample files for E2E testing
     REQUIRED_GENERIC_FILES = [
         "generic_simple.csv",
         "generic_dates.csv",
@@ -407,65 +387,37 @@ class TestGenericCSVPlugin:
     ]
 
     def test_required_generic_files_exist(self):
-        """Verify all required generic sample files exist."""
         for filename in self.REQUIRED_GENERIC_FILES:
             filepath = SAMPLE_DIR / filename
             assert filepath.exists(), f"Required generic sample file missing: {filename}"
 
-        print(f"✓ All {len(self.REQUIRED_GENERIC_FILES)} required generic files exist")
-
     def test_generic_can_parse_any_csv(self):
-        """Generic plugin should be able to parse any CSV file."""
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
-        assert plugin is not None, "Generic CSV plugin not registered"
-
-        sample_files = get_all_sample_files()
-
-        for sample_file in sample_files:
-            assert plugin.can_parse(sample_file), f"Generic plugin should be able to parse {sample_file.name}"
-
-        print(f"✓ Generic plugin can parse all {len(sample_files)} sample files")
+        assert plugin is not None
+        for sample_file in get_all_sample_files():
+            assert plugin.can_parse(sample_file), f"Generic plugin should parse {sample_file.name}"
 
     def test_generic_handles_multiple_date_formats(self):
-        """Generic plugin should handle various date formats."""
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
-
-        # Find generic_dates.csv if it exists
         dates_file = SAMPLE_DIR / "generic_dates.csv"
         if not dates_file.exists():
             pytest.skip("generic_dates.csv not found")
-
-        transactions, warnings, _ = plugin.parse(dates_file, broker_id=1)
-
-        assert len(transactions) > 0, "Should parse some transactions"
-
-        # All should have valid dates
-        for tx in transactions:
-            assert tx.date is not None, "Transaction missing date"
-
-        print(f"✓ Generic plugin parsed {len(transactions)} transactions with various date formats")
+        out = plugin.parse(dates_file, broker_id=1)
+        assert len(out.transactions) > 0
+        for tx in out.transactions:
+            assert tx.date is not None
 
     def test_generic_has_lowest_priority(self):
-        """Generic plugin should have lower priority than specific plugins."""
         generic = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
-
-        assert generic.detection_priority < 100, f"Generic priority ({generic.detection_priority}) should be < 100"
-
-        # Check that specific plugins have higher priority
+        assert generic.detection_priority < 100
         for info in BRIMProviderRegistry.list_plugin_info():
             if info.code != "broker_generic_csv":
                 other = BRIMProviderRegistry.get_provider_instance(info.code)
                 assert other.detection_priority >= generic.detection_priority, f"{info.code} priority should be >= generic"
 
-        print(f"✓ Generic plugin has lowest priority ({generic.detection_priority})")
-
     def test_generic_has_no_test_file_pattern(self):
-        """Generic plugin should return None for test_file_pattern."""
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
-
-        assert plugin.test_file_pattern is None, "Generic plugin should have no test_file_pattern"
-
-        print("✓ Generic plugin has no test_file_pattern")
+        assert plugin.test_file_pattern is None
 
 
 if __name__ == "__main__":
