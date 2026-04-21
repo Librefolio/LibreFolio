@@ -47,6 +47,12 @@ LibreFolio/
 - **No incremental Alembic migrations** — modify `001_initial.py` and recreate DB with `./dev.py db create-clean`
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
 - **After modifying DB models** — run `./dev.py db create-clean`
+- **NEVER run `git commit`** — the agent must only *propose* commit messages
+  (e.g. write them to `/tmp/libreFolio_commit_*.txt` or print them inline).
+  The user performs the actual commit manually. Staging (`git add`) and read-only
+  git commands (`git status`, `git diff`, `git log --no-pager`) are allowed.
+  Same rule for `git push`, `git reset --hard`, `git rebase`, `git checkout -- …`
+  and any other history-mutating operation: **never** execute, only suggest.
 
 ## Terminal Command Rules
 
