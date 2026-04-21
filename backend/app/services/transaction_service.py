@@ -26,7 +26,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
 from backend.app.schemas.transactions import (
     EVENT_COMPATIBLE_TYPES,
     TXBulkCreateResponse,
@@ -806,12 +806,10 @@ class TransactionService:
 
         No side effects. The caller is responsible for auth.
         """
-        from backend.app.db.models import AssetEventType as _AET  # noqa: PLC0415
-
         type_map = {
-            TransactionType.DIVIDEND: {_AET.DIVIDEND},
-            TransactionType.INTEREST: {_AET.INTEREST},
-            TransactionType.ADJUSTMENT: {_AET.PRICE_ADJUSTMENT, _AET.SPLIT},
+            TransactionType.DIVIDEND: {AssetEventType.DIVIDEND},
+            TransactionType.INTEREST: {AssetEventType.INTEREST},
+            TransactionType.ADJUSTMENT: {AssetEventType.PRICE_ADJUSTMENT, AssetEventType.SPLIT},
         }
 
         results: List[TXEventSuggestResultItem] = []
