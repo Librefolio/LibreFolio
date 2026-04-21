@@ -1,7 +1,7 @@
 # Plan: Phase 7 — Part 3: API Consolidation (atomic per-broker) + events/suggest + deferred from Part 1
 
-**Data**: 20 Aprile 2026
-**Status**: 📋 PIANIFICATO (pronto per implementazione)
+**Data**: 20 Aprile 2026 · **Ultimo update**: 21 Aprile 2026
+**Status**: 🏗️ IN CORSO (A+B, C, D ✅ · H nuovo · E, F, G ⏳)
 **Priorità**: P0 (sblocca Part 4 transactions page e Part 5 Staging Modal)
 **Effort stimato**: ~3–4 giorni (grosso; include gli spin-off Part 1 §8 e §9)
 **Phase**: [Phase 7 — Transactions System](./phases/phase-07-transactions.md)
@@ -57,6 +57,40 @@ campo `status` tri-state + `success` resta per retro-logica semplice.
 Blocchi A (service) e B (router) sono inseparabili: cambiare le firme del
 service senza aggiornare il router lascia il backend non-compilante. Vengono
 committati insieme come "Part 3 Block A+B — multi-broker atomic transactions".
+
+### Dev-2026-04-21 — Blocco H inserito dopo D (transfer semantics + promotion)
+
+In review dei commit A+B/C/D sono emerse 4 domande di design non coperte dal
+piano originale, che portano al nuovo **Blocco H** (vedi sotto, prima di E):
+
+1. **Validazione pairing su broker/tipo coerenti** — oggi nessun vincolo impedisce
+   un TRANSFER con due item sullo stesso broker (no-op semantico), né un mix di
+   tipi nello stesso `link_uuid`. Regole nuove: TRANSFER richiede broker distinti,
+   la coppia deve condividere lo stesso `type`. FX_CONVERSION resta intra-broker
+   OK (use-case reale: conversione multi-valuta su conto unico).
+2. **Pairing soft per DEPOSIT/WITHDRAWAL** — la coppia "bonifico cash tra i miei
+   broker" (es. 5k EUR da Fineco a IBKR) oggi esiste come due tx sciolte. Estendo
+   il meccanismo `link_uuid`: diventa facoltativo per DEPOSIT/WITHDRAWAL e produce
+   un `related_transaction_id` bidirezionale anche su questi tipi. Nessun tipo
+   nuovo (no `CASH_TRANSFER`), nessun effetto su balance o PMC — solo marker di
+   intenzione che aiuta refinement BRIM e UX.
+3. **Suggeritore di trasferimenti** — ho valutato `POST /transactions/transfers/suggest`
+   dedicato e l'ho **scartato**: il match è una combinazione di filtri (segno
+   opposto, tolleranza temporale/importo, escludi già linkate/stesso broker) che
+   si risolve estendendo `GET /transactions` con 3 filtri nuovi
+   (`amount_abs_min`, `amount_abs_max`, `only_unlinked`) + `exclude_ids`. Il
+   client calcola i parametri dalla tx "seed" e ottiene la lista candidata.
+   Meno superficie API, più composabilità.
+4. **Promozione coppia DEPOSIT/WITHDRAWAL → TRANSFER/FX_CONVERSION** — richiesta
+   dal flusso "refinement BRIM". Cambiare `type` via `PATCH /bulk` è vietato
+   dalla policy (immutable-type). Serve un endpoint atomico
+   `POST /transactions/transfers/promote` che: validate → delete pair →
+   create pair con nuovo type + link, tutto in un batch atomico riciclando la
+   stessa logica di `create_bulk`.
+
+Tipo `TRANSFER` **resta valido** per gli asset (azioni/ETF tra broker): l'alternativa
+SELL/BUY o DEPOSIT/WITHDRAWAL rompe il cost-basis FIFO (`cost_basis_override` va
+propagato). Per il cash intra-utente basta la coppia linkata senza nuovo tipo.
 
 ---
 
@@ -162,6 +196,7 @@ committati insieme come "Part 3 Block A+B — multi-broker atomic transactions".
 | 18 | `backend/test_scripts/test_services/test_prices_currency_coherence.py` | **Nuovo** | G |
 | 19 | `backend/test_scripts/test_services/test_ohlc_sentinel.py` | **Nuovo** | G |
 | 20 | `scripts/test_runner.py` | Modifica | G |
+| 21 | `backend/test_scripts/test_api/test_transfer_promotion.py` | **Nuovo** | H |
 
 ---
 
@@ -172,7 +207,7 @@ committati insieme come "Part 3 Block A+B — multi-broker atomic transactions".
 > I blocchi con modifiche UI (D, E-frontend, F-frontend) richiedono **test manuale
 > estetico dell'utente** prima di chiudere il blocco. L'agent deve fermarsi e chiedere conferma.
 
-### Blocco A — Service refactor: atomic + broker-scoped
+### Blocco A — Service refactor: atomic + broker-scoped  ✅ DONE (2026-04-20, commit `df6cdde0`)
 
 1. Aggiungere `TransactionService._check_broker_access_or_raise(broker_id, user_id, min_role)` che lancia `HTTPException(403)` su miss. Usato una volta per batch.
 2. Refactor `create_bulk(broker_id, items, user_id)`:
@@ -194,7 +229,7 @@ committati insieme come "Part 3 Block A+B — multi-broker atomic transactions".
 
 ---
 
-### Blocco B — Router refactor: broker-scoped endpoints
+### Blocco B — Router refactor: broker-scoped endpoints  ✅ DONE (2026-04-20, commit `df6cdde0`, fuso con A)
 
 1. **Rimuovere** `GET /transactions/{tx_id}`.
 2. **Spostare** le 3 rotte bulk su `brokers_router`:
@@ -210,7 +245,7 @@ committati insieme come "Part 3 Block A+B — multi-broker atomic transactions".
 
 ---
 
-### Blocco C — `/validate` dry-run misto + `/events/suggest`
+### Blocco C — `/validate` dry-run misto + `/events/suggest`  ✅ DONE (2026-04-20, commit `c3faae19`)
 
 #### C.1 `POST /brokers/{broker_id}/transactions/validate`
 
@@ -249,7 +284,10 @@ Body `List[TXEventSuggestRequestItem]` cap 500. Response stesso ordine input. Ne
 
 ---
 
-### Blocco D — i18n delete-events + mock data (deferred Part 1)
+### Blocco D — i18n delete-events + mock data (deferred Part 1)  ✅ DONE (2026-04-20, commit `a7551fa3`)
+
+> Nota: lo step 3 "🎨 Test manuale utente" nei 4 linguaggi resta aperto per la review UX
+> finale; le chiavi e i toast sono in place.
 
 1. `./dev.py i18n add` × 4 lingue:
    - `events.deleteSuccess` = "{count} event(s) deleted"
@@ -262,6 +300,174 @@ Body `List[TXEventSuggestRequestItem]` cap 500. Response stesso ordine input. Ne
    - +1 tx `INTEREST` su bond mock (BTP) linkata a `AssetEvent INTEREST` esistente.
    - +1 tx DIVIDEND su broker **non** accessibile a `e2e_test_user` (admin-only OWNER). Fixture per caso "hidden" spec E2E Parte 4.
    - `./dev.py db create-clean` + verifica visuale.
+
+---
+
+### Blocco H — Transfer semantics + query extensions + promotion  🆕 (Dev-2026-04-21)
+
+Raccoglie 4 osservazioni emerse in review post-commit D. Backend-only, nessun UI
+cambia (lo sfrutteranno Part 4 e Part 5).
+
+#### H.1 Validazione pairing: broker distinti + type coincidente
+
+In `create_bulk` fase 2 (e analogamente in `validate_batch`), quando risolvo un
+`link_uuid` con `len(pair) == 2`, aggiungo due check **prima** di settare
+`related_transaction_id`:
+
+```python
+if pair[0].type != pair[1].type:
+    error "linked pair must share the same type "
+          f"(got {pair[0].type.value} + {pair[1].type.value})"
+elif pair[0].type == TransactionType.TRANSFER and pair[0].broker_id == pair[1].broker_id:
+    error "TRANSFER requires distinct brokers (both on broker X)"
+# FX_CONVERSION intra-broker: consentito (multi-currency account)
+# DEPOSIT/WITHDRAWAL intra-broker: consentito (serve per ADJUSTMENT di cassa)
+else:
+    pair[0].related_transaction_id = pair[1].id
+    pair[1].related_transaction_id = pair[0].id
+```
+
+#### H.2 `link_uuid` facoltativo per DEPOSIT/WITHDRAWAL (soft relax)
+
+Oggi `schemas/transactions.py` Rule 1 richiede `link_uuid` solo per TRANSFER e
+FX_CONVERSION. Per DEPOSIT/WITHDRAWAL il campo esiste come opzionale ma è stato
+silenziosamente ignorato dal pairing (se coppia DEPOSIT↔WITHDRAWAL arrivava con
+stesso link_uuid, il service non linkava). Cambi:
+
+- Validator: nessuna modifica richiesta (il campo era già `Optional[str]` con
+  `max_length=36`; per TRANSFER/FX_CONVERSION resta obbligatorio via Rule 1).
+- Service `create_bulk` fase 2: rimuovo il filtro implicito per tipo quando
+  processo `link_uuid_map` — **ogni** coppia con 2 tx riceve il
+  `related_transaction_id` bidirezionale, purché H.1 passi.
+- Semantica: DEPOSIT + WITHDRAWAL linkate sono un *marker di intenzione*
+  (bonifico tra i miei broker). Zero effetto su balance/PMC — è solo storytelling.
+
+#### H.3 Estensione filtri `GET /transactions` (per match trasferimenti)
+
+Tre nuovi filtri opzionali in `TXQueryParams` + handler router:
+
+| Param | Tipo | Semantica |
+|---|---|---|
+| `amount_abs_min` | `Optional[Decimal]` | `ABS(Transaction.amount) >= N` |
+| `amount_abs_max` | `Optional[Decimal]` | `ABS(Transaction.amount) <= N` |
+| `only_unlinked` | `bool = False` | `Transaction.related_transaction_id IS NULL` |
+| `exclude_ids` | `Optional[List[int]]` | `Transaction.id NOT IN (…)` |
+
+`exclude_ids` va mantenuto disgiunto da `ids` (che è mutex con gli altri filtri):
+se il client chiede `ids=…` ignoriamo `exclude_ids`. Gli altri tre convivono con
+qualsiasi filtro esistente (broker_id, types, date_range, currency, tags…).
+
+Uso tipico (pseudocode client-side):
+```ts
+// seed = DEPOSIT +500 EUR on broker A, 2026-03-15
+const candidates = await api.query_transactions({
+  types: ['WITHDRAWAL'],                // segno opposto = tipo opposto
+  currency: 'EUR',
+  amount_abs_min: 495, amount_abs_max: 505, // 1% tolerance
+  date_start: '2026-03-12', date_end: '2026-03-18',
+  only_unlinked: true,
+  exclude_ids: [seed.id],
+});
+```
+
+L'ordinamento rimane `date DESC, id DESC` (default di `query`). Il client ordina
+ulteriormente per `abs(date - seed.date)` lato UI.
+
+#### H.4 `POST /transactions/transfers/promote`
+
+Endpoint dedicato per promuovere una coppia DEPOSIT/WITHDRAWAL a
+TRANSFER (con asset) o FX_CONVERSION (cross-currency stesso broker).
+Non si può fare via PATCH: `type` è immutable.
+
+**Schemi nuovi** (`schemas/transactions.py`):
+
+```python
+class TXTransferPromoteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_tx_id: int = Field(..., gt=0)
+    to_tx_id:   int = Field(..., gt=0)
+    new_type:   Literal[TransactionType.TRANSFER, TransactionType.FX_CONVERSION]
+    # Richiesto se new_type == TRANSFER (cash -> asset transfer)
+    asset_id:   Optional[int] = Field(None, gt=0)
+    quantity:   Optional[Decimal] = None
+    # Opzionale: override nuovi amount (per FX_CONVERSION i cash restano)
+    # Se None, riusa from/to esistenti.
+
+class TXTransferPromoteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rolled_back: bool
+    new_from_tx_id: Optional[int] = None
+    new_to_tx_id:   Optional[int] = None
+    errors: List[str] = Field(default_factory=list)
+```
+
+**Service `promote_transfer(req, user_id)` — algoritmo**:
+
+1. Load `from_tx = session.get(Transaction, req.from_tx_id)` + idem `to_tx`.
+   None → errore, rolled_back=True.
+2. Access check EDITOR su `{from_tx.broker_id, to_tx.broker_id}`.
+3. Pre-check coerenza:
+   - Tipi attuali: `from_tx.type` e `to_tx.type` devono essere
+     `{DEPOSIT, WITHDRAWAL}` (due tipi cash sciolti) o `{BUY, SELL}` (già
+     promoted equivalente? out-of-scope per ora).
+   - Se `new_type == TRANSFER`: `req.asset_id` e `req.quantity` obbligatori,
+     i due broker devono essere distinti (H.1).
+   - Se `new_type == FX_CONVERSION`: `from_tx.currency != to_tx.currency`
+     obbligato, stesso broker ammesso.
+4. **Delete pair** via `delete_bulk([from_tx_id, to_tx_id])` — la pre-check
+   linked-pair dell'attuale delete_bulk verifica già che eliminare entrambe
+   non lascia dangling (se erano già linkate).
+5. **Create pair** via `create_bulk([create_A, create_B])` con `link_uuid`
+   generato, i nuovi campi `type`, eventuale `asset_id`/`quantity`, e
+   `cost_basis_override` propagato per TRANSFER (se il from era su un asset
+   con holding).
+6. Atomicità: entrambi i passi condividono la stessa `session`, qualsiasi
+   fallimento in step 5 → rollback e lo step 4 viene anch'esso annullato.
+   → `rolled_back=True`, nuovi id `None`.
+7. Commit nel router solo se entrambi gli step riescono.
+
+Router:
+```python
+@tx_router.post("/transfers/promote", response_model=TXTransferPromoteResponse)
+async def promote_transfer(
+    req: TXTransferPromoteRequest,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> TXTransferPromoteResponse:
+    user_id = current_user.id
+    service = TransactionService(session)
+    response = await service.promote_transfer(req, user_id=user_id)
+    if not response.rolled_back:
+        await session.commit()
+    else:
+        await session.rollback()
+    return response
+```
+
+#### H.5 Test (appendice a G)
+
+Nuovi casi da aggiungere a `test_transaction_service.py`:
+- `test_pairing_rejects_mixed_types_in_link_uuid`.
+- `test_pairing_rejects_transfer_same_broker`.
+- `test_pairing_allows_fx_conversion_same_broker`.
+- `test_pairing_allows_deposit_withdrawal_linked`.
+
+Nuovo file `test_transactions_api.py` (appendice):
+- `test_query_filters_amount_abs_range`.
+- `test_query_filters_only_unlinked`.
+- `test_query_filters_exclude_ids`.
+- `test_query_ids_overrides_exclude_ids`.
+
+Nuovo file `test_transfer_promotion.py`:
+- `test_promote_deposit_withdrawal_to_transfer_cross_broker`.
+- `test_promote_deposit_withdrawal_to_fx_conversion_intra_broker`.
+- `test_promote_rejects_transfer_same_broker`.
+- `test_promote_rejects_fx_conversion_same_currency`.
+- `test_promote_requires_editor_on_both_brokers`.
+- `test_promote_atomicity_on_create_failure`.
+- `test_promote_preserves_cost_basis_for_transfer`.
 
 ---
 
@@ -451,13 +657,17 @@ Aggiungere entry:
 - `POST/PATCH/DELETE /brokers/{broker_id}/transactions/bulk` atomic + `rolled_back`.
 - `POST /brokers/{broker_id}/transactions/validate` dry-run misto.
 - `POST /transactions/events/suggest` tolerance 0–7gg.
+- `POST /transactions/transfers/promote` promozione DEPOSIT/WITHDRAWAL → TRANSFER/FX_CONVERSION (H.4).
 - `POST /assets/{id}/prices/normalize` conversione punti dissonanti.
 - `GET /transactions?ids=…` (sostituisce `/{id}` rimosso).
-- `GET /transactions` filtrato per broker accessibili.
+- `GET /transactions` filtrato per broker accessibili + nuovi filtri
+  `amount_abs_min`, `amount_abs_max`, `only_unlinked`, `exclude_ids` (H.3).
 
 ### Service
 - `TransactionService.*_bulk` atomiche + broker-scoped.
 - `TransactionService.validate_batch`, `.suggest_events_bulk`.
+- `TransactionService.promote_transfer` (H.4).
+- Pairing `link_uuid` esteso a DEPOSIT/WITHDRAWAL + check broker distinti su TRANSFER + check type coerente (H.1, H.2).
 - `asset_source.upsert_prices_bulk` validazione currency.
 - `asset_source._extend_ohlc_bounds` intra-day.
 - `fx_provider_manager.ensure_pair_registered`.
@@ -466,6 +676,8 @@ Aggiungere entry:
 - `rolled_back` in tutti i TXBulk*Response.
 - `TXValidateBatch`, `TXValidationIssue`, `TXValidateResponse`.
 - `TXEventSuggestRequestItem`, `TXEventSuggestResultItem`.
+- `TXTransferPromoteRequest`, `TXTransferPromoteResponse` (H.4).
+- `TXQueryParams` con `amount_abs_min`, `amount_abs_max`, `only_unlinked`, `exclude_ids` (H.3).
 - `FAPricePoint.original_currency` sempre.
 - `AssetBackwardFillInfo.fx_error`.
 - `FAPriceQueryResult.currency_breakdown`.
@@ -500,6 +712,10 @@ Aggiungere entry:
 | 7 | Provider > utente sui prezzi | No `manual_override_fields` |
 | 8 | Auto-registrazione FX su mismatch | Riduce friction utente |
 | 9 | Blocchi UI → test manuale utente | Esplicito nel flusso |
+| 10 | Transfer-match via filtri `GET /transactions` esteso | No endpoint dedicato — client compone i filtri (H.3) |
+| 11 | DEPOSIT/WITHDRAWAL linkabili, no nuovo tipo CASH_TRANSFER | Marker di intenzione zero-cost, niente effetto su balance/PMC (H.2) |
+| 12 | `type` resta immutable via PATCH | Promozione coppia via endpoint dedicato `/transfers/promote` (H.4) |
+| 13 | TRANSFER richiede broker distinti, FX_CONVERSION no | TRANSFER intra-broker è no-op semantico; FX intra-broker è use-case reale (H.1) |
 
 ---
 
@@ -536,6 +752,7 @@ Aggiungere entry:
 ./dev.py test api transactions
 ./dev.py test api transactions-validate
 ./dev.py test api events-suggest
+./dev.py test api transfer-promotion     # H
 ./dev.py test services prices-currency
 ./dev.py test services ohlc-sentinel
 
