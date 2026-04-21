@@ -421,6 +421,13 @@ class TXQueryParams(BaseModel):
     tags: Optional[List[str]] = Field(default=None, description="Filter by tags (any match)")
     currency: Optional[str] = Field(default=None, max_length=3, description="Filter by currency")
 
+    # H.3: transfer-match helpers. Composable with the other filters. When `ids`
+    # is set, these filters (including exclude_ids) are ignored.
+    amount_abs_min: Optional[Decimal] = Field(default=None, description="ABS(amount) >= N")
+    amount_abs_max: Optional[Decimal] = Field(default=None, description="ABS(amount) <= N")
+    only_unlinked: bool = Field(default=False, description="related_transaction_id IS NULL")
+    exclude_ids: Optional[List[int]] = Field(default=None, description="Transaction.id NOT IN (...)")
+
     limit: int = Field(default=100, ge=1, le=1000, description="Max results")
     offset: int = Field(default=0, ge=0, description="Offset for pagination")
 
@@ -632,6 +639,48 @@ class TXEventSuggestResultItem(BaseModel):
     type: TransactionType
     candidates: List[TXEventSuggestCandidate] = Field(default_factory=list)
     skipped_reason: Optional[Literal["type_not_event_compatible"]] = None
+
+
+# =============================================================================
+# TRANSFER PROMOTION (Block H.4)
+# =============================================================================
+
+
+class TXTransferPromoteRequest(BaseModel):
+    """
+    Atomically promote a DEPOSIT/WITHDRAWAL pair into a TRANSFER (with asset)
+    or FX_CONVERSION (cross-currency, same broker).
+
+    Cannot be done via PATCH because `type` is immutable on existing rows —
+    the endpoint deletes the original pair and creates a new one within a
+    single session.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    from_tx_id: int = Field(..., gt=0, description="Source transaction (e.g. original WITHDRAWAL)")
+    to_tx_id: int = Field(..., gt=0, description="Destination transaction (e.g. original DEPOSIT)")
+    new_type: Literal[TransactionType.TRANSFER, TransactionType.FX_CONVERSION] = Field(
+        ...,
+        description="Target type after promotion",
+    )
+    # Required when new_type == TRANSFER (cash -> asset transfer).
+    asset_id: Optional[int] = Field(default=None, gt=0)
+    quantity: Optional[Decimal] = Field(default=None, description="Asset quantity for TRANSFER")
+    # Optional override for cost_basis_override propagated on the TRANSFER
+    # destination item; if None the service will not set it.
+    cost_basis_override: Optional[Decimal] = None
+
+
+class TXTransferPromoteResponse(BaseModel):
+    """Outcome of /transactions/transfers/promote."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rolled_back: bool
+    new_from_tx_id: Optional[int] = None
+    new_to_tx_id: Optional[int] = None
+    errors: List[str] = Field(default_factory=list)
 
 
 # =============================================================================

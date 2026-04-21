@@ -21,12 +21,14 @@ from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional, Set, Tuple
+from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
+from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import (
     EVENT_COMPATIBLE_TYPES,
     TXBulkCreateResponse,
@@ -40,6 +42,8 @@ from backend.app.schemas.transactions import (
     TXEventSuggestResultItem,
     TXQueryParams,
     TXReadItem,
+    TXTransferPromoteRequest,
+    TXTransferPromoteResponse,
     TXUpdateItem,
     TXUpdateResultItem,
     TXValidateResponse,
@@ -136,6 +140,27 @@ class TransactionService:
             raise ValueError(f"asset_event_id={asset_event_id} not found")
         if event.asset_id != expected_asset_id:
             raise ValueError(f"asset_event_id={asset_event_id} belongs to asset {event.asset_id}, not {expected_asset_id}")
+
+    @staticmethod
+    def _validate_linked_pair(a: Transaction, b: Transaction) -> Optional[str]:
+        """
+        Validate semantic coherence of a linked pair (Block H.1).
+
+        Rules:
+        - Both items must share the same `type` (no mixing e.g. TRANSFER + SELL).
+        - TRANSFER requires distinct brokers (same-broker TRANSFER is a no-op).
+        - FX_CONVERSION intra-broker is allowed (multi-currency account use case).
+        - DEPOSIT/WITHDRAWAL linked pairs are allowed as "intent markers" for
+          cash movements between the user's own brokers (Block H.2).
+
+        Returns None when the pair is valid, otherwise a human-readable error
+        message suitable for the response `errors[]`.
+        """
+        if a.type != b.type:
+            return f"linked pair must share the same type (got {a.type.value} + {b.type.value})"
+        if a.type == TransactionType.TRANSFER and a.broker_id == b.broker_id:
+            return f"TRANSFER requires distinct brokers (both on broker {a.broker_id})"
+        return None
 
     # =========================================================================
     # ATOMIC ROLLBACK HELPER
@@ -240,11 +265,15 @@ class TransactionService:
         # Phase 2: Bidirectional link resolution.
         link_errors: List[str] = []
         for link_uuid, txs in link_uuid_map.items():
-            if len(txs) == 2:
-                txs[0].related_transaction_id = txs[1].id
-                txs[1].related_transaction_id = txs[0].id
-            else:
+            if len(txs) != 2:
                 link_errors.append(f"link_uuid '{link_uuid}' has {len(txs)} transactions (expected 2)")
+                continue
+            pair_error = self._validate_linked_pair(txs[0], txs[1])
+            if pair_error is not None:
+                link_errors.append(pair_error)
+                continue
+            txs[0].related_transaction_id = txs[1].id
+            txs[1].related_transaction_id = txs[0].id
 
         if link_errors:
             self._mark_rolled_back(results)
@@ -311,6 +340,16 @@ class TransactionService:
         if params.tags:
             tag_conditions = [Transaction.tags.contains(tag) for tag in params.tags]
             stmt = stmt.where(or_(*tag_conditions))
+
+        # H.3 — transfer-match helpers.
+        if params.amount_abs_min is not None:
+            stmt = stmt.where(func.abs(Transaction.amount) >= params.amount_abs_min)
+        if params.amount_abs_max is not None:
+            stmt = stmt.where(func.abs(Transaction.amount) <= params.amount_abs_max)
+        if params.only_unlinked:
+            stmt = stmt.where(Transaction.related_transaction_id.is_(None))
+        if params.exclude_ids:
+            stmt = stmt.where(Transaction.id.notin_(params.exclude_ids))
 
         stmt = stmt.order_by(Transaction.date.desc(), Transaction.id.desc())
         stmt = stmt.offset(params.offset).limit(params.limit)
@@ -647,6 +686,10 @@ class TransactionService:
 
         for link_uuid, pair in link_uuid_map.items():
             if len(pair) == 2:
+                pair_error = self._validate_linked_pair(pair[0], pair[1])
+                if pair_error is not None:
+                    issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=pair_error))
+                    continue
                 pair[0].related_transaction_id = pair[1].id
                 pair[1].related_transaction_id = pair[0].id
             else:
@@ -859,3 +902,144 @@ class TransactionService:
             )
 
         return results
+
+    # =========================================================================
+    # TRANSFER PROMOTION (Block H.4)
+    # =========================================================================
+
+    async def promote_transfer(
+        self,
+        req: TXTransferPromoteRequest,
+        user_id: Optional[int] = None,
+    ) -> TXTransferPromoteResponse:
+        """
+        Promote a sciolta coppia DEPOSIT/WITHDRAWAL in TRANSFER or FX_CONVERSION.
+
+        Atomic: delete the original pair + create the new pair in the same
+        session. Any failure → rollback and `rolled_back=True`. Caller (router)
+        commits only when `rolled_back=False`.
+        """
+        errors: List[str] = []
+
+        from_tx = await self.session.get(Transaction, req.from_tx_id)
+        to_tx = await self.session.get(Transaction, req.to_tx_id)
+
+        if from_tx is None:
+            errors.append(f"from_tx_id={req.from_tx_id} not found")
+        if to_tx is None:
+            errors.append(f"to_tx_id={req.to_tx_id} not found")
+        if errors:
+            return TXTransferPromoteResponse(rolled_back=True, errors=errors)
+
+        # Access check EDITOR on both brokers (distinct).
+        try:
+            await self._enforce_batch_access({from_tx.broker_id, to_tx.broker_id}, user_id, min_role=UserRole.EDITOR)
+        except HTTPException as e:
+            return TXTransferPromoteResponse(rolled_back=True, errors=[e.detail if isinstance(e.detail, str) else str(e.detail)])
+
+        # Pre-check: both current types must be in {DEPOSIT, WITHDRAWAL}.
+        cash_pair = {TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}
+        if from_tx.type not in cash_pair or to_tx.type not in cash_pair:
+            errors.append(f"promote supports only DEPOSIT/WITHDRAWAL pairs (got {from_tx.type.value}+{to_tx.type.value})")
+
+        # new_type-specific checks.
+        if req.new_type == TransactionType.TRANSFER:
+            if req.asset_id is None or req.quantity is None:
+                errors.append("TRANSFER promotion requires asset_id and quantity")
+            if from_tx.broker_id == to_tx.broker_id:
+                errors.append(f"TRANSFER requires distinct brokers (both on broker {from_tx.broker_id})")
+        elif req.new_type == TransactionType.FX_CONVERSION:
+            if from_tx.currency == to_tx.currency:
+                errors.append(f"FX_CONVERSION requires different currencies (got {from_tx.currency}+{to_tx.currency})")
+            if req.asset_id is not None:
+                errors.append("FX_CONVERSION promotion must not set asset_id")
+
+        if errors:
+            return TXTransferPromoteResponse(rolled_back=True, errors=errors)
+
+        # Snapshot originals before delete (we need broker/date/amount/currency).
+        from_broker_id: int = from_tx.broker_id
+        from_date: date_type = from_tx.date
+        from_amount: Decimal = from_tx.amount
+        from_currency: Optional[str] = from_tx.currency
+        from_description: Optional[str] = from_tx.description
+        from_tags_csv: Optional[str] = from_tx.tags
+
+        to_broker_id: int = to_tx.broker_id
+        to_date: date_type = to_tx.date
+        to_amount: Decimal = to_tx.amount
+        to_currency: Optional[str] = to_tx.currency
+        to_description: Optional[str] = to_tx.description
+        to_tags_csv: Optional[str] = to_tx.tags
+
+        # Step 1: delete the pair (atomic).
+        del_resp = await self.delete_bulk([req.from_tx_id, req.to_tx_id], user_id=user_id)
+        if del_resp.rolled_back:
+            return TXTransferPromoteResponse(rolled_back=True, errors=del_resp.errors or ["delete step failed"])
+
+        # Step 2: build the new pair.
+        link_uuid = str(uuid4())
+        from_tags = [t.strip() for t in from_tags_csv.split(",")] if from_tags_csv else None
+        to_tags = [t.strip() for t in to_tags_csv.split(",")] if to_tags_csv else None
+
+        if req.new_type == TransactionType.TRANSFER:
+            # TRANSFER: quantity +/- with asset, no cash; sign mirrors from/to.
+            qty = req.quantity
+            assert qty is not None
+            create_from = TXCreateItem(
+                broker_id=from_broker_id,
+                asset_id=req.asset_id,
+                type=TransactionType.TRANSFER,
+                date=from_date,
+                quantity=-abs(qty),
+                cash=None,
+                link_uuid=link_uuid,
+                tags=from_tags,
+                description=from_description,
+            )
+            create_to = TXCreateItem(
+                broker_id=to_broker_id,
+                asset_id=req.asset_id,
+                type=TransactionType.TRANSFER,
+                date=to_date,
+                quantity=abs(qty),
+                cash=None,
+                link_uuid=link_uuid,
+                tags=to_tags,
+                description=to_description,
+                cost_basis_override=req.cost_basis_override,
+            )
+        else:  # FX_CONVERSION
+            if from_currency is None or to_currency is None:
+                return TXTransferPromoteResponse(rolled_back=True, errors=["FX_CONVERSION requires both sides to have a currency"])
+            create_from = TXCreateItem(
+                broker_id=from_broker_id,
+                type=TransactionType.FX_CONVERSION,
+                date=from_date,
+                cash=Currency(code=from_currency, amount=from_amount),
+                link_uuid=link_uuid,
+                tags=from_tags,
+                description=from_description,
+            )
+            create_to = TXCreateItem(
+                broker_id=to_broker_id,
+                type=TransactionType.FX_CONVERSION,
+                date=to_date,
+                cash=Currency(code=to_currency, amount=to_amount),
+                link_uuid=link_uuid,
+                tags=to_tags,
+                description=to_description,
+            )
+
+        create_resp = await self.create_bulk([create_from, create_to], user_id=user_id)
+        if create_resp.rolled_back:
+            # create_bulk already marked results simulated; propagate errors.
+            # Router will rollback the whole session, including the deletes.
+            return TXTransferPromoteResponse(rolled_back=True, errors=create_resp.errors or ["create step failed"])
+
+        new_ids = [r.transaction_id for r in create_resp.results]
+        return TXTransferPromoteResponse(
+            rolled_back=False,
+            new_from_tx_id=new_ids[0],
+            new_to_tx_id=new_ids[1],
+        )

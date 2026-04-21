@@ -16,6 +16,7 @@ Semantics:
 - GET /transactions is filtered to brokers the user can at least VIEW.
 """
 
+from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -36,6 +37,8 @@ from backend.app.schemas.transactions import (
     TXEventSuggestResultItem,
     TXQueryParams,
     TXReadItem,
+    TXTransferPromoteRequest,
+    TXTransferPromoteResponse,
     TXTypeMetadata,
     TXUpdateItem,
     TXValidateBatch,
@@ -108,6 +111,10 @@ async def query_transactions(
     ids: Optional[List[int]] = Query(None, description="Specific IDs to fetch, returned in input order (mutex with other filters)"),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
+    amount_abs_min: Optional[Decimal] = Query(None, description="ABS(amount) >= N (H.3 transfer-match)"),
+    amount_abs_max: Optional[Decimal] = Query(None, description="ABS(amount) <= N (H.3 transfer-match)"),
+    only_unlinked: bool = Query(False, description="Only transactions without related_transaction_id"),
+    exclude_ids: Optional[List[int]] = Query(None, description="Exclude specific IDs (ignored when `ids` is set)"),
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> List[TXReadItem]:
@@ -132,6 +139,10 @@ async def query_transactions(
         tags=tags,
         currency=currency,
         ids=ids,
+        amount_abs_min=amount_abs_min,
+        amount_abs_max=amount_abs_max,
+        only_unlinked=only_unlinked,
+        exclude_ids=exclude_ids,
         limit=limit,
         offset=offset,
     )
@@ -268,3 +279,49 @@ async def suggest_events(
 
     service = TransactionService(session)
     return await service.suggest_events_bulk(requests)
+
+
+# =============================================================================
+# TRANSFER PROMOTION (Block H.4)
+# =============================================================================
+
+
+@tx_router.post("/transfers/promote", response_model=TXTransferPromoteResponse)
+async def promote_transfer(
+    req: TXTransferPromoteRequest,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> TXTransferPromoteResponse:
+    """
+    Promote a DEPOSIT/WITHDRAWAL pair into TRANSFER or FX_CONVERSION.
+
+    Atomic: deletes the original pair and creates the new pair in the same
+    session. Any failure rolls back the whole operation. `type` being
+    immutable on PATCH means this is the only way to change a cash pair
+    into a typed asset transfer or currency conversion.
+    """
+    user_id = current_user.id
+    logger.info(
+        "Promote transfer %s+%s -> %s",
+        req.from_tx_id,
+        req.to_tx_id,
+        req.new_type.value,
+        user_id=user_id,
+    )
+
+    service = TransactionService(session)
+    response = await service.promote_transfer(req, user_id=user_id)
+
+    if not response.rolled_back:
+        await session.commit()
+        logger.info(
+            "Promoted transfer: new ids %s,%s",
+            response.new_from_tx_id,
+            response.new_to_tx_id,
+            user_id=user_id,
+        )
+    else:
+        await session.rollback()
+        logger.warning("Promote transfer rolled back: %s", response.errors, user_id=user_id)
+
+    return response
