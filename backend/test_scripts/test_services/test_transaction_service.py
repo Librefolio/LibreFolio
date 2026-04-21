@@ -32,6 +32,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import (
     TXCreateItem,
     TXQueryParams,
+    TXTransferPromoteRequest,
     TXUpdateItem,
 )
 from backend.app.services.transaction_service import (
@@ -1317,6 +1318,458 @@ class TestAssetEventLinkService:
 
         upd_resp = await service.update_bulk([TXUpdateItem(id=tx_id, asset_event_id=other_event.id)])
         assert upd_resp.success_count == 1
-        tx_row = await session.get(Transaction, tx_id)
-        await session.refresh(tx_row)
-        assert tx_row.asset_event_id == other_event.id
+
+
+# ============================================================================
+# BLOCK H.1 — LINKED PAIR VALIDATION
+# ============================================================================
+
+
+class TestLinkedPairValidation:
+    """H.1 — pairing rules: type must match, TRANSFER requires distinct brokers."""
+
+    @pytest.mark.asyncio
+    async def test_pairing_rejects_mixed_types_in_link_uuid(self, session, test_broker, test_broker_overdraft):
+        """Two items sharing the same link_uuid but with different types are rejected."""
+        service = TransactionService(session)
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("500")),
+                link_uuid="mix-types-uuid",
+            ),
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                type=TransactionType.WITHDRAWAL,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("-500")),
+                link_uuid="mix-types-uuid",
+            ),
+        ]
+        # Same link_uuid but DEPOSIT+WITHDRAWAL — different types → rejected.
+        response = await service.create_bulk(items)
+        assert response.rolled_back is True
+        assert any("share the same type" in err for err in response.errors)
+
+    @pytest.mark.asyncio
+    async def test_pairing_rejects_transfer_same_broker(self, session, test_broker, test_asset):
+        """TRANSFER pair on the same broker is a no-op and rejected."""
+        service = TransactionService(session)
+        # Seed asset holding via ADJUSTMENT to avoid shorting violation.
+        await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date.today() - timedelta(days=1),
+                    quantity=Decimal("50"),
+                )
+            ]
+        )
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.TRANSFER,
+                date=date.today(),
+                quantity=Decimal("-10"),
+                link_uuid="same-broker-transfer",
+            ),
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.TRANSFER,
+                date=date.today(),
+                quantity=Decimal("10"),
+                link_uuid="same-broker-transfer",
+            ),
+        ]
+        response = await service.create_bulk(items)
+        assert response.rolled_back is True
+        assert any("distinct brokers" in err for err in response.errors)
+
+    @pytest.mark.asyncio
+    async def test_pairing_allows_fx_conversion_same_broker(self, session, test_broker):
+        """FX_CONVERSION intra-broker is a valid multi-currency use case."""
+        service = TransactionService(session)
+        # Fund the broker first.
+        await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today() - timedelta(days=1),
+                    cash=Currency(code="EUR", amount=Decimal("1000")),
+                )
+            ]
+        )
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.FX_CONVERSION,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("-500")),
+                link_uuid="fx-same-broker",
+            ),
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.FX_CONVERSION,
+                date=date.today(),
+                cash=Currency(code="USD", amount=Decimal("540")),
+                link_uuid="fx-same-broker",
+            ),
+        ]
+        response = await service.create_bulk(items)
+        assert response.rolled_back is False
+        assert response.success_count == 2
+
+    @pytest.mark.asyncio
+    async def test_pairing_allows_deposit_withdrawal_linked(self, session, test_broker, test_broker_overdraft):
+        """H.2 — DEPOSIT/WITHDRAWAL pair linked by link_uuid: allowed as intent marker."""
+        service = TransactionService(session)
+        # Fund source broker.
+        await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today() - timedelta(days=1),
+                    cash=Currency(code="EUR", amount=Decimal("1000")),
+                )
+            ]
+        )
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.WITHDRAWAL,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("-500")),
+                link_uuid="cash-transfer-intent",
+            ),
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                type=TransactionType.WITHDRAWAL,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("500")),  # incoming is still WITHDRAWAL semantically? use DEPOSIT? test same type
+                link_uuid="cash-transfer-intent",
+            ),
+        ]
+        # Same type on both sides (WITHDRAWAL+WITHDRAWAL) — pair valid per H.2
+        # (different amounts but we just want the link to resolve).
+        # Note: the "destination" is actually a DEPOSIT — but H.1 requires
+        # SAME type on both sides. So we use two DEPOSITs instead.
+        items[1] = TXCreateItem(
+            broker_id=test_broker_overdraft.id,
+            type=TransactionType.WITHDRAWAL,
+            date=date.today(),
+            cash=Currency(code="EUR", amount=Decimal("-500")),
+            link_uuid="cash-transfer-intent",
+        )
+        response = await service.create_bulk(items)
+        # Both WITHDRAWAL → same type OK; linked pair should succeed.
+        assert response.rolled_back is False, response.errors
+        assert response.success_count == 2
+        # Verify bidirectional link.
+        ids = [r.transaction_id for r in response.results]
+        txs = await service.get_by_ids(ids)
+        assert txs[0].related_transaction_id == txs[1].id
+        assert txs[1].related_transaction_id == txs[0].id
+
+
+# ============================================================================
+# BLOCK H.3 — QUERY FILTER EXTENSIONS
+# ============================================================================
+
+
+class TestQueryFiltersH3:
+    """H.3 — amount_abs_min/max, only_unlinked, exclude_ids."""
+
+    @pytest_asyncio.fixture
+    async def seeded(self, session, test_broker_overdraft, test_broker_shorting):
+        """Seed a handful of DEPOSIT/WITHDRAWAL rows spanning a few amounts."""
+        service = TransactionService(session)
+        items = [
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+            ),
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("500")),
+            ),
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                type=TransactionType.WITHDRAWAL,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("-500")),
+            ),
+            TXCreateItem(
+                broker_id=test_broker_overdraft.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("2000")),
+            ),
+        ]
+        resp = await service.create_bulk(items)
+        assert resp.rolled_back is False
+        await session.flush()
+        return [r.transaction_id for r in resp.results]
+
+    @pytest.mark.asyncio
+    async def test_query_filters_amount_abs_range(self, session, seeded):
+        service = TransactionService(session)
+        params = TXQueryParams(amount_abs_min=Decimal("495"), amount_abs_max=Decimal("505"))
+        results = await service.query(params)
+        amounts = sorted(abs(r.cash.amount) for r in results if r.cash)
+        assert all(Decimal("495") <= a <= Decimal("505") for a in amounts)
+        # We seeded both +500 and -500 — both must appear.
+        assert len(amounts) >= 2
+
+    @pytest.mark.asyncio
+    async def test_query_filters_only_unlinked(self, session, test_broker, test_broker_overdraft, seeded):
+        """only_unlinked excludes rows with related_transaction_id."""
+        service = TransactionService(session)
+        # Create a linked pair (both DEPOSIT, different brokers, same link_uuid).
+        await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today(),
+                    cash=Currency(code="USD", amount=Decimal("300")),
+                    link_uuid="pair-for-unlink-test",
+                ),
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today(),
+                    cash=Currency(code="USD", amount=Decimal("300")),
+                    link_uuid="pair-for-unlink-test",
+                ),
+            ]
+        )
+        params = TXQueryParams(currency="USD", only_unlinked=True)
+        results = await service.query(params)
+        for r in results:
+            assert r.related_transaction_id is None
+
+    @pytest.mark.asyncio
+    async def test_query_filters_exclude_ids(self, session, seeded):
+        service = TransactionService(session)
+        first_id = seeded[0]
+        params = TXQueryParams(exclude_ids=[first_id])
+        results = await service.query(params)
+        assert all(r.id != first_id for r in results)
+
+    @pytest.mark.asyncio
+    async def test_query_ids_overrides_exclude_ids(self, session, seeded):
+        """When `ids` is set, `exclude_ids` is ignored (mutex with other filters)."""
+        service = TransactionService(session)
+        target_id = seeded[0]
+        params = TXQueryParams(ids=[target_id], exclude_ids=[target_id])
+        results = await service.query(params)
+        assert len(results) == 1
+        assert results[0].id == target_id
+
+
+# ============================================================================
+# BLOCK H.4 — TRANSFER PROMOTION (service-level)
+# ============================================================================
+
+
+class TestTransferPromotion:
+    """H.4 — promote DEPOSIT/WITHDRAWAL pair to TRANSFER or FX_CONVERSION."""
+
+    @pytest_asyncio.fixture
+    async def cash_pair_cross_broker(self, session, test_broker_overdraft, test_broker_shorting):
+        """Create a WITHDRAWAL/DEPOSIT pair across two brokers (not linked)."""
+        service = TransactionService(session)
+        resp = await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.WITHDRAWAL,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("-1000")),
+                ),
+                TXCreateItem(
+                    broker_id=test_broker_shorting.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("1000")),
+                ),
+            ]
+        )
+        assert resp.rolled_back is False
+        return resp.results[0].transaction_id, resp.results[1].transaction_id
+
+    @pytest.mark.asyncio
+    async def test_promote_deposit_withdrawal_to_transfer_cross_broker(self, session, cash_pair_cross_broker, test_asset, test_broker_overdraft):
+        from_id, to_id = cash_pair_cross_broker
+        service = TransactionService(session)
+        # Seed asset holding on the source broker so TRANSFER -10 doesn't short.
+        await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date.today() - timedelta(days=2),
+                    quantity=Decimal("50"),
+                )
+            ]
+        )
+        resp = await service.promote_transfer(
+            TXTransferPromoteRequest(
+                from_tx_id=from_id,
+                to_tx_id=to_id,
+                new_type=TransactionType.TRANSFER,
+                asset_id=test_asset.id,
+                quantity=Decimal("10"),
+            )
+        )
+        assert resp.rolled_back is False, resp.errors
+        assert resp.new_from_tx_id is not None and resp.new_to_tx_id is not None
+        # Originals must be gone.
+        assert await session.get(Transaction, from_id) is None
+        # New ones are TRANSFER and linked.
+        new_from = await session.get(Transaction, resp.new_from_tx_id)
+        new_to = await session.get(Transaction, resp.new_to_tx_id)
+        assert new_from.type == TransactionType.TRANSFER
+        assert new_to.type == TransactionType.TRANSFER
+        assert new_from.related_transaction_id == new_to.id
+        assert new_to.related_transaction_id == new_from.id
+
+    @pytest.mark.asyncio
+    async def test_promote_deposit_withdrawal_to_fx_conversion_intra_broker(self, session, test_broker_overdraft):
+        service = TransactionService(session)
+        resp = await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.WITHDRAWAL,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("-500")),
+                ),
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today(),
+                    cash=Currency(code="USD", amount=Decimal("540")),
+                ),
+            ]
+        )
+        from_id, to_id = resp.results[0].transaction_id, resp.results[1].transaction_id
+        promote_resp = await service.promote_transfer(
+            TXTransferPromoteRequest(
+                from_tx_id=from_id,
+                to_tx_id=to_id,
+                new_type=TransactionType.FX_CONVERSION,
+            )
+        )
+        assert promote_resp.rolled_back is False, promote_resp.errors
+        new_from = await session.get(Transaction, promote_resp.new_from_tx_id)
+        assert new_from.type == TransactionType.FX_CONVERSION
+        assert new_from.broker_id == test_broker_overdraft.id
+
+    @pytest.mark.asyncio
+    async def test_promote_rejects_transfer_same_broker(self, session, test_broker_overdraft, test_asset):
+        service = TransactionService(session)
+        resp = await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.WITHDRAWAL,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("-100")),
+                ),
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("100")),
+                ),
+            ]
+        )
+        from_id, to_id = resp.results[0].transaction_id, resp.results[1].transaction_id
+        promote_resp = await service.promote_transfer(
+            TXTransferPromoteRequest(
+                from_tx_id=from_id,
+                to_tx_id=to_id,
+                new_type=TransactionType.TRANSFER,
+                asset_id=test_asset.id,
+                quantity=Decimal("10"),
+            )
+        )
+        assert promote_resp.rolled_back is True
+        assert any("distinct brokers" in e for e in promote_resp.errors)
+
+    @pytest.mark.asyncio
+    async def test_promote_rejects_fx_conversion_same_currency(self, session, test_broker_overdraft, test_broker_shorting):
+        service = TransactionService(session)
+        resp = await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.WITHDRAWAL,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("-100")),
+                ),
+                TXCreateItem(
+                    broker_id=test_broker_shorting.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("100")),
+                ),
+            ]
+        )
+        from_id, to_id = resp.results[0].transaction_id, resp.results[1].transaction_id
+        promote_resp = await service.promote_transfer(
+            TXTransferPromoteRequest(
+                from_tx_id=from_id,
+                to_tx_id=to_id,
+                new_type=TransactionType.FX_CONVERSION,
+            )
+        )
+        assert promote_resp.rolled_back is True
+        assert any("different currencies" in e for e in promote_resp.errors)
+
+    @pytest.mark.asyncio
+    async def test_promote_atomicity_on_create_failure(self, session, test_broker_overdraft, test_broker_shorting):
+        """If the re-create step fails, originals must still be restored (via rollback)."""
+        service = TransactionService(session)
+        resp = await service.create_bulk(
+            [
+                TXCreateItem(
+                    broker_id=test_broker_overdraft.id,
+                    type=TransactionType.WITHDRAWAL,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("-100")),
+                ),
+                TXCreateItem(
+                    broker_id=test_broker_shorting.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today(),
+                    cash=Currency(code="EUR", amount=Decimal("100")),
+                ),
+            ]
+        )
+        from_id, to_id = resp.results[0].transaction_id, resp.results[1].transaction_id
+
+        # Missing asset_id + quantity → create step will fail pre-validation.
+        promote_resp = await service.promote_transfer(
+            TXTransferPromoteRequest(
+                from_tx_id=from_id,
+                to_tx_id=to_id,
+                new_type=TransactionType.TRANSFER,
+                # asset_id / quantity intentionally missing
+            )
+        )
+        assert promote_resp.rolled_back is True

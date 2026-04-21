@@ -29,6 +29,7 @@ import subprocess
 import sys
 import traceback
 from pathlib import Path
+from typing import Callable
 
 import argcomplete
 
@@ -55,7 +56,7 @@ _COVERAGE_SOURCE = None
 
 def _run_test_suite(
     suite_name: str,
-    tests: list[tuple[str, callable]],
+    tests: list[tuple[str, Callable]],
     verbose: bool = False,
     header_msg: str = None,
     info_msgs: list[str] = None,
@@ -1339,6 +1340,19 @@ def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transactions_api.py", test_names)
     return run_command(cmd, "Transactions API tests", verbose=verbose)
+
+
+def api_transfer_promotion(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run Transfer Promotion API tests (Block H.4).
+    """
+    print_section("Transfer Promotion API Tests")
+    print_info("Testing POST /transactions/transfers/promote (Block H.4)")
+    print_info("Tests: DEPOSIT/WITHDRAWAL → TRANSFER / FX_CONVERSION atomic promotion")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transfer_promotion.py", test_names)
+    return run_command(cmd, "Transfer Promotion API tests", verbose=verbose)
 
 
 def api_brokers(verbose: bool = False, test_names: list = None) -> bool:
@@ -3011,6 +3025,14 @@ These tests verify REST API endpoints:
             "desc": "Test transaction endpoints",
             "prereq": "Database created",
             "tests": "CRUD, validation, balance checks",
+            },
+        "transfer-promotion": {
+            "func": api_transfer_promotion,
+            "test_names": True,
+            "name": "Transfer Promotion API",
+            "desc": "Promote DEPOSIT/WITHDRAWAL pair to TRANSFER/FX_CONVERSION (H.4)",
+            "prereq": "Database created",
+            "tests": "Atomic promotion, same-broker rejection, query filters",
             },
         "brokers": {
             "func": api_brokers,
