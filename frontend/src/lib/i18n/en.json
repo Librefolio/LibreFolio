@@ -990,7 +990,10 @@
       "syncFailedManualRetry": "Currency changed but post-wipe sync failed — use the Sync button to retry.",
       "body": "Changing currency from {from} to {to} will permanently delete {count} price records up to today. Prices will be re-fetched from the provider in the new currency after the wipe."
     },
-    "metadataDescription": "Description"
+    "metadataDescription": "Description",
+    "pricesInCurrency": "Prices in {currency}",
+    "eventsInCurrency": "Events in {currency}",
+    "addPricesManually": "Add manually"
   },
   "ticker": {
     "noAssets": "No tracked assets",
@@ -1004,5 +1007,11 @@
     "deletePartial": "{deleted} deleted, {inUse} in use, {notFound} not found",
     "deleteBlocked": "Cannot delete: {count} event(s) still in use by transactions ({accessible} visible to you, {hidden} in other users' portfolios)",
     "fxBannerContext": "for dividend/cash events"
+  },
+  "import": {
+    "csv": {
+      "currencyReminder": "Currency must match asset currency ({currency}).",
+      "extraColumnsIgnored": "Extra columns (like currency, source_plugin_key, fetched_at from Export) are ignored."
+    }
   }
 }

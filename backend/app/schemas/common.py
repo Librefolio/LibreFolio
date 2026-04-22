@@ -322,8 +322,46 @@ class BackwardFillInfo(BaseModel):
         return parse_ISO_date(v)
 
     def actual_rate_date_str(self) -> str:
-        """Restituisce la data in formato ISO string (YYYY-MM-DD)."""
+        """Return the actual_rate_date as ISO string (YYYY-MM-DD)."""
         return self.actual_rate_date.isoformat()
+
+
+class FxBackwardFillInfo(BaseModel):
+    """
+    FX-specific backward-fill staleness, decoupled from price backward-fill.
+
+    Used on **any** entity whose value was converted to a target currency
+    via an FX rate lookup, when that lookup may have fallen back to an
+    older date than the requested one. Semantics are identical to the
+    price staleness in ``BackwardFillInfo``, but apply only to FX.
+
+    Decoupled from price-staleness because:
+    - Prices have both dimensions (price backward-fill + FX backward-fill)
+      → use the composed ``AssetBackwardFillInfo``.
+    - Events (dividends, interest, splits, etc.) exist on discrete real
+      dates and are NEVER backward-filled themselves — only their value's
+      FX conversion can be stale → use ``FxBackwardFillInfo`` directly.
+    - Future aggregates (dashboard, portfolio breakdown) may need FX
+      staleness without any price-staleness concept.
+
+    Both fields are typically ``None`` when no currency conversion was
+    performed (identity / passthrough).
+
+    Attributes:
+        fx_rate_date: Actual date of the FX rate used for the conversion.
+        fx_days_back: Days between the requested date and ``fx_rate_date``
+            (0 = same-day match, >0 = backward-fill applied).
+    """
+
+    model_config = ConfigDict()
+
+    fx_rate_date: Optional[date_type] = Field(None, description="Actual date of the FX rate used for conversion")
+    fx_days_back: Optional[int] = Field(None, description="Days back for the FX rate (0 = same-day, None = no conversion)")
+
+    @field_validator("fx_rate_date", mode="before")
+    @classmethod
+    def _parse_fx_rate_date(cls, v):
+        return parse_ISO_date(v) if v is not None else v
 
 
 class DateRangeModel(BaseModel):

@@ -990,7 +990,10 @@
       "syncFailedManualRetry": "Valuta cambiata ma la sincronizzazione post-wipe è fallita — usa il bottone Sync per riprovare.",
       "body": "Cambiando la valuta da {from} a {to} verranno eliminati permanentemente {count} record di prezzo fino ad oggi. I prezzi verranno ri-caricati dal provider nella nuova valuta dopo la cancellazione."
     },
-    "metadataDescription": "Descrizione"
+    "metadataDescription": "Descrizione",
+    "pricesInCurrency": "Prezzi in {currency}",
+    "eventsInCurrency": "Eventi in {currency}",
+    "addPricesManually": "Aggiungi manualmente"
   },
   "ticker": {
     "noAssets": "Nessun asset monitorato",
@@ -1004,5 +1007,11 @@
     "deletePartial": "{deleted} eliminato/i, {inUse} in uso, {notFound} non trovato/i",
     "deleteBlocked": "Impossibile eliminare: {count} evento/i ancora in uso da transazioni ({accessible} visibili a te, {hidden} nei portafogli di altri utenti)",
     "fxBannerContext": "per eventi dividendi/cassa"
+  },
+  "import": {
+    "csv": {
+      "currencyReminder": "La valuta deve coincidere con quella dell'asset ({currency}).",
+      "extraColumnsIgnored": "Le colonne extra (come currency, source_plugin_key, fetched_at dall'Export) vengono ignorate."
+    }
   }
 }

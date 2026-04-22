@@ -990,7 +990,10 @@
       "syncFailedManualRetry": "Devise changée mais la synchronisation post-effacement a échoué — utilisez le bouton Sync pour réessayer.",
       "body": "Changer la devise de {from} à {to} supprimera définitivement {count} enregistrements de prix jusqu'à aujourd'hui. Les prix seront re-téléchargés depuis le fournisseur dans la nouvelle devise après la suppression."
     },
-    "metadataDescription": "Description"
+    "metadataDescription": "Description",
+    "pricesInCurrency": "Prix en {currency}",
+    "eventsInCurrency": "Événements en {currency}",
+    "addPricesManually": "Ajouter manuellement"
   },
   "ticker": {
     "noAssets": "Aucun actif suivi",
@@ -1004,5 +1007,11 @@
     "deletePartial": "{deleted} supprimé(s), {inUse} utilisé(s), {notFound} introuvable(s)",
     "deleteBlocked": "Suppression impossible : {count} événement(s) encore utilisé(s) par des transactions ({accessible} visibles par vous, {hidden} dans les portefeuilles d'autres utilisateurs)",
     "fxBannerContext": "pour les événements dividendes/cash"
+  },
+  "import": {
+    "csv": {
+      "currencyReminder": "La devise doit correspondre à celle de l'actif ({currency}).",
+      "extraColumnsIgnored": "Les colonnes supplémentaires (comme currency, source_plugin_key, fetched_at de l'Export) sont ignorées."
+    }
   }
 }

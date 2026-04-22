@@ -142,7 +142,7 @@ async def test_no_target_currency_returns_raw_values(test_server):
         assert ev["value"]["code"] == "USD"
         assert Decimal(ev["value"]["amount"]) == Decimal("1.50")
         assert ev.get("original_value") is None
-        assert ev.get("fx_rate_date") is None
+        assert ev.get("fx_info") is None
         print_success("  ✓ no target_currency → original_value is None, native value returned")
 
 
@@ -218,8 +218,8 @@ async def test_conversion_same_day_fx(test_server):
         assert ev["original_value"]["code"] == "EUR"
         assert Decimal(ev["original_value"]["amount"]) == Decimal("10.00")
         # fx metadata
-        assert ev["fx_rate_date"] == event_date.isoformat()
-        assert ev["fx_days_back"] == 0
+        assert ev["fx_info"]["fx_rate_date"] == event_date.isoformat()
+        assert ev["fx_info"]["fx_days_back"] == 0
         print_success("  ✓ same-day conversion EUR→USD at rate 1.10: 10→11, fx_days_back=0")
 
 
@@ -258,10 +258,10 @@ async def test_conversion_backward_fill_fx(test_server):
         assert ev["value"]["code"] == "SGD"
         assert Decimal(ev["value"]["amount"]) == Decimal("8.00"), f"Expected 10*0.80=8.00, got {ev['value']['amount']}"
         assert ev["original_value"]["code"] == "NZD"
-        assert ev["fx_rate_date"] == rate_date.isoformat()
-        assert ev["fx_days_back"] == (event_date - rate_date).days
-        assert ev["fx_days_back"] > 0
-        print_success(f"  ✓ backward-fill conversion: fx_days_back={ev['fx_days_back']}")
+        assert ev["fx_info"]["fx_rate_date"] == rate_date.isoformat()
+        assert ev["fx_info"]["fx_days_back"] == (event_date - rate_date).days
+        assert ev["fx_info"]["fx_days_back"] > 0
+        print_success(f"  ✓ backward-fill conversion: fx_days_back={ev['fx_info']['fx_days_back']}")
 
 
 # ============================================================
