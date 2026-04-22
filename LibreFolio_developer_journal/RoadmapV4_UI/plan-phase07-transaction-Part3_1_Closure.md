@@ -590,3 +590,131 @@ Se il save fallisce (HTTP !2xx / network error), la modale:
 #    - Edit modal asset senza toccare provider → no "Save without testing?" modal
 ```
 
+---
+
+## 🧭 Giornale di viaggio (per reset conversazione)
+
+> **Scopo**: in caso di reset del contesto, questa sezione è il backup delle intenzioni, dello stato e dei prossimi step. Aggiornata a ogni fine-sessione.
+
+### 📍 Dove sono arrivato (2026-04-22 sera tardi, batch 1 + refactor FxBackwardFillInfo + batch 2 part1)
+
+**Commit batch 1** (già fatto dall'utente, hash `66ad026a` + un commit successivo): Closure plan batch 1 completo.
+
+**Sessione post-commit (questa)** — refactor schema:
+- Creata nuova classe `FxBackwardFillInfo` in `backend/app/schemas/common.py` (accanto a `BackwardFillInfo`). Contiene `fx_rate_date` + `fx_days_back`.
+- `AssetBackwardFillInfo` (in `prices.py`) ora eredita da **entrambi** (`BackwardFillInfo, FxBackwardFillInfo`) via mixin Pydantic → wire format prezzi identico, **zero breaking change** lato client per i prezzi.
+- `FAAssetEventPointOut`: sostituiti i 2 campi piatti `fx_rate_date`+`fx_days_back` con un unico `fx_info: Optional[FxBackwardFillInfo]`. `original_value` resta standalone (non è backward-fill metadata).
+- Motivazione: gli eventi **non hanno semantica di price backward-fill** (ex-date, cedola etc. sono date reali non-interpolabili). Solo la FX staleness è rilevante → raggrupparla in un oggetto dedicato, riusabile per futuri consumer (dashboard aggregati Phase 9).
+- Backend (`asset_source.py`): 2 siti di costruzione `FAAssetEventPointOut` aggiornati per usare `fx_info=FxBackwardFillInfo(...)`. Import top-level esteso con `FxBackwardFillInfo`.
+- Frontend (`+page.svelte`): accessi `ev.fx_rate_date`/`ev.fx_days_back` → `ev.fx_info?.fx_rate_date`/`ev.fx_info?.fx_days_back`.
+- Test (`test_events_target_currency.py`): accessi aggiornati a `ev["fx_info"]["fx_rate_date"]`/`["fx_days_back"]` (sia doppi che singoli apici).
+- Client TS rigenerato: `FxBackwardFillInfo` ora è un tipo Zod esportato, `fx_info` esposto come campo opzionale su `FAAssetEventPointOut`.
+- Validazione post-refactor:
+  - `./dev.py format && lint` → ✅ all checks passed.
+  - `./dev.py front check` → ✅ 0 errors, 0 warnings.
+  - `./dev.py test api events-target-currency` → ✅ 7/7 PASSED.
+  - `./dev.py test api assets-price` → ✅ PASSED (regression OK).
+  - `./dev.py test api assets-events` → ✅ PASSED.
+
+**File toccati post-commit batch 1**:
+- `backend/app/schemas/common.py` (+~45 righe: nuova classe `FxBackwardFillInfo`).
+- `backend/app/schemas/prices.py` (AssetBackwardFillInfo rifattorizzato a inheritance, FAAssetEventPointOut con `fx_info`).
+- `backend/app/services/asset_source.py` (import + 2 siti di costruzione).
+- `frontend/src/routes/(app)/assets/[id]/+page.svelte` (2 blocchi event markers).
+- `backend/test_scripts/test_api/test_events_target_currency.py` (assert nested).
+
+**Sessione batch 2 part1** (questa, continuazione post-reset "actual_rate_date_str") — I-bis UX quick wins:
+- **Fix pregresso**: `common.py` aveva il metodo `actual_rate_date_str()` erroneamente spostato dentro `FxBackwardFillInfo` (bug introdotto nel refactor precedente). Ripristinato dentro `BackwardFillInfo` (campo corretto: `actual_rate_date`). Verificato con one-liner runtime ✅.
+- **I-bis #3** ✅ Tab label "Prices in {currency} 🇺🇸" / "Events in {currency} 🇺🇸" in `AssetDataEditorSection.svelte`:
+  - Aggiunta prop `currency?: string`.
+  - Derived `currencyFlag` via `getCurrencyInfo(currency).flag_emoji`.
+  - Label `ml-auto` nella tab bar (switcha tra pricesInCurrency/eventsInCurrency in base ad `activeTab`).
+  - `+page.svelte` passa `currency={assetInfo?.currency}`.
+  - i18n keys nuove: `assetDetail.pricesInCurrency` + `assetDetail.eventsInCurrency` (4 lingue).
+- **I-bis #4** ✅ Import CSV banner reminder in `PriceDataImportModal.svelte`:
+  - Aggiunta prop `currency?: string`.
+  - Nuovo `InfoBanner variant="warning"` nell'header slot con "Currency must match asset currency ({currency} 🇺🇸)." + "Extra columns (like currency, source_plugin_key, fetched_at from Export) are ignored."
+  - `AssetDataEditorSection.svelte` propaga `currency` al modal.
+  - i18n keys nuove: `import.csv.currencyReminder` + `import.csv.extraColumnsIgnored` (4 lingue).
+- **I-bis #6** ✅ Empty-state "Add manually" button in `+page.svelte`:
+  - Nel ramo `{:else}` (zero prezzi, provider-backed asset) aggiunto secondo bottone "Add manually" accanto a "Sync from provider". Apre il data editor salvando lo stato dei panel (pattern identico al ramo `isManualOnly`).
+  - i18n key nuova: `assetDetail.addPricesManually` (4 lingue).
+- **Gotcha #1 confermato**: shell strippa accenti (É, é, à, ñ). Per ogni `./dev.py i18n add` con chars non-ASCII ho creato script `/tmp/libreFolio_fix_*.py` con escape unicode (`\u00f1`) per fixare il file JSON post-add.
+- Validazione batch 2 part1:
+  - `./dev.py front check` → ✅ 0 errors, 0 warnings (eseguito 3 volte, dopo ogni task).
+  - `./dev.py front format` → ✅ tutti i file unchanged (già formattati).
+
+**File toccati in batch 2 part1**:
+- `backend/app/schemas/common.py` (spostato `actual_rate_date_str` dal posto sbagliato).
+- `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` (prop currency + tab label).
+- `frontend/src/lib/components/assets/PriceDataImportModal.svelte` (prop currency + warning banner).
+- `frontend/src/routes/(app)/assets/[id]/+page.svelte` (passa currency al data editor + bottone "Add manually" nell'empty state).
+- `frontend/src/lib/i18n/{en,it,fr,es}.json` (5 nuove chiavi × 4 lingue = 20 entries).
+
+### 🎯 Cosa devo fare dopo (priorità in ordine)
+
+**Prossimo commit suggerito**: batch refactor `FxBackwardFillInfo` da solo (piccolo e coeso). Messaggio:
+```
+Refactor: extract FxBackwardFillInfo as standalone building block
+
+- Create FxBackwardFillInfo in common.py (fx_rate_date + fx_days_back).
+- AssetBackwardFillInfo now inherits from BackwardFillInfo + FxBackwardFillInfo.
+- FAAssetEventPointOut replaces flat fx_rate_date/fx_days_back with a single
+  fx_info: Optional[FxBackwardFillInfo]. Events have no price-backward-fill
+  semantics (discrete real dates) — only FX staleness is meaningful.
+- Frontend +page.svelte reads ev.fx_info?.fx_rate_date / .fx_days_back.
+- Tests updated to nested access.
+- Wire format for prices is unchanged (mixin preserves field order).
+```
+
+**Poi batch 2** (~4-5h): I-bis UX quick wins
+- **#3** Tab label "Prices in {currency} 🇺🇸" → 20 min (`AssetDataEditorSection.svelte`) ✅ DONE (batch 2 part1)
+- **#4** Import CSV banner reminder → 20 min (`PriceDataImportModal.svelte`) ✅ DONE (batch 2 part1)
+- **#6** Empty-state "Add manually" → 40 min (panel con 0 prezzi) ✅ DONE (batch 2 part1)
+- **#12** Ridurre 5 toast currency-change → 1 (refactor `AssetCurrencyChangeModal.svelte`) ⏳ batch 2 part2
+- **#1 + #23** combinati: handler unificato `PriceSyncResponse` con 4 stati toast i18n (sync/noChanges/partial/failed) — ~2h ⏳ batch 2 part2
+
+**Batch 3** (~3-4h): Test coverage Blocco G (ordine per valore decrescente)
+- **G.6** `test_ohlc_sentinel.py` — 8 casi (copre Blocco F dichiarato done ma non testato).
+- **G.10** `test_asset_currency_change.py` — 5 casi (copre I.3 + I.6, flusso wipe+PATCH+re-sync).
+- **G.11** `test_asset_prices_export.py` — 7 casi (copre I.4, endpoint `/prices/export`).
+- **G.5** `test_prices_currency_coherence.py` — 3 casi post-I.11 (versione ridotta dopo i drop).
+
+**Batch 4** (~4h): Test Blocco G coda + I-bis #22 prerequisito Part 4/5
+- **G.3** `test_transactions_validate.py` — 6 casi.
+- **G.4** `test_events_suggest.py` — 5+ casi parametrizzati.
+- **G.1/G.2** estensioni `test_transaction_service.py` + matrix `test_transactions_api.py` (10+casi combinati).
+- **G.7** entries nel `scripts/test_runner.py` (mancano ancora: transactions-validate, events-suggest, prices-currency, ohlc-sentinel, assets-currency-change, assets-prices-export).
+- **G.8** coverage verification: `./dev.py test coverage services transaction` (target ≥90%) e `asset-source` (target ≥85%).
+
+**Batch 5** (~3-4h): I-bis #22 refactor error handling
+- Helper `$lib/utils/saveWithRetry.ts` o store `createSaveAction<T>`.
+- Censimento dei modal impattati (AssetModal, AssetProviderAssignmentModal, AssetCurrencyChangeModal, BrokerModal, PriceDataImportModal, DataEditor save, futuro TransactionModal).
+- Rollout progressivo + i18n `save.failed.*`.
+
+**Batch 6** (~1h): code tails
+- **#2** Provider dirty gating per "Save Without Testing?"
+- **#5** CSV import resilience (auto-detect separator + header tolerance).
+- **#7** `patch_assets_bulk` HTTP 409 semantics (non urgente).
+- **I.10** validazione finale Blocco I (run completo test suite).
+- Aggiornamento `phases/phase-07-transactions.md` con stato "Part 3 completed".
+- Archiviazione plan chain in `phases/phase-07-transactions-subplan/` (skill `plan-archive`).
+
+### ⚠️ Gotcha / note operative da ricordare
+
+1. **Pipeline UTF-8 in shell**: `echo "é"` dal prompt zsh strippa accenti. Per aggiornare file `i18n/*.json` con caratteri non-ASCII → scrivere uno script `.py` a file (`/tmp/libreFolio_*.py`) + lanciarlo. Esempio già presente: `/tmp/libreFolio_restore_fr_indent.py`. **Non usare** `json.dump(..., indent=4)` su `fr.json`: il file usa indent=2 (come en/it/es) e `indent=4` fa un mega-diff di 2000 righe.
+2. **Test FX pair pollution**: nel test DB alcune coppie (EUR/USD, GBP/USD) possono avere rate già seedati da altri test → le assertion su valore esatto falliscono. Per nuovi test: usare coppie esotiche (NZD/SGD, ILS/PHP, CAD/ZAR) + `_ensure_fx_rate` helper già presente in `test_events_target_currency.py`.
+3. **`./dev.py lint --fix`**: dopo una cleanup (es. rimozione fx_error), può capitare di lasciare import orfani. Sempre girare `lint --fix` se `lint` segnala 1 errore auto-fixabile.
+4. **Sintassi `./dev.py i18n add`**: richiede flag `--en --it --fr --es` (non posizionali). Esempio: `./dev.py i18n add foo.bar --en "Foo" --it "Bar" --fr "Baz" --es "Qux"`. Gli accenti **vanno comunque sistemati a mano dopo** (lo script strippa i chars non-ASCII in un pass intermedio).
+5. **Non eseguire mai `git commit`** — solo proporre messaggi (regola copilot-instructions). Oggi sto scrivendo i messaggi in `/tmp/libreFolio_commit_*.txt` e l'utente committa.
+6. **`requiredFxPairs` derived in `+page.svelte` L267–337**: non esiste un componente `FxPairBanner` separato — il banner è inline nel `{#each pairs}` a L1081–1153. Se si vuole riusare altrove (Phase 9 Dashboard), estrarlo prima in componente.
+7. **FxBackwardFillInfo wire format**: `{fx_rate_date: "YYYY-MM-DD" | null, fx_days_back: number | null}`. Lato FE è `Partial<{...}>` (Zod) quindi entrambi i campi sono tecnicamente opzionali anche quando l'oggetto è presente — usare sempre optional chaining `obj?.fx_rate_date`.
+
+### ✅ Check-list di "sessione riaperta correttamente"
+
+Quando la conversazione riparte, verificare:
+- [ ] `git log --oneline | head -5` → identificare ultimo commit Closure (cercare "Part 3 Closure" o "FxBackwardFillInfo").
+- [ ] `git status` → capire se ci sono file pendenti del refactor FxBackwardFillInfo (se sì, vedi sopra batch).
+- [ ] Leggere questa sezione **Giornale di viaggio** per localizzare il cursore.
+- [ ] Scorrere il Closure plan dall'alto cercando sezioni ancora **senza** ✅ DONE nel titolo → ordine di attacco.
+- [ ] Verificare che i test API sopracitati passino (`./dev.py test api assets-price && assets-events && events-target-currency`). Se rossi → NON procedere: qualcosa nella sessione precedente è rimasto monco.

@@ -22,6 +22,7 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceDataImportModal from './PriceDataImportModal.svelte';
     import EventDataImportModal from './EventDataImportModal.svelte';
+    import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {_ as t, locale} from '$lib/i18n';
 
     // =========================================================================
@@ -31,6 +32,8 @@
     interface Props {
         /** Asset ID */
         assetId: number;
+        /** Asset native currency (ISO code, e.g. "USD") — used for the "Prices in {currency} {flag}" tab label */
+        currency?: string;
         /** Current price chart data from backend query */
         chartData: any[];
         /** Current events from backend query */
@@ -47,7 +50,10 @@
         onpendingchange?: (previewSignal: RenderedSignal | null) => void;
     }
 
-    let {assetId, chartData, events, saving = $bindable(false), dirtyCount = $bindable(0), onsave, oncancel, onpendingchange}: Props = $props();
+    let {assetId, currency, chartData, events, saving = $bindable(false), dirtyCount = $bindable(0), onsave, oncancel, onpendingchange}: Props = $props();
+
+    // Currency flag emoji for tab labels (I-bis #3). Empty when currency missing.
+    let currencyFlag = $derived(currency ? getCurrencyInfo(currency).flag_emoji : '');
 
     // =========================================================================
     // Column definitions
@@ -506,13 +512,25 @@
                 </span>
             {/if}
         </button>
+
+        <!-- I-bis #3 — Currency label aligned right: "Prices in USD 🇺🇸" / "Events in USD 🇺🇸" -->
+        {#if currency}
+            <div class="ml-auto flex items-center gap-1 px-3 py-2 text-xs text-gray-500 dark:text-gray-400" data-testid="asset-editor-currency-label">
+                {#if activeTab === 'prices'}
+                    {$t('assetDetail.pricesInCurrency', {values: {currency}})}
+                {:else}
+                    {$t('assetDetail.eventsInCurrency', {values: {currency}})}
+                {/if}
+                <span class="emoji-flag">{currencyFlag}</span>
+            </div>
+        {/if}
     </div>
 
     <!-- Data Editor: Prices -->
     {#if activeTab === 'prices'}
         <DataEditor bind:rows={priceRows} bind:this={priceEditor} columns={priceColumns} onchange={handlePriceDataChange}>
             {#snippet importModal({open, setOpen, onimport})}
-                <PriceDataImportModal {open} {onimport} onclose={() => setOpen(false)} />
+                <PriceDataImportModal {open} {currency} {onimport} onclose={() => setOpen(false)} />
             {/snippet}
         </DataEditor>
     {/if}
