@@ -42,6 +42,7 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     AssetType,
     BrokerUserAccess,
+    FxConversionRoute,
     IdentifierType,
     PriceHistory,
     ProviderInputType,
@@ -1147,29 +1148,78 @@ class AssetSourceManager:
 
             default_currency = asset.currency
 
-            # Build PriceHistory objects for upsert
-            # Strategy: DELETE existing dates + INSERT new (avoids SQLite ON CONFLICT issues)
+            # Build PriceHistory objects for upsert (F.4 MERGE + sentinel semantics)
+            # Strategy: fetch existing rows, merge per-field, DELETE affected dates, INSERT merged rows.
+            # Sentinel rules apply to open/high/low/volume only (close stays required and is written verbatim):
+            #   - field == None (omitted)  → preserve existing DB value (no-op)
+            #   - field == -1              → write NULL
+            #   - field >= 0               → write the provided value
             price_objects = []
             dates_to_upsert = []
 
+            # I.2 — Currency coherence validation (Supersedes E.3).
+            # Hard reject (not per-item skip): if ANY point has a currency that doesn't
+            # match asset.currency, raise ValueError immediately so the router returns
+            # 400 with the offending dates. This is defensive — the frontend, after
+            # Block I, no longer sends a per-point currency (the column was dropped
+            # from the DataEditor), so reaching this branch means the client is buggy
+            # or someone is hitting the API directly.
+            offending_dates: list[str] = []
             for price in prices:
+                effective_currency = price.currency or default_currency
+                if effective_currency != default_currency:
+                    offending_dates.append(f"{price.date.isoformat()} ({effective_currency})")
+            if offending_dates:
+                raise ValueError(
+                    f"Currency mismatch for asset {asset_id}: expected {default_currency} for all prices, " f"got {len(offending_dates)} date(s) with different currency: " + ", ".join(offending_dates[:10]) + (f" (+ {len(offending_dates) - 10} more)" if len(offending_dates) > 10 else "")
+                )
+
+            # Index valid points by date (all inputs are guaranteed matching currency past this line)
+            valid_inputs: dict = {}
+            for price in prices:
+                valid_inputs[price.date] = price
                 dates_to_upsert.append(price.date)
+
+            # Fetch existing rows for MERGE (F.4)
+            existing_rows: dict = {}
+            if dates_to_upsert:
+                existing_stmt = select(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates_to_upsert)))
+                existing_res = await session.execute(existing_stmt)
+                for row in existing_res.scalars().all():
+                    existing_rows[row.date] = row
+
+            # F.4 sentinel helper: -1 → None (SET NULL), None → preserve, else → write
+            def _merge_field(new_val, existing_val):
+                """F.4 sentinel merge for open/high/low/volume."""
+                if new_val is None:
+                    return existing_val  # no-op: preserve
+                if new_val == Decimal("-1"):
+                    return None  # SET NULL
+                return new_val  # write
+
+            for date_key, price in valid_inputs.items():
+                existing = existing_rows.get(date_key)
+                # Sentinel merge for auxiliary OHLC fields (open/high/low) + volume
+                merged_open = _merge_field(price.open, existing.open if existing else None)
+                merged_high = _merge_field(price.high, existing.high if existing else None)
+                merged_low = _merge_field(price.low, existing.low if existing else None)
+                merged_volume = _merge_field(price.volume, existing.volume if existing else None)
 
                 price_obj = PriceHistory(
                     asset_id=asset_id,
                     date=price.date,
-                    open=(truncate_priceHistory(price.open, "open") if price.open is not None else None),
-                    high=(truncate_priceHistory(price.high, "high") if price.high is not None else None),
-                    low=truncate_priceHistory(price.low, "low") if price.low is not None else None,
+                    open=(truncate_priceHistory(merged_open, "open") if merged_open is not None else None),
+                    high=(truncate_priceHistory(merged_high, "high") if merged_high is not None else None),
+                    low=(truncate_priceHistory(merged_low, "low") if merged_low is not None else None),
                     close=truncate_priceHistory(price.close, "close"),
-                    volume=price.volume,
+                    volume=merged_volume,
                     currency=price.currency or default_currency,
                     source_plugin_key="MANUAL",
                     fetched_at=None,
                 )
                 price_objects.append(price_obj)
 
-            # Delete existing prices for these dates (upsert = delete + insert)
+            # Delete existing prices for these dates (MERGE = fetch + delete + insert)
             if dates_to_upsert:
                 delete_stmt = delete(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates_to_upsert)))
                 await session.execute(delete_stmt)
@@ -1181,11 +1231,14 @@ class AssetSourceManager:
             # Count as inserted
             total_inserted += len(price_objects)
 
+            # I.2 — after hard-reject validation all inputs were accepted
+            msg = f"Upserted {len(price_objects)} prices"
+
             results.append(
                 {
                     "asset_id": asset_id,
                     "count": len(price_objects),
-                    "message": f"Upserted {len(price_objects)} prices",
+                    "message": msg,
                 }
             )
         # update_count = 0 because SQLite doesn't distinguish
@@ -1652,6 +1705,39 @@ class AssetSourceManager:
         # ── Currency conversion pass ──────────────────────────────────────
         # For each result whose request has target_currency, convert OHLC
         # values via FX rates in a single batch call per asset.
+        # E.4 — when a conversion fails, we discriminate between:
+        #   - ``pair_missing``   (no FxConversionRoute registered for the pair)
+        #   - ``no_rate_at_date`` (route exists but no rate <= requested date)
+        # and stamp the discriminator on ``FAPricePoint.backward_fill_info.fx_error``
+        # so the frontend banner can suggest the correct remediation action
+        # (register pair vs sync history). Auto-registration is NOT performed
+        # here: it is an explicit user action in the UI.
+
+        # Collect all (base, quote) pairs involved in the failed conversions.
+        # We need this BEFORE the per-result loop so we can do a single DB
+        # roundtrip to check route existence.
+        pending_fx_pairs: set[tuple[str, str]] = set()
+        for req, result in zip(requests, results, strict=True):
+            target = getattr(req, "target_currency", None)
+            if not target or not result.prices:
+                continue
+            for p in result.prices:
+                if p.currency != target:
+                    base, quote = (p.currency, target) if p.currency < target else (target, p.currency)
+                    pending_fx_pairs.add((base, quote))
+
+        # Single query: which of those pairs DO have a route registered?
+        routes_registered: set[tuple[str, str]] = set()
+        if pending_fx_pairs:
+            route_conditions = [and_(FxConversionRoute.base == b, FxConversionRoute.quote == q) for b, q in pending_fx_pairs]
+            route_stmt = select(FxConversionRoute.base, FxConversionRoute.quote).where(or_(*route_conditions))
+            route_res = await session.execute(route_stmt)
+            routes_registered = {(b, q) for b, q in route_res.all()}
+
+        def _classify_fx_error(from_currency: str, to_currency: str) -> str:
+            """E.4 — pair_missing vs no_rate_at_date discriminator."""
+            base, quote = (from_currency, to_currency) if from_currency < to_currency else (to_currency, from_currency)
+            return "no_rate_at_date" if (base, quote) in routes_registered else "pair_missing"
 
         for req, result in zip(requests, results, strict=True):
             target = getattr(req, "target_currency", None)
@@ -1677,12 +1763,40 @@ class AssetSourceManager:
             conv_idx = 0
             for pi in price_indices:
                 conv_result = converted[conv_idx]
+                original_point = result.prices[pi]
+
                 if conv_result is None:
-                    # Conversion failed — keep native price, add warning
-                    if conv_errors:
-                        for err in conv_errors:
-                            if err not in result.errors:
-                                result.errors.append(err)
+                    # Conversion failed — keep native price, stamp fx_error discriminator
+                    # so frontend can render the correct banner (pair vs no-rate).
+                    fx_err = _classify_fx_error(original_point.currency, target)
+                    old_bfi = original_point.backward_fill_info
+                    failed_bfi = AssetBackwardFillInfo(
+                        actual_rate_date=old_bfi.actual_rate_date if old_bfi else original_point.date,
+                        days_back=old_bfi.days_back if old_bfi else 0,
+                        fx_rate_date=None,
+                        fx_days_back=None,
+                        fx_error=fx_err,
+                    )
+                    # Keep the same currency/values, only attach the bfi with fx_error.
+                    result.prices[pi] = FAPricePoint(
+                        date=original_point.date,
+                        open=original_point.open,
+                        high=original_point.high,
+                        low=original_point.low,
+                        close=original_point.close,
+                        volume=original_point.volume,
+                        currency=original_point.currency,
+                        original_currency=original_point.original_currency,
+                        original_close=original_point.original_close,
+                        original_open=original_point.original_open,
+                        original_high=original_point.original_high,
+                        original_low=original_point.original_low,
+                        backward_fill_info=failed_bfi,
+                    )
+                    # Surface the per-pair error once per result (dedup)
+                    for err in conv_errors:
+                        if err not in result.errors:
+                            result.errors.append(err)
                     conv_idx += 1
                     continue
 
@@ -2223,11 +2337,18 @@ class AssetSourceManager:
         1. If a provider is assigned → call provider.get_current_value() (parallel, semaphore-limited)
         2. Fallback → read latest PriceHistory row from DB
 
-        This is a **read-only** operation — no data is written to the DB.
+        **Side effect (F.2 + F.3)**: for every successful provider fetch whose
+        ``as_of_date`` is today, the OHLC row for today is either created
+        (``open=high=low=close=value``, ``volume=None``) or its intra-day
+        range is extended (``low``/``high`` widened, ``open`` set if missing,
+        ``close`` overwritten with the latest tick). DB-fallback results are
+        not persisted (they are stale data, not fresh quotes). A commit
+        failure on the OHLC persist is logged + rolled back without failing
+        the fetch (the FACurrentPriceItem list is still returned).
 
         Args:
             asset_ids: Asset IDs to fetch prices for
-            session: Database session (read only)
+            session: Database session (used for both read and the F.2/F.3 write-back)
             concurrency: Max parallel provider calls
 
         Returns:
@@ -2324,7 +2445,124 @@ class AssetSourceManager:
         # Run all fetches in parallel
         tasks = [_fetch_one(aid) for aid in asset_ids]
         results = await asyncio.gather(*tasks)
+
+        # F.2 + F.3 — persist current-price snapshots to PriceHistory.
+        # ----------------------------------------------------------------
+        # This call is NOT read-only anymore (docstring updated): for every
+        # successful **provider** fetch whose ``as_of_date`` equals today we
+        # either bootstrap a new row (F.2) or extend the existing intra-day
+        # range (F.3). Results sourced from the DB fallback
+        # (``source == "db:last_known"``) are **skipped**: they are not fresh
+        # quotes, they are stale rows we just read — writing them back as
+        # "today" would fabricate data.
+        #
+        # Concurrency note: multiple callers hitting this in parallel produce
+        # last-write-wins semantics. Acceptable because fresh data flows from
+        # the same provider (plus its cache), the value is the same, and the
+        # realistic concurrency upper bound is (connected users + 1 scheduler).
+        today = date_type.today()
+        items_to_persist = [r for r in results if r.value is not None and r.currency and r.as_of_date == today and r.source and r.source.startswith("provider:")]
+
+        if items_to_persist:
+            existing_stmt = select(PriceHistory).where(and_(PriceHistory.asset_id.in_([r.asset_id for r in items_to_persist]), PriceHistory.date == today))
+            existing_res = await session.execute(existing_stmt)
+            existing_by_asset = {row.asset_id: row for row in existing_res.scalars().all()}
+
+            logger.info(
+                "Current-price persist: processing %d fresh provider quote(s) for %s (existing rows today: %d)",
+                len(items_to_persist),
+                today,
+                len(existing_by_asset),
+            )
+
+            for item in items_to_persist:
+                new_close = Decimal(str(item.value))
+                existing = existing_by_asset.get(item.asset_id)
+                if existing is None:
+                    # F.2 bootstrap — open=high=low=close=new, volume=None
+                    session.add(
+                        PriceHistory(
+                            asset_id=item.asset_id,
+                            date=today,
+                            open=new_close,
+                            high=new_close,
+                            low=new_close,
+                            close=new_close,
+                            volume=None,
+                            currency=item.currency,
+                            source_plugin_key=item.source or "provider:unknown",
+                            fetched_at=utcnow(),
+                        )
+                    )
+                    logger.info(
+                        "  [F.2 bootstrap] asset=%s date=%s close=%s currency=%s source=%s",
+                        item.asset_id,
+                        today,
+                        new_close,
+                        item.currency,
+                        item.source,
+                    )
+                else:
+                    # F.3 intra-day extend
+                    patch = AssetSourceManager._extend_ohlc_bounds(existing, new_close)
+                    # Always overwrite close with the latest quote (per user spec)
+                    patch["close"] = new_close
+                    for field_name, new_val in patch.items():
+                        setattr(existing, field_name, new_val)
+                    existing.fetched_at = utcnow()
+                    logger.info(
+                        "  [Intra-day price extend] asset=%s date=%s new_close=%s patch_fields=%s",
+                        item.asset_id,
+                        today,
+                        new_close,
+                        list(patch.keys()),
+                    )
+
+            try:
+                await session.commit()
+                logger.info("Current-price persist: commit OK (%d row(s) written/updated)", len(items_to_persist))
+            except Exception as commit_err:
+                logger.warning("Current-price OHLC persist failed, rolling back: %s", commit_err)
+                await session.rollback()
+        else:
+            # Only log when something was expected but filtered out (db:last_known or today mismatch)
+            skipped_count = sum(1 for r in results if r.source == "db:last_known")
+            if skipped_count > 0:
+                logger.info(
+                    "Current-price persist: skipped %d item(s) with source=db:last_known (stale fallback, not persisted)",
+                    skipped_count,
+                )
+
         return list(results)
+
+    # F.3 helper — shared between current-price persist and future pipelines.
+    @staticmethod
+    def _extend_ohlc_bounds(existing: PriceHistory, new_close: Decimal) -> dict:
+        """Compute the patch to apply to ``existing`` so the intra-day OHLC
+        bounds cover ``new_close`` (F.3).
+
+        Rules (per plan):
+        - ``low``  = min(existing.low,  new_close) when existing.low is set, else new_close
+        - ``high`` = max(existing.high, new_close) when existing.high is set, else new_close
+        - ``open`` = new_close only when existing.open is None (first tick of the day)
+        - ``volume`` untouched
+
+        Close is intentionally NOT touched here: the caller decides whether to
+        overwrite close with the latest tick (the current-price path does,
+        see ``get_current_prices_bulk``).
+
+        Returns a dict of only the fields that need to change, so the caller
+        can SETATTR them directly on the ORM row (no over-write on stable
+        fields, easier to log/inspect).
+        """
+        patch: dict = {}
+        if existing.low is None or new_close < existing.low:
+            patch["low"] = new_close
+        if existing.high is None or new_close > existing.high:
+            patch["high"] = new_close
+        if existing.open is None:
+            patch["open"] = new_close
+        return patch
 
     # ========================================================================
     # EVENT CRUD — Manual event management
@@ -2392,13 +2630,19 @@ class AssetSourceManager:
         Bulk query events for multiple assets, returning FAAssetEventPointOut with id + is_auto.
 
         Args:
-            requests: List of FAEventQueryItem (asset_id + date_range)
+            requests: List of FAEventQueryItem (asset_id + date_range + optional target_currency)
             session: Database session
 
         Returns:
             List of FAEventQueryResult
+
+        E.8 — when ``target_currency`` is set on a request, ``event.value`` is
+        converted to that currency via FX rates at the event's date. FX misses
+        are surfaced as non-fatal warnings in ``FAEventQueryResult.errors``
+        (the event is still returned, in its native currency).
         """
         from backend.app.schemas.prices import FAAssetEventPointOut, FAEventQueryResult  # noqa: PLC0415 — avoid circular import
+        from backend.app.services.fx import convert_bulk  # noqa: PLC0415 — avoid circular import at module load
 
         results = []
 
@@ -2406,6 +2650,7 @@ class AssetSourceManager:
             asset_id = req.asset_id
             start = req.date_range.start
             end = req.date_range.end or start
+            target_currency = getattr(req, "target_currency", None)
 
             stmt = (
                 select(AssetEvent)
@@ -2421,7 +2666,8 @@ class AssetSourceManager:
             res = await session.execute(stmt)
             db_events = res.scalars().all()
 
-            event_points = []
+            # Build native-currency event points first
+            event_points: list = []
             for ev in db_events:
                 event_points.append(
                     FAAssetEventPointOut(
@@ -2434,10 +2680,41 @@ class AssetSourceManager:
                     )
                 )
 
+            errors: list[str] = []
+
+            # E.8 — optional target_currency conversion pass
+            if target_currency and event_points:
+                conversions = [(ep.value, target_currency, ep.date) for ep in event_points]
+                conv_results, conv_errors = await convert_bulk(session, conversions, raise_on_error=False)
+
+                for idx, (ep, conv) in enumerate(zip(event_points, conv_results, strict=True)):
+                    if conv is None:
+                        # FX miss — keep native currency value, surface as non-fatal warning
+                        errors.append(f"Missing FX rate {ep.value.code}->{target_currency} for event on {ep.date.isoformat()}")
+                        continue
+                    new_cur, _rate_date, _bfill = conv
+                    # Replace value with the converted Currency (same event date, type, notes, id, is_auto)
+                    event_points[idx] = FAAssetEventPointOut(
+                        date=ep.date,
+                        type=ep.type,
+                        value=new_cur,
+                        notes=ep.notes,
+                        id=ep.id,
+                        is_auto=ep.is_auto,
+                    )
+
+                # Also include per-pair errors surfaced by convert_bulk (e.g. pair not registered)
+                # (deduplicated against our per-event messages — convert_bulk errors are already
+                # one per failed conversion, same index, so we skip duplicates by content).
+                for err in conv_errors:
+                    if err not in errors:
+                        errors.append(err)
+
             results.append(
                 FAEventQueryResult(
                     asset_id=asset_id,
                     events=event_points,
+                    errors=errors,
                 )
             )
 
@@ -2650,7 +2927,9 @@ class AssetCRUDService:
         if filters.asset_type:
             conditions.append(Asset.asset_type == filters.asset_type)
 
-        conditions.append(Asset.active == filters.active)
+        # Tri-state active filter: None = no filter, True/False = exact match
+        if filters.active is not None:
+            conditions.append(Asset.active == filters.active)
 
         if filters.search:
             search_pattern = f"%{filters.search}%"
@@ -2891,6 +3170,41 @@ class AssetCRUDService:
                     # We can use __pydantic_fields_set__ to check
                     if "classification_params" in patch.model_fields_set:
                         patch_dict["classification_params"] = None
+
+                # I.3 — guard against currency change on assets with existing price history.
+                # Rationale: changing asset.currency while `price_history` rows exist creates
+                # a silent inconsistency (stored prices are in the old currency, future queries
+                # would scale them against the new currency via FX conversion producing wrong
+                # numbers). The agreed policy (see phase-07 plan, Blocco I) is "wipe on change":
+                # the frontend must explicitly DELETE prices first, then re-PATCH, then re-sync.
+                # Here we emit a structured failure so the frontend can parse it and open the
+                # destructive-confirmation modal.
+                if "currency" in patch_dict:
+                    new_currency = patch_dict["currency"]
+                    if new_currency and new_currency != asset.currency:
+                        count_stmt = select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == patch.asset_id)
+                        oldest_stmt = select(func.min(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id)
+                        newest_stmt = select(func.max(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id)
+                        count_res = await session.execute(count_stmt)
+                        existing_count = int(count_res.scalar() or 0)
+                        if existing_count > 0:
+                            oldest_res = await session.execute(oldest_stmt)
+                            newest_res = await session.execute(newest_stmt)
+                            oldest_date = oldest_res.scalar()
+                            newest_date = newest_res.scalar()
+                            # Structured token message: the frontend parses this to trigger
+                            # the currency-change modal. Format intentionally stable so the
+                            # parser is straightforward.
+                            blocker_msg = f"CURRENCY_CHANGE_BLOCKED_BY_PRICES|count={existing_count}|oldest={oldest_date.isoformat() if oldest_date else ''}|newest={newest_date.isoformat() if newest_date else ''}|from={asset.currency}|to={new_currency}"
+                            results.append(
+                                FAAssetPatchResult(
+                                    asset_id=patch.asset_id,
+                                    success=False,
+                                    message=blocker_msg,
+                                    updated_fields=None,
+                                )
+                            )
+                            continue
 
                 for field, value in patch_dict.items():
                     logger.debug(f"Patching field '{field}': '{value}'")

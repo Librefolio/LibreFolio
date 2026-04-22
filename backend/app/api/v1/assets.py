@@ -3,8 +3,11 @@ Asset Provider API endpoints.
 Handles provider assignment, price management, and price refresh operations.
 """
 
+import csv
+import io
 import json
-from typing import List, Optional
+from datetime import date as date_type
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -12,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, User
+from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, PriceHistory, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
@@ -201,7 +204,7 @@ async def get_all_assets(session: AsyncSession = Depends(get_session_generator),
 async def list_assets(
     currency: Optional[str] = Query(None, description="Filter by currency (ISO 4217, e.g., USD)"),
     asset_type: Optional[AssetType] = Query(None, description="Filter by asset type enum"),
-    active: bool = Query(True, description="Include only active assets (default: true)"),
+    active: Optional[bool] = Query(None, description="Tri-state: true = only active, false = only inactive, omit = return both (default)"),
     search: Optional[str] = Query(None, description="Search in display_name (partial match)"),
     isin: Optional[str] = Query(None, description="Exact ISIN match"),
     ticker: Optional[str] = Query(None, description="Exact ticker match"),
@@ -614,6 +617,11 @@ async def upsert_prices_bulk(
             results=results_list,
             success_count=success_count,
         )
+    except ValueError as e:
+        # I.2 — currency mismatch (or other domain validation errors from the service)
+        # surface as 400 Bad Request, with the structured message the service produced.
+        logger.warning("Upsert prices validation error: %s", e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error in bulk upsert prices: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -636,6 +644,107 @@ async def delete_prices_bulk(
 # ============================================================================
 # PRICE QUERY ENDPOINTS
 # ============================================================================
+
+
+# TODO: spostare l'endpoint nel blocco dei backup e fare una cosa simile anche per le forex e gil eventi.
+@price_router.get("/{asset_id}/export")
+async def export_asset_prices(
+    asset_id: int,
+    format: Literal["json", "csv"] = "csv",
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """
+    Export the full price history of an asset as JSON or CSV (I.4).
+
+    Designed for the "currency change — backup before wipe" workflow: lets the user
+    download a self-contained snapshot of the current price series before a
+    destructive operation. Suitable as an audit/backup mechanism beyond that flow.
+
+    **Query param**:
+    - ``format``: ``"csv"`` (default, ``text/csv``) or ``"json"`` (``application/json``).
+      Additional formats (excel, parquet) can be added via the same enum without
+      breaking the API shape.
+
+    **Columns / fields** (same in both formats):
+    ``date, open, high, low, close, volume, currency, source_plugin_key, fetched_at``.
+
+    Currency is included verbatim from ``price_history.currency`` (canary-forensic
+    value — see Blocco I deviation in phase-07 plan for why the column is kept in DB
+    but dropped from the query response).
+
+    The response is streamed for large datasets (>10k rows) to avoid building the
+    whole payload in memory.
+    """
+    # Ensure the asset exists (404 if not)
+    asset_stmt = select(Asset).where(Asset.id == asset_id)
+    asset_res = await session.execute(asset_stmt)
+    asset = asset_res.scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=404, detail=f"Asset {asset_id} not found")
+
+    # Fetch all price rows in ascending date order (streaming-friendly)
+    stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_id).order_by(PriceHistory.date.asc())
+    res = await session.execute(stmt)
+    rows: List[PriceHistory] = list(res.scalars().all())
+
+    # Build asset slug for filename (lowercase, strip non-alnum)
+    raw_name = asset.display_name or f"asset-{asset_id}"
+    asset_slug = "".join(c if c.isalnum() else "-" for c in raw_name.lower()).strip("-")[:60] or f"asset-{asset_id}"
+    today_str = date_type.today().isoformat()
+    filename = f"prices_{asset_slug}_{today_str}.{format}"
+
+    def _row_to_dict(r: PriceHistory) -> dict:
+        return {
+            "date": r.date.isoformat(),
+            "open": str(r.open) if r.open is not None else None,
+            "high": str(r.high) if r.high is not None else None,
+            "low": str(r.low) if r.low is not None else None,
+            "close": str(r.close) if r.close is not None else None,
+            "volume": str(r.volume) if r.volume is not None else None,
+            "currency": r.currency,
+            "source_plugin_key": r.source_plugin_key,
+            "fetched_at": r.fetched_at.isoformat() if r.fetched_at else None,
+        }
+
+    if format == "json":
+        # Streaming JSON (array of objects). For small datasets this is overkill but
+        # keeps the memory profile flat as the series grows.
+        def _gen_json():
+            yield f'{{"asset_id":{asset_id},"currency":"{asset.currency}","count":{len(rows)},"prices":['
+            for idx, r in enumerate(rows):
+                if idx > 0:
+                    yield ","
+                yield json.dumps(_row_to_dict(r), separators=(",", ":"))
+            yield "]}"
+
+        return StreamingResponse(
+            _gen_json(),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # CSV (default)
+    fieldnames = ["date", "open", "high", "low", "close", "volume", "currency", "source_plugin_key", "fetched_at"]
+
+    def _gen_csv():
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=fieldnames)
+        writer.writeheader()
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate(0)
+        for r in rows:
+            writer.writerow(_row_to_dict(r))
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+
+    return StreamingResponse(
+        _gen_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @price_router.post("/query", response_model=FAPriceQueryResponse)

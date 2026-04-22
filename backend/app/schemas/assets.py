@@ -725,7 +725,7 @@ class FAAinfoFiltersRequest(BaseModel):
     # Filters with proper validation
     currency: Optional[str] = Field(None, description="Filter by currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(None, description="Filter by asset type enum")
-    active: bool = Field(True, description="Include only active assets (default: true)")
+    active: Optional[bool] = Field(None, description="Tri-state filter: True = only active, False = only inactive, None (default) = no filter (return both)")
 
     # Search in display_name (partial match)
     search: Optional[str] = Field(None, description="Search in display_name (partial match)")

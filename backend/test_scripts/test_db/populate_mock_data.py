@@ -8,7 +8,7 @@ The data demonstrates all features of the unified transaction schema.
 
 ⚠️  WARNING: This is MOCK DATA for testing only!
     - Brokers: Interactive Brokers, Degiro, Recrowd
-    - Assets: AAPL, MSFT, TSLA, VWCE, etc.
+    - Assets: AAPL, MSFT, TSLA, CHIP, MWRD, etc.
     - Transactions: Buy, sell, dividends, deposits, etc.
     - FX Rates: Last 30 days for USD, GBP, CHF, JPY
 
@@ -480,64 +480,28 @@ def populate_assets(session: Session):
             ),
         },
         # ETFs (EUR)
-        {
-            "display_name": "Vanguard FTSE All-World UCITS ETF",
-            "currency": "EUR",
-            "asset_type": AssetType.ETF,
-            "classification_params": json.dumps(
-                {
-                    "short_description": "Global diversified equity ETF",
-                    "geographic_area": {
-                        "distribution": {
-                            "USA": 0.60,
-                            "DEU": 0.10,
-                            "GBR": 0.10,
-                            "JPN": 0.10,
-                            "CHN": 0.10,
-                        }
-                    },
-                    "sector_area": {
-                        "distribution": {
-                            "Technology": 0.25,
-                            "Financials": 0.20,
-                            "Healthcare": 0.15,
-                            "Consumer Discretionary": 0.12,
-                            "Industrials": 0.10,
-                            "Communication": 0.08,
-                            "Energy": 0.05,
-                            "Other": 0.05,
-                        }
-                    },
-                }
-            ),
-        },
-        {
-            "display_name": "iShares Core S&P 500 UCITS ETF",
-            "currency": "EUR",
-            "asset_type": AssetType.ETF,
-            "classification_params": json.dumps(
-                {
-                    "short_description": "S&P 500 index tracker",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Diversified",
-                }
-            ),
-        },
+        # NOTE (I-bis #13.6, 2026-04-22): rimossi "Vanguard FTSE All-World UCITS ETF"
+        # e "iShares Core S&P 500 UCITS ETF" dal mock. Rationale: Vanguard ha un
+        # provider yfinance instabile e avevamo comunque abbastanza ETF di esempio
+        # (Amundi Core MSCI World, Amundi MSCI Semiconductors). Tutte le transazioni
+        # e i price history associati sono stati cascade-removed.
         # Crowdfunding Loans (EUR)
         {
-            "display_name": "Real Estate Loan - Milano Centro",
+            "display_name": "RE Loan Milano",
             "currency": "EUR",
             "asset_type": AssetType.CROWDFUND_LOAN,
+            # Marked inactive — fixture for testing the "inactive asset" UI state.
+            "active": False,
             "classification_params": json.dumps(
                 {
-                    "short_description": "Real estate development loan in Milan",
+                    "short_description": "Real estate development loan in Milan (closed position)",
                     "geographic_area": {"ITA": 1.0},
                     "sector": "Real Estate",
                 }
             ),
         },
         {
-            "display_name": "Real Estate Loan - Roma Parioli",
+            "display_name": "RE Loan Roma",
             "currency": "EUR",
             "asset_type": AssetType.CROWDFUND_LOAN,
             "classification_params": json.dumps(
@@ -587,12 +551,14 @@ def populate_assets(session: Session):
             ),
         },
         {
-            "display_name": "Amundi MSCI World UCITS ETF",
+            "display_name": "Amundi Core MSCI World UCITS ETF Acc",
             "currency": "EUR",
             "asset_type": AssetType.ETF,
+            "identifier_isin": "IE000BI8OT95",
+            "identifier_ticker": "MWRD",
             "classification_params": json.dumps(
                 {
-                    "short_description": "Global developed markets ETF",
+                    "short_description": "Global developed markets ETF (accumulating) — served via JustETF",
                     "geographic_area": {
                         "USA": 0.65,
                         "DEU": 0.08,
@@ -667,6 +633,39 @@ def populate_assets(session: Session):
                 }
             ),
         },
+        # JustETF — live-quote provider (ISIN-based). Used to validate F.2/F.3 current-price
+        # persistence (bootstrap + intra-day extend) through a non-yfinance plugin.
+        {
+            "display_name": "Amundi MSCI Semiconductors UCITS ETF Acc",
+            "currency": "EUR",
+            "asset_type": AssetType.ETF,
+            "identifier_isin": "LU1900066033",
+            "identifier_ticker": "CHIP",
+            "user_url": "https://www.justetf.com/it/etf-profile.html?isin=LU1900066033",
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Semiconductors sector ETF tracking MSCI World Semiconductors & Semiconductor Equipment index",
+                    "geographic_area": {"distribution": {"USA": 0.80, "ASIA": 0.15, "EUROPE": 0.05}},
+                    "sector_area": {"distribution": {"Technology": 1.0}},
+                }
+            ),
+        },
+        # CSS Scraper — Italian government bond (BTP) from Borsa Italiana. Sourced from the
+        # existing backend test (test_css_scraper_current_price). Validates the F.2/F.3
+        # current-price persist flow against a provider that has no history support.
+        {
+            "display_name": "BTP Più Sc Fb33 EUR",
+            "currency": "EUR",
+            "asset_type": AssetType.BOND,
+            "user_url": "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en",
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Italian government bond (BTP Più, maturity Feb 2033) — current price scraped from Borsa Italiana",
+                    "geographic_area": {"distribution": {"ITA": 1.0}},
+                    "sector_area": {"distribution": {"Government Bonds": 1.0}},
+                }
+            ),
+        },
     ]
 
     for asset_data in assets:
@@ -687,24 +686,28 @@ def populate_asset_provider_assignments(session: Session):
         ("Apple Inc.", "yfinance", "AAPL", IdentifierType.TICKER, None),
         ("Microsoft Corporation", "yfinance", "MSFT", IdentifierType.TICKER, None),
         ("Tesla, Inc.", "yfinance", "TSLA", IdentifierType.TICKER, None),
-        ("Vanguard FTSE All-World UCITS ETF", "yfinance", "VWCE.DE", IdentifierType.TICKER, None),
-        ("iShares Core S&P 500 UCITS ETF", "yfinance", "SXR8.DE", IdentifierType.TICKER, None),
         ("Bitcoin", "yfinance", "BTC-USD", IdentifierType.TICKER, None),
         ("Ethereum", "yfinance", "ETH-USD", IdentifierType.TICKER, None),
         # Assets without transactions (for testing delete success flow)
         ("NVIDIA Corporation", "yfinance", "NVDA", IdentifierType.TICKER, None),
-        ("Amundi MSCI World UCITS ETF", "yfinance", "MWRD.DE", IdentifierType.TICKER, None),
+        # Amundi Core MSCI World ETF via JustETF (ISIN-based) — yfinance has issues
+        # reaching this instrument so we route it through the JustETF live-quote plugin.
+        ("Amundi Core MSCI World UCITS ETF Acc", "justetf", "IE000BI8OT95", IdentifierType.ISIN, None),
         # INDEX benchmarks (price tracking only, no transactions)
         ("S&P 500", "yfinance", "^GSPC", IdentifierType.TICKER, None),
         ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None),
-        # Scheduled Investment — BTP Italia with interest schedule
+        # Scheduled Investment — BTP Italia with interest schedule.
+        # Schema: FAScheduledInvestmentSchedule (see schemas/assets.py). Periods
+        # must be contiguous + non-overlapping. `asset_events` is optional.
+        # Probed OK via /provider/probe: plugin returns fixed 10000 EUR with
+        # semi-annual maturation points.
         (
             "BTP Italia 2028",
             "scheduled_investment",
             None,
             ProviderInputType.AUTO_GENERATED,
             {
-                "initial_value": {"code": "EUR", "amount": 1000},
+                "initial_value": {"code": "EUR", "amount": 10000},
                 "interest_type": "SIMPLE",
                 "day_count": "ACT/365",
                 "schedule": [
@@ -725,8 +728,35 @@ def populate_asset_provider_assignments(session: Session):
             "https://www.kitco.com/charts/livegold.html",
             ProviderInputType.URL,
             {
-                "current_css_selector": "#sp-last",
+                # Kitco updated the markup — the old "#sp-last" selector no longer
+                # resolves. This deeply-nested selector targets the current-price
+                # <h3> in the live quote card (captured 2026-04-22).
+                "current_css_selector": "#__next > div > main > div.mx-auto.box-border.w-full.max-w-full.px-5.md\\:w-\\[975px\\].md\\:px-\\[15px\\].desktop\\:w-\\[1290px\\] > div.block.md\\:gap-\\[15px\\].tablet\\:grid.tablet\\:grid-cols-\\[300px_1fr\\].tablet\\:grid-rows-\\[auto_auto\\].desktop\\:grid-cols-\\[300px_1fr_300px\\] > div.tablet\\:col-start-1.tablet\\:row-start-1 > div.relative.mb-\\[30px\\].rounded-lg.border.border-\\[\\#E5E5E5\\].px-\\[15px\\].pb-\\[17px\\].pt-\\[10px\\].leading-5 > div:nth-child(1) > div.border-b.border-ktc-borders > div.mb-2.text-right > h3",
                 "currency": "USD",
+                "decimal_format": "us",
+            },
+        ),
+        # JustETF — Amundi MSCI Semiconductors UCITS ETF Acc (ISIN-based provider).
+        # Useful to verify F.2 bootstrap + F.3 intra-day extend through a live-quote
+        # provider that is neither yfinance nor a raw URL scraper.
+        (
+            "Amundi MSCI Semiconductors UCITS ETF Acc",
+            "justetf",
+            "LU1900066033",
+            ProviderInputType.ISIN,
+            None,
+        ),
+        # CSS Scraper — Italian BTP quote from Borsa Italiana (no history support,
+        # only current price). Directly mirrors test_css_scraper_current_price so the
+        # selector + decimal format are known to work.
+        (
+            "BTP Più Sc Fb33 EUR",
+            "css_scraper",
+            "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en",
+            ProviderInputType.URL,
+            {
+                "current_css_selector": ".summary-value strong",
+                "currency": "EUR",
                 "decimal_format": "us",
             },
         ),
@@ -766,10 +796,8 @@ def populate_transactions(session: Session):
     apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
     msft = session.exec(select(Asset).where(Asset.display_name == "Microsoft Corporation")).first()
     tesla = session.exec(select(Asset).where(Asset.display_name == "Tesla, Inc.")).first()
-    vwce = session.exec(select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")).first()
-    cspx = session.exec(select(Asset).where(Asset.display_name == "iShares Core S&P 500 UCITS ETF")).first()
-    loan1 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Milano Centro")).first()
-    loan2 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Roma Parioli")).first()
+    loan1 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Milano")).first()
+    loan2 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Roma")).first()
     btc = session.exec(select(Asset).where(Asset.display_name == "Bitcoin")).first()
     eth = session.exec(select(Asset).where(Asset.display_name == "Ethereum")).first()
 
@@ -828,17 +856,6 @@ def populate_transactions(session: Session):
             "days_ago": 28,
             "description": "Initial AAPL purchase",
         },
-        # Day -25: Buy VWCE on Degiro
-        {
-            "broker": degiro,
-            "asset": vwce,
-            "type": TransactionType.BUY,
-            "quantity": Decimal("50.0"),
-            "amount": Decimal("-4765.00"),  # 50 * 95.30
-            "currency": "EUR",
-            "days_ago": 25,
-            "description": "Start ETF accumulation plan",
-        },
         # Day -20: Invest in loan 1 on Recrowd
         {
             "broker": recrowd,
@@ -872,17 +889,6 @@ def populate_transactions(session: Session):
             "days_ago": 15,
             "description": "P2P lending - Roma Parioli",
         },
-        # Day -10: Buy more VWCE on Degiro
-        {
-            "broker": degiro,
-            "asset": vwce,
-            "type": TransactionType.BUY,
-            "quantity": Decimal("30.0"),
-            "amount": Decimal("-2883.00"),  # 30 * 96.10
-            "currency": "EUR",
-            "days_ago": 10,
-            "description": "Monthly ETF purchase",
-        },
         # Day -8: Receive dividend from AAPL (net of taxes)
         {
             "broker": ib,
@@ -915,17 +921,6 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 3,
             "description": "Monthly interest payment (8.5% annual)",
-        },
-        # Day -1: Buy CSPX on Degiro
-        {
-            "broker": degiro,
-            "asset": cspx,
-            "type": TransactionType.BUY,
-            "quantity": Decimal("2.0"),
-            "amount": Decimal("-971.00"),  # 2 * 485.50
-            "currency": "EUR",
-            "days_ago": 1,
-            "description": "S&P 500 exposure",
         },
         # Day -1: Fee transaction
         {
@@ -1068,8 +1063,6 @@ def populate_price_history(session: Session):
     apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
     msft = session.exec(select(Asset).where(Asset.display_name == "Microsoft Corporation")).first()
     tesla = session.exec(select(Asset).where(Asset.display_name == "Tesla, Inc.")).first()
-    vwce = session.exec(select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")).first()
-    cspx = session.exec(select(Asset).where(Asset.display_name == "iShares Core S&P 500 UCITS ETF")).first()
     btc = session.exec(select(Asset).where(Asset.display_name == "Bitcoin")).first()
     eth = session.exec(select(Asset).where(Asset.display_name == "Ethereum")).first()
 
@@ -1081,8 +1074,6 @@ def populate_price_history(session: Session):
         (apple, "USD", Decimal("175.00"), Decimal("185.00"), "yfinance", True),
         (msft, "USD", Decimal("375.00"), Decimal("390.00"), "yfinance", True),
         (tesla, "USD", Decimal("220.00"), Decimal("245.00"), "yfinance", True),
-        (vwce, "EUR", Decimal("94.00"), Decimal("98.00"), "yfinance", True),
-        (cspx, "EUR", Decimal("480.00"), Decimal("490.00"), "yfinance", True),
         (btc, "USD", Decimal("42000.00"), Decimal("45000.00"), "yfinance", False),  # Crypto trades 24/7
         (eth, "USD", Decimal("2400.00"), Decimal("2650.00"), "yfinance", False),
     ]
@@ -1135,7 +1126,6 @@ def populate_asset_events(session: Session):
 
     Inserts manual events (provider_assignment_id=None) for:
     - Apple: quarterly dividends
-    - VWCE: semi-annual dividends
     - Loan Milano: monthly interest + one haircut
     - Loan Roma: maturity settlement
     """
@@ -1145,9 +1135,8 @@ def populate_asset_events(session: Session):
     today = date.today()
 
     apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
-    vwce = session.exec(select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")).first()
-    loan1 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Milano Centro")).first()
-    loan2 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Roma Parioli")).first()
+    loan1 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Milano")).first()
+    loan2 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Roma")).first()
 
     events_data = []
 
@@ -1165,19 +1154,7 @@ def populate_asset_events(session: Session):
                 )
             )
 
-    # VWCE — semi-annual distributions (EUR)
-    if vwce:
-        for days_ago, amount in [(120, "0.52"), (300, "0.48")]:
-            events_data.append(
-                AssetEvent(
-                    asset_id=vwce.id,
-                    date=today - timedelta(days=days_ago),
-                    type=AssetEventType.DIVIDEND,
-                    value=Decimal(amount),
-                    currency="EUR",
-                    notes="Distribution",
-                )
-            )
+    # VWCE removed from mock data (I-bis #13.6): no distribution events.
 
     # Loan Milano — monthly interest + haircut
     if loan1:

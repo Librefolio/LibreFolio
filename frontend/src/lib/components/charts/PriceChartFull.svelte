@@ -884,7 +884,7 @@
                         let labelHtml: string;
                         let isGhostRow = false;
                         if (isGhost) {
-                             // Ghost label: "💱 Name (flag CUR)" — truncate Name to same length as main (15)
+                            // Ghost label: "💱 Name (flag CUR)" — truncate Name to same length as main (15)
                             const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                             // Extract name part from ghostLabel format "💱 Name (flag CUR)"
                             const nameMatch = ghostLabel.match(/^💱\s*(.+?)\s*(\([^)]+\))$/);
@@ -921,12 +921,15 @@
                                     mainLabel = mainSeriesName;
                                 }
                                 labelHtml =
-                                    signalLabelToHtml({
-                                        label: mainLabel,
-                                        iconUrl: mainIconUrl,
-                                        assetType: mainAssetType,
-                                        isCrown: true,
-                                    }, 15) + currSuffix;
+                                    signalLabelToHtml(
+                                        {
+                                            label: mainLabel,
+                                            iconUrl: mainIconUrl,
+                                            assetType: mainAssetType,
+                                            isCrown: true,
+                                        },
+                                        15,
+                                    ) + currSuffix;
                             } else {
                                 const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                                 labelHtml = `${colorDot}${p.seriesName}`;

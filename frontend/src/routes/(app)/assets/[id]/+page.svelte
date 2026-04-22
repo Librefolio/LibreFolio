@@ -139,6 +139,7 @@
     // Classification data (loaded when has_metadata)
     let sectorDistribution: Record<string, number> | null = $state(null);
     let geographicDistribution: Record<string, number> | null = $state(null);
+    let shortDescription: string | null = $state(null);
     let classificationLoaded = $state(false);
 
     // Provider icon for header badge
@@ -484,6 +485,7 @@
         livePriceConversionFailed = false;
         sectorDistribution = null;
         geographicDistribution = null;
+        shortDescription = null;
         classificationLoaded = false;
         providerIconUrl = null;
 
@@ -708,15 +710,18 @@
                 const cp = items[0].classification_params;
                 sectorDistribution = cp.sector_area?.distribution ?? null;
                 geographicDistribution = cp.geographic_area?.distribution ?? null;
+                shortDescription = cp.short_description ?? null;
             } else {
                 // No classification data — reset to null (prevents stale data from previous asset)
                 sectorDistribution = null;
                 geographicDistribution = null;
+                shortDescription = null;
             }
         } catch (e) {
             console.error('Failed to load classification data:', e);
             sectorDistribution = null;
             geographicDistribution = null;
+            shortDescription = null;
         } finally {
             classificationLoaded = true;
         }
@@ -781,6 +786,7 @@
         } else {
             sectorDistribution = null;
             geographicDistribution = null;
+            shortDescription = null;
             classificationLoaded = true;
         }
     }
@@ -943,16 +949,29 @@
 
     async function handleAssetUpdated() {
         editModalOpen = false;
+        const prevCurrency = assetInfo?.currency;
         await reloadMetadata();
+        // I.6 post-feedback: if the asset currency was changed via the wipe-on-change
+        // flow, the previously-selected `displayCurrency` is now stale (still pointing
+        // to the OLD asset currency). Reset it to the NEW asset.currency so the chart
+        // does not attempt a meaningless self-conversion and the "Display currency"
+        // selector visually reflects the new baseline.
+        if (prevCurrency && assetInfo?.currency && assetInfo.currency !== prevCurrency) {
+            displayCurrency = assetInfo.currency;
+        }
         await handleRefresh();
     }
 
     function buildEditData() {
         if (!assetInfo) return null;
-        // Build classification_params from loaded data
-        const hasClassification = sectorDistribution || geographicDistribution;
+        // Build classification_params from loaded data. `short_description` is
+        // included here (bug-fix 2026-04-22): without it the edit modal opens
+        // with an empty "Description" textarea even though the DB has a value,
+        // because the modal reads `data.classification_params.short_description`.
+        const hasClassification = sectorDistribution || geographicDistribution || shortDescription;
         const classification_params = hasClassification
             ? {
+                  short_description: shortDescription ?? null,
                   sector_area: sectorDistribution ? {distribution: sectorDistribution} : null,
                   geographic_area: geographicDistribution ? {distribution: geographicDistribution} : null,
               }
@@ -1157,23 +1176,7 @@
             </div>
 
             {#if assetInfo}
-                <AssetPriceSummary
-                    {lastPrice}
-                    {deltaPercent}
-                    {deltaAbs}
-                    bind:displayCurrency
-                    assetCurrency={assetInfo.currency}
-                    {fxConversionMissing}
-                    {fxPairSlug}
-                    layoutMode={layout.layoutMode}
-                    onAddFxPair={() => {
-                        fxPairCreateSlug = '';
-                        showFxPairAddModal = true;
-                    }}
-                    {livePriceConversionFailed}
-                    onsyncfx={fxPairSlug ? () => handleSyncPair(fxPairSlug) : undefined}
-                    {fxSyncing}
-                />
+                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} layoutMode={layout.layoutMode} {livePriceConversionFailed} />
             {/if}
         </div>
 
@@ -1586,6 +1589,14 @@
             </button>
             {#if showMetadata}
                 <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3 space-y-4">
+                    <!-- Description (from classification_params.short_description) — always first if set -->
+                    {#if shortDescription}
+                        <div>
+                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assetDetail.metadataDescription')}</h4>
+                            <p class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{shortDescription}</p>
+                        </div>
+                    {/if}
+
                     <!-- External URLs (provider URL only — user URL is in header) -->
                     {#if providerExternalUrl}
                         <div>

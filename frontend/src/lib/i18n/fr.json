@@ -262,7 +262,7 @@
     "subtitle": "Visualisez et gérez vos investissements",
     "searchPlaceholder": "Rechercher des actifs...",
     "allTypes": "Tous les types",
-    "showActive": "Actifs seulement",
+    "showActive": "Actifs",
     "showAll": "Tout afficher",
     "table": {
       "lastPrice": "Dernier Prix",
@@ -431,7 +431,8 @@
       "balanceSelected": "Équilibrer les lignes sélectionnées",
       "deleteSelected": "Supprimer les lignes sélectionnées",
       "deleteConfirmMessage": "Supprimer {count} entrées de cette distribution ?"
-    }
+    },
+    "showInactive": "Inactifs"
   },
   "transactions": {
     "title": "Transactions",
@@ -904,6 +905,11 @@
     "saving": "Enregistrement…",
     "autoEvent": {
       "tooltip": "Généré automatiquement par un fournisseur de prix. Les modifications sont désactivées car elles seraient écrasées à la prochaine synchronisation. La suppression est également temporaire — le fournisseur recréera l'événement à la prochaine sync. Pour le retirer définitivement, modifiez la configuration du fournisseur de l'actif."
+    },
+    "cell": {
+      "notSet": "Non défini",
+      "clearField": "Effacer le champ",
+      "clearFieldConfirm": "Définir cette cellule comme vide ?"
     }
   },
   "sharedResource": {
@@ -966,7 +972,25 @@
     "weekendHint": "la date de début tombe un week-end — essayez de l'ajuster",
     "originalValue": "Valeur Originale",
     "fxDataAvailableFrom": "Taux FX disponibles à partir du {date} — dates antérieures affichent les prix non convertis",
-    "fxPairNoRates": "La paire FX {pair} n'a aucun taux dans cette période — synchronisez-la pour activer la conversion"
+    "fxPairNoRates": "La paire FX {pair} n'a aucun taux dans cette période — synchronisez-la pour activer la conversion",
+    "currencyChange": {
+      "title": "Changer de devise — action destructive",
+      "autoSyncInfo": "Après la suppression, les prix seront auto-synchronisés depuis le fournisseur à partir du {from}.",
+      "noProviderInfo": "Aucun fournisseur assigné — après la suppression vous devrez réimporter les prix manuellement.",
+      "backupTitle": "Sauvegarder les prix actuels avant suppression",
+      "exportCsv": "Exporter en CSV",
+      "exportJson": "Exporter en JSON",
+      "confirm": "Supprimer et changer la devise",
+      "working": "En cours…",
+      "progressDelete": "Suppression de {count} enregistrements de prix…",
+      "progressPatch": "Mise à jour de la devise de l'actif…",
+      "progressSync": "Re-synchronisation des prix depuis {from}…",
+      "done": "Devise changée de {from} à {to}. Prix actualisés.",
+      "failed": "Échec du changement de devise",
+      "syncFailedManualRetry": "Devise changée mais la synchronisation post-effacement a échoué — utilisez le bouton Sync pour réessayer.",
+      "body": "Changer la devise de {from} à {to} supprimera définitivement {count} enregistrements de prix jusqu'à aujourd'hui. Les prix seront re-téléchargés depuis le fournisseur dans la nouvelle devise après la suppression."
+    },
+    "metadataDescription": "Description"
   },
   "ticker": {
     "noAssets": "Aucun actif suivi",
