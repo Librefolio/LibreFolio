@@ -262,7 +262,7 @@
     "subtitle": "Visualiza y gestiona tus inversiones",
     "searchPlaceholder": "Buscar activos...",
     "allTypes": "Todos los tipos",
-    "showActive": "Solo activos",
+    "showActive": "Activos",
     "showAll": "Mostrar todos",
     "table": {
       "lastPrice": "Último Precio",
@@ -431,7 +431,8 @@
       "balanceSelected": "Equilibrar filas seleccionadas",
       "deleteSelected": "Eliminar filas seleccionadas",
       "deleteConfirmMessage": "¿Eliminar {count} entradas de esta distribución?"
-    }
+    },
+    "showInactive": "Inactivos"
   },
   "transactions": {
     "title": "Transacciones",
@@ -904,6 +905,11 @@
     "saving": "Guardando…",
     "autoEvent": {
       "tooltip": "Generado automáticamente por un proveedor de precios. Las ediciones están deshabilitadas porque se sobrescribirían en la próxima sincronización. La eliminación también es temporal — el proveedor volverá a crear el evento en la próxima sync. Para eliminarlo de forma permanente, modifica la configuración del proveedor del activo."
+    },
+    "cell": {
+      "notSet": "No establecido",
+      "clearField": "Borrar campo",
+      "clearFieldConfirm": "¿Establecer esta celda como vacía?"
     }
   },
   "sharedResource": {
@@ -966,7 +972,25 @@
     "weekendHint": "la fecha de inicio cae en fin de semana — intenta ajustarla",
     "originalValue": "Valor Original",
     "fxDataAvailableFrom": "Tasas FX disponibles desde {date} — fechas anteriores muestran precios sin convertir",
-    "fxPairNoRates": "El par FX {pair} no tiene tasas en este rango — sincronízalo para habilitar la conversión"
+    "fxPairNoRates": "El par FX {pair} no tiene tasas en este rango — sincronízalo para habilitar la conversión",
+    "currencyChange": {
+      "title": "Cambiar divisa — acción destructiva",
+      "autoSyncInfo": "Tras la eliminación, los precios se sincronizarán automáticamente desde el proveedor a partir de {from}.",
+      "noProviderInfo": "Sin proveedor asignado — tras la eliminación tendrás que re-importar los precios manualmente.",
+      "backupTitle": "Respaldar los precios actuales antes de eliminar",
+      "exportCsv": "Exportar como CSV",
+      "exportJson": "Exportar como JSON",
+      "confirm": "Eliminar y cambiar divisa",
+      "working": "En curso…",
+      "progressDelete": "Eliminando {count} registros de precio…",
+      "progressPatch": "Actualizando divisa del activo…",
+      "progressSync": "Re-sincronizando precios desde {from}…",
+      "done": "Divisa cambiada de {from} a {to}. Precios actualizados.",
+      "failed": "Falló el cambio de divisa",
+      "syncFailedManualRetry": "Divisa cambiada pero la sincronización post-borrado falló — usa el botón Sync para reintentar.",
+      "body": "Cambiar la divisa de {from} a {to} eliminará permanentemente {count} registros de precio hasta hoy. Los precios se volverán a cargar desde el proveedor en la nueva divisa tras la eliminación."
+    },
+    "metadataDescription": "Descripción"
   },
   "ticker": {
     "noAssets": "Sin activos rastreados",

@@ -183,8 +183,8 @@ class FAProviderAssignmentReadItem(BaseModel):
 
     asset_id: int = Field(..., description="Asset ID")
     provider_code: str = Field(..., description="Provider code")
-    identifier: str = Field(..., description="Asset identifier for provider")
-    identifier_type: ProviderInputType = Field(..., description=f"Provider input type ({", ".join([a.value for a in ProviderInputType])})")
+    identifier: Optional[str] = Field(None, description="Asset identifier for provider (NULL for AUTO_GENERATED providers like scheduled_investment)")
+    identifier_type: ProviderInputType = Field(..., description=f"Provider input type ({', '.join([a.value for a in ProviderInputType])})")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider configuration")
     fetch_interval: Optional[int] = Field(None, description="Refresh frequency in minutes")
     last_fetch_at: Optional[str] = Field(None, description="Last fetch timestamp (ISO format)")

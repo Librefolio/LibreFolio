@@ -25,6 +25,7 @@
     import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import ErasableNumberCell from './ErasableNumberCell.svelte';
 
     // =========================================================================
     // Props
@@ -41,9 +42,15 @@
         importModal?: Snippet<[{open: boolean; setOpen: (v: boolean) => void; onimport: (rows: ParsedRow[]) => void}]>;
         /** Emits only dirty rows (status !== 'original') */
         onchange?: (dirtyRows: DataRow[]) => void;
+        /**
+         * E.7 — default values applied to newly appended rows (via the "+" button).
+         * Example: `{currency: 'USD'}` pre-fills the currency column for new price rows.
+         * Keys not present in ColumnDef are ignored.
+         */
+        defaultRowValues?: Record<string, unknown>;
     }
 
-    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange}: Props = $props();
+    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange, defaultRowValues = {}}: Props = $props();
 
     // =========================================================================
     // State
@@ -184,6 +191,21 @@
                                     html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${display}</span>`,
                                 };
                             }
+                            // F.5 — erasable columns use the ErasableNumberCell with sentinel -1 semantics.
+                            if (col.erasable) {
+                                const raw = r.values[col.key];
+                                const numVal = raw === undefined || raw === null ? null : Number(raw);
+                                return {
+                                    type: 'custom',
+                                    component: ErasableNumberCell,
+                                    props: {
+                                        value: numVal,
+                                        step: col.step ?? 0.0001,
+                                        placeholder: col.placeholder ?? '',
+                                        onchange: (newValue: number | null) => handleCellEditByRowId(r.rowId, col.key, newValue),
+                                    },
+                                };
+                            }
                             return {
                                 type: 'editable-number',
                                 value: r.values[col.key] !== undefined && r.values[col.key] !== null ? Number(r.values[col.key]) : null,
@@ -235,12 +257,8 @@
                             // has a `readonlyReason` (e.g. auto-generated events). The actual
                             // explanatory text is shown via the proper Tooltip component (see
                             // DataTable HtmlCell.tooltip), not via the native HTML title attribute.
-                            const readonlyBadge = r.readonlyReason
-                                ? ` <span class="ml-1 inline-flex items-center align-middle opacity-70 cursor-help">🔒</span>`
-                                : '';
-                            const tooltipMeta = r.readonlyReason
-                                ? {text: r.readonlyReason, position: 'top' as const, maxWidth: '360px'}
-                                : undefined;
+                            const readonlyBadge = r.readonlyReason ? ` <span class="ml-1 inline-flex items-center align-middle opacity-70 cursor-help">🔒</span>` : '';
+                            const tooltipMeta = r.readonlyReason ? {text: r.readonlyReason, position: 'top' as const, maxWidth: '360px'} : undefined;
                             if (r.readonly) {
                                 const opt = options.find((o) => o.value === r.values[col.key]);
                                 if (opt?.tooltip) {
@@ -464,7 +482,7 @@
             date: newDate,
             status: 'appended',
             originalStatus: 'appended',
-            values: Object.fromEntries(columns.map((c) => [c.key, undefined])),
+            values: Object.fromEntries(columns.map((c) => [c.key, defaultRowValues[c.key] ?? undefined])),
             selected: false,
         };
         rows = [...rows, newRow];

@@ -13,6 +13,7 @@
 -->
 <script lang="ts">
     import {Save, X, DollarSign, CalendarClock} from 'lucide-svelte';
+    import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
     import DataEditor from '$lib/components/ui/data-editor/DataEditor.svelte';
     import type {ColumnDef, DataRow} from '$lib/components/ui/data-editor/DataEditorTypes';
@@ -51,15 +52,27 @@
     // =========================================================================
     // Column definitions
     // =========================================================================
+    //
+    // Post-Blocco I: the `currency` column has been removed from the prices tab.
+    // The backend enforces price.currency == asset.currency at write-time (hard
+    // reject 400 on mismatch); the frontend no longer sends currency per-point
+    // and no longer needs the column visually — asset.currency is shown once in
+    // the price summary strip above the chart.
 
     let priceColumns: ColumnDef[] = $derived([
-        {key: 'currency', label: $t('dataEditor.col.currency'), type: 'currency', editable: true, required: true, placeholder: 'USD'},
         {key: 'close', label: $t('dataEditor.col.close'), type: 'number', editable: true, required: true, step: 0.01, min: 0, placeholder: '145.50'},
-        {key: 'open', label: $t('dataEditor.col.open'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '144.00'},
-        {key: 'high', label: $t('dataEditor.col.high'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '146.20'},
-        {key: 'low', label: $t('dataEditor.col.low'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '143.80'},
-        {key: 'volume', label: $t('dataEditor.col.volume'), type: 'number', editable: true, required: false, step: 1, min: 0, placeholder: '1500000'},
+        {key: 'open', label: $t('dataEditor.col.open'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '144.00', erasable: true},
+        {key: 'high', label: $t('dataEditor.col.high'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '146.20', erasable: true},
+        {key: 'low', label: $t('dataEditor.col.low'), type: 'number', editable: true, required: false, step: 0.01, min: 0, placeholder: '143.80', erasable: true},
+        {key: 'volume', label: $t('dataEditor.col.volume'), type: 'number', editable: true, required: false, step: 1, min: 0, placeholder: '1500000', erasable: true},
     ]);
+
+    // F.5 — OHLC/volume columns are flagged `erasable: true`. DataEditor renders
+    //   ErasableNumberCell which emits the sentinel `-1` on explicit clear (confirm →
+    //   backend interprets it as SET NULL in the MERGE upsert). NULL values render as
+    //   "not set" italic placeholder. `Delete` key on empty input triggers the same
+    //   eraser confirm flow.
+    //   i18n keys: `dataEditor.cell.{notSet,clearField,clearFieldConfirm}` (4 langs).
 
     let eventTypeOptions = $derived([
         {value: 'DIVIDEND', label: $t('assetDetail.eventType.DIVIDEND'), emoji: '💰', tooltip: $t('assetDetail.eventTypeTooltip.DIVIDEND'), docsPath: 'financial-theory/instruments/asset-events/dividend'},
@@ -165,11 +178,16 @@
 
     // Re-translate readonlyReason on readonly rows whenever the UI language changes.
     // We don't rebuild eventRows from scratch to preserve the user's pending edits/deletes.
+    // NOTE: uses `untrack` around the read+write of `eventRows` to prevent the effect
+    // from self-triggering (the `.map()` produces a new array reference each run, which
+    // would otherwise flag `eventRows` as a dependency and cause `effect_update_depth_exceeded`).
     $effect(() => {
         // Depend on the locale store so this effect re-runs on language switch
         $locale;
         const newReason = $t('dataEditor.autoEvent.tooltip');
-        eventRows = eventRows.map((r) => (r.readonly ? {...r, readonlyReason: newReason} : r));
+        untrack(() => {
+            eventRows = eventRows.map((r) => (r.readonly ? {...r, readonlyReason: newReason} : r));
+        });
     });
 
     // =========================================================================
@@ -235,21 +253,32 @@
                 const deletePrices = dirtyPrices.filter((r) => r.status === 'deleted');
 
                 // Filter valid upserts (close must be valid)
+                // Post-Blocco I: currency is NOT part of the payload anymore — backend
+                // derives it from asset.currency and rejects any mismatch defensively.
                 const validUpserts = upsertPrices.filter((r) => {
                     const close = Number(r.values.close);
-                    return !isNaN(close) && close > 0 && r.values.currency;
+                    return !isNaN(close) && close > 0;
                 });
                 const invalidCount = upsertPrices.length - validUpserts.length;
 
                 if (validUpserts.length > 0) {
+                    // F.5 — sentinel semantics for optional OHLC/volume fields:
+                    //   undefined/null → omit (backend preserves existing DB value)
+                    //   -1             → send -1 (backend MERGE upsert interprets as SET NULL)
+                    //   other number   → send as-is
+                    const optionalField = (v: unknown): number | undefined => {
+                        if (v === undefined || v === null || v === '') return undefined;
+                        const n = Number(v);
+                        if (isNaN(n)) return undefined;
+                        return n; // includes -1 sentinel
+                    };
                     const priceItems = validUpserts.map((r) => ({
                         date: r.date,
-                        currency: String(r.values.currency),
                         close: Number(r.values.close),
-                        open: r.values.open != null ? Number(r.values.open) : undefined,
-                        high: r.values.high != null ? Number(r.values.high) : undefined,
-                        low: r.values.low != null ? Number(r.values.low) : undefined,
-                        volume: r.values.volume != null ? Number(r.values.volume) : undefined,
+                        open: optionalField(r.values.open),
+                        high: optionalField(r.values.high),
+                        low: optionalField(r.values.low),
+                        volume: optionalField(r.values.volume),
                     }));
                     await zodiosApi.upsert_prices_bulk_api_v1_assets_prices_post([
                         {
@@ -337,9 +366,7 @@
                         });
                         const allResults = bulkResp.results ?? [];
 
-                        const deletedIds = new Set<number>(
-                            allResults.filter((r: any) => r.status === 'deleted').map((r: any) => r.event_id),
-                        );
+                        const deletedIds = new Set<number>(allResults.filter((r: any) => r.status === 'deleted').map((r: any) => r.event_id));
                         const blocked = allResults.filter((r: any) => r.status === 'in_use');
                         const notFound = allResults.filter((r: any) => r.status === 'not_found');
 

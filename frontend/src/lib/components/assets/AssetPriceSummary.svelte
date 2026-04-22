@@ -1,18 +1,22 @@
 <!--
-  AssetPriceSummary.svelte — Combined price summary + currency selector + FX warning.
+  AssetPriceSummary.svelte — Price + delta + currency selector.
 
-  Groups:
-  - Delta % (left) | Price + Delta$ (right)
-  - Currency selector + FX warning/link
+  Post-Blocco I cleanup: removed 3 redundant inline warnings that duplicated the
+  full-width `requiredFxPairs` banners already present in `+page.svelte`:
+  - `fxConversionMissing` tooltip + "Add pair" button (was banner #5)
+  - `onsyncfx` / `fxSyncing` button (was banner #6)
+  - `currency_breakdown` intra-series mismatch banner (was banner #7)
 
-  When layout stacks, the block centers relative to the parent (date filter).
-  Used only in asset detail page.
+  Kept:
+  - `livePriceConversionFailed` (banner #4 - semantically distinct: "FX rate missing
+    TODAY" vs the generic "no-data" range coverage in banner #3).
+  - Currency selector via `CurrencySearchSelect`.
 
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {TrendingUp, TrendingDown, AlertTriangle, Coins, RotateCw} from 'lucide-svelte';
+    import {TrendingUp, TrendingDown, AlertTriangle} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/responsiveLayout.svelte';
@@ -28,37 +32,28 @@
         displayCurrency: string;
         /** Asset's native currency */
         assetCurrency: string;
-        /** True when required FX pair is not configured */
-        fxConversionMissing: boolean;
-        /** Canonical slug for the FX pair link */
-        fxPairSlug: string;
         /** Current responsive layout mode */
         layoutMode: LayoutMode;
-        /** Callback to open FX pair add modal */
-        onAddFxPair?: () => void;
-        /** True when live price FX conversion failed (pair exists but rate unavailable for today) */
+        /**
+         * True when live price FX conversion failed (pair exists but rate unavailable
+         * for today specifically). Surfaced as a small warning icon + tooltip next
+         * to the price, not as a full-width banner - the full-width banner (#3
+         * `no-data`) in `+page.svelte` handles the range-level "no rates" case.
+         */
         livePriceConversionFailed?: boolean;
-        /** Callback to trigger FX pair sync */
-        onsyncfx?: () => void;
-        /** True when FX sync is in progress */
-        fxSyncing?: boolean;
     }
 
-    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, fxConversionMissing, fxPairSlug, layoutMode, onAddFxPair, livePriceConversionFailed = false, onsyncfx, fxSyncing = false}: Props = $props();
-
-    let showFxPairLink = $derived(displayCurrency && assetCurrency && displayCurrency !== assetCurrency && fxPairSlug && !fxConversionMissing);
+    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, livePriceConversionFailed = false}: Props = $props();
 </script>
 
-<div class="flex {layoutMode === 'wide' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
-    <!-- Price row: [Price (Δ$)  |  Δ%] -->
+<div class="flex flex-wrap {layoutMode === 'wide' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
     {#if lastPrice !== null}
         <div class="flex items-center gap-2 {layoutMode === 'wide' ? '' : 'justify-center w-full'}">
-            <!-- Left half: price + delta abs -->
             <div class="flex items-center gap-1.5">
                 <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
                     {lastPrice.toFixed(2)}
                 </span>
-                <span class="text-xs text-gray-400 dark:text-gray-500">{livePriceConversionFailed || fxConversionMissing ? assetCurrency : displayCurrency}</span>
+                <span class="text-xs text-gray-400 dark:text-gray-500">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
                 {#if livePriceConversionFailed}
                     <Tooltip text={$t('assetDetail.livePriceConversionFailed', {values: {currency: assetCurrency}})} position="bottom">
                         <span class="text-amber-500 dark:text-amber-400">
@@ -73,7 +68,6 @@
                 {/if}
             </div>
 
-            <!-- Right half: delta % -->
             {#if deltaPercent !== null}
                 <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                     {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
@@ -83,7 +77,6 @@
         </div>
     {/if}
 
-    <!-- Currency selector row -->
     <div class="flex items-center gap-2">
         <span class="text-[10px] uppercase font-semibold text-gray-400 dark:text-gray-500 tracking-wider">
             {$t('assetDetail.displayCurrency')}
@@ -91,28 +84,5 @@
         <div class="w-28 sm:w-32">
             <CurrencySearchSelect bind:value={displayCurrency} compact={true} originalCurrency={assetCurrency} placeholder={$t('assetDetail.displayCurrency')} />
         </div>
-
-        <!-- FX warning or link -->
-        {#if fxConversionMissing}
-            <Tooltip text={$t('assetDetail.fxPairMissing', {values: {base: assetCurrency, quote: displayCurrency}})} position="bottom">
-                <span class="p-1 text-amber-500 dark:text-amber-400">
-                    <AlertTriangle size={16} />
-                </span>
-            </Tooltip>
-            {#if onAddFxPair}
-                <button class="p-1 rounded text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 cursor-pointer transition-colors" onclick={onAddFxPair} title={$t('assetDetail.addFxPair')}>
-                    <Coins size={14} />
-                </button>
-            {/if}
-        {:else if showFxPairLink}
-            <a href="/fx/{fxPairSlug}" class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors" title={$t('assetDetail.goToFxPair')}>
-                <Coins size={14} />
-            </a>
-            {#if onsyncfx}
-                <button class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-emerald-400 transition-colors disabled:opacity-50" disabled={fxSyncing} onclick={onsyncfx} title={$t('common.sync') + ' FX'}>
-                    <RotateCw size={13} class={fxSyncing ? 'animate-spin' : ''} />
-                </button>
-            {/if}
-        {/if}
     </div>
 </div>

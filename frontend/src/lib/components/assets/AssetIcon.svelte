@@ -34,7 +34,7 @@
     let pngFailed = $state(false);
 
     let showImg = $derived(!!iconUrl && !imgFailed);
-    let pngSrc = $derived(assetType && assetType !== 'INDEX' ? getAssetTypeIconUrl(assetType) : null);
+    let pngSrc = $derived(assetType ? getAssetTypeIconUrl(assetType) : null);
     let showPng = $derived(!showImg && !!pngSrc && !pngFailed);
 
     // Reset imgFailed when iconUrl changes

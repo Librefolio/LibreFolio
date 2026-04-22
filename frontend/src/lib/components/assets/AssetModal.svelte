@@ -24,6 +24,7 @@
     import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
     import ProviderComparisonModal from './ProviderComparisonModal.svelte';
     import type {DiffItem} from './ProviderComparisonModal.svelte';
+    import AssetCurrencyChangeModal from './AssetCurrencyChangeModal.svelte';
     import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
@@ -135,6 +136,12 @@
     let showSaveWithoutTestConfirm = $state(false);
     let showIdentifierChangeConfirm = $state(false);
     let showDiscardConfirm = $state(false);
+
+    // I.6 — destructive currency-change modal state.
+    let currencyChangeModalOpen = $state(false);
+    let currencyChangeBlocker = $state<{assetId: number; count: number; oldest: string; newest: string; from: string; to: string} | null>(null);
+    let currencyChangePatchPayload = $state<Record<string, unknown> | null>(null);
+    let currencyChangeProviderAssigned = $state(false);
     let pendingSearchResult = $state<any>(null);
 
     // Provider comparison modal
@@ -795,26 +802,49 @@
 
         // Step 1: Patch asset
         const idCols = identifierRowsToColumns(identifierRows);
-        const patchPayload = [
-            {
-                asset_id: assetId,
-                display_name: displayName.trim(),
-                currency: currency,
-                asset_type: assetType,
-                icon_url: iconUrl,
-                user_url: providerUserUrl || null,
-                classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
-                identifier_isin: idCols.identifier_isin || null,
-                identifier_ticker: idCols.identifier_ticker || null,
-                identifier_cusip: idCols.identifier_cusip || null,
-                identifier_sedol: idCols.identifier_sedol || null,
-                identifier_figi: idCols.identifier_figi || null,
-                identifier_uuid: idCols.identifier_uuid || null,
-                identifier_other: idCols.identifier_other || null,
-            },
-        ];
+        const patchItem = {
+            asset_id: assetId,
+            display_name: displayName.trim(),
+            currency: currency,
+            asset_type: assetType,
+            icon_url: iconUrl,
+            user_url: providerUserUrl || null,
+            classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
+            identifier_isin: idCols.identifier_isin || null,
+            identifier_ticker: idCols.identifier_ticker || null,
+            identifier_cusip: idCols.identifier_cusip || null,
+            identifier_sedol: idCols.identifier_sedol || null,
+            identifier_figi: idCols.identifier_figi || null,
+            identifier_uuid: idCols.identifier_uuid || null,
+            identifier_other: idCols.identifier_other || null,
+        };
+        const patchPayload = [patchItem];
 
-        await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
+        // I.3 — PATCH can return a per-item failure with the structured blocker message
+        // "CURRENCY_CHANGE_BLOCKED_BY_PRICES|count=N|oldest=...|newest=...|from=X|to=Y"
+        // when the user changed the currency on an asset that still has price history.
+        // Intercept it, parse, and open the destructive-confirm modal.
+        const patchResp: any = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
+        const resultItem = patchResp?.results?.[0];
+        if (resultItem && resultItem.success === false && typeof resultItem.message === 'string' && resultItem.message.startsWith('CURRENCY_CHANGE_BLOCKED_BY_PRICES|')) {
+            const parsed: Record<string, string> = {};
+            for (const chunk of resultItem.message.split('|').slice(1)) {
+                const [k, v] = chunk.split('=');
+                if (k && v !== undefined) parsed[k] = v;
+            }
+            currencyChangeBlocker = {
+                assetId,
+                count: parseInt(parsed.count || '0', 10),
+                oldest: parsed.oldest || '',
+                newest: parsed.newest || '',
+                from: parsed.from || '',
+                to: parsed.to || '',
+            };
+            currencyChangePatchPayload = patchItem;
+            currencyChangeProviderAssigned = hasProvider && !providerNoProvider;
+            currencyChangeModalOpen = true;
+            return; // abort save — the modal will either finish the flow or the user cancels
+        }
 
         // Step 2: Handle provider change
         if (providerNoProvider) {
@@ -1304,6 +1334,24 @@
     onapply={handleComparisonApply}
     oncancel={() => {
         showComparisonModal = false;
+    }}
+/>
+
+<!-- I.6 — Destructive currency-change modal. Triggered by the CURRENCY_CHANGE_BLOCKED_BY_PRICES marker. -->
+<AssetCurrencyChangeModal
+    bind:open={currencyChangeModalOpen}
+    blocker={currencyChangeBlocker}
+    patchPayload={currencyChangePatchPayload}
+    providerAssigned={currencyChangeProviderAssigned}
+    onconfirmed={() => {
+        // The flow completed: close the parent modal too and signal the refresh.
+        toasts.success($t('assets.modal.saveSuccess', {values: {name: displayName}}));
+        open = false;
+        onupdated?.();
+    }}
+    oncanceled={() => {
+        currencyChangeBlocker = null;
+        currencyChangePatchPayload = null;
     }}
 />
 

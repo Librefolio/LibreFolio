@@ -62,6 +62,10 @@ class AssetBackwardFillInfo(BackwardFillInfo):
 
     fx_rate_date: Optional[date_type] = Field(None, description="Actual date of the FX rate used for conversion")
     fx_days_back: Optional[int] = Field(None, description="Days back for the FX rate (0 = same-day, None = no conversion)")
+    fx_error: Optional[Literal["pair_missing", "no_rate_at_date"]] = Field(
+        None,
+        description=("FX conversion error discriminator (E.1). " "'pair_missing' = currency pair not registered in FX registry. " "'no_rate_at_date' = pair exists but has no rate at/before the requested date. " "None = no FX error (conversion succeeded or was not requested)."),
+    )
 
 
 # ============================================================================
@@ -79,17 +83,36 @@ class FAPricePoint(BaseModel):
     The API contract uses separate `close: Decimal` and `currency: str` fields
     for JSON compatibility. Use `close_cur` property for internal operations
     that need a Currency object.
+
+    **F.4 sentinel rules on upsert** (applied per-field, for ``open/high/low/volume``):
+
+    - ``None`` / omitted → **no-op**: existing DB value is preserved (partial merge).
+    - ``>= 0`` → write the provided value.
+    - ``-1`` → ``SET NULL`` on the DB column.
+
+    ``close`` is **not** affected by the sentinel rules: it is always required
+    and always written verbatim. To "clear" a row use the DELETE endpoint on
+    that date; to clear OHLC auxiliary fields use ``-1``.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     date: date_type = Field(..., description="Price date")
-    open: Optional[Decimal] = Field(None, description="Opening price")
-    high: Optional[Decimal] = Field(None, description="High price")
-    low: Optional[Decimal] = Field(None, description="Low price")
-    close: Decimal = Field(..., description="Closing price (required)")
-    volume: Optional[Decimal] = Field(None, description="Trading volume")
-    currency: str = Field(..., description="Currency code (ISO 4217)")
+    open: Optional[Decimal] = Field(None, description="Opening price (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    high: Optional[Decimal] = Field(None, description="High price (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    low: Optional[Decimal] = Field(None, description="Low price (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    close: Decimal = Field(..., description="Closing price (required; not affected by -1 sentinel)")
+    volume: Optional[Decimal] = Field(None, description="Trading volume (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    currency: Optional[str] = Field(
+        None,
+        description=(
+            "Currency code (ISO 4217). Post-Blocco I: OPTIONAL in both request and response. "
+            "On upsert, if omitted the backend uses `asset.currency`; if provided and != asset.currency, "
+            "the upsert is rejected with HTTP 400 (defensive — the frontend no longer sends it). "
+            "On response, kept populated for backward compat but the frontend uses `asset.currency` "
+            "as single source of truth; see phase-07 Blocco I for rationale."
+        ),
+    )
     original_currency: Optional[str] = Field(None, description="Original currency before FX conversion (None = no conversion)")
     original_close: Optional[Decimal] = Field(None, description="Close price in original currency before FX conversion")
     original_open: Optional[Decimal] = Field(None, description="Open price in original currency before FX conversion")
@@ -99,7 +122,9 @@ class FAPricePoint(BaseModel):
 
     @field_validator("currency")
     @classmethod
-    def currency_validate(cls, v: str) -> str:
+    def currency_validate(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
         return Currency.validate_code(v)
 
     @field_validator("open", "high", "low", "close", "volume", "original_open", "original_high", "original_low", "original_close", mode="before")
@@ -373,6 +398,17 @@ class FAEventQueryItem(BaseModel):
 
     asset_id: int = Field(..., description="Asset ID to query")
     date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
+    target_currency: Optional[str] = Field(
+        None,
+        description=("Convert event.value to this currency via FX rates at each event's date (E.8). " "None = return events in their native currency. " "FX misses are surfaced as non-fatal warnings in FAEventQueryResult.errors."),
+    )
+
+    @field_validator("target_currency")
+    @classmethod
+    def target_currency_validate(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return Currency.validate_code(v)
+        return v
 
 
 class FAEventQueryResult(BaseModel):
@@ -382,6 +418,10 @@ class FAEventQueryResult(BaseModel):
 
     asset_id: int = Field(..., description="Asset ID queried")
     events: List[FAAssetEventPointOut] = Field(default_factory=list, description="Asset events with id and is_auto")
+    errors: List[str] = Field(
+        default_factory=list,
+        description="Non-fatal warnings (e.g. FX rate missing for target_currency conversion at some event dates)",
+    )
 
 
 class FAEventQueryResponse(BaseListResponse[FAEventQueryResult]):

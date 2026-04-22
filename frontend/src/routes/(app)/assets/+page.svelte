@@ -114,7 +114,15 @@
     let searchText = $state('');
     let filterTypes = $state<Set<string>>(new Set());
     let filterCurrencies = $state<Set<string>>(new Set());
-    let filterActiveOnly = $state(true);
+    // Tri-state active filter: two independent toggles for Active / Inactive.
+    // Intuitive semantics (both selected OR both deselected = no filter):
+    //   - [✓Active ✗Inactive] → only active
+    //   - [✗Active ✓Inactive] → only inactive
+    //   - [✓Active ✓Inactive] → show all (both)
+    //   - [✗Active ✗Inactive] → show all (both)
+    // Default: only active (legacy behaviour).
+    let filterShowActive = $state(true);
+    let filterShowInactive = $state(false);
 
     // Date range for Δ columns
     let dateStart = $state(
@@ -145,9 +153,10 @@
         FUND: 'fund',
         HOLD: 'hold',
         CROWDFUND_LOAN: 'crowdfunding',
+        INDEX: 'index',
         OTHER: 'other',
     };
-    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'] as const;
+    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'INDEX', 'OTHER'] as const;
 
     // Count assets per type (for E5b badge in type filter dropdown)
     let typeCounts = $derived(
@@ -193,7 +202,14 @@
 
     let filteredAssets = $derived(
         assets.filter((a) => {
-            if (filterActiveOnly && !a.active) return false;
+            // Tri-state active filter: if both toggles match (both on or both off),
+            // no filter is applied. Otherwise keep only the state matching the
+            // single selected toggle.
+            const bothSameState = filterShowActive === filterShowInactive;
+            if (!bothSameState) {
+                if (filterShowActive && !a.active) return false;
+                if (filterShowInactive && a.active) return false;
+            }
             if (filterTypes.size > 0 && !filterTypes.has(a.asset_type ?? '')) return false;
             if (filterCurrencies.size > 0 && !filterCurrencies.has(a.currency)) return false;
             if (searchText) {
@@ -849,17 +865,31 @@
                         />
                     </div>
 
-                    <!-- Active toggle -->
-                    <button
-                        class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
-                               {filterActiveOnly ? 'bg-libre-green text-white border-libre-green' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                        data-testid="assets-active-toggle"
-                        onclick={() => {
-                            filterActiveOnly = !filterActiveOnly;
-                        }}
-                    >
-                        {filterActiveOnly ? $t('assets.showActive') : $t('assets.showAll')}
-                    </button>
+                    <!-- Tri-state Active/Inactive segmented toggle (I-bis #20).
+                         Both pressed OR both unpressed → show all (None filter server-side,
+                         no filter client-side). Only-one pressed → filter to that state. -->
+                    <div class="inline-flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
+                        <button
+                            type="button"
+                            class="px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-600 transition-colors whitespace-nowrap
+                                   {filterShowActive ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                            data-testid="assets-active-toggle"
+                            aria-pressed={filterShowActive}
+                            onclick={() => (filterShowActive = !filterShowActive)}
+                        >
+                            {$t('assets.showActive')}
+                        </button>
+                        <button
+                            type="button"
+                            class="px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap
+                                   {filterShowInactive ? 'bg-amber-500 text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                            data-testid="assets-inactive-toggle"
+                            aria-pressed={filterShowInactive}
+                            onclick={() => (filterShowInactive = !filterShowInactive)}
+                        >
+                            {$t('assets.showInactive')}
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Row 2: Type multi-select + Currency dropdown + Reset -->

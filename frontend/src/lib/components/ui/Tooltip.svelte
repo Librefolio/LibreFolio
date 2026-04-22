@@ -218,16 +218,22 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-        bind:this={triggerElement}
-        class="tooltip-wrapper"
-        onclick={(e) => { if (!isTouchInteraction) toggle(e); }}
-        onkeydown={handleKeydown}
-        onmouseenter={() => { if (!isTouchInteraction) show(); }}
-        onmouseleave={() => { if (!isTouchInteraction) hide(); }}
-        ontouchstart={handleTouchStart}
-        role="button"
-        tabindex="0"
-    >
+    bind:this={triggerElement}
+    class="tooltip-wrapper"
+    onclick={(e) => {
+        if (!isTouchInteraction) toggle(e);
+    }}
+    onkeydown={handleKeydown}
+    onmouseenter={() => {
+        if (!isTouchInteraction) show();
+    }}
+    onmouseleave={() => {
+        if (!isTouchInteraction) hide();
+    }}
+    ontouchstart={handleTouchStart}
+    role="button"
+    tabindex="0"
+>
     {#if children}
         {@render children()}
     {/if}

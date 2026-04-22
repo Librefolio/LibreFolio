@@ -153,6 +153,7 @@
         FUND: 'fund',
         HOLD: 'hold',
         CROWDFUND_LOAN: 'crowdfunding',
+        INDEX: 'index',
         OTHER: 'other',
     };
 </script>
