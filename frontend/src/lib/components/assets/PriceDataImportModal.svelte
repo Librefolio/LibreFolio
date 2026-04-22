@@ -13,6 +13,8 @@
     import DataImportModal from '$lib/components/ui/data-editor/DataImportModal.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {BookOpen} from 'lucide-svelte';
+    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {_ as t} from '$lib/i18n';
 
     // =========================================================================
     // Props
@@ -20,11 +22,16 @@
 
     interface Props {
         open?: boolean;
+        /** Asset native currency — shown in the import reminder banner (I-bis #4) */
+        currency?: string;
         onimport?: (rows: ParsedRow[]) => void;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), onimport, onclose}: Props = $props();
+    let {open = $bindable(false), currency, onimport, onclose}: Props = $props();
+
+    let currencyFlag = $derived(currency ? getCurrencyInfo(currency).flag_emoji : '');
+    let currencyLabel = $derived(currency ? `${currency} ${currencyFlag}`.trim() : '');
 
     // =========================================================================
     // Column definitions for asset prices
@@ -48,6 +55,15 @@
 
 <DataImportModal bind:open columns={priceColumns} {onclose} {onimport} title="📥 Import Prices CSV">
     {#snippet headerSlot()}
+        <!-- I-bis #4 — Reminder about currency match & extra columns ignored -->
+        {#if currency}
+            <InfoBanner variant="warning">
+                <p data-testid="price-import-currency-reminder">
+                    {$t('import.csv.currencyReminder', {values: {currency: currencyLabel}})}
+                </p>
+                <p class="text-[11px] opacity-80 mt-1">{$t('import.csv.extraColumnsIgnored')}</p>
+            </InfoBanner>
+        {/if}
         <InfoBanner variant="info">
             <div class="flex items-start gap-2">
                 <div class="flex-1 space-y-1">

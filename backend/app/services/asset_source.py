@@ -82,7 +82,7 @@ from backend.app.schemas.assets import (
     FAinfoResponse,
     FAMetadataChangeDetail,
 )
-from backend.app.schemas.common import Currency, OldNew
+from backend.app.schemas.common import Currency, FxBackwardFillInfo, OldNew
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAPriceQueryResult
 from backend.app.schemas.provider import (
     FAProviderConfigBase,
@@ -1880,8 +1880,7 @@ class AssetSourceManager:
                     id=original_ep.id,
                     is_auto=original_ep.is_auto,
                     original_value=original_ep.value,
-                    fx_rate_date=rate_date,
-                    fx_days_back=days_back,
+                    fx_info=FxBackwardFillInfo(fx_rate_date=rate_date, fx_days_back=days_back),
                 )
             # Include any extra convert_bulk errors (dedup against per-event ones)
             for err in conv_errors:
@@ -2738,8 +2737,7 @@ class AssetSourceManager:
                         id=ep.id,
                         is_auto=ep.is_auto,
                         original_value=ep.value,
-                        fx_rate_date=rate_date,
-                        fx_days_back=days_back,
+                        fx_info=FxBackwardFillInfo(fx_rate_date=rate_date, fx_days_back=days_back),
                     )
 
                 # Also include per-pair errors surfaced by convert_bulk (e.g. pair not registered)

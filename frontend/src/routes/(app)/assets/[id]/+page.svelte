@@ -461,8 +461,8 @@
                 originalValue: originalValueRaw != null ? Number(originalValueRaw) : undefined,
                 originalCurrency: originalCurrency ?? undefined,
                 originalCurrencyFlag: originalCurrency ? getCurrencyInfo(originalCurrency).flag_emoji : undefined,
-                fxRateDate: ev.fx_rate_date ?? undefined,
-                fxDaysBack: ev.fx_days_back ?? undefined,
+                fxRateDate: ev.fx_info?.fx_rate_date ?? undefined,
+                fxDaysBack: ev.fx_info?.fx_days_back ?? undefined,
             });
         }
 
@@ -491,8 +491,8 @@
                     originalValue: originalValueRaw != null ? Number(originalValueRaw) : undefined,
                     originalCurrency: originalCurrency ?? undefined,
                     originalCurrencyFlag: originalCurrency ? getCurrencyInfo(originalCurrency).flag_emoji : undefined,
-                    fxRateDate: ev.fx_rate_date ?? undefined,
-                    fxDaysBack: ev.fx_days_back ?? undefined,
+                    fxRateDate: ev.fx_info?.fx_rate_date ?? undefined,
+                    fxDaysBack: ev.fx_info?.fx_days_back ?? undefined,
                 });
             }
         }
@@ -1514,7 +1514,24 @@
                         >
                     {:else}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noData')}</p>
-                        <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
+                        <div class="flex items-center gap-2 justify-center">
+                            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
+                            <!-- I-bis #6 — Add manually: open data editor pre-filtered on Prices tab -->
+                            <button
+                                class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                data-testid="asset-detail-add-prices-manually"
+                                onclick={() => {
+                                    savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
+                                    showAesthetics = false;
+                                    showMeasures = false;
+                                    showSignals = false;
+                                    showDataEditor = true;
+                                }}
+                            >
+                                <Pencil class="inline mr-1" size={14} />
+                                {$t('assetDetail.addPricesManually')}
+                            </button>
+                        </div>
                     {/if}
                 </div>
             </div>
@@ -1550,6 +1567,7 @@
                 <AssetDataEditorSection
                     bind:this={assetDataEditorRef}
                     assetId={data.assetId}
+                    currency={assetInfo?.currency}
                     {chartData}
                     {events}
                     bind:saving={savingEdit}
