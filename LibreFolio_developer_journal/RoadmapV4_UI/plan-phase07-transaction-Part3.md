@@ -1,7 +1,7 @@
 # Plan: Phase 7 — Part 3: API Consolidation (atomic per-broker) + events/suggest + deferred from Part 1
 
-**Data**: 20 Aprile 2026 · **Ultimo update**: 21 Aprile 2026
-**Status**: 🏗️ IN CORSO (A+B, C, D ✅ · H nuovo · E, F, G ⏳)
+**Data**: 20 Aprile 2026 · **Ultimo update**: 22 Aprile 2026 (notte — batch 6: user feedback post-batch-5, commit pronto)
+**Status**: 🏗️ IN CORSO (A+B, C, D ✅ · H ✅ · I.1–I.8 ✅ · F.3 validato · I-bis #8/#9/#10/#11/#13/#14/#15/#16/#17/#18/#20/#21 ✅ · I-bis #1/#2/#3/#4/#5/#6/#7/#12/#19/#22/#23 ⏳ · I.9–I.11 ⏳ · E, G ⏳)
 **Priorità**: P0 (sblocca Part 4 transactions page e Part 5 Staging Modal)
 **Effort stimato**: ~3–4 giorni (grosso; include gli spin-off Part 1 §8 e §9)
 **Phase**: [Phase 7 — Transactions System](./phases/phase-07-transactions.md)
@@ -91,6 +91,61 @@ piano originale, che portano al nuovo **Blocco H** (vedi sotto, prima di E):
 Tipo `TRANSFER` **resta valido** per gli asset (azioni/ETF tra broker): l'alternativa
 SELL/BUY o DEPOSIT/WITHDRAWAL rompe il cost-basis FIFO (`cost_basis_override` va
 propagato). Per il cash intra-utente basta la coppia linkata senza nuovo tipo.
+
+---
+
+### Dev-2026-04-21 — Revisione Blocchi E/F in fase di checklist → Blocco I (currency simplification)
+
+In fase di redazione della **checklist funzionale** di verifica post-implementazione dei
+Blocchi A–H abbiamo individuato **vicoli ciechi logici** sui Blocchi E (price currency
+coherence) ed F (OHLC sentinel), in particolare:
+
+1. **Ridondanza banner FX**: i sotto-punti E.5, E.6 introducono banner inline nel
+   `AssetPriceSummary` che **duplicano** semanticamente i banner full-width già presenti
+   in `+page.svelte` via `requiredFxPairs` (stati `missing`/`no-data`/`partial-gap`).
+   L'utente con un asset USD visualizzato in EUR senza pair registrata vede **tre**
+   avvisi per lo stesso problema (icona inline + banner full-width + bottone 🪙 in due
+   posti). Design debt.
+2. **E.5 banner intra-serie non raggiungibile via UI**: con E.3 attivo (validation
+   per-item al save) il DB non può mai contenere serie multi-currency per lo stesso
+   asset — quindi `currency_breakdown.length > 1` è una condizione che via path normale
+   non si verifica. Il banner è dead code per la UI, vivo solo per dati corrotti / SQL
+   manipulation. Consumo cognitivo sproporzionato.
+3. **E.7 warning pre-save in editor**: nato per segnalare mismatch *prima* che E.3
+   skippi la riga → ma se il vincolo diventa "hard" al write, questa informazione
+   arriva dal backend come errore reale, rendendo superfluo il pre-check frontend.
+4. **Asset currency immutable o destructive change?** L'attuale PATCH asset permette
+   di cambiare `asset.currency` senza toccare `price_history.currency` → incoerenza
+   latente. Decisione: ogni cambio di valuta deve **cancellare** tutti i prezzi
+   esistenti (l'utente li rifà via provider sync o import CSV), no bulk-convert (evita
+   drift, evita dipendenza da FX history).
+5. **Denormalizzazione `price_history.currency`**: la colonna resta nel DB come canary
+   forensic (3 bytes/riga, serve per debugging `p.currency != asset.currency` in caso
+   di corruption), ma **viene rimossa dall'API response** (`FAPricePoint.currency`):
+   il frontend usa `asset.currency` come unica fonte di verità lato client. Il
+   backend già carica `asset.currency` per la validation al write → nessun lookup
+   extra introdotto.
+6. **BRIM esente dal vincolo**: i plugin BRIM scrivono **transazioni** (che hanno
+   currency propria, libera), non `price_history`. Zero impatto sugli importer.
+7. **Eventi esenti dal vincolo**: `asset_events.currency` resta libera per supportare
+   ADR (stock USD che paga dividendi in yen/euro a seconda del domicilio del payer).
+   Asimmetria intenzionale documentata.
+
+La checklist funzionale **non è ancora stata eseguita** — i Blocchi A–H hanno solo
+passato i test unitari/API; lo scoperto di cui sopra è emerso *leggendo* la checklist
+prima di eseguirla. Di conseguenza:
+
+- Alcuni Blocchi (in particolare **E.2, E.3, E.5, E.7, E.8** e la parte banner-related
+  di E.6) vanno **reinterpretati o rimossi** alla luce del nuovo design.
+- La colonna `price_history.currency` **resta** (come scritto, non veniva mai
+  rimossa); cambia solo il fatto che il frontend non la legge più.
+- Il vincolo al write diventa **hard reject (HTTP 400)** invece di per-item skip.
+- Viene introdotto un nuovo **Blocco I** (currency simplification + banner cleanup +
+  wipe-on-change + export prezzi) da eseguire PRIMA del Blocco G (test coverage), così
+  che i test di G riflettano il design finale e non lo stato intermedio.
+- I Blocchi A–H **non hanno ancora avuto test manuale funzionale** dall'utente: verrà
+  eseguito DOPO il Blocco I su design consolidato, per evitare doppio giro di verifica
+  su feature poi modificate.
 
 ---
 
@@ -648,6 +703,950 @@ Aggiungere entry:
 ./dev.py test services ohlc-sentinel
 ./dev.py test all-backend
 ```
+
+---
+
+### Blocco I — Currency simplification + banner cleanup + wipe-on-change (Dev-2026-04-21)  🔨 IN PROGRESS (I.1–I.8 done, I.9–I.11 pending — 2026-04-21)
+
+> **Stato al 2026-04-21 sera**: codice I.1–I.8 implementato e verde su
+> format/lint/svelte-check/test api+services (asset-source, assets-price).
+> Deviazione pragmatica adottata su **I.1**: `FAPricePoint.currency` non è stato
+> rimosso dal modello ma reso `Optional[str]` (frontend non lo invia più e non lo
+> legge; backend lo accetta assente e lo tratta come implicit = asset.currency).
+> Rimosso invece completamente `CurrencyBreakdownEntry` + `currency_breakdown`
+> dal response schema. I blocchi rimanenti (I.9 tests update, I.11 G-block
+> extensions) sono ancora da fare.
+
+> **Feedback funzionale 2026-04-22** — raccolti durante la checklist utente post-I.1–I.8.
+> Applicati hotfix immediati (punti marcati ✅ qui sotto), il resto confluisce in
+> un nuovo **Blocco I-bis** prima di andare al Blocco G.
+>
+> **Hotfix applicati in giornata (2026-04-22 mattina)**:
+> - ✅ `ErasableNumberCell` commit bug: i valori digitati sparivano al blur perché
+>   l'ordine `editing=false → onchange(n)` faceva partire il `$effect` con `value`
+>   ancora stale. Riscritto: `onchange` → poi `editing=false`. Inoltre aggiunto
+>   guard `if (draft !== desired)` prima di riscrivere per evitare write spuri.
+> - ✅ `ErasableNumberCell` confirm dialog rimosso: il click sull'eraser imposta
+>   direttamente la sentinel `-1` senza `window.confirm`. L'azione Revert di riga
+>   copre i mistake accidentali. Stesso per il tasto `Delete`.
+> - ✅ `ErasableNumberCell` gomma spostata a **sinistra** (absolute, opacity-0 fino
+>   a hover/focus) per non sovrapporsi alle freccie su/giù dell'input number.
+> - ✅ `ErasableNumberCell` placeholder: quando la cella è vuota non mostra più un
+>   numero di esempio — solo l'etichetta italica "Not set" tradotta. Quando l'utente
+>   va in focus la cella diventa bianca e accetta input normalmente.
+> - ✅ Currency change modal: il body dice ora *"from {oldest} to today {today}"*
+>   (prima usava `{newest}`, meno parlante in quel contesto perché il re-sync copre
+>   fino a oggi, non fino all'ultima data salvata).
+> - ✅ Dopo una currency change riuscita, `displayCurrency` viene forzato alla nuova
+>   `asset.currency` dentro `handleAssetUpdated()` del +page.svelte → la selector
+>   "Display currency" non resta più puntata alla vecchia valuta.
+>
+> **Da fare in Blocco I-bis** (non urgente ma necessario per UX completa):
+> 1. **Provider vs asset currency mismatch post-wipe**: oggi se il provider restituisce
+>    una currency diversa da quella nuova dell'asset, il sync post-wipe silenziosamente
+>    non scrive righe (bulk_upsert_prices ora è hard-reject 400, ma l'errore non
+>    risale fino al frontend in modo leggibile). Servono:
+>    (a) toast di **errore esplicito** invece che il toast "Prices refreshed" al
+>        termine quando il sync non ha inserito niente, con testo i18n tipo *"Post-wipe
+>        sync produced 0 rows — provider currency may not match the new asset
+>        currency. Update the provider or the asset currency."*;
+>    (b) banner inline full-width sul detail page con lo stesso messaggio finché
+>        l'utente non risolve (provider reassignment o currency rollback);
+>    (c) valutare se il `POST /prices/sync` debba surface per-asset `{inserted,
+>        errors[]}` per dare al frontend materiale da mostrare.
+> 2. **"Save Without Testing?" modal gating**: oggi compare ad *ogni* save dell'asset,
+>    anche se il provider non è stato toccato. Modifica: aprirlo solo se `providerCode`,
+>    `providerIdentifier`, `providerIdentifierType` o `providerParams` differiscono
+>    dallo stato caricato. Traccia il dirty-bit sul blocco provider separatamente e
+>    gate il modal su quello.
+> 3. **Tab label "Prices in {currency} {flag}"**: nella riga dei tab Prices/Events di
+>    `AssetDataEditorSection` aggiungere a destra una piccola label che ricorda
+>    all'utente la currency dell'asset (ISO3 + bandiera). Formato uniforme con il
+>    resto della UI (utilizza `CurrencyInfo.flag_emoji` dal register `getCurrencyInfo`).
+>    Nuova chiave i18n `dataEditor.pricesInCurrency` + variante events.
+> 4. **Import CSV banner reminder**: in `PriceDataImportModal` aggiungere un
+>    `InfoBanner` sopra il textarea che dice *"Currency must match asset
+>    currency ({currency} {flag}). Extra columns in the CSV (like `currency`,
+>    `source_plugin_key`, `fetched_at` from Export) are ignored on import."* Due
+>    chiavi i18n: `import.csv.currencyReminder`, `import.csv.extraColumnsIgnored`.
+> 5. **CSV Import resilience**: oggi `CsvEditor.svelte` richiede header esatto
+>    (`date;Currency;Close;Open;High;Low;Volume` o simile, match stretto). Il CSV
+>    generato da `/prices/export?format=csv` ha header `date,open,high,low,close,volume,currency,source_plugin_key,fetched_at`
+>    (separatore `,`, colonne extra) → **non ri-importabile**. Modifiche:
+>    (a) accetta sia `;` che `,` come separator (auto-detect dal first non-empty line);
+>    (b) header match deve essere **tolerante alle extra-column**: ignora colonne
+>        non mappate in `columns[].key`, ma richiede la presenza di tutte le required
+>        (date + close);
+>    (c) documentazione inline nel banner (punto 4 sopra).
+> 6. **Empty-state "Add manually" button**: quando un asset non ha prezzi e il pannello
+>    mostra solo "Sync from provider", aggiungere un secondo bottone "Add manually"
+>    che apre l'edit panel pre-filtrato sul tab Prices con una riga vuota pronta.
+>    Chiave i18n `assetDetail.addPricesManually`.
+> 7. **Backend: patch_assets_bulk semantics**: feedback #2 evidenzia che il 409-style
+>    blocker marker `CURRENCY_CHANGE_BLOCKED_BY_PRICES|...` passa attraverso il
+>    `FAAssetPatchResult.message` ma il bulk endpoint ritorna sempre 200 anche per
+>    fallimenti per-item. Da valutare se alzare l'HTTP status a 409 quando TUTTI gli
+>    item del batch falliscono per quella ragione (senza rompere la multi-asset
+>    semantic quando alcuni item passano). Non urgente.
+>
+> Tutti questi punti verranno raggruppati sotto "Blocco I-bis" (sezione da aggiungere
+> qui sotto dopo la checklist utente su questa seconda iterazione di hotfix).
+
+> **Seconda iterazione test manuale 2026-04-22 pomeriggio** — verifica hotfix mattina.
+>
+> ✅ **Confermati OK**:
+> 1. *ErasableNumberCell commit* — digitare valore in cella "Not set" → click fuori →
+>    il valore **resta** (bug commit risolto). Piccola nota UX **positiva**: dopo il
+>    commit la cella ora è evidenziata in rosso (stato "dirty"), mentre le altre
+>    restano grigie → feedback visivo coerente. Riaprendo e chiudendo il focus torna
+>    grigia normale.
+> 2. *Eraser click senza confirm dialog* — click gomma su cella con valore →
+>    cleared immediato, nessun `window.confirm`. ✅
+> 3. *Eraser posizione* — l'icona compare a sinistra su hover, non sovrapposta alle
+>    frecce su/giù del `<input type=number>`. ✅
+> 4. *Placeholder italico* — celle "Not set" mostrano solo etichetta italic grigia,
+>    nessun numero di esempio fantasma. ✅
+> 5. *Currency change modal* — body mostra la data corretta "da {oldest} a oggi {today}".
+>    ⚠️ **Richiesta UX di affinamento**: l'utente preferirebbe il testo **senza** le
+>    due date esplicite, solo "fino a oggi" (es. *"verranno cancellati 31 record di
+>    prezzo fino ad oggi"*). Le date verbose sono rumore, conta solo il totale + il
+>    fatto che arriva a oggi. Azione: semplificare la stringa i18n
+>    `assetDetail.currencyChange.body` rimuovendo placeholder `{oldestDate}`, e
+>    valutare se `{newestDate}` ha ancora senso. Se proprio servono, spostarle in un
+>    tooltip o in small-font secondario. ✅ tracciato per I-bis #8.
+> 6. *Display currency auto-switch post-change* — dopo USD→EUR la selector
+>    "Display currency" si riposiziona su EUR. ✅
+> 7. *Toast sequence currency change* — sequenza leggibile: "Cancellazione di 31
+>    record…" → "Aggiornamento valuta asset…" → "Ri-sincronizzazione prezzi da
+>    2026-03-23…" → "Valuta cambiata da USD a EUR. Prezzi aggiornati." → "Bitcoin
+>    aggiornato con successo". ✅ (Provider yfinance per Bitcoin ha accettato EUR,
+>    quindi il caso "0 righe inserite" del punto #1 I-bis non si è riprodotto qui —
+>    resta da validare con un asset in cui il provider forza una currency non
+>    allineata.)
+> 8. *F.3 current-price auto-extend* — confermato dai log JSON (`[F.3 extend]
+>    asset=8 date=2026-04-22 new_close=78217.46 patch_fields=['close']`, e un
+>    secondo evento con `patch_fields=['low', 'close']` quando il nuovo close è
+>    sotto il minimo esistente). Il min/max intra-day si estende correttamente, il
+>    campo `open` viene mantenuto, e il persist commit va a buon fine (1 riga
+>    written/updated). Feature **VALIDATA** in produzione. ✅
+>
+> 🐞 **Nuove regressioni scoperte** (da aggiungere a Blocco I-bis):
+> 9. **Dirty detection rotta per OHLCV non-close**: caso riprodotto su asset
+>    manuale con alcune celle "Not set":
+>    - L'utente imposta `close=0.07` in una cella vuota → Save abilitato → click Save → POST
+>      `/assets/prices` con body `[{"asset_id":38,"prices":[{"date":"2026-04-22","close":0.07}]}]`
+>      → 200 OK, `inserted_count:1`.
+>    - Riapre l'edit panel: il valore 0.07 **non compare**, la cella mostra di
+>      nuovo "Not set", e le altre OHLCV restano "Not set".
+>    - Se ora modifica `open`/`high`/`low`/`volume` direttamente (digitando un
+>      numero), **il bottone Save NON si abilita** → la dirty detection ignora
+>      gli edit diretti sui campi non-close.
+>    - Viceversa: asset con righe tutte piene, click gomma → value scompare →
+>      click Restore → value ritorna → Save **si abilita** correttamente → POST
+>      con `"open":-1` nel payload → 200 OK → al reload del pannello la cella
+>      risulta "Non impostato" (sentinel `-1` → NULL a DB → placeholder a UI) ✅.
+>    - Ma: sullo stesso asset, se a questo punto l'utente prova a inserire un
+>      valore nuovo in una cella "Not set" (es. scrivere `0.5` in open), **Save
+>      resta disabilitato**. Solo la gomma (→ sentinel `-1`) produce dirty.
+>    - **Ipotesi**: l'`onchange` di `ErasableNumberCell` nel caso
+>      `value===null && draft!==null` (cioè passa da "non impostato" a "impostato")
+>      probabilmente non propaga il change verso `DataEditor`'s dirty tracker —
+>      o il tracker confronta `null === undefined` in modo che ignori il delta.
+>      Stessa ipotesi per la re-lettura post-save: il backend ritorna `open/high
+>      /low/close/volume` eventualmente `null`, il diff riga originale/corrente
+>      vede tutte null→null e conclude "unchanged" invece di rimontare il draft.
+>    - Gravità: **bloccante** per l'editing manuale multi-campo. Priorità alta
+>      nel I-bis (punto 9).
+> 10. **Post-save: il valore salvato non è visibile al reload del pannello**
+>     (probabile regressione collegata al punto 9): salvando `close=0.07` su una
+>     cella "Not set", la response 200 è corretta, ma riaprendo l'edit panel il
+>     valore non è mostrato. Serve verifica se:
+>     (a) il GET prezzi post-save include la riga appena inserita (controllare
+>         network log `/prices` response body);
+>     (b) il mapping response→form state di `AssetDataEditorSection` droppa le
+>         righe con `date == today` perché si scontrano con una logica di merge
+>         della `current-price`;
+>     (c) il `$effect` di rehydration del DataEditor confronta timestamp stale.
+>     Azione: aggiungere `console.debug` temporanei sull'hydrate e reinvocare
+>     il save per isolare il path.
+>
+> Questi due punti (9, 10) diventano **I-bis #8, #9, #10** nella lista sotto.
+> Vanno risolti prima di dichiarare Blocco I "funzionalmente validato".
+
+> **Ordine**: da eseguire **PRIMA del Blocco G**, così che la test coverage di G
+> rifletta il design finale. Supersedes parziale di E.2, E.3, E.5, E.7, E.8 e parte
+> di E.6. Rationale completo vedi deviazione Dev-2026-04-21 sopra.
+
+#### I.1 Backend — API response cleanup
+- `FAPricePoint.currency` → **rimosso** dallo schema response (restano open/high/low/close/volume/date/original_*).
+- `FAPriceQueryResult.currency_breakdown` + classe `CurrencyBreakdownEntry` → **rimossi** (Supersedes E.2).
+- Pass di popolamento `currency_breakdown` in `get_prices_bulk` → **rimosso**.
+- `fx_error` discriminator su `AssetBackwardFillInfo` → **mantenuto** (backend log/debug), anche senza consumer frontend. Nessun cambio.
+
+#### I.2 Backend — Hard reject su mismatch (Supersedes E.3)
+- `bulk_upsert_prices`: se anche una sola riga del payload ha `currency != asset.currency` → **HTTP 400** con body `{detail: "Currency mismatch", asset_currency, offending_dates: [...]}`. No più per-item skip silenzioso.
+- Il frontend, con colonna currency rimossa dal DataEditor (vedi I.5), non può più far arrivare mismatch qui → questo è defensive/forensic.
+
+#### I.3 Backend — PATCH asset rifiuta currency change su asset con prezzi
+- L'attuale endpoint `PATCH /api/v1/assets/{asset_id}` (o equivalente):
+  - Se `patch.currency` è presente **e** `patch.currency != current.currency` **e** esistono righe in `price_history` per quell'asset → **HTTP 409** con body `{detail: "Asset has N price records. Delete them before changing currency.", existing_count: N, oldest_date: YYYY-MM-DD, newest_date: YYYY-MM-DD}`.
+  - Altrimenti (zero prezzi o stessa currency) → procede normalmente.
+- **Nessun nuovo endpoint dedicato**: l'orchestrazione "delete → patch → re-sync" vive lato frontend (vedi I.6). Backend espone solo i mattoni esistenti: `DELETE /assets/{id}/prices/bulk`, `PATCH /assets/{id}`, `POST /assets/prices/sync/bulk`.
+
+#### I.4 Backend — Export prezzi con formato parametrico
+- **Nuovo endpoint** `GET /api/v1/assets/{asset_id}/prices/export?format={json|csv}`:
+  - `format=csv` (default): `Content-Type: text/csv`, filename `prices_{asset_slug}_{YYYY-MM-DD}.{format}`, colonne `date, open, high, low, close, volume, currency, source_plugin_key, fetched_at` (currency da DB come canary; include tutto per backup "completo").
+  - `format=json`: `Content-Type: application/json`, body `{asset_id, currency, prices: [...]}`, stesso contenuto per riga.
+  - Formati futuri (excel, parquet, ecc.) aggiungibili senza rompere l'API. Enum Pydantic su `format` per validation.
+  - Streaming response se dataset > 10k righe (StreamingResponse con generator).
+- **Auth**: stesse regole di query prezzi (owner asset o accesso broker).
+
+#### I.5 Frontend — Banner cleanup
+- `AssetPriceSummary.svelte`:
+  - **Rimuovi** i prop `fxConversionMissing`, `fxPairSlug`, `onAddFxPair`, `onsyncfx`, `fxSyncing` (banner #5 + bottone #6 — duplicavano `requiredFxPairs`).
+  - **Rimuovi** i prop `currencyBreakdown`, `onNormalizeCurrency`, `onIgnoreCurrencyMismatch` (banner #7 E.5).
+  - **Mantieni** `livePriceConversionFailed` (banner #4 — caso "oggi manca FX rate", semanticamente distinto da #3).
+- `+page.svelte`:
+  - **Rimuovi** state `currencyBreakdown`, `currencyMismatchDismissed`.
+  - **Rimuovi** prop passati a AssetPriceSummary (solo lastPrice, delta*, displayCurrency, assetCurrency, layoutMode, livePriceConversionFailed restano).
+- `AssetDataEditorSection.svelte`:
+  - **Rimuovi** prop `assetCurrency` e la derivazione `mismatchedPriceRows` / `mismatchedCurrenciesLabel` + banner warning sopra tabella (Supersedes E.7).
+  - **Rimuovi** colonna `currency` da `priceColumns` (asset.currency inferita lato backend — il save non invia più il campo currency nel payload).
+  - **Rimuovi** `defaultRowValues={{currency: assetCurrency}}` passato a `DataEditor`.
+- `DataEditor.svelte`:
+  - Mantieni il prop `defaultRowValues` come feature generica (utile per altri use case futuri). Nessun breaking change.
+- Conseguenza del save path: `FAPricePoint` inviato non contiene più `currency`, backend la deriva da asset. Se un utente importa un CSV con una colonna `currency` diversa → backend reject con 400 (I.2).
+
+#### I.6 Frontend — Flow cambio currency (wipe + re-sync)
+Nuovo componente `AssetCurrencyChangeModal.svelte` (o estensione di `AssetDetailsModal`):
+
+**Trigger**: utente cambia il campo currency nell'edit asset → submit PATCH.
+
+**Step 1**: backend risponde 409 → frontend apre il modal.
+
+**Contenuto modal**:
+- **Header**: icona ⚠️ rossa + titolo `assetDetail.currencyChange.title` ("Change currency — destructive action").
+- **Body**:
+  - Riga 1: `assetDetail.currencyChange.body` con placeholders — "Changing currency from **{oldCurrency}** to **{newCurrency}** will permanently delete **{count}** price records (from **{oldestDate}** to **{newestDate}**)".
+  - Riga 2 (info): "After wipe, prices will be auto-synced from provider starting from {oldestDate}". Se l'asset non ha provider assignment, messaggio alternativo: "No provider assigned — you will need to re-import prices manually".
+- **Sezione backup**:
+  - Bottone secondario "📥 Export current prices as CSV" → `GET /prices/export?format=csv` (blob download).
+  - Bottone secondario "📥 Export as JSON" (minore visibilità) → `format=json`.
+- **Azioni**:
+  - "Cancel" (grigio, default focus) → chiude il modal, currency torna al valore precedente.
+  - "Delete & Change Currency" (rosso, destructive) → esegue la sequenza Step 2.
+
+**Step 2** (al click del bottone rosso):
+1. `DELETE /assets/{id}/prices/bulk` con `date_ranges: [{start: oldestDate, end: newestDate}]` → aspetta 200.
+2. `PATCH /assets/{id}` con `currency: newCurrency` → aspetta 200 (ora non trova più prezzi, accetta il cambio).
+3. Se l'asset ha provider assignment: `POST /assets/prices/sync/bulk` con `{asset_id, date_range: {start: oldestDate, end: today}}`.
+4. Toast di progresso tra gli step: "Deleting prices..." → "Updating currency..." → "Re-syncing from provider..." → "Done".
+5. Error handling: se uno step fallisce, mostra toast error con dettaglio. La sequenza NON è transazionale tra endpoint distinti (il backend non espone una transaction multi-endpoint) → in caso di fallimento dopo il DELETE, l'asset resta in stato degradato (zero prezzi, currency vecchia o nuova a seconda di dove è fallito). Refresh manuale resuscita lo stato visibile.
+6. Al termine: `invalidate()` route SvelteKit + reload pagina asset.
+
+**Nota concurrency**: il modal non previene race condition con sync in background. Mitigazione: disabilita il pulsante "Sync" in toolbar per tutta la durata della sequenza wipe+resync.
+
+#### I.7 Frontend — i18n
+- **Rimuovi** (dead keys post I.5):
+  - `prices.currencyMismatch.{title,body,normalize,ignore}` × 4 lingue = 16 righe.
+  - `prices.fxMissing.{pairMissing,noRateAtDate,addPair,syncHistory}` × 4 lingue = 16 righe.
+  - `dataEditor.warning.currencyMismatch` × 4 = 4 righe.
+- **Aggiungi** (per I.6):
+  - `assetDetail.currencyChange.title` — "Change currency" / "Cambia valuta" / "Changer de devise" / "Cambiar divisa".
+  - `assetDetail.currencyChange.body` — "Changing currency from {oldCurrency} to {newCurrency} will permanently delete {count} price records (from {oldestDate} to {newestDate})" + tre traduzioni.
+  - `assetDetail.currencyChange.autoSyncInfo` — "After wipe, prices will be auto-synced from provider starting from {oldestDate}".
+  - `assetDetail.currencyChange.noProviderInfo` — "No provider assigned — you will need to re-import prices manually".
+  - `assetDetail.currencyChange.exportCsv` — "Export current prices as CSV".
+  - `assetDetail.currencyChange.exportJson` — "Export as JSON".
+  - `assetDetail.currencyChange.cancel` — "Cancel".
+  - `assetDetail.currencyChange.confirm` — "Delete & Change Currency".
+  - `assetDetail.currencyChange.progress.{delete,patch,sync,done}` — 4 stringhe di toast progresso × 4 lingue.
+  - Totale ~40 nuove traduzioni.
+- Usa batch `./dev.py i18n add` per ogni chiave.
+
+#### I.8 Frontend — DataEditor prezzi: currency column rimossa
+- In `AssetDataEditorSection`, `priceColumns` non contiene più il key `currency`.
+- Il save path `handleSave` non invia più `currency` nei `priceItems` (backend la deriva).
+- Il CSV import modal: se CSV ha colonna `currency`, il parser la **ignora** (non la passa come value). Eventuale nota i18n "CSV currency column is ignored — asset currency is used" in PriceDataImportModal (opzionale).
+
+#### I.9 Backend — Test adaptations
+- `test_assets_price.py`:
+  - Test su upsert con currency mismatch → ora aspetta **400 hard** (prima era 200 con `errors: [...]`).
+  - Rimuovi test su `currency_breakdown` / `CurrencyBreakdownEntry`.
+- `test_asset_currency_change.py` (nuovo, vedi G.10 sotto).
+- `test_asset_prices_export.py` (nuovo, vedi G.11 sotto).
+
+#### I.10 Validazione finale Blocco I
+```bash
+./dev.py format && ./dev.py lint
+./dev.py api sync && ./dev.py front check
+./dev.py test api assets-price
+./dev.py test api assets-currency-change
+./dev.py test api assets-prices-export
+```
+
+Poi procedi con **Blocco G** (test coverage allineato al design post-I) e infine la
+checklist funzionale utente.
+
+#### I.11 Estensioni a Blocco G
+Aggiungere a G.5 `test_prices_currency_coherence.py` (rimpiazzando i test dead):
+- **Rimuovi** `test_currency_breakdown_*` e `test_normalize_endpoint_converts_dissonant_points`.
+- **Modifica** `test_upsert_rejects_currency_mismatch_via_errors` → `test_upsert_rejects_currency_mismatch_hard_400`.
+
+Aggiungere nuovo file `test_asset_currency_change.py` (G.10):
+- `test_patch_currency_same_value_noop` (200, no side effect).
+- `test_patch_currency_without_prices_succeeds` (200, asset.currency aggiornata).
+- `test_patch_currency_with_prices_rejects_409` (409 con `existing_count`, `oldest_date`, `newest_date`).
+- `test_patch_currency_after_delete_prices_succeeds` (flow completo: DELETE → PATCH → verify).
+- `test_patch_currency_invalid_code_400`.
+
+Aggiungere nuovo file `test_asset_prices_export.py` (G.11):
+- `test_export_csv_format_default`.
+- `test_export_csv_contains_all_columns`.
+- `test_export_json_format`.
+- `test_export_invalid_format_400`.
+- `test_export_empty_prices_returns_header_only`.
+- `test_export_requires_asset_access`.
+- `test_export_large_dataset_streaming` (>10k rows, verify streaming response).
+
+Aggiungere a G.7 `scripts/test_runner.py`:
+- `api/assets-currency-change`
+- `api/assets-prices-export`
+
+---
+
+### Blocco I-bis — Hotfix & UX follow-up (Dev-2026-04-22)  🔨 IN PROGRESS
+
+> Raccoglie i punti emersi nei due giri di test manuale del 2026-04-22 (mattina
+> + pomeriggio) post implementazione I.1–I.8. I 7 hotfix mattutini sono già
+> applicati inline (vedi callout sopra). I restanti 10 punti qui sotto sono la
+> coda pendente, ordinata per priorità.
+
+#### I-bis #9 — Dirty detection rotta per OHLCV erasable (BLOCCANTE)  ✅ FIXED (2026-04-22 sera)
+
+**Sintomo**: digitando un numero in una cella `ErasableNumberCell` "Not set"
+(open/high/low/volume), Save NON si abilita. Il bug NON si verifica per `close`
+(che usa il path `editable-number`) né per la gomma (che manda sentinel `-1`).
+
+**Root cause identificata** (2026-04-22 sera): `ErasableNumberCell.svelte` aveva
+`let draft = $state('')` (stringa), ma l'input è
+`<input type="number" bind:value={draft}>`. Svelte 5 **coerce automaticamente**
+`bind:value` su `type=number` a `number | null`. Appena l'utente digitava,
+`draft` diventava un numero → `draft.trim()` in `commit()` lanciava
+`TypeError: draft.trim is not a function` silenziosamente → `onchange` mai
+emesso → dirty tracker mai informato.
+
+**Fix applicato** (commit pending):
+- `draft` ridichiarato come `$state<number | null>(null)`.
+- `$effect` aggiornato: `desired = value == null || value === -1 ? null : value`.
+- `commit()` rimosso `.trim()`, gestisce direttamente `number | null | NaN`.
+- `handleEraseClick()` / `handleKeyDown()` / click handler "cleared" allineati
+  al nuovo tipo (`draft = null` invece di `''`).
+- Aggiunto commento esteso sul perché della scelta, per evitare regressioni.
+
+**Verifica**: `./dev.py front check` verde (0 errors, 0 warnings). Test manuale
+utente pendente (serve retest #9 + #10 sullo stesso flusso).
+
+#### I-bis #10 — Post-save: valore appena salvato non visibile al reload  ✅ FIXED (2026-04-22 sera, risolto con fix #9)
+
+**Retest post-fix #9** (2026-04-22 sera): payload save
+`[{asset_id:16, prices:[{date:"2026-04-22", close:89.52, open:89.52, high:89.65, low:-1}]}]`
+→ response `{success_count:1, inserted_count:1}`. Riaprendo l'edit panel il
+backend restituisce correttamente la riga con open=89.52, high=89.65,
+low=null, close=89.52, volume=null e le celle mostrano i valori (incluse
+"Not set" per le null). **Il Restore funziona**.
+
+Il bug #10 era quindi un **sintomo** di #9: il dirty tracker cieco faceva sì
+che il payload arrivasse al backend con soli campi "forzati" (es. close
+tramite keydown manuale sul save button), quindi la riga risultava salvata
+ma con un solo campo → l'utente leggeva come "nulla salvato". Fixando #9 la
+catena save → GET → display si è riallineata.
+
+#### I-bis #1 — Post-wipe sync produces 0 rows: surfacing errore
+
+Oggi se il provider restituisce una currency diversa da quella nuova
+dell'asset, il sync post-wipe silenziosamente non scrive righe
+(`bulk_upsert_prices` ora è hard-reject 400, ma l'errore non risale fino al
+frontend in modo leggibile). Servono:
+- (a) toast di **errore esplicito** invece che il toast "Prices refreshed" al
+  termine quando il sync non ha inserito niente, con testo i18n tipo
+  *"Post-wipe sync produced 0 rows — provider currency may not match the
+  new asset currency. Update the provider or the asset currency."*;
+- (b) banner inline full-width sul detail page con lo stesso messaggio finché
+  l'utente non risolve (provider reassignment o currency rollback);
+- (c) valutare se il `POST /prices/sync` debba surface per-asset
+  `{inserted, errors[]}` per dare al frontend materiale da mostrare.
+
+#### I-bis #2 — "Save Without Testing?" modal gating
+
+Oggi compare ad *ogni* save dell'asset, anche se il provider non è stato
+toccato. Modifica: aprirlo solo se `providerCode`, `providerIdentifier`,
+`providerIdentifierType` o `providerParams` differiscono dallo stato caricato.
+Traccia il dirty-bit sul blocco provider separatamente e gate il modal su
+quello.
+
+#### I-bis #3 — Tab label "Prices in {currency} {flag}"
+
+Nella riga dei tab Prices/Events di `AssetDataEditorSection` aggiungere a
+destra una piccola label che ricorda all'utente la currency dell'asset (ISO3 +
+bandiera). Formato uniforme con il resto della UI (utilizza
+`CurrencyInfo.flag_emoji` dal register `getCurrencyInfo`). Nuova chiave i18n
+`dataEditor.pricesInCurrency` + variante events.
+
+#### I-bis #4 — Import CSV banner reminder
+
+In `PriceDataImportModal` aggiungere un `InfoBanner` sopra il textarea che
+dice *"Currency must match asset currency ({currency} {flag}). Extra columns
+in the CSV (like `currency`, `source_plugin_key`, `fetched_at` from Export)
+are ignored on import."* Due chiavi i18n: `import.csv.currencyReminder`,
+`import.csv.extraColumnsIgnored`.
+
+#### I-bis #5 — CSV Import resilience
+
+Oggi `CsvEditor.svelte` richiede header esatto (separatore stretto, match
+stretto). Il CSV generato da `/prices/export?format=csv` ha header
+`date,open,high,low,close,volume,currency,source_plugin_key,fetched_at`
+(separatore `,`, colonne extra) → **non ri-importabile**. Modifiche:
+- (a) accetta sia `;` che `,` come separator (auto-detect dal first non-empty
+  line);
+- (b) header match deve essere **tolerante alle extra-column**: ignora
+  colonne non mappate in `columns[].key`, ma richiede la presenza di tutte
+  le required (date + close);
+- (c) documentazione inline nel banner (punto #4 sopra).
+
+#### I-bis #6 — Empty-state "Add manually" button
+
+Quando un asset non ha prezzi e il pannello mostra solo "Sync from provider",
+aggiungere un secondo bottone "Add manually" che apre l'edit panel
+pre-filtrato sul tab Prices con una riga vuota pronta. Chiave i18n
+`assetDetail.addPricesManually`.
+
+#### I-bis #7 — Backend: `patch_assets_bulk` HTTP semantics
+
+Il 409-style blocker marker `CURRENCY_CHANGE_BLOCKED_BY_PRICES|...` passa
+attraverso il `FAAssetPatchResult.message` ma il bulk endpoint ritorna sempre
+200 anche per fallimenti per-item. Da valutare se alzare l'HTTP status a 409
+quando TUTTI gli item del batch falliscono per quella ragione (senza rompere
+la multi-asset semantic quando alcuni item passano). Non urgente.
+
+#### I-bis #8 — Currency change modal body semplificato  ✅ FIXED (2026-04-22 sera)
+
+Feedback UX: le due date esplicite nel body (`from {oldest} to today {today}`)
+sono rumore. L'utente preferisce solo "fino a oggi".
+
+**Fix applicato**: rimossi i placeholder `{oldest}` e `{today}` dal body in
+tutte e 4 le lingue (en/it/fr/es). Nuovo testo:
+- EN: "...will permanently delete {count} price records up to today. Prices
+  will be re-fetched..."
+- IT: "...verranno eliminati permanentemente {count} record di prezzo fino
+  ad oggi. I prezzi verranno..."
+- FR: "...supprimera définitivement {count} enregistrements de prix jusqu'à
+  aujourd'hui. Les prix seront..."
+- ES: "...eliminará permanentemente {count} registros de precio hasta hoy.
+  Los precios se volverán a..."
+
+I placeholder non più referenziati nel template vengono ignorati silently
+dalla libreria i18n → nessun impatto sul chiamante (il componente continua a
+passare `values={from,to,count,oldest,today}` ma sono no-op).
+
+#### I-bis #11 — `autoSyncInfo` dentro InfoBanner nel currency change modal  ✅ FIXED (2026-04-22 sera)
+
+**Fix applicato** in `AssetCurrencyChangeModal.svelte`:
+- Import `InfoBanner` da `$lib/components/ui/InfoBanner.svelte`.
+- Le due righe `autoSyncInfo` / `noProviderInfo` wrappate rispettivamente in
+  `<InfoBanner variant="info">` e `<InfoBanner variant="warning">`.
+- Nessuna modifica i18n (riusate le chiavi esistenti).
+
+Verifica: `./dev.py front check` → 0 errors.
+
+#### I-bis #12 — Currency change: troppi toast in sequenza (UX noise)
+
+Feedback: durante il flusso currency change compaiono 5 toast in sequenza:
+1. "Deleting 2 price records…"
+2. "Updating asset currency…"
+3. "Re-syncing prices from 2026-04-21…"
+4. "Currency changed from EUR to USD. Prices refreshed."
+5. "'Amundi Prime Global UCITS ETF' updated successfully"
+
+I primi 3 sono rumore (progress intermedio), il #4 è il messaggio finale
+utile, il #5 è ridondante con il #4 (emesso dal flusso generico di edit
+asset post-PATCH).
+
+**Design proposto**:
+- Sostituire i 3 toast di progress con **un unico toast "loading"** (o
+  spinner inline nel modal) che si chiude alla fine.
+- Mostrare solo il toast finale "Currency changed from X to Y. Prices
+  refreshed.".
+- Sopprimere il toast generico "`{name}` updated successfully" quando la
+  PATCH asset è avvenuta via currency-change flow (flag interno al
+  chiamante).
+
+⏳ Pending (richiede refactor di 2-3 punti del flusso) — non urgente.
+
+#### I-bis #13 — Mock data: asset configurati male in `populate_mock_data.py`  ✅ FIXED COMPLETE (2026-04-22 sera tardi)
+
+Feedback dettagliato sui mock asset (correggere in
+`backend/test_scripts/test_db/populate_mock_data.py`):
+
+1. ✅ **"Amundi Prime Global UCITS ETF"** → rinominato a **"Amundi MSCI
+   Semiconductors UCITS ETF Acc"**, aggiunto `identifier_isin=LU1900066033`
+   + `identifier_ticker=CHIP`, descrizione aggiornata ("Semiconductors
+   sector ETF…"). ISIN nel provider config era già corretto.
+
+2. ✅ **"Amundi MSCI World UCITS ETF"** → rinominato a **"Amundi Core MSCI
+   World UCITS ETF Acc"**, aggiunto `identifier_isin=IE000BI8OT95` +
+   `identifier_ticker=MWRD`, **provider cambiato da yfinance a justetf**
+   con `IdentifierType.ISIN`.
+
+3. ✅ **"BTP Italia 2028"** (2026-04-22 sera tardi): la "malformazione" NON
+   era nella config del mock — era il bug Pydantic #21 che faceva fallire
+   la GET `/provider/assignments` con 500, inducendo il frontend a mostrare
+   "provider disattivato" come fallback UI. L'utente ha confermato via
+   `/provider/probe` che la config produce correttamente 10000 EUR flat con
+   maturation semi-annuale. Aggiornato il mock:
+   `initial_value.amount: 1000 → 10000` (un singolo taglio BTP realistico)
+   + commento esteso che linka a #21.
+
+4. ✅ **"BTP Italia 2034 (Borsa Italiana)"** → rinominato a **"BTP Più Sc
+   Fb33 EUR"** (display_name + classification description).
+
+5. ✅ **"Gold Spot Price"**: CSS selector aggiornato al deep selector
+   fornito dall'utente (catturato da Kitco live gold page 2026-04-22).
+   Commento inline che spiega il cambio (il vecchio `#sp-last` non
+   esiste più sulla pagina corrente).
+
+6. ✅ **"Vanguard FTSE All-World UCITS ETF"** e **"iShares Core S&P 500
+   UCITS ETF"** **RIMOSSI** (2026-04-22 sera tardi, su richiesta utente
+   "dedica il tempo necessario, non tanti punti"):
+   - Definizioni asset: eliminate (sostituite da commento di trail con
+     data + rationale).
+   - Provider assignments: rimossi i 2 tuple `yfinance` correlati.
+   - `populate_transactions`: rimossi i 4 transaction items (+ i locals
+     `vwce`/`cspx`).
+   - `populate_price_history`: rimossi i 2 price_configs + locals.
+   - `populate_asset_events`: rimosso il blocco VWCE dividends.
+   - Verifica: `python ast.parse`, `./dev.py format/lint/front check` tutti
+     verdi. `grep vwce|cspx|Vanguard|iShares` → solo commenti di trail.
+
+7. ✅ **"Real Estate Loan - Milano Centro"** → rinominato a **"RE Loan
+   Milano"** + aggiunto `active: False` (fixture per testare stato
+   asset inattivo). **"Real Estate Loan - Roma Parioli"** → rinominato
+   a **"RE Loan Roma"**. Aggiornate anche tutte le 4 occorrenze negli
+   `select()` dei populate_transactions/populate_events.
+
+Verifica globale: `./dev.py format && lint && front check` → tutti verdi.
+
+#### I-bis #14 — Frontend: asset type badge mostra icona sbagliata per tipo INDEX  ✅ FIXED (2026-04-22 sera)
+
+**Root cause confermata**: `PNG_MAP` / `ASSET_TYPE_ICON_MAP` / `TYPE_ICON_MAP`
+in 4 file diversi (`lib/utils/assetTypes.ts`, `lib/utils/icons.ts`,
+`lib/components/assets/AssetCard.svelte`,
+`lib/components/charts/ChartSignalsSection.svelte`, `routes/(app)/assets/+page.svelte`)
+non avevano entry per `INDEX` → caduta sul fallback `other.png`.
+
+**Fix applicato**:
+- Aggiunta entry `INDEX: 'index'` in tutti i 5 siti + aggiunto
+  `'INDEX'` a `ALL_ASSET_TYPES` nel filtro dropdown.
+- Creato `frontend/static/icons/asset-types/index.png` come **placeholder
+  iniziale** (copia di `stock.png`). TODO: sostituire con un'icona
+  dedicata (tipo "chart-line" o "trending-up") in un followup grafico.
+
+Verifica: `./dev.py front check` → 0 errors.
+
+#### I-bis #15 — Metadata & Classification: aggiungere descrizione asset in cima  ✅ FIXED (2026-04-22 sera)
+
+Campo originario identificato: **`classification_params.short_description`**
+(non è un field diretto di `Asset`, ma nested nella JSON `classification_params`).
+Già letto in `AssetModal` come `shortDescription`.
+
+**Fix applicato** in `frontend/src/routes/(app)/assets/[id]/+page.svelte`:
+- Nuovo `$state` `shortDescription: string | null`.
+- Popolato in `loadClassificationData` (`cp.short_description ?? null`).
+- Reset in tutti i punti dove si resettano gli altri field classification
+  (init, loadClassification failure path, has_metadata=false path).
+- Renderizzata come **prima sezione** del pannello `Metadata &
+  Classification`: heading uppercase + `<p>` con `whitespace-pre-wrap
+  leading-relaxed`. Nascosta se vuota (no empty state).
+- Nuova chiave i18n `assetDetail.metadataDescription` in EN/IT/FR/ES
+  ("Description" / "Descrizione" / "Description" / "Descripción").
+  Collisione evitata: `assetDetail.metadata` era già una stringa scalare,
+  non un oggetto — quindi non si poteva usare `metadata.description`.
+
+Verifica: `./dev.py front check` → 0 errors.
+
+#### I-bis #16 — Cleanup icone asset: rimuovere force-INDEX→SVG + elimina `icons.ts` dead code  ✅ FIXED (2026-04-22 tardi)
+
+Il feedback utente ha evidenziato due problemi:
+1. Nel `AssetIcon.svelte` c'era un force di fallback sul lucide `BarChart3` per
+   `assetType === 'INDEX'` (legacy, quando non esisteva `index.png`).
+2. `frontend/src/lib/utils/icons.ts` conteneva due const (`ASSET_TYPE_ICONS`,
+   `TRANSACTION_ICONS`) + due funzioni (`getAssetTypeIcon`, `getTransactionIcon`)
+   **completamente inutilizzate**. Il codice è stato sostituito tempo fa da
+   `assetTypes.ts::getAssetTypeIconUrl` + i `*_ICON_MAP` inline nei componenti.
+
+**Fix applicato**:
+- `AssetIcon.svelte:37`: rimosso `&& assetType !== 'INDEX'` dal derived
+  `pngSrc`. Ora INDEX riceve l'icona `/icons/asset-types/index.png` come
+  tutti gli altri tipi.
+- **Eliminato** `frontend/src/lib/utils/icons.ts` (dead code, 0 import nel
+  codebase).
+
+L'utente ha fornito un'icona `index.png` dedicata — il placeholder creato
+nello step precedente (#14) non serve più, andrà sovrascritto dall'asset
+dell'utente.
+
+#### I-bis #17 — Filtro "Active Only / Show All" rotto + semantica del campo `Asset.active`  ✅ FIXED (2026-04-22 tardi)
+
+**Sintomo**: toggle "active only" sulla pagina assets non mostra gli asset
+inattivi quando switchato su "show all". RE Loan Milano (marcato `active=False`)
+rimaneva invisibile indipendentemente dallo stato del toggle.
+
+**Root cause**: l'endpoint `GET /api/v1/assets/query` aveva
+`active: bool = Query(True)` come default → filtro applicato server-side a
+livello di query SQL. Gli asset inattivi non arrivavano mai al frontend,
+quindi il toggle client-side `filterActiveOnly && !a.active` non aveva nulla
+da filtrare.
+
+**Fix applicato** (tri-state):
+- `FAAinfoFiltersRequest.active`: da `bool = Field(True)` → `Optional[bool] = Field(None)`.
+  Semantica: `None` = no filter (return both), `True` = only active,
+  `False` = only inactive.
+- `AssetCRUDService.list_assets`: `conditions.append(Asset.active == filters.active)`
+  → wrapped in `if filters.active is not None`.
+- API `/query`: `active: Optional[bool] = Query(None)` con description
+  aggiornata.
+- L'altro endpoint `/assets/all` (usato da BRIM) continua a passare
+  `active=True` esplicito → comportamento invariato per quel use-case.
+- Rigenerato client TypeScript via `./dev.py api sync`.
+
+Il frontend `list_assets_api_v1_assets_query_get({queries: {}})` ora ottiene
+ENTRAMBI attivi e inattivi; il toggle in `+page.svelte` filtra client-side
+(logica `filterActiveOnly && !a.active` era già corretta).
+
+**Risposta alla domanda "a cosa serve Asset.active oggi?"**:
+Il campo è al momento **quasi puramente cosmetico**. L'analisi di tutti i
+callsite (`grep Asset.active | asset.active`) mostra che è usato solo in:
+- Il filtro di `list_assets` (ora tri-state).
+- Il mapping `FAinfoResponse.active` (round-trip del campo al frontend).
+
+**NON è usato** per:
+- Validare transazioni (si possono ancora comprare/vendere asset inattivi).
+- Bloccare il sync provider.
+- Nascondere l'asset dalle pagine di dettaglio / portfolio breakdown.
+- Mostrare badge "inattivo" in UI (a parte l'implicito filtro lista).
+
+Semantica futura desiderabile (da tracciare come nuovo task post-phase-07):
+- Asset inattivo = "archived": non compare nel portfolio live, no auto-sync,
+  transazioni passate preservate, no nuove transazioni.
+- Badge UI "📦 Archived" su card/table/detail page.
+- Confirm modal "Archive?" al posto di un semplice toggle.
+
+**Per ora la distinzione rimane utile solo come filtro di lista** — sufficiente
+per il retest del feature I-bis #13.7 (Milano disabled fixture).
+
+#### I-bis #18 — Edit modal: description `short_description` vuota all'apertura  ✅ FIXED (2026-04-22 tardi)
+
+**Sintomo** (feedback utente sul test 2): asset Apple Inc. mostra correttamente
+"Technology company" nella nuova sezione Metadata del detail page, MA all'apertura
+dell'edit modal la textarea "Description" è **vuota**. Il Save successivo
+avrebbe quindi accidentalmente azzerato il `short_description` nel DB.
+
+**Root cause**: in `frontend/src/routes/(app)/assets/[id]/+page.svelte::buildEditData()`
+la costruzione di `classification_params` passata al modal ometteva
+`short_description`. La check `hasClassification` considerava solo sector +
+geographic, quindi su asset con SOLO description (no sector/geo) il
+`classification_params` diventava `null` completamente → il modal apriva
+vuoto.
+
+**Fix applicato**:
+- Aggiunto `short_description: shortDescription ?? null` al payload.
+- Esteso il check `hasClassification` a includere `shortDescription`.
+- Commento esteso sul perché della scelta.
+
+Verifica: `./dev.py front check` → 0 errors. Test manuale pendente: aprire
+edit modal su Apple Inc. dopo populate e verificare che la textarea contenga
+"Technology company".
+
+#### I-bis #19 — Semantica estesa di `Asset.active` (follow-up)  ⏳ PENDING
+
+Spin-off dalla risposta di #I-bis #17: il flag `Asset.active` ha oggi effetto
+solo sulla lista. Per dare al feature senso reale:
+- Bloccare nuove transazioni su asset inattivi (validation al create).
+- Skippare il sync automatico provider sugli inattivi.
+- Nasconderli dal portfolio breakdown (o mostrarli con stile "archived").
+- Aggiungere badge UI "📦 Archived" su card/table/detail page.
+- Confirm modal "Archive asset?" al posto del toggle silenzioso.
+
+**Aggiornamento 2026-04-22 sera tardi**: il vero consumer del flag è lo
+**scheduler automatico** (Phase 8 — vedi `phase-08-scheduler.md`, nuova
+sezione "Interazione con Asset.active"). Lì il demone filtra
+`AssetProviderAssignment.asset.active == True` per current-price refresh e
+daily history sync. Finché Phase 8 non è attiva, la distinzione rimane
+puramente cosmetica (filtro di lista).
+
+**Aggiornamento 2026-04-22 notte** (feedback utente test 4):
+
+Regole definitive per il consumer Asset.active, decise con l'utente dopo
+lettura di phase-08-scheduler.md §Interazione con Asset.active:
+
+- **Scheduler automatico (Phase 8)**: NON chiama né current_price né history
+  per asset inattivi. Filtro `asset.active == True` nel daemon loop.
+- **Sync manuale (frontend → `POST /prices/sync`, `POST /events/sync`,
+  "Recalculate" button)**: consentito anche su asset inattivi. Caso d'uso:
+  l'utente riattiva temporaneamente un archived, fa refresh puntuale,
+  eventualmente lo riarchivia. L'azione manuale è esplicita → non deve
+  essere bloccata dal flag.
+- **Dashboard / Portfolio breakdown**: gli asset inattivi NON devono
+  comparire. Nuovo requisito dal feedback. Implementazione: il
+  `/dashboard/*` filtra `asset.active == True` nelle query di aggregazione
+  (allocazione, performance, positions table, charts). Transazioni storiche
+  restano consultabili nella pagina /transactions (separata).
+- **Badge "📦 Archived"** su card/table/detail page dell'asset rimane
+  desiderabile (dà feedback visivo nella lista "Show Inactive"), ma non
+  bloccante per Phase 8.
+
+#### I-bis #20 — Tri-state UI toggle "Active | Inactive" segmented  ✅ FIXED (2026-04-22 sera tardi)
+
+Completa la side #I-bis #17. Il backend ora è tri-state (`Optional[bool]`) ma
+il frontend aveva ancora un pulsante binario `filterActiveOnly`. Cambiato in
+**segmented control a due sub-button** indipendenti, come da UX richiesta:
+
+```
+[ Active ]  [ Inactive ]
+   ✓           ✗          → show only active
+   ✗           ✓          → show only inactive
+   ✓           ✓          → show both (no filter)
+   ✗           ✗          → show both (no filter)
+```
+
+**Fix applicato** in `routes/(app)/assets/+page.svelte`:
+- Rimosso `filterActiveOnly: boolean`; sostituito con due stati indipendenti
+  `filterShowActive` (default true, libre-green) + `filterShowInactive`
+  (default false, amber).
+- Nuova logica `filteredAssets`: `bothSameState = filterShowActive === filterShowInactive`
+  → se true, no filter; altrimenti matcha solo lo stato selezionato.
+- Nuovo markup: `<div class="inline-flex rounded-lg border overflow-hidden">`
+  con due `<button aria-pressed={...}>`, colore verde/amber per feedback
+  visivo distinto.
+- Nuova chiave i18n `assets.showInactive` × 4 lingue.
+- Semplificato testo `assets.showActive`: da "Active only" a "Active" (è
+  solo la label del button, la semantica è data dallo stato premuto).
+
+Verifica: `./dev.py front check` → 0 errors.
+
+Riferimento cross-linked in `phase-08-scheduler.md` §Interazione con
+Asset.active (l'utente ha indicato lì la destinazione naturale del filter).
+
+#### I-bis #21 — 500 Internal Server Error su GET /provider/assignments per AUTO_GENERATED providers  ✅ FIXED (2026-04-22 sera tardi)
+
+**Sintomo**: dopo aver salvato un `AssetProviderAssignment` con
+`provider_code=scheduled_investment` e `identifier_type=AUTO_GENERATED`, la
+successiva chiamata di lettura falliva con 500:
+
+```json
+{
+  "detail": "1 validation error for FAProviderAssignmentReadItem\nidentifier\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]"
+}
+```
+
+Questo bloccava la UI del detail asset: il probe funzionava, il save
+scriveva correttamente in DB, ma la re-read falliva → pannello provider
+mostrava "disattivato" come fallback.
+
+**Root cause**: il DB model `AssetProviderAssignment.identifier` è
+`Optional[str]` (`NULL for AUTO_GENERATED providers` — commento nel model).
+Ma la schema Pydantic di lettura `FAProviderAssignmentReadItem.identifier`
+era dichiarata `str = Field(...)` (required non-null). Mismatch
+DB↔schema → Pydantic rifiutava il record letto dal DB.
+
+**Fix applicato** in `backend/app/schemas/provider.py`:
+- `identifier: Optional[str] = Field(None, description="...NULL for AUTO_GENERATED providers like scheduled_investment")`.
+- Rigenerato Zodios client via `./dev.py api sync`.
+
+Verifica: `./dev.py front check` → 0 errors. Test manuale pendente: ripetere
+il flusso utente (aggiungi/modifica provider scheduled_investment su BTP
+Italia 2028, salva, verifica che la pagina detail lo legga senza 500).
+
+Questo bug era la vera causa di I-bis #13.3 ("BTP Italia 2028 schedule
+malformato / provider disattivato") — la config del mock era corretta, solo
+la re-read lato frontend falliva.
+
+#### I-bis #22 — Generalizzare error handling "Save failed → keep modal open + toast"  ⏳ PENDING
+
+**Contesto** (feedback utente 2026-04-22 notte, post fix #21):
+
+Quando il backend restituiva 500 sulla GET `/provider/assignments` (bug #21),
+il flusso di save del provider si chiudeva comunque correttamente — ma in
+scenari analoghi (500/4xx sulla PATCH stessa, non sulla re-read) il
+comportamento oggi non è uniforme: alcune modali si chiudono e perdono lo
+stato editato, altre restano aperte; gli errori arrivano a volte come toast,
+a volte come console error silente, a volte non arrivano affatto.
+
+**Requisito funzionale**:
+
+Se il salvataggio verso il backend **fallisce** (HTTP !2xx o exception
+network), la modale:
+1. **NON deve chiudersi** (o, se già chiusa con effetto ottimistico, deve
+   **riaprirsi** ripristinando il draft che l'utente aveva editato).
+2. Deve mostrare un **toast di errore** con messaggio leggibile derivato da
+   `response.detail` (FastAPI) o fallback i18n generico.
+3. Deve mantenere il dirty state così che l'utente possa correggere e
+   riprovare, oppure annullare esplicitamente.
+
+**Analisi necessaria** (da eseguire prima dell'implementazione):
+
+Censire tutti i punti del frontend dove avviene un save verso il backend,
+mappando: file modal + endpoint chiamato + comportamento attuale on-error.
+Candidati noti:
+
+- `AssetModal.svelte` (`POST/PATCH /assets/*`).
+- `AssetProviderAssignmentModal.svelte` (provider config).
+- `AssetCurrencyChangeModal.svelte` (DELETE prices + PATCH + re-sync).
+- `BrokerModal.svelte` (`POST/PATCH /brokers/*`).
+- `TransactionModal.svelte` (Part 4 in arrivo — da includere nel design).
+- `PriceDataImportModal.svelte` (CSV import).
+- `EventsModal.svelte` (create/edit asset events).
+- Tutti i flussi "Save" del `DataEditor` (prices/events edit panel).
+
+**Design proposto** (da discutere):
+
+- Creare un helper `$lib/utils/saveWithRetry.ts` o pattern store
+  `createSaveAction<T>({ call, onSuccess, onError })` che:
+  - Intercetta HTTP errors e parse `detail`.
+  - Mostra toast errore via `toast.error(...)` (già presente).
+  - Ritorna un discriminated union `{status: 'success', data} | {status: 'error', message}`
+    così il modal sa se chiudersi o restare aperto.
+- Le modali adottano il pattern: su `error` restano montate con draft
+  intatto, su `success` invocano `onClose()` + toast di successo.
+- Per flussi a più step (es. currency change: DELETE → PATCH → sync), il
+  wrapper preserva lo step che ha fallito nel messaggio.
+
+**Priorità**: P1 — non bloccante per Phase 7 ma da fare prima di Part 4/5
+(Staging Modal) perché quel flusso userà il pattern. L'analisi (censimento
+modal × endpoint × comportamento) è prerequisito a un commit dedicato nel
+prossimo batch.
+
+#### I-bis #23 — Sync scheduled_investment: status="partial" non surfacciato al frontend  ⏳ PENDING
+
+**Contesto** (feedback utente 2026-04-22 notte, test 2 post fix #21):
+
+Dopo il fix #21 il pannello provider torna a funzionare (il BTP Italia 2028
+mostra correttamente il pulsante "Ricalcola"), ma cliccando il sync manuale
+il frontend riporta un errore ambiguo (*"sinc fallisce senza motivo"*)
+mentre la risposta HTTP è in realtà **200 OK**:
+
+```json
+{
+  "results": [{
+    "asset_id": 12,
+    "status": "partial",
+    "provider_used": "scheduled_investment",
+    "points_fetched": 1,
+    "points_changed": 0,
+    "inserted_count": 0,
+    "updated_count": 0,
+    "events_fetched": 0,
+    "events_changed": 0,
+    "message": "Current value only, history unavailable",
+    "errors": [],
+    "elapsed_ms": 4
+  }],
+  "success_count": 1,
+  "errors": [],
+  "date_range": { "start": "2026-01-22", "end": "2026-04-22" },
+  "total_points_changed": 0
+}
+```
+
+**Problemi identificati**:
+
+1. **Backend**: per `scheduled_investment` (BRIM scheduler) `points_changed=0`
+   con `status=partial` è normale se la data odierna coincide con un punto
+   già presente — ma il messaggio `"Current value only, history unavailable"`
+   è fuorviante: l'asset **dovrebbe** generare history completa dal
+   `start_date` del piano. O la logica del provider è rotta, o va rivisto
+   il messaggio, o va distinto tra "nulla da aggiornare" (✅ success) e
+   "provider limitato a current value" (⚠️ partial).
+2. **Frontend**: la UI tratta `status=partial && points_changed=0` come
+   errore generico senza esporre né il `message` né il numero di punti
+   fetched/changed. Servirebbe un toast diverso in base a:
+   - `success_count>0 && total_points_changed>0` → verde "N prezzi
+     aggiornati".
+   - `success_count>0 && total_points_changed==0` → giallo "Nessun nuovo
+     prezzo (già aggiornato fino a oggi)".
+   - `errors.length > 0 || results[].status=='failed'` → rosso con detail.
+   - `status=='partial'` → giallo con `message` del provider.
+
+**Azioni**:
+
+- (a) Audit del provider `scheduled_investment.sync_asset_history`:
+  capire se il return `partial / Current value only` è corretto per
+  un piano periodico (dovrebbe ricalcolare tutti i punti da start_date
+  a oggi) o se è un path di fallback errato.
+- (b) Frontend: handler `PriceSyncResponse` con switch sui tre stati
+  sopra + toast i18n differenziati (nuove chiavi
+  `prices.sync.success`, `prices.sync.noChanges`, `prices.sync.partial`,
+  `prices.sync.failed`).
+- (c) Collegamento con #I-bis #1 (post-wipe sync 0 rows): stessa radice
+  (il frontend non distingue "0 rows = OK" vs "0 rows = problema").
+  Unificare il pattern in un unico handler condiviso.
+
+**Priorità**: P1 — sblocca il retest completo dello scheduled_investment
+(l'utente ora lo vede come "rotto" mentre il backend sta tornando una
+risposta legittima ma mal interpretata).
+
+#### I-bis — Priorità & ordine
+
+1. **#9** (bloccante) → ✅ fix applicato.
+2. **#10** (correlato a #9) → ✅ confermato OK dopo fix #9.
+3. **#8** (quick win UX i18n) → ✅ fix applicato.
+4. **#11** (InfoBanner nel currency modal) → ✅ fix applicato.
+5. **#14** (badge icona INDEX) → ✅ fix applicato.
+6. **#15** (descrizione asset in metadata panel) → ✅ fix applicato.
+7. **#16** (cleanup icone: rimuovi force-INDEX-SVG + dead `icons.ts`) → ✅ fix applicato.
+8. **#17** (active-only filter rotto → tri-state backend) → ✅ fix applicato.
+9. **#18** (edit modal: short_description vuota) → ✅ fix applicato.
+10. **#13** (mock data asset sistemati) → ✅ complete (tutti i 7 sub-punti, incluse rimozioni Vanguard/iShares).
+11. **#20** (tri-state UI toggle Active|Inactive) → ✅ fix applicato.
+12. **#21** (500 su GET /provider/assignments per AUTO_GENERATED) → ✅ fix applicato.
+13. **#3, #4, #6** (UI: tab currency label, CSV banner, empty-state) → ⏳ pending.
+14. **#12** (ridurre i 5 toast currency change a 1) → ⏳ refactor medio.
+15. **#1** (surface errori sync post-wipe) → ⏳ backend+frontend.
+16. **#2, #5** (provider dirty gating, CSV import resilience) → ⏳ pending.
+17. **#7** (backend HTTP 409 semantics) → ⏳ non urgente.
+18. **#19** (semantica estesa Asset.active, scheduler consumer + dashboard hide) → ⏳ follow-up linkato a Phase 8.
+19. **#22** (generalizzare error handling save → keep modal open + toast) → ⏳ prerequisito Part 4/5 Staging Modal.
+20. **#23** (scheduled_investment sync partial status non surfacciato) → ⏳ audit backend + frontend toast dispatch.
+
+---
+
+1. **#9** (bloccante) → ✅ fix applicato.
+2. **#10** (correlato a #9) → ✅ confermato OK dopo fix #9.
+3. **#8** (quick win UX i18n) → ✅ fix applicato.
+4. **#11** (InfoBanner nel currency modal) → ✅ fix applicato.
+5. **#14** (badge icona INDEX) → ✅ fix applicato (con placeholder
+   icona index.png da sostituire).
+6. **#13** (mock data asset sistemati) → 🟡 parziale: #1/#2/#4/#5/#7
+   fatti; #3 (BTP 2028 scheduled) e #6 (rimozione Vanguard/iShares)
+   rimandati a commit dedicato.
+7. **#15** (descrizione asset in metadata panel) → ✅ fix applicato.
+8. **#3, #4, #6** (piccoli miglioramenti UI: tab currency label, CSV
+   banner, empty-state) → ⏳ pending.
+9. **#12** (ridurre i 5 toast currency change a 1) → ⏳ refactor medio.
+10. **#1** (surface errori sync post-wipe) → ⏳ backend+frontend.
+11. **#2, #5** (refactor più ampi: provider dirty gating, CSV import
+    resilience) → ⏳ pending.
+12. **#7** (backend HTTP 409 semantics) → ⏳ non urgente.
+
+---
+
+1. **#9** (bloccante) → ✅ fix applicato.
+2. **#10** (correlato a #9) → 🔍 da riverificare post-#9.
+3. **#8** (quick win UX su stringhe i18n) → ✅ fix applicato.
+4. **#3, #4, #6** (piccoli miglioramenti UI con basso rischio) → ⏳ pending.
+5. **#1** (richiede side backend per surface errori sync) → ⏳ pending.
+6. **#2, #5** (refactor più ampi) → ⏳ pending.
+7. **#7** (backend only, non urgente) → ⏳ pending.
 
 ---
 

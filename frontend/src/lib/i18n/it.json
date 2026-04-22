@@ -262,7 +262,7 @@
     "subtitle": "Visualizza e gestisci i tuoi investimenti",
     "searchPlaceholder": "Cerca asset...",
     "allTypes": "Tutti i tipi",
-    "showActive": "Solo attivi",
+    "showActive": "Attivi",
     "showAll": "Mostra tutti",
     "table": {
       "lastPrice": "Ultimo Prezzo",
@@ -431,7 +431,8 @@
       "balanceSelected": "Bilancia righe selezionate",
       "deleteSelected": "Elimina righe selezionate",
       "deleteConfirmMessage": "Eliminare {count} voci da questa distribuzione?"
-    }
+    },
+    "showInactive": "Inattivi"
   },
   "transactions": {
     "title": "Transazioni",
@@ -904,6 +905,11 @@
     "saving": "Salvataggio…",
     "autoEvent": {
       "tooltip": "Generato automaticamente da un provider di prezzi. Le modifiche sono disabilitate perché verrebbero sovrascritte alla prossima sincronizzazione. Anche l'eliminazione è temporanea — il provider ricreerà l'evento alla prossima sync. Per rimuoverlo definitivamente, modifica la configurazione del provider dell'asset."
+    },
+    "cell": {
+      "notSet": "Non impostato",
+      "clearField": "Cancella campo",
+      "clearFieldConfirm": "Impostare questa cella come vuota?"
     }
   },
   "sharedResource": {
@@ -966,7 +972,25 @@
     "weekendHint": "la data di inizio cade nel weekend — prova a spostarla",
     "originalValue": "Valore Originale",
     "fxDataAvailableFrom": "Tassi FX disponibili dal {date} — date precedenti mostrano prezzi non convertiti",
-    "fxPairNoRates": "La coppia FX {pair} non ha tassi in questo intervallo — sincronizzala per abilitare la conversione"
+    "fxPairNoRates": "La coppia FX {pair} non ha tassi in questo intervallo — sincronizzala per abilitare la conversione",
+    "currencyChange": {
+      "title": "Cambia valuta — azione distruttiva",
+      "autoSyncInfo": "Dopo la cancellazione, i prezzi verranno auto-sincronizzati dal provider a partire da {from}.",
+      "noProviderInfo": "Nessun provider assegnato — dopo la cancellazione dovrai re-importare i prezzi manualmente.",
+      "backupTitle": "Scarica backup dei prezzi attuali prima della cancellazione",
+      "exportCsv": "Esporta come CSV",
+      "exportJson": "Esporta come JSON",
+      "confirm": "Elimina e cambia valuta",
+      "working": "In corso…",
+      "progressDelete": "Cancellazione di {count} record di prezzo…",
+      "progressPatch": "Aggiornamento valuta asset…",
+      "progressSync": "Ri-sincronizzazione prezzi da {from}…",
+      "done": "Valuta cambiata da {from} a {to}. Prezzi aggiornati.",
+      "failed": "Cambio valuta fallito",
+      "syncFailedManualRetry": "Valuta cambiata ma la sincronizzazione post-wipe è fallita — usa il bottone Sync per riprovare.",
+      "body": "Cambiando la valuta da {from} a {to} verranno eliminati permanentemente {count} record di prezzo fino ad oggi. I prezzi verranno ri-caricati dal provider nella nuova valuta dopo la cancellazione."
+    },
+    "metadataDescription": "Descrizione"
   },
   "ticker": {
     "noAssets": "Nessun asset monitorato",

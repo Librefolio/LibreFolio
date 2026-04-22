@@ -45,6 +45,31 @@ In aggiunta: **rimozione di `fetch_interval` per-provider** su `AssetProviderAss
 | `scheduler_history_sync_time` | string | `"23:00"` | `HH:MM` server time | Orario daily del sync storico FX + assets |
 | `scheduler_history_sync_horizon_days` | int | `14` | 1–365 | Finestra rolling backward per il sync storico |
 
+### 🔁 Interazione con `Asset.active`
+
+**Ancoraggio** (side-note da I-bis #17, Phase 7 — 2026-04-22): il campo
+`Asset.active` oggi è usato solo come filtro di lista. Lo scheduler è il
+consumer naturale per dare semantica "archiviato" al flag:
+
+- **Current-price refresh**: il demone itera solo su `Asset.active == True` —
+  asset inattivi non vengono pollati. Policy speculare per FX: `FxPair.active`
+  gating sul medesimo demone.
+- **Daily history sync**: stessa logica — inattivi esclusi dal rolling
+  horizon.
+- **Implementazione**: aggiungere `where(Asset.active == True)` nelle query
+  che il demone esegue su `AssetProviderAssignment` (JOIN con `Asset`).
+
+Questo è il reason d'essere del toggle tri-state "Active | Inactive" che
+la Phase 7 (I-bis #20) ha introdotto nel `GET /assets/query`: permette
+all'utente di archiviare asset "storici" (es. RE Loan chiusi, titoli
+delistati) senza perdere l'history, e di escluderli automaticamente dai
+cicli di sync senza doverli cancellare.
+
+Nota: fin tanto che il demone non è attivo (Phase 8 non completata), la
+semantica di `active` resta puramente "filtro di lista" — nessun effetto
+sul sync manuale via pulsante. Tracciato nel Plan-phase07-Part3 I-bis #19
+(follow-up).
+
 Initialization via `initialize_global_settings()` (stesso pattern di `session_ttl_hours`, `max_file_upload_mb`).
 
 ---

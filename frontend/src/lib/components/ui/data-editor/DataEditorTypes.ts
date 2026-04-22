@@ -32,6 +32,13 @@ export interface ColumnDef {
     placeholder?: string;
     /** Options for type 'enum' — value shown in select, label for display, emoji prefix */
     enumOptions?: {value: string; label: string; emoji?: string; tooltip?: string; docsPath?: string}[];
+    /**
+     * F.5 — if `true` (only meaningful on `type: 'number'`) the cell is rendered with
+     * the ErasableNumberCell component: NULL values show a "not set" placeholder and
+     * the user can clear the value via an eraser affordance that sends the `-1`
+     * sentinel upstream. Intended for optional OHLC auxiliary fields (open/high/low/volume).
+     */
+    erasable?: boolean;
 }
 
 /** A single row in the DataEditor */
