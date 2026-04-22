@@ -53,23 +53,24 @@
     }
 </script>
 
-<DataImportModal bind:open columns={priceColumns} {onclose} {onimport} title="📥 Import Prices CSV">
+<DataImportModal bind:open columns={priceColumns} {onclose} {onimport} title={$t('import.csv.titlePrices')}>
     {#snippet headerSlot()}
-        <!-- I-bis #4 — Reminder about currency match & extra columns ignored -->
-        {#if currency}
-            <InfoBanner variant="warning">
-                <p data-testid="price-import-currency-reminder">
-                    {$t('import.csv.currencyReminder', {values: {currency: currencyLabel}})}
-                </p>
-                <p class="text-[11px] opacity-80 mt-1">{$t('import.csv.extraColumnsIgnored')}</p>
-            </InfoBanner>
-        {/if}
+        <!-- I-bis #4 — Single unified InfoBanner: currency reminder first, then CSV structure,
+             then separator hint, then extra-columns note. Everything i18n-translated. -->
         <InfoBanner variant="info">
             <div class="flex items-start gap-2">
                 <div class="flex-1 space-y-1">
-                    <p><strong>Minimum:</strong> date;currency;close</p>
-                    <p><strong>Extended:</strong> date;currency;close;open;high;low;volume</p>
-                    <p class="text-[11px] opacity-80">Use <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">;</code> to skip optional columns.</p>
+                    {#if currency}
+                        <p data-testid="price-import-currency-reminder">
+                            <strong>{$t('import.csv.currencyReminder', {values: {currency: currencyLabel}})}</strong>
+                        </p>
+                    {/if}
+                    <p><strong>{$t('import.csv.labelMinimum')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;close</code></p>
+                    <p><strong>{$t('import.csv.labelExtended')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;close;open;high;low;volume</code></p>
+                    <p class="text-[11px] opacity-80">
+                        {@html $t('import.csv.separatorHint', {values: {sep: '<code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">;</code>'}})}
+                    </p>
+                    <p class="text-[11px] opacity-80">{$t('import.csv.extraColumnsIgnored')}</p>
                 </div>
                 <button class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0" onclick={openDocs} title="Open documentation" type="button">
                     <BookOpen size={16} />

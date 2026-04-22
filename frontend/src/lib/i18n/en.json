@@ -993,7 +993,8 @@
     "metadataDescription": "Description",
     "pricesInCurrency": "Prices in {currency}",
     "eventsInCurrency": "Events in {currency}",
-    "addPricesManually": "Add manually"
+    "addPricesManually": "Add manually",
+    "openFxPair": "Open FX pair detail"
   },
   "ticker": {
     "noAssets": "No tracked assets",
@@ -1011,7 +1012,14 @@
   "import": {
     "csv": {
       "currencyReminder": "Currency must match asset currency ({currency}).",
-      "extraColumnsIgnored": "Extra columns (like currency, source_plugin_key, fetched_at from Export) are ignored."
+      "extraColumnsIgnored": "Extra columns (like currency, source_plugin_key, fetched_at from Export) are ignored.",
+      "labelMinimum": "Minimum",
+      "labelExtended": "Extended",
+      "separatorHint": "Use {sep} to skip optional columns.",
+      "titlePrices": "📥 Import Prices CSV",
+      "titleEvents": "📥 Import Events CSV",
+      "eventsFormatLabel": "Format",
+      "eventsTypesLabel": "Types"
     }
   }
 }

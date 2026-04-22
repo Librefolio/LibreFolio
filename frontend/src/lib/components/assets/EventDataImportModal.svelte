@@ -13,6 +13,7 @@
     import DataImportModal from '$lib/components/ui/data-editor/DataImportModal.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {BookOpen} from 'lucide-svelte';
+    import {_ as t} from '$lib/i18n';
 
     // =========================================================================
     // Props
@@ -44,19 +45,21 @@
     }
 </script>
 
-<DataImportModal bind:open columns={eventColumns} {onclose} {onimport} title="📥 Import Events CSV">
+<DataImportModal bind:open columns={eventColumns} {onclose} {onimport} title={$t('import.csv.titleEvents')}>
     {#snippet headerSlot()}
         <InfoBanner variant="info">
             <div class="flex items-start gap-2">
                 <div class="flex-1 space-y-1">
-                    <p><strong>Format:</strong> date;currency;type;amount;notes</p>
+                    <p><strong>{$t('import.csv.eventsFormatLabel')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;type;amount;notes</code></p>
                     <p class="text-[11px] opacity-80">
-                        Types: <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">DIVIDEND</code>
+                        <strong>{$t('import.csv.eventsTypesLabel')}:</strong>
+                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">DIVIDEND</code>
                         <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">INTEREST</code>
                         <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">SPLIT</code>
                         <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">PRICE_ADJUSTMENT</code>
                         <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">MATURITY_SETTLEMENT</code>
                     </p>
+                    <p class="text-[11px] opacity-80">{$t('import.csv.extraColumnsIgnored')}</p>
                 </div>
                 <button class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0" onclick={openDocs} title="Open documentation" type="button">
                     <BookOpen size={16} />
