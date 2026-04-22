@@ -993,7 +993,8 @@
     "metadataDescription": "Descrizione",
     "pricesInCurrency": "Prezzi in {currency}",
     "eventsInCurrency": "Eventi in {currency}",
-    "addPricesManually": "Aggiungi manualmente"
+    "addPricesManually": "Aggiungi manualmente",
+    "openFxPair": "Apri dettaglio coppia FX"
   },
   "ticker": {
     "noAssets": "Nessun asset monitorato",
@@ -1011,7 +1012,14 @@
   "import": {
     "csv": {
       "currencyReminder": "La valuta deve coincidere con quella dell'asset ({currency}).",
-      "extraColumnsIgnored": "Le colonne extra (come currency, source_plugin_key, fetched_at dall'Export) vengono ignorate."
+      "extraColumnsIgnored": "Le colonne extra (come currency, source_plugin_key, fetched_at dall'Export) vengono ignorate.",
+      "labelMinimum": "Minimo",
+      "labelExtended": "Esteso",
+      "separatorHint": "Usa {sep} per saltare colonne opzionali.",
+      "titlePrices": "📥 Importa CSV Prezzi",
+      "titleEvents": "📥 Importa CSV Eventi",
+      "eventsFormatLabel": "Formato",
+      "eventsTypesLabel": "Tipi"
     }
   }
 }

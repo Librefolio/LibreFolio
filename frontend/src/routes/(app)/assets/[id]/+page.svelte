@@ -251,6 +251,19 @@
     });
 
     /**
+     * Quick-access URL to the FX pair detail page.
+     * Only populated when the main FX pair is healthy (status === 'ok') — if the pair
+     * is missing / no-data / partial-gap, the full-width banner already handles the
+     * issue with a dedicated CTA, and a link here would be confusing or dead.
+     */
+    let mainFxPairUrl = $derived.by(() => {
+        if (!fxPairSlug) return undefined;
+        const main = requiredFxPairs.find((p) => p.slug === fxPairSlug);
+        if (!main || main.status !== 'ok') return undefined;
+        return `/fx/${fxPairSlug}?start=${dateStart}&end=${dateEnd}`;
+    });
+
+    /**
      * All FX pairs required by the page (main + comparison signals).
      * Each entry has slug, label, forAsset, and status.
      */
@@ -1248,7 +1261,7 @@
             </div>
 
             {#if assetInfo}
-                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} layoutMode={layout.layoutMode} {livePriceConversionFailed} />
+                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} layoutMode={layout.layoutMode} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} />
             {/if}
         </div>
 

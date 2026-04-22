@@ -17,6 +17,7 @@
 <script lang="ts">
     import {tick} from 'svelte';
     import {t} from '$lib/i18n';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
 
     // =========================================================================
     // Types (exported for external use)
@@ -341,9 +342,14 @@
                 <div
                     class="h-5 flex items-center justify-end pr-2 text-xs font-mono leading-5
                         {v.duplicate ? 'bg-amber-50 dark:bg-amber-900/20' : v.isHeader && v.valid ? 'bg-emerald-50 dark:bg-emerald-900/10' : v.valid ? '' : 'bg-red-50 dark:bg-red-900/20'}"
-                    title={v.error || ''}
                 >
-                    <span class={v.parsed && !v.duplicate ? 'text-emerald-500' : v.duplicate ? 'text-amber-500' : v.isHeader && v.valid ? 'text-emerald-600 dark:text-emerald-400' : v.valid ? 'text-gray-400 dark:text-gray-500' : 'text-red-500'}>{v.lineNumber}</span>
+                    {#if v.error}
+                        <Tooltip text={v.error} position="right">
+                            <span class={v.parsed && !v.duplicate ? 'text-emerald-500' : v.duplicate ? 'text-amber-500' : v.isHeader && v.valid ? 'text-emerald-600 dark:text-emerald-400' : v.valid ? 'text-gray-400 dark:text-gray-500' : 'text-red-500'}>{v.lineNumber}</span>
+                        </Tooltip>
+                    {:else}
+                        <span class={v.parsed && !v.duplicate ? 'text-emerald-500' : v.duplicate ? 'text-amber-500' : v.isHeader && v.valid ? 'text-emerald-600 dark:text-emerald-400' : v.valid ? 'text-gray-400 dark:text-gray-500' : 'text-red-500'}>{v.lineNumber}</span>
+                    {/if}
                 </div>
             {/each}
         </div>
@@ -351,7 +357,7 @@
         <!-- Validation indicators -->
         <div class="flex-shrink-0 w-5">
             {#each validations as v}
-                <div class="h-5 flex items-center justify-center text-xs leading-5" title={v.error || ''}>
+                <div class="h-5 flex items-center justify-center text-xs leading-5">
                     {#if v.isHeader && v.valid}
                         <span class="text-emerald-600 dark:text-emerald-400">H</span>
                     {:else if v.parsed && !v.duplicate}
@@ -359,7 +365,13 @@
                     {:else if v.duplicate}
                         <span class="text-amber-500">⚠</span>
                     {:else if !v.valid}
-                        <span class="text-red-500">✗</span>
+                        {#if v.error}
+                            <Tooltip text={v.error} position="right">
+                                <span class="text-red-500">✗</span>
+                            </Tooltip>
+                        {:else}
+                            <span class="text-red-500">✗</span>
+                        {/if}
                     {/if}
                 </div>
             {/each}

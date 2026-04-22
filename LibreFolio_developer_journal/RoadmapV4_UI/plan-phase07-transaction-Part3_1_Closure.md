@@ -446,6 +446,30 @@ Se il save fallisce (HTTP !2xx / network error), la modale:
 
 **Priorità**: P1 — prerequisito per Part 5 Staging Modal.
 
+### I-bis #24 — Auto-refresh mirato post-sync (last-point-only)  ⏳ PENDING (nuovo, 2026-04-22 batch 2 part1 retest)
+
+**Contesto UX**: dopo aver cliccato "Sync" con provider current-price, se l'utente aspetta il debounce del backend e fa refresh manuale della pagina, il nuovo punto compare. Senza refresh non compare → UX incoerente. In più, anche il bottone "Add manually" dell'empty state (I-bis #6) sarebbe molto più fluido se, dopo il primo save, il pannello empty transitasse direttamente al grafico senza full-reload.
+
+**Design proposto**:
+1. **Caso "chart popolato, sync current-price"**: invece di ricaricare tutto `chartData` (causa flash "chart vuoto → chart pieno" + ricalcolo signals + ricalcolo FX conversion), invocare un merge targettato:
+   - Backend già risponde con `inserted_count`, `updated_count` e idealmente con i punti effettivamente toccati. Se non lo fa, va esteso → tornare `points: FAPricePoint[]` (delta) al posto di solo counters.
+   - Frontend: fare un `Map<date, point>` dei punti attuali e applicare le modifiche incrementalmente. Solo il punto odierno (o i punti toccati) viene re-renderizzato.
+   - Ricompute dei signals / FX conversion avviene sullo stesso subset.
+2. **Caso "empty state → primo punto"** (integrazione I-bis #6): quando `chartData.length === 0` e la finestra temporale include oggi, se il sync (o il save manuale) restituisce un punto con `date >= dateStart && date <= dateEnd`, il componente deve transizionare **in-place** dall'empty state al grafico senza ricaricare la pagina:
+   - Già oggi il `{#if chartData.length > 0}` switcha automaticamente se la reattività viene triggerata: basta assicurarsi che `chartData` venga aggiornato.
+3. **Performance**: evitare il re-render completo del chart ECharts. Usare `setOption(..., { replaceMerge: ['series'] })` o `appendData` se disponibile.
+
+**File candidati**:
+- Backend: `backend/app/api/v1/assets.py` endpoint `POST /assets/prices/sync` — aggiungere `changed_points: FAPricePoint[]` nel response model (o esporre via query flag `?return_points=true` per non rompere il wire format esistente).
+- Frontend: `frontend/src/routes/(app)/assets/[id]/+page.svelte` — nuova funzione `mergeChartDataIncremental(newPoints)` invocata da `handleSync`, oltre al flusso attuale "full reload".
+- Frontend: stesso pattern da riusare nel `handleSave` di `AssetDataEditorSection.svelte` (dopo I-bis #24 l'empty → chart flow diventa automatico).
+
+**i18n**: nessuna chiave nuova (il toast di sync esistente resta).
+
+**Priorità**: **P2** — nice-to-have UX, non blocca Part 4. Rimandabile a batch tail dopo I-bis #1+#23 (che forniscono il payload giusto sul response `/prices/sync`).
+
+**Note**: ha una forte sinergia con I-bis #1+#23 (handler unificato `PriceSyncResponse`): se quel refactor espone già i `changed_points`, il work di I-bis #24 si riduce a soli ~30 min di merge logic frontend.
+
 ### I-bis #23 — Sync `scheduled_investment`: `status="partial"` non surfacciato al frontend  ⏳ PENDING
 
 **Contesto**: sync manuale BTP Italia 2028 restituisce 200 OK con `results[0].status="partial"`, `points_changed=0`, `message="Current value only, history unavailable"`. Frontend tratta come errore generico senza esporre il `message`.
@@ -651,6 +675,73 @@ Se il save fallisce (HTTP !2xx / network error), la modale:
 - `frontend/src/routes/(app)/assets/[id]/+page.svelte` (passa currency al data editor + bottone "Add manually" nell'empty state).
 - `frontend/src/lib/i18n/{en,it,fr,es}.json` (5 nuove chiavi × 4 lingue = 20 entries).
 
+### 📍 Retest batch 2 part1b (2026-04-22 sera tardi, post-utente-feedback)
+
+Dopo retest manuale dell'utente:
+- **I-bis #3** ✅ confermato + traduzioni OK.
+- **I-bis #6** ✅ confermato + regressione manual-only verificata. Emerso nuovo task I-bis #24 (vedi sotto).
+- **I-bis #4** 🔧 2 issue da fixare:
+  1. **Banner design**: non un 2° banner warning, ma **un unico InfoBanner info** con ordine: currency reminder → struttura (min/extended) → hint separatore → nota extra-columns.
+  2. **Banner i18n**: le 3 righe esistenti (Minimum/Extended/separator hint) erano hardcoded in inglese → tradotte con 3 nuove chiavi i18n.
+  3. **Tooltip CSV errors**: in `CsvEditor.svelte` gli errori di parsing erano comunicati via `title=` HTML nativo. Migrato al componente custom `Tooltip.svelte` (mostra istantaneo su hover della X rossa + del numero riga con error). Posizionamento `right` per non coprire la textarea. Tooltip applicato condizionalmente solo se `v.error` non vuoto (evita wrapper spurio sulle righe valide).
+
+**i18n nuove (batch 2 part1b)** in `import.csv.*`:
+- `labelMinimum` ("Minimum" / "Minimo" / "Minimum" / "Mínimo").
+- `labelExtended` ("Extended" / "Esteso" / "Étendu" / "Extendido").
+- `separatorHint` con placeholder `{sep}` iniettato via `@html` (il codice `<code>;</code>` non si interpola con `{values}` di svelte-i18n, quindi passo HTML escapato). 4 lingue.
+
+**File toccati in batch 2 part1b**:
+- `frontend/src/lib/components/assets/PriceDataImportModal.svelte` (collassato i 2 banner in 1, traduzioni).
+- `frontend/src/lib/components/ui/data-editor/CsvEditor.svelte` (import Tooltip, 2 siti `title=""` → `<Tooltip text={v.error}>…</Tooltip>`).
+- `frontend/src/lib/i18n/{en,it,fr,es}.json` (+3 chiavi).
+
+**Validazione batch 2 part1b**:
+- `./dev.py front check` → ✅ 0 errors, 0 warnings.
+- `./dev.py front format` → ✅ all unchanged.
+
+**Nuovo task tracciato** (non ancora implementato): `I-bis #24 — Auto-refresh mirato post-sync` (aggiornato solo il last-point dopo sync, no full reload; transizione fluida empty→chart se finestra include oggi). Vedi sezione dedicata sopra nel plan.
+
+**Issue emersa ma NON fixata in questa sessione** (perché scope = #5): il CSV esportato da `/prices/export?format=csv` oggi ha colonne extra (`currency, source_plugin_key, fetched_at`) che `CsvEditor` rifiuta con "too many fields". Il round-trip export→import richiede l'header-tolerance di I-bis #5. Per ora il banner informa l'utente che le extra columns sarebbero ignorate; il parser va reso effettivamente tollerante in batch successivo.
+
+### 📍 Retest batch 2 part1c (2026-04-22 sera tardi, 3° giro feedback utente)
+
+Dopo il 3° retest manuale emersi 3 nuovi issue:
+
+**Issue A — Missing FX quick-link icon**:
+- Nella filterBar del detail asset (`AssetPriceSummary.svelte`), **dopo** il dropdown "Converti in", non c'era più un link rapido alla detail page della coppia FX.
+- Fix: aggiunta prop `fxPairUrl?: string`. Quando valorizzata (solo se pair **healthy**) mostra un bottone `<a>` con icona `ExternalLink` e `Tooltip` "Open FX pair detail". Click → naviga a `/fx/{slug}?start=...&end=...`.
+- Parent `+page.svelte`: nuovo derived `mainFxPairUrl` che cerca la main pair in `requiredFxPairs` e ritorna URL solo se `status === 'ok'`. Se missing/no-data/partial-gap → `undefined` (niente bottone). Il banner full-width gestisce già quegli stati con le CTA specifiche → evitiamo doppioni/ambiguità.
+- `data-testid="asset-detail-fx-pair-link"` per E2E futuri.
+- i18n: `assetDetail.openFxPair` (4 lingue, "Ouvrir le détail de la paire FX" per FR).
+
+**Issue B — Modal import title hardcoded + Events CSV banner hardcoded**:
+- `PriceDataImportModal.svelte`: `title="📥 Import Prices CSV"` → `title={$t('import.csv.titlePrices')}`.
+- `EventDataImportModal.svelte`:
+  - Stesso fix sul titolo.
+  - Tradotte le 2 righe del banner esistente: "Format:" → `{$t('import.csv.eventsFormatLabel')}`, "Types:" → `{$t('import.csv.eventsTypesLabel')}` (elevato a `<strong>` per coerenza col pattern prezzi).
+  - **Aggiunta** la nota "Extra columns ignored" (`import.csv.extraColumnsIgnored`, riutilizzo della chiave di I-bis #4) → anche events CSV ora avverte che colonne in più sono ignorate.
+- i18n nuove: `import.csv.{titlePrices, titleEvents, eventsFormatLabel, eventsTypesLabel}` (4 chiavi × 4 lingue).
+
+**Issue C — fr.json accidentally zeroed**:
+- Durante un tentativo di fix accent via Python inline con surrogate escape (`\ud83d\udce5`), `write_text(..., encoding='utf-8')` ha failato ma DOPO aver aperto il file in `w` → `fr.json` → 0 byte. Ripristinato via `git checkout HEAD` + script `/tmp/libreFolio_restore_fr_keys.py` che riapplica TUTTE le 13 chiavi FR aggiunte in questa sessione (pricesInCurrency, eventsInCurrency, addPricesManually, openFxPair, currencyReminder, extraColumnsIgnored, labelMinimum, labelExtended, separatorHint, titlePrices, titleEvents, eventsFormatLabel, eventsTypesLabel) con escape unicode `\u00e9` / `\u00c9` / `\u00e0` e emoji 📥 pescato da `en.json`.
+- **Lezione/gotcha nuovo**: MAI usare surrogate pair escape per l'emoji 📥 in python — usare `\N{INBOX TRAY}` o copiarla da un altro file.
+
+**File toccati in batch 2 part1c**:
+- `frontend/src/lib/components/assets/AssetPriceSummary.svelte` (+prop fxPairUrl + link).
+- `frontend/src/routes/(app)/assets/[id]/+page.svelte` (+derived mainFxPairUrl, passa al summary).
+- `frontend/src/lib/components/assets/PriceDataImportModal.svelte` (title i18n).
+- `frontend/src/lib/components/assets/EventDataImportModal.svelte` (title i18n + banner tradotto + extra-columns note).
+- `frontend/src/lib/i18n/{en,it,fr,es}.json` (+5 chiavi × 4 lingue = 20 entries; fr.json integralmente ripristinato).
+
+**Validazione batch 2 part1c**:
+- `./dev.py front check` → ✅ 0 errors, 0 warnings.
+- `./dev.py front format` → ✅ all unchanged.
+
+**i18n finale cumulativo batch 2 part1+1b+1c** (da committare insieme):
+- `assetDetail.{pricesInCurrency, eventsInCurrency, addPricesManually, openFxPair}` — 4 chiavi.
+- `import.csv.{currencyReminder, extraColumnsIgnored, labelMinimum, labelExtended, separatorHint, titlePrices, titleEvents, eventsFormatLabel, eventsTypesLabel}` — 9 chiavi.
+- **Totale: 13 chiavi × 4 lingue = 52 entries**.
+
 ### 🎯 Cosa devo fare dopo (priorità in ordine)
 
 **Prossimo commit suggerito**: batch refactor `FxBackwardFillInfo` da solo (piccolo e coeso). Messaggio:
@@ -709,6 +800,7 @@ Refactor: extract FxBackwardFillInfo as standalone building block
 5. **Non eseguire mai `git commit`** — solo proporre messaggi (regola copilot-instructions). Oggi sto scrivendo i messaggi in `/tmp/libreFolio_commit_*.txt` e l'utente committa.
 6. **`requiredFxPairs` derived in `+page.svelte` L267–337**: non esiste un componente `FxPairBanner` separato — il banner è inline nel `{#each pairs}` a L1081–1153. Se si vuole riusare altrove (Phase 9 Dashboard), estrarlo prima in componente.
 7. **FxBackwardFillInfo wire format**: `{fx_rate_date: "YYYY-MM-DD" | null, fx_days_back: number | null}`. Lato FE è `Partial<{...}>` (Zod) quindi entrambi i campi sono tecnicamente opzionali anche quando l'oggetto è presente — usare sempre optional chaining `obj?.fx_rate_date`.
+8. **Emoji in Python scripts per i18n**: MAI usare escape surrogate pair (`\ud83d\udce5`) perché `write_text(encoding='utf-8')` fallisce con `UnicodeEncodeError: surrogates not allowed` DOPO aver truncato il file → file i18n azzerato. Alternative sicure: `\N{INBOX TRAY}` (Python named-char escape) oppure leggere l'emoji da un file già presente (es. `en.json`) e riusarla. Recovery: `git checkout HEAD -- frontend/src/lib/i18n/fr.json` + script che riapplica tutte le chiavi della sessione.
 
 ### ✅ Check-list di "sessione riaperta correttamente"
 
