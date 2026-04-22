@@ -70,6 +70,36 @@ semantica di `active` resta puramente "filtro di lista" — nessun effetto
 sul sync manuale via pulsante. Tracciato nel Plan-phase07-Part3 I-bis #19
 (follow-up).
 
+#### Regole definitive per il consumer `Asset.active` (2026-04-22, post-test utente)
+
+Consolidato dopo il giro di feedback utente "test 4" sul Plan-phase07-Part3
+I-bis #19. Queste regole sono **autoritative per Phase 8**:
+
+| Consumer | Comportamento su `active=False` | Rationale |
+|----------|--------------------------------|-----------|
+| **Scheduler automatico (questo piano)** — current-price refresh + daily history sync | **Skip**: l'asset è escluso dal loop del demone (filtro `Asset.active == True` in join con `AssetProviderAssignment`). Policy speculare su `FxPair.active`. | Asset archiviati non devono consumare quota provider né inquinare i log periodici. |
+| **Sync manuale frontend** — `POST /prices/sync`, `POST /events/sync`, pulsante "Recalculate" | **Consentito**: l'azione esplicita dell'utente bypassa il flag. | Use-case: riattivazione temporanea per refresh puntuale di un asset archiviato (es. recupero history su titolo delistato), poi ri-archiviazione. Bloccare qui sarebbe paternalistico. |
+| **Dashboard / Portfolio breakdown** (Phase 9) | **Nasconde**: le query di aggregazione (allocazione, performance, positions table, charts di `/dashboard/*`) filtrano `asset.active == True`. | Gli inattivi non devono contribuire alla vista "live" del patrimonio. Le transazioni storiche restano consultabili in `/transactions` (non filtra per active). |
+| **Lista assets** `/assets` | **Tri-state UI**: toggle `[Active] [Inactive]` indipendenti (vedi I-bis #20). Endpoint `GET /assets/query` accetta `active: Optional[bool]` (None=both). | Già implementato in Part 3. |
+| **Badge UI "📦 Archived"** | **Desiderabile** su card/table/detail page per feedback visivo coerente. | Non bloccante per Phase 8; tracked in I-bis #19. |
+
+**Implementazione scheduler (Step 2 di questo piano)**:
+
+```python
+# backend/app/services/scheduler/jobs.py (pseudo)
+stmt = (
+    select(AssetProviderAssignment)
+    .join(Asset, Asset.id == AssetProviderAssignment.asset_id)
+    .where(Asset.active == True)  # noqa: E712 — SQLAlchemy expression
+    .where(AssetProviderAssignment.is_active == True)
+)
+```
+
+Lo stesso pattern per il job FX, con `where(FxPair.active == True)`.
+
+**Cross-link**: Plan-phase07-Part3 §I-bis #19 (follow-up + aggiornamento
+notte 2026-04-22), §I-bis #20 (tri-state UI completata).
+
 Initialization via `initialize_global_settings()` (stesso pattern di `session_ttl_hours`, `max_file_upload_mb`).
 
 ---

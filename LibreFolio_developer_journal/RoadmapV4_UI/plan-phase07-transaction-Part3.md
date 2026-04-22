@@ -1,13 +1,21 @@
 # Plan: Phase 7 — Part 3: API Consolidation (atomic per-broker) + events/suggest + deferred from Part 1
 
-**Data**: 20 Aprile 2026 · **Ultimo update**: 22 Aprile 2026 (notte — batch 6: user feedback post-batch-5, commit pronto)
-**Status**: 🏗️ IN CORSO (A+B, C, D ✅ · H ✅ · I.1–I.8 ✅ · F.3 validato · I-bis #8/#9/#10/#11/#13/#14/#15/#16/#17/#18/#20/#21 ✅ · I-bis #1/#2/#3/#4/#5/#6/#7/#12/#19/#22/#23 ⏳ · I.9–I.11 ⏳ · E, G ⏳)
+**Data**: 20 Aprile 2026 · **Ultimo update**: 22 Aprile 2026 (notte — batch 7: closure plan creato, decisioni terminali Blocco E consolidate)
+**Status**: 🏗️ IN CORSO (A+B, C, D ✅ · H ✅ · I.1–I.8 ✅ · F.3 validato · I-bis #8/#9/#10/#11/#13/#14/#15/#16/#17/#18/#20/#21 ✅ · Pending tasks → vedi Closure plan)
 **Priorità**: P0 (sblocca Part 4 transactions page e Part 5 Staging Modal)
 **Effort stimato**: ~3–4 giorni (grosso; include gli spin-off Part 1 §8 e §9)
 **Phase**: [Phase 7 — Transactions System](./phases/phase-07-transactions.md)
 **Predecessori**:
 - [plan-phase07-transaction-Part1.md](./plan-phase07-transaction-Part1.md) ✅
 - [plan-phase07-transaction-Part2.prompt.md](./plan-phase07-transaction-Part2.prompt.md) ✅ (Revisione 2)
+
+**Successore (chiusura Part 3)**:
+- [plan-phase07-transaction-Part3_1_Closure.md](./plan-phase07-transaction-Part3_1_Closure.md) ⏳ — raccoglie **tutti** i task pendenti con decisioni terminali post Q&A 2026-04-22:
+  - **Blocco E** residuo (E.3 cleanup, E.8 implementazione) + cancellazione E.1/E.2/E.4/E.5/E.6/E.7.
+  - **Blocco G** intero (test coverage: 6 nuovi file + estensioni G.1/G.2 + runner + coverage target).
+  - **I.9/I.10** test adaptations post Blocco I (hard-400 currency mismatch).
+  - **Blocco F** verifica finale (codice ✅, test demandati a G.6).
+  - **Coda I-bis**: #1/#2/#3/#4/#5/#6/#7/#12/#19/#22/#23.
 
 ---
 
@@ -528,6 +536,21 @@ Nuovo file `test_transfer_promotion.py`:
 
 ### Blocco E — Price currency coherence (deferred Part 1 §8)
 
+> **📦 DETTAGLIATO IN**: [`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md) §Decisioni terminali sul Blocco E.
+>
+> **Decisioni terminali** (post Q&A 2026-04-22, consolidate nel Closure plan):
+> - **E.1** `original_currency` ✅ già implementato; `fx_error` ❌ cancellato dal design (scenari coperti da `requiredFxPairs` senza discriminator nel response).
+> - **E.2** `currency_breakdown` ❌ cancellato (superseded da I.1).
+> - **E.3** soft-skip upsert 🟡 **sostituito** da I.2 hard-400 reject — resta solo cleanup docstring/commenti residui.
+> - **E.4** auto-registrazione FX pairs ❌ **cancellato** (design era sbagliato: viola principio self-hosted, UX già coperta da `requiredFxPairs` + `FxPairAddModal`).
+> - **E.5/E.6/E.7** banner mismatch + FX-missing + data-editor warning ❌ cancellati (superseded da I.5/I.8).
+> - **E.8** `query_events_bulk target_currency` + infobox FX-converted ⏳ **da fare ora** — dettaglio completo in Closure plan §Task E.8.
+>
+> Il testo originale sottostante viene conservato per **traccia storica del design originale**; fare riferimento al Closure plan per l'implementazione effettiva.
+
+<details>
+<summary>📜 Design originale E.1–E.8 (storico, superseded)</summary>
+
 #### E.1 `FAPricePoint`
 - `original_currency: str` **sempre popolato** (= `currency` se no-conversion, = valuta pre-conversione altrimenti).
 - `backward_fill_info: Optional[...]` popolato sse `days_back>0 OR fx_rate_date OR fx_error`.
@@ -576,6 +599,10 @@ Nuovo file `test_transfer_promotion.py`:
 #### E.8 `query_events_bulk` param `target_currency`
 - Converte `event.value` a display-currency alla data dell'evento.
 - Miss FX → `result.errors[]` "Missing FX rate for event on {date}". No hard-fail.
+
+</details>
+
+> **Stato comparativo & azioni follow-up** → migrati in [`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md).
 
 ---
 
@@ -1597,56 +1624,11 @@ risposta legittima ma mal interpretata).
 
 #### I-bis — Priorità & ordine
 
-1. **#9** (bloccante) → ✅ fix applicato.
-2. **#10** (correlato a #9) → ✅ confermato OK dopo fix #9.
-3. **#8** (quick win UX i18n) → ✅ fix applicato.
-4. **#11** (InfoBanner nel currency modal) → ✅ fix applicato.
-5. **#14** (badge icona INDEX) → ✅ fix applicato.
-6. **#15** (descrizione asset in metadata panel) → ✅ fix applicato.
-7. **#16** (cleanup icone: rimuovi force-INDEX-SVG + dead `icons.ts`) → ✅ fix applicato.
-8. **#17** (active-only filter rotto → tri-state backend) → ✅ fix applicato.
-9. **#18** (edit modal: short_description vuota) → ✅ fix applicato.
-10. **#13** (mock data asset sistemati) → ✅ complete (tutti i 7 sub-punti, incluse rimozioni Vanguard/iShares).
-11. **#20** (tri-state UI toggle Active|Inactive) → ✅ fix applicato.
-12. **#21** (500 su GET /provider/assignments per AUTO_GENERATED) → ✅ fix applicato.
-13. **#3, #4, #6** (UI: tab currency label, CSV banner, empty-state) → ⏳ pending.
-14. **#12** (ridurre i 5 toast currency change a 1) → ⏳ refactor medio.
-15. **#1** (surface errori sync post-wipe) → ⏳ backend+frontend.
-16. **#2, #5** (provider dirty gating, CSV import resilience) → ⏳ pending.
-17. **#7** (backend HTTP 409 semantics) → ⏳ non urgente.
-18. **#19** (semantica estesa Asset.active, scheduler consumer + dashboard hide) → ⏳ follow-up linkato a Phase 8.
-19. **#22** (generalizzare error handling save → keep modal open + toast) → ⏳ prerequisito Part 4/5 Staging Modal.
-20. **#23** (scheduled_investment sync partial status non surfacciato) → ⏳ audit backend + frontend toast dispatch.
+**✅ Completati** (2026-04-22):
+#8, #9, #10, #11, #13, #14, #15, #16, #17, #18, #20, #21.
 
----
-
-1. **#9** (bloccante) → ✅ fix applicato.
-2. **#10** (correlato a #9) → ✅ confermato OK dopo fix #9.
-3. **#8** (quick win UX i18n) → ✅ fix applicato.
-4. **#11** (InfoBanner nel currency modal) → ✅ fix applicato.
-5. **#14** (badge icona INDEX) → ✅ fix applicato (con placeholder
-   icona index.png da sostituire).
-6. **#13** (mock data asset sistemati) → 🟡 parziale: #1/#2/#4/#5/#7
-   fatti; #3 (BTP 2028 scheduled) e #6 (rimozione Vanguard/iShares)
-   rimandati a commit dedicato.
-7. **#15** (descrizione asset in metadata panel) → ✅ fix applicato.
-8. **#3, #4, #6** (piccoli miglioramenti UI: tab currency label, CSV
-   banner, empty-state) → ⏳ pending.
-9. **#12** (ridurre i 5 toast currency change a 1) → ⏳ refactor medio.
-10. **#1** (surface errori sync post-wipe) → ⏳ backend+frontend.
-11. **#2, #5** (refactor più ampi: provider dirty gating, CSV import
-    resilience) → ⏳ pending.
-12. **#7** (backend HTTP 409 semantics) → ⏳ non urgente.
-
----
-
-1. **#9** (bloccante) → ✅ fix applicato.
-2. **#10** (correlato a #9) → 🔍 da riverificare post-#9.
-3. **#8** (quick win UX su stringhe i18n) → ✅ fix applicato.
-4. **#3, #4, #6** (piccoli miglioramenti UI con basso rischio) → ⏳ pending.
-5. **#1** (richiede side backend per surface errori sync) → ⏳ pending.
-6. **#2, #5** (refactor più ampi) → ⏳ pending.
-7. **#7** (backend only, non urgente) → ⏳ pending.
+**⏳ Pendenti** → **dettagliati in** [`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md) §Coda I-bis pendente:
+#1, #2, #3, #4, #5, #6, #7, #12, #19 (→ Phase 8/9), #22 (prerequisito Part 4/5), #23.
 
 ---
 
@@ -1734,8 +1716,10 @@ risposta legittima ma mal interpretata).
 ## 🔗 Cross-link
 
 - **Predecessori**: [Part1](./plan-phase07-transaction-Part1.md) ✅, [Part2](./plan-phase07-transaction-Part2.prompt.md) ✅.
+- **Chiusura Part 3** (decisioni terminali + tutti i task pendenti): [`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md) ⏳.
 - **Successori**: Part 4 (pagina /transactions), Part 4b (File Preview), Part 5 (Staging Modal).
 - **Phase doc**: [phase-07-transactions.md](./phases/phase-07-transactions.md) §Parte 3.
+- **Phase 8/9 follow-up**: [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md) (consumer `Asset.active`).
 
 ---
 
