@@ -741,3 +741,87 @@ async def test_get_current_prices_empty_list(test_server):
         assert data["results"] == []
         assert data["success_count"] == 0
         print_success("  ✓ Empty list returns empty results")
+
+
+# ============================================================
+# Tests 15–17: I.9 — Currency mismatch hard-400 (Supersedes E.3)
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_upsert_mismatch_single_row_rejects_400(test_server):
+    """I.9 Test 15: single row with mismatched currency → HTTP 400 hard reject."""
+    print_section("Test 15: I.9 — single mismatch rejects 400")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        create_item = FAAssetCreateItem(display_name=f"I9 Mismatch {unique_id('I9A')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        today = date.today()
+        prices = [FAPricePoint(date=today, close=Decimal("1.0"), currency="EUR")]
+        upsert = FAUpsert(asset_id=asset_id, prices=prices)
+        resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert "Currency mismatch" in body["detail"]
+        assert "USD" in body["detail"]
+        assert "EUR" in body["detail"]
+        print_success("  ✓ single EUR row on USD asset → 400 with Currency mismatch")
+
+
+@pytest.mark.asyncio
+async def test_upsert_mismatch_partial_rejects_entire_batch_400(test_server):
+    """I.9 Test 16: one mismatch in a batch of 3 → entire batch rejected with 400 (hard)."""
+    print_section("Test 16: I.9 — partial mismatch rejects entire batch 400")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        create_item = FAAssetCreateItem(display_name=f"I9 Partial {unique_id('I9B')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        today = date.today()
+        prices = [
+            FAPricePoint(date=today - timedelta(days=2), close=Decimal("100"), currency="USD"),
+            FAPricePoint(date=today - timedelta(days=1), close=Decimal("101"), currency="GBP"),  # mismatch
+            FAPricePoint(date=today, close=Decimal("102"), currency="USD"),
+        ]
+        upsert = FAUpsert(asset_id=asset_id, prices=prices)
+        resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}"
+        # Verify NO rows were inserted (atomic reject)
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{"asset_id": asset_id, "date_range": {"start": (today - timedelta(days=2)).isoformat(), "end": today.isoformat()}}],
+            timeout=TIMEOUT,
+        )
+        data = query_resp.json()
+        # Should be empty or only the price points that were present before (none in this test)
+        assert len(data["items"][0].get("prices", [])) == 0, "Batch should have been atomically rejected"
+        print_success("  ✓ 1/3 mismatch rejected whole batch (atomic)")
+
+
+@pytest.mark.asyncio
+async def test_upsert_same_currency_succeeds_200(test_server):
+    """I.9 Test 17: all rows matching asset currency → 200 OK, normal insert."""
+    print_section("Test 17: I.9 — matching currency succeeds 200")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        create_item = FAAssetCreateItem(display_name=f"I9 Match {unique_id('I9C')}", currency="EUR")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        today = date.today()
+        prices = [
+            FAPricePoint(date=today - timedelta(days=1), close=Decimal("50"), currency="EUR"),
+            FAPricePoint(date=today, close=Decimal("51"), currency="EUR"),
+        ]
+        upsert = FAUpsert(asset_id=asset_id, prices=prices)
+        resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = FABulkUpsertResponse(**resp.json())
+        assert data.success_count >= 1
+        print_success("  ✓ EUR rows on EUR asset → 200 OK")

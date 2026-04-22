@@ -333,6 +333,47 @@
             });
         }
 
+        // E.8 — Event currencies: if any event is in a currency ≠ displayCurrency,
+        // add its pair to the required list. This surfaces the same banner + CTA
+        // already used for prices (asset native + comparison signals), without
+        // duplicating detection code. `forAsset` uses an i18n-aware "for events"
+        // label so the user understands the context.
+        if (displayCurrency) {
+            const eventCurrencies = new Set<string>();
+            for (const ev of events) {
+                const c = ev.value?.code;
+                if (c && c !== displayCurrency) eventCurrencies.add(c);
+            }
+            for (const [, evts] of comparisonEvents) {
+                for (const ev of evts) {
+                    const c = ev.value?.code;
+                    if (c && c !== displayCurrency) eventCurrencies.add(c);
+                }
+            }
+            for (const evCur of eventCurrencies) {
+                const slug = toSlug(evCur, displayCurrency);
+                if (seenSlugs.has(slug)) continue;
+                seenSlugs.add(slug);
+                const missing = !allConfiguredFxSlugs.includes(slug);
+                // Check if there is at least one event in this currency that failed conversion.
+                const hasFailedConversion = events.some((ev) => ev.value?.code === evCur && !ev.original_value);
+                let status: RequiredFxPairInfo['status'];
+                if (missing) {
+                    status = 'missing';
+                } else if (hasFailedConversion) {
+                    status = 'no-data';
+                } else {
+                    status = 'ok';
+                }
+                pairs.push({
+                    slug,
+                    label: slug.replace('-', '/'),
+                    forAsset: $t('events.fxBannerContext') ?? 'for dividend/cash events',
+                    status,
+                });
+            }
+        }
+
         return pairs;
     });
 
@@ -392,17 +433,36 @@
     let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
 
     // Event markers for the chart (own events + comparison asset events)
+    // E.8 — events whose FX conversion failed (conversion requested but original_value
+    // stays undefined) are HIDDEN from the chart. The FX pair issue is surfaced by
+    // the existing `requiredFxPairs` banner (extended below to include event currencies).
     let chartEventMarkers: EventMarker[] = $derived.by(() => {
         const markers: EventMarker[] = [];
+        const wantConversion = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency;
 
         // Own asset events
         for (const ev of events) {
+            const evCurrency = ev.value?.code ?? assetInfo?.currency ?? '';
+            const originalValueRaw = ev.original_value?.amount;
+            const originalCurrency = ev.original_value?.code;
+            // Hide event if conversion was requested but did not apply.
+            // Heuristic: asset native currency ≠ displayCurrency AND event currency stays
+            // ≠ displayCurrency AND no original_* populated → FX missing.
+            if (wantConversion && evCurrency !== displayCurrency && !originalCurrency) {
+                continue;
+            }
             markers.push({
                 date: ev.date,
                 type: ev.type ?? 'OTHER',
                 value: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
-                currency: ev.value?.code ?? assetInfo?.currency ?? '',
+                currency: evCurrency,
+                currencyFlag: evCurrency ? getCurrencyInfo(evCurrency).flag_emoji : undefined,
                 notes: ev.notes ?? undefined,
+                originalValue: originalValueRaw != null ? Number(originalValueRaw) : undefined,
+                originalCurrency: originalCurrency ?? undefined,
+                originalCurrencyFlag: originalCurrency ? getCurrencyInfo(originalCurrency).flag_emoji : undefined,
+                fxRateDate: ev.fx_rate_date ?? undefined,
+                fxDaysBack: ev.fx_days_back ?? undefined,
             });
         }
 
@@ -413,14 +473,26 @@
             // Find signal color for this comparison asset
             const sigColor = overlaySignals.find((s) => s.label === label)?.color;
             for (const ev of evts) {
+                const evCurrency = ev.value?.code ?? '';
+                const originalValueRaw = ev.original_value?.amount;
+                const originalCurrency = ev.original_value?.code;
+                if (wantConversion && evCurrency && evCurrency !== displayCurrency && !originalCurrency) {
+                    continue;
+                }
                 markers.push({
                     date: ev.date,
                     type: ev.type ?? 'OTHER',
                     value: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
-                    currency: ev.value?.code ?? '',
+                    currency: evCurrency,
+                    currencyFlag: evCurrency ? getCurrencyInfo(evCurrency).flag_emoji : undefined,
                     notes: ev.notes ?? undefined,
                     assetLabel: label,
                     signalColor: sigColor,
+                    originalValue: originalValueRaw != null ? Number(originalValueRaw) : undefined,
+                    originalCurrency: originalCurrency ?? undefined,
+                    originalCurrencyFlag: originalCurrency ? getCurrencyInfo(originalCurrency).flag_emoji : undefined,
+                    fxRateDate: ev.fx_rate_date ?? undefined,
+                    fxDaysBack: ev.fx_days_back ?? undefined,
                 });
             }
         }

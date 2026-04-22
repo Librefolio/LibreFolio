@@ -1002,6 +1002,7 @@
     "deleteSuccess": "{count} evento(s) eliminado(s)",
     "deleteNotFound": "Evento(s) no encontrado(s): {ids}",
     "deletePartial": "{deleted} eliminado(s), {inUse} en uso, {notFound} no encontrado(s)",
-    "deleteBlocked": "No se puede eliminar: {count} evento(s) aún en uso por transacciones ({accessible} visibles para ti, {hidden} en carteras de otros usuarios)"
+    "deleteBlocked": "No se puede eliminar: {count} evento(s) aún en uso por transacciones ({accessible} visibles para ti, {hidden} en carteras de otros usuarios)",
+    "fxBannerContext": "para eventos dividendo/efectivo"
   }
 }

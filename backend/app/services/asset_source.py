@@ -42,7 +42,6 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     AssetType,
     BrokerUserAccess,
-    FxConversionRoute,
     IdentifierType,
     PriceHistory,
     ProviderInputType,
@@ -1123,7 +1122,16 @@ class AssetSourceManager:
         Returns:
             {inserted_count, updated_count, results: [{asset_id, count, message}, ...]}
 
-        Optimized: Batch operations per asset, minimize DB roundtrips
+        Raises:
+            ValueError: if any price point has a currency that doesn't match
+                ``asset.currency`` (I.2 — Supersedes E.3). The router translates
+                this into **HTTP 400** with the offending dates. This is the
+                definitive semantics after Block I — soft-skip with ``errors[]``
+                was dropped because, post-I.5/I.8, the DataEditor no longer
+                sends a per-point currency. See
+                ``plan-phase07-transaction-Part3_1_Closure.md`` §E.3.
+
+        Optimized: Batch operations per asset, minimize DB roundtrips.
         """
         if not data:
             return {"inserted_count": 0, "updated_count": 0, "results": []}
@@ -1705,39 +1713,12 @@ class AssetSourceManager:
         # ── Currency conversion pass ──────────────────────────────────────
         # For each result whose request has target_currency, convert OHLC
         # values via FX rates in a single batch call per asset.
-        # E.4 — when a conversion fails, we discriminate between:
-        #   - ``pair_missing``   (no FxConversionRoute registered for the pair)
-        #   - ``no_rate_at_date`` (route exists but no rate <= requested date)
-        # and stamp the discriminator on ``FAPricePoint.backward_fill_info.fx_error``
-        # so the frontend banner can suggest the correct remediation action
-        # (register pair vs sync history). Auto-registration is NOT performed
-        # here: it is an explicit user action in the UI.
-
-        # Collect all (base, quote) pairs involved in the failed conversions.
-        # We need this BEFORE the per-result loop so we can do a single DB
-        # roundtrip to check route existence.
-        pending_fx_pairs: set[tuple[str, str]] = set()
-        for req, result in zip(requests, results, strict=True):
-            target = getattr(req, "target_currency", None)
-            if not target or not result.prices:
-                continue
-            for p in result.prices:
-                if p.currency != target:
-                    base, quote = (p.currency, target) if p.currency < target else (target, p.currency)
-                    pending_fx_pairs.add((base, quote))
-
-        # Single query: which of those pairs DO have a route registered?
-        routes_registered: set[tuple[str, str]] = set()
-        if pending_fx_pairs:
-            route_conditions = [and_(FxConversionRoute.base == b, FxConversionRoute.quote == q) for b, q in pending_fx_pairs]
-            route_stmt = select(FxConversionRoute.base, FxConversionRoute.quote).where(or_(*route_conditions))
-            route_res = await session.execute(route_stmt)
-            routes_registered = {(b, q) for b, q in route_res.all()}
-
-        def _classify_fx_error(from_currency: str, to_currency: str) -> str:
-            """E.4 — pair_missing vs no_rate_at_date discriminator."""
-            base, quote = (from_currency, to_currency) if from_currency < to_currency else (to_currency, from_currency)
-            return "no_rate_at_date" if (base, quote) in routes_registered else "pair_missing"
+        # E.1 closure (2026-04-22) — the `fx_error` discriminator was removed
+        # from the response: the frontend surfaces the remediation via the
+        # `requiredFxPairs` derived in `routes/(app)/assets/[id]/+page.svelte`,
+        # which already distinguishes 4 states (`ok`/`missing`/`no-data`/`partial-gap`)
+        # with dedicated banners + CTA. Auto-registration is NOT performed:
+        # pair registration is an explicit user action (E.4 cancelled).
 
         for req, result in zip(requests, results, strict=True):
             target = getattr(req, "target_currency", None)
@@ -1766,18 +1747,17 @@ class AssetSourceManager:
                 original_point = result.prices[pi]
 
                 if conv_result is None:
-                    # Conversion failed — keep native price, stamp fx_error discriminator
-                    # so frontend can render the correct banner (pair vs no-rate).
-                    fx_err = _classify_fx_error(original_point.currency, target)
+                    # Conversion failed — keep native price. The FE will hide
+                    # the point from converted chart (same policy as events,
+                    # E.8.2) and surface the FX pair issue via `requiredFxPairs`.
                     old_bfi = original_point.backward_fill_info
                     failed_bfi = AssetBackwardFillInfo(
                         actual_rate_date=old_bfi.actual_rate_date if old_bfi else original_point.date,
                         days_back=old_bfi.days_back if old_bfi else 0,
                         fx_rate_date=None,
                         fx_days_back=None,
-                        fx_error=fx_err,
                     )
-                    # Keep the same currency/values, only attach the bfi with fx_error.
+                    # Keep the same currency/values, only attach the bfi.
                     result.prices[pi] = FAPricePoint(
                         date=original_point.date,
                         open=original_point.open,
@@ -1857,6 +1837,56 @@ class AssetSourceManager:
                     backward_fill_info=new_bfi,
                 )
                 conv_idx += 1
+
+        # ── Event conversion pass (E.8) ───────────────────────────────────
+        # Mirror of the price conversion above, applied to ``result.events``
+        # when the request has ``target_currency`` and ``include_events=True``.
+        # On success: populate ``original_value``/``fx_rate_date``/``fx_days_back``.
+        # On failure: keep the event in its native currency, all ``*_value``/
+        # ``fx_*`` stay ``None`` — the FE uses this to hide the marker from
+        # the converted chart (see plan closure §E.8.2).
+        for req, result in zip(requests, results, strict=True):
+            target = getattr(req, "target_currency", None)
+            if not target or not result.events:
+                continue
+
+            conversions = []
+            event_indices = []
+            for i, ep in enumerate(result.events):
+                if ep.value.code == target:
+                    continue  # identity passthrough
+                conversions.append((ep.value, target, ep.date))
+                event_indices.append(i)
+
+            if not conversions:
+                continue
+
+            conv_results, conv_errors = await convert_bulk(session, conversions, raise_on_error=False)
+
+            for idx, ei in enumerate(event_indices):
+                conv = conv_results[idx]
+                original_ep = result.events[ei]
+                if conv is None:
+                    # FX miss — surface non-fatal warning, leave event untouched.
+                    result.errors.append(f"Missing FX rate {original_ep.value.code}->{target} for event on {original_ep.date.isoformat()}")
+                    continue
+                new_cur, rate_date, _bfill = conv
+                days_back = (original_ep.date - rate_date).days if rate_date else 0
+                result.events[ei] = FAAssetEventPointOut(
+                    date=original_ep.date,
+                    type=original_ep.type,
+                    value=new_cur,
+                    notes=original_ep.notes,
+                    id=original_ep.id,
+                    is_auto=original_ep.is_auto,
+                    original_value=original_ep.value,
+                    fx_rate_date=rate_date,
+                    fx_days_back=days_back,
+                )
+            # Include any extra convert_bulk errors (dedup against per-event ones)
+            for err in conv_errors:
+                if err not in result.errors:
+                    result.errors.append(err)
 
         return results
 
@@ -2689,11 +2719,17 @@ class AssetSourceManager:
 
                 for idx, (ep, conv) in enumerate(zip(event_points, conv_results, strict=True)):
                     if conv is None:
-                        # FX miss — keep native currency value, surface as non-fatal warning
+                        # FX miss — keep native currency value, surface as non-fatal warning.
+                        # original_* stays None → frontend will hide the event marker (E.8.2).
                         errors.append(f"Missing FX rate {ep.value.code}->{target_currency} for event on {ep.date.isoformat()}")
                         continue
-                    new_cur, _rate_date, _bfill = conv
-                    # Replace value with the converted Currency (same event date, type, notes, id, is_auto)
+                    new_cur, rate_date, _bfill = conv
+                    # Identity conversion (from == to) → no-op, don't populate original_*/fx_*
+                    # so the FE can distinguish "converted" from "passthrough".
+                    if ep.value.code == target_currency:
+                        continue
+                    # Compute days_back magnitude (0 for same-day, >0 for backward-fill).
+                    days_back = (ep.date - rate_date).days if rate_date else 0
                     event_points[idx] = FAAssetEventPointOut(
                         date=ep.date,
                         type=ep.type,
@@ -2701,6 +2737,9 @@ class AssetSourceManager:
                         notes=ep.notes,
                         id=ep.id,
                         is_auto=ep.is_auto,
+                        original_value=ep.value,
+                        fx_rate_date=rate_date,
+                        fx_days_back=days_back,
                     )
 
                 # Also include per-pair errors surfaced by convert_bulk (e.g. pair not registered)
