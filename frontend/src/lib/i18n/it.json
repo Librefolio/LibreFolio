@@ -1002,6 +1002,7 @@
     "deleteSuccess": "{count} evento/i eliminato/i",
     "deleteNotFound": "Evento/i non trovato/i: {ids}",
     "deletePartial": "{deleted} eliminato/i, {inUse} in uso, {notFound} non trovato/i",
-    "deleteBlocked": "Impossibile eliminare: {count} evento/i ancora in uso da transazioni ({accessible} visibili a te, {hidden} nei portafogli di altri utenti)"
+    "deleteBlocked": "Impossibile eliminare: {count} evento/i ancora in uso da transazioni ({accessible} visibili a te, {hidden} nei portafogli di altri utenti)",
+    "fxBannerContext": "per eventi dividendi/cassa"
   }
 }

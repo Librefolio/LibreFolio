@@ -1002,6 +1002,7 @@
     "deleteSuccess": "{count} événement(s) supprimé(s)",
     "deleteNotFound": "Événement(s) introuvable(s) : {ids}",
     "deletePartial": "{deleted} supprimé(s), {inUse} utilisé(s), {notFound} introuvable(s)",
-    "deleteBlocked": "Suppression impossible : {count} événement(s) encore utilisé(s) par des transactions ({accessible} visibles par vous, {hidden} dans les portefeuilles d'autres utilisateurs)"
+    "deleteBlocked": "Suppression impossible : {count} événement(s) encore utilisé(s) par des transactions ({accessible} visibles par vous, {hidden} dans les portefeuilles d'autres utilisateurs)",
+    "fxBannerContext": "pour les événements dividendes/cash"
   }
 }

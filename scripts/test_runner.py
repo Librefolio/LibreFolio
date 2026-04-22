@@ -1284,6 +1284,19 @@ def api_assets_events(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Assets Events API tests", verbose=verbose)
 
 
+def api_events_target_currency(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run Events target_currency (E.8) FX conversion tests.
+    """
+    print_section("Events target_currency (E.8) Tests")
+    print_info("Testing FX conversion pass on POST /assets/events/query")
+    print_info("Covers: original_value, fx_rate_date, fx_days_back, errors[] non-fatal")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_events_target_currency.py", test_names)
+    return run_command(cmd, "Events target_currency (E.8) tests", verbose=verbose)
+
+
 def api_assets_crud(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Assets CRUD API endpoint tests.
@@ -2993,6 +3006,14 @@ These tests verify REST API endpoints:
             "desc": "Test asset event CRUD endpoints",
             "prereq": "Database created",
             "tests": "POST /events, DELETE /events/{id}, POST /events/query",
+            },
+        "events-target-currency": {
+            "func": api_events_target_currency,
+            "test_names": True,
+            "name": "Events target_currency (E.8)",
+            "desc": "Test FX conversion pass on events bulk query",
+            "prereq": "Database created + FX routes/rates",
+            "tests": "POST /events/query?target_currency=* (original_value/fx_rate_date/fx_days_back)",
             },
         "utilities": {
             "func": api_utilities,

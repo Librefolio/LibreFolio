@@ -29,6 +29,16 @@
         notes?: string;
         assetLabel?: string; // only for comparison events
         signalColor?: string; // color of the overlay signal for comparison events
+        // E.8 — FX conversion metadata (mirror of price conversion).
+        // Populated iff the event was converted (target_currency ≠ event.currency AND
+        // FX rate was available). If conversion requested but failed → all undefined
+        // and caller should hide the marker from the chart.
+        originalValue?: number;
+        originalCurrency?: string;
+        originalCurrencyFlag?: string;
+        currencyFlag?: string; // flag for the display currency (after conversion, if any)
+        fxRateDate?: string;
+        fxDaysBack?: number;
     }
 
     const EVENT_SYMBOLS: Record<string, string> = {
@@ -677,7 +687,19 @@
                             let html = `<strong>${m.date}</strong>`;
                             html += `<br/>${dot}${m.type}`;
                             if (m.value !== undefined) {
-                                html += `<br/>💰 ${m.value.toFixed(4)} ${m.currency ?? ''}`;
+                                // E.8 — format mirror of price tooltip: value + (flag ISO3) + 💱 if converted
+                                const isConverted = m.originalValue !== undefined && m.originalCurrency !== undefined;
+                                const currBadge = m.currency ? ` <span style="font-size:10px;opacity:0.7">(${m.currencyFlag ?? ''} ${m.currency})${isConverted ? ' 💱' : ''}</span>` : '';
+                                html += `<br/>💰 ${m.value.toFixed(4)}${currBadge}`;
+                                if (isConverted) {
+                                    // Original value (pre-conversion), smaller + italic-grey, mirror of MeasurePanel suffix
+                                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${m.originalCurrencyFlag ?? ''} ${m.originalCurrency})</span>`;
+                                    html += `<br/><span style="font-size:10px;opacity:0.7">orig. ${m.originalValue!.toFixed(4)}${origBadge}</span>`;
+                                    if (m.fxRateDate) {
+                                        const bfillHint = m.fxDaysBack && m.fxDaysBack > 0 ? ` (${m.fxDaysBack}d back)` : '';
+                                        html += `<br/><span style="font-size:10px;opacity:0.6">fx @ ${m.fxRateDate}${bfillHint}</span>`;
+                                    }
+                                }
                             }
                             if (m.notes) {
                                 html += `<br/>📝 ${m.notes}`;
