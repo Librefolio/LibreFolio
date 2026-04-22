@@ -16,7 +16,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {TrendingUp, TrendingDown, AlertTriangle} from 'lucide-svelte';
+    import {TrendingUp, TrendingDown, AlertTriangle, ExternalLink} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/responsiveLayout.svelte';
@@ -41,9 +41,17 @@
          * `no-data`) in `+page.svelte` handles the range-level "no rates" case.
          */
         livePriceConversionFailed?: boolean;
+        /**
+         * Optional URL to the FX pair detail page.
+         * Parent should pass it only when the FX pair is **healthy** (configured + has
+         * data for the current range) — otherwise the full-width FX banner already
+         * surfaces the issue and we want to avoid a dead/incoherent CTA here.
+         * When undefined/empty → icon is hidden.
+         */
+        fxPairUrl?: string;
     }
 
-    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, livePriceConversionFailed = false}: Props = $props();
+    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, livePriceConversionFailed = false, fxPairUrl}: Props = $props();
 </script>
 
 <div class="flex flex-wrap {layoutMode === 'wide' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
@@ -84,5 +92,13 @@
         <div class="w-28 sm:w-32">
             <CurrencySearchSelect bind:value={displayCurrency} compact={true} originalCurrency={assetCurrency} placeholder={$t('assetDetail.displayCurrency')} />
         </div>
+        {#if fxPairUrl}
+            <!-- Quick link to FX pair detail (only shown when displayCurrency≠assetCurrency AND pair is healthy) -->
+            <Tooltip text={$t('assetDetail.openFxPair')} position="bottom">
+                <a href={fxPairUrl} class="inline-flex items-center justify-center p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-libre-green hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" data-testid="asset-detail-fx-pair-link" aria-label={$t('assetDetail.openFxPair')}>
+                    <ExternalLink size={14} />
+                </a>
+            </Tooltip>
+        {/if}
     </div>
 </div>
