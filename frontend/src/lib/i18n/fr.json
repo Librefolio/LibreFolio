@@ -910,7 +910,10 @@
       "notSet": "Non défini",
       "clearField": "Effacer le champ",
       "clearFieldConfirm": "Définir cette cellule comme vide ?"
-    }
+    },
+    "importCsv": "Importer CSV",
+    "addRow": "Ajouter une ligne",
+    "emptyMessage": "Aucune donnée. Utilisez 'Ajouter une ligne' ou 'Importer CSV' pour en ajouter."
   },
   "sharedResource": {
     "syncAll": "Sync. Tout",
@@ -988,7 +991,9 @@
       "done": "Devise changée de {from} à {to}. Prix actualisés.",
       "failed": "Échec du changement de devise",
       "syncFailedManualRetry": "Devise changée mais la synchronisation post-effacement a échoué — utilisez le bouton Sync pour réessayer.",
-      "body": "Changer la devise de {from} à {to} supprimera définitivement {count} enregistrements de prix jusqu'à aujourd'hui. Les prix seront re-téléchargés depuis le fournisseur dans la nouvelle devise après la suppression."
+      "body": "Changer la devise de {from} à {to} supprimera définitivement {count} enregistrements de prix jusqu'à aujourd'hui. Les prix seront re-téléchargés depuis le fournisseur dans la nouvelle devise après la suppression.",
+      "changedTo": "Devise changée de {from} à {to}",
+      "deleteSuccess": "{count} prix supprimés"
     },
     "metadataDescription": "Description",
     "pricesInCurrency": "Prix en {currency}",
@@ -1020,6 +1025,16 @@
       "titleEvents": "📥 Importer CSV Événements",
       "eventsFormatLabel": "Format",
       "eventsTypesLabel": "Types"
+    }
+  },
+  "prices": {
+    "sync": {
+      "noResponse": "aucune réponse",
+      "partialSuffix": "partielle",
+      "skippedSuffix": "ignoré",
+      "failedDefault": "échec",
+      "noChanges": "Aucune nouvelle donnée (déjà à jour)",
+      "manualOnly": "manuel seulement"
     }
   }
 }

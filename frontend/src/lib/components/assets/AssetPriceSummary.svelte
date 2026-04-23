@@ -16,7 +16,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {TrendingUp, TrendingDown, AlertTriangle, ExternalLink} from 'lucide-svelte';
+    import {TrendingUp, TrendingDown, AlertTriangle, Coins} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/responsiveLayout.svelte';
@@ -96,7 +96,7 @@
             <!-- Quick link to FX pair detail (only shown when displayCurrency≠assetCurrency AND pair is healthy) -->
             <Tooltip text={$t('assetDetail.openFxPair')} position="bottom">
                 <a href={fxPairUrl} class="inline-flex items-center justify-center p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-libre-green hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" data-testid="asset-detail-fx-pair-link" aria-label={$t('assetDetail.openFxPair')}>
-                    <ExternalLink size={14} />
+                    <Coins size={14} />
                 </a>
             </Tooltip>
         {/if}

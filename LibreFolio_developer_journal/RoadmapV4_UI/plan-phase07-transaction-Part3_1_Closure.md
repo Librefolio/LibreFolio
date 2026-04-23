@@ -446,6 +446,68 @@ Se il save fallisce (HTTP !2xx / network error), la modale:
 
 **Priorità**: P1 — prerequisito per Part 5 Staging Modal.
 
+### I-bis #25 — goBack regression `/fx/{pair}` → `/fx` invece di `/assets/{id}`  ⏳ PENDING (nuovo, 2026-04-22 batch 2 part2 retest)
+
+**Sintomo**: dall'asset detail, dopo aver cliccato il nuovo link FX quick-access (I-bis #4 part1c), si arriva a `/fx/{slug}`. Cliccando il bottone back in testa alla pagina FX detail (`data-testid="fx-detail-back-btn"`, handler `goBack('/fx')`), si viene riportati alla lista `/fx` invece che all'asset detail di partenza.
+
+**Analisi**:
+- `navigationStore.goBack(fallbackPath)` usa `history.back()` se `depth > 1`, altrimenti `goto(fallbackPath)`.
+- `afterNavigate` in `(app)/+layout.svelte` chiama `trackNavigation(nav.type)` che incrementa `depth` per navigazioni non-popstate.
+- Normalmente: asset detail (depth=1 entering) → click `<a href>` → depth=2 → FX detail → goBack → depth>1 → history.back() → torna asset detail. **Dovrebbe funzionare**.
+- Possibili cause del glitch:
+  1. `fx/[pair]/+page.svelte:662` fa `goto(..., {replaceState: true})` quando rileva inversione pair → sovrascrive l'entry history dell'asset detail.
+  2. Il mio `<a href="/fx/...">` navigazione potrebbe essere intercettata prima che `afterNavigate` scatti (edge case SvelteKit).
+  3. Depth potrebbe essere **reset** o sbagliato a causa di preload/prefetch dei dati.
+
+**Fix proposti (da provare in ordine)**:
+- (a) **Quick win**: sostituire `<a href={fxPairUrl}>` con `<button onclick={() => goto(fxPairUrl)}>` in `AssetPriceSummary.svelte` — forza esplicitamente SPA routing.
+- (b) Investigare `fx/[pair]/+page.svelte:662` `replaceState:true` — valutare se limitarlo ai soli casi dove l'URL era già `/fx/{pair}`.
+- (c) **Fallback robusto**: salvare `document.referrer` (o URL corrente prima del click) in `sessionStorage['fxDetail.returnTo']`. FX detail `goBack` legge questa key e se valida (URL interno) fa `goto(returnTo)` invece di usare solo `depth`.
+
+**Priorità**: P2 — la navigazione browser (Alt+Left) funziona, solo il bottone custom ha comportamento incoerente.
+
+### I-bis #26 — scheduled_investment: reset a initial_value + cache hashing dubbio  ⏳ PENDING (nuovo, 2026-04-23 batch 2 part3)
+
+**Sintomo** (BTP Italia 2028):
+- Config db_populate originale: `maturation_frequency=SEMIANNUAL`, `generate_interest=True`.
+- Utente l'ha modificata a DAILY + `generate_interest=False` dal frontend.
+- Dopo sync: **primi mesi** retta crescente (corretto), poi i valori si **resettano a `initial_value=10000`** e restano piatti.
+- Modificando di nuovo (DAILY → WEEKLY) + risync: **nulla cambia** → sospetto hashing `_cache_key` non rileva la variazione.
+
+**Analisi del codice** (`backend/app/services/asset_source_providers/scheduled_investment.py:326+`):
+
+```python
+# Step 2: reset on maturation + generate_interest=True
+if current_date in all_maturation_dates and period and period.generate_interest:
+    if interest_amount > 0:
+        auto_events.append(INTEREST event)
+        total_interest = Decimal("0")   # RESET
+        event_adjustment = Decimal("0")
+
+# Step 4: emit value AT maturation dates (AFTER reset!)
+if current_date in all_maturation_dates:
+    values[current_date] = principal + total_interest + event_adjustment
+```
+
+**Bug candidati**:
+1. **Ordine Step 2 prima di Step 4**: il value emesso a una maturation_date con `generate_interest=True` è **sempre `principal`** (post-reset). Con DAILY + gen_interest=True → ogni giorno reset → serie piatta a 10000. Se lo schedule ha un primo periodo senza reset seguito da uno con reset, si vedrebbe proprio il pattern "retta poi piatto".
+2. **Hashing opacità**: `_cache_key` = `md5(sort_keys(model_dump(mode='json')))`. Dovrebbe rilevare ogni cambio. Se non lo fa:
+   - (a) Il frontend NON invia davvero i nuovi `provider_params` nel PATCH (verificare devtools network).
+   - (b) Il backend rifiuta silenziosamente l'update (verificare `assign_providers_bulk` endpoint).
+   - (c) Edge case Pydantic: un campo con `default_factory` o `exclude_unset` non serializzato.
+
+**Azioni fatte in questa sessione (batch 2 part3)**:
+- `db_populate`: BTP Italia 2028 → `DAILY` + `generate_interest=False` (come richiesto). Dopo `./dev.py db create-clean` deve dare una retta pulita per 4 anni — ottimo regression test visuale.
+- Logging debug in `_generate_schedule_values`: `cache HIT/MISS key=... periods=N first_freq=... first_gen_int=...`. Prossimo retest con log DEBUG attivi permette di vedere se il cache key cambia realmente tra edits.
+- Attivare log: `LIBREFOLIO_LOG_LEVEL=DEBUG ./dev.py server start` oppure filtro grep sul server log per `scheduled_investment cache`.
+
+**Fix proposti (batch 3+)**:
+- **Bug reset**: invertire l'ordine degli step — emettere value PRE-reset (crescita reale visibile in grafico), poi reset per ciclo successivo. Mantiene gli INTEREST events come payout ma mostra la crescita giornaliera/settimanale che l'utente si aspetta.
+- **Hashing**: aggiungere test `test_cache_key_differs_on_frequency_change` + `test_cache_key_differs_on_generate_interest_toggle` + `test_cache_key_identical_on_event_only_change`.
+- **Frontend**: verificare che `ScheduledInvestmentEditor` invii `provider_params` aggiornato via `assign_providers_bulk` (non solo PATCH asset).
+
+**Priorità**: P1 — BTP Italia 2028 è asset dimostrativo nel populate, grafico errato visibile durante smoke test.
+
 ### I-bis #24 — Auto-refresh mirato post-sync (last-point-only)  ⏳ PENDING (nuovo, 2026-04-22 batch 2 part1 retest)
 
 **Contesto UX**: dopo aver cliccato "Sync" con provider current-price, se l'utente aspetta il debounce del backend e fa refresh manuale della pagina, il nuovo punto compare. Senza refresh non compare → UX incoerente. In più, anche il bottone "Add manually" dell'empty state (I-bis #6) sarebbe molto più fluido se, dopo il primo save, il pannello empty transitasse direttamente al grafico senza full-reload.
@@ -742,6 +804,131 @@ Dopo il 3° retest manuale emersi 3 nuovi issue:
 - `import.csv.{currencyReminder, extraColumnsIgnored, labelMinimum, labelExtended, separatorHint, titlePrices, titleEvents, eventsFormatLabel, eventsTypesLabel}` — 9 chiavi.
 - **Totale: 13 chiavi × 4 lingue = 52 entries**.
 
+### 📍 Batch 2 part2 (2026-04-22 sera tardi, 4° giro) — I-bis #12 + #1+#23 + bugfix
+
+**Bug A fixati in apertura** (da retest utente post-commit batch 2 part1c):
+- **FX icon**: il link FX quick-access nel filterBar usava `ExternalLink`, ma l'icona standard del progetto per le coppie FX è `ArrowLeftRight` (usata in `FxTable/FxCard/FxSyncModal/FxPairAddModal/FxProviderConfig`). Sostituita in `AssetPriceSummary.svelte`.
+- **DataEditor buttons hardcoded**: i bottoni "Import CSV" e "Add Row" nel toolbar di `DataEditor.svelte` erano in inglese fisso (sia nel tab Prices sia nel tab Events). Tradotti con nuove i18n:
+  - `dataEditor.importCsv` ("Import CSV" / "Importa CSV" / "Importer CSV" / "Importar CSV")
+  - `dataEditor.addRow` ("Add Row" / "Aggiungi riga" / "Ajouter une ligne" / "Agregar fila")
+  - `dataEditor.emptyMessage` (messaggio empty-state quando non ci sono righe, "No data. Use 'Add Row'..." tradotto).
+
+**I-bis #12 — Toast reduction currency change (5 → 1)**:
+- `AssetCurrencyChangeModal.svelte`: rimossi i 3 `toasts.info` di progress (`progressDelete`, `progressPatch`, `progressSync`). Sostituiti con uno stato `progressStep: null | 'delete' | 'patch' | 'sync'` che renderizza inline nel footer del modal (sinistra dei bottoni) uno spinner CSS + la label i18n corrispondente. Le 3 chiavi i18n esistenti sono state **riutilizzate** — non rimosse dai JSON perché ora compongono il messaggio inline.
+- `AssetModal.svelte` `onconfirmed` callback: rimosso il `toasts.success($t('assets.modal.saveSuccess'))` duplicato (il `currencyChange.done` che emette il modal figlio è sufficiente). Commento inline I-bis #12.
+- **Risultato UX**: flusso provider-backed = **1 toast finale** `done` (era 5). Flusso no-provider = **1 toast finale** `done` (era 3). Toast di errore/warning (syncFailedManualRetry, failed) intatti.
+
+**I-bis #1 + #23 — Unified PriceSyncResponse handler**:
+- `lib/utils/syncToastHelpers.ts`: refactor `buildAssetSyncToast` con firma estesa `(result, label, tr)`. Ora gestisce **5 stati** coerenti:
+  1. `ok` + `points_changed>0` → `success` (messaggio esistente).
+  2. **`ok` + `points_changed===0 && events_changed===0` → `warning`** con suffix `prices.sync.noChanges` ("No new data (already up to date)"). **Questo è il fix per I-bis #1**: post-wipe scenario dove il provider restituisce 0 righe valide (es. currency mismatch silently dropped) non viene più silenziosamente colorato di verde.
+  3. `partial` → `warning` con **`result.message` appended** quando presente (I-bis #23: surface del messaggio scheduled_investment tipo "Current value only, history unavailable").
+  4. `skipped` → `info`.
+  5. altro/errore → `error` con fallback `result.message || prices.sync.failedDefault`.
+- `buildFxSyncToast`: stesso refactor per i suffissi hardcoded (`Partial`, `Skipped`, `Failed`, `manual only`) → `tr('prices.sync.{partialSuffix, skippedSuffix, failedDefault, manualOnly}')`.
+- 2 callsite aggiornati: `+page.svelte` di `assets/[id]` e `fx/[pair]` — passano `tr` come 3° arg.
+- i18n nuove: `prices.sync.{noResponse, partialSuffix, skippedSuffix, failedDefault, noChanges, manualOnly}` — **6 chiavi × 4 lingue = 24 entries**. Accenti ripristinati via script Python (FR: "réponse", "ignoré", "échec", "donnée déjà à"; IT: "già").
+
+**Bug C — tracked, non fixato** (regressione goBack da asset detail → fx detail → back):
+- **I-bis #25 — goBack regression `/fx/{pair}` → `/fx` instead of `/assets/{id}`** ⏳ PENDING
+- **Sintomo**: dall'asset detail cliccando il nuovo link FX quick-access si naviga a `/fx/{slug}`. Cliccando il bottone back sulla pagina FX detail si torna a `/fx` (lista) invece che tornare all'asset detail di partenza.
+- **Ipotesi**: `navigationStore.depth` potrebbe non essere incrementato correttamente per navigazioni via `<a href>` (anche se SvelteKit dovrebbe gestirle come SPA navigation e triggerare `afterNavigate` con `nav.type='link'`). Oppure `history.back()` è corretto ma FX detail fa `goto(..., {replaceState: true})` in qualche path che rompe lo stack.
+- **Possibili fix**:
+  - (a) Sostituire `<a href>` con `onclick={() => goto(fxPairUrl)}` → forzare esplicitamente il routing SPA.
+  - (b) Investigare `fx/[pair]/+page.svelte` linea 662 `goto(..., {replaceState: true})` — potrebbe sovrascrivere l'entry della history che doveva contenere l'asset detail.
+  - (c) Salvare un `referrer` in sessionStorage al momento del click sul link, e al back del FX detail usare quel referrer invece del fallback `/fx`.
+- **Priorità**: P2 — la navigazione funziona (back del browser dovrebbe funzionare comunque), solo il bottone custom "back" del FX detail ha comportamento imprevisto. Rimandato a batch 3 o successivo.
+
+**File toccati in batch 2 part2**:
+- `frontend/src/lib/components/assets/AssetPriceSummary.svelte` (icona ExternalLink → ArrowLeftRight).
+- `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` (3 stringhe tradotte).
+- `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` (#12 refactor: progress toasts → inline spinner).
+- `frontend/src/lib/components/assets/AssetModal.svelte` (rimosso toast duplicato saveSuccess nel callback currency change).
+- `frontend/src/lib/utils/syncToastHelpers.ts` (#1+#23 refactor: 5 stati + i18n suffixes).
+- `frontend/src/routes/(app)/assets/[id]/+page.svelte` (passa tr a buildAssetSyncToast).
+- `frontend/src/routes/(app)/fx/[pair]/+page.svelte` (idem).
+- `frontend/src/lib/i18n/{en,it,fr,es}.json` (+9 chiavi: 3 dataEditor + 6 prices.sync).
+
+**Validazione batch 2 part2**:
+- `./dev.py front check` → ✅ 0 errors, 0 warnings.
+- `./dev.py front format` → ✅ all unchanged.
+
+**i18n cumulativo batch 2 part1+1b+1c+2** (da committare separatamente da part1/1b/1c già commitati):
+- Part2: 9 nuove chiavi × 4 lingue = **36 entries**.
+
+### 📍 Batch 2 part3 (2026-04-23 mattina, 5° giro feedback utente)
+
+**Feedback utente che ha scatenato part3**:
+1. Link FX nel filterBar c'è ma icona era generica (`Coins` → l'utente l'ha corretta in commit precedente — **nessun'azione** qui).
+2. `goBack` su FX detail torna sempre a `/fx` invece che all'asset di origine. L'utente ricorda che esisteva un sistema di "stack di pagine" con reset sui click sidebar — va verificato perché non funziona più.
+3. Toast currency change: con valuta non fornita dal provider, il toast dice **sia** "currency changed" **sia** "refreshed with success", ma la refresh è fallita. L'utente vuole 2 toast distinti: "delete success" + "sync result" (via `buildAssetSyncToast`, come fa `/assets` global che dà toast perfetti tipo `"Sincronizzazione fallita per Apple Inc.: DB upsert failed: Currency mismatch ..."`).
+4. BTP Italia 2028: configurato DAILY + no-cedola, primi mesi grafico cresce (retta), poi si resetta a 10000 e resta piatto. Cambiando frequenza non cambia nulla → sospetto hashing cache broken.
+
+**Fix I — goBack regression (refactor `navigationStore.ts` stack-based)**:
+- Root cause identificato: il sistema `depth` con `history.back()` era fragile perché altre pagine fanno `history.replaceState` / `goto({replaceState:true})` che corrompono la browser history. **Fix**: rifatto `navigationStore.ts` con **stack esplicito di pathnames** (`string[]`).
+  - `trackNavigation(type, pathname)`: push su link/goto/form, pop su popstate, reset su enter. Dedup su push consecutivo stesso pathname (per gestire replaceState con stesso path ma diversa query).
+  - `goBack(fallback)`: se stack ha ≥2 entry → pop + `goto(stack[top])`. Altrimenti `goto(fallback)`.
+  - `resetNavDepth()`: svuota lo stack (chiamato dalla Sidebar sui click top-level, pattern già esistente).
+  - Aggiunto helper `_debugStack()` per diagnostics.
+- `+layout.svelte`: `trackNavigation(nav.type, nav.to?.url.pathname)` (path passato esplicitamente).
+- Nota: usa `goto` invece di `history.back()` per determinismo — costo: una nuova entry in history, ma risoluzione pulita.
+- **Sidebar era già OK** (`resetNavDepth()` chiamato sui 3 link principali): grep confermato. Il bug era solo nella logica di `goBack`.
+
+**Fix II — Toast currency change v2 (2 toast distinti)**:
+- `AssetCurrencyChangeModal.svelte` refactor di `handleConfirm`:
+  - Inline spinner (delete/patch/sync) resta per UX feedback (I-bis #12).
+  - **Toast #1** — `deleteSuccess`: "Deleted N prices" — sparato appena la DELETE risolve.
+  - **Toast #2** — `changedTo`: "Currency changed from X to Y" — sparato appena la PATCH risolve (sempre, quando delete+patch OK).
+  - **Toast #3** — sync outcome via `buildAssetSyncToast(r, tr('common.sync'), tr)`: 5 stati (ok / noChanges / partial+msg / skipped / error). In caso di exception, surface del `response.data.detail` del backend (es. "DB upsert failed: Currency mismatch for asset 1: expected EUR ...") via `toasts.error`.
+  - Rimosso il vecchio `toasts.success(currencyChange.done)` e il `warning(syncFailedManualRetry)` (entrambi sostituiti dalla logica sopra).
+- i18n nuove: `assetDetail.currencyChange.{deleteSuccess, changedTo}` (4 lingue, accenti FR fix via script).
+- **Differenza rispetto al flow `/assets` global**: la global usa il costrutto `toasts.success($t('assets.sync.toastOk'))` / `toasts.error($t('assets.sync.toastFailed') + ': ' + r.errors[0])`. Ora il currency change flow usa `buildAssetSyncToast` che è **strettamente più espressivo** (gestisce partial, skipped, noChanges, aggiunge icons SVG inline per prezzi/eventi). Volendo in futuro si può migrare anche `/assets` global al helper, per uniformità totale.
+
+**Fix III — Icona FX corretta dall'utente** (verificata in AssetPriceSummary.svelte): ora usa `Coins` (icona monete, più evocativa di valuta rispetto a ArrowLeftRight che è per le coppie FX directional). **No action needed**.
+
+**Fix IV — DataEditor i18n completato** (dal feedback part2): bottoni "Import CSV" / "Add Row" + empty-state message tradotti. i18n: `dataEditor.{importCsv, addRow, emptyMessage}` (già in part2).
+
+**Indagine V — BTP Italia 2028 (tracked come I-bis #26)**:
+- `db_populate`: passato BTP Italia 2028 da `SEMIANNUAL` + `generate_interest=True` a **`DAILY` + `generate_interest=False`** (request utente). Prossimo `db create-clean` produrrà la retta lineare pulita.
+- Aggiunto logging debug in `_generate_schedule_values`: `cache HIT/MISS key=... periods=... first_freq=... first_gen_int=...`. Dal prossimo retest l'utente può vedere se il cache key cambia realmente quando modifica la config.
+- Bug reset **non** fixato in questa sessione (scope troppo grande, richiede riordino Step 2/4 + regression test + verifica frontend editor). Documentato come I-bis #26 con 2 bug candidati + 3 ipotesi hashing + action items.
+
+**Elenco flussi toast asset — prima/dopo (per decisione collettiva)**:
+
+| Scenario | Prima (pre-batch2) | Dopo part2 | Dopo part3 (ora) |
+|---|---|---|---|
+| Sync normale OK (/assets global) | ✓ 1 success "N fetched, M changed" | identico (non toccato) | identico |
+| Sync KO (/assets global) | ✓ 1 error "Sync failed per {name}: detail" | identico | identico |
+| Sync dal detail (handleSyncAsset signal) | ✓ 1 toast via buildAssetSyncToast (hardcoded EN suffixes) | ✓ 1 toast via buildAssetSyncToast (5 stati i18n) | identico part2 |
+| Currency change (provider assigned, sync OK) | 5 toast: 3 progress info + 1 success done + 1 success saveSuccess | 1 toast success done | **3 toast**: deleteSuccess + changedTo + syncOk |
+| Currency change (provider assigned, sync PARTIAL) | 5 toast (come sopra) | 1 toast success done ❌ fuorviante | **3 toast**: deleteSuccess + changedTo + syncWarning con result.message |
+| Currency change (provider assigned, sync FAIL es. Currency mismatch) | 5 toast + 1 warning syncFailedManualRetry | 1 success done + 1 warning generic ❌ | **3 toast**: deleteSuccess + changedTo + **error con detail backend** |
+| Currency change (NO provider) | 3 toast (progress + done + saveSuccess) | 1 toast done | **2 toast**: deleteSuccess + changedTo |
+| Currency change (delete KO) | error | error failed | identico part3 (error, toast #1 non parte) |
+| Currency change (patch KO) | error | error failed | identico part3 (toast #1 parte, #2 no) |
+
+**Raziocinio**:
+- Part2 puntava alla minimizzazione (1 solo toast) ma perdeva informazioni importanti (l'errore sync post-wipe veniva nascosto).
+- Part3 trova il giusto equilibrio: **1 toast per ogni step significativo**. Delete è un'operazione distruttiva — meritocraticamente degna di conferma. Patch è rapida ma produce la notifica chiave "currency changed" che l'utente si aspetta. Sync ha tutti i suoi stati compressi nel unified helper.
+
+**File toccati in batch 2 part3**:
+- `frontend/src/lib/stores/navigationStore.ts` (refactor stack-based + debug helper).
+- `frontend/src/routes/(app)/+layout.svelte` (pass pathname to trackNavigation).
+- `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` (3-toast refactor + buildAssetSyncToast integration).
+- `frontend/src/lib/i18n/{en,it,fr,es}.json` (+2 chiavi: `currencyChange.{deleteSuccess, changedTo}`).
+- `backend/test_scripts/test_db/populate_mock_data.py` (BTP Italia 2028 → DAILY + no interest).
+- `backend/app/services/asset_source_providers/scheduled_investment.py` (+logging debug cache HIT/MISS).
+
+**Validazione batch 2 part3**:
+- `./dev.py front check` → ✅ 0 errors, 0 warnings.
+- Backend format/lint → da rifare (ho modificato 2 file Python).
+
+**Da testare con utente prima del commit**:
+1. goBack FX → asset detail: deve tornare al detail corretto, non alla lista FX.
+2. Toast currency change: 3 toast distinti (delete + changedTo + sync esito reale).
+3. BTP Italia 2028: dopo `./dev.py db create-clean`, grafico deve essere retta pulita (no reset).
+4. Log debug: `./dev.py server start` + sync BTP, cercare "scheduled_investment cache" nei log.
+
 ### 🎯 Cosa devo fare dopo (priorità in ordine)
 
 **Prossimo commit suggerito**: batch refactor `FxBackwardFillInfo` da solo (piccolo e coeso). Messaggio:
@@ -762,8 +949,12 @@ Refactor: extract FxBackwardFillInfo as standalone building block
 - **#3** Tab label "Prices in {currency} 🇺🇸" → 20 min (`AssetDataEditorSection.svelte`) ✅ DONE (batch 2 part1)
 - **#4** Import CSV banner reminder → 20 min (`PriceDataImportModal.svelte`) ✅ DONE (batch 2 part1)
 - **#6** Empty-state "Add manually" → 40 min (panel con 0 prezzi) ✅ DONE (batch 2 part1)
-- **#12** Ridurre 5 toast currency-change → 1 (refactor `AssetCurrencyChangeModal.svelte`) ⏳ batch 2 part2
-- **#1 + #23** combinati: handler unificato `PriceSyncResponse` con 4 stati toast i18n (sync/noChanges/partial/failed) — ~2h ⏳ batch 2 part2
+- **#12** Ridurre 5 toast currency-change → 1 (refactor `AssetCurrencyChangeModal.svelte`) ✅ DONE (batch 2 part2)
+- **#1 + #23** combinati: handler unificato `PriceSyncResponse` con 5 stati toast i18n (ok/noChanges/partial+msg/skipped/failed) ✅ DONE (batch 2 part2)
+
+**Prossimo batch 2.5** (~1h): retest + possibile fix I-bis #25 (goBack regression)
+- Retest manuale I-bis #12 (flow currency change con e senza provider) + I-bis #1+#23 (sync che restituisce 0 changes, status partial, etc.).
+- Se I-bis #25 è bloccante, fix (opzione a/b/c proposte nel journal).
 
 **Batch 3** (~3-4h): Test coverage Blocco G (ordine per valore decrescente)
 - **G.6** `test_ohlc_sentinel.py` — 8 casi (copre Blocco F dichiarato done ma non testato).

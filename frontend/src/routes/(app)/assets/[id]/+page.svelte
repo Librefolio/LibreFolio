@@ -969,10 +969,10 @@
             const r = (response as any)?.results?.[0];
             const tr = get(t);
             if (r) {
-                const toast = buildAssetSyncToast(r, tr('common.sync'));
+                const toast = buildAssetSyncToast(r, tr('common.sync'), tr);
                 toasts[toast.variant](toast.message);
             } else {
-                toasts.error(`${tr('common.sync')} — no response`);
+                toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
             }
         } catch (e: any) {
             toasts.error('Sync failed: ' + (e?.message || 'unknown'));

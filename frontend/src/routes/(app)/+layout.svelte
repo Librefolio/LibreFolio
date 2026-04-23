@@ -25,7 +25,7 @@
 
     // Track SPA navigation depth for smart back-navigation
     afterNavigate((nav) => {
-        trackNavigation(nav.type);
+        trackNavigation(nav.type, nav.to?.url.pathname);
     });
 
     onMount(async () => {

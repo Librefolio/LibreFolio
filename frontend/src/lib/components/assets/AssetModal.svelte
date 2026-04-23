@@ -1344,8 +1344,9 @@
     patchPayload={currencyChangePatchPayload}
     providerAssigned={currencyChangeProviderAssigned}
     onconfirmed={() => {
-        // The flow completed: close the parent modal too and signal the refresh.
-        toasts.success($t('assets.modal.saveSuccess', {values: {name: displayName}}));
+        // The flow completed: the child modal already emitted the final
+        // `currencyChange.done` toast. I-bis #12 — suppress the generic
+        // "updated successfully" toast here to avoid duplicate notifications.
         open = false;
         onupdated?.();
     }}

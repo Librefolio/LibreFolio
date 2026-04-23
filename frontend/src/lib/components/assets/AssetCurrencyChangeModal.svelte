@@ -17,9 +17,11 @@
 -->
 <script lang="ts">
     import {AlertTriangle, Download, X} from 'lucide-svelte';
+    import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {_ as t} from '$lib/i18n';
+    import {buildAssetSyncToast} from '$lib/utils/syncToastHelpers';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     interface BlockerInfo {
@@ -52,6 +54,11 @@
     let {open = $bindable(), blocker, patchPayload, providerAssigned, onconfirmed, oncanceled}: Props = $props();
 
     let inProgress = $state(false);
+    /**
+     * I-bis #12 — inline progress step instead of 3 transient toasts.
+     * null = idle, otherwise shows next to the confirm button.
+     */
+    let progressStep = $state<null | 'delete' | 'patch' | 'sync'>(null);
 
     function exportPrices(format: 'csv' | 'json') {
         if (!blocker) return;
@@ -63,40 +70,58 @@
     async function handleConfirm() {
         if (!blocker || !patchPayload) return;
         inProgress = true;
+        progressStep = null;
+        const tr = get(t);
 
         try {
-            // Step 1: delete all prices in the range
-            toasts.info($t('assetDetail.currencyChange.progressDelete', {values: {count: blocker.count}}));
+            // Step 1: delete all prices in the range (inline spinner, no toast)
+            progressStep = 'delete';
             await zodiosApi.delete_prices_bulk_api_v1_assets_prices_delete([
                 {
                     asset_id: blocker.assetId,
                     date_ranges: [{start: blocker.oldest, end: blocker.newest}],
                 },
             ]);
+            // Toast #1 — delete success
+            toasts.success(tr('assetDetail.currencyChange.deleteSuccess', {values: {count: blocker.count}}));
 
             // Step 2: retry PATCH (now succeeds because no prices remain)
-            toasts.info($t('assetDetail.currencyChange.progressPatch'));
+            progressStep = 'patch';
             await zodiosApi.patch_assets_bulk_api_v1_assets_patch([patchPayload] as any);
+            // Toast #2 — currency change success (always fired when delete+patch
+            // succeed). The separate sync toast below reports its own outcome.
+            toasts.success(tr('assetDetail.currencyChange.changedTo', {values: {from: blocker.from, to: blocker.to}}));
 
             // Step 3: auto-sync from provider using original oldest date as start
             if (providerAssigned) {
-                toasts.info($t('assetDetail.currencyChange.progressSync', {values: {from: blocker.oldest}}));
+                progressStep = 'sync';
                 const today = new Date().toISOString().slice(0, 10);
                 try {
-                    await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
+                    const syncResponse: any = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
                         {
                             asset_id: blocker.assetId,
                             date_range: {start: blocker.oldest, end: today},
                         },
                     ]);
+                    // Toast #3 — unified sync outcome (ok / noChanges / partial / skipped / error).
+                    // This surfaces the real provider error (e.g. "Currency mismatch ...")
+                    // via result.message, instead of a generic "sync failed, retry manually".
+                    const r = syncResponse?.results?.[0];
+                    if (r) {
+                        const toast = buildAssetSyncToast(r, tr('common.sync'), tr);
+                        toasts[toast.variant](toast.message);
+                    } else {
+                        toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
+                    }
                 } catch (syncErr: any) {
-                    // Sync failure is non-fatal: currency is already changed, user can retry sync manually.
+                    // Network / HTTP error on sync — surface the detail so the user
+                    // knows why (e.g. backend 400 "Currency mismatch for asset...").
                     console.error('Post-wipe auto-sync failed:', syncErr);
-                    toasts.warning($t('assetDetail.currencyChange.syncFailedManualRetry'));
+                    const detail = syncErr?.response?.data?.detail || syncErr?.message || 'unknown error';
+                    toasts.error(`${tr('common.sync')}: ${detail}`);
                 }
             }
 
-            toasts.success($t('assetDetail.currencyChange.done', {values: {from: blocker.from, to: blocker.to}}));
             open = false;
             onconfirmed?.();
         } catch (err: any) {
@@ -105,6 +130,7 @@
             toasts.error(`${$t('assetDetail.currencyChange.failed')}: ${msg}`);
         } finally {
             inProgress = false;
+            progressStep = null;
         }
     }
 
@@ -183,6 +209,19 @@
 
             <!-- Footer -->
             <div class="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
+                {#if inProgress && progressStep}
+                    <!-- I-bis #12 — inline progress step (replaces the 3 progress toasts) -->
+                    <span class="mr-auto flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300" data-testid="currency-change-progress-step">
+                        <span class="inline-block h-3 w-3 rounded-full border-2 border-slate-400 border-t-transparent animate-spin"></span>
+                        {#if progressStep === 'delete'}
+                            {$t('assetDetail.currencyChange.progressDelete', {values: {count: blocker.count}})}
+                        {:else if progressStep === 'patch'}
+                            {$t('assetDetail.currencyChange.progressPatch')}
+                        {:else if progressStep === 'sync'}
+                            {$t('assetDetail.currencyChange.progressSync', {values: {from: blocker.oldest}})}
+                        {/if}
+                    </span>
+                {/if}
                 <button type="button" class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress}>
                     {$t('common.cancel')}
                 </button>

@@ -594,7 +594,7 @@
                     data-testid="fx-data-import-btn"
                 >
                     <Upload size={13} />
-                    Import CSV
+                    {$t('dataEditor.importCsv')}
                 </button>
                 <button
                     class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
@@ -602,7 +602,7 @@
                     data-testid="fx-data-add-row-btn"
                 >
                     <Plus size={13} />
-                    Add Row
+                    {$t('dataEditor.addRow')}
                 </button>
             {/if}
         </div>
@@ -679,7 +679,7 @@
             columns={dtColumns}
             data={sortedRows}
             defaultPageSize={10}
-            emptyMessage="No data. Use 'Add Row' or 'Import CSV' to add data."
+            emptyMessage={$t('dataEditor.emptyMessage')}
             enableActions={!isReadonly}
             enableColumnFilters={true}
             enableColumnResize={true}
