@@ -34,6 +34,7 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/uuid';
+    import {ensureAssetProvidersCached, isParametricProvider} from '$lib/utils/providerHelpers';
 
     // =========================================================================
     // Types
@@ -136,6 +137,14 @@
     let showSaveWithoutTestConfirm = $state(false);
     let showIdentifierChangeConfirm = $state(false);
     let showDiscardConfirm = $state(false);
+
+    // #R3-4 — scheduled_investment regenerate confirm. Shown when the user edits an
+    // existing scheduled_investment asset and changes its provider_params (schedule /
+    // maturation_frequency / …). Confirming wipes the old prices server-side and
+    // triggers an immediate re-sync so the chart reflects the new schedule.
+    let showScheduledRegenConfirm = $state(false);
+    let pendingSaveAssetId = $state<number | null>(null);
+    let initialProviderParamsJson = $state<string>('');
 
     // I.6 — destructive currency-change modal state.
     let currencyChangeModalOpen = $state(false);
@@ -351,6 +360,8 @@
         providerUrl = data.provider_url ?? null;
         providerNoProvider = !data.provider_code;
         fetchInterval = (data as any).fetch_interval ?? 1440;
+        // #R3-4 — snapshot initial params to detect scheduled_investment changes at save.
+        initialProviderParamsJson = providerParams ? JSON.stringify(providerParams) : '';
         moreInfoExpanded = identifierRows.length > 0;
         providerExpanded = !!data.provider_code;
         searchResultSelected = false;
@@ -794,6 +805,21 @@
     }
 
     async function saveEdit(assetId: number) {
+        // #R3-4 — for PARAMETRIC_GENERATION providers (e.g. scheduled_investment), if the
+        // user changed `provider_params` intercept the save flow to show an explicit
+        // regenerate confirmation. Confirming will: (1) PATCH/assign through the normal
+        // path, (2) BE wipes old prices + invalidates caches atomically, (3) we trigger
+        // an immediate re-sync so the chart reflects the new schedule without requiring
+        // a manual click. Gating on `isParametricProvider()` (kind-based) instead of
+        // hardcoding 'scheduled_investment' so future parametric providers inherit the
+        // flow for free.
+        await ensureAssetProvidersCached();
+        if (isParametricProvider(providerCode) && !providerNoProvider && initialProviderParamsJson && JSON.stringify(providerParams ?? null) !== initialProviderParamsJson && !pendingSaveAssetId) {
+            pendingSaveAssetId = assetId;
+            showScheduledRegenConfirm = true;
+            return; // wait for confirm; the modal will re-invoke saveEdit()
+        }
+
         // Build classification_params
         const classificationParams: any = {};
         if (shortDescription) classificationParams.short_description = shortDescription;
@@ -864,6 +890,27 @@
                 },
             ];
             await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
+        }
+
+        // #R3-4 — after a confirmed scheduled_investment regenerate, trigger an
+        // immediate sync so the prices are regenerated with the new params and
+        // the chart refreshes on close.
+        const didRegenerate = pendingSaveAssetId === assetId;
+        pendingSaveAssetId = null;
+        if (didRegenerate && isParametricProvider(providerCode) && !providerNoProvider) {
+            try {
+                const today = new Date();
+                const end = today.toISOString().slice(0, 10);
+                const startD = new Date(today);
+                startD.setFullYear(startD.getFullYear() - 5);
+                const start = startD.toISOString().slice(0, 10);
+                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
+                    {asset_id: assetId, date_range: {start, end}} as any,
+                ]);
+            } catch (syncErr) {
+                console.warn('Post-regenerate sync failed:', syncErr);
+                // Non-blocking: the user can manually re-sync if needed.
+            }
         }
 
         toasts.success($t('assets.modal.saveSuccess', {values: {name: displayName}}));
@@ -1323,6 +1370,34 @@
     onConfirm={() => doClose()}
     onCancel={() => {
         showDiscardConfirm = false;
+    }}
+    zIndex={70}
+/>
+
+<!-- #R3-4 — Confirmation: regenerate scheduled_investment prices on params change -->
+<ConfirmModal
+    open={showScheduledRegenConfirm}
+    title={$t('assets.modal.scheduledRegenTitle')}
+    message={$t('assets.modal.scheduledRegenMessage')}
+    confirmText={$t('assets.modal.scheduledRegenConfirm')}
+    cancelText={$t('common.cancel')}
+    warning={true}
+    onConfirm={() => {
+        showScheduledRegenConfirm = false;
+        const aid = pendingSaveAssetId;
+        // pendingSaveAssetId is kept non-null so the guard in saveEdit() skips
+        // re-showing this modal and proceeds to PATCH+assign+sync.
+        if (aid !== null) {
+            saveEdit(aid).catch((err) => {
+                console.error('saveEdit after regenerate confirm failed:', err);
+                toasts.error($t('common.errorOccurred'));
+                pendingSaveAssetId = null;
+            });
+        }
+    }}
+    onCancel={() => {
+        showScheduledRegenConfirm = false;
+        pendingSaveAssetId = null;
     }}
     zIndex={70}
 />

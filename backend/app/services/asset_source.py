@@ -24,6 +24,7 @@ Design principles:
 """
 
 import asyncio
+import hashlib
 import json
 import time
 from abc import ABC, abstractmethod
@@ -86,6 +87,7 @@ from backend.app.schemas.common import Currency, FxBackwardFillInfo, OldNew
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAPriceQueryResult
 from backend.app.schemas.provider import (
     FAProviderConfigBase,
+    FAProviderKind,
     FAProviderProbeResponse,
     FAProviderRefreshFieldsDetail,
     FAProviderSearchResponse,
@@ -114,6 +116,24 @@ _asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=300, ttl=120
 _asset_metadata_cache = get_ttl_cache("asset_metadata_fetch", maxsize=200, ttl=1800)  # 30 min
 _search_result_cache = get_ttl_cache("search_results", maxsize=5000, ttl=86400)  # 24h — individual items
 _search_query_cache = get_ttl_cache("search_queries", maxsize=500, ttl=900)  # 15 min — query→results
+
+
+def _provider_params_hash(provider_params: Optional[dict]) -> str:
+    """
+    Stable short hash of `provider_params` for use in cache keys (#R3-4).
+
+    Uses MD5 (non-cryptographic, just for keying) over the JSON-serialized params
+    with sorted keys to guarantee determinism regardless of dict iteration order.
+    Returns the first 8 hex chars — enough entropy to avoid collisions across the
+    small number of concurrently-cached keys per asset.
+    """
+    if not provider_params:
+        return "none"
+    try:
+        payload = json.dumps(provider_params, sort_keys=True, default=str)
+    except Exception:
+        payload = repr(sorted(provider_params.items()))
+    return hashlib.md5(payload.encode("utf-8")).hexdigest()[:8]
 
 
 # ============================================================================
@@ -273,6 +293,33 @@ class AssetSourceProvider(ABC):
         Examples: 'Yahoo Finance', 'JustETF', 'CSS Web Scraper'
         """
         pass
+
+    @property
+    def provider_kind(self) -> FAProviderKind:
+        """
+        Classifies the provider by how it produces its data (#R3-4).
+
+        Two kinds are currently defined:
+
+        - ``FAProviderKind.ONLINE_SCRAPER`` (default): fetches raw data from
+          an external source. Changing ``provider_params`` does NOT invalidate
+          the historical series already persisted in the DB (the data came
+          from outside the params).
+        - ``FAProviderKind.PARAMETRIC_GENERATION``: produces the series
+          deterministically from ``provider_params``. A params change means
+          the existing series is obsolete **by definition** — callers such as
+          ``bulk_assign_providers`` must wipe previously-persisted prices and
+          regenerate to stay consistent.
+
+        Override in parametric providers (e.g. scheduled_investment) to
+        return ``FAProviderKind.PARAMETRIC_GENERATION``. The default is safe
+        for all online/scraping providers.
+
+        The value is exposed to the frontend via ``FAProviderInfo.kind`` and
+        used to pick UI labels ("Sync" vs "Regenerate") and decide whether a
+        params change requires a destructive-confirm dialog.
+        """
+        return FAProviderKind.ONLINE_SCRAPER
 
     @property
     def get_icon(self) -> str | None:
@@ -780,6 +827,64 @@ class AssetSourceManager:
 
             existing = existing_map.get(a.asset_id)
             if existing:
+                # #R3-4: for PARAMETRIC_GENERATION providers, changing provider_params
+                # (schedule, maturation_frequency, annual_rate, …) invalidates the
+                # generated price series deterministically — the FE shows an explicit
+                # ConfirmDialog before sending the PATCH, so here we trust the incoming
+                # request and atomically wipe the existing prices + invalidate the
+                # in-memory caches. The subsequent sync call (triggered by the FE after
+                # save) will regenerate with new params.
+                #
+                # Online scrapers (yfinance, justetf, cssscraper, …) are NOT affected:
+                # their historical data came from an external source, so a params change
+                # (e.g. renaming a secondary ticker) doesn't invalidate the past candles.
+                # The gating is via ``provider_kind`` on the base class — no hardcoded
+                # provider_code check.
+                params_changed = (existing.provider_params or "") != (params_to_store or "")
+                provider_code_unchanged = existing.provider_code == a.provider_code
+                if params_changed and provider_code_unchanged:
+                    prov_instance = AssetProviderRegistry.get_provider_instance(a.provider_code)
+                    is_parametric = prov_instance is not None and prov_instance.provider_kind == FAProviderKind.PARAMETRIC_GENERATION
+                    if is_parametric:
+                        # 1. Delete prices generated by this provider for this asset.
+                        #    Scope by ``source_plugin_key == a.provider_code`` so other
+                        #    providers' data (should it ever coexist on the same asset)
+                        #    stays untouched.
+                        await session.execute(
+                            delete(PriceHistory).where(
+                                PriceHistory.asset_id == a.asset_id,
+                                PriceHistory.source_plugin_key == a.provider_code,
+                            )
+                        )
+                        # 2. Invalidate outer caches for the OLD params hash (the new
+                        #    hash produces a different cache_key → natural MISS, but we
+                        #    also drop the stale entry explicitly so it doesn't linger
+                        #    for 15 min).
+                        try:
+                            old_params_dict = None
+                            if existing.provider_params:
+                                try:
+                                    old_params_dict = json.loads(existing.provider_params)
+                                except Exception:
+                                    old_params_dict = None
+                            old_hash = _provider_params_hash(old_params_dict)
+                            old_identifier = existing.identifier or ""
+                            old_key = (
+                                existing.provider_code,
+                                old_identifier,
+                                str(existing.identifier_type),
+                                old_hash,
+                            )
+                            _asset_history_cache.delete(old_key)
+                            _asset_current_cache.delete(old_key)
+                        except Exception as cache_err:
+                            logger.debug(f"Cache invalidation skipped for asset {a.asset_id}: {cache_err}")
+                        logger.info(
+                            "parametric provider '%s' params changed for asset %s — wiped prices and invalidated cache",
+                            a.provider_code,
+                            a.asset_id,
+                        )
+
                 # UPDATE existing assignment (preserves id → FK stays valid)
                 existing.provider_code = a.provider_code
                 existing.identifier = identifier_val
@@ -2043,8 +2148,14 @@ class AssetSourceManager:
                         events_data = []
                         today = date_type.today()
 
-                        # Cache key for this provider+identifier combo
-                        cache_key = (provider_code, identifier, str(prep["identifier_type"]))
+                        # Cache key for this provider+identifier combo.
+                        # #R3-4: include a hash of `provider_params` so that changing schedule /
+                        # maturation_frequency / annual_rate (or any other provider param) yields
+                        # a different key — otherwise the cache would serve stale series (e.g. DAILY
+                        # points after switching to WEEKLY on a scheduled_investment asset) until
+                        # the TTL naturally expires.
+                        params_hash = _provider_params_hash(provider_params)
+                        cache_key = (provider_code, identifier, str(prep["identifier_type"]), params_hash)
 
                         # 1. Fetch historical data (with core cache)
                         if prov.supports_history and start < today:
@@ -2226,6 +2337,26 @@ class AssetSourceManager:
 
             # Convert to FAPricePoint objects — fallback to asset's own currency
             asset_currency = prep["asset"].currency
+
+            # #R3-2: Filter out points with currency mismatch BEFORE counting as fetched.
+            # A point whose currency differs from the asset's currency is, from the asset's
+            # point of view, indistinguishable from "no data available" — the bulk_upsert
+            # would reject the whole batch with HTTPException(400) and fetched_count would
+            # remain inflated, producing a misleading PARTIAL status ("20↓ 0Δ") instead of
+            # a clear FAILED with the real reason.
+            errors: list[str] = []
+            accepted_prices: list[dict] = []
+            mismatch_buckets: dict[str, int] = {}
+            for p in prices:
+                p_currency = p.get("currency") or asset_currency
+                if p_currency != asset_currency:
+                    mismatch_buckets[p_currency] = mismatch_buckets.get(p_currency, 0) + 1
+                    continue
+                accepted_prices.append(p)
+            if mismatch_buckets:
+                detail = ", ".join(f"{cnt} {code}" for code, cnt in sorted(mismatch_buckets.items()))
+                errors.append(f"{sum(mismatch_buckets.values())} points discarded: currency mismatch " f"(got {detail}, expected {asset_currency})")
+
             price_items = [
                 FAPricePoint(
                     date=p["date"],
@@ -2236,12 +2367,11 @@ class AssetSourceManager:
                     volume=p.get("volume"),
                     currency=p.get("currency") or asset_currency,
                 )
-                for p in prices
+                for p in accepted_prices
             ]
             upsert_obj = FAUpsert(asset_id=asset_id, prices=price_items)
 
-            errors = []
-            fetched_count = len(prices)
+            fetched_count = len(accepted_prices)
             inserted_count = 0
             updated_count = 0
             events_fetched_count = len(remote_data.get("events", []))
@@ -2251,17 +2381,18 @@ class AssetSourceManager:
             try:
                 async with AsyncSession(engine, expire_on_commit=False) as persist_session:
                     # Count actual changes BEFORE upserting (compare with DB)
-                    try:
-                        new_count, changed_count = await _count_actual_price_changes(persist_session, asset_id, price_items)
-                    except Exception:
-                        new_count, changed_count = fetched_count, 0  # Fallback
+                    if price_items:
+                        try:
+                            new_count, changed_count = await _count_actual_price_changes(persist_session, asset_id, price_items)
+                        except Exception:
+                            new_count, changed_count = fetched_count, 0  # Fallback
 
-                    try:
-                        await AssetSourceManager.bulk_upsert_prices([upsert_obj], persist_session)
-                        inserted_count = new_count
-                        updated_count = changed_count
-                    except Exception as e:
-                        errors.append(f"DB upsert failed: {str(e)}")
+                        try:
+                            await AssetSourceManager.bulk_upsert_prices([upsert_obj], persist_session)
+                            inserted_count = new_count
+                            updated_count = changed_count
+                        except Exception as e:
+                            errors.append(f"DB upsert failed: {str(e)}")
 
                     # Upsert asset events (if any)
                     events_list = remote_data.get("events", [])
@@ -2302,6 +2433,10 @@ class AssetSourceManager:
             message = None
             if errors:
                 status = SyncStatus.FAILED if fetched_count == 0 else SyncStatus.PARTIAL
+                # #R3-2: surface the first error as the user-facing message so the FE toast
+                # shows a meaningful reason (e.g. "20 points discarded: currency mismatch …")
+                # instead of a vague "Sync (partial): 20↓ 0Δ".
+                message = errors[0]
             elif fetched_count > 0:
                 has_history = prov.supports_history and start < date_type.today()
                 if has_history and fetched_count == 1:

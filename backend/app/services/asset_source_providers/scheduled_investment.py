@@ -58,6 +58,7 @@ from backend.app.schemas.assets import (
 )
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAAssetEventPoint
+from backend.app.schemas.provider import FAProviderKind
 from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.cache_utils import get_ttl_cache
@@ -509,6 +510,20 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
     @property
     def provider_name(self) -> str:
         return "Scheduled Investment Calculator"
+
+    @property
+    def provider_kind(self) -> FAProviderKind:
+        """
+        Parametric generation provider (#R3-4): the price series is produced
+        **deterministically** from ``provider_params`` (initial_value, schedule,
+        maturation_frequency, annual_rate, …). No external data source.
+
+        A change in ``provider_params`` invalidates the existing series by
+        definition, so ``bulk_assign_providers`` wipes and regenerates on every
+        confirmed params update. The frontend uses this kind to show a
+        "Regenerate Prices?" confirm dialog instead of a generic "Sync".
+        """
+        return FAProviderKind.PARAMETRIC_GENERATION
 
     @property
     def accepted_identifier_types(self) -> list:

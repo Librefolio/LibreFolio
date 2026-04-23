@@ -318,7 +318,10 @@
       "createSuccess": "\"{name}\" creato con successo",
       "saveSuccess": "\"{name}\" aggiornato con successo",
       "moreInfo": "Ulteriori Info",
-      "createSuccessProviderFailed": "Asset \"{name}\" creato, ma assegnazione provider fallita. Assegna manualmente."
+      "createSuccessProviderFailed": "Asset \"{name}\" creato, ma assegnazione provider fallita. Assegna manualmente.",
+      "scheduledRegenTitle": "Rigenerare i Prezzi?",
+      "scheduledRegenMessage": "La modifica di questi parametri cancellerà lo storico dei prezzi esistente e lo rigenererà con la nuova pianificazione. Questa azione non può essere annullata. Continuare?",
+      "scheduledRegenConfirm": "Rigenera"
     },
     "provider": {
       "assignment": "Assegnazione Provider",

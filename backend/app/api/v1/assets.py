@@ -360,6 +360,7 @@ async def list_providers(
                     name=instance.provider_name,
                     description=f"{instance.provider_name} pricing provider",
                     icon_url=instance.get_icon,
+                    kind=instance.provider_kind,
                     supports_search=supports_search,
                     params_schema=schema_fields,
                     accepted_identifier_types=[t.value for t in instance.accepted_identifier_types],
