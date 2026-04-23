@@ -520,7 +520,7 @@ flusso), ma sporca i log e indica uno stato incoerente.
 4. Unit test: verificare che `bulk_assign_providers` per un provider
    parametrico (scheduled_investment) non emetta più quel warning.
 
-### #R4-5 — Feature: toasts in modalità DEV devono loggare anche su console
+### #R4-5 — Feature: toasts in modalità DEV devono loggare anche su console  ✅ DONE (2026-04-23)
 
 **Richiesta**: per tracciamento durante lo sviluppo, ogni toast (success /
 error / warning / info) mostrato all'utente deve essere replicato su
@@ -528,41 +528,50 @@ error / warning / info) mostrato all'utente deve essere replicato su
 modalità debug. In produzione il comportamento resta invariato (nessun
 log console).
 
-**Fix proposto** (FE, `frontend/src/lib/stores/toastStore.svelte.ts` o path
-equivalente):
-```typescript
-function pushToast(variant: ToastVariant, message: string, opts?: ToastOpts) {
-  // ...existing push logic...
-  if (import.meta.env.DEV) {
-    const fn = variant === 'error' ? console.error
-             : variant === 'warning' ? console.warn
-             : console.log;
-    fn(`[toast:${variant}]`, message, opts ?? '');
-  }
-}
-```
+**Implementazione effettiva** (FE, `frontend/src/lib/stores/toastStore.svelte.ts`):
 
-**Convenzioni**:
-- Prefisso `[toast:<variant>]` per rendere grep-abile il log.
-- Usare `import.meta.env.DEV` (Vite) → true in `dev`, false in `build prod`.
-- Nessun test E2E richiesto (è helper di dev); eventualmente unit test
-  sullo store con mock di `console` e `import.meta.env`.
+- Ogni chiamata a `show(variant, message, duration?)` ora specchia il toast
+  sulla console via il helper centralizzato `$lib/debug` (`debug.log` /
+  `debug.info` / `debug.warn` / `debug.error`), mappando la variante al
+  livello console corrispondente (`success→log`, `info→info`, `warning→warn`,
+  `error→error`).
+- Gate: il helper `debug` è attivo quando `VITE_DEBUG=true` OPPURE
+  `import.meta.env.DEV === true`. In build di produzione il blocco è
+  tree-shaken → zero overhead, zero leak.
+- Prefisso: `[Toast] [<variant>] <message>` (il primo `[Toast]` è iniettato
+  dal logger con `console.<level>('[Toast]', ...)`, il secondo è esplicito
+  per facilitare il grep a livello di variante).
+- **Extra**: aggiunta utility `stripHtmlForLog(message)` che rimuove
+  `<svg>…</svg>`, `<img …>`, tutti i tag HTML residui e decodifica le entità
+  più comuni, così le icone lucide inline e i badge colorati (che sono
+  essenziali nell'UI) non sporcano il log console. La versione UI del toast
+  non è toccata.
 
-**Coda**: in un futuro, valutare se esporre anche un pannello debug in-app
-che raccoglie l'ultimo N toast (utile per bug report utenti), ma non in
-questo batch.
+**Verificato** su flusso `/fx/{pair}` e `/assets/{id}` sync:
+- Success → `[Toast] [success] Synced: 🇦🇺 AUD 🇪🇺 EUR 62↓ 0Δ`
+- Error → `[Toast] [error] Sync failed for Apple Inc.: 62 points discarded: currency mismatch (got 62 USD, expected EUR)`
+
+**Note collaterali**:
+- L'errore di console `"A listener indicated an asynchronous response by
+  returning true, but the message channel closed before a response was
+  received"` osservato durante lo stesso retest è rumore di un'estensione
+  Chrome (origine `fx:1` = documento HTML, non il bundle app) → non
+  azionabile lato codice, ignorato.
+
+**Coda** (futuri): pannello debug in-app che raccoglie gli ultimi N toast
+per bug report utenti. Non in questo batch.
 
 ---
 
 ### Priorità suggerita per Batch 2 part5b
 
-| # | Ticket | Area | Sforzo stimato | Priorità |
-|---|--------|------|---------------:|:--------:|
-| 1 | #R4-1 | BE (short-circuit empty accepted_prices) | 15 min | alta |
-| 2 | #R4-2 | FE (ConfirmModal variant rosso) | 20 min | alta |
-| 3 | #R4-4 | BE (rimuovere/aggiungere metadata_updated) | 20 min | media |
-| 4 | #R4-5 | FE (toast console log in DEV) | 15 min | bassa |
-| 5 | #R4-3 | FE/BE (chart non aggiorna) | 1-3h (dipende da diagnosi) | alta ma bloccata su diagnosi utente |
+| # | Ticket | Area | Sforzo stimato | Priorità | Stato |
+|---|--------|------|---------------:|:--------:|:-----:|
+| 1 | #R4-1 | BE (short-circuit empty accepted_prices) | 15 min | alta | ⏳ |
+| 2 | #R4-2 | FE (ConfirmModal variant rosso) | 20 min | alta | ⏳ |
+| 3 | #R4-4 | BE (rimuovere/aggiungere metadata_updated) | 20 min | media | ⏳ |
+| 4 | #R4-5 | FE (toast console log in DEV) | 15 min | bassa | ✅ DONE |
+| 5 | #R4-3 | FE/BE (chart non aggiorna) | 1-3h (dipende da diagnosi) | alta ma bloccata su diagnosi utente | ⏳ |
 
 **Nota su #R4-3**: non partire con il fix finché l'utente non conferma quale
 dei 3 rami diagnostici è (network trace). Rischio altrimenti di toccare il

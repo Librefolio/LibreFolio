@@ -142,7 +142,12 @@
             {/if}
         {/if}
         {#if pr.status === 'failed'}
-            <span class="text-red-400 truncate" title={pr.errors?.join('; ') ?? pr.message ?? ''}>{pr.errors?.[0] ?? pr.message ?? 'Failed'}</span>
+            {@const fullErr = pr.errors?.join('; ') ?? pr.message ?? ''}
+            {@const shortErr = pr.errors?.[0] ?? pr.message ?? 'Failed'}
+            <!-- #R4-6: show full error in Tooltip (truncate only clips display). -->
+            <Tooltip text={fullErr} position="top" maxWidth="500px">
+                <span class="text-red-400 truncate inline-block max-w-[240px] align-middle">{shortErr}</span>
+            </Tooltip>
         {/if}
         {#if pr.elapsed_ms}
             <span class="ml-auto text-gray-400 font-mono tabular-nums text-[10px]">{formatElapsed(pr.elapsed_ms)}</span>
