@@ -41,6 +41,15 @@ function show(variant: ToastVariant, message: string, duration?: number): string
     const id = generateUUID();
     const ms = duration ?? DEFAULT_DURATION[variant];
 
+    // #R4-5: in DEV mode mirror every toast to the browser console so developers
+    // can scroll back the full history (toasts auto-dismiss on screen). The prefix
+    // `[toast:<variant>]` keeps the log grep-friendly. Production builds skip this
+    // branch entirely (``import.meta.env.DEV`` is folded to ``false`` by Vite).
+    if (import.meta.env.DEV) {
+        const logger = variant === 'error' ? console.error : variant === 'warning' ? console.warn : console.log;
+        logger(`[toast:${variant}]`, message);
+    }
+
     const toast: Toast = {id, variant, message, duration: ms, createdAt: Date.now()};
 
     if (ms > 0) {
