@@ -56,13 +56,24 @@ export interface SyncToastResult {
 /**
  * Build a standardized toast for asset price sync results.
  *
+ * Handles 5 states (I-bis #1 + #23):
+ *  - ok + points_changed>0 → success ("N↓ MΔ")
+ *  - ok + points_changed==0 → warning "No new data (already up to date)"
+ *    (catches the post-wipe zero-rows edge case where provider silently
+ *    drops data due to currency mismatch etc.)
+ *  - partial → warning with `result.message` appended when present (covers
+ *    scheduled_investment "Current value only, history unavailable")
+ *  - skipped → info "skipped"
+ *  - other/error → error with `result.message` fallback
+ *
  * @param result - Single result from sync_prices_bulk API response
  * @param label - Display label (e.g. translated "Sync prices" or asset name)
+ * @param tr - Translation function (from get(t)). Required for i18n suffixes.
  * @returns Toast variant and HTML message
  */
-export function buildAssetSyncToast(result: any, label: string): SyncToastResult {
+export function buildAssetSyncToast(result: any, label: string, tr: (key: string, opts?: any) => string): SyncToastResult {
     if (!result) {
-        return {variant: 'error', message: `${label} — no response`};
+        return {variant: 'error', message: `${label} — ${tr('prices.sync.noResponse')}`};
     }
 
     const fetched = result.points_fetched ?? 0;
@@ -74,13 +85,21 @@ export function buildAssetSyncToast(result: any, label: string): SyncToastResult
     const eventLine = evtFetched > 0 ? `\n${calendarClockSvg} ${evtFetched}↓ ${evtChanged}Δ` : '';
 
     if (result.status === 'ok') {
+        // I-bis #1 — surface "ok but zero changes" as a warning so the user doesn't
+        // miss silent failures (e.g. provider returned rows in wrong currency and the
+        // backend dropped them all).
+        if (changed === 0 && evtChanged === 0) {
+            return {variant: 'warning', message: `${label}:\n${priceLine}${eventLine}\n${tr('prices.sync.noChanges')}`};
+        }
         return {variant: 'success', message: `${label}:\n${priceLine}${eventLine}`};
     } else if (result.status === 'partial') {
-        return {variant: 'warning', message: `${label} (partial):\n${priceLine}${eventLine}`};
+        // I-bis #23 — append provider message when present (e.g. "Current value only, history unavailable")
+        const detail = result.message ? `\n${result.message}` : '';
+        return {variant: 'warning', message: `${label} (${tr('prices.sync.partialSuffix')}):\n${priceLine}${eventLine}${detail}`};
     } else if (result.status === 'skipped') {
-        return {variant: 'info', message: `${label} — skipped`};
+        return {variant: 'info', message: `${label} — ${tr('prices.sync.skippedSuffix')}`};
     } else {
-        return {variant: 'error', message: `${label} — ${result.message || 'failed'}`};
+        return {variant: 'error', message: `${label} — ${result.message || tr('prices.sync.failedDefault')}`};
     }
 }
 
@@ -112,13 +131,13 @@ export function buildFxSyncToast(result: any, slug: string, tr: (key: string, op
             message: `Synced:\n${pairLabel}\n${dataLine}${providerHtml ? ' ' + providerHtml : ''}`,
         };
     } else if (result.status === 'partial') {
-        let msg = `Partial:\n${pairLabel}\n${dataLine}${providerHtml ? ' ' + providerHtml : ''}`;
+        let msg = `${tr('prices.sync.partialSuffix')}:\n${pairLabel}\n${dataLine}${providerHtml ? ' ' + providerHtml : ''}`;
         if (formatDetail) msg += formatDetail(result, tr);
         return {variant: 'warning', message: msg};
     } else if (result.status === 'skipped') {
-        return {variant: 'info', message: `Skipped:\n${pairLabel}\nmanual only`};
+        return {variant: 'info', message: `${tr('prices.sync.skippedSuffix')}:\n${pairLabel}\n${tr('prices.sync.manualOnly')}`};
     } else {
         const errDetail = result.message ? ': ' + result.message : '';
-        return {variant: 'error', message: `Failed:\n${pairLabel}${errDetail}`};
+        return {variant: 'error', message: `${tr('prices.sync.failedDefault')}:\n${pairLabel}${errDetail}`};
     }
 }

@@ -699,8 +699,10 @@ def populate_asset_provider_assignments(session: Session):
         # Scheduled Investment — BTP Italia with interest schedule.
         # Schema: FAScheduledInvestmentSchedule (see schemas/assets.py). Periods
         # must be contiguous + non-overlapping. `asset_events` is optional.
-        # Probed OK via /provider/probe: plugin returns fixed 10000 EUR with
-        # semi-annual maturation points.
+        # Config: DAILY maturation + generate_interest=False → smooth growing line
+        # (no auto-coupon reset). Useful for visual regression testing and to
+        # exercise the daily loop of _generate_schedule_values without touching
+        # the reset path.
         (
             "BTP Italia 2028",
             "scheduled_investment",
@@ -715,8 +717,8 @@ def populate_asset_provider_assignments(session: Session):
                         "start_date": "2024-01-15",
                         "end_date": "2028-01-15",
                         "annual_rate": 0.035,
-                        "maturation_frequency": "SEMIANNUAL",
-                        "generate_interest": True,
+                        "maturation_frequency": "DAILY",
+                        "generate_interest": False,
                     }
                 ],
             },

@@ -910,7 +910,10 @@
       "notSet": "No establecido",
       "clearField": "Borrar campo",
       "clearFieldConfirm": "¿Establecer esta celda como vacía?"
-    }
+    },
+    "importCsv": "Importar CSV",
+    "addRow": "Agregar fila",
+    "emptyMessage": "Sin datos. Usa 'Agregar fila' o 'Importar CSV' para agregar."
   },
   "sharedResource": {
     "syncAll": "Sinc. Todo",
@@ -988,7 +991,9 @@
       "done": "Divisa cambiada de {from} a {to}. Precios actualizados.",
       "failed": "Falló el cambio de divisa",
       "syncFailedManualRetry": "Divisa cambiada pero la sincronización post-borrado falló — usa el botón Sync para reintentar.",
-      "body": "Cambiar la divisa de {from} a {to} eliminará permanentemente {count} registros de precio hasta hoy. Los precios se volverán a cargar desde el proveedor en la nueva divisa tras la eliminación."
+      "body": "Cambiar la divisa de {from} a {to} eliminará permanentemente {count} registros de precio hasta hoy. Los precios se volverán a cargar desde el proveedor en la nueva divisa tras la eliminación.",
+      "changedTo": "Moneda cambiada de {from} a {to}",
+      "deleteSuccess": "{count} precios eliminados"
     },
     "metadataDescription": "Descripción",
     "pricesInCurrency": "Precios en {currency}",
@@ -1020,6 +1025,16 @@
       "titleEvents": "📥 Importar CSV Eventos",
       "eventsFormatLabel": "Formato",
       "eventsTypesLabel": "Tipos"
+    }
+  },
+  "prices": {
+    "sync": {
+      "noResponse": "sin respuesta",
+      "partialSuffix": "parcial",
+      "skippedSuffix": "omitido",
+      "failedDefault": "fallido",
+      "noChanges": "Sin datos nuevos (ya actualizado)",
+      "manualOnly": "solo manual"
     }
   }
 }

@@ -254,7 +254,21 @@ def _generate_schedule_values(
     # Check cache first — theine handles TTL expiration via timer wheel
     cached, ok = _CACHE.get(key)
     if ok:
+        logger.debug(
+            "scheduled_investment cache HIT key=%s periods=%d first_freq=%s first_gen_int=%s",
+            key[:8],
+            len(schedule.schedule),
+            schedule.schedule[0].maturation_frequency if schedule.schedule else "-",
+            schedule.schedule[0].generate_interest if schedule.schedule else "-",
+        )
         return cached
+    logger.debug(
+        "scheduled_investment cache MISS key=%s periods=%d first_freq=%s first_gen_int=%s",
+        key[:8],
+        len(schedule.schedule),
+        schedule.schedule[0].maturation_frequency if schedule.schedule else "-",
+        schedule.schedule[0].generate_interest if schedule.schedule else "-",
+    )
 
     principal = schedule.initial_value.amount
     currency_code = schedule.initial_value.code
