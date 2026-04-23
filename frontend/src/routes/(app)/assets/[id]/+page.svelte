@@ -46,7 +46,7 @@
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
     import {getFxStore, apiResultToFxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
-    import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName} from '$lib/utils/providerHelpers';
+    import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
@@ -174,7 +174,10 @@
         })),
     );
 
-    let isScheduledInvestment = $derived(providerAssignment?.provider_code === 'scheduled_investment');
+    // #R3-4 — derive "parametric" status from provider kind (instead of hardcoded code),
+    // so the detail page picks the "Regenerate" label for any parametric_generation provider.
+    // Depends on assetProvidersVersion to re-evaluate after the providers cache is loaded.
+    let isParametric = $derived.by(() => { void $assetProvidersVersion; return isParametricProvider(providerAssignment?.provider_code); });
     let isManualOnly = $derived(!providerAssignment);
 
     /** First data point date — used for "no data before" banner */
@@ -1304,7 +1307,7 @@
                 title={isManualOnly ? $t('assetDetail.syncDisabledManual') : ''}
             >
                 <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                {#if layout.showActionLabels}<span>{syncing ? $t('common.syncing') : isScheduledInvestment ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
+                {#if layout.showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
             </button>
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
@@ -1516,7 +1519,7 @@
                                 {$t('common.edit')}
                             </button>
                         </div>
-                    {:else if isScheduledInvestment}
+                    {:else if isParametric}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataScheduled')}</p>
                         <button
                             class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"

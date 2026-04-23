@@ -318,7 +318,10 @@
       "createSuccess": "\"{name}\" created successfully",
       "saveSuccess": "\"{name}\" updated successfully",
       "moreInfo": "More Info",
-      "createSuccessProviderFailed": "Asset \"{name}\" created, but provider assignment failed. Assign it manually."
+      "createSuccessProviderFailed": "Asset \"{name}\" created, but provider assignment failed. Assign it manually.",
+      "scheduledRegenTitle": "Regenerate Prices?",
+      "scheduledRegenMessage": "Changing these parameters will delete the existing price history and regenerate it with the new schedule. This action cannot be undone. Continue?",
+      "scheduledRegenConfirm": "Regenerate"
     },
     "provider": {
       "assignment": "Provider Assignment",

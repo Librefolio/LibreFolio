@@ -38,6 +38,37 @@ from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNe
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
 # ============================================================================
+# FA PROVIDER KIND
+# ============================================================================
+
+
+class FAProviderKind(StrEnum):
+    """
+    Classifies an asset pricing provider by how it produces its data.
+
+    Semantic classification consumed by backend (to gate algorithmic branches
+    without hardcoding provider codes) and frontend (to choose labels like
+    'Sync' vs 'Regenerate', or to decide whether a params change requires a
+    destructive confirm).
+
+    Values:
+    - 'online_scraper': Fetches raw data from an external source (HTTP API,
+      web scraping, market data feed). Examples: yfinance, justetf, cssscraper,
+      mockprov. Changing provider_params does NOT invalidate historical data.
+    - 'parametric_generation': Generates the series deterministically from
+      provider_params (no external source). Examples: scheduled_investment
+      (BTP-style fixed-income schedules). Changing provider_params means the
+      previous series is obsolete by definition — callers must wipe existing
+      data + regenerate to stay consistent.
+
+    Future kinds may include 'manual_only' (no sync) or 'hybrid_cash_account'.
+    """
+
+    ONLINE_SCRAPER = "online_scraper"
+    PARAMETRIC_GENERATION = "parametric_generation"
+
+
+# ============================================================================
 # FA PROVIDER PARAM FIELD
 # ============================================================================
 
@@ -77,6 +108,16 @@ class FAProviderInfo(BaseModel):
     name: str = Field(..., description="Provider full name")
     description: str = Field(..., description="Provider description")
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
+    kind: FAProviderKind = Field(
+        default=FAProviderKind.ONLINE_SCRAPER,
+        description=(
+            "Provider kind: 'online_scraper' for providers that fetch raw data from an external "
+            "source (yfinance, justetf, cssscraper), 'parametric_generation' for providers that "
+            "generate the series deterministically from provider_params (scheduled_investment). "
+            "Consumers use this to gate destructive-confirm flows (params change on a parametric "
+            "provider requires wipe+regenerate) and to pick UI labels."
+        ),
+    )
     supports_search: bool = Field(..., description="Whether provider supports asset search")
     params_schema: List[FAProviderParamField] = Field(default_factory=list, description="Form field definitions for provider_params")
     accepted_identifier_types: List[str] = Field(default_factory=list, description="Identifier types accepted by this provider")

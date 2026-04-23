@@ -16,6 +16,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
+    import {goto} from '$app/navigation';
     import {TrendingUp, TrendingDown, AlertTriangle, Coins} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
@@ -93,11 +94,26 @@
             <CurrencySearchSelect bind:value={displayCurrency} compact={true} originalCurrency={assetCurrency} placeholder={$t('assetDetail.displayCurrency')} />
         </div>
         {#if fxPairUrl}
-            <!-- Quick link to FX pair detail (only shown when displayCurrency≠assetCurrency AND pair is healthy) -->
+            <!--
+              Quick link to FX pair detail (only shown when displayCurrency≠assetCurrency AND pair is healthy).
+              NOTE: we intentionally use a <button onclick={goto(...)}> instead of an <a href> here, because
+              this element is wrapped inside <Tooltip> whose internal handlers call stopPropagation/preventDefault
+              on click; a native <a> ends up triggering a full-page reload (breaking SPA navigation and resetting
+              the navigationStore stack, which in turn breaks goBack() on the destination page). The signal cards
+              on the dashboard use the same pattern.
+            -->
             <Tooltip text={$t('assetDetail.openFxPair')} position="bottom">
-                <a href={fxPairUrl} class="inline-flex items-center justify-center p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-libre-green hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" data-testid="asset-detail-fx-pair-link" aria-label={$t('assetDetail.openFxPair')}>
+                <button
+                    type="button"
+                    onclick={() => {
+                        if (fxPairUrl) goto(fxPairUrl);
+                    }}
+                    class="inline-flex items-center justify-center p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-libre-green hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    data-testid="asset-detail-fx-pair-link"
+                    aria-label={$t('assetDetail.openFxPair')}
+                >
                     <Coins size={14} />
-                </a>
+                </button>
             </Tooltip>
         {/if}
     </div>

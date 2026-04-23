@@ -318,7 +318,10 @@
       "createSuccess": "\"{name}\" creado exitosamente",
       "saveSuccess": "\"{name}\" actualizado exitosamente",
       "moreInfo": "Más información",
-      "createSuccessProviderFailed": "Activo \"{name}\" creado, pero la asignación del proveedor falló. Asígnelo manualmente."
+      "createSuccessProviderFailed": "Activo \"{name}\" creado, pero la asignación del proveedor falló. Asígnelo manualmente.",
+      "scheduledRegenTitle": "¿Regenerar precios?",
+      "scheduledRegenMessage": "Cambiar estos parámetros eliminará el historial de precios existente y lo regenerará con la nueva planificación. Esta acción no se puede deshacer. ¿Continuar?",
+      "scheduledRegenConfirm": "Regenerar"
     },
     "provider": {
       "assignment": "Asignación de Proveedor",

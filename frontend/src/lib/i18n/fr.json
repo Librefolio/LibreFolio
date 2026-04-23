@@ -318,7 +318,10 @@
       "createSuccess": "\"{name}\" créé avec succès",
       "saveSuccess": "\"{name}\" mis à jour avec succès",
       "moreInfo": "Plus d'infos",
-      "createSuccessProviderFailed": "Actif \"{name}\" créé, mais attribution du fournisseur échouée. Assignez-le manuellement."
+      "createSuccessProviderFailed": "Actif \"{name}\" créé, mais attribution du fournisseur échouée. Assignez-le manuellement.",
+      "scheduledRegenTitle": "Régénérer les Prix ?",
+      "scheduledRegenMessage": "La modification de ces paramètres supprimera l'historique des prix existant et le régénérera avec le nouveau planning. Cette action est irréversible. Continuer ?",
+      "scheduledRegenConfirm": "Régénérer"
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",

@@ -1,10 +1,30 @@
-# Plan — Phase 7 Part 3 · Closure (Blocco E + I-bis pending)
+- Create FxBackwardFillInfo in common.py (fx_rate_date + fx_days_back).
+- AssetBackwardFillInfo now inherits from BackwardFillInfo + FxBackwardFillInfo.
+- FAAssetEventPointOut replaces flat fx_rate_date/fx_days_back with a single
+  fx_info: Optional[FxBackwardFillInfo]. Events have no price-backward-fill
+  semantics (discrete real dates) — only FX staleness is meaningful.
+- Frontend +page.svelte reads ev.fx_info?.fx_rate_date / .fx_days_back.
+- Tests updated to nested access.
+- Wire format for prices is unchanged (mixin preserves field order).
+**Prossimo commit suggerito**: batch refactor `FxBackwardFillInfo` da solo (piccolo e coeso). Messaggio:
+```
+Refactor: extract FxBackwardFillInfo as standalone building block
 
-> **Parent plan**: [`plan-phase07-transaction-Part3.md`](./plan-phase07-transaction-Part3.md)
-> **Phase doc**: [`phases/phase-07-transactions.md`](./phases/phase-07-transactions.md)
-> **Status**: ⏳ In progress — 2026-04-22 sera tardi
-> **Scope**: chiusura del Blocco E con decisioni terminali, coda I-bis pending, deliverable residui prima di passare a Part 4.
+**Da testare con utente prima del commit**:
+1. goBack FX → asset detail: deve tornare al detail corretto, non alla lista FX.
+2. Toast currency change: 3 toast distinti (delete + changedTo + sync esito reale).
+3. BTP Italia 2028: dopo `./dev.py db create-clean`, grafico deve essere retta pulita (no reset).
+4. Log debug: `./dev.py server start` + sync BTP, cercare "scheduled_investment cache" nei log.
+- `frontend/src/lib/stores/navigationStore.ts` (refactor stack-based + debug helper).
+- `frontend/src/routes/(app)/+layout.svelte` (pass pathname to trackNavigation).
+- `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` (3-toast refactor + buildAssetSyncToast integration).
+- `frontend/src/lib/i18n/{en,it,fr,es}.json` (+2 chiavi: `currencyChange.{deleteSuccess, changedTo}`).
+- `backend/test_scripts/test_db/populate_mock_data.py` (BTP Italia 2028 → DAILY + no interest).
+- `backend/app/services/asset_source_providers/scheduled_investment.py` (+logging debug cache HIT/MISS).
 
+**Validazione batch 2 part3**:
+- Part2 puntava alla minimizzazione (1 solo toast) ma perdeva informazioni importanti (l'errore sync post-wipe veniva nascosto).
+- Part3 trova il giusto equilibrio: **1 toast per ogni step significativo**. Delete è un'operazione distruttiva — meritocraticamente degna di conferma. Patch è rapida ma produce la notifica chiave "currency changed" che l'utente si aspetta. Sync ha tutti i suoi stati compressi nel unified helper.
 ---
 
 ## 🎯 Obiettivo
@@ -637,6 +657,7 @@ if current_date in all_maturation_dates:
 - **Successori**: Part 4 (pagina `/transactions`), Part 4b (File Preview), Part 5 (Staging Modal). **Gated da I-bis #22**.
 - **Phase 8 follow-up**: [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md) — consumer `Asset.active` + scheduler demone.
 - **Phase 9 follow-up**: Dashboard — consumer `Asset.active` hide su breakdown + estensione `requiredFxPairs` a viste multi-asset.
+- **Phase 9 follow-up**: Dashboard — consumer `Asset.active` hide su breakdown + estensione `requiredFxPairs` a viste multi-asset.
 
 ---
 
@@ -1001,3 +1022,478 @@ Quando la conversazione riparte, verificare:
 - [ ] Leggere questa sezione **Giornale di viaggio** per localizzare il cursore.
 - [ ] Scorrere il Closure plan dall'alto cercando sezioni ancora **senza** ✅ DONE nel titolo → ordine di attacco.
 - [ ] Verificare che i test API sopracitati passino (`./dev.py test api assets-price && assets-events && events-target-currency`). Se rossi → NON procedere: qualcosa nella sessione precedente è rimasto monco.
+
+### 📍 Batch 2 part4+5 — fix #R3-1 + #R3-2 + #R3-4 (2026-04-23 mezzogiorno)
+
+Implementati 3 dei 4 issue emersi nel retest batch 2 part3. #R3-3 (policy `asset_events` al
+cambio currency) rimane in sospeso: richiede decisione utente fra policy A (niente) /
+B (delete non-manual + re-sync) / C (conversione FX).
+
+**Decisioni di design (riviste durante la sessione)**:
+- **#R3-2**: la proposta iniziale era "(a) BE force FAILED when upsert fails + (c) FE fallback a `errors[0]`".
+  Discussione con l'utente: il bug vero è che **`fetched_count` conta anche i punti con currency
+  inesatta**. Quei punti, dal punto di vista dell'asset, sono indistinguibili da "no data". Fix
+  finale: **filtro pre-count** nel sync, prima del bulk_upsert. Gli scartati vanno in `errors`
+  con messaggio aggregato tipo "20 points discarded: currency mismatch (got 20 USD, expected
+  EUR)". `fetched_count` conta solo gli accettati → `status=FAILED` cade naturalmente. Nessuna
+  modifica FE.
+- **#R3-4**: la proposta iniziale era "(a) hash params in cache key + (c) banner opt-in dopo
+  params change". Discussione con l'utente: per `scheduled_investment` (provider *particolare*
+  dove i params **definiscono** la serie) il wipe+resync dev'essere **atomico sulla Save**,
+  previa conferma esplicita. Niente banner post-fatto da cliccare come seconda azione.
+  Fix finale: **(a) cache key params-aware + (b) ConfirmDialog al Save che, confermato, fa
+  PATCH+assign+wipe+resync in un unico flow**. Gated su `provider_plugin_key ==
+  'scheduled_investment'` per non toccare provider esterni (yfinance, ECB, …).
+
+**File toccati**:
+- `frontend/src/lib/components/assets/AssetPriceSummary.svelte` — #R3-1: sostituzione
+  `<a href={fxPairUrl}>` con `<button onclick={() => goto(fxPairUrl)}>`. Il `Tooltip` wrapper
+  chiama `stopPropagation()` sui click, che per un `<a>` reale provoca full-page reload →
+  `navigationStore` resetta lo stack → `goBack` perde la destinazione. Il `<button>` con handler
+  esplicito esegue SPA navigation e preserva lo stack.
+- `backend/app/services/asset_source.py` — #R3-2: in `_fetch_single`/`_persist_single` (sync
+  per singolo asset) aggiunto filtro pre-count dei punti con `currency != asset.currency`.
+  Messaggio aggregato in `errors`. Popolato `message = errors[0]` nel ramo errors (FAILED o
+  PARTIAL) perché il FE lo mostra direttamente nel toast.
+- `backend/app/services/asset_source.py` — #R3-4 (a): helper `_provider_params_hash()` MD5 su
+  `json.dumps(params, sort_keys=True)[:8]` + cache key estesa a 4-tupla `(provider_code,
+  identifier, identifier_type, params_hash)` per `_asset_history_cache` e
+  `_asset_current_cache`.
+- `backend/app/services/asset_source.py` — #R3-4 (b): in `bulk_assign_providers`, quando
+  l'assignment esistente è `scheduled_investment` e `existing.provider_params !=
+  params_to_store`, atomicamente: `DELETE FROM price_history WHERE asset_id=X AND
+  source_plugin_key='scheduled_investment'` + `.delete()` delle vecchie chiavi cache con hash
+  dei params pre-update. La logica è scope-limited a `scheduled_investment`.
+- `frontend/src/lib/components/assets/AssetModal.svelte` — #R3-4 (c): nuovo stato
+  `showScheduledRegenConfirm` + `ConfirmModal` "Regenerate Prices?" mostrato all'inizio di
+  `saveEdit` quando il provider è `scheduled_investment` AND `providerParams` differiscono da
+  `initialProviderParamsJson` (snapshot iniziale catturato in `loadFromData`). Alla conferma:
+  prosegue la `saveEdit` normale (PATCH+assign, che BE fa wipe+invalidate automaticamente),
+  poi chiama `sync_prices_bulk_api_v1_assets_prices_sync_post` con range 5 anni per
+  rigenerare i prezzi. Il flag `pendingSaveAssetId` evita il loop di riapertura modal al
+  secondo passaggio.
+- `frontend/src/lib/i18n/{en,it,fr,es}.json` — +3 chiavi:
+  `assets.modal.scheduledRegenTitle`, `assets.modal.scheduledRegenMessage`,
+  `assets.modal.scheduledRegenConfirm`. Accenti FR/IT/ES ripristinati via script
+  `/tmp/libreFolio_fix_accents_r34.py`.
+
+**Validazione**:
+- `./dev.py front check` → ✅ 0 errors, 0 warnings.
+- `./dev.py lint --fix && ./dev.py format` → ✅ clean (1 file riformattato da black).
+- `pipenv run pytest backend/test_scripts/test_utilities/test_provider_core_cache.py` →
+  ✅ 20/20 passed.
+- `pipenv run pytest backend/test_scripts/test_api/test_assets_prices.py` → 14/16 al primo run;
+  i 2 falliti (`test_query_without_sync_returns_empty`, `test_bulk_sync_multi_asset`) sono
+  **flaky per timeout `httpcore.ReadTimeout` su yfinance metadata** — rigirati singolarmente
+  passano 2/2 in 42s. Pre-esistenti, non correlati alle modifiche.
+
+**Da testare manualmente con utente**:
+1. #R3-1: dal dettaglio asset, click icona moneta "Open FX pair" → `/fx/{slug}` → Back →
+   torna al dettaglio asset (non alla lista FX).
+2. #R3-2: Apple USD con prezzi storici → cambio currency a EUR → il toast post-sync ora è
+   **error** con testo tipo `"20 points discarded: currency mismatch (got 20 USD, expected
+   EUR)"`, non più un generico warning.
+3. #R3-4 confirm path: BTP Italia 2028 DAILY → sync → chart retta. Apri modal edit, cambia
+   frequency a WEEKLY → click Save → appare `ConfirmModal` "Regenerate Prices?" → Confirm →
+   dopo chiusura il chart mostra gradini weekly (non più retta daily).
+4. #R3-4 cancel path: stessa modifica, al confirm clicca Cancel → modal si chiude, niente
+   PATCH inviata, chart invariato.
+
+**Commit message proposto**: vedi `/tmp/libreFolio_commit_batch2_part45.txt`.
+
+**#R3-3 ancora pending — decisione da prendere con utente**: policy `asset_events` al cambio
+currency. La raccomandazione nel plan è **Policy B** (cancella eventi non-manuali + re-sync),
+ma richiede conferma prima dell'implementazione perché impatta il wizard E2E e i test.
+
+**Poi batch 2** (~4-5h): I-bis UX quick wins
+- **#3** Tab label "Prices in {currency} 🇺🇸" → 20 min (`AssetDataEditorSection.svelte`) ✅ DONE (batch 2 part1)
+- **#4** Import CSV banner reminder → 20 min (`PriceDataImportModal.svelte`) ✅ DONE (batch 2 part1)
+- **#6** Empty-state "Add manually" → 40 min (panel con 0 prezzi) ✅ DONE (batch 2 part1)
+- **#12** Ridurre 5 toast currency-change → 1 (refactor `AssetCurrencyChangeModal.svelte`) ✅ DONE (batch 2 part2)
+- **#1 + #23** combinati: handler unificato `PriceSyncResponse` con 5 stati toast i18n (ok/noChanges/partial+msg/skipped/failed) ✅ DONE (batch 2 part2)
+
+**Prossimo batch 2.5** (~1h): retest + possibile fix I-bis #25 (goBack regression)
+- Retest manuale I-bis #12 (flow currency change con e senza provider) + I-bis #1+#23 (sync che restituisce 0 changes, status partial, etc.).
+- Se I-bis #25 è bloccante, fix (opzione a/b/c proposte nel journal).
+
+**Batch 3** (~3-4h): Test coverage Blocco G (ordine per valore decrescente)
+- **G.6** `test_ohlc_sentinel.py` — 8 casi (copre Blocco F dichiarato done ma non testato).
+- **G.10** `test_asset_currency_change.py` — 5 casi (copre I.3 + I.6, flusso wipe+PATCH+re-sync).
+- **G.11** `test_asset_prices_export.py` — 7 casi (copre I.4, endpoint `/prices/export`).
+- **G.5** `test_prices_currency_coherence.py` — 3 casi post-I.11 (versione ridotta dopo i drop).
+
+**Batch 4** (~4h): Test Blocco G coda + I-bis #22 prerequisito Part 4/5
+- **G.3** `test_transactions_validate.py` — 6 casi.
+- **G.4** `test_events_suggest.py` — 5+ casi parametrizzati.
+- **G.1/G.2** estensioni `test_transaction_service.py` + matrix `test_transactions_api.py` (10+casi combinati).
+- **G.7** entries nel `scripts/test_runner.py` (mancano ancora: transactions-validate, events-suggest, prices-currency, ohlc-sentinel, assets-currency-change, assets-prices-export).
+- **G.8** coverage verification: `./dev.py test coverage services transaction` (target ≥90%) e `asset-source` (target ≥85%).
+
+**Batch 5** (~3-4h): I-bis #22 refactor error handling
+- Helper `$lib/utils/saveWithRetry.ts` o store `createSaveAction<T>`.
+- Censimento dei modal impattati (AssetModal, AssetProviderAssignmentModal, AssetCurrencyChangeModal, BrokerModal, PriceDataImportModal, DataEditor save, futuro TransactionModal).
+- Rollout progressivo + i18n `save.failed.*`.
+
+**Batch 6** (~1h): code tails
+- **#2** Provider dirty gating per "Save Without Testing?"
+- **#5** CSV import resilience (auto-detect separator + header tolerance).
+- **#7** `patch_assets_bulk` HTTP 409 semantics (non urgente).
+- **I.10** validazione finale Blocco I (run completo test suite).
+- Aggiornamento `phases/phase-07-transactions.md` con stato "Part 3 completed".
+- Archiviazione plan chain in `phases/phase-07-transactions-subplan/` (skill `plan-archive`).
+
+### ⚠️ Gotcha / note operative da ricordare
+
+1. **Pipeline UTF-8 in shell**: `echo "é"` dal prompt zsh strippa accenti. Per aggiornare file `i18n/*.json` con caratteri non-ASCII → scrivere uno script `.py` a file (`/tmp/libreFolio_*.py`) + lanciarlo. Esempio già presente: `/tmp/libreFolio_restore_fr_indent.py`. **Non usare** `json.dump(..., indent=4)` su `fr.json`: il file usa indent=2 (come en/it/es) e `indent=4` fa un mega-diff di 2000 righe.
+2. **Test FX pair pollution**: nel test DB alcune coppie (EUR/USD, GBP/USD) possono avere rate già seedati da altri test → le assertion su valore esatto falliscono. Per nuovi test: usare coppie esotiche (NZD/SGD, ILS/PHP, CAD/ZAR) + `_ensure_fx_rate` helper già presente in `test_events_target_currency.py`.
+3. **`./dev.py lint --fix`**: dopo una cleanup (es. rimozione fx_error), può capitare di lasciare import orfani. Sempre girare `lint --fix` se `lint` segnala 1 errore auto-fixabile.
+4. **Sintassi `./dev.py i18n add`**: richiede flag `--en --it --fr --es` (non posizionali). Esempio: `./dev.py i18n add foo.bar --en "Foo" --it "Bar" --fr "Baz" --es "Qux"`. Gli accenti **vanno comunque sistemati a mano dopo** (lo script strippa i chars non-ASCII in un pass intermedio).
+5. **Non eseguire mai `git commit`** — solo proporre messaggi (regola copilot-instructions). Oggi sto scrivendo i messaggi in `/tmp/libreFolio_commit_*.txt` e l'utente committa.
+6. **`requiredFxPairs` derived in `+page.svelte` L267–337**: non esiste un componente `FxPairBanner` separato — il banner è inline nel `{#each pairs}` a L1081–1153. Se si vuole riusare altrove (Phase 9 Dashboard), estrarlo prima in componente.
+7. **FxBackwardFillInfo wire format**: `{fx_rate_date: "YYYY-MM-DD" | null, fx_days_back: number | null}`. Lato FE è `Partial<{...}>` (Zod) quindi entrambi i campi sono tecnicamente opzionali anche quando l'oggetto è presente — usare sempre optional chaining `obj?.fx_rate_date`.
+8. **Emoji in Python scripts per i18n**: MAI usare escape surrogate pair (`\ud83d\udce5`) perché `write_text(encoding='utf-8')` fallisce con `UnicodeEncodeError: surrogates not allowed` DOPO aver truncato il file → file i18n azzerato. Alternative sicure: `\N{INBOX TRAY}` (Python named-char escape) oppure leggere l'emoji da un file già presente (es. `en.json`) e riusarla. Recovery: `git checkout HEAD -- frontend/src/lib/i18n/fr.json` + script che riapplica tutte le chiavi della sessione.
+
+### 📍 Retest batch 2 part3 (2026-04-23 mattina, post-commit part2)
+
+Test manuale completo del flow currency-change + Apple USD→EUR→USD + asset manuale + BTP scheduled_investment. Emersi 4 issue, alcuni **lato FE**, altri **lato BE**, uno **di design** (scelta di policy).
+
+**Issue #R3-1 — `goBack` dal link coin quick-FX non funziona, dalla signal card sì**
+
+Sintomo: cliccando il bottone "Open FX pair detail" (l'icona moneta vicino al dropdown "Convert to" in `AssetPriceSummary.svelte`) si va a `/fx/{slug}` ma il bottone "Back" poi fallisce il fallback → l'utente resta sulla detail FX. Invece cliccando lo stesso slug da una signal card sulla dashboard il back funziona correttamente.
+
+**Root cause probabile** (da confermare con debug): il bottone quick-link è renderizzato come `<a href={fxPairUrl}>` **wrappato in `<Tooltip>`**. In `frontend/src/lib/components/ui/Tooltip.svelte` L71-93 l'handler `toggle(event)` e il click esterno chiamano `event.stopPropagation()` (e in certi path `event.preventDefault()`). Se `stopPropagation` ferma l'evento prima che SvelteKit lo intercetti tramite il listener globale di navigation, il browser ricade su **full-page reload** invece di SPA navigation. Dopo il full-reload il modulo JS viene re-inizializzato → `navigationStore` (o equivalente stack che sostiene `goBack`) viene azzerato → al click di "Back" lo stack ha lunghezza 0 → fallback a `/fx` lista.
+
+Le signal card invece usano `goto()` programmatico (senza `<a>` e senza Tooltip), quindi la history SPA viene aggiornata correttamente e `goBack` funziona.
+
+**Opzioni di fix**:
+- (a) Rimuovere il `Tooltip` wrapper e usare solo `title=` native HTML (regressione UX minima ma risolve).
+- (b) Sostituire `<a>` con `<button onclick={() => goto(fxPairUrl)}>` stylato come link — Tooltip può restare perché non c'è più href da "perdere".
+- (c) Modificare `Tooltip.svelte` per NON fare `stopPropagation` quando il click arriva da un elemento figlio che è `<a>` o `<button>` con handler proprio (più invasivo, rischio regressioni in altre pagine).
+
+Raccomandazione: **(b)**. Minimale, aderente al pattern già usato dalle signal card, zero impatto su altri Tooltip.
+
+**Issue #R3-2 — Toast "Sync (partial): 20↓ 0Δ" senza menzione dell'errore di currency**
+
+Flow: Apple con 20 prezzi USD → cambio currency a EUR. Il wizard:
+1. Delete 22 prices → `toast.success("Deleted 22 prices")` ✅
+2. PATCH currency → `toast.success("Currency changed from USD to EUR")` ✅
+3. Auto-sync post-wipe → `toast.warning("Sync (partial): 20↓ 0Δ")` ❌ **atteso: error con messaggio chiaro** "currency mismatch: fetched USD but asset is EUR".
+
+**Root cause (lato BE)** — `backend/app/services/asset_source.py` L2259-2304:
+```python
+try:
+    await AssetSourceManager.bulk_upsert_prices([upsert_obj], persist_session)
+    inserted_count = new_count
+    updated_count = changed_count
+except Exception as e:
+    errors.append(f"DB upsert failed: {str(e)}")   # <-- errore catturato
+...
+# Determine status
+message = None
+if errors:
+    status = SyncStatus.FAILED if fetched_count == 0 else SyncStatus.PARTIAL   # <-- diventa PARTIAL
+elif fetched_count > 0:
+    ...
+```
+
+Quando il backend ha **fetched 20 righe USD** e il bulk_upsert_prices le rifiuta con `HTTPException(400, "Currency mismatch: USD vs EUR")`:
+- `errors = ["DB upsert failed: 400: Currency mismatch ..."]`
+- `fetched_count = 20 > 0` → `status = PARTIAL` (non FAILED)
+- `message = None` (non viene mai popolato dal ramo errors)
+- `points_changed = 0` (l'eccezione impedisce di aggiornare i counter)
+
+Il risultato inviato al FE ha `status=partial`, `points_fetched=20`, `points_changed=0`, `message=null`, `errors=[...]`. Il FE (`buildAssetSyncToast` branch partial) legge solo `message`, **ignora `errors`** → toast vago "20↓ 0Δ".
+
+**Riformulazione del bug (dopo discussione utente)**: il problema a monte è che `fetched_count` conta **anche le righe con currency mismatch**, cioè righe che non sono "fetchabili" per questo asset. Un punto con currency sbagliata, dal punto di vista dell'asset, è indistinguibile da "nessun dato disponibile" dal provider. Da qui il toast PARTIAL che maschera un fallimento totale.
+
+**Fix scelto — filtro pre-count lato BE** (`asset_source.py`, blocco sync prezzi):
+
+1. **Prima** di calcolare `fetched_count` e prima del `bulk_upsert_prices`, filtrare il payload del provider scartando i punti con `currency != asset.currency`.
+2. Gli scartati vengono aggregati in `errors` con un messaggio tipo `"N points discarded: currency mismatch (got USD, expected EUR)"`.
+3. `fetched_count` = len(punti sopravvissuti al filtro). Nel caso Apple USD→EUR → `fetched_count = 0`.
+4. La logica esistente `if errors: status = FAILED if fetched_count == 0 else PARTIAL` cade **naturalmente** nel ramo FAILED senza modifiche.
+5. Nel ramo FAILED popolare `message = errors[0]` (se non già valorizzato) così il FE ha il testo pronto.
+
+**Niente patch FE**: `buildAssetSyncToast` ramo FAILED già legge `message`. Non serve il fallback `errors[0]` perché lato BE il messaggio è sempre valorizzato.
+
+Vantaggi:
+- Fix simmetrico al caso "provider ritorna 0 righe": stesso stato, stesso messaggio.
+- Non forza artificialmente PARTIAL→FAILED: è FAILED *per natura*, perché non è stato fetchato nulla di utilizzabile.
+- Evita di catturare l'exception di `bulk_upsert_prices` per ricostruire il motivo: la validazione è esplicita e lato sync.
+
+**Issue #R3-3 — [DESIGN] Cosa fare con gli `asset_events` al cambio valuta?**
+
+Attualmente il flow wipe-on-currency-change cancella **solo `asset_prices`** ma **lascia intatti `asset_events`** (dividendi, interessi, split, buyback, …). Gli eventi hanno un campo `original_value = {code, amount}` con la **vecchia currency**.
+
+Impatto concreto: dopo cambio USD→EUR un asset Apple avrà:
+- Prezzi nuovi in EUR (ok)
+- Dividendi storici salvati con `original_value.code = "USD"` (disallineati)
+
+Il calcolo del P&L userà l'FX rate al momento del consolidamento → funziona, **ma**:
+- Il `target_currency=asset` display mostrerà i dividendi in USD storico, non in EUR (UX sorprendente).
+- Se la nuova currency riporta eventi dal provider (sync successivo porta dividendi EUR da `yfinance`), si creerà un mix temporale: storico in USD, futuro in EUR.
+- Eventi manuali (INTEREST su bond manual) sono inseriti dall'utente con una specifica currency: non vanno toccati senza consenso.
+
+**Tre policy storicamente considerate (per traccia)**:
+
+| Policy | Pro | Contro |
+|--------|-----|--------|
+| **A) Nulla** (stato attuale) | Zero perdite di dati. | Mismatch semantico visibile nei report. |
+| **B) Cancella tutti gli eventi fetched dal provider** (preserva `source=MANUAL`) + re-sync | Coerenza piena con i prezzi. Preserva l'input utente. | UX ambigua: perché tenere i manuali se poi restano disallineati? |
+| **C) Convertire `original_value`** via FX rate alla data dell'evento | Conserva tutti i dati. | Dipende da disponibilità FX rate a quella data. Converti-e-ri-converti accumula errori. Eventi manuali modificati senza consenso. |
+
+**Decisione finale (dopo discussione utente, 2026-04-23)** — **Policy D: wipe totale simmetrico + disconnessione transazioni linkate**.
+
+Premesse di design:
+1. Il vincolo "event.currency == asset.currency" deve essere **esteso dai prezzi agli eventi** (simmetria I.2 hard-400): un asset_event con currency diversa da quella dell'asset è semanticamente incoerente tanto quanto un prezzo in valuta diversa. Applicare il reject in upsert (endpoint `/assets/events` + import path) con lo stesso pattern di `bulk_upsert_prices`.
+2. Al cambio currency, **tutti gli eventi dell'asset** sono "currency-mismatch" rispetto al nuovo valore → vanno **eliminati**, senza distinguere `source=MANUAL` vs `source=PROVIDER`. L'utente conosce il proprio stato e si riassume la responsabilità del re-insert (manualmente o via sync).
+3. Se un evento ha **transazioni collegate** (`Transaction.asset_event_id == event.id`, es. dividendo con stacco transazione `DIVIDEND_PAYMENT` abbinata), NON si possono cancellare le transazioni (sono dati contabili indipendenti). La strategia è **disconnettere**: `UPDATE transactions SET asset_event_id = NULL WHERE asset_event_id IN (...)` + `DELETE FROM asset_events WHERE asset_id = ?`.
+4. Il modal di conferma deve comunicare chiaramente sia il numero di eventi da eliminare sia il numero di transazioni che verranno disconnesse (ma NON cancellate). Dopo la conferma, l'utente è responsabile di re-inserire/re-associare eventi e transazioni se lo desidera.
+
+**Implementazione BE**:
+1. Nuovo endpoint/servizio `wipe_market_data_for_currency_change(asset_id, dry_run=False)`:
+   - Count `asset_events` per asset + per `source` (MANUAL vs PROVIDER) — solo per mostrare il breakdown nel modal.
+   - Count `transactions` con `asset_event_id IN (events_of_asset)` — per il messaggio di disconnessione.
+   - Se `dry_run=False` e confermato:
+     - `UPDATE transactions SET asset_event_id = NULL WHERE asset_event_id IN (…)`.
+     - `DELETE FROM asset_events WHERE asset_id = ?`.
+     - `DELETE FROM price_history WHERE asset_id = ?`.
+     - Cache invalidation (history + current).
+2. Attuale blocker `CURRENCY_CHANGE_BLOCKED_BY_PRICES` viene generalizzato a `CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA` e include nel payload: `price_count, event_count, linked_tx_count, oldest_date, newest_date`.
+3. Hard-400 su upsert event con currency mismatch (nuovo test).
+
+**Implementazione FE**:
+1. `AssetCurrencyChangeModal.svelte` esteso con una seconda riga informativa:
+   > "This will also delete N events (M manual + K auto-fetched) and disconnect L linked transactions from them (the transactions themselves are preserved). You are responsible for re-inserting any manual data you wish to keep."
+2. **Pre-wipe export**: il modal espone **2 bottoni** di download prima della conferma:
+   - "Export prices (CSV / JSON)" → endpoint esistente `/assets/{id}/prices/export?format=...`.
+   - "Export events (CSV / JSON)" → **nuovo endpoint** (vedi sotto #R3-3b).
+3. i18n: `currencyChange.eventsWillBeDeleted`, `currencyChange.linkedTxsWillBeDisconnected`, `currencyChange.exportEventsCsv`, `currencyChange.exportEventsJson` × 4 lingue.
+
+---
+
+**Issue #R3-3b — [DESIGN] Estensione endpoint export: eventi + FX + spostamento in Backup block**
+
+Sull'endpoint esistente `GET /api/v1/assets/{asset_id}/prices/export` c'è un TODO lasciato in precedenza (`backend/app/api/v1/assets.py:649`):
+```python
+# TODO: spostare l'endpoint nel blocco dei backup e fare una cosa simile anche per le forex e gli eventi.
+```
+
+**Design proposto (da implementare in batch dedicato, insieme a #R3-3)**:
+
+1. **Nuovo router `backup_router`** in `backend/app/api/v1/backup.py` (o estensione di `system.py`), montato su `/api/v1/backup`. Scope: export/snapshot read-only di qualsiasi serie storica prima di operazioni distruttive.
+
+2. **Endpoints generalizzati** (tutti `GET ?format=csv|json`, streaming response):
+   - `GET /backup/asset/{asset_id}/prices` — equivalente all'attuale `/assets/{id}/prices/export`. L'endpoint vecchio diventa un redirect 308 al nuovo (o è rimosso se nessun consumer esterno).
+   - `GET /backup/asset/{asset_id}/events` — NUOVO. Colonne: `date, type, source, amount, currency, fx_rate_date, fx_days_back, original_amount, original_currency, description, provider_assignment_id`.
+   - `GET /backup/fx/{base}/{quote}/rates` — NUOVO. Colonne: `date, rate, source_plugin_key, fetched_at`. Rispetta la pair resolution (direzione normalizzata).
+   - *(opzionale futuro)*: `GET /backup/asset/{asset_id}/transactions`, `GET /backup/broker/{id}/transactions`.
+
+3. **Response shape**: uniforme fra tipi di serie — un enumerato `BackupScope: prices|events|fx_rates` nei metadati del JSON wrapper:
+   ```json
+   {
+     "scope": "events",
+     "entity": {"type": "asset", "id": 42, "slug": "apple-inc"},
+     "exported_at": "2026-04-23T10:20:00Z",
+     "row_count": 17,
+     "rows": [ { ... }, ... ]
+   }
+   ```
+   Il CSV mantiene solo `rows` (header + data, coerente con l'export prezzi attuale).
+
+4. **Helper comune** `_stream_rows_as_csv(iter_rows, filename)` + `_json_snapshot(meta, iter_rows, filename)` in un modulo `backend/app/services/backup_service.py` per evitare duplicazione.
+
+5. **Integrazione con `AssetCurrencyChangeModal`**: il modal chiama i 2 nuovi endpoint `backup/asset/{id}/prices` e `backup/asset/{id}/events` (in sostituzione dell'endpoint legacy) prima di confermare il wipe.
+
+6. **Test** (blocco G.11 esteso, rinominato `test_backup_endpoints.py`):
+   - `test_backup_prices_csv_format` (regression dell'export legacy).
+   - `test_backup_events_csv_contains_all_columns`.
+   - `test_backup_events_empty_returns_header_only`.
+   - `test_backup_fx_rates_streaming_large_dataset`.
+   - `test_backup_requires_asset_access`.
+   - `test_backup_legacy_prices_redirect_308`.
+
+**Priorità**: questo batch di lavoro (R3-3 + R3-3b) va insieme a #R3-3 policy D, **da discutere con utente prima dell'implementazione** per confermare la shape JSON wrapper e la strategia legacy redirect vs remove.
+
+**Issue #R3-4 — Cambio maturation_frequency su scheduled_investment non aggiorna il chart (retta invece dei gradini)**
+
+Flow BTP Italia 2028: schedule inizialmente `DAILY` → sync → chart mostra retta liscia (giusto, un punto/giorno). Utente cambia `maturation_frequency` a `WEEKLY` → PATCH /assets + POST /assets/provider vanno OK (confermato dal payload). Ma:
+- Il chart continua a mostrare la retta liscia (niente gradini).
+- Il log recente riporta: `scheduled_investment cache HIT key=58957d74 periods=1 first_freq=DAILY first_gen_int=False`.
+
+**Root cause** — **due bachi sommati**:
+
+1. **Cache `_asset_history_cache` non include `provider_params` nella chiave** (`asset_source.py` L2047):
+   ```python
+   cache_key = (provider_code, identifier, str(prep["identifier_type"]))
+   ```
+   Per un asset scheduled_investment `identifier` è vuoto (AUTO_GENERATED), quindi la chiave è la stessa **prima e dopo** il cambio a WEEKLY. TTL 15 min → la cache continua a servire la serie DAILY fino alla scadenza naturale.
+
+2. **Cambio `provider_params` NON invalida i prezzi già persistiti**. A differenza del currency-change (che wipe-a i prezzi), modificare la schedule o la frequency del provider **non triggera alcun wipe/resync forzato**. I prezzi DAILY già in `asset_prices` restano; anche se `_asset_history_cache` fosse corretta, il chart legge dal DB → vede la serie fitta.
+
+Il log `first_freq=DAILY` che l'utente ha visto proviene da una chiamata `_generate_schedule_values` che è avvenuta **prima del cambio WEEKLY** (probabilmente lo sync automatico iniziale con config DAILY). Dopo il POST /provider con WEEKLY, la sync successiva può anche usare i nuovi params, ma:
+- Se l'utente non ha ricliccato "Sync" dopo il PATCH → i prezzi DAILY restano nel DB e il chart li mostra.
+- Se l'utente clicca "Sync" → `_asset_history_cache` HIT (cache key non cambia) → prices_data popolato dalla cache vecchia DAILY → upsert nel DB reinserisce i DAILY → chart resta liscio.
+
+**Fix scelto (dopo discussione utente)** — `scheduled_investment` è un provider *particolare*: i prezzi sono **generati deterministicamente dai `provider_params`**, non fetchati da una fonte esterna. Cambiare `schedule` / `maturation_frequency` / `annual_rate` equivale a dire "la serie precedente è obsoleta per definizione". Quindi:
+
+1. **(a) Cache key con hash `provider_params`** — fix di correttezza sempre valido:
+   - In `_asset_history_cache` e `_asset_current_cache` estendere la chiave a `(provider_code, identifier, identifier_type, params_hash)` dove `params_hash = md5(json.dumps(provider_params, sort_keys=True))[:8]`.
+   - Esporre un helper `.delete(key)` sulle cache theine (o usare TTL=0 + set con None) per invalidazioni esplicite.
+
+2. **Conferma esplicita + wipe+resync automatico al submit** — specifico per `scheduled_investment`:
+   - Nel form di edit dei params provider (frontend), quando l'utente preme "Save" e il diff tocca campi impattanti (`schedule`, `maturation_frequency`, `annual_rate`, …), aprire un **ConfirmDialog**:
+     > "Changing these parameters will regenerate all prices for this asset. The existing series will be replaced. Continue?"
+   - Se l'utente **conferma**, il FE chiama `POST /assets/provider` con un flag `regenerate=true` (o endpoint dedicato `POST /assets/{id}/provider/regenerate`).
+   - Lato BE, dentro la stessa transazione:
+     1. `UPDATE assets SET provider_params = ...`
+     2. `DELETE FROM asset_prices WHERE asset_id = ? AND provider_plugin_key = 'scheduled_investment'` (scope limitato al provider per non toccare prezzi manuali o di altri provider in scenari futuri).
+     3. Invalidate `_asset_history_cache` + `_asset_current_cache` per la vecchia chiave.
+     4. Trigger sync immediato con i nuovi params → ripopola `asset_prices` con WEEKLY.
+   - Se l'utente **annulla**, nessuna PATCH viene inviata. Lo stato è consistent: prezzi vecchi + params vecchi.
+
+**Differenza vs. la "invalidazione automatica" scartata**: quella avrebbe cancellato i prezzi *silenziosamente* al solo cambio di params. Qui il wipe+resync è **parte integrante** della conferma: l'utente sa che premendo "Continue" sta rigenerando la serie. È un'azione singola dal punto di vista dell'utente (un click su "Save" → un confirm → tutto fatto), non un flow in due fasi con banner post-submit.
+
+**Perché solo per `scheduled_investment`**: per provider esterni (yfinance, ECB, …) cambiare i params non invalida i dati storici (es. cambiare il simbolo secondario di yfinance non dovrebbe buttare via le candele). Quindi la logica di wipe+resync on-confirm è gated sul `provider_plugin_key == 'scheduled_investment'`. Per altri provider, in futuro, si potrà adottare la policy (c) originale (banner opt-in) se serve.
+
+**Rationale sintetico**:
+- (a) è un bug fix puro sul caching, indipendente dal resto.
+- Conferma esplicita + azione atomica rispetta sia il principio "no azioni distruttive implicite" sia l'UX "un'azione = un click" (niente banner post-fatto da cliccare come seconda operazione).
+- Scope-limited al provider `scheduled_investment` perché è l'unico dove i params *definiscono* la serie.
+
+**Nota collaterale**: BTP con retta al posto dei gradini oggi **sembra funzionare** se l'asset è nuovo (nessun prezzo DAILY pregresso). Il bug emerge solo quando si **modifica la frequency** di un asset già syncato. Serve un test E2E dedicato: crea scheduled_investment DAILY → sync → cambia a WEEKLY → sync → verifica che i punti nel DB siano ≤7× rispetto a prima.
+
+---
+
+**Sintesi stato e prossimi passi post-batch2-part3 retest**:
+
+| Issue | Lato | Severità | Fix proposto | Batch target |
+|-------|------|----------|--------------|--------------|
+| #R3-1 goBack da quick-link | FE (Tooltip) | Media (UX) | Sostituire `<a>` con `<button onclick={goto}>` | Batch 2 part4 (piccolo, ~15min) |
+| #R3-2 toast partial invece di error | BE only | Alta (UX fuorviante) | Filtro pre-count: scartare punti con currency mismatch prima di `fetched_count` → cade naturalmente in FAILED con `message=errors[0]` | Batch 2 part4 |
+| #R3-3 eventi al cambio currency | BE + FE + design | Alta (correttezza semantica) | **Policy D** (wipe totale simmetrico + disconnessione transazioni) + vincolo currency-mismatch su eventi + nuovo endpoint `backup/events` | Batch 3 (insieme a R3-3b export endpoint refactor) |
+| #R3-3b backup endpoints generalizzati | BE + design | Media (refactor) | Nuovo `backup_router` con `/prices`, `/events`, `/fx` + legacy redirect | Batch 3 (combinato con R3-3) |
+| #R3-4 cambio params provider non aggiorna chart | BE (cache key) + FE (confirm dialog) | Alta (bug funzionale) | (a) hash `provider_params` in cache key + (b) ConfirmDialog on save → wipe+resync atomico, **solo per `scheduled_investment`** | Batch 2 part5 |
+
+Il commit batch2-part2 è stato fatto dall'utente (vedi `/tmp/libreFolio_commit_batch2_part2.txt`). **Non aprire batch2-part3-retest come nuovo commit finché non si decide la strategia per #R3-3 e si implementano almeno #R3-1 + #R3-2.**
+
+### ✅ Check-list di "sessione riaperta correttamente"
+
+Quando la conversazione riparte, verificare:
+- [ ] `git log --oneline | head -5` → identificare ultimo commit Closure (cercare "Part 3 Closure" o "FxBackwardFillInfo").
+- [ ] `git status` → capire se ci sono file pendenti del refactor FxBackwardFillInfo (se sì, vedi sopra batch).
+- [ ] Leggere questa sezione **Giornale di viaggio** per localizzare il cursore.
+- [ ] Scorrere il Closure plan dall'alto cercando sezioni ancora **senza** ✅ DONE nel titolo → ordine di attacco.
+- [ ] Verificare che i test API sopracitati passino (`./dev.py test api assets-price && assets-events && events-target-currency`). Se rossi → NON procedere: qualcosa nella sessione precedente è rimasto monco.
+
+### 📍 Batch 2 part4b — generalizzazione `FAProviderKind` + policy R3-3 (2026-04-23 pomeriggio)
+
+Su richiesta utente, dopo il batch 2 part4+5 (che usava ancora l'hardcoded
+`provider_code == "scheduled_investment"`), ho generalizzato il discriminante
+con un enum di tipo provider sulla classe astratta. Inoltre aggiornata la
+sezione R3-3 del plan con la policy finale e un design dedicato per l'endpoint
+di export/backup.
+
+**Nuova astrazione — `FAProviderKind`**:
+- Enum `StrEnum` in `backend/app/schemas/provider.py` con 2 valori:
+  - `ONLINE_SCRAPER` (default): yfinance, justetf, cssscraper, mockprov. I params
+    non invalidano i dati storici (provengono da una fonte esterna).
+  - `PARAMETRIC_GENERATION`: scheduled_investment. I params **definiscono** la
+    serie; un cambio significa "serie obsoleta per definizione".
+- Proprietà `provider_kind` aggiunta alla classe astratta `AssetSourceProvider`
+  con default `ONLINE_SCRAPER`. Override in `scheduled_investment.py` →
+  `PARAMETRIC_GENERATION`. Tutti gli altri provider ereditano il default.
+- Esposta sul frontend via `FAProviderInfo.kind` (campo opzionale, default
+  backend-side → sempre popolato). Endpoint `GET /assets/provider` aggiornato
+  per passare `kind=instance.provider_kind`.
+
+**Refactor backend** (`asset_source.py`, `bulk_assign_providers`):
+- Sostituito il check `existing.provider_code == "scheduled_investment"` con
+  `prov_instance.provider_kind == FAProviderKind.PARAMETRIC_GENERATION`, via
+  `AssetProviderRegistry.get_provider_instance(code)`.
+- Il wipe SQL passa da `source_plugin_key == "scheduled_investment"` (hardcoded)
+  a `source_plugin_key == a.provider_code` (scope dinamico sul provider stesso).
+- Log message generalizzato: `"parametric provider '{code}' params changed …"`.
+- Risultato: aggiungere in futuro un secondo provider parametrico (es. un
+  calcolatore obbligazionario custom) non richiederà nessuna modifica in
+  `asset_source.py` — basterà override di `provider_kind`.
+
+**Refactor frontend**:
+- `providerHelpers.ts` esteso: la cache lazy `assetProviderKinds: Map<code, kind>`
+  viene popolata insieme a icons/names al primo `ensureAssetProvidersCached()`.
+  Nuove helper `getAssetProviderKind(code)` e `isParametricProvider(code)` con
+  fallback "online_scraper" sicuro.
+- `AssetModal.svelte`: le 2 branch `#R3-4` (confirm dialog trigger +
+  post-regenerate sync) ora chiamano `isParametricProvider(providerCode)`
+  invece del match diretto sulla stringa. Aggiunto `await
+  ensureAssetProvidersCached()` all'inizio di `saveEdit` per garantire che
+  la cache sia popolata prima del check.
+- `routes/(app)/assets/[id]/+page.svelte`: la derivata `isScheduledInvestment`
+  rinominata in `isParametric` e basata su `isParametricProvider(providerAssignment?.provider_code)`.
+  La toolbar label resta `assetDetail.recalculate` vs `common.sync` in base
+  al kind — funzionalità identica ma desumibile dal dato invece che dal
+  codice provider hardcoded.
+- **NON** toccati:
+  - `ProviderAssignmentSection.svelte` `uiComponent === 'scheduled_investment'`
+    (scelta del widget editor, specifica del provider, non del kind).
+  - `skipProviderAssignment` in `AssetModal.svelte` (check sul shape dei
+    params `providerParams.schedule?.length` → provider-specifico, non
+    kind-specifico; generalizzabile in futuro via metodo astratto
+    `provider.is_configured(params)`).
+
+**Gotcha svelte-check**: il docstring Python di `FAProviderKind` conteneva
+doppi-backtick RST (``VALUE``) che, trasferiti nel JSON schema OpenAPI e poi
+in un template-literal TypeScript da `openapi-zod-client`, terminavano
+prematuramente il template causando TS2349 "This expression is not callable"
+sul metodo `.describe()`. Fix: riscritto il docstring con apici singoli invece
+di backtick. Gotcha da aggiungere alla check-list: **docstrings che finiscono
+in OpenAPI description devono evitare backtick** (sia singoli che doppi).
+
+**Policy R3-3 aggiornata** (già modificata nel plan L1224+):
+- **Policy D** (wipe totale simmetrico + disconnect tx) sostituisce la Policy B.
+- Vincolo `event.currency == asset.currency` esteso dai prezzi agli eventi
+  (hard-400 su upsert).
+- Al cambio currency: tutti gli `asset_events` eliminati (manuali + auto);
+  transazioni linkate `Transaction.asset_event_id` vengono **disconnesse**
+  (`SET asset_event_id = NULL`) ma NON cancellate — l'utente riassume la
+  responsabilità del re-insert.
+- Modal di conferma esteso con riga informativa sugli eventi eliminati +
+  transazioni disconnesse.
+- Export pre-wipe esteso: modal mostra 2 bottoni download (prices + events,
+  CSV + JSON cadauno).
+
+**Design endpoint backup R3-3b** (nuova sezione nel plan L1250+):
+- Nuovo `backup_router` su `/api/v1/backup` per export read-only di serie
+  storiche prima di operazioni distruttive.
+- 3 endpoint generalizzati: `/backup/asset/{id}/prices`, `/backup/asset/{id}/events`,
+  `/backup/fx/{base}/{quote}/rates`.
+- Response shape uniforme con wrapper `{scope, entity, exported_at, row_count, rows}`.
+- Helper comune `_stream_rows_as_csv()` + `_json_snapshot()` in
+  `services/backup_service.py` per evitare duplicazione.
+- Endpoint legacy `/assets/{id}/prices/export` → redirect 308 al nuovo.
+- Test suite `test_backup_endpoints.py` (6 casi).
+
+Entrambi (policy D + backup endpoint refactor) sono **da implementare in un
+batch dedicato (Batch 3)** insieme — richiedono conferma finale utente prima
+del lavoro.
+
+**File toccati in batch 2 part4b**:
+- `backend/app/schemas/provider.py` (+enum `FAProviderKind` + campo `kind` su `FAProviderInfo`).
+- `backend/app/services/asset_source.py` (+import `FAProviderKind` + proprietà astratta `provider_kind` + refactor check `bulk_assign_providers`).
+- `backend/app/services/asset_source_providers/scheduled_investment.py` (+override `provider_kind = PARAMETRIC_GENERATION`).
+- `backend/app/api/v1/assets.py` (list_providers popola `kind=instance.provider_kind`).
+- `frontend/src/lib/api/generated.ts` (rigenerato da `./dev.py api sync`).
+- `frontend/src/lib/api/openapi.json` (rigenerato).
+- `frontend/src/lib/utils/providerHelpers.ts` (+cache `assetProviderKinds` + helper `getAssetProviderKind`/`isParametricProvider`).
+- `frontend/src/lib/components/assets/AssetModal.svelte` (2 branch `#R3-4` usano `isParametricProvider(providerCode)` invece di string match).
+- `frontend/src/routes/(app)/assets/[id]/+page.svelte` (derivata rinominata `isScheduledInvestment → isParametric`, usa `isParametricProvider`).
+- `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part3_1_Closure.md` (R3-3 policy aggiornata + R3-3b sezione export endpoint design).
+
+**Validazione**:
+- `./dev.py lint && ./dev.py format` → ✅ clean.
+- `./dev.py api sync` → ✅ client TS rigenerato con `kind?: FAProviderKind`.
+- `./dev.py front check` → ✅ 0 errors, 0 warnings.
+- `pipenv run pytest backend/test_scripts/test_utilities/test_provider_core_cache.py` → ✅ 20/20 passed.
+
+**Commit message proposto**: vedi `/tmp/libreFolio_commit_batch2_part4b.txt`.
+

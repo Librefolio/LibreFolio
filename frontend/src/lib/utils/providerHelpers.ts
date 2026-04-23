@@ -69,6 +69,7 @@ export function fxProviderBadgeHtml(providerCode: string): string {
  */
 let assetProviderIcons: Map<string, string | null> = new Map();
 let assetProviderNames: Map<string, string> = new Map();
+let assetProviderKinds: Map<string, string> = new Map();
 let assetProvidersFetched = false;
 let assetProvidersFetchPromise: Promise<void> | null = null;
 
@@ -91,6 +92,8 @@ export async function ensureAssetProvidersCached(): Promise<void> {
             for (const p of providers as any[]) {
                 assetProviderIcons.set(p.code, p.icon_url ?? null);
                 assetProviderNames.set(p.code, p.name ?? p.code);
+                // kind is optional on the schema (defaults to "online_scraper" BE-side)
+                assetProviderKinds.set(p.code, p.kind ?? 'online_scraper');
             }
         } catch {
             // Fail silently — icon lookup will just return null
@@ -111,6 +114,30 @@ export function getAssetProviderIconUrl(code: string): string | null {
 /** Get asset provider display name from the asset provider cache. */
 export function getAssetProviderName(code: string): string {
     return assetProviderNames.get(code) ?? code;
+}
+
+/**
+ * Get asset provider kind from the asset provider cache (#R3-4).
+ *
+ * Returns one of:
+ * - `"online_scraper"` — fetches data from external source (yfinance, justetf, cssscraper).
+ *   Params changes do NOT invalidate the historical series.
+ * - `"parametric_generation"` — deterministically generates the series from provider_params
+ *   (scheduled_investment). Params changes invalidate the series by definition; consumers
+ *   must wipe + regenerate.
+ *
+ * Default `"online_scraper"` for unknown providers (safe fallback, matches BE default).
+ * Requires `ensureAssetProvidersCached()` to have been called (or will return the default).
+ */
+export function getAssetProviderKind(code: string | null | undefined): 'online_scraper' | 'parametric_generation' {
+    if (!code) return 'online_scraper';
+    const v = assetProviderKinds.get(code);
+    return v === 'parametric_generation' ? 'parametric_generation' : 'online_scraper';
+}
+
+/** Convenience: true when the provider regenerates its series from params (#R3-4). */
+export function isParametricProvider(code: string | null | undefined): boolean {
+    return getAssetProviderKind(code) === 'parametric_generation';
 }
 
 /** Build an asset provider badge as HTML (icon + name). */
