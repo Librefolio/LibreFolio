@@ -17,10 +17,11 @@ spostate sezioni pending per mantenere leggibilità).
    emerse dal giro di smoke test 2026-04-23 pomeriggio.
 
 **Priorità di esecuzione suggerita** (ordine consigliato):
-1. Batch 2 **part5b** = #R4-1 + #R4-2 + #R4-4 + #R4-5 (quick wins ~70 min)
-   + diagnosi #R4-3 dopo Network trace utente.
-2. Batch 3 = R3-3 Policy D + R3-3b backup endpoints (design già fissato
-   nel parent plan, implementazione da fare qui).
+1. ~~Batch 2 **part5b** = #R4-1 + #R4-2 + #R4-4 + #R4-5 (quick wins ~70 min)
+   + diagnosi #R4-3~~ → ✅ **COMPLETO** (commit `8391aac0` + `1bff6ad1` +
+   `09dba1c3`, 2026-04-23).
+2. **Batch 3** = R3-3 Policy D + R3-3b backup endpoints (design già fissato
+   nel parent plan, implementazione da fare qui). **← PROSSIMO**
 3. Blocco G test coverage (8-10h stimati).
 4. Coda I-bis in priorità decrescente (#22 prerequisito Part 4/5 prima,
    poi #25, #26, #24, #1, #2, ecc.).
@@ -383,7 +384,7 @@ messaggio migliorabile, R3-4 funziona in backend ma ha 3 rifiniture aperte +
 una feature request trasversale. Questi 5 punti diventano il Batch 2 **part5b**
 (rifinitura) da eseguire prima di aprire il Batch 3 (R3-3 Policy D)._
 
-### #R4-1 — R3-2: messaggio errore currency-mismatch troppo tecnico
+### #R4-1 — R3-2: messaggio errore currency-mismatch troppo tecnico  ✅ DONE (2026-04-23, commit `1bff6ad1`)
 
 **Sintomo osservato dall'utente** (asset cambiato da USD a EUR, provider ritorna
 solo punti USD):
@@ -423,7 +424,7 @@ scrivere il messaggio custom nel `ProviderSyncResult`.
 mostrare `result.message` (già fa così), ma verificare che non ci sia un ramo
 che mostra la raw exception prima.
 
-### #R4-2 — R3-4: ConfirmModal deve essere ROSSO, non giallo
+### #R4-2 — R3-4: ConfirmModal deve essere ROSSO, non giallo  ✅ DONE (2026-04-23, commit `1bff6ad1`)
 
 **Sintomo**: il modal "Regenerate Prices?" oggi usa `warning={true}` →
 variante gialla. L'utente vuole la variante rossa (distruttiva) perché
@@ -445,7 +446,7 @@ l'azione wipa lo storico dei prezzi.
 **Validazione**: `./dev.py front check` + smoke manuale (screenshot o
 ispezione visiva del modal).
 
-### #R4-3 — R3-4: grafico resta retta lineare dopo regen WEEKLY
+### #R4-3 — R3-4: grafico resta retta lineare dopo regen WEEKLY  ✅ DONE (2026-04-23, risolto indirettamente dal commit `8391aac0` — parametric provider refactor)
 
 **Sintomo**: dopo confermato il modal e completato il save, il backend log
 dimostra che il wipe+regen è avvenuto correttamente:
@@ -493,7 +494,7 @@ non i gradini WEEKLY attesi.
 riporta quale dei 3 rami è. Il fix vero e proprio è condizionato a questa
 diagnosi.
 
-### #R4-4 — BE warning: `FAProviderAssignmentResult` object has no field `metadata_updated`
+### #R4-4 — BE warning: `FAProviderAssignmentResult` object has no field `metadata_updated`  ✅ DONE (2026-04-23, commit `1bff6ad1`)
 
 **Sintomo** (nel log di save con regen):
 
@@ -520,7 +521,7 @@ flusso), ma sporca i log e indica uno stato incoerente.
 4. Unit test: verificare che `bulk_assign_providers` per un provider
    parametrico (scheduled_investment) non emetta più quel warning.
 
-### #R4-5 — Feature: toasts in modalità DEV devono loggare anche su console  ✅ DONE (2026-04-23)
+### #R4-5 — Feature: toasts in modalità DEV devono loggare anche su console  ✅ DONE (2026-04-23, commit `1bff6ad1` base + `09dba1c3` HTML strip refinement)
 
 **Richiesta**: per tracciamento durante lo sviluppo, ogni toast (success /
 error / warning / info) mostrato all'utente deve essere replicato su
@@ -567,15 +568,30 @@ per bug report utenti. Non in questo batch.
 
 | # | Ticket | Area | Sforzo stimato | Priorità | Stato |
 |---|--------|------|---------------:|:--------:|:-----:|
-| 1 | #R4-1 | BE (short-circuit empty accepted_prices) | 15 min | alta | ⏳ |
-| 2 | #R4-2 | FE (ConfirmModal variant rosso) | 20 min | alta | ⏳ |
-| 3 | #R4-4 | BE (rimuovere/aggiungere metadata_updated) | 20 min | media | ⏳ |
-| 4 | #R4-5 | FE (toast console log in DEV) | 15 min | bassa | ✅ DONE |
-| 5 | #R4-3 | FE/BE (chart non aggiorna) | 1-3h (dipende da diagnosi) | alta ma bloccata su diagnosi utente | ⏳ |
+| 1 | #R4-1 | BE (short-circuit empty accepted_prices) | 15 min | alta | ✅ DONE |
+| 2 | #R4-2 | FE (ConfirmModal variant rosso) | 20 min | alta | ✅ DONE |
+| 3 | #R4-4 | BE (rimuovere/aggiungere metadata_updated) | 20 min | media | ✅ DONE |
+| 4 | #R4-5 | FE (toast console log in DEV) + HTML strip | 15+10 min | bassa | ✅ DONE |
+| 5 | #R4-3 | FE/BE (chart non aggiorna) | 1-3h (dipende da diagnosi) | alta ma bloccata su diagnosi utente | ✅ DONE |
 
-**Nota su #R4-3**: non partire con il fix finché l'utente non conferma quale
-dei 3 rami diagnostici è (network trace). Rischio altrimenti di toccare il
-ramo sbagliato e introdurre regressione su I-bis #26.
+**Stato Batch 2 part5b**: **5/5 completi**. Risoluzioni:
+
+- `8391aac0` (2026-04-23 mattina) — parametric provider refactor + `isParametric`
+  rename + dynamic wipe SQL → sblocca rigenerazione corretta (#R4-3).
+- `1bff6ad1` (2026-04-23 pomeriggio) — R4-1 + R4-2 + R4-4 + R4-5 base.
+- `09dba1c3` (2026-04-23 sera) — R4-5 extension: HTML/SVG strip su console log.
+
+Batch 2 part5b chiuso. Prossimo step: **Batch 3** (R3-3 Policy D + R3-3b backup
+endpoints) — design già fissato nel parent plan.
+
+**Nota su #R4-3 resa retrospettiva**: la diagnosi era in 3 rami (I-bis #26,
+chart reactivity, FE cache). Il refactor `8391aac0` ha toccato sia backend
+(wipe SQL dinamico, `provider_kind`) sia FE (`isParametric` derived in
+`+page.svelte`, `AssetModal.svelte` branches). Il retest utente ha
+confermato che il grafico ora aggiorna correttamente dopo regen WEEKLY →
+chiuso senza bisogno di debug ramo-per-ramo. Se in futuro il sintomo
+riemerge su un altro asset parametrico, riaprire con diagnosi network/SQL
+come originariamente pianificato.
 
 **Nota su I-bis #2** (warning "Save Without Testing?" su param-only change):
 confermato dall'utente — resta tracciato nel TODO futuri, non in questo
