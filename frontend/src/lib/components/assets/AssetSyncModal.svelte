@@ -6,6 +6,7 @@
     import {zodiosApi} from '$lib/api';
     import {CalendarClock, DollarSign, RotateCw} from 'lucide-svelte';
     import SyncModalBase from '$lib/components/ui/SyncModalBase.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import type {SyncResult, SyncSection} from '$lib/utils/syncHelpers';
     import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/syncHelpers';
@@ -143,7 +144,15 @@
         {/if}
 
         {#if pr.status === 'failed'}
-            <span class="text-red-400 truncate" title={pr.errors?.join('; ') ?? pr.message ?? ''}>{pr.errors?.[0] ?? pr.message ?? 'Failed'}</span>
+            {@const fullErr = pr.errors?.join('; ') ?? pr.message ?? ''}
+            {@const shortErr = pr.errors?.[0] ?? pr.message ?? 'Failed'}
+            <!-- #R4-6: Tooltip exposes the full (possibly long) error text that
+                 otherwise gets visually clipped by the truncate class inside a
+                 narrow flex row. `position="top"` + `maxWidth="500px"` gives a
+                 readable popover even for multi-error sync payloads. -->
+            <Tooltip text={fullErr} position="top" maxWidth="500px">
+                <span class="text-red-400 truncate inline-block max-w-[240px] align-middle">{shortErr}</span>
+            </Tooltip>
         {/if}
 
         {#if pr.elapsed_ms}

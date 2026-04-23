@@ -16,9 +16,15 @@
  *   or in .env.local: VITE_DEBUG=true
  */
 
-// This constant is replaced at compile time by Vite
-// When false, the entire debug object becomes a no-op and gets tree-shaken
-const DEBUG_ENABLED = import.meta.env.VITE_DEBUG === 'true';
+// This constant is replaced at compile time by Vite.
+// Enabled when EITHER:
+//   - VITE_DEBUG=true (explicit debug build, e.g. `./dev.py server --debug`)
+//   - import.meta.env.DEV === true (vite dev server on :5173)
+//
+// In a regular production build (`npm run build`) both are false, so the
+// entire debug object becomes a no-op and is eliminated by tree-shaking —
+// no runtime cost, no leaks.
+const DEBUG_ENABLED = import.meta.env.VITE_DEBUG === 'true' || import.meta.env.DEV === true;
 
 type LogLevel = 'log' | 'warn' | 'error' | 'info';
 
