@@ -6,6 +6,7 @@
     import {zodiosApi} from '$lib/api';
     import {ArrowLeftRight, CalendarClock, DollarSign, RotateCw} from 'lucide-svelte';
     import SyncModalBase from '$lib/components/ui/SyncModalBase.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import type {SyncResult, SyncSection} from '$lib/utils/syncHelpers';
     import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/syncHelpers';
@@ -174,7 +175,12 @@
                 </span>
             {/if}
         {:else if pr.status === 'failed'}
-            <span class="text-red-400 truncate">{pr.errors?.[0] ?? pr.message ?? 'Failed'}</span>
+            {@const fullErr = pr.errors?.join('; ') ?? pr.message ?? ''}
+            {@const shortErr = pr.errors?.[0] ?? pr.message ?? 'Failed'}
+            <!-- #R4-6: Tooltip reveals the full error that truncate clips. -->
+            <Tooltip text={fullErr} position="top" maxWidth="500px">
+                <span class="text-red-400 truncate inline-block max-w-[240px] align-middle">{shortErr}</span>
+            </Tooltip>
         {:else if pr.status === 'skipped'}
             <span class="text-gray-400 italic truncate">{pr.message ?? 'Skipped'}</span>
         {/if}
@@ -231,7 +237,12 @@
                 </span>
             {/if}
         {:else if pr.status === 'failed'}
-            <span class="text-red-400 truncate">{pr.errors?.[0] ?? pr.message ?? 'Failed'}</span>
+            {@const fullErr = pr.errors?.join('; ') ?? pr.message ?? ''}
+            {@const shortErr = pr.errors?.[0] ?? pr.message ?? 'Failed'}
+            <!-- #R4-6: Tooltip reveals the full error that truncate clips. -->
+            <Tooltip text={fullErr} position="top" maxWidth="500px">
+                <span class="text-red-400 truncate inline-block max-w-[240px] align-middle">{shortErr}</span>
+            </Tooltip>
         {:else if pr.status === 'skipped'}
             <span class="text-gray-400 italic truncate">{pr.message ?? 'Skipped'}</span>
         {/if}
