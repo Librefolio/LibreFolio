@@ -974,8 +974,11 @@ class AssetSourceManager:
                                     provider=assignment.provider_code,
                                     changes_count=changes_count,
                                 )
-                            else:
-                                result.metadata_updated = False
+                            # #R4-4: removed dead branch ``result.metadata_updated = False`` —
+                            # the field does not exist on FAProviderAssignmentResult (extra='forbid')
+                            # and had no corresponding ``= True`` counterpart, so every invocation
+                            # raised a cosmetic AttributeError swallowed by the ``except Exception``
+                            # below, polluting logs with a misleading "Failed to fetch metadata" warning.
                         except Exception as e:
                             # Log but don't fail assignment
                             logger.warning(
@@ -2356,6 +2359,29 @@ class AssetSourceManager:
             if mismatch_buckets:
                 detail = ", ".join(f"{cnt} {code}" for code, cnt in sorted(mismatch_buckets.items()))
                 errors.append(f"{sum(mismatch_buckets.values())} points discarded: currency mismatch " f"(got {detail}, expected {asset_currency})")
+
+            # #R4-1: short-circuit when every fetched point was filtered out for currency mismatch.
+            # Building ``FAUpsert(prices=[])`` would raise a raw Pydantic ``min_length`` validation
+            # error that ends up surfaced to the user ("List should have at least 1 item after
+            # validation, not 0"), instead of the meaningful "N points discarded: currency mismatch …"
+            # message we just collected in ``errors``. Returning FAILED here with that message
+            # mirrors the "No prices returned from provider" short-circuit above.
+            if not accepted_prices and mismatch_buckets:
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+                return FARefreshResult(
+                    asset_id=asset_id,
+                    status=SyncStatus.FAILED,
+                    provider_used=provider_code,
+                    points_fetched=0,
+                    points_changed=0,
+                    inserted_count=0,
+                    updated_count=0,
+                    events_fetched=len(remote_data.get("events", [])),
+                    events_changed=0,
+                    message=errors[0],
+                    errors=errors,
+                    elapsed_ms=elapsed_ms,
+                )
 
             price_items = [
                 FAPricePoint(

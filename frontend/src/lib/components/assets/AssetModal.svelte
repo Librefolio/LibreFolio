@@ -1381,7 +1381,7 @@
     message={$t('assets.modal.scheduledRegenMessage')}
     confirmText={$t('assets.modal.scheduledRegenConfirm')}
     cancelText={$t('common.cancel')}
-    warning={true}
+    danger={true}
     onConfirm={() => {
         showScheduledRegenConfirm = false;
         const aid = pendingSaveAssetId;
