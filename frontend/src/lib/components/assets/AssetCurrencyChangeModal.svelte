@@ -168,7 +168,7 @@
             <div class="flex items-center gap-3 px-5 py-4 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
                 <AlertTriangle class="text-red-600 dark:text-red-400 flex-shrink-0" size={22} />
                 <h2 id="currency-change-title" class="text-base font-semibold text-red-700 dark:text-red-300">
-                    {$t('assetDetail.currencyChange.title')}
+                    {$t('assetDetail.currencyChange.title', {values: {from: blocker.from, to: blocker.to}})}
                 </h2>
                 <button type="button" class="ml-auto p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} aria-label={$t('common.cancel')}>
                     <X size={18} />
@@ -178,16 +178,10 @@
             <!-- Body -->
             <div class="px-5 py-4 space-y-4 text-sm">
                 <p class="text-gray-700 dark:text-gray-200">
-                    {$t('assetDetail.currencyChange.body', {
-                        values: {
-                            from: blocker.from,
-                            to: blocker.to,
-                            prices: blocker.prices,
-                            events: totalEvents,
-                            oldest: blocker.oldest || '-',
-                            today: new Date().toISOString().slice(0, 10),
-                        },
-                    })}
+                    {$t('assetDetail.currencyChange.bodyIntro')}
+                </p>
+                <p class="text-red-700 dark:text-red-300 font-medium">
+                    {$t('assetDetail.currencyChange.bodyCaveat')}
                 </p>
 
                 <!-- What will be wiped / disconnected (R3-3 Policy D) -->
