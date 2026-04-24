@@ -315,13 +315,15 @@
       "duplicateName": "An asset with this name already exists",
       "duplicateNameWarning": "An asset named \"{name}\" already exists",
       "duplicateNameTooltip": "An asset with this exact name already exists. You may want to edit the existing one instead of creating a new one.",
+      "providerIncomplete": "You changed the provider but left the identifier empty. Please fill the identifier (or tick \"No provider\") before saving.",
       "createSuccess": "\"{name}\" created successfully",
       "saveSuccess": "\"{name}\" updated successfully",
       "moreInfo": "More Info",
       "createSuccessProviderFailed": "Asset \"{name}\" created, but provider assignment failed. Assign it manually.",
       "scheduledRegenTitle": "Regenerate Prices?",
       "scheduledRegenMessage": "Changing these parameters will delete the existing price history and regenerate it with the new schedule. This action cannot be undone. Continue?",
-      "scheduledRegenConfirm": "Regenerate"
+      "scheduledRegenConfirm": "Regenerate",
+      "saveFailed": "Failed to save asset"
     },
     "provider": {
       "assignment": "Provider Assignment",
@@ -470,7 +472,8 @@
       "noProviderWarning": "No provider configured. You will need to manually insert exchange rates for each date.",
       "createIntermediatePairs": "Also create intermediate pairs",
       "createIntermediatePairsHint": "Each step of the selected chain routes will be saved as a standalone pair with its provider, so they can be synced independently.",
-      "titleEdit": "Edit Pair Providers"
+      "titleEdit": "Edit Pair Providers",
+      "createFailed": "Failed to create FX pair"
     },
     "sync": {
       "title": "Sync FX Rates",
@@ -682,7 +685,8 @@
     "imageUrl": "Image URL",
     "useSelected": "Use Selected",
     "selectIcon": "Select Icon",
-    "urlHint": "Enter a remote URL or a local path from Files"
+    "urlHint": "Enter a remote URL or a local path from Files",
+    "deleteFailedSome": "Failed to delete {count} file(s)"
   },
   "datePicker": {
     "from": "From",

@@ -315,13 +315,15 @@
       "duplicateName": "Esiste già un asset con questo nome",
       "duplicateNameWarning": "Esiste già un asset chiamato \"{name}\"",
       "duplicateNameTooltip": "Un asset con questo nome esiste già. Potresti voler modificare quello esistente invece di crearne uno nuovo.",
+      "providerIncomplete": "Hai cambiato il provider ma non hai inserito l'identifier. Compila l'identifier (o spunta \"Nessun provider\") prima di salvare.",
       "createSuccess": "\"{name}\" creato con successo",
       "saveSuccess": "\"{name}\" aggiornato con successo",
       "moreInfo": "Ulteriori Info",
       "createSuccessProviderFailed": "Asset \"{name}\" creato, ma assegnazione provider fallita. Assegna manualmente.",
       "scheduledRegenTitle": "Rigenerare i Prezzi?",
       "scheduledRegenMessage": "La modifica di questi parametri cancellerà lo storico dei prezzi esistente e lo rigenererà con la nuova pianificazione. Questa azione non può essere annullata. Continuare?",
-      "scheduledRegenConfirm": "Rigenera"
+      "scheduledRegenConfirm": "Rigenera",
+      "saveFailed": "Salvataggio asset fallito"
     },
     "provider": {
       "assignment": "Assegnazione Provider",
@@ -470,7 +472,8 @@
       "noProviderWarning": "Nessun provider configurato. Dovrai inserire manualmente i tassi di cambio per ogni data.",
       "createIntermediatePairs": "Crea anche le coppie intermedie",
       "createIntermediatePairsHint": "Ogni passaggio delle catene selezionate verrà salvato come coppia autonoma con il suo provider, così da poterle sincronizzare indipendentemente.",
-      "titleEdit": "Modifica Provider Coppia"
+      "titleEdit": "Modifica Provider Coppia",
+      "createFailed": "Creazione coppia FX fallita"
     },
     "sync": {
       "title": "Sincronizza Tassi FX",
@@ -682,7 +685,8 @@
     "imageUrl": "URL Immagine",
     "useSelected": "Usa Selezionato",
     "selectIcon": "Seleziona Icona",
-    "urlHint": "Inserisci un URL remoto o un percorso locale da File"
+    "urlHint": "Inserisci un URL remoto o un percorso locale da File",
+    "deleteFailedSome": "Eliminazione di {count} file fallita"
   },
   "datePicker": {
     "from": "Dal",

@@ -11,6 +11,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
+    import {saveWithRetry} from '$lib/utils/saveWithRetry';
     import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -94,48 +95,72 @@
         uploading = true;
         error = null;
 
-        try {
-            for (const file of uploadFiles) {
-                const formData = new FormData();
-                formData.append('file', file);
+        // I-bis #22 (Batch 4.d-part2) — break-at-first-error preserves the
+        // existing UX (user sees the offending file name, can remove it and
+        // retry). ``toast: false`` because the error is rendered inline in
+        // the banner above the file list.
+        for (const file of uploadFiles) {
+            const formData = new FormData();
+            formData.append('file', file);
+            const result = await saveWithRetry(
                 // Use axios directly - Zodios doesn't handle FormData correctly
-                await axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData);
+                () => axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData),
+                {toast: false, fallback: $_('uploads.uploadFailed'), prefix: file.name},
+            );
+            if (result.status === 'error') {
+                error = result.message;
+                uploading = false;
+                return;
             }
-
-            showUploader = false;
-            pendingFiles = [];
-            await loadFiles();
-        } catch (e) {
-            console.error('Upload failed:', e);
-            error = e instanceof Error ? e.message : $_('uploads.uploadFailed');
-        } finally {
-            uploading = false;
         }
+
+        showUploader = false;
+        pendingFiles = [];
+        await loadFiles();
+        uploading = false;
     }
 
     async function handleDelete(fileId: string) {
-        try {
-            await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
-                params: {file_id: fileId},
-            });
-            await loadFiles();
-        } catch (e) {
-            console.error('Delete failed:', e);
-            error = $_('uploads.deleteFailed');
+        // I-bis #22 (Batch 4.d-part2) — unified error path.
+        const result = await saveWithRetry(
+            () =>
+                zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
+                    params: {file_id: fileId},
+                }),
+            {toast: false, fallback: $_('uploads.deleteFailed')},
+        );
+        if (result.status === 'error') {
+            error = result.message;
+            return;
         }
+        await loadFiles();
     }
 
     async function handleDeleteMultiple(fileIds: string[]) {
-        try {
-            for (const fileId of fileIds) {
-                await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
-                    params: {file_id: fileId},
-                });
+        // I-bis #22 (Batch 4.d-part2) — collect-all error policy: continue
+        // the loop even after a failure, reload the list on completion, and
+        // report a summary count. More informative than break-at-first when
+        // the user selected multiple files.
+        let failedCount = 0;
+        let lastMessage = '';
+        for (const fileId of fileIds) {
+            const result = await saveWithRetry(
+                () =>
+                    zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
+                        params: {file_id: fileId},
+                    }),
+                {toast: false, fallback: $_('uploads.deleteFailed')},
+            );
+            if (result.status === 'error') {
+                failedCount++;
+                lastMessage = result.message;
             }
-            await loadFiles();
-        } catch (e) {
-            console.error('Delete failed:', e);
-            error = $_('uploads.deleteFailed');
+        }
+        await loadFiles();
+        if (failedCount > 0) {
+            // Prefer the summary key when more than one failed; for a single
+            // failure in a multi-selection the concrete message is clearer.
+            error = failedCount === 1 ? lastMessage : $_('uploads.deleteFailedSome', {values: {count: failedCount}});
         }
     }
 

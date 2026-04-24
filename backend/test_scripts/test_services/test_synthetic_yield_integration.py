@@ -29,7 +29,7 @@ from backend.app.schemas.assets import (
 )
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAAssetEventPoint
-from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider, _generate_schedule_values
+from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider, _compute_value_at, _generate_schedule_values
 
 
 async def _history_values(params: dict, start: date, end: date):
@@ -357,3 +357,177 @@ async def test_auto_and_manual_interest_coexist():
     # Events on Feb 1: should have both auto + manual
     feb_events = [e for e in result.events if e.date == date(2025, 2, 1) and e.type == "INTEREST"]
     assert len(feb_events) >= 2, f"Expected ≥2 INTEREST events on Feb 1 (auto+manual), got {len(feb_events)}"
+
+
+# =============================================================================
+# I-bis #26 — regression tests: emitted value at maturation date is PRE-reset
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_generate_interest_daily_emits_pre_reset_value():
+    """I-bis #26: DAILY + generate_interest=True must emit the pre-reset
+    accrued value; the old bug emitted post-reset principal → flat series."""
+    schedule = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        interest_type=InterestType.SIMPLE,
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.12"),
+                maturation_frequency=MaturationFrequency.DAILY,
+                generate_interest=True,
+            )
+        ],
+        asset_events=[],
+    )
+    values, _ = _generate_schedule_values(schedule)
+
+    v_jan_2 = values[date(2025, 1, 2)]
+    assert v_jan_2 > Decimal("10000"), f"DAILY + gen_interest=True must emit pre-reset value; got flat {v_jan_2} → " "I-bis #26 regression (Step 2 running before value emission)."
+    assert v_jan_2 < Decimal("10010"), f"Day-1 accrual looks implausible: {v_jan_2}"
+
+
+@pytest.mark.asyncio
+async def test_generate_interest_weekly_shows_sawtooth_peaks():
+    """I-bis #26: WEEKLY + generate_interest=True must produce peaks > initial_value."""
+    schedule = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        interest_type=InterestType.SIMPLE,
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 3, 31),
+                annual_rate=Decimal("0.52"),
+                maturation_frequency=MaturationFrequency.WEEKLY,
+                generate_interest=True,
+            )
+        ],
+        asset_events=[],
+    )
+    values, auto_events = _generate_schedule_values(schedule)
+
+    interest_events = [e for e in auto_events if e.type == "INTEREST"]
+    assert len(interest_events) >= 10, f"Expected ≥10 weekly coupons, got {len(interest_events)}"
+
+    peaks = [v for v in values.values() if v > Decimal("10000")]
+    assert len(peaks) >= 5, f"WEEKLY sawtooth must emit values > 10000 at maturation peaks; got {len(peaks)} → " "I-bis #26 regression."
+
+
+# =============================================================================
+# current_price intra-cycle accrual — regression tests (retest 2026-04-24)
+# =============================================================================
+#
+# Bug: ``get_current_value`` backward-filled from the most recent cached
+# maturation date, which returned the pre-reset peak (== the coupon just
+# paid). Correct behaviour: on the day AFTER a coupon payout, the accrued
+# value should restart from principal and grow intra-cycle.
+# Fix: ``_compute_value_at`` re-walks the schedule day-by-day up to the
+# target date applying manual subtractive events + auto-coupon resets.
+
+
+def test_compute_value_at_semiannual_after_first_coupon_is_close_to_principal():
+    """After a SEMIANNUAL coupon + 1 day, the value should be ~principal,
+    NOT the pre-reset peak (~10500 at 5% annual on 10k over 6mo)."""
+    schedule = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        interest_type=InterestType.SIMPLE,
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.10"),
+                maturation_frequency=MaturationFrequency.SEMIANNUAL,
+                generate_interest=True,
+            )
+        ],
+        asset_events=[],
+    )
+    # Jul 2 is the day after the first SEMIANNUAL maturation (Jul 1 is the
+    # reset point). Value should be back to ~principal + 1 day of accrual,
+    # NOT ~10500.
+    v_jul2 = _compute_value_at(schedule, date(2025, 7, 2))
+    assert v_jul2 is not None
+    # 1 day at 10% annual on 10k ≈ 2.74 EUR
+    assert Decimal("10001") <= v_jul2 <= Decimal("10010"), f"Post-coupon intra-cycle value should be ~principal + 1d accrual; got {v_jul2}. " "If this is ~10500 the fix has regressed (backward-fill to peak)."
+
+
+def test_compute_value_at_semiannual_mid_cycle_grows_monotonically():
+    """Between two coupons, the value should grow monotonically from
+    principal to the next peak — no early resets."""
+    schedule = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        interest_type=InterestType.SIMPLE,
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.12"),
+                maturation_frequency=MaturationFrequency.SEMIANNUAL,
+                generate_interest=True,
+            )
+        ],
+        asset_events=[],
+    )
+    # Sample days after the first coupon (Jul 1 → reset). Aug 1, Sep 1, Oct 1
+    # should form a strictly increasing sequence.
+    v_aug = _compute_value_at(schedule, date(2025, 8, 1))
+    v_sep = _compute_value_at(schedule, date(2025, 9, 1))
+    v_oct = _compute_value_at(schedule, date(2025, 10, 1))
+    assert v_aug is not None and v_sep is not None and v_oct is not None
+    assert Decimal("10000") < v_aug < v_sep < v_oct, f"Expected strictly increasing series Aug<Sep<Oct after coupon; got {v_aug}, {v_sep}, {v_oct}."
+
+
+def test_compute_value_at_respects_manual_interest_subtractive_event():
+    """A manual INTEREST event is subtractive — _compute_value_at should
+    reflect the coupon payout on the requested date."""
+    schedule = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        interest_type=InterestType.SIMPLE,
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.12"),
+                maturation_frequency=MaturationFrequency.ANNUAL,
+                generate_interest=False,  # No auto-coupon; manual event drives the subtraction
+            )
+        ],
+        asset_events=[
+            FAAssetEventPoint(
+                date=date(2025, 6, 1),
+                type="INTEREST",
+                value=Currency(code="EUR", amount=Decimal("500")),
+                notes="manual coupon",
+            )
+        ],
+    )
+    # Before manual event (May 31): value ~ principal + 5mo accrual (≈ 500)
+    v_before = _compute_value_at(schedule, date(2025, 5, 31))
+    # On manual event day (Jun 1): value AFTER subtraction (principal + accrual - 500)
+    v_on = _compute_value_at(schedule, date(2025, 6, 1))
+    # Right after (Jun 2): value continues from v_on + 1d accrual
+    v_after = _compute_value_at(schedule, date(2025, 6, 2))
+    assert v_before is not None and v_on is not None and v_after is not None
+    assert v_on < v_before, f"Manual INTEREST must lower the value on its date; got before={v_before} on={v_on}."
+    # Jun 2 = v_on + 1d accrual. Must be > v_on but much less than v_before.
+    assert v_on < v_after < v_before, f"Post-event day should resume accrual from reduced value; got {v_on}/{v_after}/{v_before}."
+
+
+def test_compute_value_at_returns_none_outside_schedule():
+    """Before first_start or after last_end → None (caller fallback)."""
+    schedule = FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=Decimal("10000")),
+        schedule=[
+            FAInterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.05"),
+                maturation_frequency=MaturationFrequency.DAILY,
+            )
+        ],
+        asset_events=[],
+    )
+    assert _compute_value_at(schedule, date(2024, 12, 31)) is None
+    assert _compute_value_at(schedule, date(2026, 1, 1)) is None

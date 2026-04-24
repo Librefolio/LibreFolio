@@ -17,6 +17,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
+    import {saveWithRetry} from '$lib/utils/saveWithRetry';
     import {ArrowDownUp, ArrowLeftRight, Lock, RotateCcw, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -237,8 +238,19 @@
                 }
             }
 
-            // Create all routes in one bulk call
-            await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]);
+            // I-bis #22 (Batch 4.d-part2) — wrap the create call through
+            // ``saveWithRetry``. Auto-sync below stays in its own non-blocking
+            // try/catch: a sync failure must NOT block creation success.
+            // ``toast: false`` because ``error`` is rendered inline.
+            const createResult = await saveWithRetry(
+                () => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]),
+                {toast: false, fallback: $_('fx.addPair.createFailed')},
+            );
+            if (createResult.status === 'error') {
+                error = createResult.message;
+                saving = false;
+                return;
+            }
 
             // Auto-sync if real routes exist (not MANUAL-only)
             const hasRealProvider = selectedRoutes.length > 0;
@@ -271,13 +283,6 @@
                 slug: base < quote ? `${base}-${quote}` : `${quote}-${base}`,
             });
             resetAndClose();
-        } catch (e: any) {
-            const detail = e?.response?.data?.detail;
-            if (detail?.message) {
-                error = detail.message;
-            } else {
-                error = e?.message || 'Failed to create pair';
-            }
         } finally {
             saving = false;
         }

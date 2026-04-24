@@ -6,7 +6,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {isAxiosError} from 'axios';
+    import {saveWithRetry} from '$lib/utils/saveWithRetry';
     import {Check, X} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
@@ -70,33 +70,46 @@
 
         isSubmitting = true;
 
-        try {
-            await zodiosApi.change_password_api_v1_auth_change_password_post({
-                current_password: currentPassword,
-                new_password: newPassword,
-            });
+        // I-bis #22 (Batch 4.d-part2) — route through ``saveWithRetry`` for uniform
+        // error extraction. ``toast: false`` because we already render the error
+        // inline via ``InfoBanner``; a toast would duplicate the message.
+        // ``onError`` preserves the two semantic mappings (incorrect / different
+        // password) that existed before — the extractor alone would surface the
+        // raw FastAPI detail, which is less friendly.
+        const result = await saveWithRetry(
+            () =>
+                zodiosApi.change_password_api_v1_auth_change_password_post({
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                }),
+            {
+                toast: false,
+                fallback: $_('settings.passwordChangeFailed'),
+                onError: (err: unknown) => {
+                    const detail = ((err as any)?.response?.data?.detail as string)?.toLowerCase() || '';
+                    if (detail.includes('incorrect')) {
+                        error = $_('settings.currentPasswordIncorrect');
+                        return true;
+                    }
+                    if (detail.includes('different')) {
+                        error = $_('settings.passwordMustBeDifferent');
+                        return true;
+                    }
+                    return false;
+                },
+            },
+        );
 
+        if (result.status === 'success') {
             success = $_('settings.passwordChanged');
             setTimeout(() => {
                 dispatch('success');
                 handleClose();
             }, 1500);
-        } catch (e) {
-            if (isAxiosError(e)) {
-                const detail = (e.response?.data?.detail as string)?.toLowerCase() || '';
-                if (detail.includes('incorrect')) {
-                    error = $_('settings.currentPasswordIncorrect');
-                } else if (detail.includes('different')) {
-                    error = $_('settings.passwordMustBeDifferent');
-                } else {
-                    error = e.message || $_('settings.passwordChangeFailed');
-                }
-            } else {
-                error = $_('settings.passwordChangeFailed');
-            }
-        } finally {
-            isSubmitting = false;
+        } else if (!error) {
+            error = result.message;
         }
+        isSubmitting = false;
     }
 </script>
 

@@ -9,6 +9,7 @@
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import {saveWithRetry} from '$lib/utils/saveWithRetry';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -59,46 +60,57 @@
         loading = true;
         error = null;
 
+        // I-bis #22 — route both create and update through ``saveWithRetry``
+        // so HTTP failures (network, 4xx, 5xx) surface via a toast + keep
+        // the modal open with ``formTouched`` preserved, instead of
+        // closing silently with only a console.error.
         try {
             if (mode === 'create') {
-                // Create broker
-                const response = await zodiosApi.create_brokers_api_v1_brokers_post([event.detail]);
-                const result = response.results[0];
-                const brokerId = Array.isArray(result?.broker_id) ? result.broker_id[0] : result?.broker_id;
-                const errorMsg = Array.isArray(result?.error) ? result.error[0] : result?.error;
-
-                if (result?.success && brokerId) {
+                const result = await saveWithRetry(
+                    () => zodiosApi.create_brokers_api_v1_brokers_post([event.detail]),
+                    {fallback: $_('brokers.createFailed')},
+                );
+                if (result.status === 'error') {
+                    error = result.message;
+                    return;
+                }
+                const apiResult = result.data.results[0];
+                const createdId = Array.isArray(apiResult?.broker_id) ? apiResult.broker_id[0] : apiResult?.broker_id;
+                const errorMsg = Array.isArray(apiResult?.error) ? apiResult.error[0] : apiResult?.error;
+                if (apiResult?.success && createdId) {
                     formTouched = false;
-                    dispatch('created', {id: brokerId});
+                    dispatch('created', {id: createdId});
                     dispatch('close');
                 } else {
                     error = errorMsg ?? $_('brokers.createFailed');
                 }
             } else if (brokerId) {
-                // Update broker
-                // BrokerForm sends "" for cleared fields, value for set fields
-                await zodiosApi.update_broker_api_v1_brokers__broker_id__patch(
-                    {
-                        name: event.detail.name,
-                        description: event.detail.description,
-                        portal_url: event.detail.portal_url,
-                        icon_url: event.detail.icon_url,
-                        default_import_plugin: event.detail.default_import_plugin,
-                        allow_cash_overdraft: event.detail.allow_cash_overdraft,
-                        allow_asset_shorting: event.detail.allow_asset_shorting,
-                        is_active: event.detail.is_active,
-                        opened_at: event.detail.opened_at || null,
-                    },
-                    {params: {broker_id: brokerId}},
+                const result = await saveWithRetry(
+                    () =>
+                        zodiosApi.update_broker_api_v1_brokers__broker_id__patch(
+                            {
+                                name: event.detail.name,
+                                description: event.detail.description,
+                                portal_url: event.detail.portal_url,
+                                icon_url: event.detail.icon_url,
+                                default_import_plugin: event.detail.default_import_plugin,
+                                allow_cash_overdraft: event.detail.allow_cash_overdraft,
+                                allow_asset_shorting: event.detail.allow_asset_shorting,
+                                is_active: event.detail.is_active,
+                                opened_at: event.detail.opened_at || null,
+                            },
+                            {params: {broker_id: brokerId}},
+                        ),
+                    {fallback: $_('brokers.updateFailed')},
                 );
-
+                if (result.status === 'error') {
+                    error = result.message;
+                    return;
+                }
                 formTouched = false;
                 dispatch('updated', {id: brokerId});
                 dispatch('close');
             }
-        } catch (e) {
-            console.error('Broker operation failed:', e);
-            error = mode === 'create' ? $_('brokers.createFailed') : $_('brokers.updateFailed');
         } finally {
             loading = false;
         }

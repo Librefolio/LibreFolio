@@ -13,6 +13,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
+    import {saveWithRetry} from '$lib/utils/saveWithRetry';
     import {Check, ChevronDown, Crown, Eye, Loader2, Pencil, Plus, RotateCcw, Save, Search, Trash2, Users, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
@@ -303,29 +304,32 @@
         error = null;
         successMessage = null;
 
-        try {
-            const body = accesses.map((a) => ({
-                user_id: a.user_id,
-                role: a.role,
-                share_percentage: a.share_percentage,
-            }));
+        const body = accesses.map((a) => ({
+            user_id: a.user_id,
+            role: a.role,
+            share_percentage: a.share_percentage,
+        }));
 
-            await zodiosApi.bulk_update_broker_access_api_v1_brokers__broker_id__access_put(body, {params: {broker_id: brokerId}});
+        // I-bis #22 (Batch 4.d-part2) — unified error extraction.
+        // ``toast: false`` keeps the error inline in the banner (consistent
+        // with the previous UX — no additional toast noise).
+        const result = await saveWithRetry(
+            () => zodiosApi.bulk_update_broker_access_api_v1_brokers__broker_id__access_put(body, {params: {broker_id: brokerId}}),
+            {toast: false, fallback: $_('brokers.sharing.saveFailed')},
+        );
 
+        if (result.status === 'success') {
             successMessage = $_('brokers.sharing.saved');
             originalAccesses = JSON.parse(JSON.stringify(accesses));
             onChanged?.();
-
             // Auto-dismiss success after 3s
             setTimeout(() => {
                 successMessage = null;
             }, 3000);
-        } catch (e: any) {
-            const detail = e?.response?.data?.detail || e?.message || 'Unknown error';
-            error = $_('brokers.sharing.saveFailed') + ': ' + detail;
-        } finally {
-            saving = false;
+        } else {
+            error = result.message;
         }
+        saving = false;
     }
 
     // =========================================================================

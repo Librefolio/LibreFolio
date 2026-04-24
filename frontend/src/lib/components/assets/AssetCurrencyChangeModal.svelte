@@ -32,6 +32,7 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {_ as t} from '$lib/i18n';
     import {buildAssetSyncToast} from '$lib/utils/syncToastHelpers';
+    import {extractErrorMessage} from '$lib/utils/saveWithRetry';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     interface BlockerInfo {
@@ -81,9 +82,11 @@
         // just surface any HTTP error as a toast.
         try {
             await downloadAssetBackup(blocker.assetId, kind, format);
-        } catch (err: any) {
-            console.error(`Backup download failed (${kind}/${format}):`, err);
-            const detail = err?.response?.data?.detail || err?.message || 'unknown error';
+        } catch (err: unknown) {
+            // I-bis #22 — use centralised ``extractErrorMessage`` so FastAPI
+            // ``detail`` (string / object / Pydantic array) surfaces uniformly.
+            const detail = extractErrorMessage(err, 'unknown error');
+            console.error(`[backup] ${kind}/${format}`, detail, err);
             toasts.error(`${$t('assetDetail.currencyChange.backupTitle')}: ${detail}`);
         }
     }
@@ -135,18 +138,22 @@
                     } else {
                         toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
                     }
-                } catch (syncErr: any) {
-                    console.error('Post-wipe auto-sync failed:', syncErr);
-                    const detail = syncErr?.response?.data?.detail || syncErr?.message || 'unknown error';
+                } catch (syncErr: unknown) {
+                    // I-bis #22 — unified error extraction; the modal does
+                    // NOT close on sync failure (the PATCH itself succeeded).
+                    const detail = extractErrorMessage(syncErr, 'unknown error');
+                    console.error('[currency-change] post-wipe auto-sync failed', detail, syncErr);
                     toasts.error(`${tr('common.sync')}: ${detail}`);
                 }
             }
 
             open = false;
             onconfirmed?.();
-        } catch (err: any) {
-            console.error('Currency change flow failed:', err);
-            const msg = err?.response?.data?.detail || err?.message || 'unknown error';
+        } catch (err: unknown) {
+            // I-bis #22 — wipe or PATCH failed: keep the modal open so the
+            // user can retry or cancel; surface the detail via toast.
+            const msg = extractErrorMessage(err, 'unknown error');
+            console.error('[currency-change] flow failed', msg, err);
             toasts.error(`${$t('assetDetail.currencyChange.failed')}: ${msg}`);
         } finally {
             inProgress = false;
