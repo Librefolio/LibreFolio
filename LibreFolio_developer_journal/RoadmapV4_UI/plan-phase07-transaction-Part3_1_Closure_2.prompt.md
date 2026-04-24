@@ -30,9 +30,9 @@ spostate sezioni pending per mantenere leggibilità).
    `backupDownload.ts` via axiosInstance (cookie auth + 401 interceptor),
    i18n × 4. **Retest 2026-04-24**: 28/29 test verdi, 3 rifiniture
    UX/cleanup emerse → Batch 3 **part5b** (vedi §Retest findings sotto).
-3. **Batch 3 part5b** = polish post-retest (`#R5-1..#R5-3`, ~45 min).
-   **← PROSSIMO**
-4. Blocco G test coverage (8-10h stimati).
+3. ~~**Batch 3 part5b** = polish post-retest (`#R5-1..#R5-3`, ~45 min)~~
+   → ✅ **COMPLETO** (2026-04-24, commit pending).
+4. Blocco G test coverage (8-10h stimati). **← PROSSIMO**
 5. Coda I-bis in priorità decrescente (#22 prerequisito Part 4/5 prima,
    poi #25, #26, #24, #1, #2, ecc.).
 
@@ -750,19 +750,34 @@ nello stesso batch polish.
 
 ### Priorità suggerita per Batch 3 part5b
 
-| # | Ticket | Area | Sforzo stimato | Priorità |
-|---|--------|------|---------------:|:--------:|
-| 1 | #R5-1 | FE + i18n (modal copy: title/body/backupTitle) | 20 min | alta |
-| 2 | #R5-2 | FE + i18n (subset di #R5-1) | 0 (già in #R5-1) | — |
-| 3 | #R5-3 | FE (rimuovi colonna currency editor eventi) + BE test | 35 min | media |
+| # | Ticket | Area | Sforzo stimato | Priorità | Stato |
+|---|--------|------|---------------:|:--------:|:-----:|
+| 1 | #R5-1 | FE + i18n (modal copy: title/body split/backupTitle) | 20 min | alta | ✅ DONE |
+| 2 | #R5-2 | FE + i18n (subset di #R5-1) | — | — | ✅ DONE (via #R5-1) |
+| 3 | #R5-3 | FE (rimuovi colonna currency editor eventi) | 20 min | media | ✅ DONE |
 
-**Ordine di commit consigliato**: **un unico commit** "Batch 3 part5b —
-polish #R5-1 + #R5-3" perché cambiano file coerenti (modal + editor +
-i18n) e sono logicamente correlati al commit Batch 3 appena fatto.
-Separare solo se #R5-3 richiede cambi backend inattesi.
+**Stato Batch 3 part5b**: **3/3 completi** (2026-04-24, commit pending).
 
-**Nota test list retest**: se la copy di #R5-1 viene accettata dall'utente,
-la sez. 1.3 diventa auto-passante senza bisogno di ri-testare (era un
-falso bug di percezione).
+**Risoluzioni**:
+* `AssetCurrencyChangeModal.svelte` — title ora `"Change asset currency
+  ({from} → {to})"`; body splittato in `bodyIntro` (tono neutro,
+  rimanda alla lista) + `bodyCaveat` (paragrafo rosso bold, enfatizza
+  responsabilità utente sulle tx scollegate); `backupTitle` rinominato
+  "Download a backup before proceeding".
+* `AssetDataEditorSection.svelte` — rimossa colonna `currency` da
+  `eventColumns`, da `eventsToEventRows` (sia `values` che
+  `_originalValues`), e il payload POST ora fissa
+  `value.code = asset.currency` invece di leggere `r.values.currency`.
+* i18n × 4 — rimossa chiave obsoleta `body`, aggiunte `bodyIntro` +
+  `bodyCaveat`, aggiornate `title` e `backupTitle`.
+
+**Test `test_assets_events_hard_400_on_currency_mismatch`** — rinviato a
+Blocco G.10+ come pianificato (BE guard già attivo e verificato via
+retest 2026-04-24).
+
+**Nota test list retest**: la sez. 1.3/1.4/3.3 diventa auto-passante —
+con la nuova copy del `backupTitle` non c'è più dissonanza cognitiva
+quando compaiono solo i bottoni "Export events" senza i corrispondenti
+"Export prices".
 
 

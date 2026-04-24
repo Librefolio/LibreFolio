@@ -980,10 +980,10 @@
     "fxDataAvailableFrom": "Tasas FX disponibles desde {date} — fechas anteriores muestran precios sin convertir",
     "fxPairNoRates": "El par FX {pair} no tiene tasas en este rango — sincronízalo para habilitar la conversión",
     "currencyChange": {
-      "title": "Cambiar divisa — acción destructiva",
+      "title": "Cambiar divisa del activo ({from} → {to})",
       "autoSyncInfo": "Tras la eliminación, los precios se sincronizarán automáticamente desde el proveedor a partir de {from}.",
       "noProviderInfo": "Sin proveedor asignado — tras la eliminación tendrás que re-importar los precios manualmente.",
-      "backupTitle": "Respaldar los precios actuales antes de eliminar",
+      "backupTitle": "Descargar una copia de seguridad antes de continuar",
       "confirm": "Eliminar y cambiar divisa",
       "working": "En curso…",
       "progressPatch": "Actualizando divisa del activo…",
@@ -991,7 +991,6 @@
       "done": "Divisa cambiada de {from} a {to}. Precios actualizados.",
       "failed": "Falló el cambio de divisa",
       "syncFailedManualRetry": "Divisa cambiada pero la sincronización post-borrado falló — usa el botón Sync para reintentar.",
-      "body": "Cambiar la divisa de {from} a {to} eliminará permanentemente {prices} precios y {events} eventos (las transacciones enlazadas a esos eventos se desconectarán — no se eliminarán — para poder reasociarlas después). Tras la limpieza, los precios se volverán a cargar desde el proveedor en la nueva divisa.",
       "changedTo": "Moneda cambiada de {from} a {to}",
       "summaryPrices": "{count} registros de precio se eliminarán ({oldest} → {newest}).",
       "summaryEvents": "{manual} eventos manuales + {provider} eventos generados por el proveedor se eliminarán.",
@@ -1001,7 +1000,9 @@
       "exportEventsCsv": "Exportar eventos (CSV)",
       "exportEventsJson": "Exportar eventos (JSON)",
       "progressWipe": "Eliminando {prices} precios + {events} eventos y desconectando {linkedTx} transacciones…",
-      "wipeSuccess": "Eliminados {prices} precios, {events} eventos; desconectadas {linkedTx} transacciones"
+      "wipeSuccess": "Eliminados {prices} precios, {events} eventos; desconectadas {linkedTx} transacciones",
+      "bodyIntro": "El cambio de divisa requiere eliminar todos los datos de mercado almacenados (ver resumen abajo). LibreFolio intentará luego re-sincronizar precios y eventos desde el proveedor en la nueva divisa.",
+      "bodyCaveat": "Las transacciones enlazadas a los eventos eliminados serán desconectadas — es tu responsabilidad reasociarlas a los nuevos eventos si es necesario."
     },
     "metadataDescription": "Descripción",
     "pricesInCurrency": "Precios en {currency}",

@@ -980,10 +980,10 @@
     "fxDataAvailableFrom": "Tassi FX disponibili dal {date} — date precedenti mostrano prezzi non convertiti",
     "fxPairNoRates": "La coppia FX {pair} non ha tassi in questo intervallo — sincronizzala per abilitare la conversione",
     "currencyChange": {
-      "title": "Cambia valuta — azione distruttiva",
+      "title": "Cambia valuta asset ({from} → {to})",
       "autoSyncInfo": "Dopo la cancellazione, i prezzi verranno auto-sincronizzati dal provider a partire da {from}.",
       "noProviderInfo": "Nessun provider assegnato — dopo la cancellazione dovrai re-importare i prezzi manualmente.",
-      "backupTitle": "Scarica backup dei prezzi attuali prima della cancellazione",
+      "backupTitle": "Scarica un backup prima di procedere",
       "confirm": "Elimina e cambia valuta",
       "working": "In corso…",
       "progressPatch": "Aggiornamento valuta asset…",
@@ -991,7 +991,6 @@
       "done": "Valuta cambiata da {from} a {to}. Prezzi aggiornati.",
       "failed": "Cambio valuta fallito",
       "syncFailedManualRetry": "Valuta cambiata ma la sincronizzazione post-wipe è fallita — usa il bottone Sync per riprovare.",
-      "body": "Cambiando la valuta da {from} a {to} verranno eliminati permanentemente {prices} prezzi e {events} eventi (le transazioni collegate a quegli eventi verranno scollegate — NON eliminate — così potrai riassociarle in seguito). Dopo il wipe i prezzi verranno ri-caricati dal provider nella nuova valuta.",
       "changedTo": "Valuta cambiata da {from} a {to}",
       "summaryPrices": "{count} record di prezzo verranno eliminati ({oldest} → {newest}).",
       "summaryEvents": "{manual} eventi manuali + {provider} eventi generati dal provider verranno eliminati.",
@@ -1001,7 +1000,9 @@
       "exportEventsCsv": "Esporta eventi (CSV)",
       "exportEventsJson": "Esporta eventi (JSON)",
       "progressWipe": "Cancellazione di {prices} prezzi + {events} eventi e scollegamento di {linkedTx} transazioni…",
-      "wipeSuccess": "Eliminati {prices} prezzi, {events} eventi; scollegate {linkedTx} transazioni"
+      "wipeSuccess": "Eliminati {prices} prezzi, {events} eventi; scollegate {linkedTx} transazioni",
+      "bodyIntro": "Il cambio valuta richiede la cancellazione di tutti i dati di mercato memorizzati (vedi riepilogo sotto). LibreFolio proverà poi a ri-sincronizzare prezzi ed eventi dal provider nella nuova valuta.",
+      "bodyCaveat": "Le transazioni collegate agli eventi cancellati verranno scollegate — sarà tua responsabilità ricollegarle ai nuovi eventi se necessario."
     },
     "metadataDescription": "Descrizione",
     "pricesInCurrency": "Prezzi in {currency}",

@@ -88,8 +88,15 @@
         {value: 'MATURITY_SETTLEMENT', label: $t('assetDetail.eventType.MATURITY_SETTLEMENT'), emoji: '🏁', tooltip: $t('assetDetail.eventTypeTooltip.MATURITY_SETTLEMENT'), docsPath: 'financial-theory/instruments/asset-events/maturity-settlement'},
     ]);
 
+    // #R5-3 (Policy D): the ``currency`` column has been removed from the events tab.
+    // Policy D (phase-07 Batch 3) enforces ``event.currency == asset.currency`` via
+    // a backend hard-400 (``EVENT_CURRENCY_MISMATCH``). Letting the user pick a
+    // currency per event only to have the save rejected is a bad UX contract; the
+    // currency is now inherited from ``asset.currency`` on the backend side (the
+    // existing ``default_currency`` fallback in ``_upsert_asset_events``). The
+    // asset currency is still shown prominently in the tab label via
+    // ``assetDetail.eventsInCurrency`` so the user knows the unit.
     let eventColumns: ColumnDef[] = $derived([
-        {key: 'currency', label: $t('dataEditor.col.currency'), type: 'currency', editable: true, required: false, placeholder: 'USD'},
         {key: 'type', label: $t('dataEditor.col.type'), type: 'enum', editable: true, required: true, enumOptions: eventTypeOptions},
         {key: 'amount', label: $t('dataEditor.col.amount'), type: 'number', editable: true, required: true, step: 0.01, placeholder: '1.25'},
         {key: 'notes', label: $t('dataEditor.col.notes'), type: 'string', editable: true, required: false, placeholder: 'Q1 payout'},
@@ -152,7 +159,6 @@
             values: {
                 type: ev.type ?? '',
                 amount: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
-                currency: ev.value?.code ?? '',
                 notes: typeof ev.notes === 'string' ? ev.notes : Array.isArray(ev.notes) ? (ev.notes[0] ?? '') : '',
             },
             selected: false,
@@ -161,7 +167,6 @@
             _originalValues: {
                 type: ev.type ?? '',
                 amount: ev.value?.amount != null ? Number(ev.value.amount) : undefined,
-                currency: ev.value?.code ?? '',
                 notes: typeof ev.notes === 'string' ? ev.notes : Array.isArray(ev.notes) ? (ev.notes[0] ?? '') : '',
             },
         }));
@@ -339,11 +344,20 @@
                     });
 
                     if (validEvents.length > 0) {
+                        // #R5-3 (Policy D): use ``asset.currency`` for every event
+                        // instead of letting the user pick per-row.
+                        // The Zodios ``Currency_Input`` schema requires ``code`` as a
+                        // non-optional string, so we populate it from the ``currency``
+                        // prop (same value shown in the tab label). The backend
+                        // validates ``event.currency == asset.currency`` anyway
+                        // (``EVENT_CURRENCY_MISMATCH`` hard-400) so sending the
+                        // matching code is always safe.
+                        const eventCurrency = currency || 'USD';
                         const eventItems = validEvents.map((r) => ({
                             date: r.date,
                             type: String(r.values.type),
                             value: {
-                                code: String(r.values.currency || 'USD'),
+                                code: eventCurrency,
                                 amount: Number(r.values.amount),
                             },
                             notes: r.values.notes ? String(r.values.notes) : undefined,

@@ -980,10 +980,10 @@
     "fxDataAvailableFrom": "FX rates available from {date} — earlier dates show unconverted prices",
     "fxPairNoRates": "FX pair {pair} has no rates in this date range — sync it to enable conversion",
     "currencyChange": {
-      "title": "Change currency — destructive action",
+      "title": "Change asset currency ({from} → {to})",
       "autoSyncInfo": "After wipe, prices will be auto-synced from the provider starting from {from}.",
       "noProviderInfo": "No provider assigned — after wipe you will need to re-import prices manually.",
-      "backupTitle": "Backup current prices before deletion",
+      "backupTitle": "Download a backup before proceeding",
       "confirm": "Delete & Change Currency",
       "working": "Working…",
       "progressPatch": "Updating asset currency…",
@@ -991,7 +991,6 @@
       "done": "Currency changed from {from} to {to}. Prices refreshed.",
       "failed": "Currency change failed",
       "syncFailedManualRetry": "Currency changed but post-wipe sync failed — use the Sync button to retry.",
-      "body": "Changing currency from {from} to {to} will permanently wipe {prices} prices and {events} events (any transactions referencing those events will be disconnected — not deleted — so you can reattach them later). Prices will be re-fetched from the provider in the new currency after the wipe.",
       "changedTo": "Currency changed from {from} to {to}",
       "summaryPrices": "{count} price records will be deleted ({oldest} → {newest}).",
       "summaryEvents": "{manual} manual events + {provider} provider-generated events will be deleted.",
@@ -1001,7 +1000,9 @@
       "exportEventsCsv": "Export events (CSV)",
       "exportEventsJson": "Export events (JSON)",
       "progressWipe": "Wiping {prices} prices + {events} events and disconnecting {linkedTx} transactions…",
-      "wipeSuccess": "Wiped {prices} prices, {events} events; disconnected {linkedTx} transactions"
+      "wipeSuccess": "Wiped {prices} prices, {events} events; disconnected {linkedTx} transactions",
+      "bodyIntro": "Changing the currency requires wiping all stored market data (see the summary below). LibreFolio will then attempt to re-sync prices and events from the provider in the new currency.",
+      "bodyCaveat": "Any transactions that were linked to the deleted events will be disconnected — you are responsible for reattaching them to the newly-synced events if needed."
     },
     "metadataDescription": "Description",
     "pricesInCurrency": "Prices in {currency}",
