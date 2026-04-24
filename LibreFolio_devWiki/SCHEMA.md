@@ -33,8 +33,10 @@ LibreFolio_devWiki/
 │   ├── ingest-registry.md # Git-hash snapshot index for all ingested sources
 │   └── (optional: clipped external articles not tracked by git)
 └── wiki/                  # LLM-generated pages (LLM writes and maintains)
+    ├── features/          # One page per feature (F-NNN.md) + registry.md
+    ├── connections/       # Cross-feature dependency and relationship maps
+    ├── workflows/         # End-to-end user/system workflows
     ├── decisions/         # Architectural and technical decisions
-    ├── entities/          # Components, services, modules, APIs, providers
     ├── concepts/          # Patterns, approaches, principles, techniques
     ├── problems/          # Problems encountered and solved
     └── sources/           # Summaries of ingested sources (plans, articles, etc.)

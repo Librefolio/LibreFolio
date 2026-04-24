@@ -5,18 +5,47 @@
   "showAttachments": false,
   "hideUnresolved": false,
   "showOrphans": true,
-  "collapse-color-groups": true,
-  "colorGroups": [],
-  "collapse-display": true,
-  "showArrow": false,
-  "textFadeMultiplier": 0,
-  "nodeSizeMultiplier": 1,
-  "lineSizeMultiplier": 1,
-  "collapse-forces": true,
-  "centerStrength": 0.518713248970312,
-  "repelStrength": 10,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "tag:#backend  ",
+      "color": {
+        "a": 1,
+        "rgb": 14048348
+      }
+    },
+    {
+      "query": "tag:#frontend  ",
+      "color": {
+        "a": 1,
+        "rgb": 14069084
+      }
+    },
+    {
+      "query": "tag:#architecture  ",
+      "color": {
+        "a": 1,
+        "rgb": 11392604
+      }
+    },
+    {
+      "query": "tag:#mkdocs tag:#docs  ",
+      "color": {
+        "a": 1,
+        "rgb": 6058198
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": -0.5,
+  "nodeSizeMultiplier": 0.921770833333333,
+  "lineSizeMultiplier": 0.436875,
+  "collapse-forces": false,
+  "centerStrength": 0.520659722222222,
+  "repelStrength": 15.8489583333333,
   "linkStrength": 1,
-  "linkDistance": 250,
-  "scale": 1.3897077818787356,
-  "close": true
+  "linkDistance": 30,
+  "scale": 0.39543765712644,
+  "close": false
 }
