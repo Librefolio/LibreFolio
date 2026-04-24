@@ -14,6 +14,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {toasts} from '$lib/stores/toastStore.svelte';
     import {Check, ChevronDown, Crown, Eye, Loader2, Pencil, Plus, RotateCcw, Save, Search, Trash2, Users, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
@@ -56,7 +57,6 @@
     let loading = true;
     let saving = false;
     let error: string | null = null;
-    let successMessage: string | null = null;
 
     // Add user state
     let showAddModal = false; // Add User as overlay modal
@@ -137,7 +137,6 @@
     async function loadAccesses() {
         loading = true;
         error = null;
-        successMessage = null;
         showAddModal = false;
         editingUserId = null;
 
@@ -302,7 +301,6 @@
     async function handleSave() {
         saving = true;
         error = null;
-        successMessage = null;
 
         const body = accesses.map((a) => ({
             user_id: a.user_id,
@@ -311,24 +309,23 @@
         }));
 
         // I-bis #22 (Batch 4.d-part2) — unified error extraction.
-        // ``toast: false`` keeps the error inline in the banner (consistent
-        // with the previous UX — no additional toast noise).
+        // #R6-8 (Batch 4.d-part3) — success now emits a toast and closes the
+        // modal (consistent with the evolved app-wide save pattern). Only the
+        // error path keeps the inline banner (persistent, dismissible).
         const result = await saveWithRetry(
             () => zodiosApi.bulk_update_broker_access_api_v1_brokers__broker_id__access_put(body, {params: {broker_id: brokerId}}),
             {toast: false, fallback: $_('brokers.sharing.saveFailed')},
         );
 
         if (result.status === 'success') {
-            successMessage = $_('brokers.sharing.saved');
             originalAccesses = JSON.parse(JSON.stringify(accesses));
             onChanged?.();
-            // Auto-dismiss success after 3s
-            setTimeout(() => {
-                successMessage = null;
-            }, 3000);
-        } else {
-            error = result.message;
+            toasts.success($_('brokers.sharing.saved'));
+            saving = false;
+            doClose();
+            return;
         }
+        error = result.message;
         saving = false;
     }
 
@@ -460,11 +457,6 @@
 
             <!-- Error / Success banners -->
             <InfoBanner dismissible message={error} ondismiss={() => (error = null)} variant="error" />
-            {#if successMessage}
-                <InfoBanner variant="success">
-                    <span class="text-sm">{successMessage}</span>
-                </InfoBanner>
-            {/if}
 
             {#if loading}
                 <div class="flex items-center justify-center py-12">

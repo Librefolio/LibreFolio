@@ -686,7 +686,16 @@
     "useSelected": "Usar Seleccionado",
     "selectIcon": "Seleccionar Icono",
     "urlHint": "Introduce una URL remota o una ruta local desde Archivos",
-    "deleteFailedSome": "Error al eliminar {count} archivo(s)"
+    "deleteFailedSome": "Error al eliminar {count} archivo(s)",
+    "uploadFailed": "Error al subir",
+    "deleteFailed": "Error al eliminar",
+    "uploadBatchSucceeded": "{count} archivo(s) subido(s)",
+    "deleteSucceeded": "Archivo eliminado",
+    "deleteBatchSucceeded": "{count} archivo(s) eliminado(s)",
+    "confirmBulkDelete": {
+      "title": "Eliminar archivos",
+      "message": "¿Eliminar {count} archivo(s)? Esta acción no se puede deshacer."
+    }
   },
   "datePicker": {
     "from": "Desde",
