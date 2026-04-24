@@ -3,11 +3,8 @@ Asset Provider API endpoints.
 Handles provider assignment, price management, and price refresh operations.
 """
 
-import csv
-import io
 import json
-from datetime import date as date_type
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -15,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, PriceHistory, User
+from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
@@ -65,6 +62,7 @@ from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
 from backend.app.services.asset_source import (
     AssetCRUDService,
     AssetSearchService,
+    AssetSourceError,
     AssetSourceManager,
 )
 from backend.app.services.provider_registry import AssetProviderRegistry
@@ -482,7 +480,6 @@ async def probe_provider_config(
     - "Ask Provider" button to fetch identifiers and metadata (`metadata`)
     - Verify provider is working correctly
     """.format(ops_list="\n    ".join(f"- `{op.value}`" for op in ProbeOperation))
-    from backend.app.services.asset_source import AssetSourceError  # noqa: PLC0415 — lazy import / avoid circular
 
     try:
         result = await AssetSourceManager.probe_provider_config(
@@ -647,105 +644,11 @@ async def delete_prices_bulk(
 # ============================================================================
 
 
-# TODO: spostare l'endpoint nel blocco dei backup e fare una cosa simile anche per le forex e gil eventi.
-@price_router.get("/{asset_id}/export")
-async def export_asset_prices(
-    asset_id: int,
-    format: Literal["json", "csv"] = "csv",
-    session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
-):
-    """
-    Export the full price history of an asset as JSON or CSV (I.4).
-
-    Designed for the "currency change — backup before wipe" workflow: lets the user
-    download a self-contained snapshot of the current price series before a
-    destructive operation. Suitable as an audit/backup mechanism beyond that flow.
-
-    **Query param**:
-    - ``format``: ``"csv"`` (default, ``text/csv``) or ``"json"`` (``application/json``).
-      Additional formats (excel, parquet) can be added via the same enum without
-      breaking the API shape.
-
-    **Columns / fields** (same in both formats):
-    ``date, open, high, low, close, volume, currency, source_plugin_key, fetched_at``.
-
-    Currency is included verbatim from ``price_history.currency`` (canary-forensic
-    value — see Blocco I deviation in phase-07 plan for why the column is kept in DB
-    but dropped from the query response).
-
-    The response is streamed for large datasets (>10k rows) to avoid building the
-    whole payload in memory.
-    """
-    # Ensure the asset exists (404 if not)
-    asset_stmt = select(Asset).where(Asset.id == asset_id)
-    asset_res = await session.execute(asset_stmt)
-    asset = asset_res.scalar_one_or_none()
-    if not asset:
-        raise HTTPException(status_code=404, detail=f"Asset {asset_id} not found")
-
-    # Fetch all price rows in ascending date order (streaming-friendly)
-    stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_id).order_by(PriceHistory.date.asc())
-    res = await session.execute(stmt)
-    rows: List[PriceHistory] = list(res.scalars().all())
-
-    # Build asset slug for filename (lowercase, strip non-alnum)
-    raw_name = asset.display_name or f"asset-{asset_id}"
-    asset_slug = "".join(c if c.isalnum() else "-" for c in raw_name.lower()).strip("-")[:60] or f"asset-{asset_id}"
-    today_str = date_type.today().isoformat()
-    filename = f"prices_{asset_slug}_{today_str}.{format}"
-
-    def _row_to_dict(r: PriceHistory) -> dict:
-        return {
-            "date": r.date.isoformat(),
-            "open": str(r.open) if r.open is not None else None,
-            "high": str(r.high) if r.high is not None else None,
-            "low": str(r.low) if r.low is not None else None,
-            "close": str(r.close) if r.close is not None else None,
-            "volume": str(r.volume) if r.volume is not None else None,
-            "currency": r.currency,
-            "source_plugin_key": r.source_plugin_key,
-            "fetched_at": r.fetched_at.isoformat() if r.fetched_at else None,
-        }
-
-    if format == "json":
-        # Streaming JSON (array of objects). For small datasets this is overkill but
-        # keeps the memory profile flat as the series grows.
-        def _gen_json():
-            yield f'{{"asset_id":{asset_id},"currency":"{asset.currency}","count":{len(rows)},"prices":['
-            for idx, r in enumerate(rows):
-                if idx > 0:
-                    yield ","
-                yield json.dumps(_row_to_dict(r), separators=(",", ":"))
-            yield "]}"
-
-        return StreamingResponse(
-            _gen_json(),
-            media_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
-
-    # CSV (default)
-    fieldnames = ["date", "open", "high", "low", "close", "volume", "currency", "source_plugin_key", "fetched_at"]
-
-    def _gen_csv():
-        buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=fieldnames)
-        writer.writeheader()
-        yield buf.getvalue()
-        buf.seek(0)
-        buf.truncate(0)
-        for r in rows:
-            writer.writerow(_row_to_dict(r))
-            yield buf.getvalue()
-            buf.seek(0)
-            buf.truncate(0)
-
-    return StreamingResponse(
-        _gen_csv(),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+# R3-3b: ``GET /assets/prices/{id}/export`` has been removed. Use the unified
+# backup router instead:
+#   GET /api/v1/backup/asset/{id}/prices?format=csv|json
+#   GET /api/v1/backup/asset/{id}/events?format=csv|json
+#   GET /api/v1/backup/fx/{base}/{quote}/rates?format=csv|json
 
 
 @price_router.post("/query", response_model=FAPriceQueryResponse)
@@ -1037,6 +940,10 @@ async def upsert_events_bulk(
 
     Creates or updates manual asset events. Auto-generated events from providers
     are NOT affected — dedup is scoped by provider_assignment_id.
+
+    **R3-3 Policy D**: returns HTTP 400 if any submitted event carries a
+    currency code different from its parent asset's currency (symmetric to
+    ``bulk_upsert_prices``).
     """
     try:
         result = await AssetSourceManager.bulk_upsert_events(assets, session)
@@ -1045,6 +952,10 @@ async def upsert_events_bulk(
             results=results_list,
             success_count=result["success_count"],
         )
+    except AssetSourceError as e:
+        # Hard-400 on currency mismatch (and similar client-side validation errors).
+        status = 400 if e.code in ("EVENT_CURRENCY_MISMATCH",) else 500
+        raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error in bulk upsert events: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -1090,6 +1001,68 @@ async def query_events_bulk(
         return FAEventQueryResponse(items=results)
     except Exception as e:
         logger.error(f"Error querying events bulk: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# ============================================================================
+# MARKET-DATA WIPE (R3-3 Policy D)
+# ============================================================================
+
+
+@asset_router.get("/{asset_id}/market-data/summary", tags=["FA CRUD"])
+async def market_data_summary(
+    asset_id: int,
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """Return market-data counters for an asset (dry-run summary).
+
+    Used by the currency-change confirm modal to show the user exactly
+    what will be deleted / disconnected **before** they confirm. Same
+    shape as the ``POST /market-data/wipe`` response but without side
+    effects (``dry_run=true``).
+    """
+    try:
+        return await AssetSourceManager.wipe_market_data_for_currency_change(asset_id=asset_id, session=session, dry_run=True)
+    except AssetSourceError as e:
+        status = 404 if e.code == "ASSET_NOT_FOUND" else 400
+        raise HTTPException(status_code=status, detail=str(e)) from e
+    except Exception as e:
+        logger.error(f"Error in market-data summary for asset {asset_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@asset_router.post("/{asset_id}/market-data/wipe", tags=["FA CRUD"])
+async def wipe_market_data(
+    asset_id: int,
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """Wipe all market data (prices + events) and disconnect linked transactions.
+
+    Part of the Policy D currency-change flow. After this returns 200 the
+    caller should:
+
+    1. ``PATCH /assets`` with the new currency (will now succeed — no
+       residual market data blocks the change).
+    2. Re-sync from the provider (optional) via
+       ``POST /assets/prices/sync`` to repopulate the price history in the
+       new currency.
+
+    Response body matches the summary endpoint:
+    ``{prices, events_manual, events_provider, linked_tx, oldest, newest,
+    dry_run}`` (``dry_run`` is always ``false`` here). Transactions are
+    **preserved** — only their ``asset_event_id`` FK is set to ``NULL``
+    so they stop referencing the now-deleted events; the user is free to
+    re-associate them manually after re-inserting replacement events.
+    """
+    try:
+        return await AssetSourceManager.wipe_market_data_for_currency_change(asset_id=asset_id, session=session, dry_run=False)
+    except AssetSourceError as e:
+        status = 404 if e.code == "ASSET_NOT_FOUND" else 400
+        raise HTTPException(status_code=status, detail=str(e)) from e
+    except Exception as e:
+        logger.error(f"Error in market-data wipe for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

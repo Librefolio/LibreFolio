@@ -122,6 +122,21 @@ Each `phase-{NN}-subplan/README.md` contains a table of all sub-plans with step,
 
 Use the `plan-archive` skill for plan verification and archiving operations (see `.github/skills/plan-archive/SKILL.md`).
 
+## Persistent Knowledge Layer (devWiki)
+
+`LibreFolio_devWiki/` is the accumulated knowledge base for this project — decisions, patterns, problems solved, entity documentation. It is NOT the source of truth (code is) and NOT user docs (mkdocs is). It is the living memory that compounds across sessions.
+
+**For the main dev agent**, two wiki skills are available:
+
+| Skill | When to Use |
+|-------|------------|
+| `wiki-search` | At the **start** of a task — enrich context with accumulated knowledge before coding |
+| `wiki-file` | At the **end** of a session — preserve discoveries, solved problems, decisions made |
+
+**Rule**: before touching code in a domain with prior history (providers, FIFO, async I/O, EditBuffer, FX, etc.), run `wiki-search` first to avoid re-deriving what's already been learned.
+
+**Historian agent**: for full wiki operations (ingest sources, query the wiki, health-check), invoke the `project-historian` agent — the workflows are embedded directly in that agent's instructions.
+
 ## Test Users
 
 | Username | Password | Role |
