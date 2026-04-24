@@ -4,6 +4,25 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-04-24] ingest | Created 11 domain cluster pages
+
+**Pages created** (`wiki/domains/`):
+- `auth.md` — Domain: AUTH (F-001–F-003)
+- `layout-settings.md` — Domain: LAYOUT & SETTINGS (F-004–F-008)
+- `brokers.md` — Domain: BROKERS (F-009–F-014)
+- `fx.md` — Domain: FX Foreign Exchange (F-015–F-023)
+- `assets.md` — Domain: ASSETS (F-024–F-036)
+- `signals.md` — Domain: TECHNICAL ANALYSIS Signals (F-037–F-045)
+- `transactions.md` — Domain: TRANSACTIONS (F-046–F-051) — status: in-progress
+- `scheduler.md` — Domain: SCHEDULER (F-052–F-053) — status: planned
+- `dashboard.md` — Domain: DASHBOARD (F-054–F-055) — status: planned
+- `calculations.md` — Domain: CALCULATIONS (F-056–F-058)
+- `infrastructure.md` — Domain: INFRASTRUCTURE (F-059–F-074)
+
+**Updated**:
+- `index.md` — added `## Domains` section with links to all 11 pages
+- `wiki/features/registry.md` — added navigation note pointing to `wiki/domains/` for macro-level context
+
 ---
 
 ## [2026-04-24] ingest | Project bootstrap — codebase analysis
@@ -299,3 +318,20 @@ Systematically read all 68 mkdocs developer pages and mapped them to 36 features
 - 3 in-progress
 - 31 planned/idea
 - **36 features now linked to mkdocs developer pages** (up from 0 before this session)
+
+## [2026-04-24] lint | Full reasoned lint pass #3
+
+**Checks run**: thin pages, missing source sections, broken wikilinks, F-096 symmetry, registry vs files, mkdocs path validity, index orphans, log format, conceptual quality, connections currency.
+
+**Issues found and fixed**:
+- ✅ F-075–F-096: added full "Domain: PLANNED/IDEA" section to `registry.md` (22 features were counted in stats but had no individual rows)
+- ✅ F-034 `enables:` updated to include F-096
+- ✅ `## Source files` added to `problems/sync-functions-dead-code.md`, `problems/tanstack-svelte5-incompatibility.md`, `sources/todos.md`
+
+**No issues found**:
+- No broken wikilinks
+- No orphan pages (all reachable from index.md)
+- All mkdocs: paths point to real files
+- Log format: all entries well-formed
+- Thin pages: all under-25-line pages are planned/idea features (appropriate)
+- Concept pages (daily-point-policy, backend-only-calculations, fifo-runtime-decision): substantive and accurate

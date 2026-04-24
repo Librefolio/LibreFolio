@@ -1,1 +1,9 @@
-{}
+{
+  "userIgnoreFilters": [
+    "index.md",
+    "log.md",
+    "SCHEMA.md",
+    "wiki/features/registry.md",
+    "raw/ingest-registry.md"
+  ]
+}

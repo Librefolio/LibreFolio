@@ -3,6 +3,27 @@
 > Master catalog of all wiki pages. Updated on every ingest and every page creation.
 > LLM: read this first when answering queries to identify relevant pages.
 
+## Domains
+
+> Macro-level narratives — what each domain does, how its features cluster, and how it evolved.
+> For individual feature details, use the Feature Registry below.
+
+| Page | Domain | Features | Status |
+|------|--------|----------|--------|
+| [[domains/auth]] | AUTH | F-001–F-003 | stable |
+| [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008 | stable |
+| [[domains/brokers]] | BROKERS | F-009–F-014 | stable |
+| [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
+| [[domains/assets]] | ASSETS | F-024–F-036 | stable |
+| [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
+| [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | in-progress |
+| [[domains/scheduler]] | SCHEDULER | F-052–F-053 | planned |
+| [[domains/dashboard]] | DASHBOARD | F-054–F-055 | planned |
+| [[domains/calculations]] | CALCULATIONS | F-056–F-058 | stable |
+| [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074 | stable |
+
+---
+
 ## Feature Registry
 
 | Page | Description |

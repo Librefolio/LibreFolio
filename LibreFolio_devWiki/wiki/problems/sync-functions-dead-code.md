@@ -26,3 +26,9 @@ Removed all three functions. No callers found. No tests broken.
 
 ## Affected files
 - `backend/app/services/global_settings_service.py` (functions removed)
+
+## Source files
+
+| Role | Path |
+|------|------|
+| Fixed file | `backend/app/services/global_settings_service.py` |
