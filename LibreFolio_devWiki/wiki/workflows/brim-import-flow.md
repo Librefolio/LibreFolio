@@ -13,7 +13,7 @@ End-to-end steps for importing broker transaction reports into LibreFolio — fr
 ## Steps
 
 ### 1. Upload the file
-**API**: `POST /api/v1/files/upload?broker_id={id}`
+**API**: `POST /api/v1/brokers/import/upload?broker_id={id}`
 File stored at: `backend/data/prod/broker_reports/{broker_id}/`
 The file record is created in the DB. The file is NOT yet parsed.
 **Frontend entry point**: Broker detail page → "Import" button → `BrokerImportFilesModal.svelte`
@@ -24,7 +24,7 @@ The system tries all registered plugins and picks the highest-confidence match.
 If detection is ambiguous, the user can manually select from the plugin list.
 
 ### 3. Parse the file
-**API**: `POST /api/v1/files/{id}/parse`
+**API**: `POST /api/v1/brokers/import/files/{id}/parse`
 The selected BRIM plugin's `parse_file()` returns:
 - `transactions` — list of transaction records with **fake asset IDs** (negative integers)
 - `warnings` — non-fatal issues (unknown asset types, missing prices, etc.)
@@ -59,9 +59,9 @@ See [[decisions/brim-fake-asset-id]].
 ## Involved APIs
 | Step | Method | Endpoint |
 |------|--------|----------|
-| Upload | POST | `/api/v1/files/upload?broker_id={id}` |
-| List files | GET | `/api/v1/files?broker_id={id}` |
-| Parse | POST | `/api/v1/files/{id}/parse` |
+| Upload | POST | `/api/v1/brokers/import/upload?broker_id={id}` |
+| List files | GET | `/api/v1/brokers/import/files?broker_ids={id}` |
+| Parse | POST | `/api/v1/brokers/import/files/{id}/parse` |
 | Bulk commit | POST | `/api/v1/transactions/bulk` |
 
 ## Source files
@@ -70,7 +70,7 @@ See [[decisions/brim-fake-asset-id]].
 |------|------|
 | BRIM abstract base | `backend/app/services/brim_provider.py` |
 | BRIM plugins | `backend/app/services/brim_providers/` |
-| Files API | `backend/app/api/v1/files.py` |
+| Files API (BRIM router) | `backend/app/api/v1/brokers.py` (`brim_router`, prefix `/import`) |
 | Transactions API | `backend/app/api/v1/transactions.py` |
 | Import modal | `frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte` |
 | Asset matching wizard | `frontend/src/lib/components/brokers/AssetMatchingWizard.svelte` |

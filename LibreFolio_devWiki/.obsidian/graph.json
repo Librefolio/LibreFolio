@@ -1,6 +1,6 @@
 {
   "collapse-filter": false,
-  "search": "assets",
+  "search": "",
   "showTags": false,
   "showAttachments": true,
   "hideUnresolved": false,
@@ -60,6 +60,6 @@
   "repelStrength": 20,
   "linkStrength": 0.913715277777778,
   "linkDistance": 139,
-  "scale": 0.29368936746078317,
+  "scale": 0.09000957649715567,
   "close": false
 }

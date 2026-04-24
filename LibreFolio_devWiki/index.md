@@ -78,6 +78,10 @@
 | [[decisions/i18n-key-rationalization]] | Intentional duplicates OK when namespacing clarity > DRY (42 groups, ~30 accepted) | 2026-04-24 | frontend, i18n, translations, duplicates |
 | [[decisions/three-phase-pipeline]] | Bulk operations use PREPARE→FETCH→PERSIST pattern with per-task sessions | 2026-03-31 | backend, async, database, architecture |
 | [[decisions/signal-label-unification]] | `signalLabel.ts` utility + enriched `RenderedSignal` unify all signal label rendering | 2026-04-10 | frontend, signals, charts, ui, refactor |
+| [[decisions/brim-parser-only]] | BRIM Revision 2 — parser only, no commit endpoint, no asset events | 2026-04-20 | brim, brokers, architecture |
+| [[decisions/multi-broker-atomic-tx]] | Bulk TX endpoints are not broker-scoped — accept items across multiple brokers | 2026-04-20 | transactions, api, atomicity |
+| [[decisions/tx-link-uuid-semantics]] | link_uuid semantics: TRANSFER requires distinct brokers; DEPOSIT/WITHDRAWAL soft-linkable; promote endpoint | 2026-04-21 | transactions, transfer, linking |
+| [[decisions/price-currency-hard-reject]] | Hard 400 on price currency mismatch; 409 on asset currency change with existing prices | 2026-04-21 | prices, currency, api, validation |
 
 ## Concepts
 
@@ -96,6 +100,7 @@
 | [[concepts/e2e-data-testid-rule]] | ALWAYS use data-testid for Playwright selectors — NEVER CSS classes or text | testing, frontend, e2e, i18n |
 | [[concepts/responsive-4mode-layout]] | Filter bar pages use 4 breakpoint modes (wide/tablet/tablet-s/mobile) for better intermediate-width UX | frontend, responsive, layout, ux |
 | [[concepts/prices-current-side-effect]] | `/assets/prices/current` is not read-only — it upserts today's OHLC; never chain with `/sync` | backend, frontend, assets, api-contract, side-effect |
+| [[concepts/savewithretry-frontend-pattern]] | Unified modal save helper: error extraction, inline formError, optional toast, onError hook | frontend, ux, error-handling, modals |
 
 ## Problems
 
@@ -147,3 +152,8 @@
 | [[sources/phase06-step4-plana]] | `phase-06-subplan/Bugfix-Step4/PlanA/` + `Plan0/` | 2026-05-24 | phase06, assets, detail, signals, charts |
 | [[sources/phase06-step4-planc]] | `phase-06-subplan/Bugfix-Step4/PlanC/` | 2026-05-24 | phase06, fx, currency-conversion, cache |
 | [[sources/roadmap-v4-index]] | `RoadMapV4/00-Index.md` | 2026-01-09 | roadmap, frontend, v4, phases, history |
+| [[sources/phase07-transactions]] | `plan-phase07-transaction-Part1.md` | 2026-04-24 | phase07, transactions, api, brim, staging |
+| [[sources/phase07-part2-brim-revision]] | `plan-phase07-transaction-Part2.prompt.md` | 2026-04-24 | phase07, brim, parser-only, plugin-version, revision |
+| [[sources/phase07-part3-api-consolidation]] | `plan-phase07-transaction-Part3.md` | 2026-04-24 | phase07, transactions, api, multi-broker, transfer, currency |
+| [[sources/phase07-part3-closure]] | `plan-phase07-transaction-Part3_1_Closure.md` | 2026-04-24 | phase07, i-bis, currency, wipe, savewithretry |
+| [[sources/phase07-part3-closure2]] | `plan-phase07-transaction-Part3_1_Closure_2.prompt.md` + Batch4d + BlockG | 2026-04-24 | phase07, test-coverage, batch4, savewithretry, delta |
