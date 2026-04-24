@@ -237,17 +237,22 @@ async def test_refresh_mixed_results():
 
 
 @pytest.mark.asyncio
-async def test_refresh_currency_fallback_uses_asset_currency():
-    """Verify that when provider doesn't return currency, the asset's own currency is used."""
+async def test_refresh_pipeline_smoke_with_matching_currency():
+    """Smoke test: refresh pipeline completes successfully when asset and provider currencies align.
+
+    Note: Post Phase-7 I.2 (currency-coherence hard-reject), provider points whose currency
+    differs from the asset's currency are discarded. Mismatch rejection is covered by the
+    dedicated G.5 suite (`test_prices_currency_coherence.py`). Here we simply assert the
+    happy pipeline with matching currencies (USD/USD).
+    """
     assert initialize_test_database(), "Failed to initialize test database"
     AssetProviderRegistry.auto_discover()
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        # mockprov returns "USD" currency explicitly, but asset is "EUR"
-        # In this test we just verify the pipeline doesn't crash
+        # mockprov returns "USD" currency; align asset currency to USD for happy-path smoke.
         asset = Asset(
-            display_name=_unique("EUR Asset"),
-            currency="EUR",
+            display_name=_unique("USD Asset"),
+            currency="USD",
             asset_type=AssetType.STOCK,
             active=True,
         )
