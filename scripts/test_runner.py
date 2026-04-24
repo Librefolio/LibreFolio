@@ -993,6 +993,24 @@ def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Settings service tests", verbose=verbose)
 
 
+def services_current_price_bootstrap(verbose: bool = False, test_names: list = None) -> bool:
+    """Test F.2/F.3 unit helper `_extend_ohlc_bounds` in asset_source (G.6b)."""
+    print_section("Services: Current Price Bootstrap (F.2/F.3)")
+    print_info("Testing OHLC widening helper used by /assets/prices/current side-effect")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_price_bootstrap.py", test_names)
+    return run_command(cmd, "Current price bootstrap tests", verbose=verbose)
+
+
+def services_scheduled_investment_param_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Test #R6-4 symmetric wipe on scheduled_investment provider_params change (G.13)."""
+    print_section("Services: Scheduled Investment Param-Change Wipe (#R6-4)")
+    print_info("Testing bulk_assign_providers wipe: prices + auto-events + tx disconnect")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_param_change.py", test_names)
+    return run_command(cmd, "Scheduled investment param-change tests", verbose=verbose)
+
+
 # ============================================================================
 # UTILS TESTS
 # ============================================================================
@@ -1366,6 +1384,80 @@ def api_transfer_promotion(verbose: bool = False, test_names: list = None) -> bo
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transfer_promotion.py", test_names)
     return run_command(cmd, "Transfer Promotion API tests", verbose=verbose)
+
+
+def api_transactions_validate(verbose: bool = False, test_names: list = None) -> bool:
+    """Run POST /transactions/validate dry-run tests (Blocco C.1 / G.3)."""
+    print_section("Transactions Validate (C.1) API Tests")
+    print_info("Testing POST /transactions/validate — dry-run mixed batch")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transactions_validate.py", test_names)
+    return run_command(cmd, "Transactions validate tests", verbose=verbose)
+
+
+def api_events_suggest(verbose: bool = False, test_names: list = None) -> bool:
+    """Run POST /transactions/events/suggest tests (Blocco C.2 / G.4)."""
+    print_section("Events Suggest (C.2) API Tests")
+    print_info("Testing POST /transactions/events/suggest — candidate events within tolerance")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_events_suggest.py", test_names)
+    return run_command(cmd, "Events suggest tests", verbose=verbose)
+
+
+def api_ohlc_sentinel(verbose: bool = False, test_names: list = None) -> bool:
+    """Run OHLC sentinel semantics tests on POST /assets/prices (F.4 / G.6)."""
+    print_section("OHLC Sentinel (F.4) API Tests")
+    print_info("Testing sentinel rules on POST /assets/prices: None/-1/value")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_ohlc_sentinel.py", test_names)
+    return run_command(cmd, "OHLC sentinel tests", verbose=verbose)
+
+
+def api_current_price_persistence(verbose: bool = False, test_names: list = None) -> bool:
+    """Run /assets/prices/current side-effect persistence tests (F.2/F.3 / G.6c)."""
+    print_section("Current Price Persistence (F.2/F.3) API Tests")
+    print_info("Testing side-effect: /current endpoint upserts today's OHLC via mockprov")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_current_price_persistence.py", test_names)
+    return run_command(cmd, "Current price persistence tests", verbose=verbose)
+
+
+def api_prices_currency_coherence(verbose: bool = False, test_names: list = None) -> bool:
+    """Run currency-mismatch hard-reject tests on POST /assets/prices (I.2 / G.5)."""
+    print_section("Prices Currency Coherence (I.2) API Tests")
+    print_info("Testing hard-400 on FAPricePoint.currency != asset.currency")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_prices_currency_coherence.py", test_names)
+    return run_command(cmd, "Prices currency coherence tests", verbose=verbose)
+
+
+def api_asset_currency_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Run asset currency-change flow tests (I.3 + I-bis #7 HTTP 409 / G.10)."""
+    print_section("Asset Currency Change (I.3 + I-bis #7) API Tests")
+    print_info("Testing PATCH /assets currency change: 409 when blocked, wipe + retry happy path")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_currency_change.py", test_names)
+    return run_command(cmd, "Asset currency change tests", verbose=verbose)
+
+
+def api_asset_prices_export(verbose: bool = False, test_names: list = None) -> bool:
+    """Run asset prices export + CSV round-trip tests (I.4 + I-bis #5 / G.11)."""
+    print_section("Asset Prices Export + CSV Round-Trip (I.4 + I-bis #5) API Tests")
+    print_info("Testing GET /backup/asset/{id}/prices (CSV/JSON) + round-trip re-import")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_prices_export.py", test_names)
+    return run_command(cmd, "Asset prices export tests", verbose=verbose)
+
+
+def api_prices_sync_delta(verbose: bool = False, test_names: list = None) -> bool:
+    """Run sync delta payload tests (I-bis #24 changed_points + cap / G.12)."""
+    print_section("Prices Sync Delta (I-bis #24) API Tests")
+    print_info("Testing FARefreshResult.changed_points: populated/None/cap/idempotent")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_prices_sync_delta.py", test_names)
+    return run_command(cmd, "Prices sync delta tests", verbose=verbose)
 
 
 def api_brokers(verbose: bool = False, test_names: list = None) -> bool:
@@ -2732,6 +2824,22 @@ These tests verify business logic in service layer:
             "prereq": "None",
             "tests": "get_session_ttl_sync",
             },
+        "current-price-bootstrap": {
+            "func": services_current_price_bootstrap,
+            "test_names": True,
+            "name": "Current Price Bootstrap (F.2/F.3)",
+            "desc": "Unit tests for _extend_ohlc_bounds helper (G.6b)",
+            "prereq": "None",
+            "tests": "OHLC widening on /current endpoint side-effect",
+            },
+        "scheduled-investment-param-change": {
+            "func": services_scheduled_investment_param_change,
+            "test_names": True,
+            "name": "Scheduled Investment Param-Change Wipe (#R6-4)",
+            "desc": "Symmetric wipe of prices + auto-events + tx disconnect (G.13)",
+            "prereq": "Test database",
+            "tests": "bulk_assign_providers wipe when provider_params change",
+            },
         "all": {
             "func": services_all,
             "test_names": False,
@@ -3054,6 +3162,70 @@ These tests verify REST API endpoints:
             "desc": "Promote DEPOSIT/WITHDRAWAL pair to TRANSFER/FX_CONVERSION (H.4)",
             "prereq": "Database created",
             "tests": "Atomic promotion, same-broker rejection, query filters",
+            },
+        "transactions-validate": {
+            "func": api_transactions_validate,
+            "test_names": True,
+            "name": "Transactions Validate (C.1)",
+            "desc": "Dry-run mixed batch validator (G.3)",
+            "prereq": "Database created",
+            "tests": "POST /transactions/validate: previews, issues, rollback",
+            },
+        "events-suggest": {
+            "func": api_events_suggest,
+            "test_names": True,
+            "name": "Events Suggest (C.2)",
+            "desc": "Candidate events within tolerance for tx linking (G.4)",
+            "prereq": "Database created",
+            "tests": "POST /transactions/events/suggest: mapping, sorting, tolerance",
+            },
+        "ohlc-sentinel": {
+            "func": api_ohlc_sentinel,
+            "test_names": True,
+            "name": "OHLC Sentinel (F.4)",
+            "desc": "Sentinel semantics on POST /assets/prices (G.6)",
+            "prereq": "Database created",
+            "tests": "None → preserve, -1 → SET NULL, >=0 → write",
+            },
+        "current-price-persistence": {
+            "func": api_current_price_persistence,
+            "test_names": True,
+            "name": "Current Price Persistence (F.2/F.3)",
+            "desc": "/current endpoint side-effect persists today's OHLC (G.6c)",
+            "prereq": "Database created",
+            "tests": "mockprov-backed bootstrap + extend of PriceHistory",
+            },
+        "prices-currency-coherence": {
+            "func": api_prices_currency_coherence,
+            "test_names": True,
+            "name": "Prices Currency Coherence (I.2)",
+            "desc": "Hard-400 on currency mismatch (G.5)",
+            "prereq": "Database created",
+            "tests": "POST /assets/prices atomicity on mixed-currency batch",
+            },
+        "asset-currency-change": {
+            "func": api_asset_currency_change,
+            "test_names": True,
+            "name": "Asset Currency Change (I.3 + I-bis #7)",
+            "desc": "PATCH /assets currency change + HTTP 409 token (G.10)",
+            "prereq": "Database created",
+            "tests": "Blocker token, wipe+retry happy path, mixed batch 200",
+            },
+        "asset-prices-export": {
+            "func": api_asset_prices_export,
+            "test_names": True,
+            "name": "Asset Prices Export (I.4 + I-bis #5)",
+            "desc": "CSV/JSON export + round-trip re-import (G.11)",
+            "prereq": "Database created",
+            "tests": "GET /backup/asset/{id}/prices shape, filename, round-trip",
+            },
+        "prices-sync-delta": {
+            "func": api_prices_sync_delta,
+            "test_names": True,
+            "name": "Prices Sync Delta (I-bis #24)",
+            "desc": "FARefreshResult.changed_points + CHANGED_POINTS_PAYLOAD_CAP (G.12)",
+            "prereq": "Database created",
+            "tests": "mockprov: delta populated / None / idempotent / cap boundary",
             },
         "brokers": {
             "func": api_brokers,

@@ -35,8 +35,8 @@ Conseguenze:
 | G.13 (NEW) | `test_scheduled_investment_param_change.py` (services) | #R6-4 event wipe + tx disconnect | DONE 3/3 (2026-04-24) | - |
 | G.1 | `test_transaction_service.py` (audit) | Blocco A/H gap-fill | DONE audit — no gap (2026-04-24) | - |
 | G.2 | `test_broker_multiuser_api.py` (+2 test) | Blocco B access matrix gap-fill | DONE 2/2 (2026-04-24) | - |
-| G.7 | `scripts/test_runner.py` | tooling | PENDING | 15min |
-| G.8/G.9 | meta | coverage report + `./dev.py test all-backend` | PENDING | 30min |
+| G.7 | `scripts/test_runner.py` | tooling | DONE (2026-04-24) — 10/10 entries wired | - |
+| G.8/G.9 | meta | coverage report + `./dev.py test all-backend` | DONE (2026-04-24) — 7/7 groups green, 76.05% cov | - |
 
 Totale: ~8h.
 
@@ -48,7 +48,7 @@ Totale: ~8h.
 | G-batch2 | G.5 + G.10 + G.12 | ~2.5h | Currency coherence + change flow + I-bis #24 delta - P1 tutti — **DONE 2026-04-24 (14/14 test PASS)** |
 | G-batch3 | G.3 + G.4 | ~1.75h | Blocco C endpoints dry-run + events/suggest — **DONE 2026-04-24 (13/13 test PASS)** |
 | G-batch4 | G.13 + G.1/G.2 audit | ~1.5h | #R6-4 scheduled + gap-fill residuo — **DONE 2026-04-24 (5/5 new test PASS + G.1 no-gap)** |
-| G-batch5 | G.7 + G.8 + G.9 | ~45min | Test-runner + validazione finale |
+| G-batch5 | G.7 + G.8 + G.9 | ~45min | Test-runner + validazione finale — **DONE 2026-04-24 (7/7 groups green, 32/32 api, 19/19 services, 76.05% backend cov)** |
 
 ## Commit strategy (1 per batch)
 
