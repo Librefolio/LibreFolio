@@ -1,12 +1,12 @@
 ---
 name: wiki-search
-description: "Use this skill when the main dev agent needs to enrich its context before starting a coding task. Searches the devWiki for relevant accumulated knowledge — decisions, patterns, known problems, entity documentation — so the agent doesn't rediscover what's already been learned."
+description: "Use this skill to quickly search the devWiki for relevant accumulated knowledge — decisions, patterns, known problems, feature documentation — so you don't rediscover what's already been learned. Useful both before a coding task (context enrichment) and during a historical query (fast lookup without a full wiki-query pass)."
 ---
 
 # Wiki Search Skill
 
-> Quick context enrichment from `LibreFolio_devWiki/` before coding.
-> Use this at the START of a task to avoid re-deriving known knowledge.
+> Quick context lookup from `LibreFolio_devWiki/`.
+> Use when you need targeted knowledge retrieval in 2-3 reads — not a full audit.
 
 ## When to Use
 
@@ -15,6 +15,7 @@ description: "Use this skill when the main dev agent needs to enrich its context
 - When a task touches architectural decisions (FIFO, provider pattern, async I/O, etc.)
 - When the user says "remember when we..." or "as we discussed..."
 - Whenever you want to check if a decision has already been made
+- When the historian needs a fast answer and a full `wiki-query` pass would be overkill
 
 ## Search Workflow
 
@@ -30,6 +31,8 @@ Read the 2-5 most relevant pages. Prioritize:
 2. **Decisions** — don't re-debate settled choices
 3. **Entities** — understand the design intent before modifying
 4. **Concepts** — understand the patterns in use
+
+**Key**: every feature/entity/decision page should have a `## Source files` section linking to actual codebase paths. Use those links to jump directly to the relevant files — this is how the wiki acts as a navigation layer into the code.
 
 **Time limit**: spend no more than 2-3 reads. If nothing useful is found in 3 pages, stop.
 
