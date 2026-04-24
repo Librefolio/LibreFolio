@@ -8,15 +8,13 @@ mkdocs: "developer/architecture/database/brokers_transactions.md"
 
 # Domain: TRANSACTIONS
 
-> ⚠️ This domain is under active development (Phase 7). Content reflects design intent, not final implementation.
-
 > The ledger layer — every financial event (purchase, sale, dividend, fee) recorded as an immutable transaction, enabling FIFO cost-basis and portfolio-level analytics.
 
 ## What it does
 
 Transactions are the financial heart of LibreFolio. A transaction records a financial event: a BUY (quantity purchased, price paid, fees), a SELL (quantity sold, proceeds), a DIVIDEND (cash received), an INTEREST payment, a FEE, a TAX, a TRANSFER (in or out), a SPLIT (quantity adjustment), or OTHER. Each transaction belongs to a broker and references an asset. The combination of transaction history, price history, and FX rates is what makes portfolio analytics (cost basis, realized gain, unrealized gain, ROI) possible.
 
-The backend model and bulk API (F-046) were implemented in Phase 3 and extended in Phase 7. The bulk API is atomic per broker: all transactions in a `POST /brokers/:id/transactions/bulk` call succeed together or fail together, with a `validate=true` dry-run mode for previewing without committing. Access control is enforced at the API level: GET/PATCH/DELETE are filtered to transactions belonging to brokers the user has access to; creating transactions requires EDITOR role.
+The backend model and bulk API ([[F-046]]) were implemented in Phase 7. The bulk API (`POST /transactions/bulk`) is **multi-broker atomic**: all transactions across any number of brokers in a single call succeed or fail together, with a `validate=true` dry-run mode for previewing without committing. This cross-broker atomicity was required by the DEFERRABLE FK constraint on `link_uuid → related_transaction_id` (TRANSFER pairs can span brokers). Access control is enforced at the API level: GET/PATCH/DELETE are filtered to transactions belonging to brokers the user has access to; creating transactions requires EDITOR role.
 
 The primary user-facing flow for entering transactions is through the BRIM pipeline: upload a broker export file, the system parses it with the appropriate plugin, the user reviews the extracted transactions in a staging area (F-049, in-progress), resolves any unknown assets via the matching wizard, and commits. The staging modal (F-048, planned) will also support manual transaction entry as a unified entry point. The transaction list page (F-047, in-progress) provides a paginated DataTable view with broker and asset filters.
 
@@ -24,7 +22,7 @@ The primary user-facing flow for entering transactions is through the BRIM pipel
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
-| [[F-046]] | Transaction Model & Bulk API | backend | core — data model + atomic bulk create with dry-run | in-progress |
+| [[F-046]] | Transaction Model & Bulk API | backend | core — data model + multi-broker atomic bulk create with dry-run | implemented |
 | [[F-047]] | Transaction List Page (DataTable + filters) | frontend | display — paginated list with broker/asset/type filters | in-progress |
 | [[F-048]] | Staging Modal (unified manual entry + BRIM output) | frontend | core — review/edit transactions before commit | planned |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | core — wizard to match extracted assets + commit | in-progress |
@@ -39,9 +37,9 @@ graph TD
     StagingData --> ImportUI[F-049 BRIM Import UI<br/>asset matching wizard]
     ManualEntry[Manual entry form] --> StagingModal[F-048 Staging Modal<br/>review + edit]
     ImportUI --> StagingModal
-    StagingModal -->|validate=true dry-run| BulkAPI[F-046 POST /brokers/:id/transactions/bulk<br/>atomic per broker]
+    StagingModal -->|validate=true dry-run| BulkAPI[F-046 POST /transactions/bulk<br/>multi-broker atomic]
     StagingModal -->|confirm commit| BulkAPI
-    BulkAPI -->|EDITOR role check| TxDB[(Transaction table<br/>per-broker scoped)]
+    BulkAPI -->|EDITOR role check| TxDB[(Transaction table)]
     TxDB --> TxList[F-047 Transaction List Page<br/>filters: broker, asset, type]
     TxDB --> FIFO[F-056 FIFO at Runtime]
     TxDB --> EventLink[F-051 TX ↔ AssetEvent FK]
@@ -54,7 +52,7 @@ graph TD
 ## Key decisions that shaped this domain
 
 - **FIFO at runtime** (see [[decisions/fifo-runtime-decision]] and [[features/F-056]]) — cost basis is computed on demand, never stored. This decision was made to support retroactive edits: correcting a BRIM import error (wrong price, wrong quantity) immediately corrects all downstream P&L without cache invalidation.
-- **Atomic bulk API per broker** — all transactions in a bulk call are committed or rolled back together, scoped to a single broker. This prevents partial imports leaving the ledger in an inconsistent state.
+- **Multi-broker atomic bulk API** — all transactions across brokers in a bulk call are committed or rolled back together in a single DB session (see [[decisions/multi-broker-atomic-tx]]). A `validate=true` dry-run allows preview without committing. A single DEFERRABLE FK constraint (`link_uuid → related_transaction_id`) enables TRANSFER pairs that span different brokers to be inserted atomically.
 - **Fake asset ID flow** (see [[decisions/brim-fake-asset-id]]) — BRIM parsers emit negative integers as placeholder asset IDs, decoupling parse from the asset catalog. The matching wizard maps them to real asset IDs before commit.
 
 ## Known problems / limitations

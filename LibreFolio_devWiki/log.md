@@ -4,6 +4,31 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-04-24] lint | Lint pass #4 — Phase 07 contradictions + API URL audit
+
+**Issues found**: 7 (4 high, 3 medium)
+**Issues repaired**: 7
+
+### 🔴 High — Repaired
+
+1. **Contradiction**: `wiki/domains/transactions.md` said `POST /brokers/:id/transactions/bulk` and "atomic per broker / per-broker scoped" on 4 different lines. Real code (`tx_router = APIRouter(prefix="/transactions")`) has `POST /transactions/bulk` (multi-broker atomic). Fixed all 4 occurrences: prose, Mermaid node, Mermaid node label ("per-broker scoped"), key-decisions bullet. Also removed the ⚠️ "under active development" warning banner (F-046 is now implemented) and updated F-046 row status to `implemented`.
+
+2. **Wrong API URLs**: `wiki/workflows/brim-import-flow.md` upload, list-files, and parse endpoints still referenced the old `/files/` router prefix. Real code: `brim_router = APIRouter(prefix="/import")` mounted under `broker_router(prefix="/brokers")`. Fixed: `POST /api/v1/brokers/import/upload?broker_id={id}`, `GET /api/v1/brokers/import/files?broker_ids={id}`, `POST /api/v1/brokers/import/files/{id}/parse`. Also corrected source-files reference from non-existent `files.py` to `brokers.py (brim_router)`.
+
+3. **Missing file**: `wiki/sources/phase07-transactions.md` was indexed in `index.md` and `raw/ingest-registry.md` (hash `f17d963`) but the file did not exist (zombie entry from previous session). Created the source page from `plan-phase07-transaction-Part1.md`.
+
+4. **Wrong enables**: `wiki/features/F-046.md` incorrectly listed `F-037` (Signal Library Framework) in `enables`. Signal Library depends on the asset detail chart area (F-033), not on the TX Bulk API. Removed F-037 from F-046 enables.
+
+### 🟡 Medium — Repaired
+
+5. **Malformed YAML + wrong cross-ref**: `wiki/features/F-037.md` had `depends_on: [F-046-area: PriceChartFull]` — invalid YAML (colon in value) and wrong F-code (F-046 is TX API, not a chart). Fixed to `depends_on: [F-033]` (Asset Detail Page chart/signals/editor is the actual dependency).
+
+6. **Missing cross-ref**: `wiki/decisions/brim-parser-only.md` had no link to `[[decisions/brim-fake-asset-id]]`. Added a "Related decisions" section explaining that fake IDs are the mechanism that makes parser-only viable.
+
+**Deferred (no action needed)**:
+- `problems/asset-currency-mismatch.md` — already status `resolved`, no further action.
+- F-047/F-048/F-049/F-050/F-051 status in transactions domain — Phase 7 is still in-progress for these features; left as-is.
+
 ## [2026-04-24] ingest | Created 11 domain cluster pages
 
 **Pages created** (`wiki/domains/`):
@@ -343,3 +368,37 @@ yields empty `changed_points` — the changes already happened on `/current`.
 Created: [[concepts/prices-current-side-effect]] (cross-cutting API contract),
 [[problems/prices-current-sync-chain-empty-delta]] (specific anti-pattern bug).
 Updated: index.md (Concepts + Problems tables).
+
+---
+
+## 2026-04-24 — Phase 07 Part 2–3 Ingest (Transactions system final)
+
+Ingested all remaining Phase 07 plan files (Part 2, Part 3, Closure, Closure_2 + BlockG).
+This completes the documentation of the core transaction system architecture.
+
+**Sources ingested (4 new source pages):**
+- [[sources/phase07-part2-brim-revision]] — BRIM Revision 2 (parser-only)
+- [[sources/phase07-part3-api-consolidation]] — multi-broker atomic TX, transfer semantics, currency simplification
+- [[sources/phase07-part3-closure]] — Blocco I decisions, I-bis queue, #R6-4 scheduled investment wipe
+- [[sources/phase07-part3-closure2]] — Batch 4 (saveWithRetry adoption), BlockG test coverage (76.05%)
+
+**Decisions created (4):**
+- [[decisions/brim-parser-only]] — BRIM is a parser; no commit endpoint, no asset events
+- [[decisions/multi-broker-atomic-tx]] — bulk endpoints not broker-scoped, multi-broker atomic
+- [[decisions/tx-link-uuid-semantics]] — TRANSFER/DEPOSIT/WITHDRAWAL link_uuid rules + promote endpoint
+- [[decisions/price-currency-hard-reject]] — hard 400 on mismatch, 409 on currency change with prices
+
+**Concepts created (1):**
+- [[concepts/savewithretry-frontend-pattern]] — unified modal save helper adopted in 8+ modals
+
+**Features updated:**
+- [[features/F-012]] — BRIM Revision 2: parser-only, plugin_version, parse_is_stale, bulk_upsert_events rename
+- [[features/F-046]] — status→implemented, multi-broker bulk endpoints, validate/suggest/promote
+- [[features/F-049]] — commit via /transactions/bulk (not BRIM-specific), parse_is_stale UI
+- [[features/F-051]] — status→in-progress, events/suggest endpoint documented
+
+**Registry updated:**
+- F-046: `in-progress` → `implemented`
+- F-051: `planned` → `in-progress`
+
+**Wiki page count**: ~176 pages (170 + 4 sources + 4 decisions + 1 concept - 3 from prev pass)
