@@ -1,0 +1,87 @@
+---
+title: "Domain: TRANSACTIONS"
+category: domain
+features: [F-046, F-047, F-048, F-049, F-050, F-051]
+status: in-progress
+mkdocs: "developer/architecture/database/brokers_transactions.md"
+---
+
+# Domain: TRANSACTIONS
+
+> ⚠️ This domain is under active development (Phase 7). Content reflects design intent, not final implementation.
+
+> The ledger layer — every financial event (purchase, sale, dividend, fee) recorded as an immutable transaction, enabling FIFO cost-basis and portfolio-level analytics.
+
+## What it does
+
+Transactions are the financial heart of LibreFolio. A transaction records a financial event: a BUY (quantity purchased, price paid, fees), a SELL (quantity sold, proceeds), a DIVIDEND (cash received), an INTEREST payment, a FEE, a TAX, a TRANSFER (in or out), a SPLIT (quantity adjustment), or OTHER. Each transaction belongs to a broker and references an asset. The combination of transaction history, price history, and FX rates is what makes portfolio analytics (cost basis, realized gain, unrealized gain, ROI) possible.
+
+The backend model and bulk API (F-046) were implemented in Phase 3 and extended in Phase 7. The bulk API is atomic per broker: all transactions in a `POST /brokers/:id/transactions/bulk` call succeed together or fail together, with a `validate=true` dry-run mode for previewing without committing. Access control is enforced at the API level: GET/PATCH/DELETE are filtered to transactions belonging to brokers the user has access to; creating transactions requires EDITOR role.
+
+The primary user-facing flow for entering transactions is through the BRIM pipeline: upload a broker export file, the system parses it with the appropriate plugin, the user reviews the extracted transactions in a staging area (F-049, in-progress), resolves any unknown assets via the matching wizard, and commits. The staging modal (F-048, planned) will also support manual transaction entry as a unified entry point. The transaction list page (F-047, in-progress) provides a paginated DataTable view with broker and asset filters.
+
+## Feature cluster
+
+| Code | Feature | Layer | Role in domain | Status |
+|------|---------|-------|----------------|--------|
+| [[F-046]] | Transaction Model & Bulk API | backend | core — data model + atomic bulk create with dry-run | in-progress |
+| [[F-047]] | Transaction List Page (DataTable + filters) | frontend | display — paginated list with broker/asset/type filters | in-progress |
+| [[F-048]] | Staging Modal (unified manual entry + BRIM output) | frontend | core — review/edit transactions before commit | planned |
+| [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | core — wizard to match extracted assets + commit | in-progress |
+| [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | support — inline preview of uploaded broker report files | planned |
+| [[F-051]] | Transaction ↔ AssetEvent Link | backend | support — FK between transactions and asset events | planned |
+
+## Architecture at a glance
+
+```mermaid
+graph TD
+    BRIM[F-012 BRIM Framework<br/>parse broker file] -->|fake asset IDs| StagingData[Parsed Tx + extracted assets]
+    StagingData --> ImportUI[F-049 BRIM Import UI<br/>asset matching wizard]
+    ManualEntry[Manual entry form] --> StagingModal[F-048 Staging Modal<br/>review + edit]
+    ImportUI --> StagingModal
+    StagingModal -->|validate=true dry-run| BulkAPI[F-046 POST /brokers/:id/transactions/bulk<br/>atomic per broker]
+    StagingModal -->|confirm commit| BulkAPI
+    BulkAPI -->|EDITOR role check| TxDB[(Transaction table<br/>per-broker scoped)]
+    TxDB --> TxList[F-047 Transaction List Page<br/>filters: broker, asset, type]
+    TxDB --> FIFO[F-056 FIFO at Runtime]
+    TxDB --> EventLink[F-051 TX ↔ AssetEvent FK]
+    EventLink --> AssetEvents[(AssetEvent table)]
+    EventLink --> DASH[F-054 Dashboard<br/>income tracking]
+    FileStore[(UploadedFile)] --> Preview[F-050 File Preview]
+    Preview --> ImportUI
+```
+
+## Key decisions that shaped this domain
+
+- **FIFO at runtime** (see [[decisions/fifo-runtime-decision]] and [[features/F-056]]) — cost basis is computed on demand, never stored. This decision was made to support retroactive edits: correcting a BRIM import error (wrong price, wrong quantity) immediately corrects all downstream P&L without cache invalidation.
+- **Atomic bulk API per broker** — all transactions in a bulk call are committed or rolled back together, scoped to a single broker. This prevents partial imports leaving the ledger in an inconsistent state.
+- **Fake asset ID flow** (see [[decisions/brim-fake-asset-id]]) — BRIM parsers emit negative integers as placeholder asset IDs, decoupling parse from the asset catalog. The matching wizard maps them to real asset IDs before commit.
+
+## Known problems / limitations
+
+From the Phase 7 gap analysis (see [[connections/transactions-connections]]):
+
+- F-046: GET/PATCH/DELETE access control not yet fully broker-filtered — security gap being addressed in Phase 7.
+- F-013: No `plugin_version` tracking — if a BRIM plugin is updated, previously cached parses are not invalidated.
+- F-048: Unified Staging Modal not yet built — the staging UX is temporarily embedded in the BRIM import flow.
+- F-049: Asset matching wizard partially implemented — metadata preview columns not yet dynamically driven.
+- F-051: TX↔AssetEvent link defined in schema but not yet used in analytics.
+
+## What comes next
+
+- Complete Phase 7: F-048 Staging Modal, F-050 File Preview, F-051 TX↔AssetEvent link.
+- [[F-081]] Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) — user selects accounting method for realized gain calculation; FIFO is the Phase 7 default.
+- [[F-082]] Cash Split Transactions — represent cash from dividends as a separate CASH asset.
+- [[F-083]] Multi-File Multi-Broker Import — batch upload and parse multiple files in one workflow.
+- [[F-084]] Transaction Gain Chart — per-asset gain/loss visualization over time.
+
+## Source files
+
+| Role | Path |
+|------|------|
+| Primary mkdocs | `mkdocs_src/docs/developer/architecture/database/brokers_transactions.md` |
+| Transaction API | `backend/app/api/v1/transactions.py` |
+| Transaction service | `backend/app/services/transaction_service.py` |
+| DB model (Transaction) | `backend/app/db/models.py` |
+| Transaction pages | `frontend/src/routes/(app)/transactions/` |
+| BRIM abstract base | `backend/app/services/brim_provider.py` |
