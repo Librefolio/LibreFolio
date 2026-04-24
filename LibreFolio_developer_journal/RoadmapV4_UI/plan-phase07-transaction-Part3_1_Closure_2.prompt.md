@@ -20,10 +20,20 @@ spostate sezioni pending per mantenere leggibilità).
 1. ~~Batch 2 **part5b** = #R4-1 + #R4-2 + #R4-4 + #R4-5 (quick wins ~70 min)
    + diagnosi #R4-3~~ → ✅ **COMPLETO** (commit `8391aac0` + `1bff6ad1` +
    `09dba1c3`, 2026-04-23).
-2. **Batch 3** = R3-3 Policy D + R3-3b backup endpoints (design già fissato
-   nel parent plan, implementazione da fare qui). **← PROSSIMO**
-3. Blocco G test coverage (8-10h stimati).
-4. Coda I-bis in priorità decrescente (#22 prerequisito Part 4/5 prima,
+2. ~~**Batch 3** = R3-3 Policy D + R3-3b backup endpoints~~ → ✅
+   **COMPLETO** (2026-04-23 sera, commit pending): nuovo `backup_router`
+   con snapshot per-series (prezzi/eventi/FX), endpoint
+   `POST /assets/{id}/market-data/wipe` per Policy D (wipe simmetrico +
+   disconnect tx), hard-400 su event currency mismatch, nuovo token
+   blocker `CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA`, FE modal riscritta
+   con summary eventi/tx + 4 bottoni export, helper
+   `backupDownload.ts` via axiosInstance (cookie auth + 401 interceptor),
+   i18n × 4. **Retest 2026-04-24**: 28/29 test verdi, 3 rifiniture
+   UX/cleanup emerse → Batch 3 **part5b** (vedi §Retest findings sotto).
+3. **Batch 3 part5b** = polish post-retest (`#R5-1..#R5-3`, ~45 min).
+   **← PROSSIMO**
+4. Blocco G test coverage (8-10h stimati).
+5. Coda I-bis in priorità decrescente (#22 prerequisito Part 4/5 prima,
    poi #25, #26, #24, #1, #2, ecc.).
 
 ---
@@ -596,3 +606,163 @@ come originariamente pianificato.
 **Nota su I-bis #2** (warning "Save Without Testing?" su param-only change):
 confermato dall'utente — resta tracciato nel TODO futuri, non in questo
 batch.
+
+---
+
+
+## Retest findings — Batch 3 (#R5-1..#R5-3)
+
+_Registrato il 2026-04-24 dopo l'implementazione di Batch 3 (R3-3 Policy D +
+R3-3b backup endpoints, commit pending). L'utente ha eseguito la test list
+frontend completa (7 sezioni, 29 casi): 28 verdi, 1 bug UX cosmetico, 2
+proposte di polish._
+
+### Stato test list 2026-04-24
+
+| Sez | Scope | Esito |
+|-----|-------|:-----:|
+| 1.x | Backup endpoints standalone (1.1–1.6) | ✅ 6/6 |
+| 2.x | Download helper via axiosInstance (2.1–2.3) | ✅ 2/2 + 1 skip |
+| 3.x | Flow currency change end-to-end (3.1–3.8) | ✅ 8/8 |
+| 4.x | Hard-400 event currency mismatch | ⚠️ API OK, UI inconsistente (vedi #R5-3) |
+| 5.x | Regressioni legacy + no-break | ✅ 2/2 |
+| 6.  | i18n × 4 | ✅ |
+| 7.  | Console pulita | ✅ |
+
+**Verifica DB post-wipe** (asset Apple id=1, dati iniziali):
+```
+prices | events_manual | events_provider | linked_tx
+   253 |             3 |               4 |         2
+```
+Dopo il flow "Delete & Change Currency" EUR→USD:
+```
+prices | events_manual | events_provider | linked_tx
+     0 |             0 |               0 |         0
+```
+(post-wipe pre-resync: prezzi e eventi azzerati, transazioni preservate ma
+scollegate; resync era 0 perché provider non restituiva dati per il range
+richiesto — comportamento atteso).
+
+### #R5-1 — Modal currency change: copy del title/banner da semplificare
+
+**Contesto**: la modal attuale ha title "Change currency — destructive
+action" + un paragrafo `body` che ripete in prosa gli stessi dati della
+lista bullet sottostante. Risultato: informazione duplicata, cognitive
+load alto, e la consequenza importante "le transazioni scollegate sono
+responsabilità utente riconnetterle" non è enfatizzata.
+
+**Richiesta utente**: semplificare il title / body per comunicare in
+modo asciutto:
+1. Cosa: cambio valuta.
+2. Conseguenze → vedi lista rossa sotto.
+3. Dopo il wipe: il sistema **prova** a risincronizzare prezzi ed
+   eventi dal provider.
+4. **Caveat**: le transazioni scollegate restano disconnesse —
+   l'utente è responsabile di ricollegarle ai nuovi eventi (o
+   lasciarle orfane).
+
+**Fix proposto** (FE, `AssetCurrencyChangeModal.svelte` + i18n × 4):
+
+- **Title** (più descrittivo, tono neutro):
+  "Change asset currency ({from} → {to})".
+- **Body** (1 paragrafo corto, non ripete la lista):
+  "Changing the currency requires wiping all stored market data (see
+  below). After the wipe, LibreFolio will attempt to re-sync prices
+  and events from the provider in the new currency. **Transactions
+  that were linked to the deleted events will be disconnected — you
+  are responsible for reattaching them to the newly-synced events if
+  needed.**"
+- **Copy del bullet "linked_tx"**: già in bold red, lasciare invariato.
+- **Copy del titolo backup section**: rinominare da
+  "Backup current prices before deletion" a
+  "Download backup before proceeding" (ora copre anche eventi).
+
+**i18n keys da toccare** (en/it/fr/es):
+- `assetDetail.currencyChange.title` — nuovo formato con placeholders
+  `{from} {to}`.
+- `assetDetail.currencyChange.body` — riscritto, 1 paragrafo asciutto,
+  **senza** i contatori (stanno nei bullet).
+- `assetDetail.currencyChange.backupTitle` — "Download backup before
+  proceeding".
+- Rimuovere placeholders obsoleti da `body`: `{prices, events, oldest,
+  today}` non più usati lì (i contatori stanno nei `summary*`).
+
+**Effort**: ~20 min (FE + 4 file i18n).
+
+### #R5-2 — Modal backup section: title fuorviante quando ci sono solo eventi
+
+**Contesto**: durante il primo retest (asset con 3 eventi manuali, 0
+prezzi), l'utente ha percepito un bug "non compaiono i bottoni export
+prezzi". In realtà i bottoni prezzi sono **correttamente nascosti**
+(`{#if blocker.prices > 0}`) perché non ci sono prezzi da esportare;
+compaiono solo i 2 bottoni eventi. **MA** il titolo della sezione
+("Backup current prices before deletion") menziona solo i prezzi → la
+dissonanza cognitiva suggerisce "manca qualcosa".
+
+**Fix**: coperto da #R5-1 punto 4 (rinomina `backupTitle` →
+"Download backup before proceeding"). Zero codice logic da cambiare,
+solo copy.
+
+**Verifica retest atteso**: con la nuova copy, il fatto che compaia solo
+"Export events CSV/JSON" quando `prices=0` sarà auto-esplicativo.
+
+### #R5-3 — Event editor FE: colonna `currency` da rimuovere
+
+**Contesto**: l'editor di eventi manuali (accessibile da "Edit Prices &
+Events" su asset detail → tab Events) espone una colonna `currency` che
+l'utente può liberamente modificare. **Ma** Policy D impone ora:
+`event.currency == asset.currency` (hard-400 backend, vedi
+`EVENT_CURRENCY_MISMATCH` in `bulk_upsert_events`). Se l'utente inserisce
+una currency diversa:
+- FE invia il POST.
+- BE respinge 400.
+- Toast di errore genera confusione ("perché il form mi lascia scegliere?").
+
+**Principio di design**: il frontend deve **impedire** l'input invalido,
+non lasciare il backend a rifiutarlo a posteriori. La colonna `currency`
+in questo editor è semanticamente redundant — ogni evento eredita la
+currency dell'asset.
+
+**Fix proposto** (FE):
+1. **Rimuovere la colonna `currency`** dalla tabella di
+   `AssetDataEditorSection.svelte` (o dove risiede l'editor eventi).
+2. **Nel payload POST**: non inviare più `value.code` per-evento, solo
+   `value.amount`. Il backend inserisce `asset.currency` automaticamente
+   (già fa così: `currency = evt.value.code or default_currency`).
+3. **UI**: aggiungere una nota in cima al tab Events:
+   "All events are denominated in the asset's currency ({currency} {flag})".
+4. **i18n**: nuova chiave `dataEditor.eventsInAssetCurrency` × 4 (già
+   simile a I-bis #3 tab label per prezzi).
+
+**Test backend** (Blocco G.10+): `test_assets_events_hard_400_on_currency_mismatch`
+in `backend/test_scripts/test_api/test_assets_events.py` (NUOVO file o
+estensione se esiste) — verifica che POST `/assets/events` con un evento
+`{value: {code: "USD", amount: "1"}}` su asset EUR ritorni 400 con
+`detail` contenente `EVENT_CURRENCY_MISMATCH`.
+
+**Effort**: FE ~20 min, BE test ~15 min.
+
+**Priorità**: media — UI consistency + prevenzione input invalido. Non
+blocca Batch 3 commit (il BE ha già il guard hard-400), può essere
+nello stesso batch polish.
+
+---
+
+### Priorità suggerita per Batch 3 part5b
+
+| # | Ticket | Area | Sforzo stimato | Priorità |
+|---|--------|------|---------------:|:--------:|
+| 1 | #R5-1 | FE + i18n (modal copy: title/body/backupTitle) | 20 min | alta |
+| 2 | #R5-2 | FE + i18n (subset di #R5-1) | 0 (già in #R5-1) | — |
+| 3 | #R5-3 | FE (rimuovi colonna currency editor eventi) + BE test | 35 min | media |
+
+**Ordine di commit consigliato**: **un unico commit** "Batch 3 part5b —
+polish #R5-1 + #R5-3" perché cambiano file coerenti (modal + editor +
+i18n) e sono logicamente correlati al commit Batch 3 appena fatto.
+Separare solo se #R5-3 richiede cambi backend inattesi.
+
+**Nota test list retest**: se la copy di #R5-1 viene accettata dall'utente,
+la sez. 1.3 diventa auto-passante senza bisogno di ri-testare (era un
+falso bug di percezione).
+
+

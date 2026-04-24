@@ -1,17 +1,26 @@
 <!--
-  AssetCurrencyChangeModal.svelte - Destructive-confirm modal for currency change (I.6).
+  AssetCurrencyChangeModal.svelte — Destructive-confirm modal for currency change
+  (I.6 + R3-3 Policy D).
 
   Opens when PATCH /assets returns a per-item result with the structured blocker
-  message "CURRENCY_CHANGE_BLOCKED_BY_PRICES|count=N|oldest=...|newest=...|from=X|to=Y".
+  token:
+    "CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|prices=N|events_manual=M|
+     events_provider=K|linked_tx=L|oldest=...|newest=...|from=X|to=Y"
 
-  Flow:
-  1. Show count + date range + from/to currencies.
-  2. Offer 2 export buttons (CSV / JSON) for pre-wipe backup.
+  Policy D (symmetric wipe + linked-tx disconnect):
+  1. Show a summary of everything that will be deleted/disconnected:
+     N prices (oldest..newest range) + M manual events + K provider events
+     + L linked transactions that will be DISCONNECTED (but NOT deleted).
+  2. Offer export buttons (CSV / JSON) for both prices and events so the
+     user can keep a local snapshot before destruction.
   3. On "Delete & Change" confirm:
-     a. DELETE /assets/prices  (range oldest..newest)
-     b. PATCH /assets           (now succeeds - no prices remain)
-     c. POST /assets/prices/sync (if provider assigned) with same oldest..today range
-  4. Each step shows a progress toast; failure surfaces error toast.
+     a. POST /assets/{id}/market-data/wipe  (single atomic step: wipe prices
+        + wipe events + SET asset_event_id=NULL on linked transactions +
+        cache invalidate).
+     b. PATCH /assets                        (now succeeds — no residual
+        market data blocks the change).
+     c. POST /assets/prices/sync             (if provider assigned; repopulates
+        the series in the new currency).
 
   Uses Svelte 5 runes.
 -->
@@ -19,6 +28,7 @@
     import {AlertTriangle, Download, X} from 'lucide-svelte';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
+    import {downloadAssetBackup, type BackupFormat, type BackupKind} from '$lib/api/backupDownload';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {_ as t} from '$lib/i18n';
     import {buildAssetSyncToast} from '$lib/utils/syncToastHelpers';
@@ -26,45 +36,56 @@
 
     interface BlockerInfo {
         assetId: number;
-        count: number;
+        /** Number of rows in price_history for this asset. */
+        prices: number;
+        /** Manual events (provider_assignment_id IS NULL). */
+        eventsManual: number;
+        /** Auto-generated events (provider_assignment_id IS NOT NULL). */
+        eventsProvider: number;
+        /** Transactions still linked to one of the events (will be disconnected, not deleted). */
+        linkedTx: number;
+        /** Oldest date in price_history (empty if no prices). */
         oldest: string;
+        /** Newest date in price_history (empty if no prices). */
         newest: string;
+        /** Current currency (e.g. "USD"). */
         from: string;
+        /** Target currency (e.g. "EUR"). */
         to: string;
     }
 
     interface Props {
-        /** Modal open flag (bindable). */
         open: boolean;
-        /** Parsed blocker info from the PATCH 409 message. */
         blocker: BlockerInfo | null;
-        /**
-         * Serialized payload that PATCH attempted (minus currency override already in `blocker.to`).
-         * The modal re-submits this via a full PATCH after wipe, with `currency=blocker.to`.
-         */
         patchPayload: Record<string, unknown> | null;
-        /** Provider code on the asset (or null): if set, auto-sync is triggered after patch. */
         providerAssigned: boolean;
-        /** Called after the full wipe/patch/sync chain succeeds. */
         onconfirmed?: () => void;
-        /** Called when the user cancels the destructive flow. */
         oncanceled?: () => void;
     }
 
     let {open = $bindable(), blocker, patchPayload, providerAssigned, onconfirmed, oncanceled}: Props = $props();
 
     let inProgress = $state(false);
-    /**
-     * I-bis #12 — inline progress step instead of 3 transient toasts.
-     * null = idle, otherwise shows next to the confirm button.
-     */
-    let progressStep = $state<null | 'delete' | 'patch' | 'sync'>(null);
+    /** Inline progress step (replaces the old 3-toast progress chain, I-bis #12). */
+    let progressStep = $state<null | 'wipe' | 'patch' | 'sync'>(null);
 
-    function exportPrices(format: 'csv' | 'json') {
+    /** Total events count (manual + provider) — convenient for the copy in the body. */
+    const totalEvents = $derived(blocker ? blocker.eventsManual + blocker.eventsProvider : 0);
+
+    async function exportBackup(kind: BackupKind, format: BackupFormat) {
         if (!blocker) return;
-        // Cookie-based auth: a plain link with Content-Disposition is enough.
-        const url = `/api/v1/assets/prices/${blocker.assetId}/export?format=${format}`;
-        window.open(url, '_blank');
+        // Uses the shared axiosInstance (cookie auth + 401 interceptor +
+        // Accept-Language) instead of a raw ``window.open`` so every request
+        // flows through the same pipeline as the rest of the Zodios client.
+        // The backend picks the filename via ``Content-Disposition`` — we
+        // just surface any HTTP error as a toast.
+        try {
+            await downloadAssetBackup(blocker.assetId, kind, format);
+        } catch (err: any) {
+            console.error(`Backup download failed (${kind}/${format}):`, err);
+            const detail = err?.response?.data?.detail || err?.message || 'unknown error';
+            toasts.error(`${$t('assetDetail.currencyChange.backupTitle')}: ${detail}`);
+        }
     }
 
     async function handleConfirm() {
@@ -74,26 +95,30 @@
         const tr = get(t);
 
         try {
-            // Step 1: delete all prices in the range (inline spinner, no toast)
-            progressStep = 'delete';
-            await zodiosApi.delete_prices_bulk_api_v1_assets_prices_delete([
-                {
-                    asset_id: blocker.assetId,
-                    date_ranges: [{start: blocker.oldest, end: blocker.newest}],
-                },
-            ]);
-            // Toast #1 — delete success
-            toasts.success(tr('assetDetail.currencyChange.deleteSuccess', {values: {count: blocker.count}}));
+            // Step 1: single atomic wipe (prices + events + linked-tx disconnect).
+            progressStep = 'wipe';
+            await zodiosApi.wipe_market_data_api_v1_assets__asset_id__market_data_wipe_post(undefined, {
+                params: {asset_id: blocker.assetId},
+            });
+            toasts.success(
+                tr('assetDetail.currencyChange.wipeSuccess', {
+                    values: {
+                        prices: blocker.prices,
+                        events: totalEvents,
+                        linkedTx: blocker.linkedTx,
+                    },
+                }),
+            );
 
-            // Step 2: retry PATCH (now succeeds because no prices remain)
+            // Step 2: retry PATCH (now succeeds — no residual market data).
             progressStep = 'patch';
             await zodiosApi.patch_assets_bulk_api_v1_assets_patch([patchPayload] as any);
-            // Toast #2 — currency change success (always fired when delete+patch
-            // succeed). The separate sync toast below reports its own outcome.
-            toasts.success(tr('assetDetail.currencyChange.changedTo', {values: {from: blocker.from, to: blocker.to}}));
+            toasts.success(
+                tr('assetDetail.currencyChange.changedTo', {values: {from: blocker.from, to: blocker.to}}),
+            );
 
-            // Step 3: auto-sync from provider using original oldest date as start
-            if (providerAssigned) {
+            // Step 3: auto-sync (only if provider assigned AND we had prices to begin with).
+            if (providerAssigned && blocker.oldest) {
                 progressStep = 'sync';
                 const today = new Date().toISOString().slice(0, 10);
                 try {
@@ -103,9 +128,6 @@
                             date_range: {start: blocker.oldest, end: today},
                         },
                     ]);
-                    // Toast #3 — unified sync outcome (ok / noChanges / partial / skipped / error).
-                    // This surfaces the real provider error (e.g. "Currency mismatch ...")
-                    // via result.message, instead of a generic "sync failed, retry manually".
                     const r = syncResponse?.results?.[0];
                     if (r) {
                         const toast = buildAssetSyncToast(r, tr('common.sync'), tr);
@@ -114,8 +136,6 @@
                         toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
                     }
                 } catch (syncErr: any) {
-                    // Network / HTTP error on sync — surface the detail so the user
-                    // knows why (e.g. backend 400 "Currency mismatch for asset...").
                     console.error('Post-wipe auto-sync failed:', syncErr);
                     const detail = syncErr?.response?.data?.detail || syncErr?.message || 'unknown error';
                     toasts.error(`${tr('common.sync')}: ${detail}`);
@@ -162,47 +182,69 @@
                         values: {
                             from: blocker.from,
                             to: blocker.to,
-                            count: blocker.count,
-                            oldest: blocker.oldest,
+                            prices: blocker.prices,
+                            events: totalEvents,
+                            oldest: blocker.oldest || '-',
                             today: new Date().toISOString().slice(0, 10),
                         },
                     })}
                 </p>
 
-                {#if providerAssigned}
+                <!-- What will be wiped / disconnected (R3-3 Policy D) -->
+                <ul class="text-xs text-slate-700 dark:text-slate-300 bg-red-50/60 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md p-3 space-y-1 list-disc list-inside">
+                    {#if blocker.prices > 0}
+                        <li>{$t('assetDetail.currencyChange.summaryPrices', {values: {count: blocker.prices, oldest: blocker.oldest, newest: blocker.newest}})}</li>
+                    {/if}
+                    {#if blocker.eventsManual + blocker.eventsProvider > 0}
+                        <li>
+                            {$t('assetDetail.currencyChange.summaryEvents', {
+                                values: {manual: blocker.eventsManual, provider: blocker.eventsProvider},
+                            })}
+                        </li>
+                    {/if}
+                    {#if blocker.linkedTx > 0}
+                        <li class="font-medium text-red-700 dark:text-red-300">
+                            {$t('assetDetail.currencyChange.summaryLinkedTx', {values: {count: blocker.linkedTx}})}
+                        </li>
+                    {/if}
+                </ul>
+
+                {#if providerAssigned && blocker.oldest}
                     <InfoBanner variant="info">
                         {$t('assetDetail.currencyChange.autoSyncInfo', {values: {from: blocker.oldest}})}
                     </InfoBanner>
-                {:else}
+                {:else if !providerAssigned}
                     <InfoBanner variant="warning">
                         {$t('assetDetail.currencyChange.noProviderInfo')}
                     </InfoBanner>
                 {/if}
 
-                <!-- Backup section -->
+                <!-- Backup section — R3-3b: prices + events -->
                 <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
                     <div class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
                         {$t('assetDetail.currencyChange.backupTitle')}
                     </div>
                     <div class="flex gap-2 flex-wrap">
-                        <button
-                            type="button"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
-                            onclick={() => exportPrices('csv')}
-                            disabled={inProgress}
-                        >
-                            <Download size={13} />
-                            {$t('assetDetail.currencyChange.exportCsv')}
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
-                            onclick={() => exportPrices('json')}
-                            disabled={inProgress}
-                        >
-                            <Download size={13} />
-                            {$t('assetDetail.currencyChange.exportJson')}
-                        </button>
+                        {#if blocker.prices > 0}
+                            <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" onclick={() => exportBackup('prices', 'csv')} disabled={inProgress}>
+                                <Download size={13} />
+                                {$t('assetDetail.currencyChange.exportPricesCsv')}
+                            </button>
+                            <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" onclick={() => exportBackup('prices', 'json')} disabled={inProgress}>
+                                <Download size={13} />
+                                {$t('assetDetail.currencyChange.exportPricesJson')}
+                            </button>
+                        {/if}
+                        {#if totalEvents > 0}
+                            <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" onclick={() => exportBackup('events', 'csv')} disabled={inProgress}>
+                                <Download size={13} />
+                                {$t('assetDetail.currencyChange.exportEventsCsv')}
+                            </button>
+                            <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" onclick={() => exportBackup('events', 'json')} disabled={inProgress}>
+                                <Download size={13} />
+                                {$t('assetDetail.currencyChange.exportEventsJson')}
+                            </button>
+                        {/if}
                     </div>
                 </div>
             </div>
@@ -210,11 +252,10 @@
             <!-- Footer -->
             <div class="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
                 {#if inProgress && progressStep}
-                    <!-- I-bis #12 — inline progress step (replaces the 3 progress toasts) -->
                     <span class="mr-auto flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300" data-testid="currency-change-progress-step">
                         <span class="inline-block h-3 w-3 rounded-full border-2 border-slate-400 border-t-transparent animate-spin"></span>
-                        {#if progressStep === 'delete'}
-                            {$t('assetDetail.currencyChange.progressDelete', {values: {count: blocker.count}})}
+                        {#if progressStep === 'wipe'}
+                            {$t('assetDetail.currencyChange.progressWipe', {values: {prices: blocker.prices, events: totalEvents, linkedTx: blocker.linkedTx}})}
                         {:else if progressStep === 'patch'}
                             {$t('assetDetail.currencyChange.progressPatch')}
                         {:else if progressStep === 'sync'}

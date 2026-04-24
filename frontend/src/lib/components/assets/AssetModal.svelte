@@ -148,7 +148,17 @@
 
     // I.6 — destructive currency-change modal state.
     let currencyChangeModalOpen = $state(false);
-    let currencyChangeBlocker = $state<{assetId: number; count: number; oldest: string; newest: string; from: string; to: string} | null>(null);
+    let currencyChangeBlocker = $state<{
+        assetId: number;
+        prices: number;
+        eventsManual: number;
+        eventsProvider: number;
+        linkedTx: number;
+        oldest: string;
+        newest: string;
+        from: string;
+        to: string;
+    } | null>(null);
     let currencyChangePatchPayload = $state<Record<string, unknown> | null>(null);
     let currencyChangeProviderAssigned = $state(false);
     let pendingSearchResult = $state<any>(null);
@@ -846,13 +856,20 @@
         };
         const patchPayload = [patchItem];
 
-        // I.3 — PATCH can return a per-item failure with the structured blocker message
-        // "CURRENCY_CHANGE_BLOCKED_BY_PRICES|count=N|oldest=...|newest=...|from=X|to=Y"
-        // when the user changed the currency on an asset that still has price history.
-        // Intercept it, parse, and open the destructive-confirm modal.
+        // I.3 + R3-3 Policy D — PATCH returns a per-item failure with the structured
+        // blocker token when the user changed the currency on an asset that still has
+        // *any* market data (prices, events or linked transactions). Token format:
+        //   CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|prices=N|events_manual=M|
+        //     events_provider=K|linked_tx=L|oldest=...|newest=...|from=X|to=Y
+        // The modal turns this into the destructive-confirm dialog.
         const patchResp: any = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
         const resultItem = patchResp?.results?.[0];
-        if (resultItem && resultItem.success === false && typeof resultItem.message === 'string' && resultItem.message.startsWith('CURRENCY_CHANGE_BLOCKED_BY_PRICES|')) {
+        if (
+            resultItem &&
+            resultItem.success === false &&
+            typeof resultItem.message === 'string' &&
+            resultItem.message.startsWith('CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|')
+        ) {
             const parsed: Record<string, string> = {};
             for (const chunk of resultItem.message.split('|').slice(1)) {
                 const [k, v] = chunk.split('=');
@@ -860,7 +877,10 @@
             }
             currencyChangeBlocker = {
                 assetId,
-                count: parseInt(parsed.count || '0', 10),
+                prices: parseInt(parsed.prices || '0', 10),
+                eventsManual: parseInt(parsed.events_manual || '0', 10),
+                eventsProvider: parseInt(parsed.events_provider || '0', 10),
+                linkedTx: parseInt(parsed.linked_tx || '0', 10),
                 oldest: parsed.oldest || '',
                 newest: parsed.newest || '',
                 from: parsed.from || '',
@@ -1412,7 +1432,7 @@
     }}
 />
 
-<!-- I.6 — Destructive currency-change modal. Triggered by the CURRENCY_CHANGE_BLOCKED_BY_PRICES marker. -->
+<!-- I.6 + R3-3 Policy D — Destructive currency-change modal. Triggered by the CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA marker. -->
 <AssetCurrencyChangeModal
     bind:open={currencyChangeModalOpen}
     blocker={currencyChangeBlocker}

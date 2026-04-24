@@ -1535,6 +1535,166 @@ class AssetSourceManager:
         return FABulkDeleteResponse(results=results, success_count=len(results), total_deleted=deleted_count, errors=[])
 
     # ========================================================================
+    # MARKET-DATA WIPE (R3-3 Policy D)
+    # ========================================================================
+
+    @staticmethod
+    async def wipe_market_data_for_currency_change(
+        asset_id: int,
+        session: AsyncSession,
+        dry_run: bool = False,
+    ) -> dict:
+        """Wipe **all** market data for an asset before a currency change.
+
+        Policy D (see phase-07 closure plan §"Issue #R3-3"): when the user
+        confirms a currency change, we wipe every series that was denominated
+        in the old currency — prices, all events (manual + provider) — and
+        disconnect any transaction still pointing at one of the deleted
+        events (``transactions.asset_event_id = NULL``). Transactions
+        themselves are preserved; it is the user's responsibility to decide
+        whether to re-associate them to new events after re-sync.
+
+        Rationale for the "totally symmetric" choice:
+        * Prices in the old currency would mix with new-currency data after
+          the change → hard-to-debug reports.
+        * Events (dividends, interest, splits, …) carry a ``currency`` field
+          too; a residual old-currency event is as inconsistent as a
+          residual old-currency price.
+        * We don't try to convert values via FX (Policy C): double-conversion
+          accumulates rounding, manual events would be silently altered
+          without user consent.
+
+        Operations (inside a single transaction, in order):
+
+        1. ``UPDATE transactions SET asset_event_id = NULL WHERE
+           asset_event_id IN (SELECT id FROM asset_events WHERE asset_id=?)``
+        2. ``DELETE FROM asset_events WHERE asset_id=?``
+        3. ``DELETE FROM price_history WHERE asset_id=?``
+        4. Invalidate per-asset history + current-price caches.
+
+        Args:
+            asset_id: target asset.
+            session: active DB session (committed on success).
+            dry_run: when ``True``, run only the counts and skip the
+                destructive SQL. Useful for the pre-confirm summary panel
+                on the frontend.
+
+        Returns:
+            Dict with keys ``prices``, ``events_manual``, ``events_provider``,
+            ``linked_tx``, ``oldest``, ``newest`` (ISO strings or ``None``),
+            ``dry_run``.
+
+        Raises:
+            AssetSourceError: if ``asset_id`` does not exist.
+        """
+        asset = (await session.execute(select(Asset).where(Asset.id == asset_id))).scalar_one_or_none()
+        if not asset:
+            raise AssetSourceError(f"Asset {asset_id} not found", "ASSET_NOT_FOUND")
+
+        # --- Counters -------------------------------------------------------
+        prices_res = await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id))
+        prices_count = int(prices_res.scalar() or 0)
+
+        events_manual_res = await session.execute(
+            select(func.count())
+            .select_from(AssetEvent)
+            .where(
+                AssetEvent.asset_id == asset_id,
+                AssetEvent.provider_assignment_id.is_(None),
+            )
+        )
+        events_manual_count = int(events_manual_res.scalar() or 0)
+
+        events_provider_res = await session.execute(
+            select(func.count())
+            .select_from(AssetEvent)
+            .where(
+                AssetEvent.asset_id == asset_id,
+                AssetEvent.provider_assignment_id.is_not(None),
+            )
+        )
+        events_provider_count = int(events_provider_res.scalar() or 0)
+
+        linked_tx_res = await session.execute(select(func.count()).select_from(Transaction).where(Transaction.asset_event_id.in_(select(AssetEvent.id).where(AssetEvent.asset_id == asset_id))))
+        linked_tx_count = int(linked_tx_res.scalar() or 0)
+
+        oldest_date = None
+        newest_date = None
+        if prices_count > 0:
+            oldest_res = await session.execute(select(func.min(PriceHistory.date)).where(PriceHistory.asset_id == asset_id))
+            newest_res = await session.execute(select(func.max(PriceHistory.date)).where(PriceHistory.asset_id == asset_id))
+            oldest_date = oldest_res.scalar()
+            newest_date = newest_res.scalar()
+
+        summary = {
+            "prices": prices_count,
+            "events_manual": events_manual_count,
+            "events_provider": events_provider_count,
+            "linked_tx": linked_tx_count,
+            "oldest": oldest_date.isoformat() if oldest_date else None,
+            "newest": newest_date.isoformat() if newest_date else None,
+            "dry_run": dry_run,
+        }
+
+        if dry_run:
+            return summary
+
+        # --- Destructive SQL (single transaction) ---------------------------
+        # 1. Disconnect linked transactions first (pre-DELETE to avoid FK RESTRICT).
+        if linked_tx_count > 0:
+            await session.execute(Transaction.__table__.update().where(Transaction.asset_event_id.in_(select(AssetEvent.id).where(AssetEvent.asset_id == asset_id))).values(asset_event_id=None))
+
+        # 2. Delete all events.
+        if events_manual_count + events_provider_count > 0:
+            await session.execute(delete(AssetEvent).where(AssetEvent.asset_id == asset_id))
+
+        # 3. Delete all prices.
+        if prices_count > 0:
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == asset_id))
+
+        await session.commit()
+
+        # 4. Cache invalidation — history + current. The cache key is
+        # ``(provider_code, identifier, identifier_type, params_hash)`` so we
+        # rebuild it from the asset's current provider config. If the asset
+        # has no provider assigned the keys simply won't be in the cache;
+        # ``.delete`` is a no-op in that case.
+        try:
+            if asset.provider_code:
+                params_dict: Optional[dict] = None
+                if asset.provider_params:
+                    try:
+                        params_dict = json.loads(asset.provider_params)
+                    except Exception:  # noqa: BLE001 — params may be corrupted; just skip hashing
+                        params_dict = None
+                cache_key = (
+                    asset.provider_code,
+                    asset.identifier or "",
+                    str(asset.identifier_type),
+                    _provider_params_hash(params_dict),
+                )
+                _asset_history_cache.delete(cache_key)
+                _asset_current_cache.delete(cache_key)
+        except Exception as cache_err:  # noqa: BLE001 — non-fatal
+            logger.warning(
+                "wipe_market_data: cache invalidation skipped",
+                extra={"asset_id": asset_id, "error": str(cache_err)},
+            )
+
+        logger.info(
+            "Market data wiped for currency change",
+            extra={
+                "asset_id": asset_id,
+                "prices_deleted": prices_count,
+                "events_manual_deleted": events_manual_count,
+                "events_provider_deleted": events_provider_count,
+                "transactions_disconnected": linked_tx_count,
+            },
+        )
+
+        return summary
+
+    # ========================================================================
     # PROVIDER PROBE (DRY-RUN)
     # ========================================================================
 
@@ -2781,12 +2941,26 @@ class AssetSourceManager:
 
         Uses the existing _upsert_asset_events() method with provider_assignment_id=None.
 
+        **R3-3 Policy D — hard-400 on currency mismatch**: every event must
+        carry the same currency as its parent asset. Mixing currencies in
+        ``asset_events`` would create the same kind of silent inconsistency
+        already rejected for ``price_history`` (see ``bulk_upsert_prices``).
+        If any event in ``data`` has ``value.code`` set to a code different
+        from ``asset.currency`` we raise a 400 via ``AssetSourceError`` with
+        the symmetric ``EVENT_CURRENCY_MISMATCH`` code; the caller
+        (endpoint handler) re-raises it as ``HTTPException`` 400.
+
         Args:
             data: List of FAEventUpsert objects (asset_id + events[])
             session: Database session
 
         Returns:
             dict with results list and success_count
+
+        Raises:
+            AssetSourceError(code="EVENT_CURRENCY_MISMATCH"): when any
+                submitted event has an explicit currency code that does not
+                match the asset's currency.
         """
         results = []
         total_count = 0
@@ -2810,6 +2984,27 @@ class AssetSourceManager:
 
             # Determine default currency from asset or 'USD'
             default_currency = asset.currency or "USD"
+
+            # R3-3 Policy D: reject any event whose explicit currency does
+            # not match the asset's currency. ``None`` / empty codes are
+            # accepted (they'll inherit ``default_currency`` downstream).
+            mismatches: list[tuple[int, str]] = []  # (event_index, code)
+            for idx, raw_evt in enumerate(item.events or []):
+                code = None
+                value_obj = getattr(raw_evt, "value", None) if not isinstance(raw_evt, dict) else raw_evt.get("value")
+                if isinstance(value_obj, dict):
+                    code = value_obj.get("code")
+                elif value_obj is not None:
+                    code = getattr(value_obj, "code", None)
+                if code and code != asset.currency:
+                    mismatches.append((idx, code))
+
+            if mismatches:
+                mismatch_detail = ", ".join(f"#{i}={c}" for i, c in mismatches[:5])
+                raise AssetSourceError(
+                    f"EVENT_CURRENCY_MISMATCH: asset {asset_id} expects {asset.currency}, " f"got mismatched events [{mismatch_detail}]" + (f" (+{len(mismatches) - 5} more)" if len(mismatches) > 5 else ""),
+                    "EVENT_CURRENCY_MISMATCH",
+                )
 
             count = await AssetSourceManager._upsert_asset_events(
                 session=session,
@@ -3385,31 +3580,78 @@ class AssetCRUDService:
                     if "classification_params" in patch.model_fields_set:
                         patch_dict["classification_params"] = None
 
-                # I.3 — guard against currency change on assets with existing price history.
-                # Rationale: changing asset.currency while `price_history` rows exist creates
-                # a silent inconsistency (stored prices are in the old currency, future queries
-                # would scale them against the new currency via FX conversion producing wrong
-                # numbers). The agreed policy (see phase-07 plan, Blocco I) is "wipe on change":
-                # the frontend must explicitly DELETE prices first, then re-PATCH, then re-sync.
-                # Here we emit a structured failure so the frontend can parse it and open the
-                # destructive-confirmation modal.
+                # I.3 + R3-3 Policy D — guard against currency change on assets with
+                # any residual market data (prices, events, or transactions still
+                # linked to those events).
+                #
+                # Rationale: changing ``asset.currency`` while rows exist in any of
+                # ``price_history`` / ``asset_events`` / ``transactions.asset_event_id``
+                # creates a silent inconsistency — old-currency values would be
+                # scaled against a new base via FX conversion producing wrong
+                # numbers or semantically-mismatched displays. The agreed policy
+                # is "wipe totally symmetric + disconnect linked transactions"
+                # (see phase-07 closure plan, §"Issue #R3-3 Policy D"):
+                # the frontend must POST to ``/assets/{id}/market-data/wipe``
+                # first, then re-PATCH, then re-sync.
+                #
+                # Here we emit a structured failure so the frontend can parse it
+                # and open the destructive-confirmation modal. Token format:
+                #   CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|
+                #     prices=N|events_manual=M|events_provider=K|linked_tx=L|
+                #     oldest=YYYY-MM-DD|newest=YYYY-MM-DD|from=X|to=Y
+                # ``oldest``/``newest`` reflect the price range; they are empty
+                # strings when only events exist. Parser must tolerate missing
+                # fields.
                 if "currency" in patch_dict:
                     new_currency = patch_dict["currency"]
                     if new_currency and new_currency != asset.currency:
-                        count_stmt = select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == patch.asset_id)
-                        oldest_stmt = select(func.min(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id)
-                        newest_stmt = select(func.max(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id)
-                        count_res = await session.execute(count_stmt)
-                        existing_count = int(count_res.scalar() or 0)
-                        if existing_count > 0:
-                            oldest_res = await session.execute(oldest_stmt)
-                            newest_res = await session.execute(newest_stmt)
-                            oldest_date = oldest_res.scalar()
-                            newest_date = newest_res.scalar()
-                            # Structured token message: the frontend parses this to trigger
-                            # the currency-change modal. Format intentionally stable so the
-                            # parser is straightforward.
-                            blocker_msg = f"CURRENCY_CHANGE_BLOCKED_BY_PRICES|count={existing_count}|oldest={oldest_date.isoformat() if oldest_date else ''}|newest={newest_date.isoformat() if newest_date else ''}|from={asset.currency}|to={new_currency}"
+                        price_count_res = await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == patch.asset_id))
+                        price_count = int(price_count_res.scalar() or 0)
+
+                        event_manual_res = await session.execute(
+                            select(func.count())
+                            .select_from(AssetEvent)
+                            .where(
+                                AssetEvent.asset_id == patch.asset_id,
+                                AssetEvent.provider_assignment_id.is_(None),
+                            )
+                        )
+                        event_manual_count = int(event_manual_res.scalar() or 0)
+
+                        event_provider_res = await session.execute(
+                            select(func.count())
+                            .select_from(AssetEvent)
+                            .where(
+                                AssetEvent.asset_id == patch.asset_id,
+                                AssetEvent.provider_assignment_id.is_not(None),
+                            )
+                        )
+                        event_provider_count = int(event_provider_res.scalar() or 0)
+
+                        # Transactions linked (via asset_event_id) to any event of this asset.
+                        linked_tx_res = await session.execute(select(func.count()).select_from(Transaction).where(Transaction.asset_event_id.in_(select(AssetEvent.id).where(AssetEvent.asset_id == patch.asset_id))))
+                        linked_tx_count = int(linked_tx_res.scalar() or 0)
+
+                        if price_count > 0 or event_manual_count > 0 or event_provider_count > 0:
+                            oldest_date = None
+                            newest_date = None
+                            if price_count > 0:
+                                oldest_res = await session.execute(select(func.min(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id))
+                                newest_res = await session.execute(select(func.max(PriceHistory.date)).where(PriceHistory.asset_id == patch.asset_id))
+                                oldest_date = oldest_res.scalar()
+                                newest_date = newest_res.scalar()
+
+                            blocker_msg = (
+                                "CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA"
+                                f"|prices={price_count}"
+                                f"|events_manual={event_manual_count}"
+                                f"|events_provider={event_provider_count}"
+                                f"|linked_tx={linked_tx_count}"
+                                f"|oldest={oldest_date.isoformat() if oldest_date else ''}"
+                                f"|newest={newest_date.isoformat() if newest_date else ''}"
+                                f"|from={asset.currency}"
+                                f"|to={new_currency}"
+                            )
                             results.append(
                                 FAAssetPatchResult(
                                     asset_id=patch.asset_id,
