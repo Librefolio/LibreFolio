@@ -30,8 +30,8 @@ Conseguenze:
 | G.5 | `test_prices_currency_coherence.py` (nuovo) | I.2 hard-reject mismatch | DONE 5/5 (2026-04-24) | - |
 | G.10 | `test_asset_currency_change.py` (nuovo) | I.3 PATCH + I-bis #7 HTTP 409 | DONE 4/4 (2026-04-24) | - |
 | G.12 (NEW) | `test_prices_sync_delta.py` (nuovo) | I-bis #24 changed_points + cap 500 | DONE 5/5 (2026-04-24) | - |
-| G.3 | `test_transactions_validate.py` (nuovo) | Blocco C.1 dry-run | PENDING | 1h |
-| G.4 | `test_events_suggest.py` (nuovo) | Blocco C.2 | PENDING | 45min |
+| G.3 | `test_transactions_validate.py` (nuovo) | Blocco C.1 dry-run | DONE 6/6 (2026-04-24) | - |
+| G.4 | `test_events_suggest.py` (nuovo) | Blocco C.2 | DONE 7/7 (2026-04-24) | - |
 | G.13 (NEW) | `test_scheduled_investment_param_change.py` (services) | #R6-4 event wipe + tx disconnect | PENDING | 30min |
 | G.1 | `test_transaction_service.py` (estendi) | Blocco A/H gap-fill | PENDING audit-only | 30min |
 | G.2 | `test_transactions_api.py` (estendi) | Blocco B access matrix gap-fill | PENDING audit-only | 30min |
@@ -46,7 +46,7 @@ Totale: ~8h.
 |-------|-----------|:------:|-----------|
 | G-batch1 | G.6b + G.6c + G.11 | ~2h | F.2/F.3 + export/round-trip - bassa complessita, alto valore — **DONE 2026-04-24 (25/25 test PASS)** |
 | G-batch2 | G.5 + G.10 + G.12 | ~2.5h | Currency coherence + change flow + I-bis #24 delta - P1 tutti — **DONE 2026-04-24 (14/14 test PASS)** |
-| G-batch3 | G.3 + G.4 | ~1.75h | Blocco C endpoints dry-run + events/suggest |
+| G-batch3 | G.3 + G.4 | ~1.75h | Blocco C endpoints dry-run + events/suggest — **DONE 2026-04-24 (13/13 test PASS)** |
 | G-batch4 | G.13 + G.1/G.2 audit | ~1.5h | #R6-4 scheduled + gap-fill residuo |
 | G-batch5 | G.7 + G.8 + G.9 | ~45min | Test-runner + validazione finale |
 
