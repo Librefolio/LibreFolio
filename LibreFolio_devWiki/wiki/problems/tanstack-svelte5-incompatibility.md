@@ -27,3 +27,10 @@ Before adopting a UI library adapter, verify it explicitly supports the target f
 ## Affected files
 - `frontend/src/lib/tanstack-table/` (custom adapter — workaround)
 - All `DataTable` usages in `frontend/src/lib/components/table/`
+
+## Source files
+
+| Role | Path |
+|------|------|
+| Custom Svelte 5 adapter (workaround) | `frontend/src/lib/tanstack-table/` |
+| DataTable component | `frontend/src/lib/components/table/DataTable.svelte` |

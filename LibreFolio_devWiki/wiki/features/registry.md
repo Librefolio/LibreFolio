@@ -3,6 +3,8 @@
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
 > Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress)
+>
+> **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
 ## Status Key
 
@@ -165,6 +167,35 @@
 | [[F-072]] | TimeSeriesStore Pattern (delta-fetching client cache) | frontend | `implemented` | [`dev/fe/state/index.md`](developer/frontend/state/index.md) |
 | [[F-073]] | Backup & Restore | fullstack | `implemented` | — |
 | [[F-074]] | E2E Test Gallery (auto-screenshots for docs) | infra | `implemented` | — |
+
+---
+
+## Domain: PLANNED / IDEA (future features, not yet built)
+
+| Code | Title | Layer | Status | mkdocs |
+|------|-------|-------|--------|--------|
+| [[F-075]] | TanStack Table v9 Migration | frontend | `planned` | — |
+| [[F-076]] | Log Level Policy & TRACE Level | backend | `planned` | — |
+| [[F-077]] | Mobile DataTable Touch Drag Column Reorder | frontend | `planned` | — |
+| [[F-078]] | User Filter in Files Page | fullstack | `planned` | — |
+| [[F-079]] | GDPR Broker Access Compliance | fullstack | `planned` | — |
+| [[F-080]] | Candlestick Chart / Volume Bars | frontend | `planned` | — |
+| [[F-081]] | Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) | fullstack | `planned` | — |
+| [[F-082]] | Cash Split Transactions | fullstack | `planned` | — |
+| [[F-083]] | Multi-File Multi-Broker Import | fullstack | `planned` | — |
+| [[F-084]] | Transaction Gain Chart | frontend | `planned` | — |
+| [[F-085]] | QuarkAI AI Assistant | fullstack | `idea` | — |
+| [[F-086]] | Client-side Image Preview Cache (LazyImage) | frontend | `planned` | — |
+| [[F-087]] | Smooth Signal Line Style | frontend | `planned` | — |
+| [[F-088]] | Return-over-N Chart | frontend | `planned` | — |
+| [[F-089]] | FX Provider Per-Plugin Documentation | infra | `planned` | — |
+| [[F-090]] | AssetEvent → Transaction Link (Enrichment) | backend | `planned` | — |
+| [[F-091]] | Multi-Worker Cache Server | backend | `planned` | — |
+| [[F-092]] | Default Language/Currency for New Users | backend | `planned` | — |
+| [[F-093]] | Coupon Policy Field | backend | `idea` | — |
+| [[F-094]] | Sync Date Range Dialog | frontend | `planned` | — |
+| [[F-095]] | Asset Delete — Transaction Count Link | fullstack | `planned` | — |
+| [[F-096]] | Scheduled Investment — Decoupled Frequencies + Anchor Day | backend | `idea` | — |
 
 ---
 

@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "4cbe9952d86156cf",
+        "id": "9f4740fc01517e8b",
         "type": "tabs",
         "children": [
           {
-            "id": "2a58262130af18c4",
+            "id": "7d8530457f73094e",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "wiki/sources/roadmap-v4-index.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "roadmap-v4-index"
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Vista grafo"
             }
           }
         ]
@@ -53,7 +49,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "tag:todo",
+                "query": "tag:calculations",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -183,44 +179,44 @@
       "bases:Crea nuova Base": false
     }
   },
-  "active": "2a58262130af18c4",
+  "active": "7d8530457f73094e",
   "lastOpenFiles": [
+    "wiki/decisions/three-phase-pipeline.md",
+    "wiki/concepts/e2e-data-testid-rule.md",
+    "wiki/domains/assets.md",
+    "Senza nome.canvas",
+    "wiki/domains/brokers.md",
+    "wiki/domains/calculations.md",
+    "wiki/domains/auth.md",
+    "wiki/domains/transactions.md",
+    "wiki/domains/signals.md",
+    "wiki/domains/scheduler.md",
+    "wiki/domains/layout-settings.md",
+    "wiki/domains/fx.md",
+    "wiki/domains/dashboard.md",
+    "wiki/features/F-093.md",
+    "wiki/connections/fx-connections.md",
+    "wiki/features/F-024.md",
+    "wiki/connections/dependency-graph.md",
+    "raw/ingest-registry.md",
+    "wiki/features/registry.md",
+    "wiki/domains/infrastructure.md",
+    "wiki/domains",
+    "log.md",
+    "SCHEMA.md",
+    "wiki/features/F-020.md",
+    "index.md",
+    "wiki/sources/roadmap-v4-index.md",
     "wiki/sources/roadmap-v1-summary.md",
     "wiki/features/F-096.md",
-    "wiki/features/registry.md",
-    "FINAL_REPORT.md",
-    "TASK_SUMMARY.md",
-    "wiki/features/F-034.md",
-    "wiki/sources/todos.md",
     "safe_update.py",
     "fix_tables.py",
-    "wiki/features/F-055.md",
     "batch_update.py",
     "update_features.py",
     "mkdocs_mapping.py",
-    "wiki/sources/phase06-bugfix-migration.md",
-    "wiki/problems/justetf-websocket-disconnect.md",
-    "wiki/features/F-095.md",
-    "wiki/features/F-059.md",
-    "wiki/problems/asset-list-500-provider-input-type.md",
-    "wiki/decisions/signal-label-unification.md",
-    "wiki/sources/phase06-step4-planc.md",
-    "wiki/sources/phase06-step4-plana.md",
-    "wiki/sources/phase06-step3-rounds.md",
-    "raw/ingest-registry.md",
-    "wiki/sources/phase06-step6-i18n-polish.md",
-    "wiki/problems/asset-sync-transaction-closed.md",
-    "wiki/concepts/responsive-4mode-layout.md",
-    "wiki/decisions/three-phase-pipeline.md",
-    "wiki/sources/phase06-step2c-sync-refactor.md",
-    "wiki/sources/phase06-step2-providers.md",
-    "wiki/sources/kb-01-backend.md",
-    "wiki/sources/kb-02-frontend.md",
     "sources",
     "decisions",
     "entities",
-    "Senza nome.base",
-    "Senza nome.canvas",
-    "wiki/workflows"
+    "Senza nome.base"
   ]
 }

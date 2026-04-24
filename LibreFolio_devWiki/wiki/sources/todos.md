@@ -56,3 +56,10 @@ A roadmap of future features, improvements, and ideas. Entries range from high-p
 These files are updated continuously by the developer. Re-ingest when:
 - A TODO_Completati entry references a new feature or design decision
 - TODO_FUTURI contains a new entry not yet in the wiki
+
+## Source files
+
+| Role | Path |
+|------|------|
+| Completed TODOs | `TODO_Completati.md` |
+| Future TODOs | `TODO_FUTURI.md` |

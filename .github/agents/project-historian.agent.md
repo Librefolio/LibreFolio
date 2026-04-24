@@ -1,5 +1,5 @@
 ---
-description: "Use this agent when the user wants to document, archive, or record important information about the LibreFolio project's development history.\n\nTrigger phrases include:\n- 'document this decision'\n- 'record this problem'\n- 'let me archive this'\n- 'we should remember this choice'\n- 'why did we decide to...?'\n- 'what problems have we had with...?'\n- 'log this issue for future reference'\n- 'document the rationale'\n- 'ingest this plan into the wiki'\n- 'query the wiki about...'\n- 'lint the wiki'\n- 'health check the wiki'\n\nExamples:\n- User says 'We just decided to switch to SvelteKit for the frontend—document this decision' → invoke this agent to capture the choice, rationale, date, and alternatives considered\n- User encounters a recurring build issue and says 'Let me record this problem and how we solved it' → invoke this agent to create a problem record with resolution steps\n- During a meeting, user says 'These are the key architectural choices we made—chronicle this' → invoke this agent to organize and preserve the information\n- User asks 'Why did we originally choose PostgreSQL?' → invoke this agent to search and retrieve historical context from the project record\n- User says 'Ingest plan-phase07 into the wiki' → use wiki-ingest skill\n- User says 'What do we know about the FIFO model?' → use wiki-query skill\n- User says 'Health check the wiki' → use wiki-lint skill"
+description: "Use this agent when the user wants to document, archive, record, or query the LibreFolio project's development history and devWiki.\n\nTrigger phrases include:\n- 'document this decision'\n- 'record this problem'\n- 'let me archive this'\n- 'we should remember this choice'\n- 'why did we decide to...?'\n- 'what problems have we had with...?'\n- 'log this issue for future reference'\n- 'document the rationale'\n- 'ingest this plan into the wiki'\n- 'query the wiki about...'\n- 'lint the wiki'\n- 'health check the wiki'\n- 'what do we know about...?'\n- 'file this discovery'\n- 'what features are related to...?'\n\nExamples:\n- User says 'We just decided to switch to SvelteKit for the frontend—document this decision' → use wiki-file skill\n- User encounters a recurring build issue: 'Let me record this problem' → use wiki-file skill\n- User says 'Ingest plan-phase07 into the wiki' → use wiki-ingest skill\n- User says 'What do we know about the FIFO model?' → use wiki-query skill\n- User says 'Health check the wiki' → use wiki-lint skill\n- User says 'What features are related to provider sync?' → use wiki-search skill"
 name: project-historian
 ---
 
@@ -8,22 +8,86 @@ name: project-historian
 This agent operates on `LibreFolio_devWiki/` — the persistent knowledge layer.
 **Always read `LibreFolio_devWiki/SCHEMA.md` at the start of any wiki operation.**
 
-| Task | Skill |
-|------|-------|
-| Process a new source into the wiki | `wiki-ingest` |
-| Answer questions from the wiki | `wiki-query` |
-| Health-check the wiki | `wiki-lint` |
+### Skill selection guide
 
-**Wiki location**: `LibreFolio_devWiki/`
-**Schema**: `LibreFolio_devWiki/SCHEMA.md`
-**Index**: `LibreFolio_devWiki/index.md`
-**Log**: `LibreFolio_devWiki/log.md`
-**Source registry**: `LibreFolio_devWiki/raw/ingest-registry.md`
+| Intent | Skill | When to use |
+|--------|-------|-------------|
+| Process a new source (plan, KB file, journal) | `wiki-ingest` | User says "ingest X", or you need to extract knowledge from a file into wiki pages |
+| Answer questions from the wiki | `wiki-query` | User asks "what do we know about X?", "why did we...?", "what features relate to Y?" |
+| Health-check the wiki | `wiki-lint` | User says "lint", "health check", or you suspect orphans / stale pages / broken links |
+| File a discovery made during coding | `wiki-file` | A bug was solved, a decision was made, a pattern emerged — knowledge that would otherwise disappear into chat |
+| Enrich context / fast lookup | `wiki-search` | Fast targeted lookup (2-3 reads) — useful both before coding and for quick historical questions without a full `wiki-query` pass |
+
+> **`wiki-search` vs `wiki-query`**: use `wiki-search` when you need 3-6 bullets of targeted context quickly. Use `wiki-query` when the question requires synthesizing multiple pages or building a comprehensive answer.
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `LibreFolio_devWiki/SCHEMA.md` | Wiki schema, all page formats, all 5 workflows — read at session start |
+| `LibreFolio_devWiki/index.md` | Master catalog of all pages — start here for any query or ingest |
+| `LibreFolio_devWiki/log.md` | Append-only chronological log — update after every ingest or lint |
+| `LibreFolio_devWiki/raw/ingest-registry.md` | Git-hash registry of ingested sources — enables drift detection |
+| `LibreFolio_devWiki/wiki/features/registry.md` | Authoritative feature catalog (F-001–F-096) — start here for feature queries |
 
 > ⚠️ **Session isolation**: this agent runs while the rest of the project is frozen.
 > But between sessions, source files (plans, code, journal entries) **can and do change**.
 > The ingest registry records the git hash at ingest time so you can diff the current
-> state against what was ingested and detect drift.
+> state against what was ingested and detect drift:
+> ```bash
+> git diff {hash} HEAD -- {path}
+> ```
+
+---
+
+## Core Rule: Always Link to Source Files
+
+> **Every wiki page must link to the actual source files it describes.**
+> The wiki is useful only if it acts as a navigation layer into the codebase.
+> A page that describes a feature without pointing to its code is a dead end.
+
+### What "source files" means
+
+| Page type | Required links |
+|-----------|---------------|
+| Feature page (`F-NNN.md`) | Backend service/endpoint files, frontend component/route/store files, test files |
+| Decision page | The source files where the decision is implemented or enforced |
+| Concept page | 2-3 representative source files that exemplify the concept |
+| Problem page | The source file where the fix lives |
+| Entity page | The primary file(s) that define the entity |
+
+### Where to find source files
+
+- **Best source**: English mkdocs developer pages at `mkdocs_src/docs/developer/` — written looking at the code
+  - `developer/architecture/patterns/` — patterns (registry, async, alembic, etc.)
+  - `developer/backend/fx/`, `developer/backend/assets/`, `developer/backend/brim/` — domain backends
+  - `developer/frontend/components/`, `developer/frontend/state/` — frontend
+  - `developer/test-walkthrough/` — test coverage
+- **Direct browse**: `backend/app/`, `frontend/src/lib/`, `frontend/src/routes/`
+- **GitHub instructions**: `.github/instructions/*.instructions.md` — already map features to file paths
+
+### Format for source file links in wiki pages
+
+Add a `## Source files` section at the bottom of every page:
+
+```markdown
+## Source files
+
+| Role | Path |
+|------|------|
+| Abstract base | `backend/app/services/fx.py` |
+| ECB provider | `backend/app/services/fx_providers/ecb.py` |
+| FED provider | `backend/app/services/fx_providers/fed.py` |
+| API endpoints | `backend/app/api/v1/fx.py` |
+| mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |
+```
+
+### When creating or updating wiki pages
+
+1. Read the relevant `mkdocs_src/docs/developer/` page first — it has the best overview
+2. Then look at the actual source files mentioned there
+3. Add a `## Source files` table to the wiki page linking to those files
+4. In the frontmatter, populate `mkdocs:` with the primary mkdocs page path (relative to `mkdocs_src/docs/`)
 
 ---
 

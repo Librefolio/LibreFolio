@@ -1,6 +1,6 @@
 {
   "collapse-filter": false,
-  "search": "",
+  "search": "assets",
   "showTags": false,
   "showAttachments": true,
   "hideUnresolved": false,
@@ -41,18 +41,25 @@
         "a": 1,
         "rgb": 16766208
       }
+    },
+    {
+      "query": "path:wiki/domains  ",
+      "color": {
+        "a": 1,
+        "rgb": 16711888
+      }
     }
   ],
   "collapse-display": false,
   "showArrow": true,
   "textFadeMultiplier": -0.5,
-  "nodeSizeMultiplier": 0.921770833333333,
-  "lineSizeMultiplier": 0.792890625,
+  "nodeSizeMultiplier": 2.94195746527778,
+  "lineSizeMultiplier": 1.46217447916667,
   "collapse-forces": false,
-  "centerStrength": 0.584201388888889,
+  "centerStrength": 0.0841579861111111,
   "repelStrength": 20,
-  "linkStrength": 0.854947916666667,
-  "linkDistance": 500,
-  "scale": 0.11984097742973,
-  "close": true
+  "linkStrength": 0.913715277777778,
+  "linkDistance": 139,
+  "scale": 0.29368936746078317,
+  "close": false
 }
