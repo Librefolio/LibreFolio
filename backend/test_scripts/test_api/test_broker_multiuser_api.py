@@ -304,6 +304,83 @@ class TestMultiUserRoles:
 
             print_success("✓ Viewer correctly blocked from creating transactions")
 
+    @pytest.mark.asyncio
+    async def test_viewer_cannot_patch_transactions(self, test_server):
+        """MULTI-008b (G.2 gap-fill): VIEWER cannot PATCH transactions (EDITOR required)."""
+        print_section("MULTI-008b: Viewer cannot patch transactions")
+
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
+            await create_user_and_login(owner_client)
+            broker_id = await create_broker(owner_client)
+
+            # Owner seeds a transaction.
+            tx_payload = [
+                {
+                    "broker_id": broker_id,
+                    "type": "DEPOSIT",
+                    "date": date.today().isoformat(),
+                    "cash": {"code": "EUR", "amount": "1000"},
+                }
+            ]
+            post_resp = await owner_client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
+            assert post_resp.status_code == 200, post_resp.text
+            tx_id = post_resp.json()["results"][0]["transaction_id"]
+
+            # Viewer is granted access then attempts PATCH.
+            viewer_id, _ = await create_user_and_login(viewer_client)
+            await add_access(owner_client, broker_id, viewer_id, "VIEWER")
+
+            patch_resp = await viewer_client.patch(
+                f"{API_BASE}/transactions/bulk",
+                json=[{"id": tx_id, "description": "viewer tried to patch"}],
+                timeout=TIMEOUT,
+            )
+            # Batch-level access check → 403 (symmetric to the POST case).
+            assert patch_resp.status_code == 403, patch_resp.text
+            assert "editor" in patch_resp.json()["detail"].lower() or "access" in patch_resp.json()["detail"].lower()
+
+            print_success("✓ Viewer correctly blocked from patching transactions")
+
+    @pytest.mark.asyncio
+    async def test_viewer_cannot_delete_transactions(self, test_server):
+        """MULTI-008c (G.2 gap-fill): VIEWER cannot DELETE transactions (EDITOR required)."""
+        print_section("MULTI-008c: Viewer cannot delete transactions")
+
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
+            await create_user_and_login(owner_client)
+            broker_id = await create_broker(owner_client)
+
+            tx_payload = [
+                {
+                    "broker_id": broker_id,
+                    "type": "DEPOSIT",
+                    "date": date.today().isoformat(),
+                    "cash": {"code": "EUR", "amount": "500"},
+                }
+            ]
+            post_resp = await owner_client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
+            assert post_resp.status_code == 200, post_resp.text
+            tx_id = post_resp.json()["results"][0]["transaction_id"]
+
+            viewer_id, _ = await create_user_and_login(viewer_client)
+            await add_access(owner_client, broker_id, viewer_id, "VIEWER")
+
+            del_resp = await viewer_client.delete(
+                f"{API_BASE}/transactions/bulk",
+                params={"ids": [tx_id]},
+                timeout=TIMEOUT,
+            )
+            assert del_resp.status_code == 403, del_resp.text
+            assert "editor" in del_resp.json()["detail"].lower() or "access" in del_resp.json()["detail"].lower()
+
+            # Transaction still present.
+            check = await owner_client.get(f"{API_BASE}/transactions", params={"broker_id": broker_id}, timeout=TIMEOUT)
+            assert check.status_code == 200
+            ids_left = {t.get("id") for t in check.json()}
+            assert tx_id in ids_left, f"tx unexpectedly deleted: {ids_left}"
+
+            print_success("✓ Viewer correctly blocked from deleting transactions")
+
 
 class TestEditorRestrictions:
     """Tests for EDITOR role restrictions."""
