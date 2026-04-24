@@ -35,25 +35,33 @@ utente):
 3. ~~**Batch 3 part5b** = polish post-retest (`#R5-1..#R5-3`)~~
    → ✅ **COMPLETO** (2026-04-24).
 4. **Batch 4** = chiusura I-bis pendenti (~7-8h spalmati in 6 sub-batch
-   tematici). **← IN CORSO**
-   - **4.a** — #2 Save Without Testing gating (~45 min, FE, P1.5). ✅ DONE
-   - **4.b** — #7 HTTP 409 semantics (~30 min, BE, P2). ✅ DONE
+   tematici). ✅ **COMPLETO** (2026-04-24)
+   - **4.a** — #2 Save Without Testing gating (~45 min, FE, P1.5). ✅ DONE (commit `9f1cf6a8`)
+   - **4.b** — #7 HTTP 409 semantics (~30 min, BE, P2). ✅ DONE (commit `9f1cf6a8`)
    - **4.c** — #26 scheduled_investment Step 2/4 reorder + cache key
-     test (~1h + test, P1). ✅ DONE
+     test (~1h + test, P1). ✅ DONE (commit `9f1cf6a8`)
    - **4.d** — #22 `saveWithRetry` helper + adozione 8 modal (~3-4h, P1,
-     prerequisito Part 4/5). 🟡 PARTIAL (helper creato + 2/8 modal
-     adottati — vedi sub-batch 4.d-part2 per i restanti)
-   - **4.e** — #5 CSV autodetect separator + header tolerance (~1.5h, P2). ⏳ PENDING
+     prerequisito Part 4/5). ✅ DONE — helper + 7 modal adottati (part1 + part2 + part3).
+     Vedi [`plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart2.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart2.prompt.md)
+     e [`plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart3.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart3.prompt.md).
+   - **4.e** — #5 CSV autodetect separator + header tolerance (~1.5h, P2). ✅ DONE
+     (merged into Batch 4.d-part3, commit `d56fe132` — vedi sub-plan sopra).
    - **4.f** — #24 Backend `changed_points` + FE merge incrementale
-     (~1h, P2). ⏳ PENDING
-5. **Blocco G** test coverage (8-10h stimati) — dopo Batch 4.
-6. **I-bis #19** rinviato formalmente a Phase 8/9 (nessun lavoro qui).
+     (~1h, P2). ✅ DONE (dedicated sub-plan, commits `d56fe132` BE schema +
+     `ddb1fcfb` FE live-poll final — vedi §"I-bis #24" più sotto).
+5. **Blocco G** test coverage (8-10h stimati) — ✅ avviato 2026-04-24 post audit plan (← **IN CORSO**).
+6. **I-bis #19** rinviato formalmente a Phase 8/9 (doc-only, ✅ cross-link completato in Batch 4.d-part3).
 
 ---
 
-## 🧪 Blocco G — Test coverage + API sync (INTERAMENTE PENDENTE)
+## 🧪 Blocco G — Test coverage + API sync (IN CORSO — sub-plan dedicato)
 
 > **Stato rilevato 2026-04-22**: solo 2 test file base esistono (`test_transaction_service.py`, `test_transactions_api.py`). **6 nuovi file da creare**, 2 estensioni, test_runner da aggiornare, coverage target da verificare.
+>
+> **2026-04-24**: avviata esecuzione. Breakdown operativo + ordine di
+> esecuzione consolidati in sub-plan dedicato:
+> **[`plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md)**.
+> Le sezioni G.1–G.11 sottostanti restano come specifica di riferimento.
 
 ### G.1 — `test_transaction_service.py` (ESTENDI)
 
@@ -223,15 +231,17 @@ Copertura endpoint `/prices/export` (I.4):
 
 **Retest manuale richiesto**: modificare solo `name` → no modal; modificare `providerCode` → modal compare; cancel → dismiss; confirm → save procede.
 
-### I-bis #5 — CSV Import resilience  ⏳ PENDING
+### I-bis #5 — CSV Import resilience  ✅ DONE (2026-04-24, Batch 4.d-part3, commit `d56fe132`)
 
 **Dove**: `CsvEditor.svelte`.
-**Cosa**:
-- (a) Auto-detect separator `;` o `,` dalla prima riga non vuota.
-- (b) Header match **tolerante** alle extra-column: ignora colonne non mappate, richiede `date` + `close` presenti.
-- (c) Banner inline (I-bis #4, già implementato) documenta il comportamento.
+**Cosa implementato**:
+- (a) Auto-detect separator `;` o `,` dalla prima riga non vuota — funzione `detectSeparator(rawLines)` (L145). Riconosce canonical case `date;` / `date,` e fallback al primo separatore trovato.
+- (b) Header match **tolerante**: `parseHeaderLine(line, sep)` (L163) costruisce un `HeaderMap` by-name (label lowercase) invece che per posizione. Extra-column ignorate. `date` + colonne required devono essere presenti; error message dedicato su header incompleto (i18n key `csvImport.headerMissingColumns`).
+- (c) Banner inline (I-bis #4) e UI hint "detected separator: `;`" sopra l'editor.
 
-**Target**: rendere re-importabile il CSV generato da `/backup/asset/{id}/prices?format=csv` (ora il round-trip export → import fallisce con "too many fields").
+**Target raggiunto**: round-trip export `/backup/asset/{id}/prices?format=csv` → import ora funziona. CSV con delimiter `;` (default backup) o `,` (legacy) entrambi accettati.
+
+**Vedi sub-plan**: [`plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart3.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart3.prompt.md) §5.
 
 ### I-bis #7 — Backend `patch_assets_bulk` HTTP 409 semantics  ✅ DONE (2026-04-24, Batch 4.b, commit pending)
 
@@ -256,7 +266,7 @@ Copertura endpoint `/prices/export` (I.4):
 
 **Lavoro in questo plan**: **nulla** — si tratta solo del rinvio formale a Phase 8/9. Traccio qui il cross-link per chiudere il cerchio.
 
-### I-bis #22 — Generalizzare error handling "Save failed → keep modal open + toast"  🟡 PARTIAL (2026-04-24, Batch 4.d, commit pending)
+### I-bis #22 — Generalizzare error handling "Save failed → keep modal open + toast"  ✅ DONE (2026-04-24, Batch 4.d-part1+part2, commits `9f1cf6a8` + `d56fe132`)
 
 **Requisito funzionale**:
 Se il save fallisce (HTTP !2xx / network error), la modale:
@@ -264,9 +274,7 @@ Se il save fallisce (HTTP !2xx / network error), la modale:
 2. Mostra **toast errore** con messaggio da `response.detail` (FastAPI) o fallback i18n.
 3. Mantiene dirty state per permettere correzione + retry.
 
-**Stato Batch 4.d (2026-04-24)** — **helper creato + 2 modal adottati**:
-
-Helper nuovo: `frontend/src/lib/utils/saveWithRetry.ts`
+**Helper**: `frontend/src/lib/utils/saveWithRetry.ts`
 - `saveWithRetry<T>(call, options)` — wrappa una Promise, ritorna
   discriminated union `{status: 'success', data} | {status: 'error', message, error, status_code}`. Non solleva mai.
 - `extractErrorMessage(err, fallback)` — estrae il detail da errori
@@ -277,33 +285,26 @@ Helper nuovo: `frontend/src/lib/utils/saveWithRetry.ts`
   (bool, default `true`), `prefix` (es. nome asset), `onError`
   (pre-hook per custom handling — es. 409 destructive modal).
 
-**Modal adottati**:
-1. `BrokerModal.svelte` — create + update ora passano per `saveWithRetry`
-   con fallback i18n `brokers.createFailed` / `brokers.updateFailed`.
-   La modale resta aperta on error (early `return` dopo `error = result.message`).
-2. `AssetCurrencyChangeModal.svelte` — `extractErrorMessage` sostituisce
-   3 siti di estrazione manuale `err?.response?.data?.detail || err?.message`.
-   Il flusso 3-step (wipe → patch → sync) mantiene le sue `try/catch`
-   strutturate ma ora sfrutta l'extractor unificato per coerenza.
+**Modal adottati (7 totali)**:
+1. `BrokerModal.svelte` — create + update (Batch 4.d-part1).
+2. `AssetCurrencyChangeModal.svelte` — `extractErrorMessage` usato in 3 siti (Batch 4.d-part1).
+3. `PasswordChangeModal.svelte` — onError custom per incorrect/different + InfoBanner preservato (Batch 4.d-part2).
+4. `FxPairAddModal.svelte` — saveWithRetry su create; auto-sync isolato non-blocking (Batch 4.d-part2).
+5. `BrokerImportFilesModal.svelte` — saveWithRetry su upload + single delete + bulk delete (Batch 4.d-part2+part3).
+6. `BrokerSharingModal.svelte` — saveWithRetry su save permissions (Batch 4.d-part2).
+7. `AssetModal.svelte` — saveWithRetry con custom 409 handler per currency-change e duplicate name (Batch 4.d-part2).
+8. `CashTransactionModal.svelte` — saveWithRetry su create/update (Batch 4.d-part2).
 
-**Modal ancora da adottare** (sub-batch **4.d-part2**):
-- `AssetModal.svelte` — grosso, ha già custom 409 handling dal 4.b.
-  Rischio di regressione: fare una pass dedicata.
-- `AssetProviderAssignmentModal.svelte` — TBD.
-- `BrokerSharingModal.svelte` — TBD.
-- `CashTransactionModal.svelte` — TBD.
-- `FxPairAddModal.svelte` — TBD.
-- `PriceDataImportModal.svelte` + `EventDataImportModal.svelte` — usano
-  il `DataImportModal` generic wrapper, valutare se adottare a livello di
-  wrapper (più efficiente).
-- `TransactionModal.svelte` — Part 4 (non ancora esistente).
-- Save flows di `DataEditor` — censimento necessario.
+**Modal esclusi dal scope (tracciabili)**:
+- `PriceDataImportModal` + `EventDataImportModal` — usano `DataImportModal` generic wrapper; refactor-at-wrapper-level tracciato come Phase 9 bulk-import-UX (non bloccante).
+- `TransactionModal.svelte` — nascerà in Part 4, userà saveWithRetry dal giorno 1.
+- `AssetProviderAssignmentModal.svelte` — è solo visualizzatore, non ha save operation.
 
-**Prossimo commit**: `feat(phase07): Batch 4.d-part1 — saveWithRetry helper + adopt Broker/CurrencyChange modals`
+**Validazione**: retest happy/bad-flow per tutti i 5 nuovi modal della part2 → vedi
+[`plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart2.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart2.prompt.md)
+§"Retest esiti" (tutti ✅ PASS, 3 design-drift findings #R6-6/#R6-7/#R6-8 poi chiusi in part3).
 
-**Priorità**: P1 — prerequisito per Part 5 Staging Modal. Il helper è
-stabile e retro-compatibile; l'adozione nei restanti modal può
-procedere in modo incrementale senza bloccare altri lavori.
+**Priorità**: P1 — prerequisito Part 5 Staging Modal. **Chiuso.**
 
 ### I-bis #24 — Auto-refresh mirato post-sync (last-point-only)  ✅ DONE (2026-04-24, sub-plan post-Batch-4.d-part3)
 
@@ -1079,18 +1080,19 @@ Frequenze disaccoppiate (prezzi vs cedola) + anchor day".
 | 3 | #R6-3 | Scheduling flexibility | 📋 TODO_FUTURI |
 | 4 | #R6-4 | BE (asset_source param-change event wipe + tx disconnect) | ✅ FIXED |
 | 5 | #R6-5 | FE (AssetModal auto-sync also on non-parametric provider change) | ✅ FIXED |
-| 6 | #R6-6 | UX (BrokerImportFilesModal: adottare toast per upload) | ⏳ PENDING |
-| 7 | #R6-7 | UX (BrokerImportFilesModal: ConfirmModal prima di bulk delete) | ⏳ PENDING |
-| 8 | #R6-8 | UX (BrokerSharingModal: success → toast + chiude, non banner) | ⏳ PENDING |
+| 6 | #R6-6 | UX (BrokerImportFilesModal: adottare toast per upload) | ✅ FIXED (Batch 4.d-part3, commit `d56fe132`) |
+| 7 | #R6-7 | UX (BrokerImportFilesModal: ConfirmModal prima di bulk delete) | ✅ FIXED (Batch 4.d-part3, commit `d56fe132`) |
+| 8 | #R6-8 | UX (BrokerSharingModal: success → toast + chiude, non banner) | ✅ FIXED (Batch 4.d-part3, commit `d56fe132`) |
 
 **Stato Batch 4 aggiornato**:
 - 4.a #2 Save Without Testing gating → ✅ DONE + post-retest fix #R6-1.
 - 4.b #7 HTTP 409 semantics → ✅ DONE.
 - 4.c #26 scheduled_investment pre-reset value → ✅ DONE + retest bonus #R6-2 (current_price intra-cycle accrual) + #R6-4 (event wipe on params change).
 - 4.d-part1 #22 saveWithRetry helper + 2 modal → ✅ DONE.
-- 4.d-part2 #22 saveWithRetry adozione 5 modali residui (PasswordChange, FxPairAdd, BrokerImportFiles, BrokerSharing, AssetModal) → ✅ DONE + bonus #R6-5 (auto-sync su provider change) + 3 design-drift findings #R6-6/#R6-7/#R6-8 emersi in retest (sub-batch 4.d-part3 da pianificare).
-- 4.e #5 CSV resilience → ⏳ TBD.
-- 4.f #24 changed_points delta → ⏳ TBD.
+- 4.d-part2 #22 saveWithRetry adozione 5 modali residui (PasswordChange, FxPairAdd, BrokerImportFiles, BrokerSharing, AssetModal) → ✅ DONE + bonus #R6-5.
+- 4.d-part3 findings #R6-6/#R6-7/#R6-8 + I-bis #5 CSV resilience + I-bis #19 doc cross-link → ✅ DONE (commit `d56fe132`). Vedi [`plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart3.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart3.prompt.md).
+- 4.e #5 CSV resilience → ✅ DONE (merged into 4.d-part3).
+- 4.f #24 changed_points delta + live polling → ✅ DONE (commit `d56fe132` BE + `ddb1fcfb` FE final).
 
 **Batch 4 commit ready**: tutto il lavoro pendente (parts 4.a/4.b/4.c/4.d
 + findings #R6-1..#R6-5) è in blocco nel working tree, pronto per il
@@ -1129,7 +1131,7 @@ come sotto-findings indipendenti dall'adozione del helper.
 
 ---
 
-### #R6-6 — BrokerImportFilesModal: adottare toast per upload  ⏳ PENDING
+### #R6-6 — BrokerImportFilesModal: adottare toast per upload  ✅ DONE (2026-04-24, Batch 4.d-part3, commit `d56fe132`)
 
 **Origine**: retest 4.d-part2 sezione 3a (2026-04-24).
 
@@ -1160,7 +1162,7 @@ evoluto, dove ogni save produce toast conferma.
 
 ---
 
-### #R6-7 — BrokerImportFilesModal: ConfirmModal prima di bulk delete  ⏳ PENDING
+### #R6-7 — BrokerImportFilesModal: ConfirmModal prima di bulk delete  ✅ DONE (2026-04-24, Batch 4.d-part3, commit `d56fe132`)
 
 **Origine**: retest 4.d-part2 sezione 3c-1 (2026-04-24).
 
@@ -1189,7 +1191,7 @@ analoghe (delete asset, delete transaction, revoke access, ecc.).
 
 ---
 
-### #R6-8 — BrokerSharingModal: success → toast + close (non banner)  ⏳ PENDING
+### #R6-8 — BrokerSharingModal: success → toast + close (non banner)  ✅ DONE (2026-04-24, Batch 4.d-part3, commit `d56fe132`)
 
 **Origine**: retest 4.d-part2 sezione 4 (2026-04-24).
 

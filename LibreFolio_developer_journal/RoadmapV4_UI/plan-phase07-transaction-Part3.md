@@ -1,7 +1,7 @@
 # Plan: Phase 7 — Part 3: API Consolidation (atomic per-broker) + events/suggest + deferred from Part 1
 
-**Data**: 20 Aprile 2026 · **Ultimo update**: 22 Aprile 2026 (notte — batch 7: closure plan creato, decisioni terminali Blocco E consolidate)
-**Status**: 🏗️ IN CORSO (A+B, C, D ✅ · H ✅ · I.1–I.8 ✅ · F.3 validato · I-bis #8/#9/#10/#11/#13/#14/#15/#16/#17/#18/#20/#21 ✅ · Pending tasks → vedi Closure plan)
+**Data**: 20 Aprile 2026 · **Ultimo update**: 24 Aprile 2026 (audit chiusura Part 3: tutto il feature work completato, resta solo Blocco G test coverage)
+**Status**: 🏗️ Feature-complete · **Blocco G test coverage in corso** (A+B, C, D ✅ · H ✅ · I.1–I.11 ✅ · E/F ✅ (test Blocco G) · I-bis #1/#3/#4/#6/#8/#9/#10/#11/#12/#13/#14/#15/#16/#17/#18/#20/#21/#23/#25 ✅ · I-bis #2/#5/#7/#19/#22/#24/#26 ✅ (Batch 4) · #R6-1..#R6-8 ✅ · Unico blocco aperto → Blocco G test coverage — vedi [Closure_2](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md))
 **Priorità**: P0 (sblocca Part 4 transactions page e Part 5 Staging Modal)
 **Effort stimato**: ~3–4 giorni (grosso; include gli spin-off Part 1 §8 e §9)
 **Phase**: [Phase 7 — Transactions System](./phases/phase-07-transactions.md)
@@ -10,7 +10,7 @@
 - [plan-phase07-transaction-Part2.prompt.md](./plan-phase07-transaction-Part2.prompt.md) ✅ (Revisione 2)
 
 **Successore (chiusura Part 3)**:
-- [plan-phase07-transaction-Part3_1_Closure.md](./plan-phase07-transaction-Part3_1_Closure.md) ⏳ — raccoglie **tutti** i task pendenti con decisioni terminali post Q&A 2026-04-22:
+- [plan-phase07-transaction-Part3_1_Closure.md](./plan-phase07-transaction-Part3_1_Closure.md) ✅ (feature-complete) — raccoglie **tutti** i task pendenti con decisioni terminali post Q&A 2026-04-22:
   - **Blocco E** residuo (E.3 cleanup, E.8 implementazione) + cancellazione E.1/E.2/E.4/E.5/E.6/E.7.
   - **Blocco G** intero (test coverage: 6 nuovi file + estensioni G.1/G.2 + runner + coverage target).
   - **I.9/I.10** test adaptations post Blocco I (hard-400 currency mismatch).
@@ -544,7 +544,7 @@ Nuovo file `test_transfer_promotion.py`:
 > - **E.3** soft-skip upsert 🟡 **sostituito** da I.2 hard-400 reject — resta solo cleanup docstring/commenti residui.
 > - **E.4** auto-registrazione FX pairs ❌ **cancellato** (design era sbagliato: viola principio self-hosted, UX già coperta da `requiredFxPairs` + `FxPairAddModal`).
 > - **E.5/E.6/E.7** banner mismatch + FX-missing + data-editor warning ❌ cancellati (superseded da I.5/I.8).
-> - **E.8** `query_events_bulk target_currency` + infobox FX-converted ⏳ **da fare ora** — dettaglio completo in Closure plan §Task E.8.
+> - **E.8** `query_events_bulk target_currency` + infobox FX-converted ✅ DONE (commit `66ad026a`) — dettaglio completo in Closure plan §Task E.8.
 >
 > Il testo originale sottostante viene conservato per **traccia storica del design originale**; fare riferimento al Closure plan per l'implementazione effettiva.
 
@@ -1186,7 +1186,11 @@ passare `values={from,to,count,oldest,today}` ma sono no-op).
 
 Verifica: `./dev.py front check` → 0 errors.
 
-#### I-bis #12 — Currency change: troppi toast in sequenza (UX noise)
+#### I-bis #12 — Currency change: troppi toast in sequenza (UX noise)  ✅ FIXED (2026-04-23, Batch 2 part2, commit `e877876e`)
+
+> **Chiuso**: rifattorizzato in `AssetCurrencyChangeModal.svelte`. Vedi
+> [Closure plan §Batch 2 part2](./plan-phase07-transaction-Part3_1_Closure.md#-batch-2-part2-2026-04-22-sera-tardi-4°-giro--i-bis-12--123--bugfix)
+> per il dettaglio (3 toast progress → spinner inline + 1 toast finale).
 
 Feedback: durante il flusso currency change compaiono 5 toast in sequenza:
 1. "Deleting 2 price records…"
@@ -1208,7 +1212,7 @@ asset post-PATCH).
   PATCH asset è avvenuta via currency-change flow (flag interno al
   chiamante).
 
-⏳ Pending (richiede refactor di 2-3 punti del flusso) — non urgente.
+✅ DONE (2026-04-23, Batch 2 part2, commit `e877876e`) — sostituito il flusso 5-toast con spinner inline + 1 toast finale.
 
 #### I-bis #13 — Mock data: asset configurati male in `populate_mock_data.py`  ✅ FIXED COMPLETE (2026-04-22 sera tardi)
 
@@ -1394,7 +1398,12 @@ Verifica: `./dev.py front check` → 0 errors. Test manuale pendente: aprire
 edit modal su Apple Inc. dopo populate e verificare che la textarea contenga
 "Technology company".
 
-#### I-bis #19 — Semantica estesa di `Asset.active` (follow-up)  ⏳ PENDING
+#### I-bis #19 — Semantica estesa di `Asset.active` (follow-up)  ✅ DONE (doc-only, 2026-04-24, Batch 4.d-part3, commit `d56fe132`)
+
+> **Chiusura formale**: il ticket è un rinvio a Phase 8/9. Regole operative
+> definitive consolidate in [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md)
+> §Interazione con Asset.active. **Nessun codice in Phase 7**. Cross-link
+> filed in [Closure_2 §I-bis #19](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md#i-bis-19--semantica-estesa-assetactive-follow-up-phase-89--done-doc-only-2026-04-24-batch-4d-part3).
 
 Spin-off dalla risposta di #I-bis #17: il flag `Asset.active` ha oggi effetto
 solo sulla lista. Per dare al feature senso reale:
@@ -1498,7 +1507,12 @@ Questo bug era la vera causa di I-bis #13.3 ("BTP Italia 2028 schedule
 malformato / provider disattivato") — la config del mock era corretta, solo
 la re-read lato frontend falliva.
 
-#### I-bis #22 — Generalizzare error handling "Save failed → keep modal open + toast"  ⏳ PENDING
+#### I-bis #22 — Generalizzare error handling "Save failed → keep modal open + toast"  ✅ DONE (2026-04-24, Batch 4.d-part1+part2, commits `9f1cf6a8` + `d56fe132`)
+
+> **Chiuso**: helper `saveWithRetry.ts` + adozione in 7 modali (Broker,
+> AssetCurrencyChange, PasswordChange, FxPairAdd, BrokerImportFiles,
+> BrokerSharing, AssetModal, CashTransaction). Dettaglio completo in
+> [Closure_2 §I-bis #22](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md#i-bis-22--generalizzare-error-handling-save-failed--keep-modal-open--toast--done-2026-04-24-batch-4dpart1part2-commits-9f1cf6a8--d56fe132).
 
 **Contesto** (feedback utente 2026-04-22 notte, post fix #21):
 
@@ -1553,7 +1567,12 @@ Candidati noti:
 modal × endpoint × comportamento) è prerequisito a un commit dedicato nel
 prossimo batch.
 
-#### I-bis #23 — Sync scheduled_investment: status="partial" non surfacciato al frontend  ⏳ PENDING
+#### I-bis #23 — Sync scheduled_investment: status="partial" non surfacciato al frontend  ✅ DONE (2026-04-23, Batch 2 part2, commit `e877876e`)
+
+> **Chiuso** insieme a I-bis #1 nello stesso commit: `buildAssetSyncToast`
+> handler unificato per `PriceSyncResponse` con 5 stati i18n
+> (ok/noChanges/partial+msg/skipped/failed). Vedi
+> [Closure plan §Batch 2 part2](./plan-phase07-transaction-Part3_1_Closure.md#-batch-2-part2-2026-04-22-sera-tardi-4°-giro--i-bis-12--123--bugfix).
 
 **Contesto** (feedback utente 2026-04-22 notte, test 2 post fix #21):
 
@@ -1716,7 +1735,7 @@ risposta legittima ma mal interpretata).
 ## 🔗 Cross-link
 
 - **Predecessori**: [Part1](./plan-phase07-transaction-Part1.md) ✅, [Part2](./plan-phase07-transaction-Part2.prompt.md) ✅.
-- **Chiusura Part 3** (decisioni terminali + tutti i task pendenti): [`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md) ⏳.
+- **Chiusura Part 3** (decisioni terminali + tutti i task pendenti): [`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md) ✅ feature-complete + [`plan-phase07-transaction-Part3_1_Closure_2.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md) ✅ + Batch 4.d-part2/part3 sub-plans. Unico blocco aperto: **Blocco G test coverage**.
 - **Successori**: Part 4 (pagina /transactions), Part 4b (File Preview), Part 5 (Staging Modal).
 - **Phase doc**: [phase-07-transactions.md](./phases/phase-07-transactions.md) §Parte 3.
 - **Phase 8/9 follow-up**: [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md) (consumer `Asset.active`).

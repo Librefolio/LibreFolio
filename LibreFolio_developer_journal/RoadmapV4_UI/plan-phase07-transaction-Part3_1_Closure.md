@@ -52,7 +52,7 @@ per traccia storica del design originale).
 | **E.5** | `PriceCurrencyMismatchBanner` + endpoint `POST /prices/normalize` + azioni Normalize/Ignore | ❌ **Cancellato** | Superseded da I.5. Post-I.2 non possono più esistere punti dissonanti → banner + endpoint non necessari. |
 | **E.6** | Banner FX-missing differenziato (`pair_missing`/`no_rate_at_date`) | ❌ **Cancellato** | Superseded da I.5 + `requiredFxPairs` (granularità superiore: 4 stati vs 2). |
 | **E.7** | DataEditor: pre-fill colonna currency + warning | ❌ **Cancellato** | Superseded da I.5/I.8: colonna rimossa. |
-| **E.8** | `query_events_bulk` param `target_currency` + conversione event.value | ⏳ **Da fare ora** — vedi §E.8 sotto | Sblocca visualizzazione corretta di dividendi/cash events nella display-currency scelta dall'utente, pre-requisito funzionale per Phase 9 Dashboard. |
+| **E.8** | `query_events_bulk` param `target_currency` + conversione event.value | ✅ DONE (commit `66ad026a`) — vedi §E.8 sotto | Sblocca visualizzazione corretta di dividendi/cash events nella display-currency scelta dall'utente, pre-requisito funzionale per Phase 9 Dashboard. |
 
 ---
 
@@ -523,7 +523,7 @@ Dopo il 3° retest manuale emersi 3 nuovi issue:
 - i18n nuove: `prices.sync.{noResponse, partialSuffix, skippedSuffix, failedDefault, noChanges, manualOnly}` — **6 chiavi × 4 lingue = 24 entries**. Accenti ripristinati via script Python (FR: "réponse", "ignoré", "échec", "donnée déjà à"; IT: "già").
 
 **Bug C — tracked, non fixato** (regressione goBack da asset detail → fx detail → back):
-- **I-bis #25 — goBack regression `/fx/{pair}` → `/fx` instead of `/assets/{id}`** ⏳ PENDING
+- **I-bis #25 — goBack regression `/fx/{pair}` → `/fx` instead of `/assets/{id}`** ✅ DONE (verificato nei sorgenti 2026-04-24 — `AssetPriceSummary.svelte:96-114` già usa `<button onclick={goto}>` invece di `<a href>`; fix probabilmente applicato in un refactor intermedio del Tooltip. Dettaglio in [Closure_2 §I-bis #25](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md#i-bis-25--goback-regression-fxpair--fx-invece-di-assetsid--done))
 - **Sintomo**: dall'asset detail cliccando il nuovo link FX quick-access si naviga a `/fx/{slug}`. Cliccando il bottone back sulla pagina FX detail si torna a `/fx` (lista) invece che tornare all'asset detail di partenza.
 - **Ipotesi**: `navigationStore.depth` potrebbe non essere incrementato correttamente per navigazioni via `<a href>` (anche se SvelteKit dovrebbe gestirle come SPA navigation e triggerare `afterNavigate` con `nav.type='link'`). Oppure `history.back()` è corretto ma FX detail fa `goto(..., {replaceState: true})` in qualche path che rompe lo stack.
 - **Possibili fix**:
