@@ -72,9 +72,16 @@ def stream_rows_as_csv(fieldnames: list[str], rows: Iterable[dict[str, Any]]) ->
     """Yield CSV chunks (header first, then one line per row).
 
     ``rows`` is consumed lazily; pass a generator to avoid buffering.
+
+    The delimiter is ``;`` (semicolon), consistent with the CSV editor on the
+    frontend (the native format for manual price imports) and friendlier to
+    European locales that use ``,`` as decimal separator. The import side
+    (``CsvEditor``) auto-detects both ``;`` and ``,`` so round-tripping works
+    regardless, but keeping export aligned with the editor avoids the
+    auto-detect badge flipping to "comma-separated" on every export.
     """
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=fieldnames)
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter=";")
     writer.writeheader()
     yield buf.getvalue()
     buf.seek(0)

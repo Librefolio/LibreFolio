@@ -335,3 +335,11 @@ Systematically read all 68 mkdocs developer pages and mapped them to 36 features
 - Log format: all entries well-formed
 - Thin pages: all under-25-line pages are planned/idea features (appropriate)
 - Concept pages (daily-point-policy, backend-only-calculations, fifo-runtime-decision): substantive and accurate
+## [2026-04-24] file | I-bis #24 v4 — `/prices/current` has a persistence side-effect
+Filed lesson learned from final iteration of I-bis #24 (Auto-refresh mirato post-sync).
+Root cause: `AssetSourceManager.get_current_prices_bulk` upserts today's OHLC to
+PriceHistory (F.2 + F.3), so chaining `/current` + `/sync` for the same asset always
+yields empty `changed_points` — the changes already happened on `/current`.
+Created: [[concepts/prices-current-side-effect]] (cross-cutting API contract),
+[[problems/prices-current-sync-chain-empty-delta]] (specific anti-pattern bug).
+Updated: index.md (Concepts + Problems tables).

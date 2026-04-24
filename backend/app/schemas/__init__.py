@@ -142,6 +142,7 @@ from backend.app.schemas.provider import (
     FAProviderRemovalResult,
 )
 from backend.app.schemas.refresh import (
+    CHANGED_POINTS_PAYLOAD_CAP,
     FABulkRefreshResponse,
     FARefreshItem,
     FARefreshResult,
@@ -264,6 +265,7 @@ __all__ = [
     "FAPriceDeleteResult",
     "FAUpsertResult",
     # Refresh
+    "CHANGED_POINTS_PAYLOAD_CAP",
     "FARefreshItem",
     "FABulkRefreshResponse",
     "FARefreshResult",
