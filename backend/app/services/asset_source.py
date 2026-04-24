@@ -901,11 +901,7 @@ class AssetSourceManager:
                                 AssetEvent.provider_assignment_id == existing.id,
                             )
                         )
-                        disconnect_result = await session.execute(
-                            Transaction.__table__.update()
-                            .where(Transaction.asset_event_id.in_(event_ids_subq))
-                            .values(asset_event_id=None)
-                        )
+                        disconnect_result = await session.execute(Transaction.__table__.update().where(Transaction.asset_event_id.in_(event_ids_subq)).values(asset_event_id=None))
                         disconnected_tx = disconnect_result.rowcount or 0
                         deleted_events_result = await session.execute(
                             delete(AssetEvent).where(

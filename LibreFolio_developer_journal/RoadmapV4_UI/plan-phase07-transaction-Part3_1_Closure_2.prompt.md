@@ -243,7 +243,7 @@ Copertura endpoint `/prices/export` (I.4):
 
 **Priorità**: P2, non bloccante — chiusa nello stesso commit per simmetria con gli altri sub-batch.
 
-### I-bis #19 — Semantica estesa `Asset.active` (follow-up Phase 8/9)  ⏳ PENDING
+### I-bis #19 — Semantica estesa `Asset.active` (follow-up Phase 8/9)  ✅ DONE (doc-only, 2026-04-24, Batch 4.d-part3)
 
 **Spin-off** da I-bis #17. Regole definitive già consolidate in [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md) §Interazione con Asset.active:
 
@@ -251,6 +251,8 @@ Copertura endpoint `/prices/export` (I.4):
 - **Sync manuale frontend**: consentito su inattivi (azione esplicita utente).
 - **Dashboard / Portfolio breakdown (Phase 9)**: nasconde inattivi nelle aggregazioni.
 - **Badge "📦 Archived"** su card/table/detail page: desiderabile, non bloccante.
+
+**Nessun codice in Phase 7**: l'implementazione operativa è per costruzione deferita alle phase successive (8 = scheduler, 9 = dashboard). Chiusura formale del ticket per non lasciarlo aperto nella coda I-bis.
 
 **Lavoro in questo plan**: **nulla** — si tratta solo del rinvio formale a Phase 8/9. Traccio qui il cross-link per chiudere il cerchio.
 

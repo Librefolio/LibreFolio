@@ -106,17 +106,103 @@
     // Header logic
     // =========================================================================
 
-    /** Expected header string derived from column definitions */
+    /** Expected header string derived from column definitions (display-only hint) */
     let expectedHeader = $derived('date;' + columns.map((c) => c.label).join(';'));
 
-    /** Total number of columns including date */
-    let totalCols = $derived(1 + columns.length);
+    // -------------------------------------------------------------------------
+    // I-bis #5 (Batch 4.d-part3) — CSV resilience
+    //
+    // 1. Separator auto-detect: accept both ``;`` (editor native) and ``,``
+    //    (export format from ``/backup/asset/{id}/prices?format=csv``). The
+    //    first non-empty line is inspected; if it starts with ``date`` + sep,
+    //    the sep is locked. This supports round-trip export→import without
+    //    any manual normalization on the user side.
+    //
+    // 2. Tolerant header matching: columns are matched by **label name**
+    //    (case-insensitive), NOT by positional index. Extra columns in the
+    //    CSV that are not declared in ``columns`` prop are silently ignored
+    //    (e.g. ``source_plugin_key``, ``fetched_at`` emitted by the export
+    //    endpoint). Missing required columns produce a single consolidated
+    //    error listing the missing labels.
+    //
+    // 3. The ``<`` inverse-direction trick (A<B ≡ B>A) is still honoured but
+    //    only for the canonical header ordering — it degrades to a no-op
+    //    once the new by-name mapping kicks in.
+    // -------------------------------------------------------------------------
 
-    function isHeaderLine(trimmed: string): boolean {
-        if (trimmed.toLowerCase() === expectedHeader.toLowerCase()) return true;
-        // Also accept < as inverse direction: A<B is equivalent to B>A
-        const normalized = trimmed.replace(/([^;<\s]+)\s*<\s*([^;<\s]+)/g, '$2>$1');
-        return normalized.toLowerCase() === expectedHeader.toLowerCase();
+    interface HeaderMap {
+        valid: boolean;
+        separator: ';' | ',';
+        /** Index of the ``date`` column in the CSV header parts (-1 = missing) */
+        dateIdx: number;
+        /** Mapping CsvColumnDef.key → column index in CSV (-1 = not present) */
+        colIndices: Record<string, number>;
+        /** Required column labels that are absent (including ``date``) */
+        missingRequired: string[];
+    }
+
+    /** Detect the field separator from the first non-empty line. */
+    function detectSeparator(rawLines: string[]): ';' | ',' {
+        for (const line of rawLines) {
+            const t = line.trim().toLowerCase();
+            if (!t) continue;
+            // Canonical case: header starts with "date" + sep
+            if (t.startsWith('date;')) return ';';
+            if (t.startsWith('date,')) return ',';
+            // Fallback: whichever appears first in the line
+            const iSemi = t.indexOf(';');
+            const iComma = t.indexOf(',');
+            if (iSemi >= 0 && (iComma < 0 || iSemi < iComma)) return ';';
+            if (iComma >= 0) return ',';
+            return ';';
+        }
+        return ';';
+    }
+
+    /** Parse a header line into a HeaderMap, resolving columns by name. */
+    function parseHeaderLine(line: string, sep: ';' | ','): HeaderMap {
+        const parts = line.split(sep).map((p) => p.trim().toLowerCase());
+        // Honour the ``A<B`` inverse-direction syntax only in canonical mode
+        // (keeps backward compatibility for the FX editor use case).
+        const normalizedParts = parts.map((p) => {
+            const m = p.match(/^([^<\s]+)\s*<\s*([^<\s]+)$/);
+            return m ? `${m[2]}>${m[1]}` : p;
+        });
+
+        const dateIdx = normalizedParts.indexOf('date');
+        const colIndices: Record<string, number> = {};
+        const missingRequired: string[] = [];
+
+        if (dateIdx < 0) missingRequired.push('date');
+
+        for (const col of columns) {
+            const idx = normalizedParts.indexOf(col.label.toLowerCase());
+            colIndices[col.key] = idx;
+            if (idx < 0 && col.required) missingRequired.push(col.label);
+        }
+
+        return {
+            valid: missingRequired.length === 0,
+            separator: sep,
+            dateIdx,
+            colIndices,
+            missingRequired,
+        };
+    }
+
+    function isHeaderLine(trimmed: string, sep: ';' | ','): boolean {
+        // Accept as header any first non-empty line that contains the sep
+        // AND has a ``date`` token. The by-name matching then decides if it's
+        // actually valid (missingRequired list).
+        if (!trimmed.includes(sep)) return false;
+        const parts = trimmed
+            .split(sep)
+            .map((p) => p.trim().toLowerCase())
+            .map((p) => {
+                const m = p.match(/^([^<\s]+)\s*<\s*([^<\s]+)$/);
+                return m ? `${m[2]}>${m[1]}` : p;
+            });
+        return parts.includes('date');
     }
 
     // =========================================================================
@@ -136,16 +222,26 @@
     let lines = $derived(value.split('\n'));
     let lineCount = $derived(lines.length);
 
-    /** Check if header is present and valid */
-    let headerValid = $derived.by(() => {
+    /** Separator auto-detected from the first non-empty line. */
+    let detectedSeparator = $derived(detectSeparator(lines));
+
+    /** Parsed header info (by-name matching, tolerant to extra columns). */
+    let headerMap: HeaderMap | null = $derived.by(() => {
         for (const line of lines) {
             const trimmed = line.trim();
-            if (trimmed) return isHeaderLine(trimmed);
+            if (!trimmed) continue;
+            if (!isHeaderLine(trimmed, detectedSeparator)) return null;
+            return parseHeaderLine(trimmed, detectedSeparator);
         }
-        return false;
+        return null;
     });
 
+    /** Check if header is present and valid (all required columns matched). */
+    let headerValid = $derived(headerMap !== null && headerMap.valid);
+
     let validations: LineValidation[] = $derived.by(() => {
+        const sep = detectedSeparator;
+        const hmap = headerMap;
         const result: LineValidation[] = lines.map((line, i): LineValidation => {
             const lineNumber = i + 1;
             const trimmed = line.trim();
@@ -155,36 +251,40 @@
 
             // Header line (first non-empty line) — validate as header
             if (i === lines.findIndex((l) => l.trim() !== '')) {
-                if (isHeaderLine(trimmed)) {
+                if (hmap && hmap.valid) {
                     return {lineNumber, text: line, valid: true, isHeader: true};
-                } else {
+                }
+                if (hmap && !hmap.valid) {
+                    // Header parsed but missing required columns
                     return {
                         lineNumber,
                         text: line,
                         valid: false,
                         isHeader: true,
-                        error: `Expected header: ${expectedHeader}`,
+                        error: `Missing required columns: ${hmap.missingRequired.join(', ')}`,
                     };
                 }
-            }
-
-            // If header is invalid, don't validate data rows
-            if (!headerValid) {
-                return {lineNumber, text: line, valid: false, error: 'Fix header first'};
-            }
-
-            // Parse data row (N columns: date;col1;col2;...)
-            const parts = trimmed.split(';');
-            if (parts.length > totalCols) {
                 return {
                     lineNumber,
                     text: line,
                     valid: false,
-                    error: `Too many columns: expected max ${totalCols}, got ${parts.length}`,
+                    isHeader: true,
+                    error: `Expected header: ${expectedHeader}`,
                 };
             }
 
-            const dateStr = parts[0].trim();
+            // If header is invalid, don't validate data rows
+            if (!headerValid || !hmap) {
+                return {lineNumber, text: line, valid: false, error: 'Fix header first'};
+            }
+
+            // Parse data row using the by-name column mapping (I-bis #5).
+            const parts = trimmed.split(sep);
+            // NOTE: extra columns (parts.length > declared header width) are
+            // accepted and silently ignored — the header decides which slots
+            // matter via ``hmap.colIndices`` / ``hmap.dateIdx``.
+
+            const dateStr = (parts[hmap.dateIdx] ?? '').trim();
 
             // Validate date (YYYY-MM-DD)
             if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -195,13 +295,13 @@
                 return {lineNumber, text: line, valid: false, error: `Invalid date: "${dateStr}"`};
             }
 
-            // Parse each column value
+            // Parse each declared column by its CSV index (from header map).
             const values: Record<string, unknown> = {};
             let parseError: string | null = null;
 
-            for (let c = 0; c < columns.length; c++) {
-                const col = columns[c];
-                const rawVal = (parts[c + 1] ?? '').trim();
+            for (const col of columns) {
+                const csvIdx = hmap.colIndices[col.key];
+                const rawVal = csvIdx >= 0 ? (parts[csvIdx] ?? '').trim() : '';
 
                 if (!rawVal) {
                     if (col.required) {
@@ -327,7 +427,7 @@
             {/if}
         </span>
         <span class="inline-flex items-center gap-1.5 text-gray-400 dark:text-gray-500 text-[10px]">
-            {$t('csvImport.sep')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">;</kbd>
+            {$t('csvImport.sep')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">{detectedSeparator}</kbd>
             · {$t('csvImport.decimal')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">.</kbd>
             / <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">,</kbd>
             · {$t('csvImport.thousands')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">_</kbd>
