@@ -181,6 +181,8 @@
   },
   "active": "7d8530457f73094e",
   "lastOpenFiles": [
+    "wiki/problems/prices-current-sync-chain-empty-delta.md",
+    "wiki/concepts/prices-current-side-effect.md",
     "wiki/decisions/three-phase-pipeline.md",
     "wiki/concepts/e2e-data-testid-rule.md",
     "wiki/domains/assets.md",
@@ -207,8 +209,6 @@
     "wiki/features/F-020.md",
     "index.md",
     "wiki/sources/roadmap-v4-index.md",
-    "wiki/sources/roadmap-v1-summary.md",
-    "wiki/features/F-096.md",
     "safe_update.py",
     "fix_tables.py",
     "batch_update.py",
