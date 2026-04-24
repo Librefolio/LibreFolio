@@ -584,3 +584,112 @@ Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa 
 - `backend/app/utils/cache_utils.py` (adattare `NamedCache`)
 - `backend/app/main.py` (spawn/shutdown cache process)
 
+
+---
+
+## 📅 Scheduled Investment — Frequenze disaccoppiate (prezzi vs cedola) + anchor day
+
+**Data aggiunta**: 24 Aprile 2026 (retest Batch 4 sezione 3)
+**Status**: ⏳ IDEA — non in roadmap immediata
+**Priorità**: Media (UX, non bloccante)
+
+### Contesto
+
+Durante il retest del fix I-bis #26 (Batch 4.c — riordino Step 2/4 in
+`scheduled_investment.py`) è emerso un limite di design attuale del
+provider `scheduled_investment`:
+
+> **La frequenza di generazione dei prezzi coincide con la frequenza di
+> maturazione della cedola** (`maturation_frequency`). Attivando
+> `generate_interest=True`, ogni volta che viene generato un evento
+> INTEREST il valore si resetta al principal. Non esiste oggi un modo
+> per scegliere _separatamente_ la granularità del grafico prezzi e la
+> frequenza di payout.
+
+Inoltre la data in cui cade la cedola (anchor day of month / week /
+year) è determinata dalla `start_date` del periodo — non c'è controllo
+UX su "cedola ogni 1 del mese" o "cedola ogni lunedì" indipendentemente
+da quando parte lo schedule.
+
+### Cosa serve (design a alto livello)
+
+**Schema Pydantic** (`FAInterestRatePeriod`):
+- `price_frequency: MaturationFrequency` — granularità grafico (DAILY
+  come default ragionevole).
+- `coupon_frequency: MaturationFrequency | None` — **solo se**
+  `generate_interest=True`; disaccoppiata da price_frequency.
+- `coupon_anchor: CouponAnchor | None` — enum opzionale:
+  - `SCHEDULE_START` (comportamento corrente: conta dalla start_date)
+  - `FIRST_OF_MONTH` / `LAST_OF_MONTH`
+  - `SPECIFIC_DAY_OF_MONTH(day: int 1-28|"last")`
+  - `SPECIFIC_WEEKDAY` (MON..SUN)
+  - `SPECIFIC_DATE(month: int, day: int)` per ANNUAL/SEMIANNUAL
+- Validator Pydantic: `coupon_frequency` e `coupon_anchor` devono
+  essere coerenti (es. `SPECIFIC_WEEKDAY` solo con WEEKLY,
+  `SPECIFIC_DATE` solo con ANNUAL/SEMIANNUAL).
+
+**Engine** (`_generate_schedule_values`):
+- Calcolare due set di date separati:
+  `price_emission_dates` (dal `price_frequency`) e `coupon_dates`
+  (dal `coupon_frequency + coupon_anchor`, se abilitati).
+- Step 3 (emit value) ora su `price_emission_dates` invece di
+  `all_maturation_dates`.
+- Step 4 (auto-coupon reset) ora su `coupon_dates` invece di
+  `all_maturation_dates`.
+- I due set possono sovrapporsi (es. DAILY prezzi + MONTHLY coupon:
+  ogni giorno ha un punto, solo il 1° del mese c'è anche il reset).
+
+**Frontend** (`ScheduledInvestmentEditor`):
+- Nuova riga per `price_frequency`.
+- Riga condizionale `coupon_frequency` (visibile solo se
+  `generate_interest=true`).
+- Nuovo campo `coupon_anchor` con tendina contestuale
+  (day-of-month picker per MONTHLY, weekday picker per WEEKLY, ecc.).
+- Retrocompatibilità: se `price_frequency` manca nello schema JSON
+  esistente → migrare a `price_frequency = maturation_frequency`
+  (no breaking change per gli asset già configurati).
+
+### Benefici attesi
+
+- **UX**: un utente può vedere l'andamento daily del grafico anche se
+  la cedola è pagata semestralmente (oggi il grafico è sparso su 2
+  punti/anno, confondendo chi guarda).
+- **Modello fedele**: BTP Italia 2028 ha cedole semestrali ma il
+  valore di mercato varia ogni giorno — dovremmo riflettere entrambi
+  i ritmi.
+- **Anchor date**: un'obbligazione che paga cedola il 15 marzo e 15
+  settembre NON può oggi essere modellata fedelmente se l'asset è
+  stato "creato" con start_date diversa da quelle.
+
+### Non in questo plan perché
+
+- Estende schema Pydantic + migrazione dati esistenti +
+  retrocompatibilità — costo 4-6h.
+- Aggiunge ~3 campi FE + validazione contestuale — costo 3-4h.
+- Test coverage estesa (cross-product di freq × anchor × event types).
+- **Non bloccante**: il comportamento attuale è coerente se
+  `generate_interest=False` (retta crescente pulita) o se l'utente
+  accetta la coincidenza prezzi/cedola.
+
+### File candidati (quando si apre il ticket)
+
+- `backend/app/schemas/assets.py` — `FAInterestRatePeriod`,
+  nuovo enum `CouponAnchor`.
+- `backend/app/services/asset_source_providers/scheduled_investment.py`
+  — Step 3/4 rifattorizzati.
+- `frontend/src/lib/components/assets/editors/ScheduledInvestmentEditor.svelte`.
+- Test: `test_synthetic_yield_integration.py` — parametric su
+  `(price_frequency, coupon_frequency, coupon_anchor)`.
+- Alembic: **nessuna** migrazione (campo in JSON `provider_params`,
+  retro-compat via default sull'assenza).
+
+### Cross-link
+
+- Rilevato durante retest Batch 4 sezione 3 (I-bis #26):
+  [`LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part3_1_Closure_2.prompt.md`](LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part3_1_Closure_2.prompt.md)
+  §"Retest Batch 4 — sezione 3".
+- Fix correlato già applicato in 4.c:
+  `_generate_schedule_values` Step 2/4 reorder — emette valore
+  pre-reset.
+
+

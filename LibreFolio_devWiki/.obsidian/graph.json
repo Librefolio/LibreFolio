@@ -1,8 +1,8 @@
 {
-  "collapse-filter": true,
+  "collapse-filter": false,
   "search": "",
   "showTags": false,
-  "showAttachments": false,
+  "showAttachments": true,
   "hideUnresolved": false,
   "showOrphans": true,
   "collapse-color-groups": false,
@@ -18,7 +18,7 @@
       "query": "tag:#frontend  ",
       "color": {
         "a": 1,
-        "rgb": 14069084
+        "rgb": 6084302
       }
     },
     {
@@ -34,18 +34,25 @@
         "a": 1,
         "rgb": 6058198
       }
+    },
+    {
+      "query": "tag:#todo tag:#roadmap  ",
+      "color": {
+        "a": 1,
+        "rgb": 16766208
+      }
     }
   ],
   "collapse-display": false,
   "showArrow": true,
   "textFadeMultiplier": -0.5,
   "nodeSizeMultiplier": 0.921770833333333,
-  "lineSizeMultiplier": 0.436875,
+  "lineSizeMultiplier": 0.792890625,
   "collapse-forces": false,
-  "centerStrength": 0.520659722222222,
-  "repelStrength": 15.8489583333333,
-  "linkStrength": 1,
-  "linkDistance": 30,
-  "scale": 0.39543765712644,
-  "close": false
+  "centerStrength": 0.584201388888889,
+  "repelStrength": 20,
+  "linkStrength": 0.854947916666667,
+  "linkDistance": 500,
+  "scale": 0.11984097742973,
+  "close": true
 }
