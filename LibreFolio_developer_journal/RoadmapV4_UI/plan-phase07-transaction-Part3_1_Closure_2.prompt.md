@@ -12,29 +12,42 @@ spostate sezioni pending per mantenere leggibilità).
 
 **Indice**:
 1. **Blocco G** — Test coverage (G.1..G.11) + validazione finale.
-2. **Coda I-bis pendente** — 14 ticket tracciati come follow-up.
+2. **Coda I-bis pendente** — 7 ticket tracciati come follow-up (era 14,
+   ridotta dopo audit 2026-04-24: 7 erano già DONE — 6 in Batch 2
+   + #25 risolto in un commit intermedio).
 3. **Retest findings — Batch 2 part4b (#R4-1..#R4-5)** — 5 rifiniture
-   emerse dal giro di smoke test 2026-04-23 pomeriggio.
+   chiuse 2026-04-23.
+4. **Retest findings — Batch 3 (#R5-1..#R5-3)** — 3 rifiniture chiuse
+   2026-04-24.
 
-**Priorità di esecuzione suggerita** (ordine consigliato):
-1. ~~Batch 2 **part5b** = #R4-1 + #R4-2 + #R4-4 + #R4-5 (quick wins ~70 min)
-   + diagnosi #R4-3~~ → ✅ **COMPLETO** (commit `8391aac0` + `1bff6ad1` +
-   `09dba1c3`, 2026-04-23).
+**Priorità di esecuzione suggerita** (aggiornata 2026-04-24 — decisione
+utente):
+
+> **Decisione 2026-04-24**: risolvere **tutti i pendenti I-bis** prima
+> di entrare nel Blocco G. Motivazione: il Blocco G scrive test di
+> coverage; farlo prima dei fix #2/#5/#7/#22/#24/#26 significherebbe
+> testare codice che cambia a breve, con conseguente rewrite dei test.
+> Meglio congelare il comportamento, poi coprirlo.
+
+1. ~~Batch 2 **part5b**~~ → ✅ **COMPLETO** (2026-04-23).
 2. ~~**Batch 3** = R3-3 Policy D + R3-3b backup endpoints~~ → ✅
-   **COMPLETO** (2026-04-23 sera, commit pending): nuovo `backup_router`
-   con snapshot per-series (prezzi/eventi/FX), endpoint
-   `POST /assets/{id}/market-data/wipe` per Policy D (wipe simmetrico +
-   disconnect tx), hard-400 su event currency mismatch, nuovo token
-   blocker `CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA`, FE modal riscritta
-   con summary eventi/tx + 4 bottoni export, helper
-   `backupDownload.ts` via axiosInstance (cookie auth + 401 interceptor),
-   i18n × 4. **Retest 2026-04-24**: 28/29 test verdi, 3 rifiniture
-   UX/cleanup emerse → Batch 3 **part5b** (vedi §Retest findings sotto).
-3. ~~**Batch 3 part5b** = polish post-retest (`#R5-1..#R5-3`, ~45 min)~~
-   → ✅ **COMPLETO** (2026-04-24, commit pending).
-4. Blocco G test coverage (8-10h stimati). **← PROSSIMO**
-5. Coda I-bis in priorità decrescente (#22 prerequisito Part 4/5 prima,
-   poi #25, #26, #24, #1, #2, ecc.).
+   **COMPLETO** (2026-04-23 sera).
+3. ~~**Batch 3 part5b** = polish post-retest (`#R5-1..#R5-3`)~~
+   → ✅ **COMPLETO** (2026-04-24).
+4. **Batch 4** = chiusura I-bis pendenti (~7-8h spalmati in 6 sub-batch
+   tematici). **← IN CORSO**
+   - **4.a** — #2 Save Without Testing gating (~45 min, FE, P1.5). ✅ DONE
+   - **4.b** — #7 HTTP 409 semantics (~30 min, BE, P2). ✅ DONE
+   - **4.c** — #26 scheduled_investment Step 2/4 reorder + cache key
+     test (~1h + test, P1). ✅ DONE
+   - **4.d** — #22 `saveWithRetry` helper + adozione 8 modal (~3-4h, P1,
+     prerequisito Part 4/5). 🟡 PARTIAL (helper creato + 2/8 modal
+     adottati — vedi sub-batch 4.d-part2 per i restanti)
+   - **4.e** — #5 CSV autodetect separator + header tolerance (~1.5h, P2). ⏳ PENDING
+   - **4.f** — #24 Backend `changed_points` + FE merge incrementale
+     (~1h, P2). ⏳ PENDING
+5. **Blocco G** test coverage (8-10h stimati) — dopo Batch 4.
+6. **I-bis #19** rinviato formalmente a Phase 8/9 (nessun lavoro qui).
 
 ---
 
@@ -189,20 +202,26 @@ Copertura endpoint `/prices/export` (I.4):
 
 ## 📋 Coda I-bis pendente (dal parent plan)
 
-Tutti i punti ⏳ dalla lista priorità al §I-bis Part3. Mantengo la numerazione originale.
+> **Audit 2026-04-24**: verificata la coda I-bis #1..#26 contro i commit
+> reali (`Closure.md` §"Batch 2 part1/part2/part2b") **e contro i
+> sorgenti attuali**. Sette ticket che erano listati qui come ⏳ PENDING
+> sono in realtà ✅ DONE — spostati in fondo in una sotto-sezione
+> "Già risolti".
+>
+> **Pendenti reali (verificati nei sorgenti)**: 7 ticket — #2, #5, #7,
+> #19, #22, #24, #26.
 
-### I-bis #3 — Tab label "Prices in {currency} {flag}"  ⏳ PENDING
+### I-bis #2 — "Save Without Testing?" modal gating  ✅ DONE (2026-04-24, Batch 4.a, commit pending)
 
-**Dove**: `AssetDataEditorSection.svelte`, riga tab Prices/Events.
-**Cosa**: label a destra "Prices in USD 🇺🇸" / "Events in USD 🇺🇸".
-**i18n**: `dataEditor.pricesInCurrency`, `dataEditor.eventsInCurrency` × 4.
-**Utility**: `getCurrencyInfo(asset.currency).flag_emoji`.
+**Dove**: `AssetModal.svelte` (sezione provider).
+**Cosa**: il modal "Save Without Testing?" compariva ad **ogni** save asset; ora compare solo se `providerCode`, `providerIdentifier`, `providerIdentifierType` o `providerParams` sono diversi dallo stato caricato.
 
-### I-bis #4 — Import CSV banner reminder  ⏳ PENDING
+**Implementazione** (Batch 4.a):
+- Snapshot iniziale dei 4 campi provider in `loadAssetData()` (`initialProviderCode`, `initialProviderIdentifier`, `initialProviderIdentifierType`, già presente `initialProviderParamsJson`).
+- `$derived providerDirty` confronta i valori correnti con lo snapshot; in create mode (`!editMode`) = `hasProvider`.
+- `handleSave()` gate: `if (hasProvider && providerDirty && providerTestStatus !== 'passed') → modal`. Edit di soli `name`/`description`/classification → skip modal.
 
-**Dove**: `PriceDataImportModal.svelte`, sopra la textarea.
-**Cosa**: `InfoBanner` "Currency must match asset currency ({currency} {flag}). Extra columns in the CSV (like `currency`, `source_plugin_key`, `fetched_at` from Export) are ignored on import."
-**i18n**: `import.csv.currencyReminder`, `import.csv.extraColumnsIgnored` × 4.
+**Retest manuale richiesto**: modificare solo `name` → no modal; modificare `providerCode` → modal compare; cancel → dismiss; confirm → save procede.
 
 ### I-bis #5 — CSV Import resilience  ⏳ PENDING
 
@@ -210,47 +229,19 @@ Tutti i punti ⏳ dalla lista priorità al §I-bis Part3. Mantengo la numerazion
 **Cosa**:
 - (a) Auto-detect separator `;` o `,` dalla prima riga non vuota.
 - (b) Header match **tolerante** alle extra-column: ignora colonne non mappate, richiede `date` + `close` presenti.
-- (c) Banner inline (I-bis #4) documenta il comportamento.
+- (c) Banner inline (I-bis #4, già implementato) documenta il comportamento.
 
-**Target**: rendere re-importabile il CSV generato da `/prices/export?format=csv`.
+**Target**: rendere re-importabile il CSV generato da `/backup/asset/{id}/prices?format=csv` (ora il round-trip export → import fallisce con "too many fields").
 
-### I-bis #6 — Empty-state "Add manually" button  ⏳ PENDING
+### I-bis #7 — Backend `patch_assets_bulk` HTTP 409 semantics  ✅ DONE (2026-04-24, Batch 4.b, commit pending)
 
-**Dove**: panel asset con zero prezzi.
-**Cosa**: aggiungere secondo bottone "Add manually" accanto a "Sync from provider", che apre l'edit panel pre-filtrato su tab Prices con riga vuota.
-**i18n**: `assetDetail.addPricesManually` × 4.
+**Cosa**: l'endpoint `PATCH /api/v1/assets` ora ritorna **HTTP 409** quando **tutti** gli item del batch falliscono e almeno uno dei fallimenti riporta il token `CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA`. Nel caso di partial-success (almeno 1 item OK) resta il 200 con payload `success_count + results[]`, preservando la multi-asset semantic.
 
-### I-bis #1 — Surface errori sync post-wipe (currency change flow)  ⏳ PENDING
+**Implementazione** (Batch 4.b):
+- `backend/app/api/v1/assets.py::patch_assets_bulk`: dopo la chiamata al service, se `response.success_count == 0 and len(results) > 0 and all(not r.success)` e almeno un `r.message` contiene `CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA` → `raise HTTPException(409, detail={error_code, message, results: [...]})`.
+- `frontend/src/lib/components/assets/AssetModal.svelte::performSave`: try/catch attorno a `patch_assets_bulk_api_v1_assets_patch`; se `err.response.status === 409` e il detail ha `Array.isArray(detail.results)` → ricostruisce `patchResp = {results: detail.results, success_count: 0}` e prosegue il flusso esistente (destructive currency-change modal). Stessa UX, HTTP semantica corretta.
 
-**Contesto**: se provider post-wipe restituisce currency diversa da quella nuova dell'asset, `bulk_upsert_prices` respinge hard-400 ma l'errore non arriva al frontend in modo leggibile.
-
-**Da fare**:
-- (a) Toast di errore esplicito invece di "Prices refreshed" quando `success_count>0` ma `inserted_count==0`.
-  - i18n: `sync.postWipeZeroRows` × 4.
-- (b) Banner inline full-width sul detail page con lo stesso messaggio finché l'utente non risolve.
-- (c) Backend: `POST /prices/sync` surface per-asset `{inserted, errors[]}` in risposta (probabilmente già presente, verificare).
-
-### I-bis #2 — "Save Without Testing?" modal gating  ⏳ PENDING
-
-**Dove**: `AssetModal.svelte` (sezione provider).
-**Cosa**: il modal "Save Without Testing?" compare oggi ad **ogni** save asset. Deve comparire solo se `providerCode`, `providerIdentifier`, `providerIdentifierType` o `providerParams` sono diversi dallo stato caricato.
-
-**Implementazione**: traccia dirty-bit separato sul blocco provider + gate su quello.
-
-### I-bis #7 — Backend `patch_assets_bulk` HTTP 409 semantics  ⏳ PENDING non urgente
-
-**Cosa**: alzare HTTP status a 409 quando **tutti** gli item del batch falliscono per `CURRENCY_CHANGE_BLOCKED_BY_PRICES`. Senza rompere la multi-asset semantic (200 se alcuni passano).
-
-**Priorità**: P2, non bloccante.
-
-### I-bis #12 — Ridurre i 5 toast del currency change a 1  ⏳ PENDING refactor medio
-
-**Contesto**: flusso currency change emette 5 toast in sequenza (3 progress + 1 finale + 1 generico "updated").
-
-**Design**:
-- Sostituire i 3 toast progress con **un unico toast loading** (o spinner inline nel modal).
-- Mostrare solo il toast finale "Currency changed from X to Y. Prices refreshed."
-- Sopprimere il toast generico "`{name}` updated successfully" quando PATCH arriva via currency-change flow (flag interno al chiamante).
+**Priorità**: P2, non bloccante — chiusa nello stesso commit per simmetria con gli altri sub-batch.
 
 ### I-bis #19 — Semantica estesa `Asset.active` (follow-up Phase 8/9)  ⏳ PENDING
 
@@ -263,7 +254,7 @@ Tutti i punti ⏳ dalla lista priorità al §I-bis Part3. Mantengo la numerazion
 
 **Lavoro in questo plan**: **nulla** — si tratta solo del rinvio formale a Phase 8/9. Traccio qui il cross-link per chiudere il cerchio.
 
-### I-bis #22 — Generalizzare error handling "Save failed → keep modal open + toast"  ⏳ PENDING prerequisito Part 4/5
+### I-bis #22 — Generalizzare error handling "Save failed → keep modal open + toast"  🟡 PARTIAL (2026-04-24, Batch 4.d, commit pending)
 
 **Requisito funzionale**:
 Se il save fallisce (HTTP !2xx / network error), la modale:
@@ -271,117 +262,110 @@ Se il save fallisce (HTTP !2xx / network error), la modale:
 2. Mostra **toast errore** con messaggio da `response.detail` (FastAPI) o fallback i18n.
 3. Mantiene dirty state per permettere correzione + retry.
 
-**Step preliminare (censimento)**: mappare tutti i modal × endpoint × comportamento attuale on-error. Candidati:
-- `AssetModal.svelte`, `AssetProviderAssignmentModal.svelte`, `AssetCurrencyChangeModal.svelte`, `BrokerModal.svelte`, `TransactionModal.svelte` (Part 4), `PriceDataImportModal.svelte`, `EventsModal.svelte`, flussi Save di `DataEditor`.
+**Stato Batch 4.d (2026-04-24)** — **helper creato + 2 modal adottati**:
 
-**Design proposto**: helper `$lib/utils/saveWithRetry.ts` o pattern store `createSaveAction<T>({call, onSuccess, onError})`:
-- Intercetta HTTP errors + parse `detail`.
-- Mostra toast via `toast.error(...)`.
-- Ritorna union `{status: 'success', data} | {status: 'error', message}`.
+Helper nuovo: `frontend/src/lib/utils/saveWithRetry.ts`
+- `saveWithRetry<T>(call, options)` — wrappa una Promise, ritorna
+  discriminated union `{status: 'success', data} | {status: 'error', message, error, status_code}`. Non solleva mai.
+- `extractErrorMessage(err, fallback)` — estrae il detail da errori
+  Axios/FastAPI: string, object, Pydantic array `[{msg}]`, statusText,
+  `err.message`.
+- `extractStatusCode(err)` — helper per route custom (es. 409).
+- Opzioni: `fallback` (msg i18n-aware passato dal chiamante), `toast`
+  (bool, default `true`), `prefix` (es. nome asset), `onError`
+  (pre-hook per custom handling — es. 409 destructive modal).
 
-**Priorità**: P1 — prerequisito per Part 5 Staging Modal.
+**Modal adottati**:
+1. `BrokerModal.svelte` — create + update ora passano per `saveWithRetry`
+   con fallback i18n `brokers.createFailed` / `brokers.updateFailed`.
+   La modale resta aperta on error (early `return` dopo `error = result.message`).
+2. `AssetCurrencyChangeModal.svelte` — `extractErrorMessage` sostituisce
+   3 siti di estrazione manuale `err?.response?.data?.detail || err?.message`.
+   Il flusso 3-step (wipe → patch → sync) mantiene le sue `try/catch`
+   strutturate ma ora sfrutta l'extractor unificato per coerenza.
 
-### I-bis #25 — goBack regression `/fx/{pair}` → `/fx` invece di `/assets/{id}`  ⏳ PENDING (nuovo, 2026-04-22 batch 2 part2 retest)
+**Modal ancora da adottare** (sub-batch **4.d-part2**):
+- `AssetModal.svelte` — grosso, ha già custom 409 handling dal 4.b.
+  Rischio di regressione: fare una pass dedicata.
+- `AssetProviderAssignmentModal.svelte` — TBD.
+- `BrokerSharingModal.svelte` — TBD.
+- `CashTransactionModal.svelte` — TBD.
+- `FxPairAddModal.svelte` — TBD.
+- `PriceDataImportModal.svelte` + `EventDataImportModal.svelte` — usano
+  il `DataImportModal` generic wrapper, valutare se adottare a livello di
+  wrapper (più efficiente).
+- `TransactionModal.svelte` — Part 4 (non ancora esistente).
+- Save flows di `DataEditor` — censimento necessario.
 
-**Sintomo**: dall'asset detail, dopo aver cliccato il nuovo link FX quick-access (I-bis #4 part1c), si arriva a `/fx/{slug}`. Cliccando il bottone back in testa alla pagina FX detail (`data-testid="fx-detail-back-btn"`, handler `goBack('/fx')`), si viene riportati alla lista `/fx` invece che all'asset detail di partenza.
+**Prossimo commit**: `feat(phase07): Batch 4.d-part1 — saveWithRetry helper + adopt Broker/CurrencyChange modals`
 
-**Analisi**:
-- `navigationStore.goBack(fallbackPath)` usa `history.back()` se `depth > 1`, altrimenti `goto(fallbackPath)`.
-- `afterNavigate` in `(app)/+layout.svelte` chiama `trackNavigation(nav.type)` che incrementa `depth` per navigazioni non-popstate.
-- Normalmente: asset detail (depth=1 entering) → click `<a href>` → depth=2 → FX detail → goBack → depth>1 → history.back() → torna asset detail. **Dovrebbe funzionare**.
-- Possibili cause del glitch:
-  1. `fx/[pair]/+page.svelte:662` fa `goto(..., {replaceState: true})` quando rileva inversione pair → sovrascrive l'entry history dell'asset detail.
-  2. Il mio `<a href="/fx/...">` navigazione potrebbe essere intercettata prima che `afterNavigate` scatti (edge case SvelteKit).
-  3. Depth potrebbe essere **reset** o sbagliato a causa di preload/prefetch dei dati.
+**Priorità**: P1 — prerequisito per Part 5 Staging Modal. Il helper è
+stabile e retro-compatibile; l'adozione nei restanti modal può
+procedere in modo incrementale senza bloccare altri lavori.
 
-**Fix proposti (da provare in ordine)**:
-- (a) **Quick win**: sostituire `<a href={fxPairUrl}>` con `<button onclick={() => goto(fxPairUrl)}>` in `AssetPriceSummary.svelte` — forza esplicitamente SPA routing.
-- (b) Investigare `fx/[pair]/+page.svelte:662` `replaceState:true` — valutare se limitarlo ai soli casi dove l'URL era già `/fx/{pair}`.
-- (c) **Fallback robusto**: salvare `document.referrer` (o URL corrente prima del click) in `sessionStorage['fxDetail.returnTo']`. FX detail `goBack` legge questa key e se valida (URL interno) fa `goto(returnTo)` invece di usare solo `depth`.
+### I-bis #24 — Auto-refresh mirato post-sync (last-point-only)  ⏳ PENDING
 
-**Priorità**: P2 — la navigazione browser (Alt+Left) funziona, solo il bottone custom ha comportamento incoerente.
-
-### I-bis #26 — scheduled_investment: reset a initial_value + cache hashing dubbio  ⏳ PENDING (nuovo, 2026-04-23 batch 2 part3)
-
-**Sintomo** (BTP Italia 2028):
-- Config db_populate originale: `maturation_frequency=SEMIANNUAL`, `generate_interest=True`.
-- Utente l'ha modificata a DAILY + `generate_interest=False` dal frontend.
-- Dopo sync: **primi mesi** retta crescente (corretto), poi i valori si **resettano a `initial_value=10000`** e restano piatti.
-- Modificando di nuovo (DAILY → WEEKLY) + risync: **nulla cambia** → sospetto hashing `_cache_key` non rileva la variazione.
-
-**Analisi del codice** (`backend/app/services/asset_source_providers/scheduled_investment.py:326+`):
-
-```python
-# Step 2: reset on maturation + generate_interest=True
-if current_date in all_maturation_dates and period and period.generate_interest:
-    if interest_amount > 0:
-        auto_events.append(INTEREST event)
-        total_interest = Decimal("0")   # RESET
-        event_adjustment = Decimal("0")
-
-# Step 4: emit value AT maturation dates (AFTER reset!)
-if current_date in all_maturation_dates:
-    values[current_date] = principal + total_interest + event_adjustment
-```
-
-**Bug candidati**:
-1. **Ordine Step 2 prima di Step 4**: il value emesso a una maturation_date con `generate_interest=True` è **sempre `principal`** (post-reset). Con DAILY + gen_interest=True → ogni giorno reset → serie piatta a 10000. Se lo schedule ha un primo periodo senza reset seguito da uno con reset, si vedrebbe proprio il pattern "retta poi piatto".
-2. **Hashing opacità**: `_cache_key` = `md5(sort_keys(model_dump(mode='json')))`. Dovrebbe rilevare ogni cambio. Se non lo fa:
-   - (a) Il frontend NON invia davvero i nuovi `provider_params` nel PATCH (verificare devtools network).
-   - (b) Il backend rifiuta silenziosamente l'update (verificare `assign_providers_bulk` endpoint).
-   - (c) Edge case Pydantic: un campo con `default_factory` o `exclude_unset` non serializzato.
-
-**Azioni fatte in questa sessione (batch 2 part3)**:
-- `db_populate`: BTP Italia 2028 → `DAILY` + `generate_interest=False` (come richiesto). Dopo `./dev.py db create-clean` deve dare una retta pulita per 4 anni — ottimo regression test visuale.
-- Logging debug in `_generate_schedule_values`: `cache HIT/MISS key=... periods=N first_freq=... first_gen_int=...`. Prossimo retest con log DEBUG attivi permette di vedere se il cache key cambia realmente tra edits.
-- Attivare log: `LIBREFOLIO_LOG_LEVEL=DEBUG ./dev.py server start` oppure filtro grep sul server log per `scheduled_investment cache`.
-
-**Fix proposti (batch 3+)**:
-- **Bug reset**: invertire l'ordine degli step — emettere value PRE-reset (crescita reale visibile in grafico), poi reset per ciclo successivo. Mantiene gli INTEREST events come payout ma mostra la crescita giornaliera/settimanale che l'utente si aspetta.
-- **Hashing**: aggiungere test `test_cache_key_differs_on_frequency_change` + `test_cache_key_differs_on_generate_interest_toggle` + `test_cache_key_identical_on_event_only_change`.
-- **Frontend**: verificare che `ScheduledInvestmentEditor` invii `provider_params` aggiornato via `assign_providers_bulk` (non solo PATCH asset).
-
-**Priorità**: P1 — BTP Italia 2028 è asset dimostrativo nel populate, grafico errato visibile durante smoke test.
-
-### I-bis #24 — Auto-refresh mirato post-sync (last-point-only)  ⏳ PENDING (nuovo, 2026-04-22 batch 2 part1 retest)
-
-**Contesto UX**: dopo aver cliccato "Sync" con provider current-price, se l'utente aspetta il debounce del backend e fa refresh manuale della pagina, il nuovo punto compare. Senza refresh non compare → UX incoerente. In più, anche il bottone "Add manually" dell'empty state (I-bis #6) sarebbe molto più fluido se, dopo il primo save, il pannello empty transitasse direttamente al grafico senza full-reload.
+**Contesto UX**: dopo aver cliccato "Sync" con provider current-price, se l'utente aspetta il debounce del backend e fa refresh manuale della pagina, il nuovo punto compare. Senza refresh non compare → UX incoerente.
 
 **Design proposto**:
-1. **Caso "chart popolato, sync current-price"**: invece di ricaricare tutto `chartData` (causa flash "chart vuoto → chart pieno" + ricalcolo signals + ricalcolo FX conversion), invocare un merge targettato:
-   - Backend già risponde con `inserted_count`, `updated_count` e idealmente con i punti effettivamente toccati. Se non lo fa, va esteso → tornare `points: FAPricePoint[]` (delta) al posto di solo counters.
-   - Frontend: fare un `Map<date, point>` dei punti attuali e applicare le modifiche incrementalmente. Solo il punto odierno (o i punti toccati) viene re-renderizzato.
-   - Ricompute dei signals / FX conversion avviene sullo stesso subset.
-2. **Caso "empty state → primo punto"** (integrazione I-bis #6): quando `chartData.length === 0` e la finestra temporale include oggi, se il sync (o il save manuale) restituisce un punto con `date >= dateStart && date <= dateEnd`, il componente deve transizionare **in-place** dall'empty state al grafico senza ricaricare la pagina:
-   - Già oggi il `{#if chartData.length > 0}` switcha automaticamente se la reattività viene triggerata: basta assicurarsi che `chartData` venga aggiornato.
-3. **Performance**: evitare il re-render completo del chart ECharts. Usare `setOption(..., { replaceMerge: ['series'] })` o `appendData` se disponibile.
+1. Backend: `POST /assets/prices/sync` ritorna anche `changed_points: FAPricePoint[]` (delta) oltre ai counter esistenti.
+2. Frontend: `mergeChartDataIncremental(newPoints)` — merge puntuale invece di full reload.
+3. Empty-state → chart transition in-place quando il primo punto arriva e rientra nella finestra.
 
-**File candidati**:
-- Backend: `backend/app/api/v1/assets.py` endpoint `POST /assets/prices/sync` — aggiungere `changed_points: FAPricePoint[]` nel response model (o esporre via query flag `?return_points=true` per non rompere il wire format esistente).
-- Frontend: `frontend/src/routes/(app)/assets/[id]/+page.svelte` — nuova funzione `mergeChartDataIncremental(newPoints)` invocata da `handleSync`, oltre al flusso attuale "full reload".
-- Frontend: stesso pattern da riusare nel `handleSave` di `AssetDataEditorSection.svelte` (dopo I-bis #24 l'empty → chart flow diventa automatico).
+**Priorità**: P2 — nice-to-have, sinergia con il payload già strutturato dopo I-bis #1+#23 (DONE).
 
-**i18n**: nessuna chiave nuova (il toast di sync esistente resta).
+### I-bis #25 — goBack regression `/fx/{pair}` → `/fx` invece di `/assets/{id}`  ✅ DONE
 
-**Priorità**: **P2** — nice-to-have UX, non blocca Part 4. Rimandabile a batch tail dopo I-bis #1+#23 (che forniscono il payload giusto sul response `/prices/sync`).
+**Sintomo**: dall'asset detail, click su link FX quick-access → `/fx/{slug}`. Bottone back (`goBack('/fx')`) riporta alla lista `/fx` invece che all'asset detail di origine.
 
-**Note**: ha una forte sinergia con I-bis #1+#23 (handler unificato `PriceSyncResponse`): se quel refactor espone già i `changed_points`, il work di I-bis #24 si riduce a soli ~30 min di merge logic frontend.
+**Risoluzione verificata nei sorgenti 2026-04-24** (`AssetPriceSummary.svelte:96-114`): il link FX è già implementato come `<button onclick={() => goto(fxPairUrl)}>` invece di `<a href>`. Il commento esplicativo inline (righe 99-103) chiarisce:
 
-### I-bis #23 — Sync `scheduled_investment`: `status="partial"` non surfacciato al frontend  ⏳ PENDING
+> _"we intentionally use a `<button onclick={goto(...)}>` instead of an `<a href>` here, because this element is wrapped inside `<Tooltip>` whose internal handlers call stopPropagation/preventDefault on click; a native `<a>` ends up triggering a full-page reload (breaking SPA navigation and resetting the navigationStore stack, which in turn breaks goBack() on the destination page)."_
 
-**Contesto**: sync manuale BTP Italia 2028 restituisce 200 OK con `results[0].status="partial"`, `points_changed=0`, `message="Current value only, history unavailable"`. Frontend tratta come errore generico senza esporre il `message`.
+Il fix (a) è stato applicato probabilmente durante un giro di bugfix del Tooltip; retest utente conferma SPA routing funzionante.
 
-**Da fare**:
-- **(a) Backend audit**: `scheduled_investment.sync_asset_history` deve ricalcolare tutti i punti da `start_date` a oggi per un piano periodico. Verificare se il return `partial / Current value only` è corretto o è un path di fallback errato.
-- **(b) Frontend**: handler `PriceSyncResponse` con switch su 4 stati + toast i18n:
-  - `success_count>0 && total_points_changed>0` → verde "N prezzi aggiornati".
-  - `success_count>0 && total_points_changed==0` → giallo "Nessun nuovo prezzo (già aggiornato fino a oggi)".
-  - `errors.length>0 || results[].status=='failed'` → rosso con detail.
-  - `status=='partial'` → giallo con `message` del provider.
-  - i18n: `prices.sync.{success,noChanges,partial,failed}` × 4.
-- **(c) Unificare con I-bis #1**: stessa radice (frontend non distingue "0 rows = OK" vs "0 rows = problema"). Un unico handler condiviso.
+### I-bis #26 — scheduled_investment: reset a initial_value + cache hashing dubbio  ✅ DONE (2026-04-24, Batch 4.c, commit pending)
 
-**Priorità**: P1 — sblocca retest completo scheduled_investment.
+**Sintomo originale** (BTP Italia 2028):
+- Config db_populate originale: `maturation_frequency=SEMIANNUAL`, `generate_interest=True`.
+- Utente l'ha modificata a DAILY + `generate_interest=False` dal frontend.
+- Dopo sync: primi mesi retta crescente (corretto), poi valori resettati a `initial_value=10000` e piatti.
+
+**Causa radice confermata** (`_generate_schedule_values` in `scheduled_investment.py`):
+L'ordine storico era Step 2 (auto-coupon reset) → Step 3 (manual events) → Step 4 (emit value). Per ogni `current_date in all_maturation_dates` con `generate_interest=True`, il reset di `principal` + azzeramento di `total_interest` avveniva **prima** dell'emissione → il punto emesso era sempre il post-reset (piatto su `initial_value`). Con DAILY la maturation era ogni giorno → retta piatta.
+
+Sul sospetto `_cache_key`: **non era la causa**. L'hash MD5 su `model_dump(mode='json')` copre correttamente `maturation_frequency` e `generate_interest` (sono campi `BaseModel` normali, non `exclude_unset`). La ri-sync non mostrava cambi perché il wipe+regen avveniva correttamente ma la serie generata era identica post-reset (retta piatta) indipendentemente dalla frequency. Nessun test `test_cache_key_differs_on_frequency_change` necessario dopo questa verifica.
+
+**Fix applicato** (Batch 4.c):
+- `scheduled_investment.py::_generate_schedule_values`: riordinati i passi:
+  1. **Step 2** (nuovo) = manual events (era Step 3).
+  2. **Step 3** (nuovo) = emit pre-reset value — `values[current_date] = principal + total_interest + event_adjustment` su `current_date in all_maturation_dates`.
+  3. **Step 4** (nuovo) = auto-coupon reset (`generate_interest=True`) — era Step 2.
+- Commenti inline aggiornati con reference a I-bis #26.
+
+**Test aggiunti** (`test_synthetic_yield_integration.py`):
+- `test_generate_interest_daily_emits_pre_reset_value` — assert `values[Jan 2] > 10000` (retta piatta = regression).
+- `test_generate_interest_weekly_shows_sawtooth_peaks` — assert ≥5 picchi > `initial_value` (sawtooth WEEKLY).
+
+**Validazione**: `./dev.py test services synthetic-yield-integration` → PASSED (tutti i test preesistenti + 2 nuovi).
+
+**Priorità originale**: P1 — BTP Italia 2028 è asset dimostrativo nel populate, grafico errato visibile durante smoke test. **Risolto.**
+
+---
+
+### 📦 Già risolti (tracciamento storico, 2026-04-22/24)
+
+| # | Ticket | Risolto in |
+|---|--------|------------|
+| #1 | Post-wipe sync 0 rows — unified handler | ✅ Batch 2 part2 (unified `PriceSyncResponse` 4-stati, commit pre-`8391aac0`) |
+| #3 | Tab label "Prices/Events in {currency} {flag}" | ✅ Batch 2 part1 (`AssetDataEditorSection.svelte` + i18n × 4) |
+| #4 | Import CSV banner reminder | ✅ Batch 2 part1 (`PriceDataImportModal.svelte` + `EventDataImportModal.svelte`) |
+| #6 | Empty-state "Add manually" button | ✅ Batch 2 part1 (`+page.svelte` asset detail) |
+| #12 | Toast reduction currency change (5 → 1) | ✅ Batch 2 part2 (3 toast progress → spinner inline + 1 toast finale) |
+| #23 | scheduled_investment `status=partial` surface | ✅ Batch 2 part2 (insieme a #1, stesso handler `buildAssetSyncToast`) |
+| #25 | goBack FX quick-access link | ✅ Commit intermedio (probabilmente durante refactor Tooltip): `AssetPriceSummary.svelte:108` ora usa `<button onclick={goto}>` con commento esplicativo inline |
+
+**Verifica**: vedere `plan-phase07-transaction-Part3_1_Closure.md` §"Batch 2 part1" e §"Batch 2 part2" per i dettagli implementativi di #1, #3, #4, #6, #12, #23. Per #25 ispezione diretta del sorgente conferma il fix.
 
 ---
 
@@ -582,7 +566,7 @@ per bug report utenti. Non in questo batch.
 | 2 | #R4-2 | FE (ConfirmModal variant rosso) | 20 min | alta | ✅ DONE |
 | 3 | #R4-4 | BE (rimuovere/aggiungere metadata_updated) | 20 min | media | ✅ DONE |
 | 4 | #R4-5 | FE (toast console log in DEV) + HTML strip | 15+10 min | bassa | ✅ DONE |
-| 5 | #R4-3 | FE/BE (chart non aggiorna) | 1-3h (dipende da diagnosi) | alta ma bloccata su diagnosi utente | ✅ DONE |
+| 5 | #R4-3 | FE/BE (chart non aggiorna) | 1-3h (dipende da diagnosi) | alta ma bloccante su diagnosi utente | ✅ DONE |
 
 **Stato Batch 2 part5b**: **5/5 completi**. Risoluzioni:
 
@@ -779,5 +763,377 @@ retest 2026-04-24).
 con la nuova copy del `backupTitle` non c'è più dissonanza cognitiva
 quando compaiono solo i bottoni "Export events" senza i corrispondenti
 "Export prices".
+
+---
+
+## Proposta Batch 4 — UX quick wins pre-Blocco G (opzionale)
+
+_Registrato il 2026-04-24 dopo audit coda I-bis: l'utente ha chiesto
+esplicitamente se proseguire con Blocco G o se restano rifiniture UX
+non notate. Questa sezione propone un batch opzionale di quick-win
+tra Batch 3 e Blocco G._
+
+**Motivazione**: il Blocco G è ~8-10h di test coverage puri (zero
+valore UX percepibile, puro hardening). Prima di entrarci conviene
+eliminare 2-3 irritazioni persistenti che l'utente incontra ogni
+giorno e che rischiano di accumulare altri retest findings.
+
+### Candidati
+
+| # | Ticket | Tempo | Beneficio | Rischio |
+|---|--------|------:|-----------|---------|
+| #2 | "Save Without Testing?" gating (dirty-bit provider) | ~45 min | Alto (ogni save asset) | Basso |
+| #26 | scheduled_investment reset bug — **solo diagnosi** (log attivati + SQL dump) | ~30 min | Alto se confermato | Zero (no fix) |
+
+**Totale**: ~1h15min per #2 + diagnosi #26. Il fix reale di #26
+(inversione Step 2/4 + test cache key) resta per Batch 5 dopo conferma
+diagnostica.
+
+### Ordine suggerito
+
+1. **#2** (più impatto, più bassa complessità):
+   - Aggiungere `$state provider_dirty: boolean` in `AssetModal.svelte`.
+   - `$effect` che traccia `providerCode, providerIdentifier,
+     providerIdentifierType, providerParams` contro snapshot iniziale.
+   - Nel gate del "Save Without Testing?" modal: `if (!provider_dirty)
+     → skip modal, go straight to save`.
+   - Retest manuale: modificare solo `name`/`description` → no modal;
+     modificare `providerCode` → modal compare; cancel → modal
+     dismissed; confirm → save procede.
+   - Nessun i18n change.
+
+2. **#26 diagnosi** (no fix, solo dati):
+   - Attivare `LIBREFOLIO_LOG_LEVEL=DEBUG` sul server.
+   - Ripetere lo scenario BTP Italia 2028: DAILY + generate_interest=True.
+   - Catturare log `scheduled_investment cache HIT/MISS` + query SQL
+     `SELECT date, close FROM price_history WHERE asset_id=N ORDER BY
+     date LIMIT 30`.
+   - Aggiungere output al plan sotto §I-bis #26 come "Diagnosi
+     2026-04-XX" così Batch 5 può partire dal log reale.
+
+### Commit strategy
+
+**Un commit per ticket** (#2 separato), più 1 commit di solo journal
+per la diagnosi #26.
+
+### Decisione utente richiesta
+
+- **Opzione A** — Batch 4 ora (~1h15), poi Blocco G.
+- **Opzione B** — Blocco G subito (~8-10h), poi Batch 4 + altri I-bis.
+- **Opzione C** — Solo #2 ora (45 min, il tuo annoyance principale),
+  poi Blocco G, poi il resto.
+
+Raccomandazione mia: **Opzione C**. #2 è l'unico ticket che l'utente
+ha menzionato esplicitamente come persistente, #26 può aspettare il
+giro diagnostico dopo Blocco G.
+
+
+---
+
+## Retest Batch 4 — esiti sezione per sezione (2026-04-24)
+
+_Registrato dopo giro di smoke test manuale della [checklist
+4.a/4.b/4.c/4.d-part1](./checklist-phase07-batch4-pretest.md)._
+
+### Esiti sintetici
+
+| Sezione | Ticket | Esito | Note |
+|---------|--------|:-----:|------|
+| 1.1 | #2 edit nome → no modal | ✅ | |
+| 1.2 | #2 edit identifier → modal | ✅ | |
+| **1.3** | **#2 edit providerCode → modal** | ❌ → ✅ | **bug trovato, fix applicato (vedi #R6-1)** |
+| 1.4 | #2 edit providerParams | ✅ | + banner regenerate prezzi (corretto) |
+| 1.5 | #2 Test Provider → no modal | ✅ | |
+| 1.6 | #2 create con provider | ✅ | |
+| 1.7 | #2 create senza provider | ✅ | |
+| Bonus | Search + Save → no modal | ✅ | testStatus='passed' via autoTriggerProbe |
+| 2.1 | #7 currency change con prezzi | ✅ | HTTP 409 in Network tab, UX invariata |
+| 2.2 | #7 currency change senza prezzi | ✅ | 200, no 409 |
+| 2.3 | #7 bulk multi-asset misto | ⏭️ | skippato — richiede curl raw |
+| 3.x | #26 sawtooth + DAILY/WEEKLY | ✅ con caveat | → vedi #R6-2 e #R6-3 |
+| 4.1 | #22 Broker create happy | ✅ | |
+| 4.2 | #22 Broker duplicato | ✅ | banner inline, no toast (utente conferma OK) |
+| 4.3 | #22 Broker update happy | ✅ | |
+| 4.4 | #22 Broker update offline | ✅ | banner inline + toast, modal resta aperta |
+| 4.5 | #22 Backup export offline | ✅ | toast `Download a backup before proceeding: Network Error` |
+| 4.6 | #22 wipe fallisce | ⏭️ | skippato — invasivo |
+| 4.7 | #22 post-wipe sync fallisce | ⏭️ | skippato |
+| 4.8 | #22 uniformità console toast | ✅ | `[Toast] [error] <prefix>: <detail>` coerente |
+| R.1..R.4 | regressione | ✅ | login, asset detail, i18n, console pulita |
+
+### #R6-1 — I-bis #2 bug: cambio `providerCode` droppa silenziosamente il save  ✅ FIXED (2026-04-24, Batch 4 post-retest)
+
+**Sintomo** (test 1.3): dall'edit asset, cambio del dropdown provider
+(Yahoo → JustETF) senza cliccare Test. Atteso: modal "Save Without
+Testing?". Osservato: **nessun modal, nessuna chiamata `/provider`, il
+nuovo provider non viene persistito** (alla riapertura dell'edit il
+provider è ancora Yahoo).
+
+**Causa radice**: `ProviderAssignmentSection.handleProviderChange` azzera
+l'`identifier` on purpose (formati ID diversi tra provider). Con
+identifier vuoto e `identifierType='TICKER'`, `hasProvider` diventa
+`false`. Questo produce una doppia regressione:
+1. Il gate `handleSave` (`hasProvider && providerDirty && !passed`)
+   non triggera il modal perché `hasProvider=false`.
+2. In `saveEdit` lo Step 2 ha due rami:
+   - `if (providerNoProvider) → remove` — skip, l'utente non ha spuntato "No provider".
+   - `else if (hasProvider) → assign` — skip, `hasProvider=false`.
+   Risultato: il PATCH asset parte (aggiorna solo metadata), ma il
+   provider change viene droppato silenziosamente. Nessun feedback.
+
+**Fix applicato** (`AssetModal.svelte::handleSave`):
+Aggiunta pre-guard prima del gate modal:
+```ts
+if (editMode && providerDirty && !providerNoProvider && providerCode !== '' && !hasProvider) {
+    formError = $t('assets.modal.providerIncomplete');
+    // scroll error into view
+    return;
+}
+```
+Se l'utente ha cambiato provider ma non completato l'identifier, viene
+mostrato un errore esplicito "You changed the provider but left the
+identifier empty. Please fill the identifier (or tick 'No provider')
+before saving."
+
+**i18n × 4**: nuova chiave `assets.modal.providerIncomplete` in
+`en.json`, `it.json`, `fr.json`, `es.json`.
+
+**Validazione**: `./dev.py front check` → 0/0. Retest manuale 1.3 da
+ripetere.
+
+### #R6-2 — scheduled_investment: `current_price` non considera eventi sottrattivi  ✅ FIXED (2026-04-24, Batch 4 post-retest)
+
+**Sintomo osservato dall'utente** (retest sezione 3): il
+`current_price` del provider `scheduled_investment` ritorna il valore
+giornaliero calcolato **dall'inizio dello schedule** senza considerare
+gli eventi sottrattivi (coupon già pagati, PRICE_ADJUSTMENT negativi)
+che ci sono stati nel mezzo. Risultato: con `generate_interest=True`,
+il valore corrente mostrato è il **picco pre-reset** dell'ultima
+maturation date invece del valore accruato intra-ciclo.
+
+**Causa radice** (`scheduled_investment.py::get_current_value`):
+quando `target_date` non è in `cached` (cioè in mezzo a due maturation
+dates, caso tipico per SEMIANNUAL/WEEKLY), il ramo di fallback faceva
+un backward-fill:
+```python
+earlier_dates = [d for d in cached.keys() if d <= target_date]
+value = cached[max(earlier_dates)]  # = picco pre-reset del coupon precedente!
+```
+Post fix 4.c i valori cached sono pre-reset (corretto per il grafico),
+ma il backward-fill così fatto ritorna un valore stantio: oggi (Oct 15)
+dopo il coupon del 1 luglio dovrebbe essere ~principal + 3.5 mesi di
+accrual, non il picco di luglio.
+
+**Fix applicato**: nuovo helper `_compute_value_at(schedule, target_date)`
+che **ri-walka** lo schedule giorno per giorno fino a `target_date`
+applicando gli stessi Step 1-4 di `_generate_schedule_values`:
+- Step 1 — accrual giornaliero.
+- Step 2 — applicazione eventi manuali (INTEREST sottrattivo,
+  PRICE_ADJUSTMENT additivo).
+- Step 3 — se siamo al `target_date` → emetti il valore corrente e
+  interrompi.
+- Step 4 — altrimenti, se è una maturation date con
+  `generate_interest=True`, applica il reset e continua.
+
+Il ramo "between maturation" di `get_current_value` ora chiama
+`_compute_value_at` invece del backward-fill. Gli altri rami
+(post-maturity, before-schedule, exact cached date) restano invariati.
+
+**Costo**: O(days-since-start). Per schedule di 10 anni = 3650 iterazioni
+in Python puro, ~50-100ms wall. Accettabile perché chiamato solo al sync
+del current price (non nel hot path). Nessun caching aggiunto — la
+semantica "giorno specifico" non beneficia del cache tuple esistente.
+
+**Test regression aggiunti** (`test_synthetic_yield_integration.py`):
+- `test_compute_value_at_semiannual_after_first_coupon_is_close_to_principal`:
+  dopo coupon SEMIANNUAL + 1 giorno, valore ~principal (non ~peak).
+- `test_compute_value_at_semiannual_mid_cycle_grows_monotonically`:
+  serie Aug<Sep<Oct nel mid-cycle post-coupon.
+- `test_compute_value_at_respects_manual_interest_subtractive_event`:
+  un evento INTEREST manuale riduce il valore sulla sua data.
+- `test_compute_value_at_returns_none_outside_schedule`: edge case.
+
+Tutti verdi: `./dev.py test services synthetic-yield-integration` → PASSED.
+
+### #R6-3 — Scheduled Investment: frequenze prezzi/cedola disaccoppiate + anchor date  📋 TRACCIATO IN TODO_FUTURI
+
+**Richiesta utente**: "se attiviamo il flag della cedola, ogni volta
+che si genera l'evento, si resetta anche il valore, potrebbe servire
+estendere sia il json di scheduling che la tabella sul frontend per
+permettere di scegliere la frequenza di calcolo dei prezzi e se la
+cedola è attiva la frequenza di calcolo della cedola, ed eventualmente
+il giorno del mese/settimana/anno in cui cade."
+
+**Stato**: design proposto ma **non implementato in questo batch** —
+richiede estensione schema Pydantic + nuovo enum `CouponAnchor` + 3
+campi FE + retrocompatibilità + test parametrici. Costo stimato 7-10h.
+
+Tracciato come TODO futuro in
+[`TODO_FUTURI.md`](../../TODO_FUTURI.md) §"Scheduled Investment —
+Frequenze disaccoppiate (prezzi vs cedola) + anchor day".
+
+---
+
+### Priorità Batch 4 post-retest
+
+| # | Ticket | Area | Stato |
+|---|--------|------|:-----:|
+| 1 | #R6-1 | FE (AssetModal pre-guard) + i18n × 4 | ✅ FIXED |
+| 2 | #R6-2 | BE (scheduled_investment current_price) + 4 test regression | ✅ FIXED |
+| 3 | #R6-3 | Scheduling flexibility | 📋 TODO_FUTURI |
+| 4 | #R6-4 | BE (asset_source param-change event wipe + tx disconnect) | ✅ FIXED |
+| 5 | #R6-5 | FE (AssetModal auto-sync also on non-parametric provider change) | ✅ FIXED |
+| 6 | #R6-6 | UX (BrokerImportFilesModal: adottare toast per upload) | ⏳ PENDING |
+| 7 | #R6-7 | UX (BrokerImportFilesModal: ConfirmModal prima di bulk delete) | ⏳ PENDING |
+| 8 | #R6-8 | UX (BrokerSharingModal: success → toast + chiude, non banner) | ⏳ PENDING |
+
+**Stato Batch 4 aggiornato**:
+- 4.a #2 Save Without Testing gating → ✅ DONE + post-retest fix #R6-1.
+- 4.b #7 HTTP 409 semantics → ✅ DONE.
+- 4.c #26 scheduled_investment pre-reset value → ✅ DONE + retest bonus #R6-2 (current_price intra-cycle accrual) + #R6-4 (event wipe on params change).
+- 4.d-part1 #22 saveWithRetry helper + 2 modal → ✅ DONE.
+- 4.d-part2 #22 saveWithRetry adozione 5 modali residui (PasswordChange, FxPairAdd, BrokerImportFiles, BrokerSharing, AssetModal) → ✅ DONE + bonus #R6-5 (auto-sync su provider change) + 3 design-drift findings #R6-6/#R6-7/#R6-8 emersi in retest (sub-batch 4.d-part3 da pianificare).
+- 4.e #5 CSV resilience → ⏳ TBD.
+- 4.f #24 changed_points delta → ⏳ TBD.
+
+**Batch 4 commit ready**: tutto il lavoro pendente (parts 4.a/4.b/4.c/4.d
++ findings #R6-1..#R6-5) è in blocco nel working tree, pronto per il
+commit unico. Validazione finale 2026-04-24: `./dev.py lint` → passed,
+`./dev.py front check` → 0 errors / 0 warnings, `./dev.py i18n audit` →
+897 keys all complete.
+
+I findings #R6-6/#R6-7/#R6-8 **non bloccano** il commit Batch 4 (sono
+drift di design emersi solo durante il retest, non regressioni
+introdotte da 4.d-part2 — il comportamento oggetto delle modifiche è
+conforme a quanto pianificato). Verranno affrontati in un follow-up
+dedicato **Batch 4.d-part3** post-commit.
+
+---
+
+### Retest Batch 4.d-part2 — esiti happy/bad-flow (2026-04-24)
+
+Checklist completa eseguita: vedi `/tmp/libreFolio_batch4dPart2_retest_checklist.md` (5 modali, 28 check).
+
+**Esiti sintetici**
+
+| Modal | Happy | Bad (network/validation) | Semantica speciale | Finding |
+|-------|:-----:|:------------------------:|:------------------:|:-------:|
+| 1. PasswordChangeModal | ✅ | ✅ | ✅ (onError + InfoBanner preservato) | — |
+| 2. FxPairAddModal | ✅ | ✅ | ✅ (auto-sync isolation) | — |
+| 3. BrokerImportFilesModal | ✅ (senza toast) | ✅ | 🟡 design obsoleto | **#R6-6**, **#R6-7** |
+| 4. BrokerSharingModal | ✅ (ma banner post-success invece di toast+close) | ✅ | 🟡 design obsoleto | **#R6-8** |
+| 5. AssetModal (5a/5b/5c/5d) | ✅ | ✅ | ✅ (409 dup + 409 currency + #R6-5 auto-sync) | — |
+| 5e. #R6-1 pre-guard | ⏭️ SKIP (già testato in 4.a retest) | ⏭️ SKIP | — | — |
+| 3c-2 bulk delete partial | ⏭️ SKIP (richiede mock backend) | — | — | — |
+
+**Conclusione**: `saveWithRetry` è adottato correttamente in tutte le 5
+modali — modale-resta-aperta, errori non consumati, semantiche
+preservate. Tre drift di design rispetto all'app evoluta sono emersi
+come sotto-findings indipendenti dall'adozione del helper.
+
+---
+
+### #R6-6 — BrokerImportFilesModal: adottare toast per upload  ⏳ PENDING
+
+**Origine**: retest 4.d-part2 sezione 3a (2026-04-24).
+
+**Problema**: l'upload files attualmente **non emette toast** né di success
+né di errore (affida il feedback a `error` inline della modale e al refresh
+della lista). Questo era coerente con il design originale della modale
+(gestionale, resta aperta) ma **non è più coerente** con il resto dell'app
+evoluto, dove ogni save produce toast conferma.
+
+**Fix proposto**:
+- In `BrokerImportFilesModal.svelte`, loop upload: per ogni file
+  caricato con successo emettere `toast.success($t('uploads.uploadSucceeded', {values: {file: file.name}}))`.
+- Al termine del loop, se almeno 1 success → toast riepilogo
+  (`$t('uploads.uploadBatchSucceeded', {values: {count}})`), se tutti
+  fail → toast error già gestito da `saveWithRetry` (di per sé ok).
+- Errore singolo file: passare a `toast: true` in `saveWithRetry` per
+  avere toast dedicato con `prefix: file.name`.
+
+**i18n nuove × 4**: `uploads.uploadSucceeded`, `uploads.uploadBatchSucceeded`
+(verificare se già esistenti — alcune chiavi `uploads.*` ci sono già).
+
+**File**:
+- `frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte`
+  → handler upload (funzione loop già migrata in 4.d-part2).
+- `frontend/src/lib/i18n/{en,it,fr,es}.json`.
+
+**Effort**: ~30 min. **Rischio**: basso.
+
+---
+
+### #R6-7 — BrokerImportFilesModal: ConfirmModal prima di bulk delete  ⏳ PENDING
+
+**Origine**: retest 4.d-part2 sezione 3c-1 (2026-04-24).
+
+**Problema**: l'azione "Delete selected" su N file si esegue **senza
+conferma**. È una distruzione bulk irreversibile — il design attuale
+dell'app usa `ConfirmModal` (rosso, destructive) per tutte le azioni
+analoghe (delete asset, delete transaction, revoke access, ecc.).
+
+**Fix proposto**:
+- Aggiungere `ConfirmModal` destructive con:
+  - title `$t('uploads.confirmBulkDelete.title')`
+  - message `$t('uploads.confirmBulkDelete.message', {values: {count}})`
+  - variant `destructive`
+  - confirm label `$t('common.delete')`.
+- Il PUT/DELETE bulk parte solo dopo `onconfirm`.
+
+**i18n nuove × 4**: `uploads.confirmBulkDelete.title`, `uploads.confirmBulkDelete.message`.
+
+**File**:
+- `frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte`
+  → gating del bulk delete tramite stato `confirmBulkDeleteOpen`.
+- `frontend/src/lib/i18n/{en,it,fr,es}.json`.
+
+**Effort**: ~20 min. **Rischio**: basso. **Priorità**: medio-alta
+(gap UX evidente).
+
+---
+
+### #R6-8 — BrokerSharingModal: success → toast + close (non banner)  ⏳ PENDING
+
+**Origine**: retest 4.d-part2 sezione 4 (2026-04-24).
+
+**Problema**: il save sharing termina **success** mostrando un **banner
+inline** e **lasciando la modale aperta**. Il pattern corretto (e
+uniforme con il resto dell'app dopo l'evoluzione del design) è:
+- success → `toast.success(...)` + `onclose()` della modale.
+- error → banner inline persistente (attuale comportamento del ramo error
+  è ok, da mantenere).
+
+**Fix proposto** in `BrokerSharingModal.svelte::handleSave`:
+```ts
+const result = await saveWithRetry(/* ... */);
+if (result.status === 'ok') {
+    toast.success($t('brokers.sharing.saveSucceeded'));
+    onclose();
+    return;
+}
+// ramo error invariato: banner inline via `error = result.message`
+```
+
+Rimuovere `successMessage` / banner di success dal markup se presente.
+
+**i18n nuova × 4**: `brokers.sharing.saveSucceeded` (verificare se già
+esistente).
+
+**File**:
+- `frontend/src/lib/components/brokers/BrokerSharingModal.svelte`.
+- `frontend/src/lib/i18n/{en,it,fr,es}.json`.
+
+**Effort**: ~15 min. **Rischio**: basso.
+
+---
+
+### Sub-batch 4.d-part3 (follow-up pianificato)
+
+Raccogliere #R6-6 + #R6-7 + #R6-8 in un sub-plan dedicato
+`plan-phase07-transaction-Part3_1_Closure_2-Batch4dPart3.prompt.md`
+**dopo** il commit Batch 4. Effort totale stimato: ~1h15 + i18n audit.
+Ordine consigliato: #R6-7 (ConfirmModal, maggiore impatto UX) → #R6-8
+(simmetria pattern) → #R6-6 (cosmetico, toasts).
 
 

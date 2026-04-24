@@ -10,6 +10,7 @@
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import {saveWithRetry} from '$lib/utils/saveWithRetry';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -70,31 +71,33 @@
         loading = true;
         error = null;
 
-        try {
-            // Create transaction - use cash object for cash movement
-            // DEPOSIT: cash.amount > 0, WITHDRAWAL: cash.amount < 0
-            const cashAmount = type === 'DEPOSIT' ? amount : -amount;
-            await zodiosApi.create_transactions_bulk_api_v1_transactions_bulk_post([
-                {
-                    broker_id: brokerId,
-                    type: type,
-                    date: date,
-                    cash: {
-                        code: currency,
-                        amount: cashAmount,
+        // I-bis #22 — route through ``saveWithRetry`` so HTTP failures
+        // surface via a toast + keep the modal open with ``error`` banner,
+        // instead of closing on success only and swallowing errors to console.
+        const cashAmount = type === 'DEPOSIT' ? amount : -amount;
+        const result = await saveWithRetry(
+            () =>
+                zodiosApi.create_transactions_bulk_api_v1_transactions_bulk_post([
+                    {
+                        broker_id: brokerId,
+                        type: type,
+                        date: date,
+                        cash: {
+                            code: currency,
+                            amount: cashAmount,
+                        },
+                        description: description || undefined,
                     },
-                    description: description || undefined,
-                },
-            ]);
-
-            dispatch('success');
-            dispatch('close');
-        } catch (e) {
-            console.error('Failed to create transaction:', e);
-            error = 'Failed to create transaction';
-        } finally {
-            loading = false;
+                ]),
+            {fallback: $_('brokers.cashTransactionFailed', {default: 'Failed to create transaction'})},
+        );
+        loading = false;
+        if (result.status === 'error') {
+            error = result.message;
+            return;
         }
+        dispatch('success');
+        dispatch('close');
     }
 
     function handleClose() {

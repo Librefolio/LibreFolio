@@ -315,13 +315,15 @@
       "duplicateName": "Un actif avec ce nom existe déjà",
       "duplicateNameWarning": "Un actif nommé \"{name}\" existe déjà",
       "duplicateNameTooltip": "Un actif portant ce nom existe déjà. Vous pouvez modifier l'actif existant au lieu d'en créer un nouveau.",
+      "providerIncomplete": "Vous avez changé le fournisseur mais laissé l'identifiant vide. Veuillez renseigner l'identifiant (ou cocher « Aucun fournisseur ») avant d'enregistrer.",
       "createSuccess": "\"{name}\" créé avec succès",
       "saveSuccess": "\"{name}\" mis à jour avec succès",
       "moreInfo": "Plus d'infos",
       "createSuccessProviderFailed": "Actif \"{name}\" créé, mais attribution du fournisseur échouée. Assignez-le manuellement.",
       "scheduledRegenTitle": "Régénérer les Prix ?",
       "scheduledRegenMessage": "La modification de ces paramètres supprimera l'historique des prix existant et le régénérera avec le nouveau planning. Cette action est irréversible. Continuer ?",
-      "scheduledRegenConfirm": "Régénérer"
+      "scheduledRegenConfirm": "Régénérer",
+      "saveFailed": "Échec de l'enregistrement de l'actif"
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -470,7 +472,8 @@
       "noProviderWarning": "Aucun fournisseur configuré. Vous devrez saisir manuellement les taux de change pour chaque date.",
       "createIntermediatePairs": "Créer aussi les paires intermédiaires",
       "createIntermediatePairsHint": "Chaque étape des chaînes sélectionnées sera sauvegardée comme paire autonome avec son fournisseur, afin de pouvoir les synchroniser indépendamment.",
-      "titleEdit": "Modifier les Fournisseurs"
+      "titleEdit": "Modifier les Fournisseurs",
+      "createFailed": "Échec de la création de la paire FX"
     },
     "sync": {
       "title": "Synchroniser les taux FX",
@@ -682,7 +685,8 @@
     "imageUrl": "URL de l'Image",
     "useSelected": "Utiliser la Sélection",
     "selectIcon": "Sélectionner une Icône",
-    "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers"
+    "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers",
+    "deleteFailedSome": "Échec de la suppression de {count} fichier(s)"
   },
   "datePicker": {
     "from": "Du",

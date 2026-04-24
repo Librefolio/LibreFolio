@@ -338,7 +338,31 @@ def _generate_schedule_values(
                         time_fraction=day_fraction,
                     )
 
-        # === D8 Step 2: Auto-coupon at maturation date (generate_interest) ===
+        # === D8 Step 2: Apply manual events on this date ===
+        # (formerly Step 3; moved up so Step 3 below can emit the pre-reset value)
+        if current_date in events_by_date:
+            for evt in events_by_date[current_date]:
+                if evt.type == "INTEREST":
+                    event_adjustment -= evt.value.amount
+                elif evt.type == "PRICE_ADJUSTMENT":
+                    event_adjustment += evt.value.amount
+
+        # === D8 Step 3: Emit value at maturation dates (I-bis #26 — pre-reset) ===
+        # Previously this step ran AFTER the auto-coupon reset (old Step 4 after
+        # Step 2), which meant every maturation date emitted the post-reset
+        # ``principal`` value. With generate_interest=True + DAILY frequency
+        # this produced a flat ``initial_value`` series ("retta piatta" bug).
+        # Now we emit the accrued value FIRST, so the chart shows the real
+        # growth up to the coupon payout; the reset in Step 4 below then
+        # restarts the accrual for the next cycle.
+        if current_date in all_maturation_dates:
+            values[current_date] = principal + total_interest + event_adjustment
+
+        # === D8 Step 4: Auto-coupon at maturation date (generate_interest) ===
+        # (formerly Step 2; moved down so the emitted value in Step 3 above
+        # is the pre-reset accrued one. The INTEREST auto-event date is still
+        # the maturation date, matching the point where the spike is visible
+        # in the chart.)
         if current_date in all_maturation_dates and period and period.generate_interest:
             current_value = principal + total_interest + event_adjustment
             interest_amount = current_value - principal
@@ -356,17 +380,6 @@ def _generate_schedule_values(
                 total_interest = Decimal("0")
                 event_adjustment = Decimal("0")
 
-        # === D8 Step 3: Apply manual events on this date ===
-        if current_date in events_by_date:
-            for evt in events_by_date[current_date]:
-                if evt.type == "INTEREST":
-                    event_adjustment -= evt.value.amount
-                elif evt.type == "PRICE_ADJUSTMENT":
-                    event_adjustment += evt.value.amount
-
-        # === D8 Step 4: Emit value only at maturation dates ===
-        if current_date in all_maturation_dates:
-            values[current_date] = principal + total_interest + event_adjustment
         current_date += timedelta(days=1)
 
     # === D6: MATURITY_SETTLEMENT at end of schedule (if no late interest) ===
@@ -385,6 +398,132 @@ def _generate_schedule_values(
     result = (values, auto_events)
     _CACHE.set(key, result)
     return result
+
+
+def _compute_value_at(
+    schedule: FAScheduledInvestmentSchedule,
+    target_date: date_type,
+) -> Decimal | None:
+    """
+    Compute the accrued value at ``target_date`` — the "current_price"
+    helper.
+
+    **Why this exists** (retest 2026-04-24, follow-up to I-bis #26 fix):
+    ``_generate_schedule_values`` only emits values at *maturation dates*
+    (so the cached dict is sparse for SEMIANNUAL / WEEKLY schedules).
+    Previously, ``get_current_value`` would backward-fill from the most
+    recent maturation date, which returned the **pre-reset peak** — i.e.
+    the value right before the auto-coupon was paid. That is wrong for any
+    day **after** a coupon: the real accrual has restarted from
+    ``initial_value`` (D1/D2 reset) and only the intra-cycle days matter.
+
+    Example (BTP-style, SEMIANNUAL, generate_interest=True, start Jan 1):
+      - cached[Jul 1] = principal + 6mo interest  (peak, pre-reset)
+      - On Jul 2 the value resets to ``initial_value``.
+      - Today = Oct 15 → the correct value is ``initial_value + 3.5mo
+        interest``, *not* cached[Jul 1].
+
+    This function re-walks the schedule day-by-day up to ``target_date``
+    and returns the running value at that exact day, correctly applying
+    manual subtractive events (INTEREST coupons, PRICE_ADJUSTMENT) AND
+    auto-coupon resets along the way.
+
+    The walk is bounded by ``target_date`` (not ``last_end``) so cost is
+    O(days-since-start); no caching is needed because this is called
+    once per current-price sync. ``_generate_schedule_values`` remains
+    the cached source of truth for the *history* curve.
+
+    Returns:
+        ``Decimal`` with the accrued value at ``target_date``, or
+        ``None`` if ``target_date`` falls outside the schedule range
+        (caller decides fallback).
+    """
+    if not schedule.schedule:
+        return None
+
+    first_start = schedule.schedule[0].start_date
+    last_end = schedule.schedule[-1].end_date
+    if target_date < first_start or target_date > last_end:
+        return None
+
+    principal = schedule.initial_value.amount
+    is_compound = schedule.interest_type == InterestType.COMPOUND
+    convention = schedule.day_count
+
+    # Pre-compute all maturation dates (identical to _generate_schedule_values).
+    all_maturation_dates: set[date_type] = set()
+    for p in schedule.schedule:
+        all_maturation_dates |= _compute_maturation_dates(p.start_date, p.end_date, p.maturation_frequency)
+
+    # Pre-index manual events by date.
+    events_by_date: dict[date_type, list] = {}
+    for e in schedule.asset_events:
+        events_by_date.setdefault(e.date, []).append(e)
+
+    total_interest = Decimal("0")
+    event_adjustment = Decimal("0")
+    current_date = first_start
+    current_period_idx = 0
+
+    while current_date <= target_date:
+        # Find active period for this date
+        period = None
+        for i in range(current_period_idx, len(schedule.schedule)):
+            p = schedule.schedule[i]
+            if p.start_date <= current_date <= p.end_date:
+                period = p
+                current_period_idx = i
+                break
+
+        # Step 1: daily interest increment
+        if period is not None and current_date > first_start:
+            day_fraction = calculate_day_count_fraction(
+                start_date=current_date - timedelta(days=1),
+                end_date=current_date,
+                convention=convention,
+            )
+            if day_fraction > 0:
+                if is_compound:
+                    base = principal + total_interest
+                    total_interest += calculate_simple_interest(
+                        principal=base,
+                        annual_rate=period.annual_rate,
+                        time_fraction=day_fraction,
+                    )
+                else:
+                    total_interest += calculate_simple_interest(
+                        principal=principal,
+                        annual_rate=period.annual_rate,
+                        time_fraction=day_fraction,
+                    )
+
+        # Step 2: manual events on this date (subtractive INTEREST, additive PRICE_ADJUSTMENT)
+        if current_date in events_by_date:
+            for evt in events_by_date[current_date]:
+                if evt.type == "INTEREST":
+                    event_adjustment -= evt.value.amount
+                elif evt.type == "PRICE_ADJUSTMENT":
+                    event_adjustment += evt.value.amount
+
+        # If this is the target date, capture the pre-reset value and stop.
+        # We return the value AFTER manual events of the day were applied
+        # but BEFORE the auto-coupon reset would fire, matching the chart
+        # peak emitted by ``_generate_schedule_values``.
+        if current_date == target_date:
+            return principal + total_interest + event_adjustment
+
+        # Step 4: auto-coupon reset at maturation date (generate_interest=True).
+        if current_date in all_maturation_dates and period and period.generate_interest:
+            current_value = principal + total_interest + event_adjustment
+            interest_amount = current_value - principal
+            if interest_amount > 0:
+                total_interest = Decimal("0")
+                event_adjustment = Decimal("0")
+
+        current_date += timedelta(days=1)
+
+    # Safe fallback; unreachable given the early return when current_date==target_date.
+    return principal + total_interest + event_adjustment
 
 
 def _compute_late_interest_value(
@@ -607,6 +746,9 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 )
 
             if target_date in cached:
+                # Exact cached maturation date: use the pre-reset peak directly.
+                # ``_generate_schedule_values`` already applies manual events and
+                # auto-coupon logic symmetrically here.
                 value = cached[target_date]
             elif cached and target_date > max(cached.keys()):
                 # Post-maturity: compute late interest one-shot
@@ -616,12 +758,15 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 # Before schedule: return initial_value
                 value = schedule.initial_value.amount
             elif cached:
-                # Between maturation dates: use most recent cached value (backward-fill)
-                earlier_dates = [d for d in cached.keys() if d <= target_date]
-                if earlier_dates:
-                    value = cached[max(earlier_dates)]
-                else:
-                    value = schedule.initial_value.amount
+                # Between maturation dates — retest 2026-04-24: backward-fill
+                # from the most recent maturation date was WRONG when
+                # ``generate_interest=True``, because it returned the peak value
+                # BEFORE the coupon reset. Real accrual has restarted from
+                # principal and only intra-cycle days matter.
+                # ``_compute_value_at`` walks the schedule up to ``target_date``
+                # applying the same reset semantics as ``_generate_schedule_values``.
+                computed = _compute_value_at(schedule, target_date)
+                value = computed if computed is not None else schedule.initial_value.amount
             else:
                 value = schedule.initial_value.amount
 

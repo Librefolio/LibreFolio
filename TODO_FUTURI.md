@@ -683,6 +683,43 @@ da quando parte lo schedule.
 - Alembic: **nessuna** migrazione (campo in JSON `provider_params`,
   retro-compat via default sull'assenza).
 
+### ⚠️ Caveat current_price (retest Batch 4, 2026-04-24)
+
+Durante il retest 3.2/3.3 (BTP DAILY/WEEKLY regen) è emerso che il
+**current_price** del provider Scheduled Investment **non è ancora
+del tutto coerente con gli eventi intermedi** (coupon reset +
+price_adjustment) quando la frequenza coupon e la frequenza prezzi
+sono disaccoppiate — anche dopo i fix #R6-2 (`_compute_value_at`
+backward-walk) e #R6-4 (event wipe simmetrico).
+
+**Sintomo osservato**: dopo rigenerazione DAILY/WEEKLY il chart
+storico è corretto (sawtooth visibile), la tab Events è pulita
+(niente coupon stantii), ma il **valore "oggi"** mostrato nelle
+card asset può divergere rispetto a quanto ricostruibile a mano
+dalla schedule — tipicamente perché il ramo "intra-cycle" di
+`get_current_value` assume coincidenza tra evento coupon e punto
+di emissione prezzo, che nel modello disaccoppiato non vale più.
+
+**Cosa fare quando si apre il ticket #R6-3**:
+
+1. **Ripensare `get_current_value`** insieme a `_compute_value_at`:
+   deve camminare lo schedule reale con i due set indipendenti
+   (`price_emission_dates` ≠ `coupon_dates`) e applicare gli
+   eventi nel loro ordine cronologico reale, non presumendo
+   lockstep.
+2. **Estendere `test_synthetic_yield_integration.py`** con casi
+   parametrici che verifichino `current_price` in date "scomode":
+   - il giorno dopo un coupon (deve scendere)
+   - a metà ciclo con rateo parziale
+   - nel gap tra due price-emission date consecutive (nessun
+     evento nel mezzo)
+   - con `price_frequency=DAILY` + `coupon_frequency=ANNUAL`
+     (il caso realistico BTP) — verifica che il valore cambi
+     ogni giorno ma il reset avvenga solo alla data cedola.
+3. **Includere `current_price` nella matrice di regressione** del
+   provider, non solo gli storici. Oggi le 4 regression aggiunte
+   in 4.c coprono solo il passato.
+
 ### Cross-link
 
 - Rilevato durante retest Batch 4 sezione 3 (I-bis #26):

@@ -32,6 +32,7 @@
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
+    import {saveWithRetry} from '$lib/utils/saveWithRetry';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/uuid';
     import {ensureAssetProvidersCached, isParametricProvider} from '$lib/utils/providerHelpers';
@@ -146,6 +147,15 @@
     let pendingSaveAssetId = $state<number | null>(null);
     let initialProviderParamsJson = $state<string>('');
 
+    // I-bis #2 — snapshot of the provider config as loaded from the DB.
+    // Used by the ``providerDirty`` derived below to gate the
+    // "Save Without Testing?" modal: it must fire **only** when one of
+    // these four fields changed vs what was loaded. Non-provider edits
+    // (name, description, classification, etc.) skip the modal entirely.
+    let initialProviderCode = $state<string>('');
+    let initialProviderIdentifier = $state<string>('');
+    let initialProviderIdentifierType = $state<string>('TICKER');
+
     // I.6 — destructive currency-change modal state.
     let currencyChangeModalOpen = $state(false);
     let currencyChangeBlocker = $state<{
@@ -190,6 +200,26 @@
 
     let isValid = $derived(displayName.trim().length > 0);
     let hasProvider = $derived(!providerNoProvider && providerCode !== '' && (providerIdentifier !== '' || providerIdentifierType === 'AUTO_GENERATED'));
+
+    // I-bis #2 — dirty detection for the provider block.
+    //
+    // Previous behaviour: the "Save Without Testing?" modal fired on every
+    // save whenever a provider was configured, even if the user only
+    // touched a non-provider field (name, description, classification…).
+    //
+    // New behaviour: the modal fires only when any of the four provider
+    // fields (code / identifier / identifier_type / params) changed
+    // compared to the snapshot taken at load time. In **create mode**
+    // (editMode === false) there is no snapshot, so any provider
+    // configured means "dirty" by definition.
+    let providerDirty = $derived(
+        !editMode
+            ? hasProvider
+            : providerCode !== initialProviderCode ||
+              providerIdentifier !== initialProviderIdentifier ||
+              providerIdentifierType !== initialProviderIdentifierType ||
+              JSON.stringify(providerParams ?? null) !== (initialProviderParamsJson || 'null'),
+    );
     let title = $derived(editMode ? $t('assets.modal.titleEdit') : $t('assets.modal.title'));
 
     /** Asset type options for SimpleSelect (with PNG icons) */
@@ -372,6 +402,12 @@
         fetchInterval = (data as any).fetch_interval ?? 1440;
         // #R3-4 — snapshot initial params to detect scheduled_investment changes at save.
         initialProviderParamsJson = providerParams ? JSON.stringify(providerParams) : '';
+        // I-bis #2 — snapshot the other three provider fields too so
+        // ``providerDirty`` can detect any user edit and gate the
+        // "Save Without Testing?" modal accordingly.
+        initialProviderCode = providerCode;
+        initialProviderIdentifier = providerIdentifier;
+        initialProviderIdentifierType = providerIdentifierType;
         moreInfoExpanded = identifierRows.length > 0;
         providerExpanded = !!data.provider_code;
         searchResultSelected = false;
@@ -723,8 +759,29 @@
 
     function handleSave() {
         if (!isValid) return;
-        // Check if provider configured but not tested
-        if (hasProvider && providerTestStatus !== 'passed') {
+        // I-bis #2 — retest 1.3 follow-up: when the user changes the provider
+        // dropdown, ``ProviderAssignmentSection.handleProviderChange`` clears
+        // the identifier on purpose (different providers use different ID
+        // formats). As a result ``hasProvider`` becomes ``false`` →
+        // (a) the "Save Without Testing?" gate below would NOT fire, and
+        // (b) ``saveEdit``'s provider step would silently skip both the
+        //     remove and the assign branch, so the provider change would
+        //     be thrown away without any feedback.
+        // Surface an explicit form error so the user completes the provider
+        // block (or ticks "No provider") before saving.
+        if (editMode && providerDirty && !providerNoProvider && providerCode !== '' && !hasProvider) {
+            formError = $t('assets.modal.providerIncomplete');
+            setTimeout(() => {
+                document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+            }, 50);
+            return;
+        }
+        // I-bis #2 — only gate on the "Save Without Testing?" modal when
+        // the provider block has actually been touched. Before, the modal
+        // fired on every save with a configured provider, even if the
+        // user only edited non-provider metadata (name, description,
+        // classification…).
+        if (hasProvider && providerDirty && providerTestStatus !== 'passed') {
             showSaveWithoutTestConfirm = true;
             return;
         }
@@ -736,26 +793,44 @@
         formError = null;
         showSaveWithoutTestConfirm = false;
 
-        try {
-            if (editMode && editData?.id) {
-                await saveEdit(editData.id);
-            } else {
-                await saveCreate();
-            }
-        } catch (e: any) {
-            console.error('Save failed:', e);
-            if (e?.response?.status === 409) {
-                formError = $t('assets.modal.duplicateName');
-            } else {
-                formError = e?.message || 'Save failed';
-            }
-            // Scroll error into view
+        // I-bis #22 (Batch 4.d-part2) — route the orchestrator through
+        // ``saveWithRetry`` for uniform error extraction. Two custom
+        // semantics are preserved:
+        //   (a) **409 currency-change** is NOT handled here: it's intercepted
+        //       deeper in ``saveEdit`` (see the patch_assets_bulk try/catch
+        //       around the PATCH call) which rewrites the ``patchResp`` from
+        //       ``detail.results[]`` and opens the destructive
+        //       ``AssetCurrencyChangeModal``. That path never throws to us.
+        //   (b) **409 duplicate-name** (create path) still maps to the
+        //       dedicated ``duplicateName`` i18n key via the ``onError``
+        //       hook below.
+        // ``toast: false`` because the error is rendered inline via the
+        // ``data-form-error`` banner (the existing UX).
+        const result = await saveWithRetry(
+            () => (editMode && editData?.id ? saveEdit(editData.id) : saveCreate()),
+            {
+                toast: false,
+                fallback: $t('assets.modal.saveFailed'),
+                onError: (err: any) => {
+                    if (err?.response?.status === 409) {
+                        formError = $t('assets.modal.duplicateName');
+                        return true;
+                    }
+                    return false;
+                },
+            },
+        );
+
+        if (result.status === 'error' && !formError) {
+            formError = result.message;
+        }
+        if (result.status === 'error') {
+            // Scroll error into view (same behavior as the previous try/catch)
             setTimeout(() => {
                 document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
             }, 50);
-        } finally {
-            saving = false;
         }
+        saving = false;
     }
 
     async function saveCreate() {
@@ -862,7 +937,23 @@
         //   CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|prices=N|events_manual=M|
         //     events_provider=K|linked_tx=L|oldest=...|newest=...|from=X|to=Y
         // The modal turns this into the destructive-confirm dialog.
-        const patchResp: any = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
+        //
+        // I-bis #7 — the backend now also returns HTTP 409 when *every* item in
+        // the batch is blocked by market data (single-asset edits always fall in
+        // this case). Axios throws on non-2xx; we catch below and re-extract the
+        // ``results[]`` from the response body so the UX is identical.
+        let patchResp: any;
+        try {
+            patchResp = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
+        } catch (err: any) {
+            const status = err?.response?.status;
+            const detail = err?.response?.data?.detail;
+            if (status === 409 && detail && typeof detail === 'object' && Array.isArray(detail.results)) {
+                patchResp = {results: detail.results, success_count: 0};
+            } else {
+                throw err;
+            }
+        }
         const resultItem = patchResp?.results?.[0];
         if (
             resultItem &&
@@ -915,9 +1006,22 @@
         // #R3-4 — after a confirmed scheduled_investment regenerate, trigger an
         // immediate sync so the prices are regenerated with the new params and
         // the chart refreshes on close.
+        //
+        // #R6-5 (2026-04-24, retest Batch 4) — extended to cover non-parametric
+        // provider changes too. Scenario 1.3: user changes provider Yahoo →
+        // JustETF with a valid identifier. Without this auto-sync, the page
+        // reloads after save but the chart keeps showing the OLD prices (from
+        // Yahoo) because nothing regenerated the series. The user perceived
+        // this as "no reload happened" and had to F5 manually. Now, any
+        // change to ``providerCode``, ``providerIdentifier`` or
+        // ``providerIdentifierType`` triggers an opportunistic sync so the
+        // new provider fetches fresh data on close. ``providerDirty`` already
+        // covers all four fields including ``providerParams``.
         const didRegenerate = pendingSaveAssetId === assetId;
         pendingSaveAssetId = null;
-        if (didRegenerate && isParametricProvider(providerCode) && !providerNoProvider) {
+        const providerChanged = providerDirty && !providerNoProvider && hasProvider;
+        const shouldAutoSync = (didRegenerate && isParametricProvider(providerCode)) || providerChanged;
+        if (shouldAutoSync && !providerNoProvider) {
             try {
                 const today = new Date();
                 const end = today.toISOString().slice(0, 10);
@@ -928,7 +1032,7 @@
                     {asset_id: assetId, date_range: {start, end}} as any,
                 ]);
             } catch (syncErr) {
-                console.warn('Post-regenerate sync failed:', syncErr);
+                console.warn('Post-save auto-sync failed (non-blocking):', syncErr);
                 // Non-blocking: the user can manually re-sync if needed.
             }
         }

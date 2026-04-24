@@ -172,7 +172,26 @@ async def patch_assets_bulk(
     - Per-item success/failure status
     """
     try:
-        return await AssetCRUDService.patch_assets_bulk(assets, session)
+        response = await AssetCRUDService.patch_assets_bulk(assets, session)
+        # I-bis #7 — HTTP 409 semantics: if every item in the batch failed
+        # for the same business reason (currency change blocked by market
+        # data), raise 409 so clients can distinguish "nothing happened"
+        # from the happy-path 200. Individual partial-success responses
+        # still return 200 — this only triggers when 100% of the items
+        # failed AND at least one failure carries the
+        # ``CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA`` token.
+        if response.success_count == 0 and len(response.results) > 0 and all(not r.success for r in response.results) and any(r.message and "CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA" in r.message for r in response.results):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error_code": "CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA",
+                    "message": "All assets in the batch are blocked by existing market data.",
+                    "results": [r.model_dump() for r in response.results],
+                },
+            )
+        return response
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in bulk asset patch: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e

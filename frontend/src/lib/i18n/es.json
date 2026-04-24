@@ -315,13 +315,15 @@
       "duplicateName": "Ya existe un activo con este nombre",
       "duplicateNameWarning": "Ya existe un activo llamado \"{name}\"",
       "duplicateNameTooltip": "Ya existe un activo con este nombre exacto. Es posible que desee editar el existente en lugar de crear uno nuevo.",
+      "providerIncomplete": "Ha cambiado el proveedor pero ha dejado el identificador vacío. Complete el identificador (o marque «Sin proveedor») antes de guardar.",
       "createSuccess": "\"{name}\" creado exitosamente",
       "saveSuccess": "\"{name}\" actualizado exitosamente",
       "moreInfo": "Más información",
       "createSuccessProviderFailed": "Activo \"{name}\" creado, pero la asignación del proveedor falló. Asígnelo manualmente.",
       "scheduledRegenTitle": "¿Regenerar precios?",
       "scheduledRegenMessage": "Cambiar estos parámetros eliminará el historial de precios existente y lo regenerará con la nueva planificación. Esta acción no se puede deshacer. ¿Continuar?",
-      "scheduledRegenConfirm": "Regenerar"
+      "scheduledRegenConfirm": "Regenerar",
+      "saveFailed": "Error al guardar el activo"
     },
     "provider": {
       "assignment": "Asignación de Proveedor",
@@ -470,7 +472,8 @@
       "noProviderWarning": "Ningún proveedor configurado. Deberá insertar manualmente los tipos de cambio para cada fecha.",
       "createIntermediatePairs": "Crear también los pares intermedios",
       "createIntermediatePairsHint": "Cada paso de las cadenas seleccionadas se guardará como par autónomo con su proveedor, para poder sincronizarlos de forma independiente.",
-      "titleEdit": "Editar Proveedores del Par"
+      "titleEdit": "Editar Proveedores del Par",
+      "createFailed": "Error al crear el par FX"
     },
     "sync": {
       "title": "Sincronizar tasas FX",
@@ -682,7 +685,8 @@
     "imageUrl": "URL de la Imagen",
     "useSelected": "Usar Seleccionado",
     "selectIcon": "Seleccionar Icono",
-    "urlHint": "Introduce una URL remota o una ruta local desde Archivos"
+    "urlHint": "Introduce una URL remota o una ruta local desde Archivos",
+    "deleteFailedSome": "Error al eliminar {count} archivo(s)"
   },
   "datePicker": {
     "from": "Desde",
