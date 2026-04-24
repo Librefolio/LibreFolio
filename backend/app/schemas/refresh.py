@@ -35,6 +35,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.app.schemas.common import BaseBulkResponse, Currency, DateRangeModel
+from backend.app.schemas.prices import FAPricePoint
 
 # ============================================================================
 # SHARED SYNC STATUS ENUM
@@ -88,6 +89,25 @@ class FARefreshResult(BaseModel):
     message: Optional[str] = Field(None, description="Optional note/summary (non-error)")
     errors: List[str] = Field(default_factory=list)
     elapsed_ms: Optional[int] = Field(None, ge=0, description="Backend sync time for this asset in ms")
+    # I-bis #24 (2026-04-24) — delta payload for targeted frontend refresh.
+    # Populated with the subset of ``FAPricePoint`` rows that were actually
+    # inserted or updated (not every fetched point). Capped at
+    # ``CHANGED_POINTS_PAYLOAD_CAP`` items to keep the sync response bounded;
+    # beyond the cap the field is ``None`` and the frontend falls back to a
+    # full chart reload. When ``points_changed == 0`` the field is ``None`` as
+    # well (nothing to merge). The payload does NOT include target-currency
+    # conversion: consumers that show a converted chart must still reload
+    # through the query endpoint (or apply FX conversion locally).
+    changed_points: Optional[List[FAPricePoint]] = Field(
+        None,
+        description=("Delta of inserted/updated price points for targeted frontend refresh. " "None when no changes, when count > CHANGED_POINTS_PAYLOAD_CAP, or when " "the frontend should reload through the query endpoint for currency conversion."),
+    )
+
+
+#: Upper bound for ``FARefreshResult.changed_points``. Above this threshold the
+#: response omits the payload and the frontend is expected to do a full reload
+#: (cheaper than streaming a huge delta over the wire).
+CHANGED_POINTS_PAYLOAD_CAP: int = 500
 
 
 class FABulkRefreshResponse(BaseBulkResponse[FARefreshResult]):

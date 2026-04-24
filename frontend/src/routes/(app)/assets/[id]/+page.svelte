@@ -831,6 +831,116 @@
     }
 
     // =========================================================================
+    // I-bis #24 — Live current-price polling (contextual auto-refresh)
+    // =========================================================================
+    //
+    // Why: clicking Sync already does a targeted merge (decision matrix in
+    // handleSyncAsset), but the user wants updates to appear *without* any
+    // manual click. This effect polls ``/assets/prices/current`` once per
+    // minute and, when the polled close differs from the in-memory chart,
+    // merges today's point in-place — zero flicker, signals auto-recompute.
+    //
+    // IMPORTANT (why we do NOT fall back to a silent ``/sync`` call):
+    // the ``/current`` endpoint is NOT read-only — its F.2/F.3 side-effect
+    // already persists today's OHLC to the DB. If we chained a silent
+    // ``/sync`` after ``/current``, the sync's ``_count_actual_price_changes``
+    // would see the DB already up-to-date and return ``changed_points=None``,
+    // forcing the FE into the full-reload fallback (flicker) — exactly the
+    // UX regression reported during retest. The polled item carries all we
+    // need (close + currency + as_of_date) to update today's point.
+    //
+    // Constraints:
+    // • Only polls when the asset has a provider assigned (otherwise the
+    //   endpoint would just echo back the DB's last known value — useless).
+    // • Skips polling when the browser tab is hidden (saves provider quota
+    //   and rate limit budget).
+    // • No polling during a full chart reload (``loading === true``) to
+    //   avoid interleaving fetches on the same chartData array.
+    // • Point merge is idempotent: if close == last known close for the
+    //   same as_of_date, we skip the state update (no render, no network).
+    // • Converted-currency chart (displayCurrency ≠ asset currency): the
+    //   polled close is in the asset's native currency and would flash
+    //   wrong values inside the FX-converted series — in that case we do
+    //   a silent full reload (single loadChartData) as the fallback.
+    // =========================================================================
+
+    const CURRENT_PRICE_POLL_INTERVAL_MS = 60_000; // 1 minute — conservative
+    let livePollTimerId: ReturnType<typeof setInterval> | null = null;
+
+    async function pollCurrentPriceOnce() {
+        // Guards: skip if tab hidden, no provider, or a full reload is in
+        // progress. Also skip if the asset changed between schedule and
+        // tick (route navigation races).
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        if (!providerAssignment?.provider_code) return;
+        if (loading) return;
+        const assetIdAtTick = data.assetId;
+
+        try {
+            const response = await zodiosApi.get_current_prices_bulk_api_v1_assets_prices_current_post([assetIdAtTick]);
+            // Route changed mid-request: drop the result.
+            if (assetIdAtTick !== data.assetId) return;
+
+            const item: any = (response as any)?.results?.[0];
+            if (!item || item.error || item.value == null || !item.as_of_date) return;
+
+            const newClose = Number(item.value);
+            if (!Number.isFinite(newClose)) return;
+
+            // Idempotent guard: compare with the point for the same date.
+            const existingIdx = chartData.findIndex((p: any) => p.date === item.as_of_date);
+            if (existingIdx >= 0) {
+                const existingClose = Number((chartData[existingIdx] as any).close);
+                if (Number.isFinite(existingClose) && Math.abs(existingClose - newClose) < 1e-9) return;
+            }
+
+            // Converted-currency chart: the polled close is in the asset's
+            // native currency and would flash wrong numbers mid-series. A
+            // single silent full reload is the pragmatic fallback here.
+            const isConvertedChart = !!(displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency);
+            if (isConvertedChart) {
+                await loadChartData();
+                return;
+            }
+
+            // Point-level merge: update today's close + currency + as_of_date
+            // via mergeChartPointsIncremental. Enriched fields on the existing
+            // point (original_close, backward_fill_info, …) are preserved by
+            // the shallow-merge rule (the polled item does not carry them,
+            // so they are not overwritten). Signal derivatives ($derived
+            // from chartData) recompute automatically.
+            const polledPoint: any = {
+                date: item.as_of_date,
+                close: newClose,
+                currency: item.currency,
+            };
+            chartData = mergeChartPointsIncremental(chartData, [polledPoint]);
+        } catch {
+            // Silent: polling is best-effort. Next tick will retry.
+        }
+    }
+
+    $effect(() => {
+        // Track provider assignment + asset id so the timer restarts on
+        // route change or when a provider is (un)assigned.
+        const hasProvider = !!providerAssignment?.provider_code;
+        const assetId = data.assetId;
+        if (!hasProvider || !assetId) return;
+
+        livePollTimerId = setInterval(pollCurrentPriceOnce, CURRENT_PRICE_POLL_INTERVAL_MS);
+        // Kick an initial poll after a short delay so the first tick feels
+        // contextual (but not simultaneous with the page's own initial
+        // loadChartData).
+        const warmupId = setTimeout(pollCurrentPriceOnce, 5_000);
+
+        return () => {
+            if (livePollTimerId) clearInterval(livePollTimerId);
+            clearTimeout(warmupId);
+            livePollTimerId = null;
+        };
+    });
+
+    // =========================================================================
     // Actions
     // =========================================================================
 
@@ -961,7 +1071,8 @@
         maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
     }
 
-    async function handleSyncAsset(assetId: number) {
+    async function handleSyncAsset(assetId: number, opts: {silent?: boolean} = {}) {
+        const silent = opts.silent === true;
         try {
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
                 {
@@ -971,18 +1082,85 @@
             ]);
             const r = (response as any)?.results?.[0];
             const tr = get(t);
-            if (r) {
-                const toast = buildAssetSyncToast(r, tr('common.sync'), tr);
-                toasts[toast.variant](toast.message);
-            } else {
-                toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
+            if (!silent) {
+                if (r) {
+                    const toast = buildAssetSyncToast(r, tr('common.sync'), tr);
+                    toasts[toast.variant](toast.message);
+                } else {
+                    toasts.error(`${tr('common.sync')} — ${tr('prices.sync.noResponse')}`);
+                }
+            }
+
+            // I-bis #24 (2026-04-24) — targeted post-sync refresh.
+            //
+            // Design rationale (post-§2a-1 retest feedback): prefer a
+            // point-targeted merge over a full chart reload whenever the
+            // backend returned a reliable ``changed_points`` delta. This is
+            // the intended UX — when a current-price tick updates today's
+            // OHLC, only that point changes and all derived signals
+            // (EMA/MACD/RSI/Bollinger) recompute automatically via $derived
+            // since they depend on ``chartData``.
+            //
+            // Full ``loadChartData()`` reload is used ONLY as a fallback
+            // when the delta is either:
+            //   (a) missing / above the backend cap (CHANGED_POINTS_PAYLOAD_CAP)
+            //   (b) too large for an in-place merge (more than DELTA_MERGE_LIMIT)
+            //   (c) tainted by side channels needing a full query:
+            //       - display currency ≠ asset currency (delta is raw DB
+            //         values, unsuitable for the FX-converted chart — would
+            //         flash wrong numbers in the middle of the series)
+            //       - events changed (events are reloaded by the query
+            //         endpoint, not present in ``changed_points``)
+            if (assetId === data.assetId && r?.asset_id === assetId) {
+                const changedPoints = Array.isArray(r.changed_points) ? r.changed_points : null;
+                const isConvertedChart = !!(displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency);
+                const eventsChanged = Number(r.events_changed ?? 0) > 0;
+                const DELTA_MERGE_LIMIT = 50;
+
+                const canMergeOnly = changedPoints && changedPoints.length > 0 && changedPoints.length <= DELTA_MERGE_LIMIT && !isConvertedChart && !eventsChanged;
+
+                if (canMergeOnly) {
+                    // In-place targeted refresh — no full reload, no flicker.
+                    chartData = mergeChartPointsIncremental(chartData, changedPoints);
+                } else if (changedPoints && changedPoints.length > 0) {
+                    // Partial info available: merge for instant feedback,
+                    // then still run a full reload to pick up FX/events.
+                    if (!isConvertedChart) {
+                        chartData = mergeChartPointsIncremental(chartData, changedPoints);
+                    }
+                    await loadChartData();
+                } else {
+                    // No delta from backend (no changes, or above cap,
+                    // or reload is needed anyway): full reload.
+                    await loadChartData();
+                }
             }
         } catch (e: any) {
-            toasts.error('Sync failed: ' + (e?.message || 'unknown'));
+            if (!silent) toasts.error('Sync failed: ' + (e?.message || 'unknown'));
         }
         // Reload comparison data for the synced asset, then trigger UI update
         await maybeLoadComparison();
         overlayDataVersion++;
+    }
+
+    /**
+     * I-bis #24 helper — merge ``changed_points`` from a sync response into
+     * the current ``chartData`` array by date. New points are appended,
+     * existing points by date are shallow-merged (so OHLC fields update
+     * without losing enriched fields like ``original_close`` that may have
+     * been set by ``loadChartData``). Result is sorted by date ascending.
+     *
+     * NOTE: the merge only runs when the chart is showing the asset's native
+     * currency (no target_currency conversion), because the delta from the
+     * sync endpoint carries raw DB values without FX applied.
+     */
+    function mergeChartPointsIncremental<T extends {date: string}>(existing: T[], delta: T[]): T[] {
+        const byDate = new Map<string, T>(existing.map((p) => [p.date, p]));
+        for (const np of delta) {
+            const prev = byDate.get(np.date);
+            byDate.set(np.date, prev ? ({...prev, ...np} as T) : np);
+        }
+        return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     }
 
     function handleDetailAsset(assetId: number) {

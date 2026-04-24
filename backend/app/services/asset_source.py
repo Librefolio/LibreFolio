@@ -51,6 +51,7 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import (
+    CHANGED_POINTS_PAYLOAD_CAP,
     FAAssetDelete,
     FABulkDeleteResponse,
     FABulkMetadataRefreshResponse,
@@ -2487,13 +2488,22 @@ class AssetSourceManager:
             session,
             asset_id: int,
             price_items: list,
-        ) -> tuple[int, int]:
+        ) -> tuple[int, int, list]:
             """
             Compare fetched prices with existing DB prices.
-            Returns (new_count, changed_count) — truly new inserts and actual value changes.
+
+            Returns
+            -------
+            tuple
+                ``(new_count, changed_count, changed_items)`` where
+                ``changed_items`` is the subset of ``price_items`` whose dates
+                correspond to true inserts or true updates (value changed vs
+                the stored row). Used by I-bis #24 to produce the
+                ``changed_points`` delta in ``FARefreshResult`` so the
+                frontend can refresh the chart without a full re-query.
             """
             if not price_items:
-                return 0, 0
+                return 0, 0, []
 
             dates = [p.date for p in price_items]
 
@@ -2504,17 +2514,20 @@ class AssetSourceManager:
 
             new_count = 0
             changed_count = 0
+            changed_items: list = []
             for p in price_items:
                 old_close = existing.get(p.date)
                 if old_close is None:
                     new_count += 1
+                    changed_items.append(p)
                 else:
                     # Truncate fetched value to DB precision before comparing
                     truncated_new = truncate_priceHistory(Decimal(str(p.close)), "close")
                     if float(old_close) != float(truncated_new):
                         changed_count += 1
+                        changed_items.append(p)
 
-            return new_count, changed_count
+            return new_count, changed_count, changed_items
 
         async def _persist_single(asset_id: int) -> FARefreshResult:
             """Upsert fetched prices and update assignment in an isolated session."""
@@ -2621,6 +2634,8 @@ class AssetSourceManager:
             updated_count = 0
             events_fetched_count = len(remote_data.get("events", []))
             events_changed_count = 0
+            # I-bis #24 — accumulate the actual delta here; None if above cap.
+            changed_items_delta: list = []
 
             # Isolated session for this asset's DB writes
             try:
@@ -2628,9 +2643,9 @@ class AssetSourceManager:
                     # Count actual changes BEFORE upserting (compare with DB)
                     if price_items:
                         try:
-                            new_count, changed_count = await _count_actual_price_changes(persist_session, asset_id, price_items)
+                            new_count, changed_count, changed_items_delta = await _count_actual_price_changes(persist_session, asset_id, price_items)
                         except Exception:
-                            new_count, changed_count = fetched_count, 0  # Fallback
+                            new_count, changed_count, changed_items_delta = fetched_count, 0, list(price_items)  # Fallback
 
                         try:
                             await AssetSourceManager.bulk_upsert_prices([upsert_obj], persist_session)
@@ -2638,6 +2653,8 @@ class AssetSourceManager:
                             updated_count = changed_count
                         except Exception as e:
                             errors.append(f"DB upsert failed: {str(e)}")
+                            # If the upsert failed, no delta is reliable.
+                            changed_items_delta = []
 
                     # Upsert asset events (if any)
                     events_list = remote_data.get("events", [])
@@ -2706,6 +2723,8 @@ class AssetSourceManager:
                 message=message,
                 errors=errors,
                 elapsed_ms=elapsed_ms,
+                # I-bis #24 — delta payload (None when empty OR above cap).
+                changed_points=(changed_items_delta if changed_items_delta and len(changed_items_delta) <= CHANGED_POINTS_PAYLOAD_CAP else None),
             )
 
         # Build persist tasks only for assets that had fetch results or errors

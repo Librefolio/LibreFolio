@@ -305,16 +305,110 @@ Helper nuovo: `frontend/src/lib/utils/saveWithRetry.ts`
 stabile e retro-compatibile; l'adozione nei restanti modal può
 procedere in modo incrementale senza bloccare altri lavori.
 
-### I-bis #24 — Auto-refresh mirato post-sync (last-point-only)  ⏳ PENDING
+### I-bis #24 — Auto-refresh mirato post-sync (last-point-only)  ✅ DONE (2026-04-24, sub-plan post-Batch-4.d-part3)
 
-**Contesto UX**: dopo aver cliccato "Sync" con provider current-price, se l'utente aspetta il debounce del backend e fa refresh manuale della pagina, il nuovo punto compare. Senza refresh non compare → UX incoerente.
+**Contesto UX**: dopo aver cliccato "Sync" sulla pagina asset detail, il
+chart non si aggiornava — l'utente doveva fare F5 per vedere i nuovi
+punti. Root cause: `handleSyncAsset` in `/assets/[id]/+page.svelte`
+chiamava `maybeLoadComparison()` ma non `loadChartData()`.
 
-**Design proposto**:
-1. Backend: `POST /assets/prices/sync` ritorna anche `changed_points: FAPricePoint[]` (delta) oltre ai counter esistenti.
-2. Frontend: `mergeChartDataIncremental(newPoints)` — merge puntuale invece di full reload.
-3. Empty-state → chart transition in-place quando il primo punto arriva e rientra nella finestra.
+**Implementazione** (post-commit Batch 4.d-part3):
 
-**Priorità**: P2 — nice-to-have, sinergia con il payload già strutturato dopo I-bis #1+#23 (DONE).
+1. **Backend — `FARefreshResult.changed_points` delta**
+   - Nuovo campo `Optional[List[FAPricePoint]]` popolato con i punti
+     effettivamente inseriti/aggiornati (non tutti i punti fetchati).
+   - Cap `CHANGED_POINTS_PAYLOAD_CAP = 500`: oltre la soglia il campo è
+     `None` → il FE ricade su full reload.
+   - `_count_actual_price_changes` ora ritorna `(new, changed, items)`
+     invece di `(new, changed)` — la terza tupla è la lista dei
+     `FAPricePoint` modificati.
+   - Nota: la delta **non** include conversione target_currency; il
+     consumer FE deve applicarla solo quando il chart mostra la valuta
+     nativa (altrimenti cade su `loadChartData` che applica l'FX).
+
+2. **Frontend — targeted refresh in `/assets/[id]/+page.svelte`**
+
+   Matrice decisionale in `handleSyncAsset` (post-feedback §2a-1):
+
+   | `changed_points` | size ≤ 50 | valuta nativa | eventi cambiati | Azione |
+   |------------------|:---------:|:-------------:|:---------------:|--------|
+   | presente | ✓ | ✓ | no | **merge-only** (no reload) |
+   | presente | ✗ (51-500) | ✓ | no | merge + reload |
+   | presente | ✓ | ✗ (converted) | qualsiasi | solo reload |
+   | presente | qualsiasi | ✓ | sì | merge + reload |
+   | null / assente | — | — | — | solo reload |
+
+   Helper `mergeChartPointsIncremental<T extends {date: string}>`:
+   shallow-merge per data, append new, sort ASC. Riusabile.
+
+   **Preferenza merge-only**: il caso principale è il current-price tick
+   (1 punto "oggi" aggiornato). I segnali collegati (EMA/MACD/RSI/
+   Bollinger) sono `$derived` da `chartData` → si riallineano
+   automaticamente senza reload esplicito. Soglia `DELTA_MERGE_LIMIT = 50`
+   per contenere lo shallow-merge pur tollerando piccole re-sync da pochi
+   giorni.
+
+   **Fallback reload** quando il merge non basta: display currency ≠
+   asset currency (raw DB values non convertiti), event changes (eventi
+   non in delta), > 50 punti (merge costoso), o no delta.
+
+3. **Live polling contestuale (post-retest §2a-1)**
+
+   Su `/assets/[id]`, dopo che il Sync manuale funzionava col merge
+   targeted, l'utente ha chiesto anche l'update **contestuale**: il
+   chart deve riflettere i cambi del current-price senza click.
+
+   Implementazione in `+page.svelte`:
+   - `pollCurrentPriceOnce()` chiama l'endpoint read-only
+     `/assets/prices/current` (che sotto ha F.2/F.3 persistenti →
+     scrive in DB l'OHLC di oggi). La risposta è un
+     `FACurrentPriceItem`; viene costruito un `polledPoint` minimale
+     (`date, close, currency`) e fatto merge via
+     `mergeChartPointsIncremental`.
+   - `$effect` con cleanup: `setInterval` a **60s**
+     (`CURRENT_PRICE_POLL_INTERVAL_MS`) + `setTimeout(5s)` iniziale
+     (warm-up). Riparte al cambio asset / provider.
+   - Guards: skip se tab hidden (visibilityState), provider non
+     assegnato, `loading === true` (reload in corso), asset cambiato
+     mid-request, cambio close < 1e-9 (idempotent).
+   - Chart in valuta convertita → polling fallisce-back a
+     `loadChartData()` (i valori polled sono in valuta nativa).
+   - Best-effort: errori di rete silenziati, il tick successivo
+     ritenta. Zero toast.
+
+   **Post-mortem iterazione v3 → v4 (2026-04-24)**: una versione intermedia
+   provava a riusare `handleSyncAsset(..., {silent:true})` dopo il rilevamento
+   del delta, sperando di passare per la stessa matrice decisionale del Sync
+   manuale. **Non ha funzionato**: l'endpoint `/current` **non è read-only**
+   (F.2/F.3 persiste l'OHLC di oggi su DB). Il silent `/sync` subito dopo
+   confrontava il fetch provider con il DB appena scritto → `changed_points=None`
+   → FE cadeva nel ramo "no delta" → `loadChartData()` full reload ogni minuto
+   (flicker). Il fix v4 scarta il detour: l'item polled contiene già tutti i
+   campi necessari (`close`, `currency`, `as_of_date`) per il merge diretto.
+   **Invariante da preservare**: non chainare silent-sync dopo `/current`
+   finché esiste il side-effect F.2/F.3.
+
+3. **Export CSV allineato**: `backend_service.stream_rows_as_csv` ora usa
+   `delimiter=";"` (conforme al CsvEditor nativo). Round-trip
+   export→import ora produce CSV coerenti. Import accetta ancora `,`
+   (auto-detect I-bis #5, commit Batch 4.d-part3).
+
+**File**:
+- `backend/app/schemas/refresh.py` — `FARefreshResult.changed_points` + `CHANGED_POINTS_PAYLOAD_CAP`.
+- `backend/app/schemas/__init__.py` — export `CHANGED_POINTS_PAYLOAD_CAP`.
+- `backend/app/services/asset_source.py` — `_count_actual_price_changes` signature + `_persist_single` delta capture.
+- `backend/app/services/backup_service.py` — CSV `delimiter=";"`.
+- `frontend/src/lib/api/{openapi.json,generated.ts}` — rigenerati via `./dev.py api sync`.
+- `frontend/src/routes/(app)/assets/[id]/+page.svelte` — `handleSyncAsset` con merge + reload, `mergeChartPointsIncremental` helper.
+
+**Validazione**:
+- `./dev.py format` + `./dev.py lint` → ✅ all passed.
+- `./dev.py api sync` → ✅ openapi + generated.ts rigenerati.
+- `./dev.py front check` → ✅ 0 errors / 0 warnings.
+- `./dev.py test services synthetic-yield-integration` → ✅ PASSED (nessuna regressione sul persist path).
+
+**Priorità originale**: P2 nice-to-have — risolto insieme al bug più
+grave del chart che non si aggiornava.
 
 ### I-bis #25 — goBack regression `/fx/{pair}` → `/fx` invece di `/assets/{id}`  ✅ DONE
 
