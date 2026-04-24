@@ -686,7 +686,16 @@
     "useSelected": "Usa Selezionato",
     "selectIcon": "Seleziona Icona",
     "urlHint": "Inserisci un URL remoto o un percorso locale da File",
-    "deleteFailedSome": "Eliminazione di {count} file fallita"
+    "deleteFailedSome": "Eliminazione di {count} file fallita",
+    "uploadFailed": "Caricamento fallito",
+    "deleteFailed": "Eliminazione fallita",
+    "uploadBatchSucceeded": "{count} file caricati",
+    "deleteSucceeded": "File eliminato",
+    "deleteBatchSucceeded": "{count} file eliminati",
+    "confirmBulkDelete": {
+      "title": "Elimina file",
+      "message": "Eliminare {count} file? L'azione non è reversibile."
+    }
   },
   "datePicker": {
     "from": "Dal",

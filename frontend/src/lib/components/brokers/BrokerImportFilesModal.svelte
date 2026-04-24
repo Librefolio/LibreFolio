@@ -12,6 +12,7 @@
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {toasts} from '$lib/stores/toastStore.svelte';
     import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -47,6 +48,10 @@
     // Pending files tracking for close confirmation
     let pendingFiles = $state<globalThis.File[]>([]);
     let showCloseConfirm = $state(false);
+
+    // #R6-7 (Batch 4.d-part3) — Bulk delete confirmation gating.
+    let confirmBulkDeleteOpen = $state(false);
+    let pendingBulkDeleteIds = $state<string[]>([]);
 
     // File edit (rename) state
     let editingFile = $state<File | null>(null);
@@ -118,6 +123,10 @@
         pendingFiles = [];
         await loadFiles();
         uploading = false;
+        // #R6-6 (Batch 4.d-part3) — success toast for batch uploads (aligned
+        // with the evolved app-wide save pattern). Errors remain inline in the
+        // banner (persistent, dismissible).
+        toasts.success($_('uploads.uploadBatchSucceeded', {values: {count: uploadFiles.length}}));
     }
 
     async function handleDelete(fileId: string) {
@@ -134,6 +143,8 @@
             return;
         }
         await loadFiles();
+        // #R6-6 (Batch 4.d-part3) — success toast for single-file delete.
+        toasts.success($_('uploads.deleteSucceeded'));
     }
 
     async function handleDeleteMultiple(fileIds: string[]) {
@@ -161,6 +172,9 @@
             // Prefer the summary key when more than one failed; for a single
             // failure in a multi-selection the concrete message is clearer.
             error = failedCount === 1 ? lastMessage : $_('uploads.deleteFailedSome', {values: {count: failedCount}});
+        } else {
+            // #R6-6 (Batch 4.d-part3) — success toast for bulk delete.
+            toasts.success($_('uploads.deleteBatchSucceeded', {values: {count: fileIds.length}}));
         }
     }
 
@@ -200,6 +214,29 @@
     function cancelClose() {
         showCloseConfirm = false;
     }
+
+    // #R6-7 (Batch 4.d-part3) — Bulk delete confirmation gating.
+    // Centralised entry point used by both the SelectionBar action and the
+    // FilesTable internal ``onDeleteMultiple`` callback, so a single
+    // destructive ConfirmModal protects every bulk-delete path.
+    function requestBulkDelete(ids: string[]) {
+        if (ids.length === 0) return;
+        pendingBulkDeleteIds = [...ids];
+        confirmBulkDeleteOpen = true;
+    }
+
+    async function confirmBulkDelete() {
+        const ids = pendingBulkDeleteIds;
+        confirmBulkDeleteOpen = false;
+        pendingBulkDeleteIds = [];
+        await handleDeleteMultiple(ids);
+        filesTableRef?.clearSelection();
+    }
+
+    function cancelBulkDelete() {
+        confirmBulkDeleteOpen = false;
+        pendingBulkDeleteIds = [];
+    }
 </script>
 
 <ModalBase maxWidth="900px" onRequestClose={tryClose} {open} testId="import-files-modal" zIndex={50}>
@@ -220,8 +257,7 @@
                         label: () => $_('common.delete'),
                         variant: 'danger',
                         onClick: () => {
-                            handleDeleteMultiple(selectedFileIds);
-                            filesTableRef?.clearSelection();
+                            requestBulkDelete(selectedFileIds);
                         },
                     },
                 ]}
@@ -270,7 +306,7 @@
                 <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">{$_('brokers.uploadHint')}</p>
             </div>
         {:else}
-            <FilesTable bind:this={filesTableRef} {files} type="brim" onDelete={handleDelete} onDeleteMultiple={handleDeleteMultiple} showBrokerColumn={false} onSelectionChange={(ids) => (selectedFileIds = ids)} />
+            <FilesTable bind:this={filesTableRef} {files} type="brim" onDelete={handleDelete} onDeleteMultiple={requestBulkDelete} showBrokerColumn={false} onSelectionChange={(ids) => (selectedFileIds = ids)} />
         {/if}
     </div>
 
@@ -314,6 +350,17 @@
     onConfirm={confirmClose}
     open={showCloseConfirm}
     title={$_('uploads.pendingUploads')}
+/>
+
+<!-- #R6-7 (Batch 4.d-part3) — Bulk delete destructive confirm. -->
+<ConfirmModal
+    confirmText={$_('common.delete')}
+    danger={true}
+    message={$_('uploads.confirmBulkDelete.message', {values: {count: pendingBulkDeleteIds.length}})}
+    onCancel={cancelBulkDelete}
+    onConfirm={confirmBulkDelete}
+    open={confirmBulkDeleteOpen}
+    title={$_('uploads.confirmBulkDelete.title')}
 />
 
 <style>

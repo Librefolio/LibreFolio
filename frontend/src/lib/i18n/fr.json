@@ -686,7 +686,16 @@
     "useSelected": "Utiliser la Sélection",
     "selectIcon": "Sélectionner une Icône",
     "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers",
-    "deleteFailedSome": "Échec de la suppression de {count} fichier(s)"
+    "deleteFailedSome": "Échec de la suppression de {count} fichier(s)",
+    "uploadFailed": "Échec du téléversement",
+    "deleteFailed": "Échec de la suppression",
+    "uploadBatchSucceeded": "{count} fichier(s) téléversé(s)",
+    "deleteSucceeded": "Fichier supprimé",
+    "deleteBatchSucceeded": "{count} fichier(s) supprimé(s)",
+    "confirmBulkDelete": {
+      "title": "Supprimer les fichiers",
+      "message": "Supprimer {count} fichier(s) ? Cette action est irréversible."
+    }
   },
   "datePicker": {
     "from": "Du",

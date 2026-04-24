@@ -686,7 +686,16 @@
     "useSelected": "Use Selected",
     "selectIcon": "Select Icon",
     "urlHint": "Enter a remote URL or a local path from Files",
-    "deleteFailedSome": "Failed to delete {count} file(s)"
+    "deleteFailedSome": "Failed to delete {count} file(s)",
+    "uploadFailed": "Upload failed",
+    "deleteFailed": "Delete failed",
+    "uploadBatchSucceeded": "{count} file(s) uploaded",
+    "deleteSucceeded": "File deleted",
+    "deleteBatchSucceeded": "{count} file(s) deleted",
+    "confirmBulkDelete": {
+      "title": "Delete files",
+      "message": "Delete {count} file(s)? This action cannot be undone."
+    }
   },
   "datePicker": {
     "from": "From",
