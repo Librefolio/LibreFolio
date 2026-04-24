@@ -21,9 +21,9 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-001]] | User Authentication & Sessions | fullstack | `implemented` | — |
-| [[F-002]] | User Management (admin CRUD) | fullstack | `implemented` | — |
-| [[F-003]] | Multi-User Role System (admin/user) | fullstack | `implemented` | — |
+| [[F-001]] | User Authentication & Sessions | fullstack | `implemented` | [`dev/arch/access_control.md`](developer/architecture/access_control.md) |
+| [[F-002]] | User Management (admin CRUD) | fullstack | `implemented` | [`dev/arch/database/users_access.md`](developer/architecture/database/users_access.md) |
+| [[F-003]] | Multi-User Role System (admin/user) | fullstack | `implemented` | [`dev/arch/access_control.md`](developer/architecture/access_control.md) |
 
 ---
 
@@ -31,11 +31,11 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-004]] | App Shell & Navigation (sidebar, header) | frontend | `implemented` | — |
-| [[F-005]] | User Settings (language, theme) | fullstack | `implemented` | — |
-| [[F-006]] | Global Settings (admin-managed app config) | fullstack | `implemented` | — |
+| [[F-004]] | App Shell & Navigation (sidebar, header) | frontend | `implemented` | [`dev/fe/styling.md`](developer/frontend/styling.md) |
+| [[F-005]] | User Settings (language, theme) | fullstack | `implemented` | [`dev/fe/components/settings.md`](developer/frontend/components/settings.md) |
+| [[F-006]] | Global Settings (admin-managed app config) | fullstack | `implemented` | [`dev/arch/settings.md`](developer/architecture/settings.md) |
 | [[F-007]] | Theme System (dark/light/auto) | frontend | `implemented` | — |
-| [[F-008]] | i18n System (EN/IT/FR/ES, 840+ keys) | frontend | `implemented` | — |
+| [[F-008]] | i18n System (EN/IT/FR/ES, 840+ keys) | frontend | `implemented` | [`dev/fe/i18n.md`](developer/frontend/i18n.md) |
 
 ---
 
@@ -46,8 +46,8 @@
 | [[F-009]] | Broker CRUD | fullstack | `documented` | `user/brokers/index.en.md` |
 | [[F-010]] | Broker Sharing (Owner/Editor/Viewer roles) | fullstack | `documented` | `user/brokers/sharing.en.md` |
 | [[F-011]] | File Management (upload/list/delete broker reports) | fullstack | `documented` | `user/files/index.en.md` |
-| [[F-012]] | BRIM Framework (broker report import pipeline) | fullstack | `implemented` | — |
-| [[F-013]] | BRIM Plugins (11 broker parsers) | backend | `implemented` | — |
+| [[F-012]] | BRIM Framework (broker report import pipeline) | fullstack | `implemented` | [`dev/be/brim/architecture.md`](developer/backend/brim/architecture.md) |
+| [[F-013]] | BRIM Plugins (11 broker parsers) | backend | `implemented` | [`dev/be/brim/providers_list.md`](developer/backend/brim/providers_list.md) |
 | [[F-014]] | Image Upload & Crop (broker icon) | fullstack | `implemented` | — |
 
 ---
@@ -56,12 +56,12 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-015]] | FX Provider Registry (ECB, FED, BOE, SNB) | backend | `documented` | — |
+| [[F-015]] | FX Provider Registry (ECB, FED, BOE, SNB) | backend | `documented` | [`dev/be/fx/architecture.md`](developer/backend/fx/architecture.md) |
 | [[F-016]] | FX Pair CRUD | fullstack | `documented` | `user/fx/add-pair.en.md` |
 | [[F-017]] | FX Rate Sync (fetch from central banks) | fullstack | `documented` | `user/fx/sync.en.md` |
-| [[F-018]] | FX Multi-Provider Fallback (priority chain) | backend | `implemented` | — |
-| [[F-019]] | MANUAL Sentinel Provider (auto-insert/remove) | backend | `implemented` | — |
-| [[F-020]] | FX Currency Conversion Graph (triangulation) | fullstack | `implemented` | — |
+| [[F-018]] | FX Multi-Provider Fallback (priority chain) | backend | `implemented` | [`dev/be/fx/architecture.md`](developer/backend/fx/architecture.md) |
+| [[F-019]] | MANUAL Sentinel Provider (auto-insert/remove) | backend | `implemented` | [`dev/be/fx/configuration.md`](developer/backend/fx/configuration.md) |
+| [[F-020]] | FX Currency Conversion Graph (triangulation) | fullstack | `implemented` | [`dev/fe/fx-chain-algorithm.md`](developer/frontend/fx-chain-algorithm.md) |
 | [[F-021]] | FX List View (dual view: card + table) | frontend | `implemented` | `user/fx/index.en.md` |
 | [[F-022]] | FX Detail Page (rate history, provider mgmt) | frontend | `implemented` | — |
 | [[F-023]] | FX Chart & Signal Overlay | frontend | `documented` | `user/fx/chart-settings.en.md` |
@@ -74,12 +74,12 @@
 |------|-------|-------|--------|--------|
 | [[F-024]] | Asset CRUD | fullstack | `documented` | `user/assets/index.en.md` |
 | [[F-025]] | Asset Provider Registry (yfinance, JustETF, CSS Scraper, Scheduled Investment) | backend | `documented` | `user/assets/providers/` |
-| [[F-026]] | Asset Provider Assignment (dynamic params form) | fullstack | `implemented` | — |
-| [[F-027]] | Asset Data Sync (price fetch from providers) | fullstack | `implemented` | — |
+| [[F-026]] | Asset Provider Assignment (dynamic params form) | fullstack | `implemented` | [`dev/be/assets/architecture.md`](developer/backend/assets/architecture.md) |
+| [[F-027]] | Asset Data Sync (price fetch from providers) | fullstack | `implemented` | [`dev/be/assets/architecture.md`](developer/backend/assets/architecture.md) |
 | [[F-028]] | Asset Search Autocomplete (multi-provider parallel) | frontend | `implemented` | — |
 | [[F-029]] | Asset Metadata Refresh | fullstack | `implemented` | — |
-| [[F-030]] | Asset Price History (OHLCV store/query) | backend | `implemented` | — |
-| [[F-031]] | Asset Events (DIVIDEND, SPLIT, INTEREST, etc.) | fullstack | `implemented` | — |
+| [[F-030]] | Asset Price History (OHLCV store/query) | backend | `implemented` | [`dev/arch/database/assets_pricing.md`](developer/architecture/database/assets_pricing.md) |
+| [[F-031]] | Asset Events (DIVIDEND, SPLIT, INTEREST, etc.) | fullstack | `implemented` | [`dev/be/assets/events.md`](developer/backend/assets/events.md) |
 | [[F-032]] | Asset List View (dual view: card + table) | frontend | `implemented` | `user/assets/index.en.md` |
 | [[F-033]] | Asset Detail Page (chart, signals, editor) | frontend | `implemented` | `user/assets/detail/` |
 | [[F-034]] | Scheduled Investment Provider (synthetic yield) | backend | `implemented` | `user/assets/providers/` |
@@ -108,7 +108,7 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-046]] | Transaction Model & Bulk API | backend | `in-progress` | — |
+| [[F-046]] | Transaction Model & Bulk API | backend | `in-progress` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
 | [[F-047]] | Transaction List Page (DataTable + filters) | frontend | `in-progress` | — |
 | [[F-048]] | Staging Modal (unified manual entry + BRIM output) | frontend | `planned` | — |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | `in-progress` | — |
@@ -149,20 +149,20 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-059]] | Provider Registry Pattern (auto-discovery via decorator) | backend | `implemented` | — |
-| [[F-060]] | Thread Isolation for Providers | backend | `implemented` | — |
+| [[F-059]] | Provider Registry Pattern (auto-discovery via decorator) | backend | `implemented` | [`dev/arch/patterns/registry_pattern.md`](developer/architecture/patterns/registry_pattern.md) |
+| [[F-060]] | Thread Isolation for Providers | backend | `implemented` | [`dev/arch/overview.md`](developer/architecture/overview.md) |
 | [[F-061]] | 5-layer Provider Cache | backend | `implemented` | — |
 | [[F-062]] | Docker Single-Image Deploy | infra | `documented` | `admin/docker_advanced.en.md` |
 | [[F-063]] | dev.py CLI (single entry point) | infra | `implemented` | `admin/cli_tools.en.md` |
-| [[F-064]] | Data Separation prod/test (isolated SQLite) | backend | `implemented` | — |
+| [[F-064]] | Data Separation prod/test (isolated SQLite) | backend | `implemented` | [`dev/arch/database/index.md`](developer/architecture/database/index.md) |
 | [[F-065]] | JWT Cookie Auth (stateless, multi-worker) | backend | `implemented` | — |
 | [[F-066]] | Zodios API Client (OpenAPI types + Zod validation) | frontend | `implemented` | — |
-| [[F-067]] | Playwright E2E Tests (181+ tests) | infra | `implemented` | — |
-| [[F-068]] | Backend API Tests (276+ pytest tests) | infra | `implemented` | — |
+| [[F-067]] | Playwright E2E Tests (181+ tests) | infra | `implemented` | [`dev/tests/index.md`](developer/test-walkthrough/index.md) |
+| [[F-068]] | Backend API Tests (276+ pytest tests) | infra | `implemented` | [`dev/tests/index.md`](developer/test-walkthrough/index.md) |
 | [[F-069]] | MkDocs Multi-Language Documentation | infra | `documented` | `developer/` |
-| [[F-070]] | Aphra LLM Translation Pipeline | infra | `implemented` | — |
-| [[F-071]] | EditBuffer Pattern (bidirectional inline editor) | frontend | `implemented` | — |
-| [[F-072]] | TimeSeriesStore Pattern (delta-fetching client cache) | frontend | `implemented` | — |
+| [[F-070]] | Aphra LLM Translation Pipeline | infra | `implemented` | [`dev/docs/translation-pipeline.md`](developer/docs/translation-pipeline.md) |
+| [[F-071]] | EditBuffer Pattern (bidirectional inline editor) | frontend | `implemented` | [`dev/fe/components/ui-base/data-editor.md`](developer/frontend/components/ui-base/data-editor.md) |
+| [[F-072]] | TimeSeriesStore Pattern (delta-fetching client cache) | frontend | `implemented` | [`dev/fe/state/index.md`](developer/frontend/state/index.md) |
 | [[F-073]] | Backup & Restore | fullstack | `implemented` | — |
 | [[F-074]] | E2E Test Gallery (auto-screenshots for docs) | infra | `implemented` | — |
 
@@ -183,7 +183,8 @@
 | DASHBOARD | 2 | 0 | 0 | 2 |
 | CALCULATIONS | 3 | 2 | 0 | 1 |
 | INFRASTRUCTURE | 16 | 15 | 0 | 1 |
-| **TOTAL** | **74** | **62** | **3** | **9** |
+| PLANNED/IDEA | 22 | 0 | 0 | 22 |
+| **TOTAL** | **96** | **62** | **3** | **31** |
 
 ## Key source files
 

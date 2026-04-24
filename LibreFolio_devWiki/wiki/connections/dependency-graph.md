@@ -2,7 +2,8 @@
 
 > Cross-domain view of feature dependencies. Shows which features must exist before others can be built.
 > Read [[features/registry]] for feature descriptions.
-> Last updated: 2026-04-24
+> Last updated: 2026-05-13
+> F-075–F-095 range (21 planned/idea features) is now tracked in the registry. Inverse `enables:` links from their dependencies have been populated.
 
 ---
 
@@ -52,6 +53,15 @@ graph TD
     F052[F-052 Scheduler]
     F054[F-054 Dashboard]
     F056[F-056 FIFO]
+  end
+
+  subgraph "Phase 10+ — Planned/Ideas 📋"
+    F075[F-075 TanStack Table v9]
+    F081[F-081 Fiscal Sale Method]
+    F083[F-083 Multi-File Import]
+    F085[F-085 QuarkAI Assistant]
+    F090[F-090 AssetEvent↔TX Link]
+    FREST[F-076…F-095 — 21 planned/idea features]
   end
 
   F001 --> F003
