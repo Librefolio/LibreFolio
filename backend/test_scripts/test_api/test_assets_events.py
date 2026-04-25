@@ -626,3 +626,49 @@ async def test_multiple_types_same_date(test_server):
         types_found = {e.type for e in events_found}
         assert types_found == {"DIVIDEND", "INTEREST"}
         print_success(f"Both event types coexist on same date: {types_found}")
+
+
+# ============================================================
+# Test 9: EVENT_CURRENCY_MISMATCH → HTTP 400 (Policy D regression)
+# ============================================================
+@pytest.mark.asyncio
+async def test_bulk_upsert_events_currency_mismatch_returns_400(test_server):
+    """Test 9: Hard-400 when an event currency differs from its parent asset.
+
+    Regression for the residual ``e.code`` → ``e.error_code`` bug discovered
+    by wiki-lint pass #5 on `assets.py::bulk_upsert_events` (the third
+    occurrence beyond G-batch6's market_data fixes). Before the fix the
+    branch raised AttributeError, which the bare ``except Exception`` mapped
+    to HTTP 500 instead of the documented HTTP 400.
+    """
+    print_section("Test 9: EVENT_CURRENCY_MISMATCH → HTTP 400")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        # Asset declared in USD…
+        create_item = FAAssetCreateItem(display_name=f"Event Cur Mismatch {unique_id('EVT9')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+
+        # …event submitted with EUR value → must be rejected.
+        events = [
+            FAAssetEventPoint(
+                date=date.today() - timedelta(days=1),
+                type="DIVIDEND",
+                value=Currency(code="EUR", amount=Decimal("1.00")),
+            ),
+        ]
+        upsert_data = FAEventUpsert(asset_id=asset_id, events=events)
+
+        resp = await client.post(
+            f"{API_BASE}/assets/events",
+            json=[upsert_data.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
+        assert resp.status_code == 400, f"Expected 400 for EVENT_CURRENCY_MISMATCH, got {resp.status_code}: {resp.text}"
+        # The error message must mention the mismatch (asset USD vs event EUR).
+        body = resp.text.upper()
+        assert "EUR" in body or "USD" in body or "MISMATCH" in body or "CURRENCY" in body, f"Error body should mention the currency mismatch: {resp.text}"
+        print_success("Currency-mismatched event correctly rejected with HTTP 400")

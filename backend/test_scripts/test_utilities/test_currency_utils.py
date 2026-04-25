@@ -256,5 +256,3 @@ class TestNormalizeCurrency:
         result_en = normalize_currency("CHF", language="en")
         result_it = normalize_currency("CHF", language="it")
         assert result_en["iso_codes"] == result_it["iso_codes"] == ["CHF"]
-
-

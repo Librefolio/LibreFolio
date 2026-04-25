@@ -211,14 +211,7 @@ async def _seed_stale_data(
 
 
 async def _count_prices(session: AsyncSession, asset_id: int) -> int:
-    return int(
-        (
-            await session.execute(
-                select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id)
-            )
-        ).scalar()
-        or 0
-    )
+    return int((await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id))).scalar() or 0)
 
 
 # ============================================================================
@@ -344,5 +337,3 @@ async def test_param_change_does_not_touch_other_assets():
         assert sib_auto is not None, "sibling auto event wrongly wiped"
         sib_tx = await session.get(Transaction, sibling["tx_id"])
         assert sib_tx is not None and sib_tx.asset_event_id == sibling["auto_event_id"]
-
-

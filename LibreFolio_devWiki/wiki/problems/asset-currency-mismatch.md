@@ -4,10 +4,25 @@ category: problem
 status: resolved
 date: 2026-04-01
 tags: [backend, db, assets, prices, currency, fx]
-related: [entities/db-models, concepts/daily-point-policy]
+related: [entities/db-models, concepts/daily-point-policy, decisions/price-currency-hard-reject, decisions/policy-d-currency-wipe]
 ---
 
 # Problem: Asset Price Currency Mismatch
+
+> **Superseded-in-spirit (2026-04-21 → 2026-04-23)**: the per-row
+> `PriceHistory.currency` column is still present (forensic canary), but the
+> *runtime contract* it once enabled — accepting mismatched-currency rows and
+> FX-converting at read time — has been replaced by **stricter rules**:
+>
+> - **API in**: hard-400 on any price-currency mismatch in `upsert_prices_bulk`
+>   (see [[decisions/price-currency-hard-reject]] — Blocco I.2).
+> - **API out**: `FAPricePoint` no longer exposes `currency`; frontend trusts
+>   `asset.currency` as the single source of truth (I.8).
+> - **Currency change**: HTTP 409 if prices exist; Policy D destructive wipe
+>   on user confirm (see [[decisions/policy-d-currency-wipe]]).
+>
+> The page below documents the original 2026-04-01 design rationale for the
+> per-row column, which is still factually accurate at the DB layer.
 
 ## Symptom
 When displaying asset prices, the currency of a fetched price can differ from the currency declared on the `Asset` record. For example, a European ETF might declare `EUR` as its currency, but the yfinance provider returns prices in `USD` for the US-listed share class. Assuming `PriceHistory` prices are always in `Asset.currency` leads to silent mis-valuation.

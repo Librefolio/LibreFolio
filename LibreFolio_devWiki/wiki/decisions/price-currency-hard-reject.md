@@ -5,6 +5,7 @@ status: resolved
 tags: [prices, currency, assets, api, validation]
 related_features: [F-030, F-024]
 related_sources: [sources/phase07-part3-api-consolidation, sources/phase07-part3-closure]
+related: [decisions/policy-d-currency-wipe, entities/backup-router]
 ---
 
 # Decision: Price Currency Hard-Reject + Asset Currency Change 409
@@ -52,6 +53,14 @@ In both cases, failing loudly is better than silently skipping rows.
 ```
 
 **User must**: DELETE all prices first (via bulk delete or DataEditor clear), then PATCH currency.
+
+**Or accept the destructive path** — Phase 7 Part 3 Closure Batch 3 added
+[[decisions/policy-d-currency-wipe]] (commit `8fc018ab`): when the user explicitly
+confirms in `AssetCurrencyChangeModal`, the PATCH proceeds with a server-side
+symmetric wipe of prices + events (transactions preserved with
+`asset_event_id = NULL`). The 409 + Policy D pair is the canonical flow:
+409 = "stop, confirm" / Policy D = "user said yes, wipe and proceed".
+[[entities/backup-router]] is the mandatory pre-confirm snapshot surface.
 
 **No auto-conversion** (bulk-convert option was rejected):
 - Would introduce FX rate dependency at asset update time

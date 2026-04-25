@@ -86,10 +86,7 @@ async def _create_asset(client: httpx.AsyncClient, tag: str, currency: str = "US
 
 
 async def _seed_prices(client: httpx.AsyncClient, asset_id: int, start: date, count: int) -> None:
-    points = [
-        FAPricePoint(date=start + timedelta(days=i), close=Decimal("100.00") + Decimal(i))
-        for i in range(count)
-    ]
+    points = [FAPricePoint(date=start + timedelta(days=i), close=Decimal("100.00") + Decimal(i)) for i in range(count)]
     payload = FAUpsert(asset_id=asset_id, prices=points)
     resp = await client.post(
         f"{API_BASE}/assets/prices",
@@ -233,5 +230,3 @@ async def test_summary_dry_run_does_not_mutate(test_server):
             assert body["prices"] == 2, f"attempt {attempt}: prices changed → {body}"
             assert body["dry_run"] is True
         print_success("Summary endpoint is non-mutating across repeated calls")
-
-

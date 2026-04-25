@@ -107,10 +107,7 @@ async def _create_asset(client: httpx.AsyncClient, tag: str, currency: str = "US
 
 
 async def _seed_prices(client: httpx.AsyncClient, asset_id: int, start: date, count: int) -> None:
-    points = [
-        FAPricePoint(date=start + timedelta(days=i), close=Decimal("100.00") + Decimal(i))
-        for i in range(count)
-    ]
+    points = [FAPricePoint(date=start + timedelta(days=i), close=Decimal("100.00") + Decimal(i)) for i in range(count)]
     payload = FAUpsert(asset_id=asset_id, prices=points)
     resp = await client.post(
         f"{API_BASE}/assets/prices",
@@ -272,4 +269,3 @@ async def test_same_currency_patch_is_not_blocked(test_server):
         assert body["success_count"] == 1, body
         assert body["results"][0]["success"] is True
         print_success("Same-currency PATCH accepted (no block)")
-

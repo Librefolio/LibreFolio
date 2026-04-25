@@ -2,9 +2,18 @@
 type: source
 title: "Phase 07 — Part 3: API Consolidation + Transfer Semantics + Currency Simplification"
 date_ingested: 2026-04-24
-git_hash: c9b269
-path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part3.md
-status: feature_complete
+date_updated: 2026-04-25
+git_hash: a61b0dfa
+path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3.md
+status: "✅ DONE"
+related:
+  - decisions/multi-broker-atomic-tx
+  - decisions/tx-link-uuid-semantics
+  - decisions/price-currency-hard-reject
+  - decisions/policy-d-currency-wipe
+  - features/F-046
+  - features/F-051
+  - sources/phase07-part3-closure
 ---
 
 # Phase 07 Part 3 — API Consolidation
@@ -12,6 +21,9 @@ status: feature_complete
 > The largest and most architecturally significant plan of Phase 07.
 > Introduced multi-broker atomic transactions, transfer semantics, and
 > the currency simplification (Blocco I) that invalidated several earlier designs.
+>
+> **Path note**: archived 2026-04-25 from `RoadmapV4_UI/plan-phase07-transaction-Part3.md`
+> into `phases/phase-07-subplan/Parte3/`. ✅ DONE — see closure + closure_2 for follow-ups.
 
 ## Overview
 

@@ -115,7 +115,7 @@
 | [[F-048]] | Staging Modal (unified manual entry + BRIM output) | frontend | `planned` | — |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | `in-progress` | — |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `planned` | — |
-| [[F-051]] | Transaction ↔ AssetEvent Link | backend | `in-progress` | — |
+| [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |
 
 ---
 

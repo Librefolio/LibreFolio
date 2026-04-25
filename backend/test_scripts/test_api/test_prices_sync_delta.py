@@ -252,10 +252,7 @@ async def test_delta_above_cap_is_omitted(test_server):
         assert result["inserted_count"] == days, result
         assert result["points_changed"] == days, result
         # Cap enforced: delta must be None even though many points changed.
-        assert result.get("changed_points") is None, (
-            f"expected None above cap ({CHANGED_POINTS_PAYLOAD_CAP}), "
-            f"got {len(result.get('changed_points') or [])} items"
-        )
+        assert result.get("changed_points") is None, f"expected None above cap ({CHANGED_POINTS_PAYLOAD_CAP}), " f"got {len(result.get('changed_points') or [])} items"
         print_info(f"points_changed={result['points_changed']} ≥ cap+1 ({CHANGED_POINTS_PAYLOAD_CAP + 1})")
         print_success("Cap honoured: delta omitted above CHANGED_POINTS_PAYLOAD_CAP")
 
@@ -277,6 +274,3 @@ async def test_delta_at_exact_cap_is_included(test_server):
         assert delta is not None, "expected delta at exact cap, got None"
         assert len(delta) == days, f"expected {days} items, got {len(delta)}"
         print_success(f"Boundary inclusive: delta returned with {len(delta)} items (= cap)")
-
-
-

@@ -203,4 +203,3 @@ async def test_upsert_reports_many_offending_dates_with_ellipsis(test_server):
         assert "CHF" in detail
         assert "more" in detail or "+ 2 more" in detail, f"expected truncation hint, got: {detail}"
         print_success("Large mismatch batch truncated with ellipsis")
-

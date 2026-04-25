@@ -242,4 +242,3 @@ async def test_serve_unknown_id_returns_404(test_server):
         )
         assert resp.status_code == 404
         print_success("✓ Unknown id returns 404")
-

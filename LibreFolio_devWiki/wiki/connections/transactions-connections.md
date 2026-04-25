@@ -1,6 +1,8 @@
 # Transaction Feature Connections
 
-> Status: Phase 7 — in progress (Part 1✅, Part 2✅, Part 3–5 TODO)
+> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25)**.
+> Backend coverage 87.06% after G-batch6/7. Parts 4–5 (frontend Staging Modal /
+> File Preview) still planned.
 > See [[connections/dependency-graph]] for the full project view.
 
 ---
@@ -28,17 +30,29 @@ graph TD
 
 ---
 
-## Phase 7 Gap Analysis (from plan)
+## Phase 7 Closed-Gaps Summary
 
-| # | Gap | Status | Blocking |
-|---|-----|--------|---------|
-| 1 | `Transaction ↔ AssetEvent` link absent | F-051 planned | Smart assistant, income tracking |
-| 2 | Access control for GET/PATCH/DELETE not broker-filtered | F-046 in-progress | Security |
-| 3 | BRIM no `plugin_version` for cache invalidation | F-013 planned | Re-parse detection |
-| 4 | Frontend `/transactions` is placeholder | F-047 in-progress | User-facing |
-| 5 | No unified Staging Area | F-048 planned | Core UX |
-| 6 | BRIM no metadata UI for preview columns | F-013 planned | F-049 dynamic rendering |
-| 7 | Bulk TX not atomic per-broker | F-046 planned | Data integrity |
+The pre-Phase-7 gap list below was the original analysis. As of 2026-04-25
+(Phase 7 Part 3 closure) all 7 gaps that drove the work are resolved.
+
+| # | Original gap | Resolved by | Notes |
+|---|--------------|-------------|-------|
+| 1 | `Transaction ↔ AssetEvent` link absent | F-051 — `Transaction.asset_event_id` + `POST /transactions/events/suggest` | Part 1 (column) + Part 3 (suggest endpoint) |
+| 2 | Access control for GET/PATCH/DELETE not broker-filtered | F-046 — broker-scoped queries + EDITOR-role write checks | Part 3 |
+| 3 | BRIM no `plugin_version` for cache invalidation | F-013 + [[decisions/brim-parser-only]] (`parse_is_stale` flag) | Part 2 |
+| 4 | Frontend `/transactions` placeholder | F-047 — DataTable + filters | partial (Part 3 backend ready; FE polish in Part 4) |
+| 5 | No unified Staging Area | F-048 | still planned (Part 4) |
+| 6 | BRIM no metadata UI for preview columns | F-013 / F-049 — `last-parse` cache + dynamic columns | Part 2 + Part 3 |
+| 7 | Bulk TX not atomic per-broker | F-046 — see [[decisions/multi-broker-atomic-tx]] | Part 3 (multi-broker, single DEFERRABLE FK) |
+
+Additional Phase 7 deliverables not in the original gap list:
+
+- **Hard-400 on price/event currency mismatch** ([[decisions/price-currency-hard-reject]] — Blocco I.2)
+- **HTTP 409 on `Asset.currency` PATCH with existing data** + **Policy D destructive wipe** ([[decisions/policy-d-currency-wipe]])
+- **Backup router** for pre-wipe snapshots ([[entities/backup-router]])
+- **2 production bugs** discovered by the BlockG coverage push:
+  [[problems/assets-wipe-error-attr-mismatch]],
+  [[problems/babel-currency-symbol-echo]]
 
 ---
 

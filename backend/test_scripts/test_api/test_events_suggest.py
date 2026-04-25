@@ -294,4 +294,3 @@ async def test_suggest_rejects_tolerance_over_max(test_server):
         )
         assert resp.status_code == 422, f"expected 422, got {resp.status_code}: {resp.text}"
         print_success("tolerance_days=8 rejected with 422")
-
