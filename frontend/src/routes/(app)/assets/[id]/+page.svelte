@@ -177,7 +177,10 @@
     // #R3-4 — derive "parametric" status from provider kind (instead of hardcoded code),
     // so the detail page picks the "Regenerate" label for any parametric_generation provider.
     // Depends on assetProvidersVersion to re-evaluate after the providers cache is loaded.
-    let isParametric = $derived.by(() => { void $assetProvidersVersion; return isParametricProvider(providerAssignment?.provider_code); });
+    let isParametric = $derived.by(() => {
+        void $assetProvidersVersion;
+        return isParametricProvider(providerAssignment?.provider_code);
+    });
     let isManualOnly = $derived(!providerAssignment);
 
     /** First data point date — used for "no data before" banner */

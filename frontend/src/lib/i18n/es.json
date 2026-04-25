@@ -444,7 +444,38 @@
     "subtitle": "Visualiza y gestiona el historial de transacciones",
     "addTransaction": "Agregar Transacción",
     "import": "Importar",
-    "placeholderMessage": "La gestión de transacciones estará disponible pronto."
+    "placeholderMessage": "La gestión de transacciones estará disponible pronto.",
+    "actions": {
+      "edit": "Editar"
+    },
+    "empty": "Sin transacciones",
+    "ghost": {
+      "tooltip": "Partner enlazado mostrado por contexto"
+    },
+    "gotoLinkedPair": "Ir al par enlazado",
+    "linkedEvent": "Evento enlazado",
+    "table": {
+      "asset": "Activo",
+      "broker": "Bróker",
+      "cash": "Efectivo",
+      "date": "Fecha",
+      "quantity": "Cant.",
+      "tags": "Etiquetas",
+      "type": "Tipo"
+    },
+    "types": {
+      "ADJUSTMENT": "Ajuste",
+      "BUY": "Compra",
+      "DEPOSIT": "Depósito",
+      "DIVIDEND": "Dividendo",
+      "FEE": "Comisión",
+      "FX_CONVERSION": "Conversión FX",
+      "INTEREST": "Interés",
+      "SELL": "Venta",
+      "TAX": "Impuesto",
+      "TRANSFER": "Transferencia",
+      "WITHDRAWAL": "Retiro"
+    }
   },
   "fx": {
     "title": "Tipos de Cambio",

@@ -212,14 +212,7 @@
     // compared to the snapshot taken at load time. In **create mode**
     // (editMode === false) there is no snapshot, so any provider
     // configured means "dirty" by definition.
-    let providerDirty = $derived(
-        !editMode
-            ? hasProvider
-            : providerCode !== initialProviderCode ||
-              providerIdentifier !== initialProviderIdentifier ||
-              providerIdentifierType !== initialProviderIdentifierType ||
-              JSON.stringify(providerParams ?? null) !== (initialProviderParamsJson || 'null'),
-    );
+    let providerDirty = $derived(!editMode ? hasProvider : providerCode !== initialProviderCode || providerIdentifier !== initialProviderIdentifier || providerIdentifierType !== initialProviderIdentifierType || JSON.stringify(providerParams ?? null) !== (initialProviderParamsJson || 'null'));
     let title = $derived(editMode ? $t('assets.modal.titleEdit') : $t('assets.modal.title'));
 
     /** Asset type options for SimpleSelect (with PNG icons) */
@@ -806,20 +799,17 @@
         //       hook below.
         // ``toast: false`` because the error is rendered inline via the
         // ``data-form-error`` banner (the existing UX).
-        const result = await saveWithRetry(
-            () => (editMode && editData?.id ? saveEdit(editData.id) : saveCreate()),
-            {
-                toast: false,
-                fallback: $t('assets.modal.saveFailed'),
-                onError: (err: any) => {
-                    if (err?.response?.status === 409) {
-                        formError = $t('assets.modal.duplicateName');
-                        return true;
-                    }
-                    return false;
-                },
+        const result = await saveWithRetry(() => (editMode && editData?.id ? saveEdit(editData.id) : saveCreate()), {
+            toast: false,
+            fallback: $t('assets.modal.saveFailed'),
+            onError: (err: any) => {
+                if (err?.response?.status === 409) {
+                    formError = $t('assets.modal.duplicateName');
+                    return true;
+                }
+                return false;
             },
-        );
+        });
 
         if (result.status === 'error' && !formError) {
             formError = result.message;
@@ -955,12 +945,7 @@
             }
         }
         const resultItem = patchResp?.results?.[0];
-        if (
-            resultItem &&
-            resultItem.success === false &&
-            typeof resultItem.message === 'string' &&
-            resultItem.message.startsWith('CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|')
-        ) {
+        if (resultItem && resultItem.success === false && typeof resultItem.message === 'string' && resultItem.message.startsWith('CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|')) {
             const parsed: Record<string, string> = {};
             for (const chunk of resultItem.message.split('|').slice(1)) {
                 const [k, v] = chunk.split('=');
@@ -1028,9 +1013,7 @@
                 const startD = new Date(today);
                 startD.setFullYear(startD.getFullYear() - 5);
                 const start = startD.toISOString().slice(0, 10);
-                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
-                    {asset_id: assetId, date_range: {start, end}} as any,
-                ]);
+                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start, end}} as any]);
             } catch (syncErr) {
                 console.warn('Post-save auto-sync failed (non-blocking):', syncErr);
                 // Non-blocking: the user can manually re-sync if needed.

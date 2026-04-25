@@ -116,9 +116,7 @@
             // Step 2: retry PATCH (now succeeds — no residual market data).
             progressStep = 'patch';
             await zodiosApi.patch_assets_bulk_api_v1_assets_patch([patchPayload] as any);
-            toasts.success(
-                tr('assetDetail.currencyChange.changedTo', {values: {from: blocker.from, to: blocker.to}}),
-            );
+            toasts.success(tr('assetDetail.currencyChange.changedTo', {values: {from: blocker.from, to: blocker.to}}));
 
             // Step 3: auto-sync (only if provider assigned AND we had prices to begin with).
             if (providerAssigned && blocker.oldest) {
@@ -227,21 +225,41 @@
                     </div>
                     <div class="flex gap-2 flex-wrap">
                         {#if blocker.prices > 0}
-                            <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" onclick={() => exportBackup('prices', 'csv')} disabled={inProgress}>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                                onclick={() => exportBackup('prices', 'csv')}
+                                disabled={inProgress}
+                            >
                                 <Download size={13} />
                                 {$t('assetDetail.currencyChange.exportPricesCsv')}
                             </button>
-                            <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" onclick={() => exportBackup('prices', 'json')} disabled={inProgress}>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                                onclick={() => exportBackup('prices', 'json')}
+                                disabled={inProgress}
+                            >
                                 <Download size={13} />
                                 {$t('assetDetail.currencyChange.exportPricesJson')}
                             </button>
                         {/if}
                         {#if totalEvents > 0}
-                            <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" onclick={() => exportBackup('events', 'csv')} disabled={inProgress}>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                                onclick={() => exportBackup('events', 'csv')}
+                                disabled={inProgress}
+                            >
                                 <Download size={13} />
                                 {$t('assetDetail.currencyChange.exportEventsCsv')}
                             </button>
-                            <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" onclick={() => exportBackup('events', 'json')} disabled={inProgress}>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                                onclick={() => exportBackup('events', 'json')}
+                                disabled={inProgress}
+                            >
                                 <Download size={13} />
                                 {$t('assetDetail.currencyChange.exportEventsJson')}
                             </button>

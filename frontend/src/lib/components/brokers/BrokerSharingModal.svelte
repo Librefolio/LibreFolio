@@ -312,10 +312,7 @@
         // #R6-8 (Batch 4.d-part3) — success now emits a toast and closes the
         // modal (consistent with the evolved app-wide save pattern). Only the
         // error path keeps the inline banner (persistent, dismissible).
-        const result = await saveWithRetry(
-            () => zodiosApi.bulk_update_broker_access_api_v1_brokers__broker_id__access_put(body, {params: {broker_id: brokerId}}),
-            {toast: false, fallback: $_('brokers.sharing.saveFailed')},
-        );
+        const result = await saveWithRetry(() => zodiosApi.bulk_update_broker_access_api_v1_brokers__broker_id__access_put(body, {params: {broker_id: brokerId}}), {toast: false, fallback: $_('brokers.sharing.saveFailed')});
 
         if (result.status === 'success') {
             originalAccesses = JSON.parse(JSON.stringify(accesses));

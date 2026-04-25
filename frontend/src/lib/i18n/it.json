@@ -444,7 +444,38 @@
     "subtitle": "Visualizza e gestisci la cronologia delle transazioni",
     "addTransaction": "Aggiungi Transazione",
     "import": "Importa",
-    "placeholderMessage": "La gestione delle transazioni sarà disponibile a breve."
+    "placeholderMessage": "La gestione delle transazioni sarà disponibile a breve.",
+    "actions": {
+      "edit": "Modifica"
+    },
+    "empty": "Nessuna transazione",
+    "ghost": {
+      "tooltip": "Partner correlato mostrato per contesto"
+    },
+    "gotoLinkedPair": "Vai alla coppia collegata",
+    "linkedEvent": "Evento collegato",
+    "table": {
+      "asset": "Asset",
+      "broker": "Broker",
+      "cash": "Cassa",
+      "date": "Data",
+      "quantity": "Qtà",
+      "tags": "Tag",
+      "type": "Tipo"
+    },
+    "types": {
+      "ADJUSTMENT": "Aggiustamento",
+      "BUY": "Acquisto",
+      "DEPOSIT": "Deposito",
+      "DIVIDEND": "Dividendo",
+      "FEE": "Commissione",
+      "FX_CONVERSION": "Conversione FX",
+      "INTEREST": "Interesse",
+      "SELL": "Vendita",
+      "TAX": "Tassa",
+      "TRANSFER": "Trasferimento",
+      "WITHDRAWAL": "Prelievo"
+    }
   },
   "fx": {
     "title": "Tassi di Cambio",

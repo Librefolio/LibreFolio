@@ -242,10 +242,7 @@
             // ``saveWithRetry``. Auto-sync below stays in its own non-blocking
             // try/catch: a sync failure must NOT block creation success.
             // ``toast: false`` because ``error`` is rendered inline.
-            const createResult = await saveWithRetry(
-                () => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]),
-                {toast: false, fallback: $_('fx.addPair.createFailed')},
-            );
+            const createResult = await saveWithRetry(() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]), {toast: false, fallback: $_('fx.addPair.createFailed')});
             if (createResult.status === 'error') {
                 error = createResult.message;
                 saving = false;
