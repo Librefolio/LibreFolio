@@ -66,10 +66,7 @@
         // closing silently with only a console.error.
         try {
             if (mode === 'create') {
-                const result = await saveWithRetry(
-                    () => zodiosApi.create_brokers_api_v1_brokers_post([event.detail]),
-                    {fallback: $_('brokers.createFailed')},
-                );
+                const result = await saveWithRetry(() => zodiosApi.create_brokers_api_v1_brokers_post([event.detail]), {fallback: $_('brokers.createFailed')});
                 if (result.status === 'error') {
                     error = result.message;
                     return;

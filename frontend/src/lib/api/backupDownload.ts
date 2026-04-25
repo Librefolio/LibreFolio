@@ -63,11 +63,7 @@ function triggerBrowserDownload(blob: Blob, filename: string) {
  *
  * @throws AxiosError on HTTP failure (401 handled by interceptor).
  */
-export async function downloadAssetBackup(
-    assetId: number,
-    kind: BackupKind,
-    format: BackupFormat,
-): Promise<void> {
+export async function downloadAssetBackup(assetId: number, kind: BackupKind, format: BackupFormat): Promise<void> {
     const response = await axiosInstance.get<Blob>(`/api/v1/backup/asset/${assetId}/${kind}`, {
         params: {format},
         responseType: 'blob',
@@ -93,4 +89,3 @@ export async function downloadFxBackup(base: string, quote: string, format: Back
     const filename = extractFilename(response.headers?.['content-disposition'] as string | undefined, fallback);
     triggerBrowserDownload(response.data, filename);
 }
-

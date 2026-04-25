@@ -444,7 +444,38 @@
     "subtitle": "Visualisez et gérez l'historique des transactions",
     "addTransaction": "Ajouter une Transaction",
     "import": "Importer",
-    "placeholderMessage": "La gestion des transactions sera bientôt disponible."
+    "placeholderMessage": "La gestion des transactions sera bientôt disponible.",
+    "actions": {
+      "edit": "Modifier"
+    },
+    "empty": "Aucune transaction",
+    "ghost": {
+      "tooltip": "Partenaire lié affiché pour le contexte"
+    },
+    "gotoLinkedPair": "Aller à la paire liée",
+    "linkedEvent": "Événement lié",
+    "table": {
+      "asset": "Actif",
+      "broker": "Courtier",
+      "cash": "Espèces",
+      "date": "Date",
+      "quantity": "Qté",
+      "tags": "Étiquettes",
+      "type": "Type"
+    },
+    "types": {
+      "ADJUSTMENT": "Ajustement",
+      "BUY": "Achat",
+      "DEPOSIT": "Dépôt",
+      "DIVIDEND": "Dividende",
+      "FEE": "Frais",
+      "FX_CONVERSION": "Conversion FX",
+      "INTEREST": "Intérêts",
+      "SELL": "Vente",
+      "TAX": "Impôt",
+      "TRANSFER": "Transfert",
+      "WITHDRAWAL": "Retrait"
+    }
   },
   "fx": {
     "title": "Taux de Change",

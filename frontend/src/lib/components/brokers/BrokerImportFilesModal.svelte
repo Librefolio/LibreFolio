@@ -353,15 +353,7 @@
 />
 
 <!-- #R6-7 (Batch 4.d-part3) — Bulk delete destructive confirm. -->
-<ConfirmModal
-    confirmText={$_('common.delete')}
-    danger={true}
-    message={$_('uploads.confirmBulkDelete.message', {values: {count: pendingBulkDeleteIds.length}})}
-    onCancel={cancelBulkDelete}
-    onConfirm={confirmBulkDelete}
-    open={confirmBulkDeleteOpen}
-    title={$_('uploads.confirmBulkDelete.title')}
-/>
+<ConfirmModal confirmText={$_('common.delete')} danger={true} message={$_('uploads.confirmBulkDelete.message', {values: {count: pendingBulkDeleteIds.length}})} onCancel={cancelBulkDelete} onConfirm={confirmBulkDelete} open={confirmBulkDeleteOpen} title={$_('uploads.confirmBulkDelete.title')} />
 
 <style>
     /* Backdrop and modal-content styles handled by ModalBase */

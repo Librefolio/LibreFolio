@@ -444,7 +444,38 @@
     "subtitle": "View and manage your transaction history",
     "addTransaction": "Add Transaction",
     "import": "Import",
-    "placeholderMessage": "Transaction management will be available soon."
+    "placeholderMessage": "Transaction management will be available soon.",
+    "empty": "No transactions yet",
+    "linkedEvent": "Linked event",
+    "gotoLinkedPair": "Go to linked pair",
+    "ghost": {
+      "tooltip": "Linked partner shown for context"
+    },
+    "table": {
+      "date": "Date",
+      "type": "Type",
+      "asset": "Asset",
+      "quantity": "Qty",
+      "cash": "Cash",
+      "broker": "Broker",
+      "tags": "Tags"
+    },
+    "actions": {
+      "edit": "Edit"
+    },
+    "types": {
+      "BUY": "Buy",
+      "SELL": "Sell",
+      "DIVIDEND": "Dividend",
+      "INTEREST": "Interest",
+      "DEPOSIT": "Deposit",
+      "WITHDRAWAL": "Withdrawal",
+      "FEE": "Fee",
+      "TAX": "Tax",
+      "TRANSFER": "Transfer",
+      "FX_CONVERSION": "FX Conversion",
+      "ADJUSTMENT": "Adjustment"
+    }
   },
   "fx": {
     "title": "FX Rates",
