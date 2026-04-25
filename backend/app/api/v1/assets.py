@@ -1044,7 +1044,7 @@ async def market_data_summary(
     try:
         return await AssetSourceManager.wipe_market_data_for_currency_change(asset_id=asset_id, session=session, dry_run=True)
     except AssetSourceError as e:
-        status = 404 if e.code == "ASSET_NOT_FOUND" else 400
+        status = 404 if e.error_code == "ASSET_NOT_FOUND" else 400
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error in market-data summary for asset {asset_id}: {e}")
@@ -1078,7 +1078,7 @@ async def wipe_market_data(
     try:
         return await AssetSourceManager.wipe_market_data_for_currency_change(asset_id=asset_id, session=session, dry_run=False)
     except AssetSourceError as e:
-        status = 404 if e.code == "ASSET_NOT_FOUND" else 400
+        status = 404 if e.error_code == "ASSET_NOT_FOUND" else 400
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error in market-data wipe for asset {asset_id}: {e}")

@@ -1011,6 +1011,16 @@ def services_scheduled_investment_param_change(verbose: bool = False, test_names
     return run_command(cmd, "Scheduled investment param-change tests", verbose=verbose)
 
 
+def services_brim_provider_base(verbose: bool = False, test_names: list = None) -> bool:
+    """Test BRIMProvider abstract base default properties (docs_url, icon_url, plugin_version) — G-batch6."""
+    print_section("Services: BRIMProvider Base Defaults (G-batch6)")
+    print_info("Testing default property values inherited by all BRIM provider subclasses")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_provider_base.py", test_names)
+    return run_command(cmd, "BRIM provider base tests", verbose=verbose)
+
+
+
 # ============================================================================
 # UTILS TESTS
 # ============================================================================
@@ -1460,6 +1470,24 @@ def api_prices_sync_delta(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Prices sync delta tests", verbose=verbose)
 
 
+def api_market_data_wipe(verbose: bool = False, test_names: list = None) -> bool:
+    """Run market-data wipe endpoint tests (R3-3 Policy D / G-batch6)."""
+    print_section("Market-Data Wipe (R3-3) API Tests")
+    print_info("Testing GET /assets/{id}/market-data/summary + POST /wipe (Policy D)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_market_data_wipe.py", test_names)
+    return run_command(cmd, "Market-data wipe tests", verbose=verbose)
+
+
+def api_backup_export_extras(verbose: bool = False, test_names: list = None) -> bool:
+    """Run backup export tests for events + fx_rates endpoints (G-batch6)."""
+    print_section("Backup Export Extras (events + FX) API Tests")
+    print_info("Testing GET /backup/asset/{id}/events and /backup/fx/{base}/{quote}/rates")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_export_extras.py", test_names)
+    return run_command(cmd, "Backup export extras tests", verbose=verbose)
+
+
 def api_brokers(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Brokers API endpoint tests.
@@ -1488,7 +1516,6 @@ def api_brim(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "BRIM API tests", verbose=verbose)
 
 
-
 def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run E2E (End-to-End) API tests.
@@ -1502,6 +1529,7 @@ def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_search_to_prices.py", test_names)
     return run_command(cmd, "E2E API tests", verbose=verbose)
+
 
 
 def api_auth(verbose: bool = False, test_names: list = None) -> bool:
@@ -2840,6 +2868,14 @@ These tests verify business logic in service layer:
             "prereq": "Test database",
             "tests": "bulk_assign_providers wipe when provider_params change",
             },
+        "brim-provider-base": {
+            "func": services_brim_provider_base,
+            "test_names": True,
+            "name": "BRIMProvider Base Defaults (G-batch6)",
+            "desc": "Default properties inherited by BRIM provider subclasses",
+            "prereq": "None",
+            "tests": "docs_url=None, icon_url=None, plugin_version='1.0.0'",
+            },
         "all": {
             "func": services_all,
             "test_names": False,
@@ -3226,6 +3262,22 @@ These tests verify REST API endpoints:
             "desc": "FARefreshResult.changed_points + CHANGED_POINTS_PAYLOAD_CAP (G.12)",
             "prereq": "Database created",
             "tests": "mockprov: delta populated / None / idempotent / cap boundary",
+            },
+        "market-data-wipe": {
+            "func": api_market_data_wipe,
+            "test_names": True,
+            "name": "Market-Data Wipe (R3-3 / G-batch6)",
+            "desc": "GET /summary + POST /wipe (Policy D direct API)",
+            "prereq": "Database created",
+            "tests": "Counters, idempotency, 404, dry-run non-mutation",
+            },
+        "backup-export-extras": {
+            "func": api_backup_export_extras,
+            "test_names": True,
+            "name": "Backup Export Extras (G-batch6)",
+            "desc": "/backup/asset/{id}/events + /backup/fx/{base}/{quote}/rates",
+            "prereq": "Database created",
+            "tests": "Events CSV/JSON, FX CSV/JSON inverted pair, 400/404/empty",
             },
         "brokers": {
             "func": api_brokers,
@@ -4394,7 +4446,6 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
         )
         if r.returncode != 0:
             print_warning(f"coverage html failed: {r.stderr.strip()}")
-        html_dir = "htmlcov"
     elif is_front:
         r = subprocess.run(
             [*pipenv_prefix(), "coverage", "html", "-d", html_dir,
