@@ -26,7 +26,7 @@ Plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`` §G.3.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import httpx
@@ -347,5 +347,61 @@ async def test_validate_ghost_id_reports_not_found(test_server):
         print_success("Ghost IDs correctly surfaced per operation")
 
 
+@pytest.mark.asyncio
+async def test_validate_update_asset_event_without_asset_id(test_server):
+    """G7§4 — Update setting asset_event_id on a tx with no asset_id is captured
+    as a per-op issue (not raised) thanks to the bare-except wrapper around
+    each update step (transaction_service.py L623-L650).
+
+    Contract: ``_check_asset_event_link`` raises ``ValueError`` and the issue
+    is collected; ``would_rollback=True`` and the rest of the batch is
+    rolled back.
+    """
+    print_section("G7§4.1 — update asset_event_id without asset_id is reported")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        broker_id = await _create_broker(client, allow_cash_overdraft=True)
+        today = date.today()
+
+        # A pure-cash DEPOSIT (no asset_id) — the only kind we can later
+        # mis-link to an asset_event.
+        ids = await _post_tx(
+            client,
+            [
+                {
+                    "broker_id": broker_id,
+                    "type": "DEPOSIT",
+                    "date": today.isoformat(),
+                    "cash": {"code": "EUR", "amount": "1000"},
+                },
+            ],
+        )
+        assert len(ids) == 1
+        cash_tx_id = ids[0]
+
+        # Validate an update that tries to attach asset_event_id to a tx
+        # without an asset_id. The contract is "report, don't raise".
+        body = await _validate(
+            client,
+            updates=[{"id": cash_tx_id, "asset_event_id": 12345}],
+        )
+        assert body["would_rollback"] is True, body
+        assert body["issues"], "expected at least one issue"
+        match = next(
+            (i for i in body["issues"] if i["operation"] == "update" and i["ref_id"] == cash_tx_id),
+            None,
+        )
+        assert match is not None, body["issues"]
+        assert "asset_id" in match["error"].lower(), match
+        print_success("✓ asset_event_id without asset_id surfaces as a validate-issue")
 
 
+# Note (G7§4.2 dropped): the originally-planned "delete with cascade-fail"
+# test cannot be exercised through the public validate endpoint. The
+# bare-except wrapper around ``session.delete(tx)`` (transaction_service.py
+# L614) is a pure defensive guard — DEFERRABLE INITIALLY DEFERRED FKs +
+# the always-rollback dry-run mean no realistic delete path can raise.
+# Triggering it would require monkeypatching ``session.delete`` which is
+# both fragile and tests the test infra rather than the contract. Per the
+# §G-batch7 cost/benefit decision, this branch is left at its current
+# coverage level.
