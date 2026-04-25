@@ -1488,6 +1488,15 @@ def api_backup_export_extras(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Backup export extras tests", verbose=verbose)
 
 
+def api_uploads_serve_file(verbose: bool = False, test_names: list = None) -> bool:
+    """Run /uploads/file/{id} preview / download / MIME branch tests (G-batch7)."""
+    print_section("Uploads Serve-File API Tests (G-batch7)")
+    print_info("Testing GET /uploads/file/{id}: plain, text+image preview, download flag")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_uploads_serve_file.py", test_names)
+    return run_command(cmd, "Uploads serve-file tests", verbose=verbose)
+
+
 def api_brokers(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Brokers API endpoint tests.
@@ -3278,6 +3287,14 @@ These tests verify REST API endpoints:
             "desc": "/backup/asset/{id}/events + /backup/fx/{base}/{quote}/rates",
             "prereq": "Database created",
             "tests": "Events CSV/JSON, FX CSV/JSON inverted pair, 400/404/empty",
+            },
+        "uploads-serve-file": {
+            "func": api_uploads_serve_file,
+            "test_names": True,
+            "name": "Uploads Serve File (G-batch7)",
+            "desc": "GET /uploads/file/{id} preview/download/MIME branches",
+            "prereq": "Database created",
+            "tests": "Plain serve, text+image preview, MIME guards, download filename, 404",
             },
         "brokers": {
             "func": api_brokers,

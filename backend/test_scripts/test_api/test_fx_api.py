@@ -928,3 +928,65 @@ async def test_manual_cleanup_from_previous_tests(test_server):
         # Cleanup BRL/MXN from test 13
         await client.request("DELETE", f"{API_BASE}/fx/providers/routes", json=[{"base": "BRL", "quote": "MXN"}], timeout=TIMEOUT)
         print_success("✓ Cleanup BRL/MXN")
+
+
+@pytest.mark.asyncio
+async def test_delete_rates_mixed_validity(test_server):
+    """G7§5: DELETE /fx/currencies/rate with mixed valid+invalid items.
+
+    Contract under test (api/v1/fx.py L319-L327): the endpoint must collect
+    per-item errors (e.g. ``from == to``) into the ``errors`` array while
+    still processing the valid items. Returns 200 with a partial result.
+    """
+    print_section("G7§5: DELETE rates — mixed valid + invalid batch")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        today = date.today()
+
+        # Seed a rate that we'll delete
+        await client.post(
+            f"{API_BASE}/fx/currencies/rate",
+            json=[
+                FXUpsertItem(
+                    **{"date": today},
+                    base="NZD",
+                    quote="USD",
+                    rate=Decimal("0.61"),
+                    source="MANUAL",
+                ).model_dump(mode="json")
+            ],
+            timeout=TIMEOUT,
+        )
+
+        deletions = [
+            # Valid request → from != to, range covers seeded rate
+            FXDeleteItem(
+                **{"from": "NZD", "to": "USD"},
+                date_range=DateRangeModel(start=today, end=today),
+            ).model_dump(mode="json"),
+            # Invalid request → from == to → should land in errors[]
+            FXDeleteItem(
+                **{"from": "EUR", "to": "EUR"},
+                date_range=DateRangeModel(start=today, end=today),
+            ).model_dump(mode="json"),
+        ]
+
+        response = await client.request(
+            method="DELETE",
+            url=f"{API_BASE}/fx/currencies/rate",
+            json=deletions,
+            headers={"Content-Type": "application/json"},
+            timeout=TIMEOUT,
+        )
+
+        assert response.status_code == 200, response.text
+        body = FXBulkDeleteResponse(**response.json())
+        # One success result for NZD/USD
+        assert len(body.results) == 1, f"expected 1 result, got {body.results}"
+        assert body.results[0].success
+        # One error captured for the from==to violation
+        assert body.errors, "expected at least one per-item error"
+        assert any("EUR" in e for e in body.errors), f"errors should mention EUR: {body.errors}"
+        print_success(f"✓ Mixed batch handled: 1 success + {len(body.errors)} error(s)")
+

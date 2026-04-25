@@ -6,12 +6,15 @@ Ensures:
 - Every listed currency passes the backend validator
 - Crypto currencies are included
 - Flag emoji are correctly assigned for major currencies
+- normalize_currency() resolves ISO / symbol / name / multi-match / not-found
+  branches (Phase 7 Part 3 Closure_2 G-batch7 §1).
 """
 
 from backend.app.schemas.common import CRYPTO_CURRENCIES, _validate_currency_code_cached
 from backend.app.utils.currency_utils import (
     _build_currency_to_flag_map,
     list_currencies,
+    normalize_currency,
 )
 
 
@@ -164,3 +167,94 @@ class TestCurrencyFlagMap:
         """EUR must map to 🇪🇺 (EU flag), not any single Eurozone country."""
         fm = _build_currency_to_flag_map()
         assert fm["EUR"] == "🇪🇺"
+
+
+# ============================================================================
+# G-batch7 §1 — normalize_currency() unit tests
+# ============================================================================
+
+
+class TestNormalizeCurrency:
+    """Tests for ``normalize_currency`` covering all match-type branches.
+
+    Covers Phase 7 Part 3 Closure_2 G-batch7 §1: the function was at 20%
+    coverage; these tests exercise direct ISO, unique symbol, ambiguous
+    symbol, name search (single + multi-match), empty input, locale switch,
+    and the not-found error branch.
+    """
+
+    def test_iso_code_direct_match(self):
+        """Direct ISO 4217 code → match_type=exact, single iso_code."""
+        result = normalize_currency("USD")
+        assert result["match_type"] == "exact"
+        assert result["iso_codes"] == ["USD"]
+        assert result["error"] is None
+
+    def test_iso_code_lowercase_normalised(self):
+        """Lower/mixed case ISO codes are upper-cased and matched."""
+        result = normalize_currency("eur")
+        assert result["match_type"] == "exact"
+        assert result["iso_codes"] == ["EUR"]
+
+    def test_unique_symbol_match(self):
+        """Symbol with a single mapping (€ → EUR) returns match_type=exact."""
+        result = normalize_currency("€")
+        assert result["match_type"] == "exact"
+        assert result["iso_codes"] == ["EUR"]
+        assert result["error"] is None
+
+    def test_ambiguous_symbol_returns_all_candidates(self):
+        """``$`` matches several currencies → match_type=symbol_ambiguous."""
+        result = normalize_currency("$")
+        assert result["match_type"] == "symbol_ambiguous"
+        assert "USD" in result["iso_codes"]
+        assert "CAD" in result["iso_codes"]
+        # Error message mentions ambiguity
+        assert result["error"] and "multiple" in result["error"].lower()
+
+    def test_name_search_falls_back_to_locale_currencies(self):
+        """A name like 'Swiss Franc' resolves via the locale.currencies name search."""
+        # 'Swiss Franc' is the English Babel name for CHF; it does not match
+        # any ISO 4217 / historical 3-letter code, so the function reaches
+        # the locale.currencies name-search branch.
+        result = normalize_currency("Swiss Franc", language="en")
+        assert result["match_type"] in ("exact", "multi-match")
+        assert "CHF" in result["iso_codes"]
+
+    def test_name_multi_match(self):
+        """A name like 'Dollar' matches several currencies → multi-match."""
+        result = normalize_currency("Dollar", language="en")
+        assert result["match_type"] == "multi-match"
+        assert "USD" in result["iso_codes"]
+        # At least 2 results expected
+        assert len(result["iso_codes"]) >= 2
+        assert result["error"] and "match" in result["error"].lower()
+
+    def test_empty_input_returns_not_found(self):
+        """Empty / falsy input → match_type=not_found with explicit error."""
+        result = normalize_currency("")
+        assert result["match_type"] == "not_found"
+        assert result["iso_codes"] == []
+        assert result["error"] == "Empty input"
+
+    def test_unknown_garbage_returns_not_found(self):
+        """A random non-currency string returns not_found."""
+        result = normalize_currency("zzzzz_not_a_currency_xyz")
+        assert result["match_type"] == "not_found"
+        assert result["iso_codes"] == []
+        assert result["error"] and "no currency" in result["error"].lower()
+
+    def test_query_field_preserves_original_input(self):
+        """The ``query`` field always echoes the caller-supplied string verbatim."""
+        result = normalize_currency("  usd  ")  # whitespace + lower
+        assert result["query"] == "  usd  "  # original preserved
+        assert result["match_type"] == "exact"
+        assert result["iso_codes"] == ["USD"]
+
+    def test_locale_switch_still_resolves_iso(self):
+        """ISO direct lookup is locale-independent."""
+        result_en = normalize_currency("CHF", language="en")
+        result_it = normalize_currency("CHF", language="it")
+        assert result_en["iso_codes"] == result_it["iso_codes"] == ["CHF"]
+
+

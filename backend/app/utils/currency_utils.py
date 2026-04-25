@@ -188,19 +188,21 @@ def normalize_currency(input_str: str, language: str = "en") -> dict:
     input_clean = input_str.strip().upper()
     locale = get_babel_locale(language)
 
-    # Try direct ISO code match
-    try:
-        # Check if it's a valid currency by trying to get its symbol
-        symbol = get_currency_symbol(input_clean, locale=locale)
-        if symbol:
+    # Try direct ISO code match — accept only **strict 3-letter alpha_3 codes**
+    # validated against pycountry's active list or the supported crypto set.
+    # NOTE: ``babel.numbers.get_currency_symbol`` echoes the input back for
+    # unknown codes, so it cannot be used as a validator. Likewise
+    # ``pycountry.currencies.lookup`` does fuzzy NAME matching ("SWISS FRANC"
+    # → CHF) which would skip the dedicated symbol/name branches below.
+    if len(input_clean) == 3 and input_clean.isalpha():
+        is_iso = pycountry.currencies.get(alpha_3=input_clean) is not None
+        if is_iso or input_clean in CRYPTO_CURRENCIES:
             return {
                 "query": input_str,
                 "iso_codes": [input_clean],
                 "match_type": "exact",
                 "error": None,
             }
-    except Exception:
-        pass
 
     # Try symbol match
     if input_clean in SYMBOL_TO_ISO or input_str.strip() in SYMBOL_TO_ISO:

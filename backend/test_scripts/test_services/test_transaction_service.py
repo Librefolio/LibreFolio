@@ -882,6 +882,52 @@ class TestDeleteBulkBasic:
         tx = await session.get(Transaction, tx_id)
         assert tx is None
 
+    @pytest.mark.asyncio
+    async def test_delete_bulk_balance_violation_rolls_back(self, session, test_broker):
+        """G7§6 / TX-U-079: Deleting a deposit that pushes the broker balance
+        negative is rejected by ``_validate_broker_balances`` (post-flush) and
+        the whole batch is rolled back.
+
+        Covers the ``BalanceValidationError`` branch in ``delete_bulk``
+        (transaction_service.py L526-L528) — previously uncovered.
+        """
+        service = TransactionService(session)
+
+        # Build a state where deleting the deposit would push the balance
+        # negative on a broker that DOES NOT allow overdraft.
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today() - timedelta(days=2),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+            ),
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.WITHDRAWAL,
+                date=date.today() - timedelta(days=1),
+                cash=Currency(code="EUR", amount=Decimal("-80")),
+            ),
+        ]
+        response = await service.create_bulk(items)
+        deposit_id = response.results[0].transaction_id
+        withdrawal_id = response.results[1].transaction_id
+
+        # Attempting to delete the deposit (leaving only the -80 withdrawal)
+        # must trigger a balance violation → rollback, no rows deleted.
+        delete_response = await service.delete_bulk([deposit_id])
+
+        assert delete_response.success_count == 0, "no successful deletion expected"
+        assert delete_response.total_deleted == 0
+        assert delete_response.rolled_back is True
+        assert delete_response.errors, "errors[] should report the balance violation"
+        # Note: actual session.rollback() is the caller's responsibility (API
+        # layer); the service only flags ``rolled_back=True`` for the caller.
+        # We avoid relying on the rollback to keep this a pure service-level
+        # contract test.
+        # Sanity: at least the withdrawal row is still queryable in this session.
+        assert await session.get(Transaction, withdrawal_id) is not None
+
 
 # ============================================================================
 # 3.9 DELETE_BULK - LINKED TRANSACTION ENFORCEMENT
