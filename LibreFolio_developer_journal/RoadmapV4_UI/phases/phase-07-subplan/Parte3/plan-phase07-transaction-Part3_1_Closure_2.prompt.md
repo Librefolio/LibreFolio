@@ -49,19 +49,26 @@ utente):
    - **4.f** — #24 Backend `changed_points` + FE merge incrementale
      (~1h, P2). ✅ DONE (dedicated sub-plan, commits `d56fe132` BE schema +
      `ddb1fcfb` FE live-poll final — vedi §"I-bis #24" più sotto).
-5. **Blocco G** test coverage (8-10h stimati) — ✅ avviato 2026-04-24 post audit plan (← **IN CORSO**).
+5. **Blocco G** test coverage (8-10h stimati) — ✅ **DONE 2026-04-25** (G-batch1..5 chiusi 2026-04-24 + G-batch6 0%-functions chiusi 2026-04-25 in commit `c943f219` + G-batch7 partial-coverage gap-fill chiuso 2026-04-25 in commit `a61b0dfa`. Backend coverage 87.06%).
 6. **I-bis #19** rinviato formalmente a Phase 8/9 (doc-only, ✅ cross-link completato in Batch 4.d-part3).
 
 ---
 
-## 🧪 Blocco G — Test coverage + API sync (IN CORSO — sub-plan dedicato)
+## 🧪 Blocco G — Test coverage + API sync  ✅ **DONE 2026-04-25** (sub-plan dedicato chiuso)
 
-> **Stato rilevato 2026-04-22**: solo 2 test file base esistono (`test_transaction_service.py`, `test_transactions_api.py`). **6 nuovi file da creare**, 2 estensioni, test_runner da aggiornare, coverage target da verificare.
+> **Stato finale 2026-04-25**: G-batch1..5 (G.1..G.13 + test runner +
+> coverage validation) chiusi 2026-04-24, **G-batch6** (0%-functions:
+> market_data_wipe + backup events/fx + BRIM defaults — 17 nuovi test
+> + 1 fix di produzione `assets.py::e.error_code`) chiuso 2026-04-25
+> in commit `c943f219`, **G-batch7** (partial-coverage gap-fill:
+> normalize_currency + uploads/serve_file + FX chain + validate
+> edge-case + DELETE mixed-validity + delete_bulk balance-violation —
+> 22 nuovi test + 1 fix di produzione `currency_utils.normalize_currency`)
+> chiuso 2026-04-25 in commit `a61b0dfa`.
 >
-> **2026-04-24**: avviata esecuzione. Breakdown operativo + ordine di
-> esecuzione consolidati in sub-plan dedicato:
-> **[`plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md)**.
-> Le sezioni G.1–G.11 sottostanti restano come specifica di riferimento.
+> **Backend coverage**: 76.05% (post G-batch5) → 85.34% (post G-batch6) → **87.06%** (post G-batch7).
+> **Sub-plan dettagliato**: [`plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md).
+> Le sezioni G.1–G.11 sottostanti restano come specifica di riferimento storica.
 
 ### G.1 — `test_transaction_service.py` (ESTENDI)
 
@@ -255,7 +262,7 @@ Copertura endpoint `/prices/export` (I.4):
 
 ### I-bis #19 — Semantica estesa `Asset.active` (follow-up Phase 8/9)  ✅ DONE (doc-only, 2026-04-24, Batch 4.d-part3)
 
-**Spin-off** da I-bis #17. Regole definitive già consolidate in [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md) §Interazione con Asset.active:
+**Spin-off** da I-bis #17. Regole definitive già consolidate in [`phases/phase-08-scheduler.md`](../../phase-08-scheduler.md) §Interazione con Asset.active:
 
 - **Scheduler auto (Phase 8)**: skip inattivi (filtro `asset.active == True` nel daemon loop).
 - **Sync manuale frontend**: consentito su inattivi (azione esplicita utente).
@@ -1066,7 +1073,7 @@ richiede estensione schema Pydantic + nuovo enum `CouponAnchor` + 3
 campi FE + retrocompatibilità + test parametrici. Costo stimato 7-10h.
 
 Tracciato come TODO futuro in
-[`TODO_FUTURI.md`](../../TODO_FUTURI.md) §"Scheduled Investment —
+[`TODO_FUTURI.md`](../../../../../TODO_FUTURI.md) §"Scheduled Investment —
 Frequenze disaccoppiate (prezzi vs cedola) + anchor day".
 
 ---

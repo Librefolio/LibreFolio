@@ -27,7 +27,7 @@ The primary user-facing flow for entering transactions is through the BRIM pipel
 | [[F-048]] | Staging Modal (unified manual entry + BRIM output) | frontend | core — review/edit transactions before commit | planned |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | core — wizard to match extracted assets + commit | in-progress |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | support — inline preview of uploaded broker report files | planned |
-| [[F-051]] | Transaction ↔ AssetEvent Link | backend | support — FK between transactions and asset events | planned |
+| [[F-051]] | Transaction ↔ AssetEvent Link | backend | support — FK between transactions and asset events + suggest endpoint | implemented |
 
 ## Architecture at a glance
 
@@ -57,13 +57,23 @@ graph TD
 
 ## Known problems / limitations
 
-From the Phase 7 gap analysis (see [[connections/transactions-connections]]):
+Phase 7 Parts 1+2+3 closed (2026-04-25, backend coverage 87.06%). Remaining items:
 
-- F-046: GET/PATCH/DELETE access control not yet fully broker-filtered — security gap being addressed in Phase 7.
-- F-013: No `plugin_version` tracking — if a BRIM plugin is updated, previously cached parses are not invalidated.
-- F-048: Unified Staging Modal not yet built — the staging UX is temporarily embedded in the BRIM import flow.
-- F-049: Asset matching wizard partially implemented — metadata preview columns not yet dynamically driven.
-- F-051: TX↔AssetEvent link defined in schema but not yet used in analytics.
+- **F-048** Unified Staging Modal not yet built — staging UX is currently
+  embedded inside the BRIM import flow (Part 4 work).
+- **F-050** File Preview System still planned (Part 4).
+- **F-049** asset matching wizard live but UX polish (preview columns, filters)
+  ongoing.
+- **Currency consistency**: enforced through [[decisions/price-currency-hard-reject]]
+  (hard-400 on price/event currency mismatch, HTTP 409 on `Asset.currency`
+  PATCH with existing data) and [[decisions/policy-d-currency-wipe]] (destructive
+  symmetric wipe; transactions preserved with `asset_event_id = NULL`).
+
+Two production bugs were surfaced by the Phase 7 Part 3 BlockG coverage push and
+have been filed:
+
+- [[problems/assets-wipe-error-attr-mismatch]] — `e.code` → `e.error_code`
+- [[problems/babel-currency-symbol-echo]] — `normalize_currency` strict pycountry lookup
 
 ## What comes next
 

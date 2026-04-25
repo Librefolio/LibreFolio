@@ -2,15 +2,20 @@
 type: source
 title: "Phase 07 — Part 2: BRIM Revision 2 (Parser-Only)"
 date_ingested: 2026-04-24
-git_hash: f17d963
-path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part2.prompt.md
-status: completed
+date_updated: 2026-04-25
+git_hash: a61b0dfa
+path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte2/plan-phase07-transaction-Part2.prompt.md
+status: "✅ DONE"
+related: [features/F-012, decisions/brim-parser-only, sources/phase07-transactions, workflows/brim-import-flow]
 ---
 
 # Phase 07 Part 2 — BRIM Revision 2
 
 > Architectural reset of BRIM after v1 was partly implemented then reconsidered.
 > The core principle: **BRIM is a parser, nothing more.**
+>
+> **Path note**: archived 2026-04-25 from `RoadmapV4_UI/plan-phase07-transaction-Part2.prompt.md`
+> into `phases/phase-07-subplan/Parte2/`. All Part 2 work is complete.
 
 ## Context
 

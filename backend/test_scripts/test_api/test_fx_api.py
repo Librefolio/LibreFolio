@@ -989,4 +989,3 @@ async def test_delete_rates_mixed_validity(test_server):
         assert body.errors, "expected at least one per-item error"
         assert any("EUR" in e for e in body.errors), f"errors should mention EUR: {body.errors}"
         print_success(f"✓ Mixed batch handled: 1 success + {len(body.errors)} error(s)")
-

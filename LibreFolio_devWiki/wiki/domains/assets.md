@@ -68,12 +68,16 @@ graph TD
 - [[decisions/scheduled-investment-redesign]] — the Scheduled Investment provider was redesigned as a **pure deterministic engine** with no DB access: given a schedule definition, it computes the full synthetic price series on demand. This eliminated a class of stale-data bugs from the earlier design.
 - [[decisions/three-phase-pipeline]] — bulk sync operations use a PREPARE→FETCH→PERSIST pattern with per-task sessions to avoid the "transaction is closed" SQLAlchemy error that occurs when concurrent tasks share an async session.
 - [[decisions/data-editor-unification]] — the inline data editor was unified into a generic `DataEditor` component set shared by both the FX and Asset detail pages, eliminating duplicated logic for click-to-edit, CSV import, and bulk save.
+- [[decisions/price-currency-hard-reject]] — Phase 7 Part 3: hard-400 on any price-currency mismatch in `upsert_prices_bulk`; HTTP 409 on `Asset.currency` PATCH while price/event history exists.
+- [[decisions/policy-d-currency-wipe]] — when the user accepts the 409, currency change is destructive: prices + events wiped symmetrically, transactions preserved with `asset_event_id = NULL`. Pre-confirm snapshots via [[entities/backup-router]] (`/api/v1/backup/asset/{id}/{prices,events}`).
 
 ## Known problems / limitations
 
 - [[problems/asset-sync-transaction-closed]] — bulk asset sync previously failed with "This transaction is closed" under concurrent commits on a shared session; resolved by per-task session isolation (three-phase pipeline).
 - [[problems/asset-list-500-provider-input-type]] — asset list endpoint returned 500 when an asset had `ProviderInputType.AUTO_GENERATED`; resolved by correcting the enum mapping in `FAinfoResponse`.
-- [[problems/asset-currency-mismatch]] — asset price currency may differ from `Asset.currency` (e.g. a EUR-denominated ETF with prices returned in USD by yfinance); resolved by adding a per-row currency column to the price history table.
+- [[problems/asset-currency-mismatch]] — asset price currency may differ from `Asset.currency` (e.g. a EUR-denominated ETF with prices returned in USD by yfinance); per-row currency column added in 2026-04 (still present as forensic canary), now superseded at the API contract level by [[decisions/price-currency-hard-reject]].
+- [[problems/assets-wipe-error-attr-mismatch]] — Policy D wipe handlers used non-existent `e.code` attribute; fixed in G-batch6 (one residual occurrence flagged).
+- [[problems/babel-currency-symbol-echo]] — `normalize_currency` echoed unknown garbage via babel; fixed via strict pycountry lookup in G-batch7.
 
 ## What comes next
 

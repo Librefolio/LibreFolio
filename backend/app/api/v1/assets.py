@@ -973,7 +973,7 @@ async def upsert_events_bulk(
         )
     except AssetSourceError as e:
         # Hard-400 on currency mismatch (and similar client-side validation errors).
-        status = 400 if e.code in ("EVENT_CURRENCY_MISMATCH",) else 500
+        status = 400 if e.error_code in ("EVENT_CURRENCY_MISMATCH",) else 500
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error in bulk upsert events: {e}")

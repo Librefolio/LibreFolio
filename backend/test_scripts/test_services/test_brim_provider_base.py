@@ -79,4 +79,3 @@ def test_to_plugin_info_propagates_default_docs_url(stub: _StubBRIMProvider) -> 
     assert info.docs_url is None
     assert info.icon_url is None
     assert info.plugin_version == "1.0.0"
-

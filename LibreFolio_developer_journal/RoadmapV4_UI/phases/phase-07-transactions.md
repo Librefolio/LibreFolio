@@ -1,6 +1,7 @@
 # Phase 7: Transactions System — Macro Plan
 
-**Status**: 🔄 In corso (Part 1 ✅, Part 2 ✅ Revisione 2 completata, Part 3–5 TODO)
+**Status**: 🔄 In corso (Part 1 ✅, Part 2 ✅ Revisione 2, **Part 3 ✅ DONE 2026-04-25** — feature work + Blocco G test coverage backend 87.06% — Part 4/4b/5 TODO)
+**Sub-plans archiviati**: [`phase-07-subplan/README.md`](./phase-07-subplan/README.md)
 **Durata stimata**: ~11 giorni (multi-sprint, Parti 1+2+3+4+4b+5 = 1+2+2+2+1+3)
 **Priorità**: P0 (MVP)
 **Dipendenze**:

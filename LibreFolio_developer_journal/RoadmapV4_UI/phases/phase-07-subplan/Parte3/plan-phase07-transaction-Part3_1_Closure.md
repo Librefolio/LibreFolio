@@ -325,9 +325,9 @@ Per i batch ancora da eseguire consulta il file `_2`:
 ## 🔗 Cross-link
 
 - **Parent**: [`plan-phase07-transaction-Part3.md`](./plan-phase07-transaction-Part3.md).
-- **Predecessori**: [`plan-phase07-transaction-Part1.md`](./plan-phase07-transaction-Part1.md) ✅, [`plan-phase07-transaction-Part2.prompt.md`](./plan-phase07-transaction-Part2.prompt.md) ✅.
+- **Predecessori**: [`plan-phase07-transaction-Part1.md`](../Parte1/plan-phase07-transaction-Part1.md) ✅, [`plan-phase07-transaction-Part2.prompt.md`](../Parte2/plan-phase07-transaction-Part2.prompt.md) ✅.
 - **Successori**: Part 4 (pagina `/transactions`), Part 4b (File Preview), Part 5 (Staging Modal). **Gated da I-bis #22**.
-- **Phase 8 follow-up**: [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md) — consumer `Asset.active` + scheduler demone.
+- **Phase 8 follow-up**: [`phases/phase-08-scheduler.md`](../../phase-08-scheduler.md) — consumer `Asset.active` + scheduler demone.
 - **Phase 9 follow-up**: Dashboard — consumer `Asset.active` hide su breakdown + estensione `requiredFxPairs` a viste multi-asset.
 - **Phase 9 follow-up**: Dashboard — consumer `Asset.active` hide su breakdown + estensione `requiredFxPairs` a viste multi-asset.
 
@@ -773,9 +773,13 @@ B (delete non-manual + re-sync) / C (conversione FX).
 
 **Commit message proposto**: vedi `/tmp/libreFolio_commit_batch2_part45.txt`.
 
-**#R3-3 ancora pending — decisione da prendere con utente**: policy `asset_events` al cambio
-currency. La raccomandazione nel plan è **Policy B** (cancella eventi non-manuali + re-sync),
-ma richiede conferma prima dell'implementazione perché impatta il wizard E2E e i test.
+**#R3-3 — Policy `asset_events` al cambio currency: ✅ DONE** (commit
+`8fc018ab`, 2026-04-23 sera). Implementata Policy D ("destructive wipe
+con backup pre-flight") concordata con utente: confermata la
+cancellazione completa di prezzi+eventi+disconnect transazioni al
+cambio currency, con endpoint `/backup/asset/{id}/events` (R3-3b)
+disponibili pre-confirm. Vedi §"Batch 3 — R3-3 Policy D + R3-3b backup
+endpoints" più avanti in questo file.
 
 **Poi batch 2** (~4-5h): I-bis UX quick wins
 - **#3** Tab label "Prices in {currency} 🇺🇸" → 20 min (`AssetDataEditorSection.svelte`) ✅ DONE (batch 2 part1)
@@ -946,7 +950,7 @@ Premesse di design:
 
 **Issue #R3-3b — [DESIGN] Estensione endpoint export: eventi + FX + spostamento in Backup block**
 
-Sull'endpoint esistente `GET /api/v1/assets/{asset_id}/prices/export` c'è un TODO lasciato in precedenza (`backend/app/api/v1/assets.py:649`):
+Sull'endpoint esistente `GET /api/v1/assets/{asset_id}/prices/export` c'era un TODO lasciato in precedenza (`backend/app/api/v1/assets.py:649`). **TODO rimosso** in commit `8fc018ab` (Batch 3 — R3-3b): l'endpoint è stato spostato/duplicato sotto il nuovo router `backend/app/api/v1/backup.py` con i tre endpoint `/backup/asset/{id}/prices`, `/backup/asset/{id}/events`, `/backup/fx/{base}/{quote}/rates`. Storico del TODO originale (per contesto):
 ```python
 # TODO: spostare l'endpoint nel blocco dei backup e fare una cosa simile anche per le forex e gli eventi.
 ```

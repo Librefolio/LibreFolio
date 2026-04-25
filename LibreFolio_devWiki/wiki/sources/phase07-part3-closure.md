@@ -2,15 +2,27 @@
 type: source
 title: "Phase 07 — Part 3 Closure: Blocco I decisions + I-bis issues + Blocco H implementation"
 date_ingested: 2026-04-24
-git_hash: 66ad026a
-path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part3_1_Closure.md
-status: completed
+date_updated: 2026-04-25
+git_hash: a61b0dfa
+path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure.md
+status: "✅ DONE"
+related:
+  - decisions/price-currency-hard-reject
+  - decisions/tx-link-uuid-semantics
+  - decisions/policy-d-currency-wipe
+  - concepts/savewithretry-frontend-pattern
+  - entities/backup-router
+  - features/F-012
+  - features/F-046
+  - features/F-051
 ---
 
 # Phase 07 Part 3 Closure
 
 > Closure plan for Part 3. Contains the authoritative terminal decisions on Blocco E,
 > the full I-bis issue log (26 items), Policy D backup endpoints, and R3-x retest rounds.
+>
+> **Path note**: archived 2026-04-25 into `phases/phase-07-subplan/Parte3/`. ✅ DONE.
 
 ## Purpose
 
@@ -43,11 +55,38 @@ The manual testing session on 2026-04-22 produced 26 I-bis follow-up issues. Not
 | #25 | ✅ | Resolved in intermediate commit |
 | #26 | ✅ | Scheduled investment Step 2/4 reorder + cache key test |
 
-## R3-3 Policy D — Backup Endpoints
+## R3-3 Policy D — Destructive Currency-Change Wipe + Backup Endpoints
 
-`GET /api/v1/system/export` and `POST /api/v1/system/import` — basic backup/restore
-endpoints added. The full backup feature (F-073) remains largely unimplemented; these
-endpoints are the first scaffolding.
+When `PATCH /assets/{id}` changes `currency` and the asset has price/event history,
+the chosen semantics is **Policy D — destructive symmetric wipe + transaction
+disconnection** (commit `8fc018ab`, 2026-04-23):
+
+- All `price_history` rows for the asset → DELETED
+- All `asset_events` rows for the asset → DELETED (manual + provider-generated)
+- `transactions.asset_event_id` for affected events → set to `NULL` (rows preserved
+  so FIFO history stays intact, only the event link is severed)
+- `provider_assignment` row → re-pointed (provider can re-sync from scratch in new currency)
+
+Because the wipe is irrecoverable, a **new read-only backup router** was introduced
+to allow the user to export a snapshot before confirming the destructive PATCH.
+
+### New router: `backend/app/api/v1/backup.py`
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /backup/asset/{asset_id}/prices` | Export price history (CSV/JSON). Replaces legacy `/assets/{id}/prices/export`. |
+| `GET /backup/asset/{asset_id}/events` | **NEW** — Export asset events with FX backfill columns (`date, type, source, amount, currency, fx_rate_date, fx_days_back, original_amount, original_currency, description, provider_assignment_id`). |
+| `GET /backup/fx/{base}/{quote}/rates` | **NEW** — Export FX pair rates respecting normalised pair direction (`date, rate, source_plugin_key, fetched_at`). |
+
+The frontend `AssetCurrencyChangeModal` now calls `/backup/asset/{id}/prices` and
+`/backup/asset/{id}/events` pre-confirm so the user can save a CSV/JSON snapshot
+before executing the destructive PATCH. See [[decisions/policy-d-currency-wipe]]
+and [[entities/backup-router]] for details.
+
+> ⚠️ **Note vs the old "R3-3 Policy D" placeholder line**: an earlier draft of this
+> wiki page mentioned `/api/v1/system/export` + `/api/v1/system/import` as Policy D.
+> That description was wrong — it was never implemented. The actual Policy D
+> backup feature is the per-resource `backup.py` router described above.
 
 ## #R6-4 — Scheduled Investment Symmetric Wipe
 
@@ -56,11 +95,16 @@ Critical fix: when `scheduled_investment` provider params change:
 - Provider-generated events deleted ✅ (events with non-null `provider_assignment_id`)
 - Manual events preserved ✅ (events with `provider_assignment_id IS NULL`)
 - Transactions pointing to deleted events: `asset_event_id = NULL`, **row preserved** ✅
-  (so FIFO history is intact, just the event link is severed)
+  (so FIFO history is intact, just the event link is severed — see [[features/F-056]])
 - Assignment row: **UPDATE** (not DELETE/INSERT) so FK chain stays stable
 
 Prior to this fix, only prices were wiped — stale auto-events contradicted the regenerated
 schedule and made `get_current_value` undefined.
+
+> **Distinction from Policy D**: #R6-4 (scheduled-investment param-change) is
+> *selective* — only provider-generated events are wiped. Policy D (currency change)
+> is *destructive symmetric* — all events deleted regardless of source, because the
+> currency change invalidates the meaning of every historical amount.
 
 ## #R6-5 — Auto-Sync After Provider Change
 

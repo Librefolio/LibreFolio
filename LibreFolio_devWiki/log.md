@@ -4,6 +4,72 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-04-25] lint | wiki-lint pass #5 — post Phase 7 Parts 1+2+3 ingest reconciliation
+
+**Scope**: full health-check after Phase 7 Part 3 closure (backend coverage 87.06%,
+2 production bugs filed, Policy D destructive wipe in place, new backup router,
+ErasableNumberCell typing fix). Workspace HEAD = `a61b0dfa` (matches latest re-anchor
+in `raw/ingest-registry.md`).
+
+### Drift detection — ✅ clean
+
+All 17 unique git-hashes in `raw/ingest-registry.md` resolve in current history.
+Phase 7 sources (Parts 1/2/3 + Closure + Closure_2) re-anchored at `a61b0dfa` =
+HEAD; `git diff a61b0dfa HEAD -- {phase07 paths} = 0 lines`. No source drift.
+
+### Prioritized repair list
+
+| # | Sev | Page | Problem | Action |
+|---|-----|------|---------|--------|
+| L5-01 | P0 | `connections/transactions-connections.md` | Header "Phase 7 — in progress (Part 1✅, Part 2✅, Part 3–5 TODO)" + 7-row gap table all stale; Parts 1–3 now ✅ DONE | rewrote header + replaced gap table with closed-gap table |
+| L5-02 | P0 | `features/F-051.md` | Source files & layer breakdown referenced `Transaction.related_asset_event_id`; **code has `Transaction.asset_event_id`** (models.py L580/L659) | renamed all references to `asset_event_id`; updated status to `implemented`; added Policy D link |
+| L5-03 | P0 | `domains/transactions.md` | F-051 row "planned"; "Known problems" still listed Phase 7 gaps as open (access control, multi-broker atomic, plugin_version) — all closed in Part 2/3 | updated F-051 row→`implemented`, rewrote "Known problems" to reflect closed gaps + add Policy D context |
+| L5-04 | P1 | `problems/assets-wipe-error-attr-mismatch.md` | Reported 2 fixed sites; **a third sibling `e.code` reference still lives at `assets.py:976` (bulk_upsert_events)** — code wins → annotate as residual | added "Residual occurrence" section; flagged for code-side follow-up |
+| L5-05 | P1 | `decisions/policy-d-currency-wipe.md` | Missing cross-ref to `features/F-073` (Backup & Restore) — backup endpoints belong to F-073 | added `F-073` to `related` + body |
+| L5-06 | P1 | `entities/backup-router.md` | Missing cross-ref to `features/F-073` | added F-073 in `related` + body |
+| L5-07 | P1 | `features/F-073.md` | No `related_decisions`/`related_problems`; doesn't mention Policy D or `entities/backup-router` | added related_decisions + cross-refs |
+| L5-08 | P1 | `decisions/price-currency-hard-reject.md` | I.3 (409 on currency change with prices) doesn't link to its destructive successor Policy D | added "When the user accepts the 409" pointer + `related: policy-d-currency-wipe` |
+| L5-09 | P1 | `problems/asset-currency-mismatch.md` | Older "per-row currency column" page — silent on the fact that I.2 hard-reject + Policy D now formalise a stricter model on top of it | added "Superseded-in-spirit" header + cross-refs to I.2/I.3/Policy D |
+| L5-10 | P1 | `domains/assets.md` | No mention of Policy D destructive wipe or backup-router despite being the asset domain owner | added "Asset currency change (Policy D)" subsection + cross-refs |
+| L5-11 | P2 | `wiki/features/F-049.md`, `F-047.md`, `F-046.md` | mostly current; only minor stale gap-analysis bullets — covered transitively by L5-01 / L5-03 | none (P2, deferred) |
+
+### Index drift
+
+`index.md` Problems/Decisions/Entities tables reflect the on-disk state correctly
+post Phase 7 Part 3 ingest. F-051 status row was the only case where index
+implicitly inherited the page's stale `in-progress` — now reconciled via L5-02.
+
+### Orphan detection — ✅ none
+
+Every wiki/* page is reachable from `index.md` directly or transitively
+(domains → features → connections → decisions/concepts/problems). The 4 new
+Phase-7 pages (`problems/assets-wipe-error-attr-mismatch`, `problems/babel-currency-symbol-echo`,
+`decisions/policy-d-currency-wipe`, `entities/backup-router`) are all listed in
+`index.md` and now also linked from at least 2 sibling pages each (post-L5).
+
+### Contradiction scan — beyond fixes above
+
+- `e.code` vs `e.error_code`: only the wiki had stale claims; current code
+  uses `e.error_code` in the 2 wipe handlers. Residual `e.code` at line 976
+  (bulk_upsert_events) is a **code-side latent bug** — annotated, not silently
+  preserved (L5-04).
+- "Soft-skip currency mismatch" appears nowhere in the wiki as the *current*
+  behaviour — only as historical context inside `price-currency-hard-reject.md`
+  and Part 3 source page (correctly framed as "old behaviour").
+
+### Knowledge condensation
+
+- Pages **rewritten in place**: 5 (transactions-connections, F-051, domains/transactions, asset-currency-mismatch, price-currency-hard-reject)
+- Cross-ref additions: 6 pages received new `related:` + body links
+- Sections added: 4 ("Residual occurrence", "Asset currency change (Policy D)" in domains/assets, "Superseded-in-spirit" in asset-currency-mismatch, "Closed Phase 7 gaps" in transactions-connections)
+- Sections deleted: 1 (the now-misleading "Phase 7 Gap Analysis (from plan)" 7-row TODO table in transactions-connections)
+- Pages deleted: 0 (all stale content was condensed/annotated, not removed — historical signal preserved with "Superseded" framing)
+- Concept debt scanned: `editbuffer-pattern` (concept) + `data-editor-unification` (decision) overlap is intentional (mechanism vs rationale). FX-related concepts (`daily-point-policy`, `prices-current-side-effect`) and BRIM-related decisions (`brim-broker-scoped`, `brim-fake-asset-id`, `brim-parser-only`) cover distinct angles; no merges performed.
+
+**Total touched**: 11 wiki pages + log.md + this entry. **0 new pages created**, **0 pages deleted**.
+
+---
+
 ## [2026-04-24] lint | Lint pass #4 — Phase 07 contradictions + API URL audit
 
 **Issues found**: 7 (4 high, 3 medium)
@@ -402,3 +468,45 @@ This completes the documentation of the core transaction system architecture.
 - F-051: `planned` → `in-progress`
 
 **Wiki page count**: ~176 pages (170 + 4 sources + 4 decisions + 1 concept - 3 from prev pass)
+
+## [2026-04-25] ingest | phase07 Parts 1/2/3 — re-anchor + G-batch6/G-batch7 closure
+
+Re-ingested Phase 7 Parts 1, 2, 3 (incl. Closure + Closure_2 + Batch4d + BlockG)
+after the plans were archived from `RoadmapV4_UI/plan-phase07-transaction-Part*.md`
+into `RoadmapV4_UI/phases/phase-07-subplan/Parte{1,2,3}/`. All Phase 7 Parts 1–3
+are now ✅ DONE.
+
+**Re-anchored sources** (path + git_hash → `a61b0dfa`, status → ✅ DONE):
+- [[sources/phase07-transactions]] — Parte1/Part1.md
+- [[sources/phase07-part2-brim-revision]] — Parte2/Part2.prompt.md
+- [[sources/phase07-part3-api-consolidation]] — Parte3/Part3.md
+- [[sources/phase07-part3-closure]] — Parte3/Part3_1_Closure.md
+- [[sources/phase07-part3-closure2]] — Parte3/Part3_1_Closure_2.prompt.md (+ 3 companions)
+
+**Delta surfaced** (new content not in previous ingest):
+- Backend coverage **76.05% → 85.34% → 87.06%** in 2 days (G-batch6 + G-batch7); from ~57% at start of Phase 7
+- 2 production bugs discovered by the new tests:
+  - [[problems/assets-wipe-error-attr-mismatch]] — `e.code` → `e.error_code` (HTTP 500 → 404)
+  - [[problems/babel-currency-symbol-echo]] — `normalize_currency` echoed garbage; strict pycountry lookup
+- Policy D destructive wipe semantics formalised (commit `8fc018ab`):
+  - [[decisions/policy-d-currency-wipe]] — created
+  - Distinguishes from `#R6-4` selective wipe (manual events preserved there)
+- New backup router `/api/v1/backup`:
+  - [[entities/backup-router]] — created
+  - Endpoints: `/backup/asset/{id}/{prices,events}` + `/backup/fx/{base}/{quote}/rates`
+  - Replaces legacy `/assets/{id}/prices/export`
+- I-bis #24 `changed_points` cap-500 + live-poll merge (commit `ddb1fcfb`) — refined in [[sources/phase07-part3-closure2]]
+- ErasableNumberCell `$state<number | null>` fix (commit `83328b6b`) — captured in closure_2
+
+**Files corrected** (previous ingest had wrong info):
+- [[sources/phase07-part3-closure]] — old "R3-3 Policy D" line incorrectly claimed
+  `/api/v1/system/{export,import}` as the backup. Replaced with the actual `backup.py`
+  router + Policy D destructive wipe description.
+
+**Cross-links added/strengthened**: F-012 (BRIM), F-046 (TX bulk), F-051 (TX↔AssetEvent),
+F-056 (FIFO runtime — transaction preservation rationale), F-019/F-020 (FX),
+[[entities/db-models]], [[entities/api-router]],
+[[concepts/savewithretry-frontend-pattern]], [[decisions/price-currency-hard-reject]].
+
+**Pages created**: 2 problems + 1 decision + 1 entity = 4 new wiki pages.
+**Pages updated**: 5 source pages + index.md + ingest-registry.md.

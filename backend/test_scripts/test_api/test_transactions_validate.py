@@ -26,7 +26,7 @@ Plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`` §G.3.
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 import httpx
@@ -174,14 +174,9 @@ async def test_validate_clean_batch_populates_previews(test_server):
         )
         assert body["would_rollback"] is False, body
         assert body["issues"] == []
-        assert body["balance_preview"].get(f"{broker_id}:EUR") == "9500.00" or Decimal(
-            body["balance_preview"][f"{broker_id}:EUR"]
-        ) == Decimal("9500"), body["balance_preview"]
+        assert body["balance_preview"].get(f"{broker_id}:EUR") == "9500.00" or Decimal(body["balance_preview"][f"{broker_id}:EUR"]) == Decimal("9500"), body["balance_preview"]
         assert Decimal(body["holdings_preview"][f"{broker_id}:asset:{asset_id}"]) == Decimal("5")
-        print_success(
-            f"cash preview={body['balance_preview'][f'{broker_id}:EUR']}, "
-            f"holdings={body['holdings_preview'][f'{broker_id}:asset:{asset_id}']}"
-        )
+        print_success(f"cash preview={body['balance_preview'][f'{broker_id}:EUR']}, " f"holdings={body['holdings_preview'][f'{broker_id}:asset:{asset_id}']}")
 
 
 @pytest.mark.asyncio

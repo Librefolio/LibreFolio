@@ -63,14 +63,51 @@ When a phase is complete:
    └── ...
    ```
 
-4. **Create/update README.md** in the subplan directory with a table:
+   **ALWAYS use `git mv` (never plain `mv` or `cp`+`rm`)** so git follows the
+   rename and `git log --follow` keeps tracking the file across the archive.
+   Move-and-fix should always be a single atomic preparation:
+
+   ```bash
+   # 1. Move with git so history is preserved
+   git mv plan-phaseNN-Foo.prompt.md \
+          phases/phase-NN-subplan/StepX/plan-phaseNN-Foo.prompt.md
+   ```
+
+   For multi-file moves write the operations to a temporary script under
+   `/tmp/libreFolio_archive_phaseNN.sh` (per the global "long commands"
+   rule) — easier to review, replay, and keeps the terminal log readable.
+
+4. **Fix relative cross-links after move**. The path delta is mechanical:
+   the file gains 2 extra `../` levels (`RoadmapV4_UI/` → `RoadmapV4_UI/phases/phase-NN-subplan/StepX/`).
+   Targets that need rewriting:
+
+   | Old (from `RoadmapV4_UI/`) | New (from `phase-NN-subplan/StepX/`) |
+   |----------------------------|--------------------------------------|
+   | `./other-plan.md` (sibling now in same StepX) | `./other-plan.md` (unchanged) |
+   | `./other-plan.md` (sibling now in different StepY) | `../StepY/other-plan.md` |
+   | `./phases/phase-NN-…md` | `../../phase-NN-…md` |
+   | `../phase-NN-…md` (already under `phases/`) | `../../phase-NN-…md` |
+   | `../../TODO_FUTURI.md` (project root) | `../../../../../TODO_FUTURI.md` |
+   | `../../../backend/…` (project source) | add 2 more `../` |
+
+   Use a `/tmp/libreFolio_fix_phaseNN_links.sh` helper with `sed -i ''` (BSD
+   sed on macOS). Validate at the end with a Python one-liner that walks the
+   archived folder and `os.path.normpath()`-resolves every `](./…)` and
+   `](../…)` link, printing the broken ones. Code references (`backend/…`)
+   that were *already broken before the move* are noise — leave them.
+
+5. **Create/update README.md** in the subplan directory with a table:
    ```markdown
    | File | Step | Description | Status |
    |------|------|-------------|--------|
    | `plan-phase06Step3Round12...md` | Step 3 | Round 12 — ... | ✅ |
    ```
 
-5. **Update master index** at `phases/00-index.md` with the new phase entry.
+6. **Update master index** at `phases/00-index.md` with the new phase entry.
+
+7. **Update phase summary** at `phases/phase-{NN}-{name}.md` to mark the
+   archived parts/steps as ✅ and add a `**Sub-plans archiviati**` link to
+   the new `phase-{NN}-subplan/README.md`.
 
 ## Directory Structure
 

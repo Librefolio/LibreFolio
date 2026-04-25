@@ -3,8 +3,8 @@
 # Sub-Plan: Phase 7 Part 3 Closure_2 — Blocco G test coverage
 
 Parent: plan-phase07-transaction-Part3_1_Closure_2.prompt.md (Blocco G)
-Data: 24 Aprile 2026 - Stato: IN CORSO
-Effort riveduto: ~8h (dopo audit coverage reale 2026-04-24)
+Data: 24 Aprile 2026 - Stato: ✅ **DONE 2026-04-25** (G-batch1..5 + G-batch6 + G-batch7 tutti chiusi; backend coverage 76.05% → 85.34% → **87.06%**)
+Effort riveduto: ~8h (dopo audit coverage reale 2026-04-24) — actual: ~8h (G1..5) + ~2h (G6) + ~3.5h (G7)
 
 ## Revisione scope (post-audit 2026-04-24)
 
@@ -211,4 +211,49 @@ Legend: 🟢 = needs new tests (worthwhile);
 Total *expected* backend coverage gain if **G-batch7 worthwhile items**
 are implemented: ~+1.5–2 percentage points (from 85.34% to ~87%).
 
+### G-batch7 deliverables — ✅ DONE 2026-04-25 (commit `a61b0dfa`)
+
+All 6 worthwhile items implemented. Backend coverage: 85.34% → **87.06%**
+(+1.72pp, in linea con la stima ~+1.5–2pp). Totale: **22 nuovi test PASS
++ 1 fix di produzione**.
+
+| # | Item | File | New tests | Result |
+|---|------|------|:---------:|:------:|
+| 1 🟢 | `normalize_currency` unit | `test_currency_utils.py::TestNormalizeCurrency` | 10 | ✅ |
+| 2 🟢 | uploads `serve_file` | `test_uploads_serve_file.py` (new) | 8 | ✅ |
+| 3 🟡 | FX 2-leg CHAIN sync | `test_fx_sync.py::test_sync_multi_step_chain` | 1 | ✅ |
+| 4 🟡 | validate update w/o asset_id | `test_transactions_validate.py` (extend) | 1 | ✅ |
+| 5 🟡 | DELETE FX mixed-validity | `test_fx_api.py::test_delete_rates_mixed_validity` | 1 | ✅ |
+| 6 🟡 | `delete_bulk` balance violation | `test_transaction_service.py` (extend) | 1 | ✅ |
+
+**Production bug discovered & fixed**:
+
+- `backend/app/utils/currency_utils.py::normalize_currency` previously
+  matched **any** non-empty string as "exact" because
+  `babel.numbers.get_currency_symbol(code)` echoes the input back for
+  unknown codes (e.g. `get_currency_symbol("XYZ") == "XYZ"`). This
+  allowed garbage strings to pass as valid currencies. Replaced with
+  strict `pycountry.currencies.get(alpha_3=...)` lookup + explicit
+  `CRYPTO_CURRENCIES` set. The 3 existing API tests in
+  `test_utilities.py` still pass (loose intentionally).
+
+**Documented non-feasibility**:
+
+- The originally-planned "delete with cascade-fail" sub-test of item #4
+  was dropped: DEFERRABLE FK + always-rollback dry-run masks any orphan
+  FK violation, so the bare-except branch on `session.delete` (line
+  649) cannot be reached deterministically. Documented inline in
+  `test_transactions_validate.py`.
+
+### Final Blocco G summary
+
+| Stage | Coverage | Tests added | Notes |
+|-------|:--------:|:-----------:|-------|
+| Pre-Blocco G (2026-04-24) | ~57% | — | baseline |
+| Post G-batch5 (2026-04-24) | **76.05%** | 60 (G.3..G.13) | 7/7 groups green |
+| Post G-batch6 (2026-04-25) | **85.34%** | +17 (0%-functions) | + 1 prod fix (`e.error_code`) |
+| Post G-batch7 (2026-04-25) | **87.06%** | +22 (gap-fill) | + 1 prod fix (`normalize_currency`) |
+
+**Total**: ~99 nuovi test backend, 2 bug di produzione scoperti e fissati,
+backend coverage portata da ~57% a **87.06%** in due giorni di lavoro.
 

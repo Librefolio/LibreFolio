@@ -367,6 +367,3 @@ async def test_fx_empty_pair_returns_header_only_csv(test_server):
         # in this suite, but other tests may have seeded — accept >= 0).
         assert payload["row_count"] == len(payload["rows"])
         print_success("Empty FX pair backup contract honoured")
-
-
-

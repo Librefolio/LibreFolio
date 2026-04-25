@@ -304,5 +304,3 @@ async def test_export_csv_round_trip(test_server):
             assert _key(s) == _key(d), f"round-trip mismatch: {s} vs {d}"
         print_info(f"Round-trip verified for {len(src_sorted)} price rows")
         print_success("CSV export → re-import → OHLC integrity preserved")
-
-

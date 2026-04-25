@@ -1,13 +1,13 @@
 # Plan: Phase 7 — Part 3: API Consolidation (atomic per-broker) + events/suggest + deferred from Part 1
 
-**Data**: 20 Aprile 2026 · **Ultimo update**: 24 Aprile 2026 (audit chiusura Part 3: tutto il feature work completato, resta solo Blocco G test coverage)
-**Status**: 🏗️ Feature-complete · **Blocco G test coverage in corso** (A+B, C, D ✅ · H ✅ · I.1–I.11 ✅ · E/F ✅ (test Blocco G) · I-bis #1/#3/#4/#6/#8/#9/#10/#11/#12/#13/#14/#15/#16/#17/#18/#20/#21/#23/#25 ✅ · I-bis #2/#5/#7/#19/#22/#24/#26 ✅ (Batch 4) · #R6-1..#R6-8 ✅ · Unico blocco aperto → Blocco G test coverage — vedi [Closure_2](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md))
+**Data**: 20 Aprile 2026 · **Ultimo update**: 25 Aprile 2026 (Part 3 chiuso al 100%: feature work + Blocco G test coverage + G-batch6 + G-batch7 tutti DONE; backend coverage 87.06%)
+**Status**: ✅ **DONE 2026-04-25** (A+B, C, D ✅ · H ✅ · I.1–I.11 ✅ · E/F ✅ · I-bis #1/#3/#4/#6/#8/#9/#10/#11/#12/#13/#14/#15/#16/#17/#18/#20/#21/#23/#25 ✅ · I-bis #2/#5/#7/#19/#22/#24/#26 ✅ (Batch 4) · #R6-1..#R6-8 ✅ · Blocco G test coverage ✅ (G-batch1..5 + G-batch6 0%-functions + G-batch7 partial-coverage gap-fill) — vedi [Closure_2](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md) e [BlockG sub-plan](./plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md))
 **Priorità**: P0 (sblocca Part 4 transactions page e Part 5 Staging Modal)
 **Effort stimato**: ~3–4 giorni (grosso; include gli spin-off Part 1 §8 e §9)
-**Phase**: [Phase 7 — Transactions System](./phases/phase-07-transactions.md)
+**Phase**: [Phase 7 — Transactions System](../../phase-07-transactions.md)
 **Predecessori**:
-- [plan-phase07-transaction-Part1.md](./plan-phase07-transaction-Part1.md) ✅
-- [plan-phase07-transaction-Part2.prompt.md](./plan-phase07-transaction-Part2.prompt.md) ✅ (Revisione 2)
+- [plan-phase07-transaction-Part1.md](../Parte1/plan-phase07-transaction-Part1.md) ✅
+- [plan-phase07-transaction-Part2.prompt.md](../Parte2/plan-phase07-transaction-Part2.prompt.md) ✅ (Revisione 2)
 
 **Successore (chiusura Part 3)**:
 - [plan-phase07-transaction-Part3_1_Closure.md](./plan-phase07-transaction-Part3_1_Closure.md) ✅ (feature-complete) — raccoglie **tutti** i task pendenti con decisioni terminali post Q&A 2026-04-22:
@@ -733,7 +733,7 @@ Aggiungere entry:
 
 ---
 
-### Blocco I — Currency simplification + banner cleanup + wipe-on-change (Dev-2026-04-21)  🔨 IN PROGRESS (I.1–I.8 done, I.9–I.11 pending — 2026-04-21)
+### Blocco I — Currency simplification + banner cleanup + wipe-on-change (Dev-2026-04-21)  ✅ DONE (I.1–I.11 chiusi 2026-04-22..23 — vedi `Part3_1_Closure.md`)
 
 > **Stato al 2026-04-21 sera**: codice I.1–I.8 implementato e verde su
 > format/lint/svelte-check/test api+services (asset-source, assets-price).
@@ -1042,7 +1042,7 @@ Aggiungere a G.7 `scripts/test_runner.py`:
 
 ---
 
-### Blocco I-bis — Hotfix & UX follow-up (Dev-2026-04-22)  🔨 IN PROGRESS
+### Blocco I-bis — Hotfix & UX follow-up (Dev-2026-04-22)  ✅ DONE 2026-04-25 (tutti i ticket #1..#26 chiusi — vedi `Closure_2`)
 
 > Raccoglie i punti emersi nei due giri di test manuale del 2026-04-22 (mattina
 > + pomeriggio) post implementazione I.1–I.8. I 7 hotfix mattutini sono già
@@ -1063,7 +1063,7 @@ Aggiungere a G.7 `scripts/test_runner.py`:
 `TypeError: draft.trim is not a function` silenziosamente → `onchange` mai
 emesso → dirty tracker mai informato.
 
-**Fix applicato** (commit pending):
+**Fix applicato** (commit `83328b6b`, 2026-04-22):
 - `draft` ridichiarato come `$state<number | null>(null)`.
 - `$effect` aggiornato: `desired = value == null || value === -1 ? null : value`.
 - `commit()` rimosso `.trim()`, gestisce direttamente `number | null | NaN`.
@@ -1401,7 +1401,7 @@ edit modal su Apple Inc. dopo populate e verificare che la textarea contenga
 #### I-bis #19 — Semantica estesa di `Asset.active` (follow-up)  ✅ DONE (doc-only, 2026-04-24, Batch 4.d-part3, commit `d56fe132`)
 
 > **Chiusura formale**: il ticket è un rinvio a Phase 8/9. Regole operative
-> definitive consolidate in [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md)
+> definitive consolidate in [`phases/phase-08-scheduler.md`](../../phase-08-scheduler.md)
 > §Interazione con Asset.active. **Nessun codice in Phase 7**. Cross-link
 > filed in [Closure_2 §I-bis #19](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md#i-bis-19--semantica-estesa-assetactive-follow-up-phase-89--done-doc-only-2026-04-24-batch-4d-part3).
 
@@ -1646,8 +1646,13 @@ risposta legittima ma mal interpretata).
 **✅ Completati** (2026-04-22):
 #8, #9, #10, #11, #13, #14, #15, #16, #17, #18, #20, #21.
 
-**⏳ Pendenti** → **dettagliati in** [`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md) §Coda I-bis pendente:
-#1, #2, #3, #4, #5, #6, #7, #12, #19 (→ Phase 8/9), #22 (prerequisito Part 4/5), #23.
+**✅ Tutti chiusi 2026-04-22..25** → cronologia + cross-link in
+[`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md) e
+[`plan-phase07-transaction-Part3_1_Closure_2.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md):
+#1 ✅, #2 ✅ (commit `9f1cf6a8`), #3 ✅, #4 ✅, #5 ✅ (commit `d56fe132`),
+#6 ✅, #7 ✅ (commit `9f1cf6a8`), #12 ✅, #19 ✅ (doc-only, rinviato a
+Phase 8/9 — commit `d56fe132`), #22 ✅ (commit `9f1cf6a8` + `d56fe132`),
+#23 ✅.
 
 ---
 
@@ -1734,11 +1739,11 @@ risposta legittima ma mal interpretata).
 
 ## 🔗 Cross-link
 
-- **Predecessori**: [Part1](./plan-phase07-transaction-Part1.md) ✅, [Part2](./plan-phase07-transaction-Part2.prompt.md) ✅.
+- **Predecessori**: [Part1](../Parte1/plan-phase07-transaction-Part1.md) ✅, [Part2](../Parte2/plan-phase07-transaction-Part2.prompt.md) ✅.
 - **Chiusura Part 3** (decisioni terminali + tutti i task pendenti): [`plan-phase07-transaction-Part3_1_Closure.md`](./plan-phase07-transaction-Part3_1_Closure.md) ✅ feature-complete + [`plan-phase07-transaction-Part3_1_Closure_2.prompt.md`](./plan-phase07-transaction-Part3_1_Closure_2.prompt.md) ✅ + Batch 4.d-part2/part3 sub-plans. Unico blocco aperto: **Blocco G test coverage**.
 - **Successori**: Part 4 (pagina /transactions), Part 4b (File Preview), Part 5 (Staging Modal).
-- **Phase doc**: [phase-07-transactions.md](./phases/phase-07-transactions.md) §Parte 3.
-- **Phase 8/9 follow-up**: [`phases/phase-08-scheduler.md`](./phases/phase-08-scheduler.md) (consumer `Asset.active`).
+- **Phase doc**: [phase-07-transactions.md](../../phase-07-transactions.md) §Parte 3.
+- **Phase 8/9 follow-up**: [`phases/phase-08-scheduler.md`](../../phase-08-scheduler.md) (consumer `Asset.active`).
 
 ---
 

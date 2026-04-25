@@ -506,4 +506,3 @@ async def test_sync_multi_step_chain(test_server):
                 json=[{"base": "CHF", "quote": "USD"}],
                 timeout=TIMEOUT,
             )
-

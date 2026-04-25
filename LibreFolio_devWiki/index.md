@@ -82,6 +82,7 @@
 | [[decisions/multi-broker-atomic-tx]] | Bulk TX endpoints are not broker-scoped — accept items across multiple brokers | 2026-04-20 | transactions, api, atomicity |
 | [[decisions/tx-link-uuid-semantics]] | link_uuid semantics: TRANSFER requires distinct brokers; DEPOSIT/WITHDRAWAL soft-linkable; promote endpoint | 2026-04-21 | transactions, transfer, linking |
 | [[decisions/price-currency-hard-reject]] | Hard 400 on price currency mismatch; 409 on asset currency change with existing prices | 2026-04-21 | prices, currency, api, validation |
+| [[decisions/policy-d-currency-wipe]] | Asset currency change → destructive symmetric wipe (prices + events); transactions preserved with `asset_event_id=NULL`; pre-confirm via new `/backup` router | 2026-04-23 | assets, currency, destructive, fifo, backup |
 
 ## Concepts
 
@@ -116,12 +117,15 @@
 | [[problems/asset-sync-transaction-closed]] | Bulk asset sync failed with "This transaction is closed" due to concurrent commits on shared session | resolved | backend, async, database, sqlalchemy |
 | [[problems/asset-list-500-provider-input-type]] | list_assets returned 500 when asset had ProviderInputType.AUTO_GENERATED — wrong enum used in FAinfoResponse | resolved | backend, assets, providers, api, enum |
 | [[problems/prices-current-sync-chain-empty-delta]] | Chaining `/prices/current` + `/sync` reports empty `changed_points` — `/current` already persisted today's row | resolved | backend, frontend, assets, prices, anti-pattern |
+| [[problems/assets-wipe-error-attr-mismatch]] | `assets.py` wipe handlers used non-existent `e.code` (should be `e.error_code`) → HTTP 500 instead of 404 | resolved | backend, assets, exceptions, hidden-bug |
+| [[problems/babel-currency-symbol-echo]] | `normalize_currency` echoed unknown garbage codes back as valid (babel quirk) — fixed via strict pycountry lookup | resolved | backend, currency, fx, hidden-bug |
 
 ## Entities
 
 | Page | Summary |
 |------|---------|
 | [[entities/api-router]] | FastAPI router structure — all v1 API routes and their modules |
+| [[entities/backup-router]] | `/api/v1/backup` read-only export router (asset prices/events, FX rates) — Policy D pre-wipe snapshot |
 | [[entities/db-models]] | All SQLModel ORM models — tables, enums, constraints, design notes |
 | [[entities/devpy-cli]] | `dev.py` — single CLI entry point for all developer operations |
 
@@ -152,8 +156,8 @@
 | [[sources/phase06-step4-plana]] | `phase-06-subplan/Bugfix-Step4/PlanA/` + `Plan0/` | 2026-05-24 | phase06, assets, detail, signals, charts |
 | [[sources/phase06-step4-planc]] | `phase-06-subplan/Bugfix-Step4/PlanC/` | 2026-05-24 | phase06, fx, currency-conversion, cache |
 | [[sources/roadmap-v4-index]] | `RoadMapV4/00-Index.md` | 2026-01-09 | roadmap, frontend, v4, phases, history |
-| [[sources/phase07-transactions]] | `plan-phase07-transaction-Part1.md` | 2026-04-24 | phase07, transactions, api, brim, staging |
-| [[sources/phase07-part2-brim-revision]] | `plan-phase07-transaction-Part2.prompt.md` | 2026-04-24 | phase07, brim, parser-only, plugin-version, revision |
-| [[sources/phase07-part3-api-consolidation]] | `plan-phase07-transaction-Part3.md` | 2026-04-24 | phase07, transactions, api, multi-broker, transfer, currency |
-| [[sources/phase07-part3-closure]] | `plan-phase07-transaction-Part3_1_Closure.md` | 2026-04-24 | phase07, i-bis, currency, wipe, savewithretry |
-| [[sources/phase07-part3-closure2]] | `plan-phase07-transaction-Part3_1_Closure_2.prompt.md` + Batch4d + BlockG | 2026-04-24 | phase07, test-coverage, batch4, savewithretry, delta |
+| [[sources/phase07-transactions]] | `phases/phase-07-subplan/Parte1/plan-phase07-transaction-Part1.md` ✅ DONE | 2026-04-24 (upd. 2026-04-25) | phase07, transactions, api, brim, staging |
+| [[sources/phase07-part2-brim-revision]] | `phases/phase-07-subplan/Parte2/plan-phase07-transaction-Part2.prompt.md` ✅ DONE | 2026-04-24 (upd. 2026-04-25) | phase07, brim, parser-only, plugin-version, revision |
+| [[sources/phase07-part3-api-consolidation]] | `phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3.md` ✅ DONE | 2026-04-24 (upd. 2026-04-25) | phase07, transactions, api, multi-broker, transfer, currency |
+| [[sources/phase07-part3-closure]] | `phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure.md` ✅ DONE | 2026-04-24 (upd. 2026-04-25) | phase07, i-bis, currency, policy-d, wipe, backup |
+| [[sources/phase07-part3-closure2]] | `phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md` (+ Batch4d + BlockG G1..G7) ✅ DONE | 2026-04-24 (upd. 2026-04-25) | phase07, test-coverage, batch4, savewithretry, delta, 87% |

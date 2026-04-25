@@ -1,17 +1,22 @@
 ---
 title: "Phase 07 Part 1 — Transaction System Foundation"
 category: source
-source_file: "LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part1.md"
-git_hash: "f17d963"
+source_file: "LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte1/plan-phase07-transaction-Part1.md"
+git_hash: "a61b0dfa"
 date_ingested: "2026-04-24"
+date_updated: "2026-04-25"
+status: "✅ DONE"
 tags: [transactions, asset-events, db, backend, phase07]
-related: [features/F-046, features/F-051, decisions/tx-link-uuid-semantics]
+related: [features/F-046, features/F-051, decisions/tx-link-uuid-semantics, entities/db-models]
 ---
 
 # Source: Phase 07 Part 1 — Transaction System Foundation
 
-> **Plan**: `plan-phase07-transaction-Part1.md` (602 lines)
+> **Plan**: `phases/phase-07-subplan/Parte1/plan-phase07-transaction-Part1.md` (602 lines) — ✅ **DONE**
 > **Phase**: 7 — Transactions System (prerequisite for Parts 2–5)
+>
+> **Path note**: archived 2026-04-25 from `RoadmapV4_UI/plan-phase07-transaction-Part1.md`
+> into `phases/phase-07-subplan/Parte1/`. All Part 1 work is complete.
 
 ## What this plan established
 

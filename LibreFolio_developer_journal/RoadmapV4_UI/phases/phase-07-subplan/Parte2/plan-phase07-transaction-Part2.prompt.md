@@ -1,8 +1,8 @@
 # Phase 7 — Part 2: BRIM come parser puro (Revisione 2)
 
 > **Status**: ✅ Revisione 2 completata (apr 2026) — tutti i blocchi A/B/C chiusi, backend test-suite verde
-> **Predecessore**: [`plan-phase07-transaction-Part1.md`](./plan-phase07-transaction-Part1.md) (✅ completato)
-> **Phase overview**: [`phases/phase-07-transactions.md`](./phases/phase-07-transactions.md) — sezione "Parte 2"
+> **Predecessore**: [`plan-phase07-transaction-Part1.md`](../Parte1/plan-phase07-transaction-Part1.md) (✅ completato)
+> **Phase overview**: [`phases/phase-07-transactions.md`](../../phase-07-transactions.md) — sezione "Parte 2"
 > **Giorni stimati**: 2 (v1) + 0.5 (smantellamento + versioning)
 
 ---
@@ -658,8 +658,8 @@ Evidenze minime dall'esecuzione finale:
 
 ## 🔗 Cross-link
 
-- **Piano padre** (Phase 7 overview): [`phases/phase-07-transactions.md`](./phases/phase-07-transactions.md), sezione "Parte 2 — BRIM Plugin v2".
-- **Predecessore** (Part 1): [`plan-phase07-transaction-Part1.md`](./plan-phase07-transaction-Part1.md).
+- **Piano padre** (Phase 7 overview): [`phases/phase-07-transactions.md`](../../phase-07-transactions.md), sezione "Parte 2 — BRIM Plugin v2".
+- **Predecessore** (Part 1): [`plan-phase07-transaction-Part1.md`](../Parte1/plan-phase07-transaction-Part1.md).
 - **Successori** (Part 3, 4, 5): da creare quando Part 2 sarà completata.
 - **Feature correlata**: linking manuale TX↔evento dalla Staging Modal → spostata in **Part 5** (deferred da Part 1).
 

@@ -5,7 +5,7 @@
 **Status**: 📋 PIANIFICATO (pronto per implementazione)
 **Priorità**: P0 (prerequisito di tutte le altre parti di Phase 7)
 **Effort stimato**: ~1.5 giorni
-**Phase**: [Phase 7 — Transactions System](../phase-07-transactions.md)
+**Phase**: [Phase 7 — Transactions System](../../phase-07-transactions.md)
 
 > **📌 Contesto**: piano di dettaglio della **Parte 1** del macro-plan di Phase 7.
 > Senza questa parte non si può né estendere BRIM (Parte 2) né propagare il link
@@ -591,8 +591,8 @@ test('delete non-existent event id (stale UI) shows warning', async ({ page }) =
 
 ## 🔗 Cross-link
 
-- Phase principale: [`phase-07-transactions.md`](../phase-07-transactions.md)
-- Round 12 (AssetEvent): [`phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md`](../phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md)
+- Phase principale: [`phase-07-transactions.md`](../../phase-07-transactions.md)
+- Round 12 (AssetEvent): [`phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md`](../../phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md)
 - Modello DB: [`backend/app/db/models.py`](../../../../../backend/app/db/models.py)
 - Schemas: [`backend/app/schemas/transactions.py`](../../../../../backend/app/schemas/transactions.py)
 - Migrazione: [`backend/alembic/versions/001_initial.py`](../../../../../backend/alembic/versions/001_initial.py)
