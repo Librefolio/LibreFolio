@@ -156,14 +156,17 @@
         if (!open) return;
         rolledBack = null;
         issues = [];
-        if (mode === 'create-many') {
-            drafts = initialRows.length > 0 ? initialRows.map(freshDraftFromTx).map((d) => ({...d, status: 'new', draft: {...d.draft, id: undefined}})) : [freshEmptyDraft()];
-        } else {
-            drafts = initialRows.map(freshDraftFromTx);
-        }
-        // Refresh asset cache on open (avoid stale display_name cross-client).
+        // Compute the next drafts list in a local variable BEFORE assigning to
+        // the `drafts` rune. This avoids the read-write loop trap of Svelte 5
+        // `$effect`: assigning to `drafts` and then iterating it inside the same
+        // effect makes `drafts` a tracked dependency, and the prior write
+        // immediately invalidates the effect → infinite re-run
+        // (`effect_update_depth_exceeded`). Reading from `next` is untracked.
+        const next: DraftRow[] = mode === 'create-many' ? (initialRows.length > 0 ? initialRows.map(freshDraftFromTx).map((d) => ({...d, status: 'new', draft: {...d.draft, id: undefined}})) : [freshEmptyDraft()]) : initialRows.map(freshDraftFromTx);
         const ids = new Set<number>();
-        for (const d of drafts) if (d.draft.asset_id != null) ids.add(d.draft.asset_id);
+        for (const d of next) if (d.draft.asset_id != null) ids.add(d.draft.asset_id);
+        drafts = next;
+        // Refresh asset cache on open (avoid stale display_name cross-client).
         if (ids.size > 0) void ensureAssetsLoaded();
     });
 

@@ -12,10 +12,11 @@
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
-    import {Check, RotateCcw, Search, X} from 'lucide-svelte';
+    import {Check, Filter as FilterIcon, RotateCcw, Search, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import type {ColumnType, EnumOption, FilterValue} from './types';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
 
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
@@ -23,6 +24,8 @@
     interface Props {
         type: ColumnType;
         enumOptions?: EnumOption[];
+        /** For `currency-stack`: list of currency codes available in the current dataset (seed for the CurrencySearchSelect). */
+        currencyOptions?: string[];
         numberMin?: number;
         numberMax?: number;
         onApply: (filter: FilterValue | null) => void;
@@ -32,7 +35,7 @@
         anchorElement?: HTMLElement | null;
     }
 
-    let {type, enumOptions = [], numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null, anchorElement = null}: Props = $props();
+    let {type, enumOptions = [], currencyOptions = [], numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null, anchorElement = null}: Props = $props();
 
     let popoverElement: HTMLDivElement;
 
@@ -154,6 +157,23 @@
 
     // Enum filter state
     let selectedEnums = $state<Set<string>>(getInitialEnums());
+
+    // Multi-enum filter state (tags-like) — start with empty selection (= no filter)
+    function getInitialMultiEnums(): Set<string> {
+        return new Set(initialValue?.type === 'multi-enum' ? initialValue.selected : []);
+    }
+    let multiEnums = $state<Set<string>>(getInitialMultiEnums());
+    let multiEnumSearch = $state('');
+
+    // Currency-stack filter state
+    type CurrencyStackItem = {code: string; min?: number; max?: number};
+    function getInitialCurrencyStack(): CurrencyStackItem[] {
+        return initialValue?.type === 'currency-stack' ? initialValue.items.map((i) => ({...i})) : [];
+    }
+    let currencyStack = $state<CurrencyStackItem[]>(getInitialCurrencyStack());
+    let currencyToAdd = $state('');
+    /** Index of the currency-stack row whose range editor is currently open. */
+    let currencyOpenIdx = $state<number | null>(null);
 
     // Size filter state (stored in bytes internally)
     let sizeMinBytes = $state(getInitialSizeMin());
@@ -304,6 +324,10 @@
             filter = {type: 'date', from: dateFrom || undefined, to: dateTo || undefined};
         } else if (type === 'enum' && selectedEnums.size < enumOptions.length && selectedEnums.size > 0) {
             filter = {type: 'enum', selected: Array.from(selectedEnums)};
+        } else if (type === 'multi-enum' && multiEnums.size > 0) {
+            filter = {type: 'multi-enum', selected: Array.from(multiEnums)};
+        } else if (type === 'currency-stack' && currencyStack.length > 0) {
+            filter = {type: 'currency-stack', items: currencyStack.map((i) => ({...i}))};
         }
 
         onApply(filter);
@@ -319,6 +343,11 @@
         dateFrom = '';
         dateTo = '';
         selectedEnums = new Set(enumOptions.map((o) => o.value));
+        multiEnums = new Set();
+        multiEnumSearch = '';
+        currencyStack = [];
+        currencyToAdd = '';
+        currencyOpenIdx = null;
         sizeMinBytes = numberMin;
         sizeMaxBytes = numberMax;
         initSizeInputs();
@@ -342,6 +371,40 @@
 
     function clearAllEnums() {
         selectedEnums = new Set();
+        applyFilter();
+    }
+
+    // ---- Multi-enum (tags-like) helpers ----
+    function toggleMultiEnum(value: string) {
+        if (multiEnums.has(value)) multiEnums.delete(value);
+        else multiEnums.add(value);
+        multiEnums = new Set(multiEnums);
+        applyFilter();
+    }
+    let filteredMultiEnumOptions = $derived(multiEnumSearch.trim() === '' ? enumOptions : enumOptions.filter((o) => o.label.toLowerCase().includes(multiEnumSearch.toLowerCase())));
+
+    // ---- Currency-stack helpers ----
+    /** Set of currency codes already in the stack (to exclude from the picker). */
+    let usedCurrencies = $derived(new Set(currencyStack.map((i) => i.code)));
+    function addCurrencyToStack(code: string) {
+        if (!code || usedCurrencies.has(code)) return;
+        currencyStack = [...currencyStack, {code}];
+        currencyToAdd = '';
+        applyFilter();
+    }
+    function removeCurrencyFromStack(idx: number) {
+        currencyStack = currencyStack.filter((_, i) => i !== idx);
+        if (currencyOpenIdx === idx) currencyOpenIdx = null;
+        applyFilter();
+    }
+    function updateCurrencyMin(idx: number, value: string) {
+        const v = value === '' ? undefined : Number(value);
+        currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, min: Number.isFinite(v as number) ? (v as number) : undefined} : it));
+        applyFilter();
+    }
+    function updateCurrencyMax(idx: number, value: string) {
+        const v = value === '' ? undefined : Number(value);
+        currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, max: Number.isFinite(v as number) ? (v as number) : undefined} : it));
         applyFilter();
     }
 
@@ -590,6 +653,83 @@
                         </button>
                     {/each}
                 </div>
+            </div>
+        {:else if type === 'multi-enum'}
+            <div class="enum-filter">
+                <div class="search-input-wrapper">
+                    <Search size={14} class="search-icon" />
+                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={multiEnumSearch} />
+                    {#if multiEnumSearch}
+                        <button type="button" class="clear-input-btn" onclick={() => (multiEnumSearch = '')}>
+                            <X size={12} />
+                        </button>
+                    {/if}
+                </div>
+                <div class="enum-list">
+                    {#if filteredMultiEnumOptions.length === 0}
+                        <div class="enum-empty">{$t('table.filter.empty') || 'No options'}</div>
+                    {:else}
+                        {#each filteredMultiEnumOptions as option}
+                            <button type="button" class="enum-option" onclick={() => toggleMultiEnum(option.value)} data-testid={`filter-multi-enum-option-${option.value}`}>
+                                <span class="enum-checkbox" class:checked={multiEnums.has(option.value)}>
+                                    {#if multiEnums.has(option.value)}
+                                        <Check size={12} />
+                                    {/if}
+                                </span>
+                                <span class="enum-label">{option.label}</span>
+                            </button>
+                        {/each}
+                    {/if}
+                </div>
+            </div>
+        {:else if type === 'currency-stack'}
+            <div class="currency-stack-filter">
+                <div class="currency-add-row">
+                    <CurrencySearchSelect
+                        bind:value={currencyToAdd}
+                        compact={true}
+                        excludedCurrencies={usedCurrencies}
+                        allowedCurrencies={currencyOptions.length > 0 ? currencyOptions : undefined}
+                        placeholder={$t('table.filter.currencyStack.addCurrency') || 'Add currency…'}
+                        onchange={(v) => addCurrencyToStack(v)}
+                    />
+                </div>
+                {#if currencyStack.length === 0}
+                    <div class="currency-stack-empty">{$t('table.filter.currencyStack.empty') || 'Pick a currency to add a numeric range filter.'}</div>
+                {:else}
+                    <ul class="currency-stack-list">
+                        {#each currencyStack as item, idx (item.code)}
+                            <li class="currency-stack-row" data-testid={`filter-currency-row-${item.code}`}>
+                                <span class="currency-stack-code">{item.code}</span>
+                                <span class="currency-stack-range">
+                                    {#if item.min != null || item.max != null}
+                                        {item.min ?? '−∞'} … {item.max ?? '+∞'}
+                                    {:else}
+                                        <span class="currency-stack-any">{$t('table.filter.currencyStack.any') || 'any amount'}</span>
+                                    {/if}
+                                </span>
+                                <button type="button" class="currency-stack-btn" title={$t('table.filter') || 'Filter'} onclick={() => (currencyOpenIdx = currencyOpenIdx === idx ? null : idx)} data-testid={`filter-currency-funnel-${item.code}`}>
+                                    <FilterIcon size={12} />
+                                </button>
+                                <button type="button" class="currency-stack-btn danger" title={$t('common.delete') || 'Delete'} onclick={() => removeCurrencyFromStack(idx)} data-testid={`filter-currency-trash-${item.code}`}>
+                                    <Trash2 size={12} />
+                                </button>
+                                {#if currencyOpenIdx === idx}
+                                    <div class="currency-stack-range-editor">
+                                        <div class="range-row">
+                                            <label class="range-label" for={`cur-min-${idx}`}>{$t('common.min')}</label>
+                                            <input type="number" class="range-input" id={`cur-min-${idx}`} value={item.min ?? ''} onchange={(e) => updateCurrencyMin(idx, (e.currentTarget as HTMLInputElement).value)} />
+                                        </div>
+                                        <div class="range-row">
+                                            <label class="range-label" for={`cur-max-${idx}`}>{$t('common.max')}</label>
+                                            <input type="number" class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, (e.currentTarget as HTMLInputElement).value)} />
+                                        </div>
+                                    </div>
+                                {/if}
+                            </li>
+                        {/each}
+                    </ul>
+                {/if}
             </div>
         {/if}
     </div>
@@ -1084,5 +1224,113 @@
         background: #4ade80;
         border-color: #4ade80;
         color: #0f172a;
+    }
+
+    .enum-empty {
+        padding: 0.5rem;
+        font-size: 0.75rem;
+        color: #94a3b8;
+        text-align: center;
+    }
+
+    /* Currency-stack filter */
+    .currency-stack-filter {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-width: 280px;
+    }
+    .currency-add-row {
+        display: flex;
+        align-items: center;
+    }
+    .currency-stack-empty {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        text-align: center;
+        padding: 0.5rem;
+    }
+    .currency-stack-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .currency-stack-row {
+        position: relative;
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.3rem 0.5rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        background: #f8fafc;
+    }
+    :global(.dark) .currency-stack-row {
+        background: #0f172a;
+        border-color: #334155;
+    }
+    .currency-stack-code {
+        font-weight: 600;
+        font-size: 0.75rem;
+        color: #1a4031;
+    }
+    :global(.dark) .currency-stack-code {
+        color: #4ade80;
+    }
+    .currency-stack-range {
+        font-size: 0.75rem;
+        color: #475569;
+    }
+    :global(.dark) .currency-stack-range {
+        color: #cbd5e1;
+    }
+    .currency-stack-any {
+        color: #94a3b8;
+        font-style: italic;
+    }
+    .currency-stack-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: transparent;
+        color: #64748b;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .currency-stack-btn:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+    :global(.dark) .currency-stack-btn:hover {
+        background: #334155;
+        color: #f1f5f9;
+    }
+    .currency-stack-btn.danger:hover {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+    :global(.dark) .currency-stack-btn.danger:hover {
+        background: #7f1d1d;
+        color: #fecaca;
+    }
+    .currency-stack-range-editor {
+        grid-column: 1 / -1;
+        margin-top: 0.4rem;
+        padding-top: 0.4rem;
+        border-top: 1px dashed #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    :global(.dark) .currency-stack-range-editor {
+        border-top-color: #334155;
     }
 </style>

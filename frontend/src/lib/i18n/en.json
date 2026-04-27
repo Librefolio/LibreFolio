@@ -461,7 +461,10 @@
       "tags": "Tags"
     },
     "actions": {
-      "edit": "Edit"
+      "edit": "Edit",
+      "clone": "Clone",
+      "delete": "Delete",
+      "promotePair": "Promote pair"
     },
     "types": {
       "BUY": "Buy",

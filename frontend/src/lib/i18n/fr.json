@@ -446,7 +446,10 @@
     "import": "Importer",
     "placeholderMessage": "La gestion des transactions sera bientôt disponible.",
     "actions": {
-      "edit": "Modifier"
+      "edit": "Modifier",
+      "clone": "Cloner",
+      "delete": "Supprimer",
+      "promotePair": "Promouvoir la paire"
     },
     "empty": "Aucune transaction",
     "ghost": {

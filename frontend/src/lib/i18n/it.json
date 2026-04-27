@@ -446,7 +446,10 @@
     "import": "Importa",
     "placeholderMessage": "La gestione delle transazioni sarà disponibile a breve.",
     "actions": {
-      "edit": "Modifica"
+      "edit": "Modifica",
+      "clone": "Clona",
+      "delete": "Elimina",
+      "promotePair": "Promuovi coppia"
     },
     "empty": "Nessuna transazione",
     "ghost": {

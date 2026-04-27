@@ -184,7 +184,7 @@ export type CellContent = SimpleCellContent | IconTextCell | BadgeCell | DateCel
  * Column data type - determines filter UI and sorting behavior
  e * - 'size' is special for byte sizes with logarithmic slider
  */
-export type ColumnType = 'text' | 'number' | 'date' | 'enum' | 'size' | 'custom';
+export type ColumnType = 'text' | 'number' | 'date' | 'enum' | 'multi-enum' | 'size' | 'currency-stack' | 'custom';
 
 /**
  * Enum option for enum-type columns
@@ -239,6 +239,20 @@ export interface ColumnDef<T> {
     /** Get raw value for sorting/filtering (if different from cell render) */
     getValue?: (row: T) => unknown;
 
+    /**
+     * For `currency-stack` columns: extract the currency code + amount of a
+     * row. Returns `null` when the cell has no currency value (filter excludes
+     * the row by default unless the filter list is empty).
+     */
+    getCurrencyValue?: (row: T) => {code: string; amount: number} | null;
+
+    /**
+     * For `multi-enum` columns: extract the array of values associated with
+     * a row (e.g. tags). When the row has none, return `[]`. Filter logic:
+     * row passes if `selected` is empty OR ∃ overlap with the row's array.
+     */
+    getMultiValue?: (row: T) => string[];
+
     /** URL parameter key for deep-linking filters (default: column id) */
     urlKey?: string;
 
@@ -266,8 +280,8 @@ export interface RowAction<T> {
     /** Icon component */
     icon: AnyComponent;
 
-    /** Label - string or function for i18n */
-    label: string | (() => string);
+    /** Label - string, i18n function, or row-derived (used as button title attr) */
+    label: string | (() => string) | ((row: T) => string);
 
     /** Click handler */
     onClick: (row: T) => void | Promise<void>;
@@ -327,7 +341,7 @@ export interface BulkAction<T> {
 /**
  * Filter value union type
  */
-export type FilterValue = TextFilter | NumberFilter | DateFilter | EnumFilter | SizeFilter;
+export type FilterValue = TextFilter | NumberFilter | DateFilter | EnumFilter | MultiEnumFilter | SizeFilter | CurrencyStackFilter;
 
 /**
  * Active filter state for a column
@@ -359,6 +373,31 @@ export interface DateFilter {
 export interface EnumFilter {
     type: 'enum';
     selected: string[];
+}
+
+/**
+ * Multi-select enum filter — same semantics as EnumFilter but the popover UI
+ * is a checkbox checklist with a search-box (no select-all/clear-all chips).
+ * Used when the option set is dynamic (e.g. tags derived from currently
+ * loaded rows). Filter logic: row passes if `selected` is empty or any of
+ * its values intersects the row's value set.
+ */
+export interface MultiEnumFilter {
+    type: 'multi-enum';
+    selected: string[];
+}
+
+/**
+ * Currency-stack filter — a stack of {currency, min?, max?} ranges OR-ed
+ * together. Designed for cells that carry both a currency code and an amount
+ * (e.g. Transactions `cash`, FX rates, Asset prices). The column must declare
+ * `getCurrencyValue: (row) => { code, amount } | null` for filtering to work.
+ * Filter logic: row passes if `items` is empty OR ∃ item whose code matches
+ * the row's currency code AND the row amount is within `[min, max]`.
+ */
+export interface CurrencyStackFilter {
+    type: 'currency-stack';
+    items: Array<{code: string; min?: number; max?: number}>;
 }
 
 export interface SizeFilter {

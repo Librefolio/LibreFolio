@@ -21,7 +21,7 @@
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
-    import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
+    import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, EnumOption, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
 
     interface Props {
         data: T[];
@@ -247,6 +247,15 @@
                     return true;
                 } else if (filterValue.type === 'enum') {
                     return filterValue.selected.includes(String(rawValue));
+                } else if (filterValue.type === 'multi-enum') {
+                    if (filterValue.selected.length === 0) return true;
+                    const rowVals = column.getMultiValue ? column.getMultiValue(row) : Array.isArray(rawValue) ? (rawValue as unknown[]).map((v) => String(v)) : String(rawValue ?? '').split(',');
+                    return filterValue.selected.some((sel) => rowVals.includes(sel));
+                } else if (filterValue.type === 'currency-stack') {
+                    if (filterValue.items.length === 0) return true;
+                    const cv = column.getCurrencyValue ? column.getCurrencyValue(row) : null;
+                    if (!cv) return false;
+                    return filterValue.items.some((it) => it.code === cv.code && (it.min === undefined || cv.amount >= it.min) && (it.max === undefined || cv.amount <= it.max));
                 }
                 return true;
             });
@@ -378,6 +387,36 @@
         if (min >= max) max = min + 1;
 
         return {min, max};
+    }
+
+    /**
+     * Compute the option set for a `multi-enum` filter column from the data
+     * loaded in this table. Sorted alphabetically. Used when the column does
+     * NOT declare a static `enumOptions` (typical for tags or other open sets
+     * derived from rows).
+     */
+    function getMultiEnumOptions(column: ColumnDef<T>): EnumOption[] {
+        const all = new Set<string>();
+        for (const row of data) {
+            const vals = column.getMultiValue ? column.getMultiValue(row) : [];
+            for (const v of vals) if (v != null && v !== '') all.add(String(v));
+        }
+        return [...all].sort((a, b) => a.localeCompare(b)).map((v) => ({value: v, label: v}));
+    }
+
+    /**
+     * Compute the available currency-codes for a `currency-stack` filter
+     * column from the data. Used to seed the CurrencySearchSelect dropdown
+     * inside the filter popover.
+     */
+    function getCurrencyOptions(column: ColumnDef<T>): string[] {
+        if (!column.getCurrencyValue) return [];
+        const all = new Set<string>();
+        for (const row of data) {
+            const cv = column.getCurrencyValue(row);
+            if (cv?.code) all.add(cv.code);
+        }
+        return [...all].sort();
     }
 
     function formatDate(value: Date | string, format?: string): string {
@@ -921,9 +960,12 @@
                                 <!-- Filter popover -->
                                 {#if openFilterColumnId === column.id}
                                     {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column) : {min: 0, max: 100}}
+                                    {@const dynamicEnumOptions = column.type === 'multi-enum' ? getMultiEnumOptions(column) : (column.enumOptions ?? [])}
+                                    {@const currencyOptions = column.type === 'currency-stack' ? getCurrencyOptions(column) : []}
                                     <DataTableColumnFilter
                                         type={column.type}
-                                        enumOptions={column.enumOptions}
+                                        enumOptions={dynamicEnumOptions}
+                                        {currencyOptions}
                                         numberMin={minMax.min}
                                         numberMax={minMax.max}
                                         initialValue={columnFilters[column.id]}
@@ -1158,7 +1200,7 @@
                                                         e.stopPropagation();
                                                         handleRowAction(action, row);
                                                     }}
-                                                    title={typeof action.label === 'function' ? action.label() : action.label}
+                                                    title={typeof action.label === 'function' ? (action.label as (r?: T) => string)(row) : action.label}
                                                 >
                                                     <action.icon size={16} class={action.iconClass?.(row) ?? ''} />
                                                 </button>

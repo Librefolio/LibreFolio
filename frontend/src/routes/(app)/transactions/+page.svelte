@@ -4,13 +4,16 @@
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {Plus, Upload} from 'lucide-svelte';
+    import {Plus, Upload, Pencil, Copy, Trash2, Zap, RefreshCw} from 'lucide-svelte';
 
     import {zodiosApi} from '$lib/api';
     import {ensureTxTypesLoaded} from '$lib/stores/txTypeStore';
     import {ensureAssetsLoaded} from '$lib/stores/assetStore';
     import type {BrokerLike} from '$lib/utils/brokerColors';
+    import type {FilterValue} from '$lib/components/table/types';
     import TransactionsTable from '$lib/components/transactions/TransactionsTable.svelte';
+    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import TransactionStagingModal from '$lib/components/transactions/TransactionStagingModal.svelte';
     import BulkDeleteLinkedPairModal, {type ProblemPair} from '$lib/components/transactions/BulkDeleteLinkedPairModal.svelte';
     import TransferPromoteModal from '$lib/components/transactions/TransferPromoteModal.svelte';
@@ -54,6 +57,8 @@
         date_end?: string;
         tags?: string[];
         currency?: string;
+        /** Currency-stack filter encoded as `code:min:max` items (CSV). */
+        cash?: Array<{code: string; min?: number; max?: number}>;
         page?: number;
         page_size?: number;
         highlight_id?: number;
@@ -98,6 +103,25 @@
         out.date_end = searchParams.get('date_end') || undefined;
         out.tags = csv('tags');
         out.currency = searchParams.get('currency') || undefined;
+        // Currency-stack: `cash=USD:0:1000,EUR::500` (min/max optional → empty token).
+        const cashRaw = searchParams.get('cash');
+        if (cashRaw) {
+            const items: Array<{code: string; min?: number; max?: number}> = [];
+            for (const s of cashRaw
+                .split(',')
+                .map((x) => x.trim())
+                .filter(Boolean)) {
+                const [code, minS, maxS] = s.split(':');
+                if (!code) continue;
+                const min = minS != null && minS !== '' ? Number(minS) : undefined;
+                const max = maxS != null && maxS !== '' ? Number(maxS) : undefined;
+                const it: {code: string; min?: number; max?: number} = {code: code.toUpperCase()};
+                if (Number.isFinite(min as number)) it.min = min as number;
+                if (Number.isFinite(max as number)) it.max = max as number;
+                items.push(it);
+            }
+            if (items.length > 0) out.cash = items;
+        }
         out.page = num('page');
         out.page_size = num('page_size');
         out.highlight_id = num('highlight_id');
@@ -113,6 +137,9 @@
         if (f.date_end) params.set('date_end', f.date_end);
         if (f.tags?.length) params.set('tags', f.tags.join(','));
         if (f.currency) params.set('currency', f.currency);
+        if (f.cash?.length) {
+            params.set('cash', f.cash.map((it) => `${it.code}:${it.min ?? ''}:${it.max ?? ''}`).join(','));
+        }
         if (f.page != null && f.page !== 1) params.set('page', String(f.page));
         if (f.page_size != null && f.page_size !== 50) params.set('page_size', String(f.page_size));
         if (f.highlight_id != null) params.set('highlight_id', String(f.highlight_id));
@@ -126,6 +153,68 @@
         if (next !== `${$page.url.pathname}${$page.url.search}`) {
             goto(next, {replaceState: true, noScroll: true, keepFocus: true});
         }
+    }
+
+    /**
+     * Build the `initialFilters` map (keyed by column `urlKey`) for the
+     * DataTable header filter UI from the current `filters` state. This is
+     * computed once at mount; subsequent UI changes flow back through
+     * `handleColumnFiltersChange` instead.
+     */
+    function filtersToColumnFilters(f: FilterMap): Record<string, FilterValue> {
+        const out: Record<string, FilterValue> = {};
+        if (f.types?.length) out.types = {type: 'enum', selected: f.types};
+        if (f.tags?.length) out.tags = {type: 'multi-enum', selected: f.tags};
+        if (f.broker_id != null) out.broker_id = {type: 'enum', selected: [String(f.broker_id)]};
+        if (f.date_start || f.date_end) out.date = {type: 'date', from: f.date_start, to: f.date_end};
+        if (f.cash?.length) out.cash = {type: 'currency-stack', items: f.cash.map((i) => ({...i}))};
+        return out;
+    }
+
+    /**
+     * Receive header column filter changes (keyed by `urlKey`) from the
+     * DataTable and reduce them into the page-level `filters` state.
+     * URL sync happens automatically via the existing `$effect` below.
+     *
+     * NOTE: `DataTable` emits this on every internal reactivity tick (e.g. when
+     * the `columns` prop reference changes due to upstream `$derived`), even
+     * if the underlying filter set didn't change. We therefore deep-compare
+     * the incoming record against the current `filters` and bail out on
+     * no-op emits to avoid an infinite reload loop.
+     */
+    function handleColumnFiltersChange(record: Record<string, FilterValue>) {
+        const next: FilterMap = {...filters};
+        // Reset the keys that are header-controlled so removing a filter clears it.
+        next.types = undefined;
+        next.tags = undefined;
+        next.broker_id = undefined;
+        next.date_start = undefined;
+        next.date_end = undefined;
+        next.cash = undefined;
+        for (const [k, v] of Object.entries(record)) {
+            if (!v) continue;
+            if (k === 'types' && v.type === 'enum') next.types = v.selected.length > 0 ? v.selected : undefined;
+            else if (k === 'tags' && v.type === 'multi-enum') next.tags = v.selected.length > 0 ? v.selected : undefined;
+            else if (k === 'broker_id' && v.type === 'enum' && v.selected.length === 1) next.broker_id = Number(v.selected[0]);
+            else if (k === 'date' && v.type === 'date') {
+                next.date_start = v.from || undefined;
+                next.date_end = v.to || undefined;
+            } else if (k === 'cash' && v.type === 'currency-stack') next.cash = v.items.length > 0 ? v.items.map((i) => ({...i})) : undefined;
+        }
+        // Bail-out: if nothing relevant changed, skip the state update + reload.
+        // This breaks the DataTable re-emit → reload loop triggered by
+        // upstream $derived columns prop changes.
+        const sameTypes = JSON.stringify(filters.types ?? null) === JSON.stringify(next.types ?? null);
+        const sameTags = JSON.stringify(filters.tags ?? null) === JSON.stringify(next.tags ?? null);
+        const sameBroker = (filters.broker_id ?? null) === (next.broker_id ?? null);
+        const sameDate = (filters.date_start ?? null) === (next.date_start ?? null) && (filters.date_end ?? null) === (next.date_end ?? null);
+        const sameCash = JSON.stringify(filters.cash ?? null) === JSON.stringify(next.cash ?? null);
+        if (sameTypes && sameTags && sameBroker && sameDate && sameCash) return;
+        // Reset to first page on filter change.
+        next.page = 1;
+        filters = next;
+        // Re-fetch with the new filter set (server-side filters need the call).
+        void reload();
     }
 
     // =========================================================================
@@ -177,24 +266,14 @@
     }
 
     async function loadEventTooltipMap(rows: TXReadItem[]): Promise<void> {
-        const ids = new Set<number>();
-        for (const r of rows) {
-            if (r.asset_event_id != null) ids.add(r.asset_event_id);
-        }
-        if (ids.size === 0) {
-            eventTooltipMap = new Map();
-            return;
-        }
-        try {
-            const res = (await zodiosApi.query_events_bulk_api_v1_assets_events_query_post({ids: [...ids]} as never)) as AssetEvent[] | unknown;
-            const items = (res as AssetEvent[]) ?? [];
-            const m = new Map<number, AssetEvent>();
-            for (const ev of items) m.set(ev.id, ev);
-            eventTooltipMap = m;
-        } catch (e) {
-            console.warn('Failed to load event tooltip map:', e);
-            eventTooltipMap = new Map();
-        }
+        // The `POST /assets/events/query` endpoint expects a list of
+        // `{asset_id, date_range, target_currency?}` items — there is no
+        // bulk-by-id lookup for events. Until a dedicated endpoint exists
+        // (deferred to Round 2 / Phase 7 final), we surface a generic
+        // "Linked event" tooltip via the fallback in `eventTooltipText()`
+        // and skip the (broken) network call entirely. Avoids a 422 spam.
+        void rows;
+        eventTooltipMap = new Map();
     }
 
     async function reload(): Promise<void> {
@@ -237,6 +316,7 @@
         void filters.date_end;
         void filters.tags;
         void filters.currency;
+        void filters.cash;
         void filters.page;
         void filters.page_size;
         void filters.highlight_id;
@@ -425,19 +505,63 @@
         stagingOpen = true;
     }
 
+    function handleCloneRow(row: TXReadItem) {
+        stagingMode = 'create-many';
+        const today = new Date().toISOString().slice(0, 10);
+        stagingInitial = [{...row, id: 0, date: today, related_transaction_id: null}];
+        stagingOpen = true;
+    }
+
+    function handleDeleteRow(row: TXReadItem) {
+        // Reuse the bulk-delete pipeline with a single-row selection. This
+        // automatically handles the linked-pair extender modal when the row
+        // has a partner.
+        selectedRows = [row];
+        void onBulkDelete();
+    }
+
     function handlePageChange(page: number) {
         filters = {...filters, page};
     }
+
+    function handlePageSizeChange(pageSize: number) {
+        filters = {...filters, page_size: pageSize, page: 1};
+        void reload();
+    }
+
+    /** Reference to the TransactionsTable component for visibility/selection control. */
+    let transactionsTableComponent = $state<TransactionsTable | undefined>(undefined);
 </script>
 
 <div class="space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-4">
         <div>
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">{$_('transactions.title')}</h2>
+            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                {$_('transactions.title')}
+                {#if mainRows.length > 0}
+                    <span data-testid="tx-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{mainRows.length}</span>
+                {/if}
+            </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('transactions.subtitle')}</p>
         </div>
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center gap-2">
+            {#if selectedRows.length > 0}
+                <DataTableToolbar
+                    selectedCount={selectedRows.length}
+                    bulkActions={[
+                        {id: 'edit', icon: Pencil, label: () => $_('transactions.actions.edit') || 'Edit', onClick: () => onEditBulk()},
+                        {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
+                        ...(canPromote ? [{id: 'promote', icon: Zap, label: () => $_('transactions.actions.promotePair') || 'Promote pair', onClick: () => onPromotePair()}] : []),
+                        {id: 'delete', icon: Trash2, label: () => $_('transactions.actions.delete') || 'Delete', variant: 'danger' as const, onClick: () => onBulkDelete()},
+                    ]}
+                    onClearSelection={() => {
+                        transactionsTableComponent?.getTableRef()?.clearSelection();
+                        selectedRows = [];
+                    }}
+                />
+            {/if}
+            <ColumnVisibilityToggle tableRef={transactionsTableComponent?.getTableRef()} />
             <button class="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" data-testid="tx-import-button" onclick={onImportFromBroker}>
                 <Upload size={18} />
                 <span>{$_('transactions.import')}</span>
@@ -450,8 +574,11 @@
     </div>
 
     {#if loading}
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center border border-gray-100 dark:border-gray-700" data-testid="tx-loading">
-            <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('common.loading')}…</p>
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-gray-700" data-testid="tx-loading">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
+                <RefreshCw class="text-libre-green animate-spin" size={32} />
+            </div>
+            <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
         </div>
     {:else if error}
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4" data-testid="tx-error">
@@ -459,6 +586,7 @@
         </div>
     {:else}
         <TransactionsTable
+            bind:this={transactionsTableComponent}
             {mainRows}
             {partnerRows}
             {brokers}
@@ -466,29 +594,17 @@
             currentPage={filters.page ?? 1}
             pageSize={filters.page_size ?? 50}
             highlightId={filters.highlight_id ?? null}
+            initialFilters={filtersToColumnFilters(filters)}
             onSelectionChange={handleSelectionChange}
             onLinkedPairClick={handleLinkedPairClick}
             onEventBadgeClick={handleEventBadgeClick}
             onEditRow={handleEditRow}
+            onCloneRow={handleCloneRow}
+            onDeleteRow={handleDeleteRow}
             onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+            onFiltersChange={handleColumnFiltersChange}
         />
-        {#if selectedRows.length > 0}
-            <div class="flex items-center justify-between gap-3 p-3 rounded-lg bg-libre-green/10 dark:bg-libre-green/20 border border-libre-green/30" data-testid="tx-selection-bar">
-                <span class="text-xs text-gray-700 dark:text-gray-200" data-testid="tx-selection-count">
-                    {selectedRows.length} selected
-                </span>
-                <div class="flex items-center gap-2">
-                    <button class="px-3 py-1.5 text-xs rounded bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600" onclick={onEditBulk} data-testid="tx-bulk-edit"> ✎ Edit bulk </button>
-                    <button class="px-3 py-1.5 text-xs rounded bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600" onclick={onCloneBulk} data-testid="tx-bulk-clone"> 📋 Clone </button>
-                    {#if canPromote}
-                        <button class="px-3 py-1.5 text-xs rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/50" onclick={onPromotePair} data-testid="tx-bulk-promote">
-                            ⚡ Promote pair
-                        </button>
-                    {/if}
-                    <button class="px-3 py-1.5 text-xs rounded bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/50" onclick={onBulkDelete} data-testid="tx-bulk-delete"> 🗑 Delete </button>
-                </div>
-            </div>
-        {/if}
     {/if}
 </div>
 
