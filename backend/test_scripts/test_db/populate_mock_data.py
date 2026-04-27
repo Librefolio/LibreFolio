@@ -1029,6 +1029,34 @@ def populate_transactions(session: Session):
     ]
 
     for tx_data in transactions:
+        # Auto-tag transactions for visual demo of the multi-tag filter on
+        # the /transactions page. Tags are stored as a CSV string per-row
+        # (Transaction.tags) and exposed as List[str] via the API. Mapping:
+        # - BUY  → 'core' for stocks/ETFs, 'speculative' for crypto/loans
+        # - SELL → 'rebalance'
+        # - DIVIDEND/INTEREST → 'long-term'
+        # - FEE/TAX → 'fees'
+        # Some rows get an extra 'review' tag deterministically (every 4th)
+        # to give the multi-select something to combine.
+        auto_tags: list[str] = []
+        ttype = tx_data["type"]
+        asset = tx_data.get("asset")
+        if ttype == TransactionType.BUY:
+            asset_kind = getattr(asset, "asset_type", None) if asset else None
+            if asset_kind in ("CRYPTO", "P2P_LOAN"):
+                auto_tags.append("speculative")
+            else:
+                auto_tags.append("core")
+        elif ttype == TransactionType.SELL:
+            auto_tags.append("rebalance")
+        elif ttype in (TransactionType.DIVIDEND, TransactionType.INTEREST):
+            auto_tags.append("long-term")
+        elif ttype in (TransactionType.FEE, TransactionType.TAX):
+            auto_tags.append("fees")
+        if (tx_data["days_ago"] % 4) == 0 and ttype != TransactionType.DEPOSIT:
+            auto_tags.append("review")
+        tags_csv = ",".join(auto_tags) if auto_tags else None
+
         tx = Transaction(
             broker_id=tx_data["broker"].id,
             asset_id=tx_data["asset"].id if tx_data["asset"] else None,
@@ -1038,6 +1066,7 @@ def populate_transactions(session: Session):
             amount=tx_data["amount"],
             currency=tx_data["currency"],
             description=tx_data["description"],
+            tags=tags_csv,
         )
         session.add(tx)
 
