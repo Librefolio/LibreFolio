@@ -584,8 +584,10 @@
                 aria-label={$_('transactions.refresh') || 'Refresh from server'}
                 disabled={loading}
                 onclick={() => {
-                    // Reset column filters and URL filter state before reloading.
+                    // Reset column filters, selection, and URL filter state before reloading.
                     transactionsTableComponent?.resetFilters();
+                    transactionsTableComponent?.getTableRef()?.clearSelection();
+                    selectedRows = [];
                     filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
                     void reload();
                 }}

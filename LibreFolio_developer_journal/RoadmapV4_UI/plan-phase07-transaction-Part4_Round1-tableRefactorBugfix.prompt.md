@@ -686,7 +686,59 @@ Aggiunto `clearFilters()` export in `DataTable.svelte`.
 | Issue | Stato | Note |
 |-------|-------|------|
 | **W64** — Linked assets / ghost rows | ⏳ verify | Verificare dati mock per TX con `related_transaction_id`. Ghost row viola c'è ma le interazioni (chip che mostra quale filtro ha escluso + bottoni ✕/+) non sono implementate. |
-| **W66 partial** — TX cash cell → `formatCurrencyAmountHtml()` | ⏳ Round 2 | TransactionsTable `formatCash()` ancora inline. Da unificare col helper condiviso. |
+| **W66 partial** — TX cash cell → `formatCurrencyAmountHtml()` | ✅ C19 | Risolto in Round 1.8. |
 | **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | La tinta viola c'è ma le interazioni (chip che mostra quale filtro ha escluso + bottoni ✕/+) non sono implementate. |
 | **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT — deferred a phase 7 final. |
+
+---
+
+## Round 1.8 — Enum filter stability, currency unification, selection reset, IDE errors
+
+### Issues reportati
+
+| # | Sev | Descrizione | Fix | Status |
+|---|-----|-------------|-----|--------|
+| W72 | 🐛 compilazione | `DataTableColumnFilter.svelte`: 4 errori IDE per `as HTMLInputElement` cast in template Svelte (non valido). | Rimossi i cast `as HTMLInputElement`, uso `e.currentTarget.value` direttamente. | ✅ C17 |
+| W73 | 🐛 grave | Filtro tipo TX: una volta deselezionato un tipo, sparisce dall'elenco e non è più riselezionabile. Causa: `getEnumOptionsWithCounts()` in DataTable faceva `.filter(o => o.count > 0)` sulle opzioni, eliminando quelle con count 0. | Rimosso `.filter(o => o.count > 0)` — le opzioni sono definite dal parent via `enumOptions`, i conteggi a 0 vengono mostrati ma non rimossi. | ✅ C18 |
+| W74 | ⚠ UX | Cash cell TX non usa `formatCurrencyAmountHtml()` condiviso — mostra `€ 🇪🇺` senza EUR code, e `🇺🇸USD` senza `$` symbol. | Cash cell ora usa `formatCurrencyAmountHtml(n, code, {showSign: true})`. Rimossa logica inline duplicata. Import `getCurrencyInfo` rimosso (non più usato). | ✅ C19 |
+| W75 | ⚠ UX | Event tooltip non usa `formatCurrencyAmountHtml()` — mostra `0.25 USD` senza symbol/flag. | `eventTooltipText()` ora genera con `formatCurrencyAmountHtml` (stripping HTML tags per tooltip plain-text). | ✅ C20 |
+| W76 | ⚠ UX | Refresh non resetta la selezione. Toolbar continua a mostrare "N selected" dopo il refresh. | Refresh ora chiama `clearSelection()` e resetta `selectedRows = []` prima di reload. | ✅ C21 |
+
+### Dettagli implementativi
+
+**C17 — DataTableColumnFilter `as` casts**: Svelte template parser non supporta TypeScript `as` casts in espressioni inline. Le 4 occorrenze nelle currency-stack range inputs usavano `(e.currentTarget as HTMLInputElement).value`. Cambiato in `e.currentTarget.value` direttamente — il tipo è corretto dato che `e` è un InputEvent su un `<input>`.
+
+**C18 — Enum filter stability** (root cause analysis):
+- `DataTable.getEnumOptionsWithCounts()` line 423: computava conteggi da `data` (che è `visibleRows`, la pagina filtrata), poi faceva `.filter(o => o.count > 0)` → tipi con count 0 sparivano
+- Il parent (TransactionsTable) fornisce `enumOptions` con TUTTI i tipi presenti nel dataset completo (via `TX_TYPES.filter(tt => mainRows.some(...))`)
+- Fix: rimosso il `.filter()`, le opzioni restano tutte visibili con conteggio 0 quando filtrate
+- Questo allinea il comportamento a `/assets` dove i filtri non scompaiono
+
+**C19 — Cash cell unificata**: La cell `cash` in TransactionsTable aveva ~15 righe di logica inline duplicata da `currencyFormat.ts`. Ora usa `formatCurrencyAmountHtml(n, code, {showSign: true})` direttamente. Output: `$ 🇺🇸USD` per USD, `€ 🇪🇺EUR` per EUR, `🇷🇴RON` per RON (senza simbolo). Questo chiude il residuo W66.
+
+**C20 — Event tooltip currency**: `eventTooltipText()` ora genera il fragment HTML con `formatCurrencyAmountHtml`, poi strappa i tag HTML con `.replace(/<[^>]*>/g, '')` per il tooltip plain-text. Risultato: `💰 DIVIDEND · 2025-07-31 · 0.25 $ 🇺🇸USD · "notes"`.
+
+**C21 — Selection reset on refresh**: Aggiunto `clearSelection()` + `selectedRows = []` nel handler `onclick` del bottone refresh, prima di `reload()`.
+
+### File modificati
+
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/table/DataTableColumnFilter.svelte` | Rimossi 4 cast `as HTMLInputElement` |
+| `frontend/src/lib/components/table/DataTable.svelte` | Rimosso `.filter(o => o.count > 0)` da `getEnumOptionsWithCounts()` |
+| `frontend/src/lib/components/transactions/TransactionsTable.svelte` | Cash cell → `formatCurrencyAmountHtml`, event tooltip → `formatCurrencyAmountHtml`, rimosso import `getCurrencyInfo` |
+| `frontend/src/routes/(app)/transactions/+page.svelte` | Refresh ora resetta selezione |
+
+### Validazione Round 1.8
+
+- `./dev.py front check` → 0 errors, 2 warnings (intentional) ✅
+- `prettier` → tutto clean ✅
+
+### Residui aperti dopo Round 1.8
+
+| Issue | Stato | Note |
+|-------|-------|------|
+| **W64** — Linked assets / ghost rows | ⏳ verify | Verificare dati mock per TX con `related_transaction_id`. |
+| **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | La tinta viola c'è ma le interazioni non sono implementate. |
+| **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT. |
 
