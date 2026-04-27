@@ -273,7 +273,8 @@
     "showAll": "Show all",
     "table": {
       "lastPrice": "Last Price",
-      "provider": "Provider"
+      "provider": "Provider",
+      "name": "Name"
     },
     "empty": {
       "noAssets": "No assets yet",

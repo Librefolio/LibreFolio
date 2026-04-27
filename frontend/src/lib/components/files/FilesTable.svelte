@@ -18,6 +18,7 @@
     // Generate a consistent color based on broker id for visual distinction
     // Uses shared golden-ratio color utility
     import {getIndexColor} from '$lib/utils/colors';
+    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
 
     interface Props {
         files: FileData[];
@@ -179,20 +180,6 @@
         return getIndexColor(brokerId, 120);
     }
 
-    /** Resolve best icon URL for a broker: icon_url → portal favicon → null */
-    function getBrokerIconUrl(brokerId: number): string | null {
-        if (!brokers) return null;
-        const b = brokers.get(brokerId);
-        if (!b) return null;
-        if (b.icon_url?.trim()) return b.icon_url;
-        if (b.portal_url?.trim()) {
-            try {
-                return new URL(b.portal_url).origin + '/favicon.ico';
-            } catch {}
-        }
-        return null;
-    }
-
     function escapeHtml(s: string): string {
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
@@ -249,7 +236,7 @@
                         if (name === '-') return '-';
                         const brimFile = row as BrimFile;
                         const brokerId = safeNumber(brimFile.target_broker_id);
-                        const iconSrc = brokerId ? getBrokerIconUrl(brokerId) : null;
+                        const iconSrc = brokerId ? getBrokerIconUrlById(brokerId, brokers!) : null;
                         if (iconSrc) {
                             return {
                                 type: 'html' as const,
@@ -265,13 +252,7 @@
                     },
                     type: 'enum',
                     enumOptions: Array.from(brokers.values()).map((b) => {
-                        let iconUrl: string | null = null;
-                        if (b.icon_url?.trim()) iconUrl = b.icon_url;
-                        else if (b.portal_url?.trim()) {
-                            try {
-                                iconUrl = new URL(b.portal_url).origin + '/favicon.ico';
-                            } catch {}
-                        }
+                        const iconUrl = getBrokerIconUrl(b);
                         return {value: String(b.id), label: b.name, iconUrl: iconUrl ?? undefined};
                     }),
                     width: 160,
@@ -499,3 +480,4 @@
         }
     }
 </style>
+

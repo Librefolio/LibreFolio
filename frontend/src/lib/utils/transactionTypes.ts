@@ -73,29 +73,16 @@ const TX_TYPE_DOC_SLUG: Record<string, string> = {
 const DOC_LANGS = new Set(['it', 'fr', 'es']);
 
 /**
- * Build the absolute mkdocs URL for a transaction type, language-aware.
+ * Build the mkdocs URL for a transaction type, language-aware.
  *
  * The mkdocs i18n plugin emits `/mkdocs/<lang>/...` for non-default
  * languages and `/mkdocs/...` for the default `en`. The backend serves
  * the bundled site under `/mkdocs/`.
- *
- * In dev mode (Vite at :5173) there is no proxy for `/mkdocs/`, so we
- * construct an absolute URL pointing to the backend at :8000.
  */
 export function getTxTypeDocUrl(type: string | null | undefined, lang: string = 'en'): string {
     const slug = TX_TYPE_DOC_SLUG[(type ?? '').toUpperCase()];
     const langPrefix = DOC_LANGS.has(lang) ? `/${lang}` : '';
-    const path = slug ? `/mkdocs${langPrefix}/financial-theory/instruments/transaction-types/${slug}/` : `/mkdocs${langPrefix}/financial-theory/instruments/transaction-types/`;
-
-    // In the browser, detect if we're running on the Vite dev server (:5173)
-    // and redirect to the backend origin (:8000) which actually serves mkdocs.
-    if (typeof window !== 'undefined') {
-        const loc = window.location;
-        if (loc.port === '5173') {
-            return `${loc.protocol}//${loc.hostname}:8000${path}`;
-        }
-    }
-    return path;
+    return slug ? `/mkdocs${langPrefix}/financial-theory/instruments/transaction-types/${slug}/` : `/mkdocs${langPrefix}/financial-theory/instruments/transaction-types/`;
 }
 
 /**

@@ -85,7 +85,7 @@ from backend.app.schemas.assets import (
     FAMetadataChangeDetail,
 )
 from backend.app.schemas.common import Currency, FxBackwardFillInfo, OldNew
-from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAPriceQueryResult
+from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAEventQueryResult, FAPriceQueryResult
 from backend.app.schemas.provider import (
     FAProviderConfigBase,
     FAProviderKind,
@@ -3190,6 +3190,36 @@ class AssetSourceManager:
             )
 
         return results
+
+    @staticmethod
+    async def get_events_by_ids(event_ids: list[int], session: AsyncSession) -> list:
+        """
+        Fetch events by their primary-key IDs, grouped by asset_id.
+
+        Returns the same FAEventQueryResult shape as query_events_bulk but
+        with point selection instead of date-range filters.
+        """
+        if not event_ids:
+            return []
+
+        stmt = select(AssetEvent).where(AssetEvent.id.in_(event_ids)).order_by(AssetEvent.asset_id, AssetEvent.date)
+        res = await session.execute(stmt)
+        db_events = res.scalars().all()
+
+        # Group by asset_id
+        grouped: dict[int, list] = {}
+        for ev in db_events:
+            point = FAAssetEventPointOut(
+                date=ev.date,
+                type=ev.type.value if hasattr(ev.type, "value") else str(ev.type),
+                value=Currency(code=ev.currency, amount=ev.value),
+                notes=ev.notes,
+                id=ev.id,
+                is_auto=ev.provider_assignment_id is not None,
+            )
+            grouped.setdefault(ev.asset_id, []).append(point)
+
+        return [FAEventQueryResult(asset_id=aid, events=evts, errors=[]) for aid, evts in grouped.items()]
 
     @staticmethod
     async def delete_events_bulk(

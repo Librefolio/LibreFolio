@@ -47,6 +47,7 @@
         value: string;
         currency: string;
         is_auto: boolean;
+        notes?: string | null;
     }
 
     type FilterMap = {
@@ -259,14 +260,35 @@
     }
 
     async function loadEventTooltipMap(rows: TXReadItem[]): Promise<void> {
-        // The `POST /assets/events/query` endpoint expects a list of
-        // `{asset_id, date_range, target_currency?}` items — there is no
-        // bulk-by-id lookup for events. Until a dedicated endpoint exists
-        // (deferred to Round 2 / Phase 7 final), we surface a generic
-        // "Linked event" tooltip via the fallback in `eventTooltipText()`
-        // and skip the (broken) network call entirely. Avoids a 422 spam.
-        void rows;
-        eventTooltipMap = new Map();
+        const ids = [...new Set(rows.map((r) => r.asset_event_id).filter((id): id is number => id != null))];
+        if (ids.length === 0) {
+            eventTooltipMap = new Map();
+            return;
+        }
+        try {
+            const res = await zodiosApi.get_events_by_ids_api_v1_assets_events_get({queries: {ids}});
+            const map = new Map<number, AssetEvent>();
+            for (const item of res.items ?? []) {
+                for (const ev of item.events ?? []) {
+                    if (ev.id != null) {
+                        map.set(ev.id, {
+                            id: ev.id,
+                            asset_id: item.asset_id,
+                            type: ev.type,
+                            date: ev.date,
+                            value: typeof ev.value === 'object' ? ev.value.amount : String(ev.value),
+                            currency: typeof ev.value === 'object' ? ev.value.code : '',
+                            is_auto: ev.is_auto ?? false,
+                            notes: (Array.isArray(ev.notes) ? ev.notes.join(', ') : ev.notes) ?? null,
+                        });
+                    }
+                }
+            }
+            eventTooltipMap = map;
+        } catch (e) {
+            console.warn('Failed to load event tooltips:', e);
+            eventTooltipMap = new Map();
+        }
     }
 
     async function reload(): Promise<void> {

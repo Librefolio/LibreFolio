@@ -573,7 +573,7 @@ Batch di fix in ordine di priorità:
 | W59 | ❌ bug | In `/assets/` manca il titolo tradotto della colonna `name` (`assets.table.name`). Header sparito. | Chiave `assets.table.name` aggiunta in 4 lingue via `./dev.py i18n add`. | ✅ C4 |
 | W60 | ❌ bug | Paginazione non mostrata in `/transactions` nonostante 21 TX. Custom paginator `totalPages > 1` ma `pageSize` default 50 ≥ 21 → 1 pagina sola → nascosta. L'utente si aspetta di **vederla sempre** (come feedback per "tot risultati"). | Condizione cambiata a `displayRows.length > 0`. | ✅ C1 |
 | W61 | ⚠ UX | Icona tipo TX: ha tooltip in `title` HTML nativo ma deve usare `Tooltip.svelte`. Desktop: hover=tooltip, click→doc wiki. Mobile: click=tooltip, longpress→doc. | Rimosso `title` HTML, aggiunto `tooltip` nella HtmlCell. Type icon ora `<a href>` nativo (no click delegation). Rimossi handler dblclick/pointer/coarsePointer. | ✅ C5 |
-| W62 | ⚠ UX | Evento tooltip mostra solo "Linked event" generico. Il piano originale prevedeva bulk event query `POST /assets/events/query` con `{ids}` per alimentare `eventTooltipMap`. Feature mancante nel backend (non esiste endpoint by-event-id) — da implementare come `GET /assets/events?ids=...` o bulk query variant. | **Missing feature backend**: occorre endpoint per recuperare eventi per ID. Frontend: aggiornare `loadEventTooltipMap` per usare endpoint reale. Deferred Round 2 se endpoint non disponibile. | ⏳ deferred |
+| W62 | ⚠ UX | Evento tooltip mostra solo "Linked event" generico. Il piano originale prevedeva bulk event query `POST /assets/events/query` con `{ids}` per alimentare `eventTooltipMap`. Feature mancante nel backend (non esiste endpoint by-event-id) — da implementare come `GET /assets/events?ids=...` o bulk query variant. | Endpoint `GET /api/v1/assets/events?ids=...` già esisteva. Import refactored (top-level). `loadEventTooltipMap()` ora chiama endpoint reale. `eventTooltipText()` arricchito con notes + ⚙ auto. | ✅ C11 |
 | W63 | ⚠ UX | Colonna `actions` sempre visibile/sticky. Solo la colonna `select` deve essere sticky; `actions` deve scrollare con le altre colonne. | Aggiunto prop `stickyActions?: boolean` a DataTable (default true). TransactionsTable usa `stickyActions={false}`. | ✅ C6 |
 | W64 | ⚠ UX | Asset collegati (linked assets) creati in DB population non mostrati nel frontend come pianificato nel piano originale (Step 5, ghost row con chip etc.). Da verificare se i dati sono presenti e se la logica di rendering funziona. | Verificare `populate_mock_data.py` per TX con `related_transaction_id` e testare visivamente la ghost row. Se i dati mancano → aggiungere TX linked in mocking. | ⏳ verify |
 | W65 | ⚠ UX mobile | Pulsanti header (refresh, vis toggle, import, add) disallineati in mobile: tooltip a destra, icone decentrate e troppo larghe. Upload e Add devono avere icone centrate, padding uniforme. | Tutti i bottoni ora `flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs` con `size={15}` su icone. `ml-auto` allinea a destra. | ✅ C7 |
@@ -595,7 +595,7 @@ Batch di fix in ordine di priorità:
   - CSS aggiunto `text-decoration: none` su `.tx-type-icon-link`.
 - **C6 (W63) ✅** — Actions column non sticky: aggiunto prop `stickyActions?: boolean` (default `true`) a DataTable. TransactionsTable usa `stickyActions={false}`.
 - **C7 (W65) ✅** — Mobile buttons: tutti i bottoni con padding uniforme `px-2.5 py-1.5 text-xs`, icone `size={15}`, `justify-center gap-1`. Container con `ml-auto` per allineamento a destra.
-- **C8 (W62) ⏳ deferred** — Event tooltip con dati reali (richiede endpoint backend `GET /assets/events?ids=...`).
+- **C8 (W62) ✅** — Event tooltip con dati reali: endpoint `GET /assets/events?ids=...` già presente. Import refactored al top-level. `loadEventTooltipMap()` wired. `eventTooltipText()` arricchito.
 - **C9 (W64) ⏳ verify** — Linked assets / ghost rows: verifica dati mock pendente.
 - **C10 (W66) ✅ partial** — Refactor codice duplicato: creato `currencyFormat.ts` condiviso. TX cash cell resta inline (da unificare in Round 2). Broker icon chain non ancora fattorizzata.
 
@@ -605,3 +605,41 @@ Batch di fix in ordine di priorità:
 - **W62** ⏳ — Event tooltip con dati reali (richiede endpoint backend).
 - **W64** ⏳ — Linked assets / ghost rows: verifica dati mock.
 - **W66** partial — brokerIconHtml() fattorizzazione + TX cash cell unificazione (Round 2).
+
+---
+
+## Round 1.6 — Refactoring & Event Wiring
+
+### Recap lavoro fatto in Round 1.5 e prima
+
+1. **`getTxTypeDocUrl()` semplificato** (da Round 1.5): rimosso il blocco if che rilevava porta 5173 e redirigeva a :8000. Ora restituisce direttamente il path relativo `/mkdocs/...` — il backend serve sempre il sito statico.
+
+2. **`getBrokerIconUrl()` fattorizzato** (da Round 1.5): creato `$lib/utils/brokerHelpers.ts` con `getBrokerIconUrl(broker)` e `getBrokerIconUrlById(id, collection)`. Usato in:
+   - `TransactionsTable.svelte` (import + uso in broker cell + broker enumOptions)
+   - `FilesTable.svelte` (import + uso in broker cell + broker enumOptions)
+   - `BrokerBadge.svelte` (import + uso nel rendering icona)
+
+3. **`formatCurrencyAmountHtml()` condiviso** (da Round 1.5): creato `$lib/utils/currencyFormat.ts`. Usato in `AssetTable.svelte` (lastPrice column).
+
+### Lavoro Round 1.6
+
+| # | Fix | Dettaglio | Status |
+|---|-----|-----------|--------|
+| C11 | W62 — Event tooltip con dati reali | Endpoint `GET /api/v1/assets/events?ids=...` già esisteva nel backend (`asset_source.py:get_events_by_ids`). Import lazy inline spostato al top-level (`FAEventQueryResult` aggiunto in import). API sync eseguito (`./dev.py api sync`). Frontend `loadEventTooltipMap()` ora chiama endpoint reale, raccoglie `asset_event_id` univoci dalle TX, costruisce `Map<eventId, AssetEvent>` con type/date/value/currency/is_auto/notes. `eventTooltipText()` migliorato con notes e icona ⚙ per auto-events. | ✅ |
+
+### Validazione Round 1.6
+
+- `./dev.py front check` → 0 errors, 0 warnings ✅
+- `./dev.py api sync` → endpoint generato in `generated.ts` ✅
+- `ruff check` + `black` → backend clean ✅
+- `prettier` → frontend clean ✅
+
+### Residui aperti dopo Round 1.6
+
+| Issue | Stato | Note |
+|-------|-------|------|
+| **W64** — Linked assets / ghost rows | ⏳ verify | Verificare dati mock (`populate_mock_data.py`) per TX con `related_transaction_id`. Ghost row viola visibile ma chip "out of filter" (Step 5 piano originale) non implementato. |
+| **W66 partial** — TX cash cell → `formatCurrencyAmountHtml()` | ⏳ Round 2 | TransactionsTable `formatCash()` ancora inline. Da unificare col helper condiviso in un futuro refactor. |
+| **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | La tinta viola c'è ma le interazioni (chip che mostra quale filtro ha escluso + bottoni ✕/+) non sono implementate. |
+| **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT — deferred a phase 7 final. |
+
