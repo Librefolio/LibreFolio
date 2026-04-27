@@ -1,20 +1,20 @@
 <!--
-  TransactionStagingModal.svelte — manual create/edit modal for transactions.
+  TransactionStagingModal.svelte — universal create/edit modal for transactions.
 
   Step 7 of plan-phase07-transaction-Part4.prompt.md.
 
-  Modes:
-  - `create-many` → POST /transactions/bulk
-  - `edit-many`   → PATCH /transactions/bulk
+  This is the **single, universal** modal for any flow that produces a list of
+  transaction drafts:
+  - `create-many` (manual Add) → POST /transactions/bulk
+  - `edit-many`   (single-row edit, bulk edit, clone)  → PATCH /transactions/bulk
+  - import-from-broker (BRIM, Round 2) → reuses the same modal pre-populated
+    with the parsed BRIM drafts; commit pipeline is identical.
 
   Each mode opens with a list of draft rows (passed in as `initialRows`); the
   user can edit fields inline, add or remove rows (create-many only) and commit
   the whole batch atomically. A debounced live-validate hits POST
   /transactions/validate with one branch populated and surfaces issues in a
   banner above the rows.
-
-  This is the manual-only minimal version. Part 5 extends it with BRIM mode
-  + asset resolver + duplicate detection + event-suggest tolerance slider.
 
   Pattern: Svelte 5 runes, dark mode, `data-testid` everywhere.
 -->
@@ -366,9 +366,10 @@
     <div class="modal-header flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-staging-title">
             {#if mode === 'create-many'}
-                ➕ {$t('transactions.staging.createTitle') || 'New transactions'} — {drafts.length} {drafts.length === 1 ? 'draft' : 'drafts'}
+                ➕ {$t('transactions.staging.createTitle')} —
+                {drafts.length === 1 ? $t('transactions.staging.draftSingular', {values: {n: drafts.length}}) : $t('transactions.staging.draftPlural', {values: {n: drafts.length}})}
             {:else}
-                ✎ {$t('transactions.staging.editTitle') || 'Edit transactions'} — {editedCount} of {drafts.length} edited
+                ✎ {$t('transactions.staging.editTitle')} — {$t('transactions.staging.editedFmt', {values: {n: editedCount, total: drafts.length}})}
             {/if}
             {#if validating}
                 <span class="ml-2 text-xs text-gray-400">…validating</span>

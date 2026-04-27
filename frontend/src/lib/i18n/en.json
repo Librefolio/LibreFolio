@@ -84,8 +84,15 @@
     "perPage": "per page",
     "items": "items",
     "actions": "Actions",
-    "filter": "Filter",
-    "confirmBulkAction": "Are you sure you want to perform this action on"
+    "filter": {
+      "currencyStack": {
+        "addCurrency": "Add currency…",
+        "empty": "Pick a currency to add a numeric range filter.",
+        "any": "any amount"
+      }
+    },
+    "confirmBulkAction": "Are you sure you want to perform this action on",
+    "filterLabel": "Filter"
   },
   "filter": {
     "contains": "Contains",
@@ -458,7 +465,8 @@
       "quantity": "Qty",
       "cash": "Cash",
       "broker": "Broker",
-      "tags": "Tags"
+      "tags": "Tags",
+      "event": "Event"
     },
     "actions": {
       "edit": "Edit",
@@ -478,7 +486,15 @@
       "TRANSFER": "Transfer",
       "FX_CONVERSION": "FX Conversion",
       "ADJUSTMENT": "Adjustment"
-    }
+    },
+    "staging": {
+      "createTitle": "New transactions",
+      "editTitle": "Edit transactions",
+      "draftSingular": "{n} draft",
+      "draftPlural": "{n} drafts",
+      "editedFmt": "{n} of {total} edited"
+    },
+    "refresh": "Refresh from server"
   },
   "fx": {
     "title": "FX Rates",

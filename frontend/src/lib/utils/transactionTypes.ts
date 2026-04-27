@@ -46,6 +46,47 @@ export function getTransactionTypeIconUrl(type: string | null | undefined): stri
     return `/icons/transactions/${filename}.png`;
 }
 
+// =============================================================================
+// MKDOCS DOCUMENTATION DEEP-LINKS
+// =============================================================================
+
+/**
+ * Map a transaction type to the relative slug under
+ * `mkdocs/financial-theory/instruments/transaction-types/`. Several enum
+ * values share a doc page (BUY+SELL → `buy-sell`,
+ * DEPOSIT+WITHDRAWAL → `deposit-withdrawal`). Types without a dedicated
+ * page fall back to the section index.
+ */
+const TX_TYPE_DOC_SLUG: Record<string, string> = {
+    BUY: 'buy-sell',
+    SELL: 'buy-sell',
+    DEPOSIT: 'deposit-withdrawal',
+    WITHDRAWAL: 'deposit-withdrawal',
+    DIVIDEND: 'dividend',
+    INTEREST: 'interest',
+    FEE: 'fee',
+    TAX: 'fee',
+    TRANSFER: 'transfer',
+};
+
+/** Languages with a built mkdocs site (besides default `en`). */
+const DOC_LANGS = new Set(['it', 'fr', 'es']);
+
+/**
+ * Build the absolute mkdocs URL for a transaction type, language-aware.
+ *
+ * The mkdocs i18n plugin emits `/mkdocs/<lang>/...` for non-default
+ * languages and `/mkdocs/...` for the default `en`. The backend serves
+ * the bundled site under `/mkdocs/`.
+ */
+export function getTxTypeDocUrl(type: string | null | undefined, lang: string = 'en'): string {
+    const slug = TX_TYPE_DOC_SLUG[(type ?? '').toUpperCase()];
+    const base = '/mkdocs';
+    const langPrefix = DOC_LANGS.has(lang) ? `/${lang}` : '';
+    if (!slug) return `${base}${langPrefix}/financial-theory/instruments/transaction-types/`;
+    return `${base}${langPrefix}/financial-theory/instruments/transaction-types/${slug}/`;
+}
+
 /**
  * Build SelectOption[] for transaction type dropdowns.
  * Each option includes an icon from the PNG map.

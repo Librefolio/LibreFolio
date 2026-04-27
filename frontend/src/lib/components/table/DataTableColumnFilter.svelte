@@ -174,6 +174,21 @@
     let currencyToAdd = $state('');
     /** Index of the currency-stack row whose range editor is currently open. */
     let currencyOpenIdx = $state<number | null>(null);
+    /** Per-row slider position state for the currency-stack range editor.
+     *  Mirrors the linear scale used by `type:'number'` so the UX is identical. */
+    let currencyMinPos = $state<Record<number, number>>({});
+    let currencyMaxPos = $state<Record<number, number>>({});
+
+    function curMinPos(idx: number): number {
+        if (currencyMinPos[idx] != null) return currencyMinPos[idx];
+        const v = currencyStack[idx]?.min;
+        return v == null ? 0 : numToSliderPos(v);
+    }
+    function curMaxPos(idx: number): number {
+        if (currencyMaxPos[idx] != null) return currencyMaxPos[idx];
+        const v = currencyStack[idx]?.max;
+        return v == null ? 100 : numToSliderPos(v);
+    }
 
     // Size filter state (stored in bytes internally)
     let sizeMinBytes = $state(getInitialSizeMin());
@@ -348,6 +363,8 @@
         currencyStack = [];
         currencyToAdd = '';
         currencyOpenIdx = null;
+        currencyMinPos = {};
+        currencyMaxPos = {};
         sizeMinBytes = numberMin;
         sizeMaxBytes = numberMax;
         initSizeInputs();
@@ -400,11 +417,29 @@
     function updateCurrencyMin(idx: number, value: string) {
         const v = value === '' ? undefined : Number(value);
         currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, min: Number.isFinite(v as number) ? (v as number) : undefined} : it));
+        currencyMinPos = {...currencyMinPos, [idx]: numToSliderPos(currencyStack[idx]?.min ?? numberMin)};
         applyFilter();
     }
     function updateCurrencyMax(idx: number, value: string) {
         const v = value === '' ? undefined : Number(value);
         currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, max: Number.isFinite(v as number) ? (v as number) : undefined} : it));
+        currencyMaxPos = {...currencyMaxPos, [idx]: numToSliderPos(currencyStack[idx]?.max ?? numberMax)};
+        applyFilter();
+    }
+    function updateCurrencyMinSlider(idx: number, pos: number) {
+        const maxP = curMaxPos(idx);
+        if (pos > maxP) pos = maxP;
+        currencyMinPos = {...currencyMinPos, [idx]: pos};
+        const v = sliderPosToNum(pos);
+        currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, min: v} : it));
+        applyFilter();
+    }
+    function updateCurrencyMaxSlider(idx: number, pos: number) {
+        const minP = curMinPos(idx);
+        if (pos < minP) pos = minP;
+        currencyMaxPos = {...currencyMaxPos, [idx]: pos};
+        const v = sliderPosToNum(pos);
+        currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, max: v} : it));
         applyFilter();
     }
 
@@ -412,6 +447,11 @@
     function handleClickOutside(event: MouseEvent) {
         const target = event.target as HTMLElement;
         if (target.closest('.filter-btn')) return;
+        // Skip clicks inside any combobox/listbox option (e.g. the
+        // CurrencySearchSelect dropdown used by the currency-stack filter
+        // mounts options outside `popoverElement`). Without this guard the
+        // popover closes on every option click (W27).
+        if (target.closest('[role="listbox"], [role="option"], [role="combobox"]')) return;
         if (popoverElement && !popoverElement.contains(target)) {
             onClose();
         }
@@ -484,7 +524,7 @@
 
 <div bind:this={popoverElement} class="filter-popover" style={popoverStyle} transition:fade={{duration: 100}}>
     <div class="filter-header">
-        <span class="filter-title">{$t('table.filter')}</span>
+        <span class="filter-title">{$t('table.filterLabel')}</span>
         <button class="reset-btn" onclick={clearFilter} title={$t('common.clear')} type="button">
             <RotateCcw size={14} />
         </button>
@@ -643,12 +683,15 @@
                 </div>
                 <div class="enum-list">
                     {#each enumOptions as option}
-                        <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)}>
+                        <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)} data-testid={`filter-enum-option-${option.value}`}>
                             <span class="enum-checkbox" class:checked={selectedEnums.has(option.value)}>
                                 {#if selectedEnums.has(option.value)}
                                     <Check size={12} />
                                 {/if}
                             </span>
+                            {#if option.iconUrl}
+                                <img src={option.iconUrl} alt="" class="enum-option-icon" />
+                            {/if}
                             <span class="enum-label">{option.label}</span>
                         </button>
                     {/each}
@@ -708,14 +751,14 @@
                                         <span class="currency-stack-any">{$t('table.filter.currencyStack.any') || 'any amount'}</span>
                                     {/if}
                                 </span>
-                                <button type="button" class="currency-stack-btn" title={$t('table.filter') || 'Filter'} onclick={() => (currencyOpenIdx = currencyOpenIdx === idx ? null : idx)} data-testid={`filter-currency-funnel-${item.code}`}>
+                                <button type="button" class="currency-stack-btn" title={$t('table.filterLabel') || 'Filter'} onclick={() => (currencyOpenIdx = currencyOpenIdx === idx ? null : idx)} data-testid={`filter-currency-funnel-${item.code}`}>
                                     <FilterIcon size={12} />
                                 </button>
                                 <button type="button" class="currency-stack-btn danger" title={$t('common.delete') || 'Delete'} onclick={() => removeCurrencyFromStack(idx)} data-testid={`filter-currency-trash-${item.code}`}>
                                     <Trash2 size={12} />
                                 </button>
                                 {#if currencyOpenIdx === idx}
-                                    <div class="currency-stack-range-editor">
+                                    <div class="currency-stack-range-editor number-filter">
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-min-${idx}`}>{$t('common.min')}</label>
                                             <input type="number" class="range-input" id={`cur-min-${idx}`} value={item.min ?? ''} onchange={(e) => updateCurrencyMin(idx, (e.currentTarget as HTMLInputElement).value)} />
@@ -723,6 +766,24 @@
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-max-${idx}`}>{$t('common.max')}</label>
                                             <input type="number" class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, (e.currentTarget as HTMLInputElement).value)} />
+                                        </div>
+                                        <!-- Linear dual range slider — same UX as `type:'number'`. -->
+                                        <div class="size-slider-container">
+                                            <div class="size-slider-track">
+                                                <div class="size-slider-range" style="left: {curMinPos(idx)}%; right: {100 - curMaxPos(idx)}%"></div>
+                                                <div class="slider-tick" style="left: 25%"></div>
+                                                <div class="slider-tick" style="left: 50%"></div>
+                                                <div class="slider-tick" style="left: 75%"></div>
+                                            </div>
+                                            <input type="range" class="size-slider size-slider-min" min="0" max="100" value={curMinPos(idx)} oninput={(e) => updateCurrencyMinSlider(idx, Number((e.currentTarget as HTMLInputElement).value))} />
+                                            <input type="range" class="size-slider size-slider-max" min="0" max="100" value={curMaxPos(idx)} oninput={(e) => updateCurrencyMaxSlider(idx, Number((e.currentTarget as HTMLInputElement).value))} />
+                                        </div>
+                                        <div class="size-slider-labels">
+                                            <span>{fmtNum(numberMin)}</span>
+                                            <span class="slider-label-mid">{fmtNum(sliderPosToNum(25))}</span>
+                                            <span class="slider-label-mid">{fmtNum(sliderPosToNum(50))}</span>
+                                            <span class="slider-label-mid">{fmtNum(sliderPosToNum(75))}</span>
+                                            <span>{fmtNum(numberMax)}</span>
                                         </div>
                                     </div>
                                 {/if}
@@ -1231,6 +1292,14 @@
         font-size: 0.75rem;
         color: #94a3b8;
         text-align: center;
+    }
+
+    .enum-option-icon {
+        width: 1rem;
+        height: 1rem;
+        object-fit: contain;
+        flex-shrink: 0;
+        border-radius: 2px;
     }
 
     /* Currency-stack filter */

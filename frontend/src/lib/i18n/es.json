@@ -84,8 +84,15 @@
     "perPage": "por página",
     "items": "elementos",
     "actions": "Acciones",
-    "filter": "Filtrar",
-    "confirmBulkAction": "¿Estás seguro de querer realizar esta acción en"
+    "filter": {
+      "currencyStack": {
+        "addCurrency": "Añadir moneda…",
+        "empty": "Elige una moneda para añadir un filtro numérico.",
+        "any": "cualquier importe"
+      }
+    },
+    "confirmBulkAction": "¿Estás seguro de querer realizar esta acción en",
+    "filterLabel": "Filtro"
   },
   "filter": {
     "contains": "Contiene",
@@ -464,7 +471,8 @@
       "date": "Fecha",
       "quantity": "Cant.",
       "tags": "Etiquetas",
-      "type": "Tipo"
+      "type": "Tipo",
+      "event": "Evento"
     },
     "types": {
       "ADJUSTMENT": "Ajuste",
@@ -478,7 +486,15 @@
       "TAX": "Impuesto",
       "TRANSFER": "Transferencia",
       "WITHDRAWAL": "Retiro"
-    }
+    },
+    "staging": {
+      "createTitle": "Nuevas transacciones",
+      "editTitle": "Editar transacciones",
+      "draftSingular": "{n} borrador",
+      "draftPlural": "{n} borradores",
+      "editedFmt": "{n} de {total} editadas"
+    },
+    "refresh": "Recargar desde el servidor"
   },
   "fx": {
     "title": "Tipos de Cambio",

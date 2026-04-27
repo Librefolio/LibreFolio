@@ -84,8 +84,15 @@
     "perPage": "par page",
     "items": "éléments",
     "actions": "Actions",
-    "filter": "Filtrer",
-    "confirmBulkAction": "Êtes-vous sûr de vouloir effectuer cette action sur"
+    "filter": {
+      "currencyStack": {
+        "addCurrency": "Ajouter une devise…",
+        "empty": "Choisissez une devise pour ajouter un filtre numérique.",
+        "any": "n'importe quel montant"
+      }
+    },
+    "confirmBulkAction": "Êtes-vous sûr de vouloir effectuer cette action sur",
+    "filterLabel": "Filtre"
   },
   "filter": {
     "contains": "Contient",
@@ -464,7 +471,8 @@
       "date": "Date",
       "quantity": "Qté",
       "tags": "Étiquettes",
-      "type": "Type"
+      "type": "Type",
+      "event": "Événement"
     },
     "types": {
       "ADJUSTMENT": "Ajustement",
@@ -478,7 +486,15 @@
       "TAX": "Impôt",
       "TRANSFER": "Transfert",
       "WITHDRAWAL": "Retrait"
-    }
+    },
+    "staging": {
+      "createTitle": "Nouvelles transactions",
+      "editTitle": "Modifier les transactions",
+      "draftSingular": "{n} brouillon",
+      "draftPlural": "{n} brouillons",
+      "editedFmt": "{n} sur {total} modifiées"
+    },
+    "refresh": "Actualiser depuis le serveur"
   },
   "fx": {
     "title": "Taux de Change",
