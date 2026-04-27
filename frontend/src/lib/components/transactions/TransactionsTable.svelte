@@ -28,10 +28,11 @@
     import TransactionTypeBadge from './TransactionTypeBadge.svelte';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
-    import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/currencyStore';
+    import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/currencyStore';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
     import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
     import {getStringBadgeStyle} from '$lib/utils/colors';
+    import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getEventTypeEmoji} from '$lib/utils/eventTypes';
@@ -347,8 +348,10 @@
         if (!ev) return $t('transactions.linkedEvent') || 'Linked event';
         const emoji = getEventTypeEmoji(ev.type);
         const amount = Number(ev.value);
-        const formatted = Number.isFinite(amount) ? amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : ev.value;
-        const parts = [`${emoji} ${ev.type}`, ev.date, `${formatted} ${ev.currency}`];
+        // Strip HTML tags from formatCurrencyAmountHtml for plain-text tooltip
+        const currHtml = Number.isFinite(amount) ? formatCurrencyAmountHtml(amount, ev.currency) : `${ev.value} ${ev.currency}`;
+        const currText = currHtml.replace(/<[^>]*>/g, '');
+        const parts = [`${emoji} ${ev.type}`, ev.date, currText];
         if (ev.notes) parts.push(`"${ev.notes}"`);
         if (ev.is_auto) parts.push('⚙ auto');
         return parts.join(' · ');
@@ -448,26 +451,10 @@
                 if (!d.tx.cash) return '—';
                 const code = d.tx.cash.code;
                 const n = Number(d.tx.cash.amount);
-                const info = getCurrencyInfo(code);
-                const symbol = info.symbol ?? '';
-                // Avoid showing the code twice: if we have a real symbol (not == code), show "amount symbol flag"
-                // Otherwise show "amount flag code"
-                const hasRealSymbol = symbol !== '' && symbol !== code;
-                const sign = n > 0 ? '+' : '';
-                const abs = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                const formatted = `${sign}${n < 0 ? '-' : ''}${abs}`;
-                const flagHtml = info.flag_emoji && info.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${info.flag_emoji}</span>` : '';
-                let suffixHtml: string;
-                if (hasRealSymbol) {
-                    // Show: "+1,234.56 € 🇪🇺" (no code)
-                    suffixHtml = `<span class="tx-cash-symbol">${escapeHtml(symbol)}</span> ${flagHtml}`;
-                } else {
-                    // Show: "+1,234.56 🇺🇸USD" (flag + code, no duplication)
-                    suffixHtml = `${flagHtml}<span class="tx-cash-code">${escapeHtml(code)}</span>`;
-                }
+                const inner = formatCurrencyAmountHtml(n, code, {showSign: true});
                 return {
                     type: 'html',
-                    html: `<span class="tx-cash-cell" data-testid="tx-cash-cell-${d.tx.id}" title="${escapeHtml(formatCash(d.tx.cash))}"><span class="tx-cash-amount">${escapeHtml(formatted)}</span> ${suffixHtml}</span>`,
+                    html: `<span class="tx-cash-cell" data-testid="tx-cash-cell-${d.tx.id}" title="${escapeHtml(formatCash(d.tx.cash))}">${inner}</span>`,
                 };
             },
         },

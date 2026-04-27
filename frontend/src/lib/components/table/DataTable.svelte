@@ -420,7 +420,7 @@
             const v = column.getValue ? String(column.getValue(row) ?? '') : '';
             counts.set(v, (counts.get(v) ?? 0) + 1);
         }
-        return opts.map((o) => ({...o, count: counts.get(o.value) ?? 0})).filter((o) => o.count > 0);
+        return opts.map((o) => ({...o, count: counts.get(o.value) ?? 0}));
     }
 
     /**
