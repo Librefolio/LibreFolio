@@ -15,6 +15,7 @@
 -->
 <script lang="ts">
     import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
+    import {getBrokerIconUrl} from '$lib/utils/brokerHelpers';
 
     interface Props {
         /** The broker to display */
@@ -29,17 +30,7 @@
 
     let {broker, brokers, size = 16, showName = true}: Props = $props();
 
-    let iconUrl = $derived.by(() => {
-        if (broker.icon_url?.trim()) return broker.icon_url;
-        if (broker.portal_url?.trim()) {
-            try {
-                return new URL(broker.portal_url).origin + '/favicon.ico';
-            } catch {
-                /* ignore */
-            }
-        }
-        return null;
-    });
+    let iconUrl = $derived(getBrokerIconUrl(broker));
 
     let color = $derived(getBrokerColor(broker.id, brokers));
     let name = $derived(broker.name ?? `#${broker.id}`);

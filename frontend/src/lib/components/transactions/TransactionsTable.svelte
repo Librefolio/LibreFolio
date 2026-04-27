@@ -30,6 +30,7 @@
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
     import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/currencyStore';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
+    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
     import {getStringBadgeStyle} from '$lib/utils/colors';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -74,6 +75,7 @@
         value: string;
         currency: string;
         is_auto: boolean;
+        notes?: string | null;
     }
 
     /**
@@ -257,20 +259,6 @@
         return brokers.find((b) => b.id === brokerId)?.name ?? `#${brokerId}`;
     }
 
-    /** Resolve the best icon URL for a broker using the fallback chain:
-     *  1. custom icon_url  2. portal_url → favicon.ico  3. null (dot fallback in CSS) */
-    function brokerIconUrl(brokerId: number): string | null {
-        const b = brokers.find((br) => br.id === brokerId);
-        if (!b) return null;
-        if (b.icon_url?.trim()) return b.icon_url;
-        if (b.portal_url?.trim()) {
-            try {
-                return new URL(b.portal_url).origin + '/favicon.ico';
-            } catch {}
-        }
-        return null;
-    }
-
     function brokerStyle(brokerId: number): string {
         const c = getBrokerColor(brokerId, brokers);
         // Inject CSS custom properties used by the row tint, broker badge and
@@ -297,7 +285,10 @@
     function eventTooltipText(eventId: number): string {
         const ev = eventTooltipMap.get(eventId);
         if (!ev) return $t('transactions.linkedEvent') || 'Linked event';
-        return `${ev.type} · ${ev.date} · ${ev.value} ${ev.currency}${ev.is_auto ? ' · auto' : ''}`;
+        const parts = [ev.type, ev.date, `${ev.value} ${ev.currency}`];
+        if (ev.notes) parts.push(`"${ev.notes}"`);
+        if (ev.is_auto) parts.push('⚙ auto');
+        return parts.join(' · ');
     }
 
     // =========================================================================
@@ -465,20 +456,14 @@
             width: 160,
             urlKey: 'broker_id',
             enumOptions: brokers.map((b) => {
-                let iconUrl: string | null = null;
-                if (b.icon_url?.trim()) iconUrl = b.icon_url;
-                else if (b.portal_url?.trim()) {
-                    try {
-                        iconUrl = new URL(b.portal_url).origin + '/favicon.ico';
-                    } catch {}
-                }
+                const iconUrl = getBrokerIconUrl(b);
                 const color = getBrokerColor(b.id, brokers);
                 return {value: String(b.id), label: b.name ?? `#${b.id}`, iconUrl: iconUrl ?? undefined, dotColor: iconUrl ? undefined : color.bg};
             }),
             getValue: (d) => String(d.tx.broker_id),
             cell: (d) => {
                 const name = brokerName(d.tx.broker_id);
-                const iconSrc = brokerIconUrl(d.tx.broker_id);
+                const iconSrc = getBrokerIconUrlById(d.tx.broker_id, brokers);
                 const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" class="tx-broker-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="tx-broker-dot" style="display:none"></span>` : `<span class="tx-broker-dot"></span>`;
                 return {
                     type: 'html',

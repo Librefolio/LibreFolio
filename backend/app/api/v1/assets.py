@@ -1023,6 +1023,55 @@ async def query_events_bulk(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@event_router.get("", response_model=FAEventQueryResponse)
+async def get_events_by_ids(
+    ids: List[int] = Query(..., min_length=1, description="Event IDs to fetch"),
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """Fetch specific events by their IDs.
+
+    Returns the same shape as POST /events/query but with a point selection
+    by event primary key instead of date-range filters. Results are grouped
+    by asset_id.
+
+    **Request Example**:
+    ```
+    GET /api/v1/assets/events?ids=1&ids=2&ids=5
+    ```
+
+    **Response Example**:
+    ```json
+    {
+      "items": [
+        {
+          "asset_id": 1,
+          "events": [
+            {
+              "date": "2025-07-31",
+              "type": "DIVIDEND",
+              "value": {"code": "USD", "amount": "0.250000"},
+              "notes": "Quarterly dividend",
+              "id": 3,
+              "is_auto": false,
+              "original_value": null,
+              "fx_info": null
+            }
+          ],
+          "errors": []
+        }
+      ]
+    }
+    ```
+    """
+    try:
+        results = await AssetSourceManager.get_events_by_ids(ids, session)
+        return FAEventQueryResponse(items=results)
+    except Exception as e:
+        logger.error(f"Error fetching events by IDs: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 # ============================================================================
 # MARKET-DATA WIPE (R3-3 Policy D)
 # ============================================================================
