@@ -361,22 +361,39 @@
         const partner = d.tx.related_transaction_id != null ? partnerLookup.get(d.tx.related_transaction_id) : null;
         const partnerBroker = partner ? brokerName(partner.broker_id) : '?';
         const thisBroker = brokerName(d.tx.broker_id);
+        const currency = d.tx.cash?.code ?? '?';
+
+        /** Format a cash amount as plain text (strip HTML from formatCurrencyAmountHtml). */
+        const fmtCash = (code: string, amount: string | undefined): string => {
+            const n = Number(amount ?? 0);
+            if (!Number.isFinite(n)) return `${amount} ${code}`;
+            return formatCurrencyAmountHtml(Math.abs(n), code).replace(/<[^>]*>/g, '');
+        };
 
         if (type === 'TRANSFER') {
             if (d.isReceiver) {
-                return `📥 ${$t('transactions.linkTooltip.transferIn') || `Receiving from ${partnerBroker}`}`.replace('{broker}', partnerBroker);
+                return `📥 ${$t('transactions.linkTooltip.transferIn') || `Received from ${partnerBroker}`}`.replace('{broker}', partnerBroker);
             }
-            return `📤 ${$t('transactions.linkTooltip.transferOut') || `Sending to ${partnerBroker}`}`.replace('{broker}', partnerBroker);
+            return `📤 ${$t('transactions.linkTooltip.transferOut') || `Sent to ${partnerBroker}`}`.replace('{broker}', partnerBroker);
         }
         if (type === 'FX_CONVERSION') {
-            const toCurr = partner?.cash?.code ?? '?';
+            const thisAmount = fmtCash(currency, d.tx.cash?.amount);
+            const partnerCurr = partner?.cash?.code ?? '?';
+            const partnerAmount = fmtCash(partnerCurr, partner?.cash?.amount);
             if (d.isReceiver) {
-                return `💱 ${$t('transactions.linkTooltip.fxReceive') || `Converted from ${toCurr}`}`.replace('{currency}', toCurr);
+                return `💱 ${$t('transactions.linkTooltip.fxReceive') || `Converted from ${partnerAmount}`}`.replace('{amount}', partnerAmount);
             }
-            return `💱 ${$t('transactions.linkTooltip.fxSend') || `Converting to ${toCurr}`}`.replace('{currency}', toCurr);
+            return `💱 ${$t('transactions.linkTooltip.fxSend') || `Converting to ${partnerAmount}`}`.replace('{amount}', partnerAmount);
         }
-        // Generic fallback
-        return `🔗 ${$t('transactions.linkTooltip.generic') || 'Linked pair'} — ${thisBroker} ↔ ${partnerBroker}`;
+        // Cash transfers between brokers (DEPOSIT↔WITHDRAWAL, or same-type linked)
+        if (type === 'DEPOSIT' && partner) {
+            return `🏦 ${$t('transactions.linkTooltip.depositFrom') || `Cash in from ${partnerBroker}`}`.replace('{broker}', partnerBroker).replace('{currency}', currency);
+        }
+        if (type === 'WITHDRAWAL' && partner) {
+            return `🏦 ${$t('transactions.linkTooltip.withdrawalTo') || `Cash out to ${partnerBroker}`}`.replace('{broker}', partnerBroker).replace('{currency}', currency);
+        }
+        // Generic fallback — cash transfer / linked pair
+        return `🏦 ${$t('transactions.linkTooltip.generic') || 'Cash transfer'} — ${thisBroker} ↔ ${partnerBroker}`;
     }
 
     // =========================================================================

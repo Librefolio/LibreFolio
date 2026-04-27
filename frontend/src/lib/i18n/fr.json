@@ -501,9 +501,11 @@
         "linkTooltip": {
             "transferIn": "Reçu de {broker}",
             "transferOut": "Envoyé à {broker}",
-            "fxReceive": "Converti depuis {currency}",
-            "fxSend": "Conversion en {currency}",
-            "generic": "Paire liée"
+            "fxReceive": "Converti depuis {amount}",
+            "fxSend": "Conversion en {amount}",
+            "generic": "Virement",
+            "depositFrom": "Encaissement de {broker} ({currency})",
+            "withdrawalTo": "Retrait vers {broker} ({currency})"
         }
     },
     "fx": {
