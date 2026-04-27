@@ -398,6 +398,14 @@
         multiEnums = new Set(multiEnums);
         applyFilter();
     }
+    function selectAllMultiEnums() {
+        multiEnums = new Set(enumOptions.map((o) => o.value));
+        applyFilter();
+    }
+    function clearAllMultiEnums() {
+        multiEnums = new Set();
+        applyFilter();
+    }
     let filteredMultiEnumOptions = $derived(multiEnumSearch.trim() === '' ? enumOptions : enumOptions.filter((o) => o.label.toLowerCase().includes(multiEnumSearch.toLowerCase())));
 
     // ---- Currency-stack helpers ----
@@ -704,6 +712,10 @@
             </div>
         {:else if type === 'multi-enum'}
             <div class="enum-filter">
+                <div class="enum-actions">
+                    <button type="button" class="enum-action-btn" onclick={selectAllMultiEnums}>{$t('common.selectAll')}</button>
+                    <button type="button" class="enum-action-btn" onclick={clearAllMultiEnums}>{$t('common.clearAll')}</button>
+                </div>
                 <div class="search-input-wrapper">
                     <Search size={14} class="search-icon" />
                     <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={multiEnumSearch} />
@@ -724,7 +736,15 @@
                                         <Check size={12} />
                                     {/if}
                                 </span>
+                                {#if option.iconUrl}
+                                    <img src={option.iconUrl} alt="" class="enum-option-icon" />
+                                {:else if option.dotColor}
+                                    <span class="enum-option-dot" style="background:{option.dotColor}"></span>
+                                {/if}
                                 <span class="enum-label">{option.label}</span>
+                                {#if option.count != null}
+                                    <span class="enum-count">{option.count}</span>
+                                {/if}
                             </button>
                         {/each}
                     {/if}

@@ -237,9 +237,9 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 > - ●evt tooltip: `title` attribute alimentato dalla `eventTooltipMap` pre-fetched al load (lookup sincrono, no lazy network).
 >
 > **Follow-ups (rimandati alla fase di QA finale, Step 10)**:
-> - Popover-on-click sul `●evt` con link "Open in /assets/{asset_id}#events" (oggi è solo title).
+> - ~~Popover-on-click sul `●evt` con link "Open in /assets/{asset_id}#events"~~ — **CHIUSO**: il tooltip è ora ricco (emoji tipo + date + amount formattato con `formatCurrencyAmountHtml()` + notes + ⚙ auto). Un popover dedicato non aggiunge valore; l'utente ha già tutte le informazioni nel tooltip hover. Se necessario, navigazione a `/assets/{id}#events` può essere cablata come link diretto in una futura iterazione.
 > - `frontend/e2e/asset-event-delete.spec.ts` — 4 scenari Parte 1 (richiede dev server + populate_mock_data run).
-> - `populate_mock_data.py` extension (≥1 DIVIDEND con asset_event_id, ≥1 TRANSFER cross-broker, ≥30 TX su 2-3 broker).
+> - `populate_mock_data.py` extension — ✅ DONE in Round 1.9 (C25): 3 coppie linked TX + DIVIDEND con asset_event_id.
 
 **Files**:
 - (modifiche in `TransactionsTable.svelte`)

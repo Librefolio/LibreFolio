@@ -253,6 +253,13 @@ export interface ColumnDef<T> {
     getCurrencyValue?: (row: T) => {code: string; amount: number} | null;
 
     /**
+     * For `currency-stack` columns: pre-computed list of available currency
+     * codes from the full dataset (provided by parent). When present, DataTable
+     * uses this instead of dynamically computing from the current visible rows.
+     */
+    currencyOptions?: string[];
+
+    /**
      * For `multi-enum` columns: extract the array of values associated with
      * a row (e.g. tags). When the row has none, return `[]`. Filter logic:
      * row passes if `selected` is empty OR ∃ overlap with the row's array.

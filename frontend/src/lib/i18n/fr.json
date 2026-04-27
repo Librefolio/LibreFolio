@@ -473,7 +473,8 @@
       "quantity": "Qté",
       "tags": "Étiquettes",
       "type": "Type",
-      "event": "Événement"
+      "event": "Événement",
+      "links": "Liens"
     },
     "types": {
       "ADJUSTMENT": "Ajustement",
@@ -495,7 +496,8 @@
       "draftPlural": "{n} brouillons",
       "editedFmt": "{n} sur {total} modifiées"
     },
-    "refresh": "Actualiser depuis le serveur"
+    "refresh": "Actualiser depuis le serveur",
+    "noAsset": "(Pas d'actif)"
   },
   "fx": {
     "title": "Taux de Change",

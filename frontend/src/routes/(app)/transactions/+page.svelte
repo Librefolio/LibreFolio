@@ -167,6 +167,7 @@
         if (f.types?.length) out.types = {type: 'enum', selected: f.types};
         if (f.tags?.length) out.tags = {type: 'multi-enum', selected: f.tags};
         if (f.broker_id != null) out.broker_id = {type: 'enum', selected: [String(f.broker_id)]};
+        if (f.asset_id != null) out.asset_id = {type: 'enum', selected: [String(f.asset_id)]};
         if (f.date_start || f.date_end) out.date = {type: 'date', from: f.date_start, to: f.date_end};
         if (f.cash?.length) out.cash = {type: 'currency-stack', items: f.cash.map((i) => ({...i}))};
         return out;
@@ -189,6 +190,7 @@
         next.types = undefined;
         next.tags = undefined;
         next.broker_id = undefined;
+        next.asset_id = undefined;
         next.date_start = undefined;
         next.date_end = undefined;
         next.cash = undefined;
@@ -197,6 +199,7 @@
             if (k === 'types' && v.type === 'enum') next.types = v.selected.length > 0 ? v.selected : undefined;
             else if (k === 'tags' && v.type === 'multi-enum') next.tags = v.selected.length > 0 ? v.selected : undefined;
             else if (k === 'broker_id' && v.type === 'enum' && v.selected.length === 1) next.broker_id = Number(v.selected[0]);
+            else if (k === 'asset_id' && v.type === 'enum') next.asset_id = v.selected.length === 1 ? Number(v.selected[0]) : undefined;
             else if (k === 'date' && v.type === 'date') {
                 next.date_start = v.from || undefined;
                 next.date_end = v.to || undefined;
@@ -208,9 +211,10 @@
         const sameTypes = JSON.stringify(filters.types ?? null) === JSON.stringify(next.types ?? null);
         const sameTags = JSON.stringify(filters.tags ?? null) === JSON.stringify(next.tags ?? null);
         const sameBroker = (filters.broker_id ?? null) === (next.broker_id ?? null);
+        const sameAsset = (filters.asset_id ?? null) === (next.asset_id ?? null);
         const sameDate = (filters.date_start ?? null) === (next.date_start ?? null) && (filters.date_end ?? null) === (next.date_end ?? null);
         const sameCash = JSON.stringify(filters.cash ?? null) === JSON.stringify(next.cash ?? null);
-        if (sameTypes && sameTags && sameBroker && sameDate && sameCash) return;
+        if (sameTypes && sameTags && sameBroker && sameAsset && sameDate && sameCash) return;
         // Reset to first page on filter change.
         next.page = 1;
         filters = next;
@@ -490,24 +494,35 @@
         void reload();
     }
 
+    let highlightClearTimer: ReturnType<typeof setTimeout> | null = null;
+
     function handleLinkedPairClick(row: TXReadItem) {
         // GoTo: scroll/pulse on the partner row.
-        // The TransactionsTable already renders pairs adjacent, so we just need
-        // to set the highlight_id filter and let the table react via its
-        // `highlightId` prop. We also auto-clear it after the pulse animation
-        // finishes so the URL doesn't carry stale highlight state.
+        // Pairs are rendered adjacent so the partner is usually visible already.
+        // We still scroll+pulse to make it obvious which row is the partner.
         if (row.related_transaction_id == null) return;
         const partnerId = row.related_transaction_id;
-        filters = {...filters, highlight_id: partnerId};
-        // Scroll the partner row into view if rendered.
-        queueMicrotask(() => {
-            const el = document.querySelector<HTMLElement>(`[data-row-id="tx-${partnerId}"]`);
-            if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
+
+        // Cancel any pending auto-clear from a previous click.
+        if (highlightClearTimer != null) clearTimeout(highlightClearTimer);
+
+        // Force animation restart: clear highlight first, wait a frame, then set.
+        filters = {...filters, highlight_id: undefined};
+        requestAnimationFrame(() => {
+            filters = {...filters, highlight_id: partnerId};
+            // Scroll the partner row into view. Row id may be "tx-N" or "ghost-N".
+            queueMicrotask(() => {
+                const el =
+                    document.querySelector<HTMLElement>(`[data-row-id="tx-${partnerId}"]`) ??
+                    document.querySelector<HTMLElement>(`[data-row-id="ghost-${partnerId}"]`);
+                if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
+            });
+            // Auto-clear highlight after the pulse animation (1.4s).
+            highlightClearTimer = setTimeout(() => {
+                filters = {...filters, highlight_id: undefined};
+                highlightClearTimer = null;
+            }, 1600);
         });
-        // Auto-clear highlight after the pulse animation (1.4s).
-        window.setTimeout(() => {
-            filters = {...filters, highlight_id: undefined};
-        }, 1600);
     }
 
     function handleEventBadgeClick(_row: TXReadItem) {
@@ -588,7 +603,7 @@
                     transactionsTableComponent?.resetFilters();
                     transactionsTableComponent?.getTableRef()?.clearSelection();
                     selectedRows = [];
-                    filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
+                    filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, asset_id: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
                     void reload();
                 }}
             >

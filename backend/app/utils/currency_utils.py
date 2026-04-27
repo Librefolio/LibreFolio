@@ -272,6 +272,7 @@ def list_currencies(language: str = "en") -> List[dict]:
         List of dicts with 'code', 'name', 'symbol', 'flag_emoji', 'country_codes', 'country_names'
     """
     locale = get_babel_locale(language)
+    en_locale = get_babel_locale("en")  # Universal symbols ($, £, ¥) regardless of UI language
     flag_map = _build_currency_to_flag_map()
     countries_map = _build_currency_to_countries_map()
     currencies = []
@@ -284,7 +285,7 @@ def list_currencies(language: str = "en") -> List[dict]:
         code = currency.alpha_3
         try:
             name = get_currency_name(code, locale=locale) or currency.name
-            symbol = get_currency_symbol(code, locale=locale) or code
+            symbol = get_currency_symbol(code, locale=en_locale) or code
         except Exception:
             name = currency.name
             symbol = code

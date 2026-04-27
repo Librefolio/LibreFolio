@@ -473,7 +473,8 @@
       "quantity": "Qtà",
       "tags": "Tag",
       "type": "Tipo",
-      "event": "Evento"
+      "event": "Evento",
+      "links": "Link"
     },
     "types": {
       "ADJUSTMENT": "Aggiustamento",
@@ -495,7 +496,8 @@
       "draftPlural": "{n} bozze",
       "editedFmt": "{n} su {total} modificate"
     },
-    "refresh": "Ricarica dal server"
+    "refresh": "Ricarica dal server",
+    "noAsset": "(Senza asset)"
   },
   "fx": {
     "title": "Tassi di Cambio",

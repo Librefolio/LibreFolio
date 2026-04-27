@@ -1084,6 +1084,101 @@ def populate_transactions(session: Session):
 
     session.commit()
 
+    # --- Linked transactions (TRANSFER + FX_CONVERSION) ---
+    # These require related_transaction_id (bidirectional FK).
+    # We create them after the main commit so IDs are available.
+
+    # 1. TRANSFER pair: Move 5 AAPL shares from IB → DEGIRO
+    tx_transfer_out = Transaction(
+        broker_id=ib.id,
+        asset_id=apple.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=12),
+        quantity=Decimal("-5"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="Transfer AAPL to DEGIRO",
+        tags="rebalance",
+    )
+    tx_transfer_in = Transaction(
+        broker_id=degiro.id,
+        asset_id=apple.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=12),
+        quantity=Decimal("5"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="Transfer AAPL from IB",
+        tags="rebalance",
+    )
+    session.add(tx_transfer_out)
+    session.add(tx_transfer_in)
+    session.flush()  # Assign IDs
+    tx_transfer_out.related_transaction_id = tx_transfer_in.id
+    tx_transfer_in.related_transaction_id = tx_transfer_out.id
+    session.commit()
+    print(f"  🔗 TRANSFER pair: AAPL IB→DEGIRO (#{tx_transfer_out.id} ↔ #{tx_transfer_in.id})")
+
+    # 2. TRANSFER pair: Move 0.1 BTC from Coinbase → IB
+    tx_btc_out = Transaction(
+        broker_id=coinbase.id,
+        asset_id=btc.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=8),
+        quantity=Decimal("-0.1"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="Transfer BTC to IB",
+        tags="rebalance",
+    )
+    tx_btc_in = Transaction(
+        broker_id=ib.id,
+        asset_id=btc.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=8),
+        quantity=Decimal("0.1"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="Transfer BTC from Coinbase",
+        tags="rebalance",
+    )
+    session.add(tx_btc_out)
+    session.add(tx_btc_in)
+    session.flush()
+    tx_btc_out.related_transaction_id = tx_btc_in.id
+    tx_btc_in.related_transaction_id = tx_btc_out.id
+    session.commit()
+    print(f"  🔗 TRANSFER pair: BTC Coinbase→IB (#{tx_btc_out.id} ↔ #{tx_btc_in.id})")
+
+    # 3. FX_CONVERSION pair: Convert 1000 EUR → ~1090 USD at IB
+    tx_fx_sell = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.FX_CONVERSION,
+        date=today - timedelta(days=15),
+        quantity=Decimal("0"),
+        amount=Decimal("-1000"),
+        currency="EUR",
+        description="FX conversion EUR→USD",
+    )
+    tx_fx_buy = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.FX_CONVERSION,
+        date=today - timedelta(days=15),
+        quantity=Decimal("0"),
+        amount=Decimal("1090"),
+        currency="USD",
+        description="FX conversion EUR→USD",
+    )
+    session.add(tx_fx_sell)
+    session.add(tx_fx_buy)
+    session.flush()
+    tx_fx_sell.related_transaction_id = tx_fx_buy.id
+    tx_fx_buy.related_transaction_id = tx_fx_sell.id
+    session.commit()
+    print(f"  🔗 FX_CONVERSION pair: EUR→USD at IB (#{tx_fx_sell.id} ↔ #{tx_fx_buy.id})")
+
 
 def populate_price_history(session: Session):
     """Create price history for market-priced assets."""
