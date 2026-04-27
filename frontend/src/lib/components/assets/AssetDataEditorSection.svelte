@@ -24,6 +24,7 @@
     import EventDataImportModal from './EventDataImportModal.svelte';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {_ as t, locale} from '$lib/i18n';
+    import {getEventTypeEmoji} from '$lib/utils/eventTypes';
 
     // =========================================================================
     // Props
@@ -81,11 +82,11 @@
     //   i18n keys: `dataEditor.cell.{notSet,clearField,clearFieldConfirm}` (4 langs).
 
     let eventTypeOptions = $derived([
-        {value: 'DIVIDEND', label: $t('assetDetail.eventType.DIVIDEND'), emoji: '💰', tooltip: $t('assetDetail.eventTypeTooltip.DIVIDEND'), docsPath: 'financial-theory/instruments/asset-events/dividend'},
-        {value: 'INTEREST', label: $t('assetDetail.eventType.INTEREST'), emoji: '📈', tooltip: $t('assetDetail.eventTypeTooltip.INTEREST'), docsPath: 'financial-theory/instruments/asset-events/interest'},
-        {value: 'SPLIT', label: $t('assetDetail.eventType.SPLIT'), emoji: '✂️', tooltip: $t('assetDetail.eventTypeTooltip.SPLIT'), docsPath: 'financial-theory/instruments/asset-events/split'},
-        {value: 'PRICE_ADJUSTMENT', label: $t('assetDetail.eventType.PRICE_ADJUSTMENT'), emoji: '📊', tooltip: $t('assetDetail.eventTypeTooltip.PRICE_ADJUSTMENT'), docsPath: 'financial-theory/instruments/asset-events/price-adjustment'},
-        {value: 'MATURITY_SETTLEMENT', label: $t('assetDetail.eventType.MATURITY_SETTLEMENT'), emoji: '🏁', tooltip: $t('assetDetail.eventTypeTooltip.MATURITY_SETTLEMENT'), docsPath: 'financial-theory/instruments/asset-events/maturity-settlement'},
+        {value: 'DIVIDEND', label: $t('assetDetail.eventType.DIVIDEND'), emoji: getEventTypeEmoji('DIVIDEND'), tooltip: $t('assetDetail.eventTypeTooltip.DIVIDEND'), docsPath: 'financial-theory/instruments/asset-events/dividend'},
+        {value: 'INTEREST', label: $t('assetDetail.eventType.INTEREST'), emoji: getEventTypeEmoji('INTEREST'), tooltip: $t('assetDetail.eventTypeTooltip.INTEREST'), docsPath: 'financial-theory/instruments/asset-events/interest'},
+        {value: 'SPLIT', label: $t('assetDetail.eventType.SPLIT'), emoji: getEventTypeEmoji('SPLIT'), tooltip: $t('assetDetail.eventTypeTooltip.SPLIT'), docsPath: 'financial-theory/instruments/asset-events/split'},
+        {value: 'PRICE_ADJUSTMENT', label: $t('assetDetail.eventType.PRICE_ADJUSTMENT'), emoji: getEventTypeEmoji('PRICE_ADJUSTMENT'), tooltip: $t('assetDetail.eventTypeTooltip.PRICE_ADJUSTMENT'), docsPath: 'financial-theory/instruments/asset-events/price-adjustment'},
+        {value: 'MATURITY_SETTLEMENT', label: $t('assetDetail.eventType.MATURITY_SETTLEMENT'), emoji: getEventTypeEmoji('MATURITY_SETTLEMENT'), tooltip: $t('assetDetail.eventTypeTooltip.MATURITY_SETTLEMENT'), docsPath: 'financial-theory/instruments/asset-events/maturity-settlement'},
     ]);
 
     // #R5-3 (Policy D): the ``currency`` column has been removed from the events tab.

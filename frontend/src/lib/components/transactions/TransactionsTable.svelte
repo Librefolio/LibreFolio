@@ -34,6 +34,7 @@
     import {getStringBadgeStyle} from '$lib/utils/colors';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {getEventTypeEmoji} from '$lib/utils/eventTypes';
 
     // Sentinel keep-imports (used in HTML cells / hover targets but not statically referenced).
     void Calendar1;
@@ -140,6 +141,16 @@
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
 
+    /** Track active column filters so we can pre-filter displayRows before
+     *  the pair-never-split paginator. Initialized from `initialFilters`. */
+    let activeColumnFilters = $state<Record<string, FilterValue>>(initialFilters ? {...initialFilters} : {});
+
+    /** Intercept filter changes: update local state and forward to parent. */
+    function handleFiltersChangeInternal(record: Record<string, FilterValue>) {
+        activeColumnFilters = {...record};
+        onFiltersChange?.(record);
+    }
+
     export function getTableRef() {
         return tableRef;
     }
@@ -147,6 +158,12 @@
     /** Total number of transactions in the current dataset (excluding ghost partners). */
     export function getTotalCount(): number {
         return mainRows.length;
+    }
+
+    /** Clear all column filters (called by parent on refresh). */
+    export function resetFilters(): void {
+        activeColumnFilters = {};
+        tableRef?.clearFilters();
     }
 
     // =========================================================================
@@ -218,22 +235,65 @@
     });
 
     // =========================================================================
+    // Pre-filter displayRows by active column filters (so pagination reflects
+    // the filtered count, not the full dataset). DataTable also applies
+    // filters internally — but since data is already filtered, it's a no-op.
+    // =========================================================================
+
+    /** Apply active column filters to displayRows. */
+    let filteredDisplayRows = $derived.by<DisplayRow[]>(() => {
+        const filters = activeColumnFilters;
+        const entries = Object.entries(filters).filter(([, v]) => v != null);
+        if (entries.length === 0) return displayRows;
+
+        return displayRows.filter((d) => {
+            for (const [urlKeyOrId, fv] of entries) {
+                if (!fv) continue;
+                const col = columns.find((c) => (c.urlKey ?? c.id) === urlKeyOrId || c.id === urlKeyOrId);
+                if (!col) continue;
+                const getValue = col.getValue ?? col.cell;
+                const rawValue = getValue(d);
+
+                if (fv.type === 'enum') {
+                    if (!fv.selected.includes(String(rawValue))) return false;
+                } else if (fv.type === 'multi-enum') {
+                    if (fv.selected.length > 0) {
+                        const rowVals = col.getMultiValue ? col.getMultiValue(d) : String(rawValue ?? '').split(',');
+                        if (!fv.selected.some((sel) => rowVals.includes(sel))) return false;
+                    }
+                } else if (fv.type === 'date') {
+                    const dateStr = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as {type: string}).type === 'date' ? String((rawValue as unknown as {value: string}).value) : String(rawValue);
+                    const date = new Date(dateStr);
+                    if (fv.from && date < new Date(fv.from)) return false;
+                    if (fv.to && date > new Date(fv.to)) return false;
+                } else if (fv.type === 'currency-stack') {
+                    if (fv.items.length > 0) {
+                        const cv = col.getCurrencyValue ? col.getCurrencyValue(d) : null;
+                        if (!cv) return false;
+                        if (!fv.items.some((it) => it.code === cv.code && (it.min === undefined || cv.amount >= it.min) && (it.max === undefined || cv.amount <= it.max))) return false;
+                    }
+                }
+            }
+            return true;
+        });
+    });
+
+    // =========================================================================
     // Pair-never-split paginator
     // =========================================================================
 
     /**
-     * Slice `displayRows` into pages, ensuring pairs never cross a page boundary.
+     * Slice `filteredDisplayRows` into pages, ensuring pairs never cross a page boundary.
      * Effective page size may be `pageSize ± 1` to preserve adjacency.
      */
     let pages = $derived.by<DisplayRow[][]>(() => {
+        const rows = filteredDisplayRows;
         const result: DisplayRow[][] = [];
         let buf: DisplayRow[] = [];
-        for (let i = 0; i < displayRows.length; i++) {
-            const row = displayRows[i];
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
             const isPair = row.pairAnchorId != null;
-            // Look-ahead: if adding this row would exceed pageSize and the row is
-            // a giver of a pair (next row is its receiver), push the buffer first.
-            const nextIsPartner = isPair && i + 1 < displayRows.length && displayRows[i + 1].pairAnchorId === row.pairAnchorId && !row.isReceiver;
+            const nextIsPartner = isPair && i + 1 < rows.length && rows[i + 1].pairAnchorId === row.pairAnchorId && !row.isReceiver;
             const wouldExceed = buf.length >= pageSize;
             const wouldSplitPair = nextIsPartner && buf.length + 1 > pageSize;
             if ((wouldExceed && !row.isReceiver) || wouldSplitPair) {
@@ -285,7 +345,10 @@
     function eventTooltipText(eventId: number): string {
         const ev = eventTooltipMap.get(eventId);
         if (!ev) return $t('transactions.linkedEvent') || 'Linked event';
-        const parts = [ev.type, ev.date, `${ev.value} ${ev.currency}`];
+        const emoji = getEventTypeEmoji(ev.type);
+        const amount = Number(ev.value);
+        const formatted = Number.isFinite(amount) ? amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : ev.value;
+        const parts = [`${emoji} ${ev.type}`, ev.date, `${formatted} ${ev.currency}`];
         if (ev.notes) parts.push(`"${ev.notes}"`);
         if (ev.is_auto) parts.push('⚙ auto');
         return parts.join(' · ');
@@ -559,14 +622,14 @@
         {getRowClass}
         {getRowStyle}
         {isRowSelectable}
-        {onFiltersChange}
+        onFiltersChange={handleFiltersChangeInternal}
         {initialFilters}
         onSelectionChange={handleSelectionChange}
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
     />
 
-    {#if displayRows.length > 0}
-        <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={displayRows.length} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
+    {#if filteredDisplayRows.length > 0}
+        <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={filteredDisplayRows.length} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
     {/if}
 </div>
 

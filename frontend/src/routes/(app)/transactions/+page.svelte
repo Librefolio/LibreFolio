@@ -568,7 +568,7 @@
                         {id: 'edit', icon: Pencil, label: () => $_('transactions.actions.edit') || 'Edit', onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
                         ...(canPromote ? [{id: 'promote', icon: Zap, label: () => $_('transactions.actions.promotePair') || 'Promote pair', onClick: () => onPromotePair()}] : []),
-                        {id: 'delete', icon: Trash2, label: () => $_('transactions.actions.delete') || 'Delete', variant: 'danger' as const, onClick: () => onBulkDelete()},
+                        {id: 'delete', icon: Trash2, label: () => $_('transactions.actions.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
                     ]}
                     onClearSelection={() => {
                         transactionsTableComponent?.getTableRef()?.clearSelection();
@@ -583,7 +583,12 @@
                 title={$_('transactions.refresh') || 'Refresh from server'}
                 aria-label={$_('transactions.refresh') || 'Refresh from server'}
                 disabled={loading}
-                onclick={() => void reload()}
+                onclick={() => {
+                    // Reset column filters and URL filter state before reloading.
+                    transactionsTableComponent?.resetFilters();
+                    filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
+                    void reload();
+                }}
             >
                 <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
             </button>
