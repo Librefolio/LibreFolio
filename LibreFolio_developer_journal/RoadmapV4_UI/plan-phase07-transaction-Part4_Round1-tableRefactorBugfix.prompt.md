@@ -742,3 +742,199 @@ Aggiunto `clearFilters()` export in `DataTable.svelte`.
 | **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | La tinta viola c'è ma le interazioni non sono implementate. |
 | **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT. |
 
+---
+
+## Round 1.9 — Open points (verifica e documentazione)
+
+### Issues aperti da risolvere
+
+| # | Sev | Descrizione | Root cause | Fix proposto | Status |
+|---|-----|-------------|------------|-------------|--------|
+| W77 | ⚠ UX | Cash cell e event tooltip: USD mostra `-5,00 🇺🇸USD` senza simbolo `$`. L'utente si aspetta `$ 🇺🇸USD`. Lo stesso per CHF (no `Fr.`), GBP (symbol vuoto!). EUR funziona (`€`). | **Babel locale-dependent**: con `locale='it'`, `get_currency_symbol('USD')` restituisce `'USD'` (identico al code), non `'$'`. È il comportamento corretto di Babel per l'italiano. `hasRealSymbol = symbol !== code` → `false` → path senza simbolo. | Due opzioni: **(A)** Usare `locale='en'` per il symbol lookup nel backend (il simbolo `$` è universale). **(B)** Aggiungere una mappa fallback hardcoded nel frontend per i 5-6 simboli universali (`USD→$`, `GBP→£`, `JPY→¥`, `CHF→Fr.`, `CNY→¥`). Opzione A è più pulita. | ⏳ |
+| W78 | 🐛 compilazione | `DataTable.svelte` line 1228: `as (r?: T) => string` — TypeScript cast non valido in template Svelte (stessa classe di errore di W67/W72). | Svelte template parser non supporta `as` cast inline. | Estrarre in helper function: `function getActionTitle(action, row) { ... }`. | ⏳ |
+| W79 | ⚠ build warning | `TransactionsTable.svelte` line 147: Svelte avverte che `initialFilters` è referenziato in `$state()` init ma cattura solo il valore iniziale. Warning ripetuto 2× in check e 4× in build (SSR+client). | Intenzionale: `activeColumnFilters` deve partire dal valore iniziale dei filtri URL, poi essere aggiornato via `handleFiltersChangeInternal`. Ma Svelte non sa che è intenzionale. | Sopprimere con `// svelte-ignore state_referenced_locally` oppure refactorare con `$effect` per sync iniziale. | ⏳ |
+| W80 | ⚠ build warning (molti) | `DataTable.svelte` + `DataTableColumnFilter.svelte`: ~60 CSS warnings per `:global(.dark) .xxx` selectors marcati "Selector dark is never used". | Svelte static analysis non può provare che la classe `.dark` esista a compile-time (è applicata a `<html>` runtime). Sono false positive. | Migrare i selettori `.dark` da `:global(.dark) .local` a forma nesting `:global(.dark) &` Svelte-5, oppure spostare in blocco `:global { .dark .xxx { ... } }` come fatto in `TransactionsTable.svelte`. | ⏳ low priority |
+| W81 | ⚠ build warning | `DataTable.svelte`: ~10 export functions marcate "Unused function" (`navigateToRowId`, `toggleColumnVisibilityById`, `clearFilters`, etc.). | Svelte non sa che sono usate esternamente via `bind:this`. | Nessun fix necessario — sono false positive dell'analisi statica. Documentare e ignorare. | ℹ️ ignore |
+| W82 | ⚠ UX | Linked transactions (`related_transaction_id`) non visibili: la feature ghost row esiste ma `populate_mock_data.py` non crea nessuna TX di tipo TRANSFER/FX_CONVERSION con partner linkato. | **Missing mock data**: nessuna TX con `related_transaction_id != null` creata nel seeding. | Aggiungere in `populate_mock_data.py` almeno 2 coppie TRANSFER (un broker→altro) e 1 FX_CONVERSION (EUR→USD) con `related_transaction_id` bidirezionale. Poi verificare ghost row rendering. Questo chiude definitivamente W64. | ⏳ |
+
+### Analisi dettagliata W77 — Currency symbol locale issue
+
+Risultati `babel.numbers.get_currency_symbol(code, locale='it')`:
+
+| Currency | Symbol (it) | Symbol == Code | Comportamento attuale | Atteso dall'utente |
+|----------|------------|----------------|----------------------|-------------------|
+| USD | `'USD'` | ✅ | `🇺🇸USD` | `$ 🇺🇸USD` |
+| EUR | `'€'` | ❌ | `€ 🇪🇺EUR` ✅ | `€ 🇪🇺EUR` ✅ |
+| RON | `'RON'` | ✅ | `🇷🇴RON` | `🇷🇴RON` ✅ |
+| GBP | `''` | ❌ (empty!) | `🇬🇧GBP` | `£ 🇬🇧GBP` |
+| CHF | `'CHF'` | ✅ | `🇨🇭CHF` | `Fr. 🇨🇭CHF` o `🇨🇭CHF` |
+
+Il problema è che Babel localizza anche i simboli valuta: in italiano non si usa `$` per il dollaro, si scrive "USD". La soluzione pulita è chiedere al backend di restituire il simbolo in `locale='en'` (che è universale per i simboli finanziari), oppure exporre un campo `compact_symbol` separato.
+
+### Piano esecuzione Round 1.9
+
+1. **W78** — Fix `as` cast in DataTable.svelte (1 riga, quick fix)
+2. **W79** — Sopprimere warning `state_referenced_locally` in TransactionsTable
+3. **W77** — Fix currency symbol (decidere approccio A vs B, implementare)
+4. **W82** — Aggiungere TX linked in mock data + verificare ghost rows
+5. **W80/W81** — Low priority: CSS warnings e unused exports — documentare, non fixare ora
+
+---
+
+## Round 1.9 — Execution Report
+
+### Fixes implementati
+
+| # | Issue | Fix | Status |
+|---|-------|-----|--------|
+| W77 | Currency symbol locale-dependent (`$` non mostrato per USD con locale `it`) | **Opzione A**: backend `list_currencies()` ora usa `locale='en'` per il symbol lookup (via `en_locale`), mantenendo il locale utente per il `name`. Simboli universali (`$`, `£`, `¥`, `Fr.`) ora corretti per tutte le lingue. | ✅ C22 |
+| W78 | `as (r?: T) => string` cast in template Svelte (DataTable.svelte:1228) | Rimosso il cast — `action.label(row)` funziona direttamente dato che TypeScript inferisce il tipo dalla union dopo il `typeof` guard. | ✅ C23 |
+| W79 | Warning `state_referenced_locally` per `initialFilters` in TransactionsTable | Aggiunto `// svelte-ignore state_referenced_locally` sopra la riga. Il pattern è intenzionale. | ✅ C24 |
+| W82 | No TX con `related_transaction_id` nei mock data → ghost row non verificabili | Aggiunte 3 coppie linked in `populate_mock_data.py`: 2× TRANSFER (AAPL IB→DEGIRO, BTC Coinbase→IB) + 1× FX_CONVERSION (EUR→USD at IB). Tutte con FK bidirezionale. | ✅ C25 |
+| W80 | ~60 CSS warnings `:global(.dark)` in DataTable/DataTableColumnFilter | Documentato: false positive dell'analisi statica Svelte. `.dark` è applicata a `<html>` a runtime. Non fixato — low priority. | ℹ️ ignore |
+| W81 | ~10 unused export warnings in DataTable | Documentato: usate esternamente via `bind:this`. False positive. | ℹ️ ignore |
+
+### Dettagli implementativi
+
+**C22 — Currency symbol locale fix** (root cause + fix):
+- Babel `get_currency_symbol('USD', locale='it')` → `'USD'` (non `'$'`), perché in italiano il dollaro si scrive "USD"
+- Fix: `list_currencies()` ora crea un `en_locale = get_babel_locale("en")` e lo usa solo per `get_currency_symbol(code, locale=en_locale)`
+- Il `name` continua a usare il locale utente → "Dollaro statunitense" in italiano
+- Risultato frontend: `$ 🇺🇸USD` per USD, `£ 🇬🇧GBP` per GBP, `¥ 🇯🇵JPY` per JPY
+
+**C23 — DataTable `as` cast removal**: Svelte template parser non supporta TypeScript `as` inline. Il `typeof action.label === 'function'` guard è sufficiente per TypeScript a narroware il tipo, rendendo `action.label(row)` valido senza cast.
+
+**C24 — state_referenced_locally suppression**: Il commento `// svelte-ignore state_referenced_locally` sopprime il warning Svelte che `initialFilters` è catturato dal `$state()` init. È intenzionale: il valore iniziale viene usato solo all'init, poi `handleFiltersChangeInternal()` aggiorna lo state.
+
+**C25 — Linked transactions mock data**: Creati dopo la `session.commit()` principale delle TX normali. Pattern:
+1. Crea i due TX della coppia senza `related_transaction_id`
+2. `session.flush()` per assegnare gli ID
+3. Assegna `tx_a.related_transaction_id = tx_b.id` e viceversa
+4. `session.commit()`
+
+### File modificati
+
+| File | Modifica |
+|------|----------|
+| `backend/app/utils/currency_utils.py` | `en_locale` per symbol lookup universale |
+| `frontend/src/lib/components/table/DataTable.svelte` | Rimosso `as` cast da action title |
+| `frontend/src/lib/components/transactions/TransactionsTable.svelte` | `svelte-ignore state_referenced_locally` |
+| `backend/test_scripts/test_db/populate_mock_data.py` | 3 coppie linked TX (TRANSFER×2, FX_CONVERSION×1) |
+
+### Validazione Round 1.9
+
+- `./dev.py front check` → **0 errors, 0 warnings** ✅ (migliorato da 2 warnings)
+- `prettier --check` → clean (2 file preesistenti non in scope) ✅
+- `ruff check` backend → All checks passed ✅
+
+### Residui aperti dopo Round 1.9
+
+| Issue | Stato | Note |
+|-------|-------|------|
+| **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | La tinta viola c'è ma le interazioni (chip + bottoni ✕/+) non sono implementate. |
+| **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT. |
+| **W82 verify** | ⏳ | Rieseguire `./dev.py test db populate --force` e verificare ghost row rendering con le nuove TX linked. |
+
+---
+
+## Round 1.10 — Execution Report
+
+### Fixes implementati
+
+| # | Issue | Fix | Status |
+|---|-------|-----|--------|
+| C26 | Currency-stack filter instabile: `items.length === 0` non gestito, `min`/`max` undefined causavano crash | Stabilizzato filtraggio `currency-stack`: `items.length === 0` → skip filtro; bounds undefined → nessun limite (passano sempre). | ✅ C26 |
+| C27 | Colonna `asset` usava filtro `text` generico — non permetteva selezione dropdown | Cambiato a `type: 'enum'` con `enumOptions` auto-generate da `mainRows` (display_name, icon_url, fallback asset-type PNG). Valore `__null__` per TX senza asset. | ✅ C27 |
+| C28 | Tags: filtro generico non permetteva selezione multipla con dot colorati | Tags column ora `type: 'multi-enum'` con `enumOptions` generate dal set unico di tags, `dotColor` da `getStringColor()`, e `getMultiValue` per filtraggio multi-valore. | ✅ C28 |
+| C29 | Colonna `event` separata ridondante — info event e linked pair sparse | Unificata in colonna **"Links"** (`id: 'links'`): event dot (🔴) + direction arrow (⬆/⬇) + link icon (🔗). Click delegation via `data-tx-link` e `data-tx-event`. | ✅ C29 |
+
+### Dettagli implementativi
+
+**C26 — Currency-stack filter stability**: Il filtro `currency-stack` nella logica `filteredDisplayRows` ora verifica `fv.items.length > 0` prima di applicare. Items con `min`/`max` undefined trattati come "nessun limite" (sempre passano quel bound check).
+
+**C27 — Asset filter → enum**: La colonna `asset` ora ha `type: 'enum'` con `enumOptions` auto-generate:
+- Scansiona `mainRows` per `asset_id` unici
+- Usa `getAssetInfo()` dal store per `display_name` e `icon_url`
+- Fallback a `getAssetTypeIconUrl()` se l'asset non ha icona
+- Valore speciale `__null__` per TX senza asset, in cima all'elenco ordinato
+
+**C28 — Multi-enum tags**: La colonna `tags` usa `type: 'multi-enum'` con:
+- `getMultiValue: (d) => d.tx.tags ?? []` per restituire array di valori
+- `enumOptions` con `dotColor` da `getStringColor(tag).bg`
+- Filtraggio multi-enum usa `some()`: riga matcha se ha almeno un tag selezionato
+
+**C29 — Links column**: Sostituisce la vecchia colonna `event`. Aggrega:
+1. **Event dot**: `<button class="tx-event-dot">` con tooltip dal nome dell'evento
+2. **Pair arrow**: `<span class="tx-pair-arrow">⬆</span>` (receiver) o `⬇` (giver) — solo per TX con `pairAnchorId`
+3. **Link icon**: `<button class="tx-link-icon">🔗</button>` con tooltip i18n
+
+Click delegation in `handleTableClick()` distingue `data-tx-link` vs `data-tx-event` per chiamare `onLinkedPairClick` o `onEventBadgeClick`.
+
+### File modificati
+
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/transactions/TransactionsTable.svelte` | Currency-stack filter fix, asset→enum, tags→multi-enum, links column, pair arrows CSS |
+
+### Residui aperti dopo Round 1.10
+
+| Issue | Stato | Note |
+|-------|-------|------|
+| Visual refinement linked TX (freccia ↳, sfondo viola ghost, pulse click) | ⏳ Round 1.11 | Feedback utente: rimuovere `↳` da qty, usare ⬆⬇ nel Links col, rimuovere sfondo viola ghost, pulse su click 🔗 |
+
+---
+
+## Round 1.11 — Execution Report
+
+### Fixes implementati
+
+| # | Issue | Fix | Status |
+|---|-------|-----|--------|
+| C30 | Quantità receiver mostrava `↳ +0,1` — prefisso brutto nella cella qty | Rimosso prefisso `↳` da `formatQty()`. Frecce direzionali (⬆⬇) ora nella colonna Links, tra le righe paired. | ✅ C30 |
+| C31 | Ghost row aveva sfondo viola `!important` che rompeva uniformità broker tint | Rimosso CSS `.tx-row-ghost` con override viola. Ghost rows ora usano solo `opacity: 0.7`, broker tint uniforme. | ✅ C31 |
+| C32 | Click su 🔗 non faceva pulsare la riga partner visivamente | Verificato end-to-end: `handleLinkedPairClick` → `highlight_id` → `tx-row-highlight` → `txPulse` animation. Con pair-adjacent rendering, partner sempre visibile → scroll + pulse funzionano. Auto-clear dopo 1.6s. | ✅ C32 |
+| C33 | Pulse non si triggerava: querySelector non trovava ghost rows + animation non si re-triggerava su click ripetuti | Fix querySelector: ora cerca sia `tx-${id}` che `ghost-${id}`. Fix re-trigger: `requestAnimationFrame` clear→set cycle. Fix timer leak: cancel pending clear timer su click ripetuto. | ✅ C33 |
+
+### Dettagli implementativi
+
+**C30 — Remove ↳ prefix from quantity**: `formatQty()` ora è puro: `+N` per positivi, `-N` per negativi, `0` per zero. Nessun prefisso receiver. Frecce direzionali vivono nella colonna Links (C29): `⬆` per receiver, `⬇` per giver. Separazione semantica (direzione) dalla grandezza (quantità).
+
+**C31 — Ghost row: opacity instead of violet**: CSS `.tx-row-ghost > td` applica solo `opacity: 0.7` — niente più `background-color: rgb(139 92 246 / 0.08) !important` né variante dark. Ghost rows ereditano broker tint come tutte le altre, con opacity ridotta per segnalare "fuori filtro".
+
+**C32 — Pulse on 🔗 click**: Flusso end-to-end:
+1. Click su `🔗` → `handleTableClick()` trova `data-tx-link` → `onLinkedPairClick(tx)`
+2. `+page.svelte` → `handleLinkedPairClick(row)` → `filters.highlight_id = partnerId`
+3. `TransactionsTable` prop `highlightId` → `getRowClass()` aggiunge `tx-row-highlight`
+4. CSS `animation: txPulse 1.4s ease-in-out 1` → indigo box-shadow pulse
+5. `scrollIntoView({behavior: 'smooth', block: 'center'})`
+6. `setTimeout(1600ms)` → auto-clear `highlight_id`
+
+Con pair-adjacent rendering la riga partner è già visibile, ma scroll+pulse la evidenzia.
+
+**C33 — Pulse fix (3 bug correlati)**:
+- **Bug 1**: `querySelector('[data-row-id="tx-${partnerId}"]')` non trovava ghost rows (che hanno `data-row-id="ghost-${id}"`). Fix: fallback a `ghost-${partnerId}`.
+- **Bug 2**: Click ripetuti non ri-triggeravano l'animazione CSS perché `tx-row-highlight` era già applicata. Fix: `requestAnimationFrame` cycle — prima clear `highlight_id`, aspetta un frame, poi re-set.
+- **Bug 3**: `setTimeout` di auto-clear poteva accumularsi su click rapidi. Fix: `highlightClearTimer` con `clearTimeout` preventivo.
+
+### File modificati
+
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/transactions/TransactionsTable.svelte` | Rimosso `↳` da `formatQty()`, CSS ghost viola→opacity, mantenuto pulse animation |
+| `frontend/src/routes/(app)/transactions/+page.svelte` | Fix `handleLinkedPairClick`: querySelector ghost fallback, rAF re-trigger, timer leak fix |
+
+### Validazione Round 1.11
+
+- Ghost rows uniformi con broker tint + opacity 0.7 ✅
+- Frecce ⬆⬇ nella colonna Links (non più nella qty) ✅
+- Click 🔗 → pulse indigo sulla riga partner ✅
+- Auto-clear highlight dopo 1.6s ✅
+
+### Residui aperti dopo Round 1.11
+
+| Issue | Stato | Note |
+|-------|-------|------|
+| **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | Chip interattivo con ✕/+ per rimuovere/aggiungere ghost row ai filtri — design da definire |
+| **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT |
+| ~~**Event badge click** (`onEventBadgeClick`)~~ | ✅ chiuso | Tooltip è già ricco (emoji+date+amount+notes+auto). Popover dedicato non aggiunge valore. Piano originale aggiornato. |
+

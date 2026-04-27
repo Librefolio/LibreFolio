@@ -7,7 +7,9 @@
   - Always-pair-adjacent rendering: linked TX (TRANSFER, FX_CONVERSION) are always
     rendered as adjacent rows; giver (out, qty<0 or cash<0) above, receiver (in)
     below. When the partner is filtered out of `mainRows`, it is shown as a
-    "ghost row" with violet tint (taken from `partnerRows`).
+    "ghost row" with reduced opacity (taken from `partnerRows`). Broker tint is
+    uniform across all rows (ghost or not). Direction arrows (⬇/⬆) appear in
+    the Links column for each half of a pair.
   - Pair-never-split paginator: pairs are kept on the same page; if a pair would
     cross a page boundary it is pushed entirely to the next page.
   - Columns: color-band (broker), date, type-badge, asset, qty, cash, broker,
@@ -31,7 +33,7 @@
     import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/currencyStore';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
     import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
-    import {getStringBadgeStyle} from '$lib/utils/colors';
+    import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
     import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -144,6 +146,7 @@
 
     /** Track active column filters so we can pre-filter displayRows before
      *  the pair-never-split paginator. Initialized from `initialFilters`. */
+    // svelte-ignore state_referenced_locally
     let activeColumnFilters = $state<Record<string, FilterValue>>(initialFilters ? {...initialFilters} : {});
 
     /** Intercept filter changes: update local state and forward to parent. */
@@ -327,11 +330,11 @@
         return `--broker-bg:${c.bg};--broker-text:${c.text};--broker-dark-bg:${c.darkBg};--broker-dark-text:${c.darkText};`;
     }
 
-    function formatQty(q: string, isReceiver: boolean): string {
+    function formatQty(q: string): string {
         const n = Number(q);
         if (!Number.isFinite(n) || n === 0) return '0';
         const formatted = n.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
-        return (isReceiver ? '↳ ' : '') + (n > 0 ? `+${formatted}` : formatted);
+        return n > 0 ? `+${formatted}` : formatted;
     }
 
     function formatCash(cash: TXReadItem['cash']): string {
@@ -436,7 +439,7 @@
             type: 'number',
             width: 110,
             getValue: (d) => Number(d.tx.quantity),
-            cell: (d) => formatQty(d.tx.quantity, d.isReceiver),
+            cell: (d) => formatQty(d.tx.quantity),
         },
         {
             id: 'cash',
@@ -444,6 +447,7 @@
             type: 'currency-stack',
             width: 160,
             urlKey: 'cash',
+            currencyOptions: [...new Set(mainRows.filter((r) => r.cash).map((r) => r.cash!.code))].sort(),
             getValue: (d) => (d.tx.cash ? Number(d.tx.cash.amount) : 0),
             getCurrencyValue: (d) => (d.tx.cash ? {code: d.tx.cash.code, amount: Number(d.tx.cash.amount)} : null),
             cell: (d) => {
@@ -459,33 +463,64 @@
             },
         },
         {
-            id: 'event',
-            header: () => $t('transactions.table.event') || 'Event',
+            id: 'links',
+            header: () => $t('transactions.table.links') || 'Links',
             type: 'custom',
             sortable: false,
             filterable: false,
             resizable: false,
-            width: 56,
+            width: 80,
             cell: (d) => {
-                if (d.tx.asset_event_id == null) return '';
-                const tip = eventTooltipText(d.tx.asset_event_id);
+                const hasEvent = d.tx.asset_event_id != null;
+                const hasLink = d.tx.related_transaction_id != null;
+                if (!hasEvent && !hasLink) return '';
+                const parts: string[] = [];
+                if (hasEvent) {
+                    const tip = eventTooltipText(d.tx.asset_event_id!);
+                    parts.push(`<button type="button" class="tx-event-dot" data-tx-event="${d.tx.id}" data-testid="tx-event-dot-${d.tx.id}" aria-label="${escapeHtml(tip)}" title="${escapeHtml(tip)}"></button>`);
+                }
+                if (hasLink) {
+                    // Direction arrow: giver ⬇, receiver ⬆
+                    const arrow = d.pairAnchorId != null ? (d.isReceiver ? '<span class="tx-pair-arrow">⬆</span>' : '<span class="tx-pair-arrow">⬇</span>') : '';
+                    const linkTip = $t('transactions.gotoLinkedPair') || 'Go to linked pair';
+                    parts.push(`${arrow}<button type="button" class="tx-link-icon" data-tx-link="${d.tx.id}" data-testid="tx-link-icon-${d.tx.id}" aria-label="${escapeHtml(linkTip)}" title="${escapeHtml(linkTip)}">🔗</button>`);
+                }
+                const tooltipText = hasEvent ? eventTooltipText(d.tx.asset_event_id!) : $t('transactions.gotoLinkedPair') || 'Go to linked pair';
                 return {
                     type: 'html',
-                    html: `<div class="tx-event-cell"><button type="button" class="tx-event-dot" data-tx-event="${d.tx.id}" data-testid="tx-event-dot-${d.tx.id}" aria-label="${escapeHtml(tip)}"></button></div>`,
-                    tooltip: {text: tip, position: 'top'},
+                    html: `<div class="tx-links-cell">${parts.join('')}</div>`,
+                    tooltip: parts.length === 1 ? {text: tooltipText, position: 'top'} : undefined,
                 };
             },
         },
         {
             id: 'asset',
             header: () => $t('transactions.table.asset'),
-            type: 'text',
+            type: 'enum',
             width: 220,
             urlKey: 'asset_id',
-            getValue: (d) => {
+            enumOptions: (() => {
                 void $assetStoreVersion;
-                return d.tx.asset_id ? (getAssetInfo(d.tx.asset_id)?.display_name ?? '') : '';
-            },
+                const assetIds = new Set<number | null>();
+                for (const r of mainRows) assetIds.add(r.asset_id ?? null);
+                const opts: {value: string; label: string; iconUrl?: string}[] = [];
+                if (assetIds.has(null)) {
+                    opts.push({value: '__null__', label: $t('transactions.noAsset') || '(No asset)'});
+                }
+                for (const aid of assetIds) {
+                    if (aid == null) continue;
+                    const info = getAssetInfo(aid);
+                    const name = info?.display_name ?? `#${aid}`;
+                    const iconSrc = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : undefined);
+                    opts.push({value: String(aid), label: name, iconUrl: iconSrc ?? undefined});
+                }
+                return opts.sort((a, b) => {
+                    if (a.value === '__null__') return -1;
+                    if (b.value === '__null__') return 1;
+                    return a.label.localeCompare(b.label);
+                });
+            })(),
+            getValue: (d) => (d.tx.asset_id ? String(d.tx.asset_id) : '__null__'),
             cell: (d) => {
                 void $assetStoreVersion;
                 if (!d.tx.asset_id) return '—';
@@ -527,6 +562,13 @@
             type: 'multi-enum',
             width: 200,
             urlKey: 'tags',
+            enumOptions: (() => {
+                const tagSet = new Set<string>();
+                for (const r of mainRows) {
+                    if (r.tags) for (const tag of r.tags) tagSet.add(tag);
+                }
+                return [...tagSet].sort().map((tag) => ({value: tag, label: tag, dotColor: getStringColor(tag).bg}));
+            })(),
             getValue: (d) => (d.tx.tags ?? []).join(','),
             getMultiValue: (d) => d.tx.tags ?? [],
             cell: (d) => {
@@ -539,13 +581,6 @@
     ]);
 
     let rowActions = $derived<RowAction<DisplayRow>[]>([
-        {
-            id: 'linked-pair',
-            icon: LinkIcon,
-            label: () => $t('transactions.gotoLinkedPair') || 'Go to linked pair',
-            visible: (d: DisplayRow) => d.tx.related_transaction_id != null,
-            onClick: (d) => onLinkedPairClick?.(d.tx),
-        },
         {
             id: 'edit',
             icon: Pencil,
@@ -570,6 +605,7 @@
     /**
      * Click delegation for inline buttons rendered by HtmlCell:
      * - `data-tx-event` → open event popover (Round 2)
+     * - `data-tx-link`  → go to linked pair (scroll + pulse)
      * Type-icon navigation is now handled via native <a> tags (no delegation needed).
      */
 
@@ -581,6 +617,14 @@
             const id = Number(eventBtn.getAttribute('data-tx-event'));
             const tx = displayRows.find((d) => d.tx.id === id)?.tx;
             if (tx) onEventBadgeClick?.(tx);
+            ev.stopPropagation();
+            return;
+        }
+        const linkBtn = target.closest('[data-tx-link]') as HTMLElement | null;
+        if (linkBtn) {
+            const id = Number(linkBtn.getAttribute('data-tx-link'));
+            const tx = displayRows.find((d) => d.tx.id === id)?.tx;
+            if (tx) onLinkedPairClick?.(tx);
             ev.stopPropagation();
             return;
         }
@@ -738,11 +782,12 @@
         .dark .tx-table-wrap .tx-cash-code {
             color: #cbd5e1;
         }
-        /* Event dot: dedicated column between type and broker. */
-        .tx-table-wrap .tx-event-cell {
+        /* Links column: event dot + chain icon side by side. */
+        .tx-table-wrap .tx-links-cell {
             display: flex;
             justify-content: center;
             align-items: center;
+            gap: 0.375rem;
             width: 100%;
         }
         .tx-table-wrap .tx-event-dot {
@@ -762,6 +807,26 @@
         .dark .tx-table-wrap .tx-event-dot {
             background: rgb(196 181 253);
             box-shadow: 0 0 0 2px rgb(196 181 253 / 0.22);
+        }
+        /* Link chain icon: clickable button for linked pair navigation. */
+        .tx-table-wrap .tx-link-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.25rem;
+            height: 1.25rem;
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            border: 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            line-height: 1;
+            transition: transform 0.12s ease;
+        }
+        .tx-table-wrap .tx-link-icon:hover {
+            transform: scale(1.2);
         }
         /* Tag badges: colored chips, one per tag, deterministic palette. */
         .tx-table-wrap .tx-tag-list {
@@ -787,12 +852,17 @@
             color: var(--badge-dark-text, #e2e8f0);
             box-shadow: 0 0 0 1px color-mix(in srgb, var(--badge-dark-text, #e2e8f0) 22%, transparent);
         }
-        /* Ghost rows: violet tint (overrides broker tint). */
-        .tx-table-wrap tr.tx-row-ghost > td {
-            background: rgb(245 243 255 / 0.7) !important;
+        /* Pair direction arrows: ⬇ (giver) / ⬆ (receiver) in Links column. */
+        .tx-table-wrap .tx-pair-arrow {
+            font-size: 0.75rem;
+            line-height: 1;
+            opacity: 0.55;
+            pointer-events: none;
         }
-        .dark .tx-table-wrap tr.tx-row-ghost > td {
-            background: rgb(76 29 149 / 0.2) !important;
+        /* Ghost rows: subtle opacity to distinguish context-only partner rows
+           while keeping the broker tint uniform with other rows. */
+        .tx-table-wrap tr.tx-row-ghost > td {
+            opacity: 0.7;
         }
         .tx-table-wrap tr.tx-row-highlight {
             animation: txPulse 1.4s ease-in-out 1;
