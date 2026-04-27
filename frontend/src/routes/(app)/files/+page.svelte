@@ -233,7 +233,7 @@
     async function loadBrokers() {
         try {
             brokers = (await zodiosApi.list_brokers_api_v1_brokers_get()) as Broker[];
-            brokerMap = new Map(brokers.map((b) => [b.id, {id: b.id, name: b.name}]));
+            brokerMap = new Map(brokers.map((b) => [b.id, {id: b.id, name: b.name, icon_url: (b as any).icon_url ?? null, portal_url: (b as any).portal_url ?? null}]));
             // If no filter selected, select all brokers by default
             if (selectedBrokerIds.size === 0 && brokers.length > 0) {
                 selectedBrokerIds = new Set(brokers.map((b) => b.id));

@@ -28,7 +28,7 @@
     import TransactionTypeBadge from './TransactionTypeBadge.svelte';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
-    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/currencyStore';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
     import {getStringBadgeStyle} from '$lib/utils/colors';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
@@ -39,6 +39,7 @@
     void Hash;
     void LinkIcon;
     void TransactionTypeBadge;
+    void $currencyStoreVersion;
 
     // Hydrate stores used by the cell renderers.
     void ensureAssetsLoaded();
@@ -341,16 +342,6 @@
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    /** Detect coarse pointer (touch-first device) once per script load. */
-    let isCoarsePointer = $state(false);
-    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-        try {
-            isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
-        } catch {
-            isCoarsePointer = false;
-        }
-    }
-
     let columns = $derived<ColumnDef<DisplayRow>[]>([
         {
             id: 'date',
@@ -365,11 +356,11 @@
             id: 'typeIcon',
             header: () => $t('transactions.table.type'),
             type: 'enum',
-            width: 64,
+            width: 90,
             sortable: true,
             filterable: true,
             urlKey: 'types',
-            enumOptions: TX_TYPES.map((tt) => ({value: tt, label: $t(`transactions.types.${tt}`) || tt, iconUrl: getTransactionTypeIconUrl(tt)})),
+            enumOptions: TX_TYPES.filter((tt) => mainRows.some((r) => r.type === tt)).map((tt) => ({value: tt, label: $t(`transactions.types.${tt}`) || tt, iconUrl: getTransactionTypeIconUrl(tt)})),
             getValue: (d) => d.tx.type,
             cell: (d) => {
                 const label = $t(`transactions.types.${d.tx.type}`) || d.tx.type;
@@ -377,8 +368,52 @@
                 const docUrl = getTxTypeDocUrl(d.tx.type, $locale ?? 'en');
                 return {
                     type: 'html',
-                    html: `<button type="button" class="tx-type-icon-link" data-tx-type-doc="${escapeHtml(docUrl)}" data-testid="tx-type-icon-${d.tx.id}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" class="tx-type-icon" /></button>`,
+                    html: `<a href="${escapeHtml(docUrl)}" target="_blank" rel="noopener noreferrer" class="tx-type-icon-link" data-testid="tx-type-icon-${d.tx.id}" aria-label="${escapeHtml(label)}"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" class="tx-type-icon" /></a>`,
                     tooltip: {text: label, position: 'top'},
+                };
+            },
+        },
+        {
+            id: 'quantity',
+            header: () => $t('transactions.table.quantity'),
+            type: 'number',
+            width: 110,
+            getValue: (d) => Number(d.tx.quantity),
+            cell: (d) => formatQty(d.tx.quantity, d.isReceiver),
+        },
+        {
+            id: 'cash',
+            header: () => $t('transactions.table.cash'),
+            type: 'currency-stack',
+            width: 160,
+            urlKey: 'cash',
+            getValue: (d) => (d.tx.cash ? Number(d.tx.cash.amount) : 0),
+            getCurrencyValue: (d) => (d.tx.cash ? {code: d.tx.cash.code, amount: Number(d.tx.cash.amount)} : null),
+            cell: (d) => {
+                void $currencyStoreVersion;
+                if (!d.tx.cash) return '—';
+                const code = d.tx.cash.code;
+                const n = Number(d.tx.cash.amount);
+                const info = getCurrencyInfo(code);
+                const symbol = info.symbol ?? '';
+                // Avoid showing the code twice: if we have a real symbol (not == code), show "amount symbol flag"
+                // Otherwise show "amount flag code"
+                const hasRealSymbol = symbol !== '' && symbol !== code;
+                const sign = n > 0 ? '+' : '';
+                const abs = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                const formatted = `${sign}${n < 0 ? '-' : ''}${abs}`;
+                const flagHtml = info.flag_emoji && info.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${info.flag_emoji}</span>` : '';
+                let suffixHtml: string;
+                if (hasRealSymbol) {
+                    // Show: "+1,234.56 € 🇪🇺" (no code)
+                    suffixHtml = `<span class="tx-cash-symbol">${escapeHtml(symbol)}</span> ${flagHtml}`;
+                } else {
+                    // Show: "+1,234.56 🇺🇸USD" (flag + code, no duplication)
+                    suffixHtml = `${flagHtml}<span class="tx-cash-code">${escapeHtml(code)}</span>`;
+                }
+                return {
+                    type: 'html',
+                    html: `<span class="tx-cash-cell" data-testid="tx-cash-cell-${d.tx.id}" title="${escapeHtml(formatCash(d.tx.cash))}"><span class="tx-cash-amount">${escapeHtml(formatted)}</span> ${suffixHtml}</span>`,
                 };
             },
         },
@@ -395,34 +430,8 @@
                 const tip = eventTooltipText(d.tx.asset_event_id);
                 return {
                     type: 'html',
-                    html: `<div class="tx-event-cell"><button type="button" class="tx-event-dot" data-tx-event="${d.tx.id}" data-testid="tx-event-dot-${d.tx.id}" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}"></button></div>`,
-                };
-            },
-        },
-        {
-            id: 'broker',
-            header: () => $t('transactions.table.broker'),
-            type: 'enum',
-            width: 160,
-            urlKey: 'broker_id',
-            enumOptions: brokers.map((b) => {
-                let iconUrl: string | null = null;
-                if (b.icon_url?.trim()) iconUrl = b.icon_url;
-                else if (b.portal_url?.trim()) {
-                    try {
-                        iconUrl = new URL(b.portal_url).origin + '/favicon.ico';
-                    } catch {}
-                }
-                return {value: String(b.id), label: b.name ?? `#${b.id}`, iconUrl: iconUrl ?? undefined};
-            }),
-            getValue: (d) => String(d.tx.broker_id),
-            cell: (d) => {
-                const name = brokerName(d.tx.broker_id);
-                const iconSrc = brokerIconUrl(d.tx.broker_id);
-                const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" class="tx-broker-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="tx-broker-dot" style="display:none"></span>` : `<span class="tx-broker-dot"></span>`;
-                return {
-                    type: 'html',
-                    html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}" title="${escapeHtml(name)}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span></span>`,
+                    html: `<div class="tx-event-cell"><button type="button" class="tx-event-dot" data-tx-event="${d.tx.id}" data-testid="tx-event-dot-${d.tx.id}" aria-label="${escapeHtml(tip)}"></button></div>`,
+                    tooltip: {text: tip, position: 'top'},
                 };
             },
         },
@@ -450,33 +459,30 @@
             },
         },
         {
-            id: 'quantity',
-            header: () => $t('transactions.table.quantity'),
-            type: 'number',
-            width: 110,
-            getValue: (d) => Number(d.tx.quantity),
-            cell: (d) => formatQty(d.tx.quantity, d.isReceiver),
-        },
-        {
-            id: 'cash',
-            header: () => $t('transactions.table.cash'),
-            type: 'currency-stack',
+            id: 'broker',
+            header: () => $t('transactions.table.broker'),
+            type: 'enum',
             width: 160,
-            urlKey: 'cash',
-            getValue: (d) => (d.tx.cash ? Number(d.tx.cash.amount) : 0),
-            getCurrencyValue: (d) => (d.tx.cash ? {code: d.tx.cash.code, amount: Number(d.tx.cash.amount)} : null),
+            urlKey: 'broker_id',
+            enumOptions: brokers.map((b) => {
+                let iconUrl: string | null = null;
+                if (b.icon_url?.trim()) iconUrl = b.icon_url;
+                else if (b.portal_url?.trim()) {
+                    try {
+                        iconUrl = new URL(b.portal_url).origin + '/favicon.ico';
+                    } catch {}
+                }
+                const color = getBrokerColor(b.id, brokers);
+                return {value: String(b.id), label: b.name ?? `#${b.id}`, iconUrl: iconUrl ?? undefined, dotColor: iconUrl ? undefined : color.bg};
+            }),
+            getValue: (d) => String(d.tx.broker_id),
             cell: (d) => {
-                if (!d.tx.cash) return '—';
-                const code = d.tx.cash.code;
-                const n = Number(d.tx.cash.amount);
-                const info = getCurrencyInfo(code);
-                const symbol = info.symbol ?? '';
-                const sign = n > 0 ? '+' : '';
-                const abs = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                const formatted = `${sign}${n < 0 ? '-' : ''}${abs}`;
+                const name = brokerName(d.tx.broker_id);
+                const iconSrc = brokerIconUrl(d.tx.broker_id);
+                const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" class="tx-broker-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="tx-broker-dot" style="display:none"></span>` : `<span class="tx-broker-dot"></span>`;
                 return {
                     type: 'html',
-                    html: `<span class="tx-cash-cell" data-testid="tx-cash-cell-${d.tx.id}" title="${escapeHtml(formatCash(d.tx.cash))}"><span class="tx-cash-amount">${escapeHtml(formatted)}</span> <span class="tx-cash-symbol">${escapeHtml(symbol)}</span> <span class="emoji-flag">${info.flag_emoji ?? ''}</span><span class="tx-cash-code">${escapeHtml(code)}</span></span>`,
+                    html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}" title="${escapeHtml(name)}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span></span>`,
                 };
             },
         },
@@ -528,22 +534,9 @@
 
     /**
      * Click delegation for inline buttons rendered by HtmlCell:
-     * - `data-tx-link` → goto linked pair
      * - `data-tx-event` → open event popover (Round 2)
-     * - `data-tx-type-doc` → open mkdocs doc page (desktop click,
-     *   mobile dblclick / long-press only — see pointer handlers below)
+     * Type-icon navigation is now handled via native <a> tags (no delegation needed).
      */
-    let pressTimer: ReturnType<typeof setTimeout> | null = null;
-    let longPressFired = false;
-    let pressTargetUrl: string | null = null;
-
-    function openInNewTab(url: string) {
-        try {
-            window.open(url, '_blank', 'noopener,noreferrer');
-        } catch {
-            /* no-op */
-        }
-    }
 
     function handleTableClick(ev: MouseEvent) {
         const target = ev.target as HTMLElement | null;
@@ -556,62 +549,12 @@
             ev.stopPropagation();
             return;
         }
-        const docBtn = target.closest('[data-tx-type-doc]') as HTMLElement | null;
-        if (docBtn) {
-            const url = docBtn.getAttribute('data-tx-type-doc') ?? '';
-            // Mobile/touch: ignore single tap (dblclick or long-press handle it).
-            if (isCoarsePointer) {
-                ev.preventDefault();
-                ev.stopPropagation();
-                return;
-            }
-            // Desktop: single click opens.
-            if (url) openInNewTab(url);
-            ev.stopPropagation();
-            return;
-        }
-    }
-
-    function handleTableDblClick(ev: MouseEvent) {
-        if (!isCoarsePointer) return;
-        const target = ev.target as HTMLElement | null;
-        if (!target) return;
-        const docBtn = target.closest('[data-tx-type-doc]') as HTMLElement | null;
-        if (docBtn) {
-            const url = docBtn.getAttribute('data-tx-type-doc') ?? '';
-            if (url) openInNewTab(url);
-            ev.stopPropagation();
-        }
-    }
-
-    function handleTablePointerDown(ev: PointerEvent) {
-        if (!isCoarsePointer) return;
-        const target = ev.target as HTMLElement | null;
-        if (!target) return;
-        const docBtn = target.closest('[data-tx-type-doc]') as HTMLElement | null;
-        if (!docBtn) return;
-        pressTargetUrl = docBtn.getAttribute('data-tx-type-doc');
-        longPressFired = false;
-        if (pressTimer) clearTimeout(pressTimer);
-        pressTimer = setTimeout(() => {
-            longPressFired = true;
-            if (pressTargetUrl) openInNewTab(pressTargetUrl);
-        }, 500);
-    }
-
-    function handleTablePointerEnd() {
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-        }
-        pressTargetUrl = null;
-        longPressFired = false;
     }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="tx-table-wrap" data-testid="tx-table" onclick={handleTableClick} ondblclick={handleTableDblClick} onpointerdown={handleTablePointerDown} onpointerup={handleTablePointerEnd} onpointercancel={handleTablePointerEnd} onpointerleave={handleTablePointerEnd}>
+<div class="tx-table-wrap" data-testid="tx-table" onclick={handleTableClick}>
     <DataTable
         bind:this={tableRef}
         data={visibleRows}
@@ -626,6 +569,7 @@
         enableColumnVisibility={true}
         enableColumnFilters={true}
         enableSorting={true}
+        stickyActions={false}
         emptyMessage={$t('transactions.empty') || 'No transactions yet'}
         {getRowClass}
         {getRowStyle}
@@ -636,7 +580,7 @@
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
     />
 
-    {#if totalPages > 1}
+    {#if displayRows.length > 0}
         <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={displayRows.length} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
     {/if}
 </div>
@@ -708,6 +652,7 @@
             border-radius: 4px;
             cursor: pointer;
             line-height: 1;
+            text-decoration: none;
             transition:
                 transform 0.12s ease,
                 background-color 0.12s ease;

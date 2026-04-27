@@ -61,6 +61,8 @@
         tableLayout?: 'fixed' | 'auto';
         /** Optional predicate: if returns false, row checkbox is hidden and row is excluded from bulk select */
         isRowSelectable?: (row: T) => boolean;
+        /** Whether the actions column is sticky (default: true) */
+        stickyActions?: boolean;
     }
 
     let {
@@ -95,6 +97,7 @@
         getRowStyle,
         tableLayout = 'fixed',
         isRowSelectable,
+        stickyActions = true,
     }: Props = $props();
 
     // Derived: effective selection mode
@@ -402,6 +405,22 @@
             for (const v of vals) if (v != null && v !== '') all.add(String(v));
         }
         return [...all].sort((a, b) => a.localeCompare(b)).map((v) => ({value: v, label: v}));
+    }
+
+    /**
+     * Enrich enum options with count of matching rows in `data` and filter out
+     * options that have zero rows. This ensures the filter dropdown only shows
+     * types/values that actually exist in the current dataset.
+     */
+    function getEnumOptionsWithCounts(column: ColumnDef<T>): EnumOption[] {
+        const opts = column.enumOptions ?? [];
+        if (opts.length === 0) return opts;
+        const counts = new Map<string, number>();
+        for (const row of data) {
+            const v = column.getValue ? String(column.getValue(row) ?? '') : '';
+            counts.set(v, (counts.get(v) ?? 0) + 1);
+        }
+        return opts.map((o) => ({...o, count: counts.get(o.value) ?? 0})).filter((o) => o.count > 0);
     }
 
     /**
@@ -960,7 +979,7 @@
                                 <!-- Filter popover -->
                                 {#if openFilterColumnId === column.id}
                                     {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column) : {min: 0, max: 100}}
-                                    {@const dynamicEnumOptions = column.type === 'multi-enum' ? getMultiEnumOptions(column) : (column.enumOptions ?? [])}
+                                    {@const dynamicEnumOptions = column.type === 'multi-enum' ? getMultiEnumOptions(column) : column.type === 'enum' ? getEnumOptionsWithCounts(column) : (column.enumOptions ?? [])}
                                     {@const currencyOptions = column.type === 'currency-stack' ? getCurrencyOptions(column) : []}
                                     <DataTableColumnFilter
                                         type={column.type}
@@ -980,7 +999,7 @@
 
                     <!-- Actions column -->
                     {#if enableActions && rowActions.length > 0}
-                        <th class="th-fixed th-actions" style="width: {actionsColumnWidth};">
+                        <th class="{stickyActions ? 'th-fixed' : ''} th-actions" style="width: {actionsColumnWidth};">
                             {$t('table.actions') || 'Actions'}
                         </th>
                     {/if}
@@ -1187,7 +1206,7 @@
 
                             <!-- Actions cell -->
                             {#if enableActions && rowActions.length > 0}
-                                <td class="td-fixed td-actions">
+                                <td class="{stickyActions ? 'td-fixed' : ''} td-actions">
                                     <div class="actions-row">
                                         {#each rowActions as action}
                                             {#if !action.visible || action.visible(row)}

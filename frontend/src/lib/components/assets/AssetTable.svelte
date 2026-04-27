@@ -11,10 +11,11 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
-    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
 
     // =========================================================================
@@ -156,18 +157,24 @@
                 id: 'lastPrice',
                 header: () => $t('assets.table.lastPrice'),
                 cell: (row) => {
+                    void $currencyStoreVersion;
                     const live = livePriceMap.get(row.id);
                     const price = live?.value ?? row.lastPrice;
                     if (price == null) return '—';
                     const dir = live?.direction ?? 'neutral';
                     const colorCls = dir === 'up' ? 'text-emerald-600 dark:text-emerald-400' : dir === 'down' ? 'text-red-500 dark:text-red-400' : '';
-                    const info = getCurrencyInfo(row.currency);
+                    const inner = formatCurrencyAmountHtml(price, row.currency);
                     return {
                         type: 'html',
-                        html: `<span class="font-mono transition-colors duration-300 ${colorCls}">${Number(price).toFixed(2)}</span> <span class="emoji-flag text-xs">${info.flag_emoji}</span> <span class="text-xs text-gray-400">${row.currency}</span>`,
+                        html: `<span class="font-mono transition-colors duration-300 ${colorCls}">${inner}</span>`,
                     };
                 },
-                type: 'number',
+                type: 'currency-stack',
+                getCurrencyValue: (row) => {
+                    const live = livePriceMap.get(row.id);
+                    const price = live?.value ?? row.lastPrice;
+                    return price != null ? {code: row.currency, amount: price} : null;
+                },
                 getValue: (row) => livePriceMap.get(row.id)?.value ?? row.lastPrice ?? 0,
                 width: 150,
                 minWidth: 100,

@@ -13,6 +13,7 @@
  * @module stores/currencyStore
  */
 import {zodiosApi} from '$lib/api';
+import {writable} from 'svelte/store';
 
 // ============================================================================
 // TYPES
@@ -38,6 +39,17 @@ let loading = false;
 let loadPromise: Promise<void> | null = null;
 /** Language used for the last successful load — used to detect language changes. */
 let lastLoadedLanguage: string = '';
+
+/**
+ * Reactive version counter — incremented every time the currency data changes.
+ * Subscribe in components (`void $currencyStoreVersion`) to retrigger derived
+ * computations that call `getCurrencyInfo()`.
+ */
+export const currencyStoreVersion = writable(0);
+
+function bumpVersion() {
+    currencyStoreVersion.update((v) => v + 1);
+}
 
 // ============================================================================
 // PUBLIC API
@@ -80,6 +92,7 @@ export async function ensureCurrenciesLoaded(language: string = 'en'): Promise<v
             currencyMap = new Map(allCurrencies.map((c) => [c.code, c]));
             loaded = true;
             lastLoadedLanguage = language;
+            bumpVersion();
         } catch (e) {
             console.error('Failed to load currencies:', e);
         } finally {

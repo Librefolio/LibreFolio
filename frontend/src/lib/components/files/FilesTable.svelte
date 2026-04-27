@@ -179,6 +179,24 @@
         return getIndexColor(brokerId, 120);
     }
 
+    /** Resolve best icon URL for a broker: icon_url → portal favicon → null */
+    function getBrokerIconUrl(brokerId: number): string | null {
+        if (!brokers) return null;
+        const b = brokers.get(brokerId);
+        if (!b) return null;
+        if (b.icon_url?.trim()) return b.icon_url;
+        if (b.portal_url?.trim()) {
+            try {
+                return new URL(b.portal_url).origin + '/favicon.ico';
+            } catch {}
+        }
+        return null;
+    }
+
+    function escapeHtml(s: string): string {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function getBrokerBadgeStyle(file: FileData): string | undefined {
         if (type !== 'brim') return undefined;
         const brimFile = file as BrimFile;
@@ -229,20 +247,34 @@
                     cell: (row) => {
                         const name = getBrokerName(row);
                         if (name === '-') return '-';
-                        // Return styled badge for broker
+                        const brimFile = row as BrimFile;
+                        const brokerId = safeNumber(brimFile.target_broker_id);
+                        const iconSrc = brokerId ? getBrokerIconUrl(brokerId) : null;
+                        if (iconSrc) {
+                            return {
+                                type: 'html' as const,
+                                html: `<span class="broker-cell" title="${escapeHtml(name)}"><img src="${escapeHtml(iconSrc)}" alt="" class="broker-cell-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="broker-cell-dot" style="display:none;background:${getBrokerColor(brokerId!).bg}"></span><span class="broker-cell-name">${escapeHtml(name)}</span></span>`,
+                            };
+                        }
+                        // No icon — show colored dot + name
+                        const dotColor = brokerId ? getBrokerColor(brokerId).bg : '#94a3b8';
                         return {
-                            type: 'badge' as const,
-                            text: name,
-                            variant: 'default' as const,
-                            customStyle: getBrokerBadgeStyle(row),
+                            type: 'html' as const,
+                            html: `<span class="broker-cell" title="${escapeHtml(name)}"><span class="broker-cell-dot" style="background:${dotColor}"></span><span class="broker-cell-name">${escapeHtml(name)}</span></span>`,
                         };
                     },
                     type: 'enum',
-                    enumOptions: Array.from(brokers.values()).map((b) => ({
-                        value: String(b.id),
-                        label: b.name,
-                    })),
-                    width: 140,
+                    enumOptions: Array.from(brokers.values()).map((b) => {
+                        let iconUrl: string | null = null;
+                        if (b.icon_url?.trim()) iconUrl = b.icon_url;
+                        else if (b.portal_url?.trim()) {
+                            try {
+                                iconUrl = new URL(b.portal_url).origin + '/favicon.ico';
+                            } catch {}
+                        }
+                        return {value: String(b.id), label: b.name, iconUrl: iconUrl ?? undefined};
+                    }),
+                    width: 160,
                     getValue: (row) => String((row as BrimFile).target_broker_id || ''),
                 });
             }
@@ -428,3 +460,42 @@
 <div data-testid="files-table-{type}">
     <DataTable bind:this={dataTableRef} {bulkActions} {columns} data={files} emptyMessage={$t('uploads.noFiles')} getRowDisplayName={getFileName} getRowId={getFileId} {initialFilters} {onFiltersChange} {onSelectionChange} {rowActions} storageKey="filesTable_{type}" tableLayout="auto" />
 </div>
+
+<style>
+    :global {
+        .broker-cell {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            max-width: 100%;
+            min-width: 0;
+        }
+        .broker-cell-icon {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 3px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+        .broker-cell-dot {
+            display: inline-block;
+            width: 0.625rem;
+            height: 0.625rem;
+            border-radius: 9999px;
+            flex-shrink: 0;
+            box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
+        }
+        .dark .broker-cell-dot {
+            box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
+        }
+        .broker-cell-name {
+            font-size: 0.8125rem;
+            color: inherit;
+            min-width: 0;
+            flex: 1 1 auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+</style>

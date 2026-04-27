@@ -514,12 +514,94 @@ Batch di fix in ordine di priorità:
   - Import aggiunto: `getAssetTypeIconUrl` da `$lib/utils/assetTypes`.
 - **C4 (W35) ⏳** — Colori dark mode: verifica visiva in corso; i valori CSS `color-mix` dark 38%/48% sono presenti e corretti, possibile problema di rendering nel contesto specifico — deferred a verifica visiva.
 - **C5 (W42, W43, W44) ✅** — Event dot: wrapper `<div class="tx-event-cell">` con flexbox centering; colonna `event` spostata tra `typeIcon` e `broker` nell'array `columns`; colonna `links` rimossa interamente; funzionalità `🔗` → row action `linked-pair` (icona Link2, visibile solo per TX con partner).
-- **C6 (W45) ✅** — Cash: cell rifatta come `<amount> <symbol> <flag><code>` con CSS dedicato; larghezza colonna 110→160px.
-- **C7 (W38) ✅** — Click delegation: rimosso handling `data-tx-link` (ora row action); handler `data-tx-type-doc` desktop verificato funzionante (single click → `openInNewTab`).
-- **C8 (W39, W40, W46) ✅** — Filtri enum con icone: `EnumOption` in `types.ts` esteso con `iconUrl?: string`; `DataTableColumnFilter` enum rende `<img class="enum-option-icon">` per opzioni con `iconUrl`; CSS `.enum-option-icon` (1rem, 2px border-radius); TX `typeIcon` enumOptions include `iconUrl: getTransactionTypeIconUrl(tt)`; broker `enumOptions` include `iconUrl` dalla chain broker. Select All/Clear All erano già presenti. Cablaggio `/files` deferred a Round 2.
+- **C6 (W52, W51) ✅** — Cash cell refactor: eliminare duplicazione codice valuta, fix flag async
+- **C7 (W50) ✅** — BrokerBadge component generalizzato + cablare in `/files?tab=brim`
+- **C8 (W53) ⏳** — FilterPanel generico per asset, broker, tag nella tabella TX
+- **C9 (W56) ✅** — Mobile responsive: iconizzare pulsanti Import/Add su schermi piccoli
 
-**Validazione**: `./dev.py front format` → 1 file formatted (TransactionsTable); `./dev.py front check` → 0/0 ✅; `./dev.py i18n audit` → 940 keys, 0 incomplete ✅.
+---
 
-**Residui aperti Round 1.3**:
-- **W35** ⏳ — Colori dark mode: verifica visiva pending (serve server running).
-- **W46** ⏳ (parziale) — `/files?tab=brim` broker icon: `EnumOption.iconUrl` è pronto ma il cablaggio nella pagina files è deferred a Round 2.
+## 🔁 Walkthrough Round 1.4 — Feedback post-walkthrough visivo (2026-04-27)
+
+| ID | Severity | Descrizione | Action | Status |
+|----|----------|-------------|--------|--------|
+| W47 | ⚠ UX | Filtro broker: quando il broker non ha icona c'è uno spazio bianco fastidioso. Servire il puntino colorato come fallback (identico alla cella broker nella tabella). | Aggiungere dot colorato inline nell'enum option del filtro broker quando `iconUrl` è assente. | ⏳ |
+| W48 | ⚠ UX | Filtro prezzo multi-valuta (`currency-stack`) esteso anche alla tabella `/assets/` nella colonna "ultimo prezzo". Formattare i numeri come in transactions: `[simbolo]|bandiera|iso3`. | Modificare `AssetTable.svelte` colonna `lastPrice`: tipo `currency-stack`, aggiungere `getCurrencyValue`, formattare cella con simbolo/bandiera/codice come in TX. | ⏳ |
+| W49 | ❌ bug | In `/assets/` manca il titolo tradotto della colonna `name` (`assets.table.name`). Header sparito. | Verificare che `header: () => $t('assets.table.name')` sia nello column def `name`. | ⏳ |
+| W50 | ❌ bug | Paginazione non mostrata in `/transactions` nonostante 21 TX. Custom paginator `totalPages > 1` ma `pageSize` default 50 ≥ 21 → 1 pagina sola → nascosta. L'utente si aspetta di **vederla sempre** (come feedback per "tot risultati"). | Mostrare `DataTablePagination` sempre (condizione `displayRows.length > 0`). | ⏳ |
+| W51 | ⚠ UX | Icona tipo TX: ha tooltip in `title` HTML nativo ma deve usare `Tooltip.svelte`. Desktop: hover=tooltip, click→doc wiki. Mobile: click=tooltip, longpress→doc. | Rimuovere `title` HTML, usare `tooltip` nella HtmlCell per typeIcon. Riadattare click delegation: desktop click→doc (non bloccato da Tooltip perché Tooltip non fa stopPropagation su hover-only), mobile touch→tooltip (Tooltip gestisce), longpress→doc. | ⏳ |
+| W52 | ⚠ UX | Evento tooltip mostra solo "Linked event" generico. Il piano originale prevedeva bulk event query `POST /assets/events/query` con `{ids}` per alimentare `eventTooltipMap`. Feature mancante nel backend (non esiste endpoint by-event-id) — da implementare come `GET /assets/events?ids=...` o bulk query variant. | **Missing feature backend**: occorre endpoint per recuperare eventi per ID. Frontend: aggiornare `loadEventTooltipMap` per usare endpoint reale. Deferred Round 2 se endpoint non disponibile. | ⏳ deferred |
+| W53 | ⚠ UX | Colonna `actions` sempre visibile/sticky. Solo la colonna `select` deve essere sticky; `actions` deve scrollare con le altre colonne. | In `TransactionsTable.svelte` configurare DataTable: actions non sticky. Verificare se DataTable supporta non-sticky actions (probabilmente va aggiunto prop `stickyActions?: boolean`). | ⏳ |
+| W54 | ⚠ UX | Asset collegati (linked assets) creati in DB population non mostrati nel frontend come pianificato nel piano originale (Step 5, ghost row con chip etc.). Da verificare se i dati sono presenti e se la logica di rendering funziona. | Verificare `populate_mock_data.py` per TX con `related_transaction_id` e testare visivamente la ghost row. Se i dati mancano → aggiungere TX linked in mocking. | ⏳ verify |
+| W55 | ⚠ UX mobile | Pulsanti header (refresh, vis toggle, import, add) disallineati in mobile: tooltip a destra, icone decentrate e troppo larghe. Upload e Add devono avere icone centrate, padding uniforme. | Uniformare classi CSS: `flex items-center justify-center gap-1 px-2.5 py-1.5` su tutti i bottoni azione. | ⏳ |
+| W56 | 🔍 refactor | Codice duplicato: logica cash cell (`formatCash` + `getCurrencyInfo` + symbol/flag rendering) è identica tra TX e assets — fattorizzare in helper `formatCurrencyAmount()` riusabile. Broker icon chain (inline HTML con onerror) duplicata tra TransactionsTable broker cell e enum options e files — fattorizzare `brokerIconHtml()`. | Creare `$lib/utils/currencyFormat.ts` con `formatCurrencyAmount()` e `$lib/utils/brokerHelpers.ts` con `brokerIconHtml()`. | ⏳ |
+
+### Fix plan Round 1.4
+
+Batch di fix in ordine di priorità:
+
+- **C1 (W55) ✅** — Riordinato array `columns` in `TransactionsTable.svelte`: `date → typeIcon → quantity → cash → event → asset → broker → tags`.
+- **C2 (W54) ⏳** — Dark mode: CSS rules per `.dark` già presenti (`.dark .tx-cash-amount`, `.dark .tx-tag-badge`, `.dark .tx-broker-dot`). Verifica visiva con server running pendente.
+- **C3 (W47) ✅** — Type column: `width` alzato a 90px. Aggiunto `getEnumOptionsWithCounts()` in `DataTable.svelte` che computa il count di righe per ogni enum option e filtra quelle con count=0. CSS `.enum-count` in `DataTableColumnFilter` per badge conteggio. `enumOptions` in TX usa `.filter(tt => mainRows.some(r => r.type === tt))`.
+- **C4 (W48) ✅** — Event tooltip: aggiunto `tooltip: {text: tip, position: 'top'}` alla cella HtmlCell dell'event dot. DataTable renderizza `<Tooltip>` wrapper quando `cellContent.tooltip` è presente.
+- **C5 (W49) ✅** — Type icon click → wiki: root cause era `Tooltip.toggle()` che chiama `event.stopPropagation()`, impedendo la delegation click su `tx-table-wrap`. Fix: rimosso `tooltip` dalla cella typeIcon (usa solo `title` attr HTML per tooltip nativo). Fix URL: `getTxTypeDocUrl()` ora costruisce URL assoluto `protocol://hostname:8000/mkdocs/...` quando si rileva la porta dev 5173.
+- **C6 (W52, W51) ✅** — Cash cell refactor:
+  - Eliminata duplicazione codice valuta: se esiste un simbolo reale (≠ codice), mostra `importo simbolo bandiera`; altrimenti `importo bandiera+codice`. Bandiera 🏳️ (fallback) omessa.
+  - Aggiunto `currencyStoreVersion` (Svelte `writable(0)` store) a `currencyStore.ts` — incrementato dopo ogni load. Cash cell fa `void $currencyStoreVersion` per forzare re-render quando il currency store carica async.
+- **C7 (W50) ✅** — BrokerBadge + FilesTable broker:
+  - Creato `BrokerBadge.svelte` generico (icon chain: `icon_url → portal_url/favicon.ico → dot colorato` + nome).
+  - Refact broker cell in `FilesTable.svelte`: da `badge` colorato a `html` con `<img>` + `onerror` fallback a dot. Broker `enumOptions` arricchite con `iconUrl`.
+  - `loadBrokers` in `/files/+page.svelte` ora mappa `icon_url` e `portal_url` nel `brokerMap`.
+- **C8 (W53) ⏳** — FilterPanel generico per asset, broker, tag: deferred Round 2 (richiede componente dedicato con search + checkbox list + count per tutti gli asset in DB).
+- **C9 (W56) ✅** — Mobile responsive: `<span>` testo di Import e Add Transaction wrappati con `hidden sm:inline` → icona-only su schermi <640px.
+
+**Validazione**: `./dev.py front format` → clean; `./dev.py front check` → 0/0 ✅; `./dev.py i18n audit` → 940 keys, 0 incomplete ✅.
+
+**Residui aperti Round 1.4**:
+- **W53** ⏳ — FilterPanel generico per asset, broker, tag (deferred Round 2).
+- **W54** ⏳ — Dark mode: verifica visiva pending (serve server running).
+
+
+---
+
+## 🔁 Walkthrough Round 1.5 — Feedback post-walkthrough visivo (2026-04-27)
+
+| ID | Severity | Descrizione | Action | Status |
+|----|----------|-------------|--------|--------|
+| W57 | ⚠ UX | Filtro broker: quando il broker non ha icona c'è uno spazio bianco fastidioso. Servire il puntino colorato come fallback (identico alla cella broker nella tabella). | Aggiunto `dotColor` a `EnumOption`; broker enumOptions con dot colorato quando iconUrl assente. CSS `.enum-option-dot` in DataTableColumnFilter. | ✅ C2 |
+| W58 | ⚠ UX | Filtro prezzo multi-valuta (`currency-stack`) esteso anche alla tabella `/assets/` nella colonna "ultimo prezzo". Formattare i numeri come in transactions: `[simbolo]|bandiera|iso3`. | Creato `$lib/utils/currencyFormat.ts` con `formatCurrencyAmountHtml()`. AssetTable lastPrice ora `type:'currency-stack'` con `getCurrencyValue`, formattazione unificata. | ✅ C3 |
+| W59 | ❌ bug | In `/assets/` manca il titolo tradotto della colonna `name` (`assets.table.name`). Header sparito. | Chiave `assets.table.name` aggiunta in 4 lingue via `./dev.py i18n add`. | ✅ C4 |
+| W60 | ❌ bug | Paginazione non mostrata in `/transactions` nonostante 21 TX. Custom paginator `totalPages > 1` ma `pageSize` default 50 ≥ 21 → 1 pagina sola → nascosta. L'utente si aspetta di **vederla sempre** (come feedback per "tot risultati"). | Condizione cambiata a `displayRows.length > 0`. | ✅ C1 |
+| W61 | ⚠ UX | Icona tipo TX: ha tooltip in `title` HTML nativo ma deve usare `Tooltip.svelte`. Desktop: hover=tooltip, click→doc wiki. Mobile: click=tooltip, longpress→doc. | Rimosso `title` HTML, aggiunto `tooltip` nella HtmlCell. Type icon ora `<a href>` nativo (no click delegation). Rimossi handler dblclick/pointer/coarsePointer. | ✅ C5 |
+| W62 | ⚠ UX | Evento tooltip mostra solo "Linked event" generico. Il piano originale prevedeva bulk event query `POST /assets/events/query` con `{ids}` per alimentare `eventTooltipMap`. Feature mancante nel backend (non esiste endpoint by-event-id) — da implementare come `GET /assets/events?ids=...` o bulk query variant. | **Missing feature backend**: occorre endpoint per recuperare eventi per ID. Frontend: aggiornare `loadEventTooltipMap` per usare endpoint reale. Deferred Round 2 se endpoint non disponibile. | ⏳ deferred |
+| W63 | ⚠ UX | Colonna `actions` sempre visibile/sticky. Solo la colonna `select` deve essere sticky; `actions` deve scrollare con le altre colonne. | Aggiunto prop `stickyActions?: boolean` a DataTable (default true). TransactionsTable usa `stickyActions={false}`. | ✅ C6 |
+| W64 | ⚠ UX | Asset collegati (linked assets) creati in DB population non mostrati nel frontend come pianificato nel piano originale (Step 5, ghost row con chip etc.). Da verificare se i dati sono presenti e se la logica di rendering funziona. | Verificare `populate_mock_data.py` per TX con `related_transaction_id` e testare visivamente la ghost row. Se i dati mancano → aggiungere TX linked in mocking. | ⏳ verify |
+| W65 | ⚠ UX mobile | Pulsanti header (refresh, vis toggle, import, add) disallineati in mobile: tooltip a destra, icone decentrate e troppo larghe. Upload e Add devono avere icone centrate, padding uniforme. | Tutti i bottoni ora `flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs` con `size={15}` su icone. `ml-auto` allinea a destra. | ✅ C7 |
+| W66 | 🔍 refactor | Codice duplicato: logica cash cell (`formatCash` + `getCurrencyInfo` + symbol/flag rendering) è identica tra TX e assets — fattorizzare in helper `formatCurrencyAmount()` riusabile. Broker icon chain (inline HTML con onerror) duplicata tra TransactionsTable broker cell e enum options e files — fattorizzare `brokerIconHtml()`. | Creato `$lib/utils/currencyFormat.ts` con `formatCurrencyAmountHtml()`. Usato in AssetTable. TX usa ancora logica inline (da unificare in Round 2). | ✅ partial |
+
+### Fix plan Round 1.5
+
+Batch di fix in ordine di priorità:
+
+- **C1 (W60) ✅** — Pagination sempre visibile: condizione `displayRows.length > 0` anziché `totalPages > 1`.
+- **C2 (W57) ✅** — Broker filter dot fallback: aggiunto `dotColor` a `EnumOption` in `types.ts`. UI `DataTableColumnFilter` enum ora rende `.enum-option-dot` quando `dotColor` presente e `iconUrl` assente. CSS per dark mode. TransactionsTable broker `enumOptions` ora include `dotColor` = `getBrokerColor().bg` quando `iconUrl` è null.
+- **C3 (W58, W66) ✅** — Multi-currency price in assets table:
+  - Creato `$lib/utils/currencyFormat.ts` con `formatCurrencyAmountHtml()` (symbol/flag/code pattern unificato, no duplicazione).
+  - `AssetTable.svelte` lastPrice ora `type:'currency-stack'` con `getCurrencyValue`, formattazione via helper condiviso. Import `currencyStoreVersion` per re-render async.
+- **C4 (W59) ✅** — Asset table title: chiave `assets.table.name` aggiunta in EN/IT/FR/ES via `./dev.py i18n add`.
+- **C5 (W61) ✅** — Type icon tooltip con Tooltip.svelte:
+  - Cell typeIcon ora ha `tooltip: {text: label, position: 'top'}` e usa `<a href>` nativo per navigazione wiki.
+  - Rimossi handler `dblclick`/`pointerdown`/`pointerEnd` e `isCoarsePointer` detection (non più necessari).
+  - CSS aggiunto `text-decoration: none` su `.tx-type-icon-link`.
+- **C6 (W63) ✅** — Actions column non sticky: aggiunto prop `stickyActions?: boolean` (default `true`) a DataTable. TransactionsTable usa `stickyActions={false}`.
+- **C7 (W65) ✅** — Mobile buttons: tutti i bottoni con padding uniforme `px-2.5 py-1.5 text-xs`, icone `size={15}`, `justify-center gap-1`. Container con `ml-auto` per allineamento a destra.
+- **C8 (W62) ⏳ deferred** — Event tooltip con dati reali (richiede endpoint backend `GET /assets/events?ids=...`).
+- **C9 (W64) ⏳ verify** — Linked assets / ghost rows: verifica dati mock pendente.
+- **C10 (W66) ✅ partial** — Refactor codice duplicato: creato `currencyFormat.ts` condiviso. TX cash cell resta inline (da unificare in Round 2). Broker icon chain non ancora fattorizzata.
+
+**Validazione**: `./dev.py front format` → clean; `./dev.py front check` → 0/0 ✅; `./dev.py i18n audit` → 941 keys, 0 incomplete ✅.
+
+**Residui aperti Round 1.5**:
+- **W62** ⏳ — Event tooltip con dati reali (richiede endpoint backend).
+- **W64** ⏳ — Linked assets / ghost rows: verifica dati mock.
+- **W66** partial — brokerIconHtml() fattorizzazione + TX cash cell unificazione (Round 2).
