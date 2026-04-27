@@ -408,6 +408,21 @@
     }
 
     /**
+     * Enrich parent-provided enumOptions for multi-enum columns with counts
+     * from the current data. Uses column.enumOptions as the stable option list.
+     */
+    function getMultiEnumOptionsWithCounts(column: ColumnDef<T>): EnumOption[] {
+        const opts = column.enumOptions ?? [];
+        if (opts.length === 0) return opts;
+        const counts = new Map<string, number>();
+        for (const row of data) {
+            const vals = column.getMultiValue ? column.getMultiValue(row) : [];
+            for (const v of vals) counts.set(v, (counts.get(v) ?? 0) + 1);
+        }
+        return opts.map((o) => ({...o, count: counts.get(o.value) ?? 0}));
+    }
+
+    /**
      * Enrich enum options with count of matching rows in `data` and filter out
      * options that have zero rows. This ensures the filter dropdown only shows
      * types/values that actually exist in the current dataset.
@@ -985,8 +1000,9 @@
                                 <!-- Filter popover -->
                                 {#if openFilterColumnId === column.id}
                                     {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column) : {min: 0, max: 100}}
-                                    {@const dynamicEnumOptions = column.type === 'multi-enum' ? getMultiEnumOptions(column) : column.type === 'enum' ? getEnumOptionsWithCounts(column) : (column.enumOptions ?? [])}
-                                    {@const currencyOptions = column.type === 'currency-stack' ? getCurrencyOptions(column) : []}
+                                    {@const dynamicEnumOptions =
+                                        column.type === 'multi-enum' ? (column.enumOptions && column.enumOptions.length > 0 ? getMultiEnumOptionsWithCounts(column) : getMultiEnumOptions(column)) : column.type === 'enum' ? getEnumOptionsWithCounts(column) : (column.enumOptions ?? [])}
+                                    {@const currencyOptions = column.type === 'currency-stack' ? (column.currencyOptions ?? getCurrencyOptions(column)) : []}
                                     <DataTableColumnFilter
                                         type={column.type}
                                         enumOptions={dynamicEnumOptions}
@@ -1030,6 +1046,7 @@
                         {@const rowId = getRowId(row)}
                         {@const isSelected = rowSelection[rowId]}
                         <tr
+                            data-row-id={rowId}
                             class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
                             style={getRowStyle?.(row) ?? ''}
                             onclick={() => {
@@ -1225,7 +1242,7 @@
                                                         e.stopPropagation();
                                                         handleRowAction(action, row);
                                                     }}
-                                                    title={typeof action.label === 'function' ? (action.label as (r?: T) => string)(row) : action.label}
+                                                    title={typeof action.label === 'function' ? action.label(row) : action.label}
                                                 >
                                                     <action.icon size={16} class={action.iconClass?.(row) ?? ''} />
                                                 </button>

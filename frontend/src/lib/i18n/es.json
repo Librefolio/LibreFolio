@@ -473,7 +473,8 @@
       "quantity": "Cant.",
       "tags": "Etiquetas",
       "type": "Tipo",
-      "event": "Evento"
+      "event": "Evento",
+      "links": "Enlaces"
     },
     "types": {
       "ADJUSTMENT": "Ajuste",
@@ -495,7 +496,8 @@
       "draftPlural": "{n} borradores",
       "editedFmt": "{n} de {total} editadas"
     },
-    "refresh": "Recargar desde el servidor"
+    "refresh": "Recargar desde el servidor",
+    "noAsset": "(Sin activo)"
   },
   "fx": {
     "title": "Tipos de Cambio",

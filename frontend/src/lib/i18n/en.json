@@ -467,7 +467,8 @@
       "cash": "Cash",
       "broker": "Broker",
       "tags": "Tags",
-      "event": "Event"
+      "event": "Event",
+      "links": "Links"
     },
     "actions": {
       "edit": "Edit",
@@ -495,7 +496,8 @@
       "draftPlural": "{n} drafts",
       "editedFmt": "{n} of {total} edited"
     },
-    "refresh": "Refresh from server"
+    "refresh": "Refresh from server",
+    "noAsset": "(No asset)"
   },
   "fx": {
     "title": "FX Rates",
