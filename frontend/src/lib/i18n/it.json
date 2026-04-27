@@ -497,7 +497,14 @@
       "editedFmt": "{n} su {total} modificate"
     },
     "refresh": "Ricarica dal server",
-    "noAsset": "(Senza asset)"
+    "noAsset": "(Senza asset)",
+    "linkTooltip": {
+      "transferIn": "Ricevuto da {broker}",
+      "transferOut": "Inviato a {broker}",
+      "fxReceive": "Convertito da {currency}",
+      "fxSend": "Conversione in {currency}",
+      "generic": "Coppia collegata"
+    }
   },
   "fx": {
     "title": "Tassi di Cambio",

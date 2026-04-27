@@ -938,3 +938,87 @@ Con pair-adjacent rendering la riga partner è già visibile, ma scroll+pulse la
 | **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT |
 | ~~**Event badge click** (`onEventBadgeClick`)~~ | ✅ chiuso | Tooltip è già ricco (emoji+date+amount+notes+auto). Popover dedicato non aggiunge valore. Piano originale aggiornato. |
 
+---
+
+## Round 1.12 — Execution Report
+
+### Fixes implementati
+
+| # | Issue | Fix | Status |
+|---|-------|-----|--------|
+| C34 | Pulse 🔗 non funzionava: (a) `box-shadow` su `<tr>` non renderizza in tutti i browser, (b) catena reattiva `highlightId` → `getRowClass` → DataTable non propagava perché la function reference non cambiava, (c) querySelector non trovava ghost rows | Riscrittura completa: pulse ora via **manipolazione DOM diretta** (`classList.add/remove` + `offsetWidth` reflow). CSS animation spostata su `<td>`. Rimossa prop `highlightId` e campo `FilterMap.highlight_id` (non più necessari). | ✅ C34 |
+| C35 | Colori riga broker troppo sbiaditi — poco distinguibili tra broker diversi | Alzati valori `color-mix`: light 22%→**30%** (hover 32%→42%), dark 38%→**45%** (hover 48%→55%). Commento CSS con istruzioni "TUNE THESE VALUES" per regolazione rapida. | ✅ C35 |
+| C36 | Quantità senza indicazione visiva direzione (buy vs sell) | Aggiunto emoji 📈 dopo numeri positivi e 📉 dopo negativi in `formatQty()`. Zero/vuoto resta senza emoji. | ✅ C36 |
+| C37 | Dead code: import inutilizzati + sentinel `void` per componenti non più usati | Rimossi: `Calendar1`, `Hash`, `Link2 as LinkIcon`, `TransactionTypeBadge` import + relative sentinel `void`. JSDoc in testa aggiornato. | ✅ C37 |
+| C38 | Click delegation: click su 🔗 e ●evt intercettati troppo tardi (dopo DataTable `<tr onclick>` che togglava la selezione riga) | Click handler spostato in **capture phase** via Svelte action `use:captureClick` → `addEventListener('click', handler, true)`. `stopPropagation()` impedisce al click di raggiungere DataTable. | ✅ C38 |
+| C39 | Tooltip 🔗 generico ("Go to linked pair") — non spiega il tipo di legame | Nuovo `linkedPairTooltip(d)`: tooltip specifico per tipo TX. TRANSFER: `📥 Ricevuto da {broker}` / `📤 Inviato a {broker}`. FX_CONVERSION: `💱 Convertito da {currency}` / `Conversione in {currency}`. Generico: `🔗 Coppia collegata — Broker1 ↔ Broker2`. 5 chiavi i18n aggiunte (EN/IT/FR/ES). | ✅ C39 |
+
+### Dettagli implementativi
+
+**C34 — Pulse rewrite (root cause × 3)**:
+
+1. **CSS**: `box-shadow` su `<tr>` è inaffidabile — molti browser non renderizzano shadow su table rows. Fix: animazione spostata su `.tx-table-wrap tr.tx-row-highlight > td` (ogni cella dentro il `<tr>` ha la sua animation).
+
+2. **Reattività Svelte 5**: `getRowClass` è una funzione passata come prop a DataTable. Quando `highlightId` (prop di TransactionsTable) cambia, la **function reference** resta la stessa — DataTable non sa che deve ri-valutare `{getRowClass?.(row)}` nel template. La closure cattura `highlightId`, ma DataTable non tracked le dipendenze interne della closure.
+
+3. **querySelector**: cercava solo `[data-row-id="tx-${id}"]` ma ghost rows hanno `data-row-id="ghost-${id}"`.
+
+**Soluzione**: bypass completo della catena reattiva. `handleLinkedPairClick` manipola direttamente il DOM:
+```js
+el.classList.remove('tx-row-highlight');
+void el.offsetWidth;  // force reflow → restart animation
+el.classList.add('tx-row-highlight');
+el.scrollIntoView({behavior: 'smooth', block: 'center'});
+```
+
+Questo elimina la dipendenza dalla reattività per un effetto puramente visivo e temporaneo. La prop `highlightId` e il campo `FilterMap.highlight_id` sono stati rimossi completamente (cleanup: ~20 righe di boilerplate URL encoding/decoding).
+
+Anche `handlePromoteCommitted` è stato aggiornato: ora il pulse avviene dopo `reload().then(...)` via DOM diretto.
+
+**C35 — Broker tint tuning**: I valori sono nel CSS di TransactionsTable, sezione "Whole-row tint". Commento aggiunto: `── TUNE THESE VALUES to adjust row saturation ──`. Per regolare: modificare i `%` nelle funzioni `color-mix()`.
+
+**C36 — Quantity emoji**: `formatQty()` ora appends ` 📈` per n>0 e ` 📉` per n<0. Zero/non-finito resta `'0'` senza emoji.
+
+**C37 — Import cleanup**: Rimossi 4 import inutilizzati (`Calendar1`, `Hash`, `LinkIcon`, `TransactionTypeBadge`) e relative sentinel `void`. Erano residui di round precedenti quando la colonna links usava icone Lucide e il TransactionTypeBadge era nella cella type.
+
+**C38 — Click delegation capture phase**: Il click su 🔗 e ●evt non funzionava perché il click veniva intercettato prima dal `<tr onclick>` di DataTable (che gestisce la selezione riga). Soluzione: Svelte action `use:captureClick` attacca `addEventListener('click', handler, true)` in capture phase → il click arriva prima al nostro handler, che chiama `stopPropagation()` per impedire la propagazione verso DataTable.
+
+**C39 — Context-specific link tooltip**: Funzione `linkedPairTooltip(d)` costruisce un tooltip ricco basato su:
+- `d.tx.type` → determina il tipo di legame (TRANSFER, FX_CONVERSION, fallback generico)
+- `d.isReceiver` → direzione (in/out)
+- `partnerLookup` → nome broker partner e valuta partner
+Risultato:
+- TRANSFER giver: `📤 Inviato a Interactive Brokers`
+- TRANSFER receiver: `📥 Ricevuto da Coinbase`
+- FX_CONVERSION giver: `💱 Conversione in USD`
+- FX_CONVERSION receiver: `💱 Convertito da EUR`
+- Generico: `🔗 Coppia collegata — IBKR ↔ DEGIRO`
+
+### File modificati
+
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/transactions/TransactionsTable.svelte` | Pulse CSS su `<td>`, rmv prop `highlightId`, `formatQty` emoji, broker tint, cleanup imports, capture click delegation, `linkedPairTooltip()` |
+| `frontend/src/routes/(app)/transactions/+page.svelte` | Pulse via DOM diretto, rmv `FilterMap.highlight_id`, cleanup URL parse/build/effect |
+| `frontend/src/lib/i18n/{en,it,fr,es}.json` | 5 chiavi `transactions.linkTooltip.*` |
+
+### Validazione Round 1.12
+
+- Nessun errore reale in entrambi i file ✅
+- Warning CSS: false positive pre-esistenti (W80) ✅
+- Pulse: DOM diretto con capture phase + fallback ghost-id querySelector ✅
+- Broker tint: light 30%/42%, dark 45%/55% (regolabili via commento CSS) ✅
+- Quantità: `+1,234 📈` / `-56.78 📉` / `0` ✅
+- Link tooltip: specifico per tipo TX con emoji e broker/currency ✅
+- i18n: 5 chiavi `transactions.linkTooltip.*` in 4 lingue ✅
+
+### Residui aperti dopo Round 1.12
+
+| Issue | Stato | Note |
+|-------|-------|------|
+| **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | Chip interattivo con ✕/+ per rimuovere/aggiungere ghost row ai filtri — design da definire |
+| **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT |
+| **`escapeHtml()` × 4 copie** | ⏳ cleanup | Fattorizzare in `$lib/utils/escapeHtml.ts` e importare ovunque |
+| **`formatCash()` residuo** | ⏳ cleanup | Usato solo come `title` attr nella cash cell — sostituibile con `formatCurrencyAmountHtml().replace(/<[^>]*>/g, '')` |
+| **`onEventBadgeClick` dead handler** | ⏳ cleanup | Noop in `+page.svelte` + prop/delegation in TransactionsTable — rimuovere quando confermato non necessario |
+

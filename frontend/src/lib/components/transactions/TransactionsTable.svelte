@@ -12,8 +12,8 @@
     the Links column for each half of a pair.
   - Pair-never-split paginator: pairs are kept on the same page; if a pair would
     cross a page boundary it is pushed entirely to the next page.
-  - Columns: color-band (broker), date, type-badge, asset, qty, cash, broker,
-    tags, link-icon, event-icon. Selection + actions managed by DataTable.
+  - Columns: date, type-icon, quantity (📈/📉), cash, links (event dot + pair
+    arrows + 🔗), asset, broker, tags. Selection + actions managed by DataTable.
   - GoTo / row actions are emitted via callbacks; this component does not
     perform navigation or open modals on its own.
 
@@ -21,13 +21,11 @@
 -->
 <script lang="ts">
     import {_ as t, locale} from '$lib/i18n';
-    import {Calendar1, Hash, Link2 as LinkIcon, Pencil, Copy, Trash2} from 'lucide-svelte';
+    import {Pencil, Copy, Trash2} from 'lucide-svelte';
 
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
     import type {ColumnDef, FilterValue, RowAction} from '$lib/components/table/types';
-
-    import TransactionTypeBadge from './TransactionTypeBadge.svelte';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
     import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/currencyStore';
@@ -39,11 +37,7 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getEventTypeEmoji} from '$lib/utils/eventTypes';
 
-    // Sentinel keep-imports (used in HTML cells / hover targets but not statically referenced).
-    void Calendar1;
-    void Hash;
-    void LinkIcon;
-    void TransactionTypeBadge;
+    // Sentinel keep-imports (used in reactive expressions but not statically referenced).
     void $currencyStoreVersion;
 
     // Hydrate stores used by the cell renderers.
@@ -104,8 +98,6 @@
         currentPage?: number;
         /** Target page size — pairs may push effective size to N±1. Default 50. */
         pageSize?: number;
-        /** Highlighted row id (CSS pulse). Cleared after the animation runs. */
-        highlightId?: number | null;
         onSelectionChange?: (rows: TXReadItem[]) => void;
         onLinkedPairClick?: (row: TXReadItem) => void;
         onEventBadgeClick?: (row: TXReadItem) => void;
@@ -128,7 +120,6 @@
         eventTooltipMap = new Map(),
         currentPage = 1,
         pageSize = 50,
-        highlightId = null,
         onSelectionChange,
         onLinkedPairClick,
         onEventBadgeClick,
@@ -334,7 +325,8 @@
         const n = Number(q);
         if (!Number.isFinite(n) || n === 0) return '0';
         const formatted = n.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
-        return n > 0 ? `+${formatted}` : formatted;
+        const emoji = n > 0 ? ' 📈' : ' 📉';
+        return `${n > 0 ? '+' : ''}${formatted}${emoji}`;
     }
 
     function formatCash(cash: TXReadItem['cash']): string {
@@ -360,6 +352,33 @@
         return parts.join(' · ');
     }
 
+    /**
+     * Build a context-specific tooltip for the 🔗 link icon based on TX type
+     * and role (giver/receiver). Explains what this linked pair means.
+     */
+    function linkedPairTooltip(d: DisplayRow): string {
+        const type = d.tx.type;
+        const partner = d.tx.related_transaction_id != null ? partnerLookup.get(d.tx.related_transaction_id) : null;
+        const partnerBroker = partner ? brokerName(partner.broker_id) : '?';
+        const thisBroker = brokerName(d.tx.broker_id);
+
+        if (type === 'TRANSFER') {
+            if (d.isReceiver) {
+                return `📥 ${$t('transactions.linkTooltip.transferIn') || `Receiving from ${partnerBroker}`}`.replace('{broker}', partnerBroker);
+            }
+            return `📤 ${$t('transactions.linkTooltip.transferOut') || `Sending to ${partnerBroker}`}`.replace('{broker}', partnerBroker);
+        }
+        if (type === 'FX_CONVERSION') {
+            const toCurr = partner?.cash?.code ?? '?';
+            if (d.isReceiver) {
+                return `💱 ${$t('transactions.linkTooltip.fxReceive') || `Converted from ${toCurr}`}`.replace('{currency}', toCurr);
+            }
+            return `💱 ${$t('transactions.linkTooltip.fxSend') || `Converting to ${toCurr}`}`.replace('{currency}', toCurr);
+        }
+        // Generic fallback
+        return `🔗 ${$t('transactions.linkTooltip.generic') || 'Linked pair'} — ${thisBroker} ↔ ${partnerBroker}`;
+    }
+
     // =========================================================================
     // DataTable wiring
     // =========================================================================
@@ -374,7 +393,6 @@
         const cls: string[] = ['tx-row-tinted'];
         if (d.isGhost) cls.push('tx-row-ghost');
         if (d.isReceiver) cls.push('tx-row-receiver');
-        if (highlightId != null && d.tx.id === highlightId) cls.push('tx-row-highlight');
         return cls.join(' ');
     }
 
@@ -482,10 +500,10 @@
                 if (hasLink) {
                     // Direction arrow: giver ⬇, receiver ⬆
                     const arrow = d.pairAnchorId != null ? (d.isReceiver ? '<span class="tx-pair-arrow">⬆</span>' : '<span class="tx-pair-arrow">⬇</span>') : '';
-                    const linkTip = $t('transactions.gotoLinkedPair') || 'Go to linked pair';
+                    const linkTip = linkedPairTooltip(d);
                     parts.push(`${arrow}<button type="button" class="tx-link-icon" data-tx-link="${d.tx.id}" data-testid="tx-link-icon-${d.tx.id}" aria-label="${escapeHtml(linkTip)}" title="${escapeHtml(linkTip)}">🔗</button>`);
                 }
-                const tooltipText = hasEvent ? eventTooltipText(d.tx.asset_event_id!) : $t('transactions.gotoLinkedPair') || 'Go to linked pair';
+                const tooltipText = hasEvent ? eventTooltipText(d.tx.asset_event_id!) : linkedPairTooltip(d);
                 return {
                     type: 'html',
                     html: `<div class="tx-links-cell">${parts.join('')}</div>`,
@@ -614,26 +632,39 @@
         if (!target) return;
         const eventBtn = target.closest('[data-tx-event]') as HTMLElement | null;
         if (eventBtn) {
+            ev.preventDefault();
+            ev.stopPropagation();
             const id = Number(eventBtn.getAttribute('data-tx-event'));
             const tx = displayRows.find((d) => d.tx.id === id)?.tx;
             if (tx) onEventBadgeClick?.(tx);
-            ev.stopPropagation();
             return;
         }
         const linkBtn = target.closest('[data-tx-link]') as HTMLElement | null;
         if (linkBtn) {
+            ev.preventDefault();
+            ev.stopPropagation();
             const id = Number(linkBtn.getAttribute('data-tx-link'));
             const tx = displayRows.find((d) => d.tx.id === id)?.tx;
             if (tx) onLinkedPairClick?.(tx);
-            ev.stopPropagation();
             return;
         }
+    }
+
+    /** Svelte action: attach click handler in capture phase so we intercept
+     *  clicks on injected HTML buttons before DataTable's <tr onclick>. */
+    function captureClick(node: HTMLElement) {
+        node.addEventListener('click', handleTableClick, true);
+        return {
+            destroy() {
+                node.removeEventListener('click', handleTableClick, true);
+            },
+        };
     }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="tx-table-wrap" data-testid="tx-table" onclick={handleTableClick}>
+<div class="tx-table-wrap" data-testid="tx-table" use:captureClick>
     <DataTable
         bind:this={tableRef}
         data={visibleRows}
@@ -668,19 +699,22 @@
     /* All selectors target HTML injected by DataTable's HtmlCell / row APIs;
        they are not statically visible to Svelte, hence the single :global block. */
     :global {
-        /* Whole-row tint: bumped contrast for clearer broker recognition.
-           Light: 22% / hover 32%. Dark: 38% / hover 48%. */
+        /* Whole-row tint: broker color recognition.
+           ── TUNE THESE VALUES to adjust row saturation ──
+           Mixed with white (light) / #1e1e2e (dark) instead of transparent.
+           Dark uses --broker-bg (high lightness) at low % to get visible tint.
+           Light: base 60% / hover 75%.  Dark: base 18% / hover 25%. */
         .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-bg, transparent) 22%, transparent);
+            background: color-mix(in srgb, var(--broker-bg, transparent) 60%, white);
         }
         .dark .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-dark-bg, transparent) 38%, transparent);
+            background: color-mix(in srgb, var(--broker-bg, transparent) 18%, #1e1e2e);
         }
         .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-bg, transparent) 32%, transparent);
+            background: color-mix(in srgb, var(--broker-bg, transparent) 75%, white);
         }
         .dark .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-dark-bg, transparent) 48%, transparent);
+            background: color-mix(in srgb, var(--broker-bg, transparent) 25%, #1e1e2e);
         }
         /* Broker cell: icon/dot + name with proper truncation when narrow. */
         .tx-table-wrap .tx-broker-cell {
@@ -864,7 +898,9 @@
         .tx-table-wrap tr.tx-row-ghost > td {
             opacity: 0.7;
         }
-        .tx-table-wrap tr.tx-row-highlight {
+        /* Pulse highlight: applied via direct DOM classList.add('tx-row-highlight').
+           Targets <td> because <tr> box-shadow is unreliable across browsers. */
+        .tx-table-wrap tr.tx-row-highlight > td {
             animation: txPulse 1.4s ease-in-out 1;
         }
         @keyframes txPulse {
@@ -872,7 +908,7 @@
                 box-shadow: inset 0 0 0 0 rgb(99 102 241 / 0);
             }
             40% {
-                box-shadow: inset 0 0 0 9999px rgb(99 102 241 / 0.18);
+                box-shadow: inset 0 0 0 9999px rgb(99 102 241 / 0.25);
             }
             100% {
                 box-shadow: inset 0 0 0 0 rgb(99 102 241 / 0);

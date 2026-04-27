@@ -497,7 +497,14 @@
       "editedFmt": "{n} de {total} editadas"
     },
     "refresh": "Recargar desde el servidor",
-    "noAsset": "(Sin activo)"
+    "noAsset": "(Sin activo)",
+    "linkTooltip": {
+      "transferIn": "Recibido de {broker}",
+      "transferOut": "Enviado a {broker}",
+      "fxReceive": "Convertido desde {currency}",
+      "fxSend": "Convirtiendo a {currency}",
+      "generic": "Par enlazado"
+    }
   },
   "fx": {
     "title": "Tipos de Cambio",

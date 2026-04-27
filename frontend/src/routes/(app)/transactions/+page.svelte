@@ -62,7 +62,6 @@
         cash?: Array<{code: string; min?: number; max?: number}>;
         page?: number;
         page_size?: number;
-        highlight_id?: number;
     };
 
     // =========================================================================
@@ -125,7 +124,6 @@
         }
         out.page = num('page');
         out.page_size = num('page_size');
-        out.highlight_id = num('highlight_id');
         return out;
     }
 
@@ -143,7 +141,6 @@
         }
         if (f.page != null && f.page !== 1) params.set('page', String(f.page));
         if (f.page_size != null && f.page_size !== 50) params.set('page_size', String(f.page_size));
-        if (f.highlight_id != null) params.set('highlight_id', String(f.highlight_id));
         const qs = params.toString();
         return qs ? `/transactions?${qs}` : '/transactions';
     }
@@ -338,7 +335,6 @@
         void filters.cash;
         void filters.page;
         void filters.page_size;
-        void filters.highlight_id;
         syncUrl();
     });
 
@@ -488,41 +484,50 @@
     function handlePromoteCommitted(resp: {new_from_tx_id?: number | null; new_to_tx_id?: number | null}) {
         promoteOpen = false;
         selectedRows = [];
-        // Highlight the new pair after the list reloads.
         const hi = resp.new_from_tx_id ?? resp.new_to_tx_id;
-        if (hi != null) filters = {...filters, highlight_id: hi};
-        void reload();
+        void reload().then(() => {
+            // Pulse the new pair after data is loaded and rendered.
+            if (hi != null) {
+                queueMicrotask(() => {
+                    const el = document.querySelector<HTMLElement>(`[data-row-id="tx-${hi}"]`);
+                    if (el) {
+                        el.classList.add('tx-row-highlight');
+                        el.scrollIntoView({behavior: 'smooth', block: 'center'});
+                        setTimeout(() => el.classList.remove('tx-row-highlight'), 1600);
+                    }
+                });
+            }
+        });
     }
 
     let highlightClearTimer: ReturnType<typeof setTimeout> | null = null;
 
     function handleLinkedPairClick(row: TXReadItem) {
-        // GoTo: scroll/pulse on the partner row.
-        // Pairs are rendered adjacent so the partner is usually visible already.
-        // We still scroll+pulse to make it obvious which row is the partner.
+        // Pulse the partner row via direct DOM manipulation.
+        // We bypass the reactive prop chain (highlightId → getRowClass → DataTable)
+        // because DataTable doesn't re-render rows when a closure's captured value
+        // changes (same function reference). Direct DOM is reliable for visual-only
+        // animations.
         if (row.related_transaction_id == null) return;
         const partnerId = row.related_transaction_id;
-
-        // Cancel any pending auto-clear from a previous click.
         if (highlightClearTimer != null) clearTimeout(highlightClearTimer);
 
-        // Force animation restart: clear highlight first, wait a frame, then set.
-        filters = {...filters, highlight_id: undefined};
-        requestAnimationFrame(() => {
-            filters = {...filters, highlight_id: partnerId};
-            // Scroll the partner row into view. Row id may be "tx-N" or "ghost-N".
-            queueMicrotask(() => {
-                const el =
-                    document.querySelector<HTMLElement>(`[data-row-id="tx-${partnerId}"]`) ??
-                    document.querySelector<HTMLElement>(`[data-row-id="ghost-${partnerId}"]`);
-                if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
-            });
-            // Auto-clear highlight after the pulse animation (1.4s).
-            highlightClearTimer = setTimeout(() => {
-                filters = {...filters, highlight_id: undefined};
-                highlightClearTimer = null;
-            }, 1600);
-        });
+        const el =
+            document.querySelector<HTMLElement>(`[data-row-id="tx-${partnerId}"]`) ??
+            document.querySelector<HTMLElement>(`[data-row-id="ghost-${partnerId}"]`);
+        if (!el) return;
+
+        // Remove class first, force reflow, then re-add → restarts CSS animation.
+        el.classList.remove('tx-row-highlight');
+        void el.offsetWidth;
+        el.classList.add('tx-row-highlight');
+        el.scrollIntoView({behavior: 'smooth', block: 'center'});
+
+        // Auto-clear after the pulse animation finishes (1.4s + margin).
+        highlightClearTimer = setTimeout(() => {
+            el.classList.remove('tx-row-highlight');
+            highlightClearTimer = null;
+        }, 1600);
     }
 
     function handleEventBadgeClick(_row: TXReadItem) {
@@ -640,7 +645,6 @@
             {eventTooltipMap}
             currentPage={filters.page ?? 1}
             pageSize={filters.page_size ?? 50}
-            highlightId={filters.highlight_id ?? null}
             initialFilters={filtersToColumnFilters(filters)}
             onSelectionChange={handleSelectionChange}
             onLinkedPairClick={handleLinkedPairClick}
