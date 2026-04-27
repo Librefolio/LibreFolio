@@ -538,7 +538,7 @@
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('transactions.subtitle')}</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 ml-auto">
             {#if selectedRows.length > 0}
                 <DataTableToolbar
                     selectedCount={selectedRows.length}
@@ -556,22 +556,22 @@
             {/if}
             <ColumnVisibilityToggle tableRef={transactionsTableComponent?.getTableRef()} />
             <button
-                class="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all disabled:opacity-50"
+                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all disabled:opacity-50"
                 data-testid="tx-refresh-button"
                 title={$_('transactions.refresh') || 'Refresh from server'}
                 aria-label={$_('transactions.refresh') || 'Refresh from server'}
                 disabled={loading}
                 onclick={() => void reload()}
             >
-                <RefreshCw size={18} class={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
             </button>
-            <button class="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" data-testid="tx-import-button" onclick={onImportFromBroker}>
-                <Upload size={18} />
-                <span>{$_('transactions.import')}</span>
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" data-testid="tx-import-button" onclick={onImportFromBroker}>
+                <Upload size={15} />
+                <span class="hidden sm:inline">{$_('transactions.import')}</span>
             </button>
-            <button class="flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="tx-add-button" onclick={onAddTransaction}>
-                <Plus size={18} />
-                <span>{$_('transactions.addTransaction')}</span>
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="tx-add-button" onclick={onAddTransaction}>
+                <Plus size={15} />
+                <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
             </button>
         </div>
     </div>

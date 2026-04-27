@@ -691,8 +691,13 @@
                             </span>
                             {#if option.iconUrl}
                                 <img src={option.iconUrl} alt="" class="enum-option-icon" />
+                            {:else if option.dotColor}
+                                <span class="enum-option-dot" style="background:{option.dotColor}"></span>
                             {/if}
                             <span class="enum-label">{option.label}</span>
+                            {#if option.count != null}
+                                <span class="enum-count">{option.count}</span>
+                            {/if}
                         </button>
                     {/each}
                 </div>
@@ -1300,6 +1305,37 @@
         object-fit: contain;
         flex-shrink: 0;
         border-radius: 2px;
+    }
+
+    .enum-option-dot {
+        display: inline-block;
+        width: 0.625rem;
+        height: 0.625rem;
+        border-radius: 9999px;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
+    }
+
+    :global(.dark) .enum-option-dot {
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
+    }
+
+    .enum-count {
+        margin-left: auto;
+        font-size: 0.6875rem;
+        font-variant-numeric: tabular-nums;
+        color: #94a3b8;
+        background: #f1f5f9;
+        padding: 0 0.35rem;
+        border-radius: 9999px;
+        min-width: 1.25rem;
+        text-align: center;
+        line-height: 1.4;
+    }
+
+    :global(.dark) .enum-count {
+        color: #64748b;
+        background: #334155;
     }
 
     /* Currency-stack filter */
