@@ -497,7 +497,14 @@
       "editedFmt": "{n} of {total} edited"
     },
     "refresh": "Refresh from server",
-    "noAsset": "(No asset)"
+    "noAsset": "(No asset)",
+    "linkTooltip": {
+      "transferIn": "Received from {broker}",
+      "transferOut": "Sent to {broker}",
+      "fxReceive": "Converted from {currency}",
+      "fxSend": "Converting to {currency}",
+      "generic": "Linked pair"
+    }
   },
   "fx": {
     "title": "FX Rates",
