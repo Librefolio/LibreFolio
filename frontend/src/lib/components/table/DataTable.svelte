@@ -872,6 +872,12 @@
         clearAllSelection();
     }
 
+    /** Clear all column filters (for external reset). */
+    export function clearFilters() {
+        columnFilters = {};
+        onFiltersChange?.({});
+    }
+
     /** Get currently selected rows (for external toolbar) */
     export function getSelectedRows(): T[] {
         return selectedRows;

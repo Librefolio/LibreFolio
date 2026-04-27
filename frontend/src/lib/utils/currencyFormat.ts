@@ -43,11 +43,12 @@ export function formatCurrencyAmountHtml(amount: number, code: string, opts: Cur
     const abs = Math.abs(amount).toLocaleString(undefined, {minimumFractionDigits: minFraction, maximumFractionDigits: maxFraction});
     const formatted = `${sign}${amount < 0 ? '-' : ''}${abs}`;
     const flagHtml = info.flag_emoji && info.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${info.flag_emoji}</span>` : '';
+    const codeHtml = `<span class="currency-code">${escapeHtml(code)}</span>`;
     let suffixHtml: string;
     if (hasRealSymbol) {
-        suffixHtml = `<span class="currency-symbol">${escapeHtml(symbol)}</span> ${flagHtml}`;
+        suffixHtml = `<span class="currency-symbol">${escapeHtml(symbol)}</span> ${flagHtml}${codeHtml}`;
     } else {
-        suffixHtml = `${flagHtml}<span class="currency-code">${escapeHtml(code)}</span>`;
+        suffixHtml = `${flagHtml}${codeHtml}`;
     }
     return `<span class="currency-amount">${escapeHtml(formatted)}</span> ${suffixHtml}`;
 }
