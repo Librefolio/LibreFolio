@@ -25,12 +25,29 @@ export interface CurrencyAmountFormatOptions {
 }
 
 /**
- * Format a currency amount as HTML string: `amount symbol flag` or `amount flag code`.
+ * Format a currency amount as plain text (no HTML).
  *
- * Rules:
- * - If symbol exists and differs from code → show `amount symbol flag` (no code)
- * - Otherwise → show `amount flag code` (no duplication)
- * - White flag 🏳️ (fallback) is omitted
+ * Output: `1,000.00 $ 🇺🇸 USD` or `1,000.00 🇺🇸 USD` (no symbol).
+ * Suitable for tooltips, title attributes, plain-text contexts.
+ */
+export function formatCurrencyAmountPlain(amount: number, code: string, opts: CurrencyAmountFormatOptions = {}): string {
+    const {showSign = false, minFraction = 2, maxFraction = 2} = opts;
+    const info = getCurrencyInfo(code);
+    const symbol = info.symbol ?? '';
+    const hasRealSymbol = symbol !== '' && symbol !== code;
+    const sign = showSign && amount > 0 ? '+' : '';
+    const abs = Math.abs(amount).toLocaleString(undefined, {minimumFractionDigits: minFraction, maximumFractionDigits: maxFraction});
+    const formatted = `${sign}${amount < 0 ? '-' : ''}${abs}`;
+    const flag = info.flag_emoji && info.flag_emoji !== '🏳️' ? info.flag_emoji : '';
+    const parts = [formatted];
+    if (hasRealSymbol) parts.push(symbol);
+    if (flag) parts.push(flag);
+    parts.push(code);
+    return parts.join(' ');
+}
+
+/**
+ * Format a currency amount as HTML string: `amount symbol flag code`.
  *
  * @returns HTML string ready for HtmlCell rendering
  */

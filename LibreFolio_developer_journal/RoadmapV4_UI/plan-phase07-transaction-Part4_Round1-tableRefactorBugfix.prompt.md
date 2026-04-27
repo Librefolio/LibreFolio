@@ -1091,3 +1091,60 @@ Utente conferma che pulse, colori, icone ed emoji funzionano tutti. Tuttavia:
 | **`onEventBadgeClick` dead handler** | ⏳ cleanup | Noop — rimuovere quando confermato |
 | **Rieseguire `./dev.py db create-clean && ./dev.py db populate`** | ⏳ | Necessario per vedere la nuova coppia giroconto nei dati |
 
+---
+
+## Round 1.14 — Execution Report
+
+### Fixes implementati
+
+| # | Issue | Fix | Status |
+|---|-------|-----|--------|
+| C43 | Event tooltip: tipo evento mostrato in inglese raw (`DIVIDEND`, `SPLIT`) invece del nome tradotto | Usato `$t(\`assetDetail.eventType.${ev.type}\`)` per nome tradotto. Fallback al code raw se la chiave non esiste. | ✅ C43 |
+| C44 | Event tooltip su una riga sola — poco leggibile | Riformattato su più righe con `\n`: riga 1 = emoji + nome tradotto + data; riga 2 = importo formattato + ⚙ auto; riga 3+ = notes. | ✅ C44 |
+| C45 | FX tooltip mostrava solo importo partner — manca il lato "da" | Ora mostra entrambi i lati: `💱 Conversione in 1.000,00 € 🇪🇺EUR → 1.090,00 $ 🇺🇸USD` | ✅ C45 |
+| C46 | Generico tooltip diceva "Coppia collegata" — poco descrittivo per cash transfer | Cambiato a "Giroconto" (IT), "Cash transfer" (EN), "Virement" (FR), "Transferencia de fondos" (ES) | ✅ C46 |
+| C47 | `thisAmount` unused warning in `linkedPairTooltip` FX branch | Ora usato per mostrare entrambi i lati del cambio nel tooltip | ✅ C47 |
+
+### Dettagli implementativi
+
+**C43+C44 — Event tooltip tradotto e multi-riga**:
+```
+Prima:  💰 DIVIDEND · 2025-07-31 · 0.25 $ 🇺🇸USD · "Quarterly" · ⚙ auto
+Dopo:   💰 Dividendo · 2025-07-31
+        0.25 $ 🇺🇸USD  ⚙ auto
+        Quarterly dividend payment
+```
+- Riga 1: `{emoji} {$t(assetDetail.eventType.{TYPE})} · {date}`
+- Riga 2: `{formattedAmount}` + opzionale `⚙ auto`
+- Riga 3+: notes (senza virgolette)
+- Le traduzioni esistevano già sotto `assetDetail.eventType.*` (5 tipi: DIVIDEND, INTEREST, SPLIT, PRICE_ADJUSTMENT, MATURITY_SETTLEMENT)
+
+**C45 — FX tooltip entrambi i lati**: `fmtCash()` helper formatta `Math.abs(amount)` con `formatCurrencyAmountHtml` (strip HTML). Il tooltip ora mostra `thisAmount → partnerAmount` per il giver e `partnerAmount → thisAmount` per il receiver.
+
+**C46 — Generic fallback**: i18n key `transactions.linkTooltip.generic` aggiornata da "Linked pair"/"Coppia collegata" a "Cash transfer"/"Giroconto"/"Virement"/"Transferencia de fondos". Emoji cambiata da 🔗 a 🏦.
+
+### File modificati
+
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/transactions/TransactionsTable.svelte` | `eventTooltipText()` tradotto + multi-riga; `linkedPairTooltip()` FX con entrambi i lati |
+| `frontend/src/lib/i18n/{en,it,fr,es}.json` | `generic` → "Cash transfer"/"Giroconto"; `fxReceive/fxSend` → `{amount}` placeholder |
+
+### Validazione Round 1.14
+
+- Nessun errore reale ✅
+- Event tooltip: nome tradotto (`Dividendo` in IT, `Dividende` in FR) ✅
+- Event tooltip: multi-riga con `\n` (emoji+tipo+data / importo / notes) ✅
+- FX tooltip: entrambi i lati (`1.000 € EUR → 1.090 $ USD`) ✅
+- Generic: "Giroconto" con 🏦 ✅
+
+### Residui aperti dopo Round 1.14
+
+| Issue | Stato | Note |
+|-------|-------|------|
+| **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | Chip interattivo con ✕/+ |
+| **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT |
+| **`escapeHtml()` × 4 copie** | ⏳ cleanup | Fattorizzare in `$lib/utils/escapeHtml.ts` |
+| **`formatCash()` residuo** | ⏳ cleanup | Sostituibile con strip-HTML di `formatCurrencyAmountHtml()` |
+| **`onEventBadgeClick` dead handler** | ⏳ cleanup | Noop — rimuovere quando confermato |
+
