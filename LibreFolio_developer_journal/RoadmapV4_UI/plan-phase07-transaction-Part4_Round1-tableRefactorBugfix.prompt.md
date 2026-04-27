@@ -1006,9 +1006,9 @@ Risultato:
 
 - Nessun errore reale in entrambi i file ✅
 - Warning CSS: false positive pre-esistenti (W80) ✅
-- Pulse: DOM diretto con capture phase + fallback ghost-id querySelector ✅
-- Broker tint: light 30%/42%, dark 45%/55% (regolabili via commento CSS) ✅
-- Quantità: `+1,234 📈` / `-56.78 📉` / `0` ✅
+- Pulse: DOM diretto con capture phase + fallback ghost-id querySelector ✅ **Confermato funzionante dall'utente**
+- Broker tint: light 30%/42%, dark 45%/55% (regolabili via commento CSS) ✅ **Confermato visivamente dall'utente**
+- Quantità: `+1,234 📈` / `-56.78 📉` / `0` ✅ **Confermato dall'utente**
 - Link tooltip: specifico per tipo TX con emoji e broker/currency ✅
 - i18n: 5 chiavi `transactions.linkTooltip.*` in 4 lingue ✅
 
@@ -1021,4 +1021,73 @@ Risultato:
 | **`escapeHtml()` × 4 copie** | ⏳ cleanup | Fattorizzare in `$lib/utils/escapeHtml.ts` e importare ovunque |
 | **`formatCash()` residuo** | ⏳ cleanup | Usato solo come `title` attr nella cash cell — sostituibile con `formatCurrencyAmountHtml().replace(/<[^>]*>/g, '')` |
 | **`onEventBadgeClick` dead handler** | ⏳ cleanup | Noop in `+page.svelte` + prop/delegation in TransactionsTable — rimuovere quando confermato non necessario |
+
+---
+
+## Round 1.13 — Tooltip linked pair completi + mock data giroconti
+
+### Contesto
+
+Utente conferma che pulse, colori, icone ed emoji funzionano tutti. Tuttavia:
+
+1. **Tooltip linked pair incompleti**: `linkedPairTooltip()` copre solo TRANSFER (asset) e FX_CONVERSION (cambio valuta). Mancano tooltip per:
+   - **DEPOSIT↔WITHDRAWAL** (giroconto cash tra broker): es. prelevare da un broker e depositare in un altro
+   - **Altre combinazioni possibili** con `related_transaction_id`: ADJUSTMENT, o coppie miste
+
+2. **Mock data insufficienti**: `populate_mock_data.py` crea solo 3 coppie linked:
+   - 2× TRANSFER (AAPL IB→DEGIRO, BTC Coinbase→IB)
+   - 1× FX_CONVERSION (EUR→USD at IB)
+   
+   Mancano completamente:
+   - Giroconto cash (WITHDRAWAL da un broker + DEPOSIT su un altro, linkati)
+   - DEPOSIT/WITHDRAWAL cross-broker
+
+### Piano esecuzione
+
+| # | Task | Status |
+|---|------|--------|
+| C40 | Estendere `linkedPairTooltip()` per DEPOSIT↔WITHDRAWAL (giroconto cash) | ✅ |
+| C41 | Aggiungere coppia linked WITHDRAWAL↔DEPOSIT in `populate_mock_data.py` | ✅ |
+| C42 | i18n keys per i nuovi tooltip (`depositFrom`, `withdrawalTo`) | ✅ |
+
+### Dettagli implementativi
+
+**C40 — Tooltip DEPOSIT↔WITHDRAWAL**: `linkedPairTooltip()` ora gestisce 4 tipi linked:
+- `TRANSFER` → `📥 Ricevuto da {broker}` / `📤 Inviato a {broker}`
+- `FX_CONVERSION` → `💱 Convertito da {currency}` / `Conversione in {currency}`
+- `DEPOSIT` (linked) → `🏦 Accredito da {broker} ({currency})`
+- `WITHDRAWAL` (linked) → `🏦 Prelievo verso {broker} ({currency})`
+- Generico → `🔗 Coppia collegata — Broker1 ↔ Broker2`
+
+**C41 — Mock data giroconto cash**: Aggiunta coppia #4 in `populate_mock_data.py`:
+- WITHDRAWAL €2000 da DEGIRO + DEPOSIT €2000 su IB, stessa data, linkati bidirezionalmente
+- Tag `giroconto` per riconoscibilità
+
+**C42 — i18n**: 2 nuove chiavi `transactions.linkTooltip.depositFrom` / `.withdrawalTo` in 4 lingue.
+
+### File modificati
+
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/transactions/TransactionsTable.svelte` | `linkedPairTooltip()` esteso per DEPOSIT/WITHDRAWAL |
+| `backend/test_scripts/test_db/populate_mock_data.py` | Coppia linked WITHDRAWAL↔DEPOSIT (giroconto €2000 DEGIRO→IB) |
+| `frontend/src/lib/i18n/{en,it,fr,es}.json` | 2 chiavi `transactions.linkTooltip.{depositFrom,withdrawalTo}` |
+
+### Validazione Round 1.13
+
+- Nessun errore reale ✅
+- Tooltip copre tutti i tipi linked: TRANSFER, FX_CONVERSION, DEPOSIT, WITHDRAWAL, generico ✅
+- Mock data: 4 coppie linked (2× TRANSFER, 1× FX_CONVERSION, 1× WITHDRAWAL↔DEPOSIT) ✅
+- i18n: 7 chiavi `transactions.linkTooltip.*` totali ✅
+
+### Residui aperti dopo Round 1.13
+
+| Issue | Stato | Note |
+|-------|-------|------|
+| **Ghost row chip "out of filter"** (Step 5 piano originale) | ⏳ Round 2 | Chip interattivo con ✕/+ per rimuovere/aggiungere ghost row ai filtri — design da definire |
+| **E2E `asset-event-delete.spec.ts`** (Step 6 piano originale) | ⏳ deferred | Test E2E per delete eventi con RESTRICT |
+| **`escapeHtml()` × 4 copie** | ⏳ cleanup | Fattorizzare in `$lib/utils/escapeHtml.ts` |
+| **`formatCash()` residuo** | ⏳ cleanup | Sostituibile con strip-HTML di `formatCurrencyAmountHtml()` |
+| **`onEventBadgeClick` dead handler** | ⏳ cleanup | Noop — rimuovere quando confermato |
+| **Rieseguire `./dev.py db create-clean && ./dev.py db populate`** | ⏳ | Necessario per vedere la nuova coppia giroconto nei dati |
 

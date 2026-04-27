@@ -1179,6 +1179,37 @@ def populate_transactions(session: Session):
     session.commit()
     print(f"  🔗 FX_CONVERSION pair: EUR→USD at IB (#{tx_fx_sell.id} ↔ #{tx_fx_buy.id})")
 
+    # 4. Cash transfer (giroconto): WITHDRAWAL from DEGIRO → DEPOSIT to IB (€2000)
+    tx_cash_out = Transaction(
+        broker_id=degiro.id,
+        asset_id=None,
+        type=TransactionType.WITHDRAWAL,
+        date=today - timedelta(days=20),
+        quantity=Decimal("0"),
+        amount=Decimal("-2000"),
+        currency="EUR",
+        description="Cash transfer to IB",
+        tags="giroconto",
+    )
+    tx_cash_in = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=20),
+        quantity=Decimal("0"),
+        amount=Decimal("2000"),
+        currency="EUR",
+        description="Cash transfer from DEGIRO",
+        tags="giroconto",
+    )
+    session.add(tx_cash_out)
+    session.add(tx_cash_in)
+    session.flush()
+    tx_cash_out.related_transaction_id = tx_cash_in.id
+    tx_cash_in.related_transaction_id = tx_cash_out.id
+    session.commit()
+    print(f"  🔗 CASH TRANSFER pair: €2000 DEGIRO→IB (#{tx_cash_out.id} ↔ #{tx_cash_in.id})")
+
 
 def populate_price_history(session: Session):
     """Create price history for market-priced assets."""
