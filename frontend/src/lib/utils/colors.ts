@@ -127,3 +127,40 @@ export function hslToHex(h: number, s: number, l: number): string {
     };
     return `#${f(0)}${f(8)}${f(4)}`;
 }
+
+/**
+ * Stable string hash → unsigned int. Used to fold an arbitrary string
+ * (e.g. a tag name) into the same golden-ratio hue distribution used by
+ * `getIndexColor()`.
+ */
+function hashString(s: string): number {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+        h = (h * 31 + s.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+}
+
+/**
+ * Resolve a deterministic `ColorSet` for an arbitrary string label
+ * (tag, category, free-form chip). Same string → same color across
+ * the app, with golden-ratio separation shared with broker / provider
+ * / priority badges.
+ *
+ * @param label    String to colorize (case-insensitive)
+ * @param startHue Starting hue in degrees (default 200 = cyan-blue)
+ */
+export function getStringColor(label: string, startHue: number = 200): ColorSet {
+    if (!label) return getIndexColor(0, startHue);
+    return getIndexColor(hashString(label), startHue);
+}
+
+/**
+ * Inline-style snippet exposing CSS custom properties consumed by a
+ * generic badge rule (`--badge-bg/--badge-text/--badge-dark-bg/--badge-dark-text`).
+ * Pair with a CSS class that reads those variables.
+ */
+export function getStringBadgeStyle(label: string, startHue: number = 200): string {
+    const c = getStringColor(label, startHue);
+    return `--badge-bg:${c.bg};--badge-text:${c.text};--badge-dark-bg:${c.darkBg};--badge-dark-text:${c.darkText};`;
+}

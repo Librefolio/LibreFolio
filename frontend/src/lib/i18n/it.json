@@ -84,8 +84,15 @@
     "perPage": "per pagina",
     "items": "elementi",
     "actions": "Azioni",
-    "filter": "Filtra",
-    "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su"
+    "filter": {
+      "currencyStack": {
+        "addCurrency": "Aggiungi valuta…",
+        "empty": "Scegli una valuta per aggiungere un filtro numerico.",
+        "any": "qualsiasi importo"
+      }
+    },
+    "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
+    "filterLabel": "Filtro"
   },
   "filter": {
     "contains": "Contiene",
@@ -464,7 +471,8 @@
       "date": "Data",
       "quantity": "Qtà",
       "tags": "Tag",
-      "type": "Tipo"
+      "type": "Tipo",
+      "event": "Evento"
     },
     "types": {
       "ADJUSTMENT": "Aggiustamento",
@@ -478,7 +486,15 @@
       "TAX": "Tassa",
       "TRANSFER": "Trasferimento",
       "WITHDRAWAL": "Prelievo"
-    }
+    },
+    "staging": {
+      "createTitle": "Nuove transazioni",
+      "editTitle": "Modifica transazioni",
+      "draftSingular": "{n} bozza",
+      "draftPlural": "{n} bozze",
+      "editedFmt": "{n} su {total} modificate"
+    },
+    "refresh": "Ricarica dal server"
   },
   "fx": {
     "title": "Tassi di Cambio",

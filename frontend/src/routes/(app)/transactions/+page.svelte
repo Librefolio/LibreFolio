@@ -201,9 +201,9 @@
                 next.date_end = v.to || undefined;
             } else if (k === 'cash' && v.type === 'currency-stack') next.cash = v.items.length > 0 ? v.items.map((i) => ({...i})) : undefined;
         }
-        // Bail-out: if nothing relevant changed, skip the state update + reload.
-        // This breaks the DataTable re-emit → reload loop triggered by
-        // upstream $derived columns prop changes.
+        // Bail-out: if nothing relevant changed, skip the state update.
+        // This breaks the DataTable re-emit loop triggered by upstream
+        // $derived columns prop changes.
         const sameTypes = JSON.stringify(filters.types ?? null) === JSON.stringify(next.types ?? null);
         const sameTags = JSON.stringify(filters.tags ?? null) === JSON.stringify(next.tags ?? null);
         const sameBroker = (filters.broker_id ?? null) === (next.broker_id ?? null);
@@ -213,8 +213,8 @@
         // Reset to first page on filter change.
         next.page = 1;
         filters = next;
-        // Re-fetch with the new filter set (server-side filters need the call).
-        void reload();
+        // No reload(): filtering is now 100% client-side (W28). Use the
+        // explicit Refresh button to re-fetch from the backend.
     }
 
     // =========================================================================
@@ -222,19 +222,12 @@
     // =========================================================================
 
     async function loadMainRows(): Promise<TXReadItem[]> {
-        const queries: Record<string, unknown> = {
-            limit: filters.page_size ?? 100,
-            offset: filters.page && filters.page_size ? (filters.page - 1) * filters.page_size : 0,
-        };
-        if (filters.broker_id != null) queries.broker_id = filters.broker_id;
-        if (filters.asset_id != null) queries.asset_id = filters.asset_id;
-        if (filters.types?.length) queries.types = filters.types;
-        if (filters.date_start) queries.date_start = filters.date_start;
-        if (filters.date_end) queries.date_end = filters.date_end;
-        if (filters.tags?.length) queries.tags = filters.tags;
-        if (filters.currency) queries.currency = filters.currency;
-
-        const res = (await zodiosApi.query_transactions_api_v1_transactions_get({queries} as never)) as TXReadItem[];
+        // Architectural decision (Round 1.2 / W28): the backend always returns
+        // the full set of transactions visible to the current user. Filtering,
+        // sorting and pagination happen 100% client-side via DataTable. This
+        // keeps the network surface minimal and the URL filter state
+        // purely presentational. No limit/offset — we pull everything.
+        const res = (await zodiosApi.query_transactions_api_v1_transactions_get({} as never)) as TXReadItem[];
         return res ?? [];
     }
 
@@ -257,8 +250,8 @@
 
     async function loadBrokers(): Promise<void> {
         try {
-            const res = (await zodiosApi.list_brokers_api_v1_brokers_get()) as Array<{id: number; name: string}>;
-            brokers = res.map((b) => ({id: b.id, name: b.name}));
+            const res = (await zodiosApi.list_brokers_api_v1_brokers_get()) as Array<{id: number; name: string; icon_url?: string | null; portal_url?: string | null; default_import_plugin?: string | null}>;
+            brokers = res.map((b) => ({id: b.id, name: b.name, icon_url: b.icon_url ?? null, portal_url: b.portal_url ?? null, default_import_plugin: b.default_import_plugin ?? null}));
         } catch (e) {
             console.warn('Failed to load brokers:', e);
             brokers = [];
@@ -526,7 +519,7 @@
 
     function handlePageSizeChange(pageSize: number) {
         filters = {...filters, page_size: pageSize, page: 1};
-        void reload();
+        // No reload(): client-side pagination only (W28).
     }
 
     /** Reference to the TransactionsTable component for visibility/selection control. */
@@ -562,6 +555,16 @@
                 />
             {/if}
             <ColumnVisibilityToggle tableRef={transactionsTableComponent?.getTableRef()} />
+            <button
+                class="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all disabled:opacity-50"
+                data-testid="tx-refresh-button"
+                title={$_('transactions.refresh') || 'Refresh from server'}
+                aria-label={$_('transactions.refresh') || 'Refresh from server'}
+                disabled={loading}
+                onclick={() => void reload()}
+            >
+                <RefreshCw size={18} class={loading ? 'animate-spin' : ''} />
+            </button>
             <button class="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" data-testid="tx-import-button" onclick={onImportFromBroker}>
                 <Upload size={18} />
                 <span>{$_('transactions.import')}</span>
