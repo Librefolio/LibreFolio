@@ -766,11 +766,11 @@
                                     <div class="currency-stack-range-editor number-filter">
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-min-${idx}`}>{$t('common.min')}</label>
-                                            <input type="number" class="range-input" id={`cur-min-${idx}`} value={item.min ?? ''} onchange={(e) => updateCurrencyMin(idx, (e.currentTarget as HTMLInputElement).value)} />
+                                            <input type="number" class="range-input" id={`cur-min-${idx}`} value={item.min ?? ''} onchange={(e) => updateCurrencyMin(idx, e.currentTarget.value)} />
                                         </div>
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-max-${idx}`}>{$t('common.max')}</label>
-                                            <input type="number" class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, (e.currentTarget as HTMLInputElement).value)} />
+                                            <input type="number" class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, e.currentTarget.value)} />
                                         </div>
                                         <!-- Linear dual range slider — same UX as `type:'number'`. -->
                                         <div class="size-slider-container">
@@ -780,8 +780,8 @@
                                                 <div class="slider-tick" style="left: 50%"></div>
                                                 <div class="slider-tick" style="left: 75%"></div>
                                             </div>
-                                            <input type="range" class="size-slider size-slider-min" min="0" max="100" value={curMinPos(idx)} oninput={(e) => updateCurrencyMinSlider(idx, Number((e.currentTarget as HTMLInputElement).value))} />
-                                            <input type="range" class="size-slider size-slider-max" min="0" max="100" value={curMaxPos(idx)} oninput={(e) => updateCurrencyMaxSlider(idx, Number((e.currentTarget as HTMLInputElement).value))} />
+                                            <input type="range" class="size-slider size-slider-min" min="0" max="100" value={curMinPos(idx)} oninput={(e) => updateCurrencyMinSlider(idx, Number(e.currentTarget.value))} />
+                                            <input type="range" class="size-slider size-slider-max" min="0" max="100" value={curMaxPos(idx)} oninput={(e) => updateCurrencyMaxSlider(idx, Number(e.currentTarget.value))} />
                                         </div>
                                         <div class="size-slider-labels">
                                             <span>{fmtNum(numberMin)}</span>
