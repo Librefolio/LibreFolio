@@ -32,7 +32,7 @@
     import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
     import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
     import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
-    import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
+    import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getEventTypeEmoji} from '$lib/utils/eventTypes';
@@ -342,14 +342,17 @@
         const ev = eventTooltipMap.get(eventId);
         if (!ev) return $t('transactions.linkedEvent') || 'Linked event';
         const emoji = getEventTypeEmoji(ev.type);
+        const typeName = $t(`assetDetail.eventType.${ev.type}`) || ev.type;
         const amount = Number(ev.value);
-        // Strip HTML tags from formatCurrencyAmountHtml for plain-text tooltip
-        const currHtml = Number.isFinite(amount) ? formatCurrencyAmountHtml(amount, ev.currency) : `${ev.value} ${ev.currency}`;
-        const currText = currHtml.replace(/<[^>]*>/g, '');
-        const parts = [`${emoji} ${ev.type}`, ev.date, currText];
-        if (ev.notes) parts.push(`"${ev.notes}"`);
-        if (ev.is_auto) parts.push('⚙ auto');
-        return parts.join(' · ');
+        const currText = Number.isFinite(amount) ? formatCurrencyAmountPlain(amount, ev.currency) : `${ev.value} ${ev.currency}`;
+        // Line 1: emoji + translated type name + date
+        const line1 = `${emoji} ${typeName} · ${ev.date}`;
+        // Line 2: formatted amount
+        const line2 = currText + (ev.is_auto ? '  ⚙ auto' : '');
+        // Line 3+: notes (if any)
+        const lines = [line1, line2];
+        if (ev.notes) lines.push(ev.notes);
+        return lines.join('\n');
     }
 
     /**
@@ -363,11 +366,11 @@
         const thisBroker = brokerName(d.tx.broker_id);
         const currency = d.tx.cash?.code ?? '?';
 
-        /** Format a cash amount as plain text (strip HTML from formatCurrencyAmountHtml). */
+        /** Format a cash amount as plain text for tooltips. */
         const fmtCash = (code: string, amount: string | undefined): string => {
             const n = Number(amount ?? 0);
             if (!Number.isFinite(n)) return `${amount} ${code}`;
-            return formatCurrencyAmountHtml(Math.abs(n), code).replace(/<[^>]*>/g, '');
+            return formatCurrencyAmountPlain(Math.abs(n), code);
         };
 
         if (type === 'TRANSFER') {
@@ -380,10 +383,11 @@
             const thisAmount = fmtCash(currency, d.tx.cash?.amount);
             const partnerCurr = partner?.cash?.code ?? '?';
             const partnerAmount = fmtCash(partnerCurr, partner?.cash?.amount);
+            // Show both sides: "Converting 1,000.00 € EUR → 1,090.00 $ USD"
             if (d.isReceiver) {
-                return `💱 ${$t('transactions.linkTooltip.fxReceive') || `Converted from ${partnerAmount}`}`.replace('{amount}', partnerAmount);
+                return `💱 ${$t('transactions.linkTooltip.fxReceive') || `Converted from ${partnerAmount}`}`.replace('{amount}', `${partnerAmount} → ${thisAmount}`);
             }
-            return `💱 ${$t('transactions.linkTooltip.fxSend') || `Converting to ${partnerAmount}`}`.replace('{amount}', partnerAmount);
+            return `💱 ${$t('transactions.linkTooltip.fxSend') || `Converting to ${partnerAmount}`}`.replace('{amount}', `${thisAmount} → ${partnerAmount}`);
         }
         // Cash transfers between brokers (DEPOSIT↔WITHDRAWAL, or same-type linked)
         if (type === 'DEPOSIT' && partner) {
