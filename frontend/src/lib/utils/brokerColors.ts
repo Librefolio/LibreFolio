@@ -13,10 +13,16 @@
 
 import {getIndexColor, type ColorSet} from './colors';
 
-/** Minimal shape required for broker color resolution. */
+/** Minimal shape required for broker color resolution and icon display. */
 export interface BrokerLike {
     id: number;
     name?: string;
+    /** Custom icon URL (highest priority in icon chain) */
+    icon_url?: string | null;
+    /** Portal URL for favicon fallback */
+    portal_url?: string | null;
+    /** Default import plugin code for plugin-icon fallback */
+    default_import_plugin?: string | null;
 }
 
 /**

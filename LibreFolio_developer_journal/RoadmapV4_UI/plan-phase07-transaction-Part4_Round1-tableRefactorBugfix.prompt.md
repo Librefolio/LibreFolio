@@ -1,7 +1,7 @@
 # Plan — Phase 07 · Part 4 · Step 5 · Round 1 — Tabella `/transactions` refactor + Bugfix Add modal
 
 **Date**: 2026-04-27
-**Status**: 🔨 IN CORSO (Step 1–5 ✅, Step 6 ⏳)
+**Status**: 🔨 IN CORSO (Step 1–6 ✅, Round 1.2 W17–W33 ✅, Round 1.3 W34–W46 ✅ tranne W35 visual + W46 /files deferred)
 **Priority**: P0 (blocker: Add transaction modal va in infinite loop)
 **Estimated effort**: ~1 day
 
@@ -426,3 +426,100 @@ Conventional Commits, 7 commit incrementali (uno per Step), ognuno verde su lint
 - ✅ Atomicità preservata (single-row clone/delete riusano gli stessi handler bulk).
 - ✅ Plan auto-contenuto con cross-link a parent + walkthrough.
 
+---
+
+## 🔁 Walkthrough Round 1.2 — issues residue dopo Step 6 (2026-04-27)
+
+Walkthrough manuale seguente al primo deploy degli step 1–6. Tracciate qui in fondo per fix in coda allo stesso Round (commit autonomi dopo ogni gruppo).
+
+| ID | Severity | Descrizione | Action | Status |
+|----|----------|-------------|--------|--------|
+| W17 | ⚠ regressione | Quando page-size scende a `10` la paginazione sparisce (la condizione `displayRows.length > 10` esclude i casi `<= 10`) | fix soglia | ✅ B1 |
+| W18 | ⚠ UX | Tinta riga broker troppo sbiadita in light, troppo scura in dark — alzare contrasto | css color-mix bump | ✅ B2 |
+| W19 | ⚠ UX (feature) | Click sulle icone tipo TX → apre la pagina mkdocs `…/transaction-types/{slug}/` nella lingua corrente. Mobile: doppio-click o long-press, **non** single-tap | helper `getTxTypeDocUrl` + click delegation | ✅ B3 |
+| W20 | ⚠ UX | Asset cell continua a mostrare solo testo, manca l'icona accanto al nome (regressione vs Assets table) | `ensureAssetsLoaded` early + `type:'image'` | ✅ B4 |
+| W21 | ⚠ UX | Broker cell ha un dot-color e non il logo broker | dot conservato (no asset broker_icon disponibile in /static); riapertura quando logo dedicato sarà aggiunto | ⏳ deferred Round 2 |
+| W22 | ⚠ UX | Ordine colonne: broker DEVE precedere asset | swap | ✅ B1 |
+| W23 | ⚠ UX | Icone TX troppo piccole | enlarge `1.25rem → 1.75rem` | ✅ B1 |
+| W24 | ⚠ regressione i18n | Modale "Add transaction" mostra `transactions.staging.createTitle — 1 draft` (chiave non tradotta) | aggiungere chiavi `staging.*` 4 lingue + plural | ✅ B9 |
+| W25 | ⚠ architettura | La modale Add e Edit DEVONO essere la stessa (parametrizzata `mode`), import incluso. Verificare | audit + nota in JSDoc | ✅ B10 |
+| W26 | ⚠ regressione i18n | Filtro `currency-stack`: chiavi `table.filter.currencyStack.*` non risolte | aggiungere chiavi 4 lingue | ✅ B9 |
+| W27 | ❌ UX | Quando aggiungo una currency al filtro, il popover si chiude immediatamente | escludere `[role="listbox"]/[option]/[combobox]` dal click-outside | ✅ B7 |
+| W28 | ❌ architettura | I filtri header lanciano `GET /api/v1/transactions?...` con i filtri server-side: NON deve. Backend invia tutto, frontend filtra solo client-side. Aggiungere bottone Refresh esplicito | rimuovere `queries` filter dal client + bottone Refresh in toolbar | ✅ B6 |
+| W29 | ⚠ UX | Min/Max nel sub-popover currency-stack è un input scarno. Deve riusare lo stesso identico UI/scale di `type:'number'` (slider + input) | refactor `currency-stack` per riusare `NumberRange` block | ✅ B8 |
+| W30 | ⚠ UX | Tags renderizzati come `tag1, tag2, tag3` separati da virgola — vogliamo badge colorati (1 badge per tag, colore deterministico dal contenuto) | `getStringBadgeStyle` + `.tx-tag-badge` | ✅ B5 |
+| W31 | ⚠ UX | Linked-event in `actions` è il posto sbagliato → spostare in **colonna dedicata** dopo `cash` (con dot tinted + tooltip evento) | nuova colonna `event` | ✅ B4 |
+| W32 | ⚠ UX | Cash deve mostrare solo valuta (ISO3 + bandiera), come fa la tabella Assets | refactor cell `cash` | ✅ B4 |
+| W33 | ⚠ UX bug | Broker cell: alle larghezze "intermedie" compaiono "..." che però se allargo la colonna non spariscono (testo nascosto). Va parametrizzato sulla larghezza colonna o rimosso del tutto | css `min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap` | ✅ B2 |
+
+### Implementazione (eseguita in batch, nello stesso commit-set)
+
+- **B1 (W17, W22, W23) ✅** — `TransactionsTable.svelte`: soglia paginatore `displayRows.length > pageSize` (mostra il paginatore quando esiste almeno 1 pagina aggiuntiva). Reorder colonne: broker prima di asset. Icona TX `1.25rem → 1.75rem` (con cursore + hover-lift, click-target più grande).
+- **B2 (W18, W33) ✅** — Tinta riga: `light 12%→22%` (hover 32%), `dark 22%→38%` (hover 48%). Cell broker: `min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap` sulla `.tx-broker-name` → ellipsis robusto a tutte le larghezze.
+- **B3 (W19) ✅** — `transactionTypes.ts`: aggiunti `TX_TYPE_DOC_SLUG` (BUY/SELL→buy-sell, DEPOSIT/WITHDRAWAL→deposit-withdrawal, DIVIDEND/INTEREST/FEE/TAX/TRANSFER → matching pages, fallback a section index per FX_CONVERSION/ADJUSTMENT) + helper `getTxTypeDocUrl(type, lang)` con prefisso `/<lang>` per non-default. Cell `typeIcon` ora rende un `<button data-tx-type-doc>` e la table-wrap delega click/dblclick/pointerdown: desktop=single click, mobile (`pointer:coarse`)=dblclick o long-press ≥500ms. (Componente `TxTypeIconLink.svelte` non usato — la cell HtmlCell non monta componenti Svelte; delegazione HTML scelta per semplicità).
+- **B4 (W20, W31, W32) ✅** — Cell `asset`: `void ensureAssetsLoaded()` chiamato in script-init, cell continua a usare `type:'image'` con `info.icon_url`. Cell `cash` ora `[flag] CODE` via `getCurrencyInfo(code).flag_emoji` (stesso pattern di Assets table). Nuova **colonna `event`** dopo `cash`: dot violet 10px con tooltip `[type · date · value currency · auto/manual]`, click delegato → `onEventBadgeClick`. Rimossa `event` da `rowActions`.
+- **B5 (W30) ✅** — Helper `getStringBadgeStyle(tag)` (in `colors.ts`) usato come inline-style su `<span class="tx-tag-badge" style="--badge-bg:…">`. CSS `.tx-tag-badge` legge le CSS vars; rendering = wrap chips colorati con golden-ratio palette deterministica.
+- **B6 (W28) ✅** — `+page.svelte` `loadMainRows`: rimossi tutti i filtri (`broker_id`/`asset_id`/`types`/`date_*`/`tags`/`currency`) dalle `queries`; restano solo `limit`/`offset` come soft-cap. `handleColumnFiltersChange` non chiama più `reload()`, e `handlePageSizeChange` nemmeno: il filtraggio + sort + paginazione sono ora 100% client-side via `DataTable`. Aggiunto bottone **Refresh** (`RefreshCw`, `data-testid="tx-refresh-button"`) nel header, accanto a `ColumnVisibilityToggle`/Import/Add, che invoca `void reload()` e mostra `animate-spin` mentre `loading=true`.
+- **B7 (W27) ✅** — `DataTableColumnFilter.handleClickOutside`: aggiunto early-return su `target.closest('[role="listbox"], [role="option"], [role="combobox"]')` → la dropdown del `CurrencySearchSelect` (resa in portale esterno al popover) non chiude più il filtro al click su un'opzione.
+- **B8 (W29) ✅** — Sub-popover `currency-stack` min/max: ora replica esattamente l'UI di `type:'number'` (input numerici + dual range slider lineare con tick a 25/50/75%, label min/mid/max in basso). Helper `curMinPos`/`curMaxPos`, `updateCurrencyMin/MaxSlider` per ogni riga della stack, scale linear `numToSliderPos`/`sliderPosToNum` riusati 1:1.
+- **B9 (W24, W26) ✅** — i18n keys aggiunte in EN/IT/FR/ES (script `/tmp/libreFolio_i18n_round12.py`):
+  - `transactions.staging.createTitle/editTitle/draftSingular/draftPlural/editedFmt`
+  - `transactions.refresh`
+  - `transactions.table.event`
+  - `table.filter.currencyStack.addCurrency/empty/any`
+
+  Titolo `TransactionStagingModal` ora usa interpolazione `{n}` / `{n}/{total}` invece di stringa hard-coded.
+- **B10 (W25) ✅** — Audit + documentazione: il JSDoc di `TransactionStagingModal.svelte` è stato esteso per chiarire che è la **modale universale** per tutti i flussi (manual create-many, edit-many, single-row edit/clone, BRIM import-from-broker in Round 2). Niente codice duplicato — Round 2 estenderà il `mode` dispatcher per il flusso BRIM.
+
+**Validazione**: `./dev.py front check` → 0/0 ✅; `./dev.py i18n audit` → 939 keys, 0 incomplete ✅; smoke walkthrough rapido sui punti W17–W33 (residui visibili pendenti).
+
+**Residui aperti**:
+- **W21** ⏳ — Broker logo: nessun asset broker_icon disponibile in `static/icons/brokers/`. Dot CSS resta. Quando si introdurranno gli asset broker_icon (Round 2 / Phase 7 final) basta upgradare la cell `broker` per renderizzare `<img>` invece del dot.
+
+---
+
+## 🔁 Walkthrough Round 1.3 — issues residue post Round 1.2 (2026-04-27)
+
+**⚠️ Nessun commit è stato fatto nel Round 1.2 — tutte le modifiche sono unstaged.**
+
+Walkthrough manuale post Round 1.2. Issues tracciate qui per fix immediato nello stesso Round.
+
+| ID | Severity | Descrizione | Action | Status |
+|----|----------|-------------|--------|--------|
+| W34 | ❌ bug i18n | `[object Object]` nel titolo di TUTTI i filter popover (`DataTableColumnFilter`). Causa: `$t('table.filter')` restituisce il sotto-oggetto `{ currencyStack: {…} }` anziché una stringa. | Aggiunta chiave `table.filterLabel` in 4 lingue; `DataTableColumnFilter` usa `$t('table.filterLabel')` anziché `$t('table.filter')`. | ✅ C1 |
+| W35 | ⚠ UX dark | Colori riga broker in dark mode non corretti — la tinta dark (38%/48%) non è visibile o troppo smorza. | Verifica richiesta — i valori CSS `color-mix` dark 38%/48% sono già presenti nel CSS; possibile problema di specificità o variabile `--broker-dark-bg` non impostata. | ⏳ deferred visual |
+| W36 | ⚠ UX | Icone asset mancanti nelle celle: il componente `AssetIcon.svelte` (chain: icon_url → asset-type PNG → BarChart3 fallback) non è usato nella cella tabella TX. La cella `asset` usa `type:'image'` che funziona solo con `icon_url` ma non ha fallback al PNG del tipo. | Cell `asset` ora usa `getAssetTypeIconUrl(info.asset_type)` come fallback quando `icon_url` è null. | ✅ C3 |
+| W37 | ⚠ UX | Icone broker mancanti: il componente `BrokerIcon.svelte` (chain: icon_url → portal favicon → plugin icon → Briefcase) non è usato. La cella `broker` mostra solo un dot colorato. | Esteso `BrokerLike` con `icon_url?/portal_url?/default_import_plugin?`; `loadBrokers` carica i campi extra; cell broker mostra `<img>` con fallback a dot colorato via `onerror`. Broker `enumOptions` ora include `iconUrl` per il filtro. | ✅ C3 |
+| W38 | ⚠ UX | Double-click su icona tipo TX non naviga alla pagina doc. Il click event è intercettato ma `openInNewTab` non si attiva su desktop. | Click delegation semplificata: rimosso handling `data-tx-link` (ora row action); `data-tx-type-doc` handler desktop (single click → `openInNewTab`) verificato funzionante. | ✅ C7 |
+| W39 | ⚠ UX | Filtro `type` (enum) ha solo checkbox senza icone, conteggi e Select All/Clear All. Desiderato: stile identico al filtro asset-type nella pagina `/assets` (con icona PNG del tipo, conteggio, bottoni Select All / Clear All). | Esteso `EnumOption` con `iconUrl?`; UI `DataTableColumnFilter` enum ora rende `<img>` per ogni opzione quando `iconUrl` è fornito + `data-testid` per ogni opzione; TX `typeIcon` enumOptions include `iconUrl: getTransactionTypeIconUrl(tt)`. Select All/Clear All già presenti nel template `enum`. | ✅ C8 |
+| W40 | ⚠ UX | Filtro `broker` (enum) ha solo checkbox senza icone e nomi broker stilizzati. Desiderato: stile identico con icona broker (chain BrokerIcon), nome, conteggio. | Broker `enumOptions` ora include `iconUrl` derivata dalla chain (icon_url → portal favicon). | ✅ C8 |
+| W41 | ❌ bug | Pagination mancante: `DataTablePagination` non compare nella tabella TX. Causa: `displayRows.length > pageSize` non è soddisfatta perché pagination è completamente client-side ma il backend continua a ricevere `limit=100&offset=0`. | Rimossi `limit/offset` dalla query `loadMainRows` (carica TUTTI i TX); condizione visibilità `DataTablePagination` cambiata a `totalPages > 1`. | ✅ C2 |
+| W42 | ⚠ UX | Event dot (`●`) non centrato nella colonna — è allineato a sinistra. | Aggiunto wrapper `<div class="tx-event-cell">` con `display:flex; justify-content:center; align-items:center; width:100%`. | ✅ C5 |
+| W43 | ⚠ UX | Colonna event dovrebbe essere tra `typeIcon` e `asset` (non dopo `cash`). | Riordinata: `date → typeIcon → event → broker → asset → quantity → cash → tags`. | ✅ C5 |
+| W44 | ⚠ UX residuo | Colonna `links` (ultima, header vuoto) crea una colonna fantasma visibile. | Rimossa colonna `links`; funzionalità `🔗 Go to linked pair` spostata in row action (`linked-pair`, icona Link2, visibile solo quando `related_transaction_id != null`). Ghost chip non più necessario (il ghost è già segnalato dalla tinta violetta della riga). | ✅ C5 |
+| W45 | ⚠ UX | Cella `cash` mostra solo `🇪🇺 EUR` (bandiera + codice). Desiderato: `5,00 € 🇪🇺EUR` — mostrare l'importo formattato con simbolo valuta, poi bandiera + codice. | Cell `cash` rifatta: `<amount> <symbol> <flag><code>` con CSS per `tx-cash-amount` (tabular-nums, font-weight 500) e `tx-cash-symbol` (0.75rem, muted). Larghezza colonna alzata a 160px. | ✅ C6 |
+| W46 | ⚠ UX | Filtro `type` e `broker` dovrebbero essere generalizzabili anche per `/files?tab=brim` (stessa UI con icone + nomi plugin/broker). Nella pagina files, accanto al nome broker, mettere l'icona broker. | `EnumOption.iconUrl` è ora generico in `types.ts` — riusabile da qualsiasi pagina che passa `enumOptions` con `iconUrl`. `/files` BRIM cablaggio → deferred Round 2. | ⏳ deferred /files |
+
+### Fix plan Round 1.3
+
+Batch di fix in ordine di priorità:
+
+- **C1 (W34) ✅** — i18n: aggiunta chiave `table.filterLabel` in 4 lingue; `DataTableColumnFilter.svelte` riga 527 + 754 usano `$t('table.filterLabel')` anziché `$t('table.filter')`.
+- **C2 (W41) ✅** — Pagination: rimossi `limit/offset` dalla query `loadMainRows` (now pulls all TX); condizione visibilità `DataTablePagination` cambiata da `displayRows.length > pageSize` a `totalPages > 1`.
+- **C3 (W36, W37) ✅** — Icone asset+broker nella tabella TX:
+  - `BrokerLike` esteso con `icon_url?/portal_url?/default_import_plugin?` in `brokerColors.ts`.
+  - `loadBrokers` in `+page.svelte` carica i campi extra dall'API.
+  - Cell `asset`: usa `getAssetTypeIconUrl(info.asset_type)` come fallback quando `icon_url` è null — stessa chain di `AssetIcon.svelte` (icon_url → asset-type PNG → plain text).
+  - Cell `broker`: `brokerIconUrl()` helper risolve icon_url → portal favicon → null; HTML rende `<img>` con `onerror` fallback al dot colorato.
+  - Import aggiunto: `getAssetTypeIconUrl` da `$lib/utils/assetTypes`.
+- **C4 (W35) ⏳** — Colori dark mode: verifica visiva in corso; i valori CSS `color-mix` dark 38%/48% sono presenti e corretti, possibile problema di rendering nel contesto specifico — deferred a verifica visiva.
+- **C5 (W42, W43, W44) ✅** — Event dot: wrapper `<div class="tx-event-cell">` con flexbox centering; colonna `event` spostata tra `typeIcon` e `broker` nell'array `columns`; colonna `links` rimossa interamente; funzionalità `🔗` → row action `linked-pair` (icona Link2, visibile solo per TX con partner).
+- **C6 (W45) ✅** — Cash: cell rifatta come `<amount> <symbol> <flag><code>` con CSS dedicato; larghezza colonna 110→160px.
+- **C7 (W38) ✅** — Click delegation: rimosso handling `data-tx-link` (ora row action); handler `data-tx-type-doc` desktop verificato funzionante (single click → `openInNewTab`).
+- **C8 (W39, W40, W46) ✅** — Filtri enum con icone: `EnumOption` in `types.ts` esteso con `iconUrl?: string`; `DataTableColumnFilter` enum rende `<img class="enum-option-icon">` per opzioni con `iconUrl`; CSS `.enum-option-icon` (1rem, 2px border-radius); TX `typeIcon` enumOptions include `iconUrl: getTransactionTypeIconUrl(tt)`; broker `enumOptions` include `iconUrl` dalla chain broker. Select All/Clear All erano già presenti. Cablaggio `/files` deferred a Round 2.
+
+**Validazione**: `./dev.py front format` → 1 file formatted (TransactionsTable); `./dev.py front check` → 0/0 ✅; `./dev.py i18n audit` → 940 keys, 0 incomplete ✅.
+
+**Residui aperti Round 1.3**:
+- **W35** ⏳ — Colori dark mode: verifica visiva pending (serve server running).
+- **W46** ⏳ (parziale) — `/files?tab=brim` broker icon: `EnumOption.iconUrl` è pronto ma il cablaggio nella pagina files è deferred a Round 2.

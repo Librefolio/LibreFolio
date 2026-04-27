@@ -192,6 +192,8 @@ export type ColumnType = 'text' | 'number' | 'date' | 'enum' | 'multi-enum' | 's
 export interface EnumOption {
     value: string;
     label: string;
+    /** Optional icon URL rendered beside the label in filter dropdowns */
+    iconUrl?: string;
 }
 
 /**

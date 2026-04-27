@@ -18,8 +18,8 @@
   Pattern: Svelte 5 runes, dark mode, `data-testid` everywhere.
 -->
 <script lang="ts">
-    import {_ as t} from '$lib/i18n';
-    import {Calendar1, Hash, Link2 as LinkIcon, Pencil, Sparkles, Copy, Trash2} from 'lucide-svelte';
+    import {_ as t, locale} from '$lib/i18n';
+    import {Calendar1, Hash, Link2 as LinkIcon, Pencil, Copy, Trash2} from 'lucide-svelte';
 
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
@@ -27,15 +27,22 @@
 
     import TransactionTypeBadge from './TransactionTypeBadge.svelte';
 
-    import {assetStoreVersion, getAssetInfo} from '$lib/stores/assetStore';
+    import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
-    import {getTransactionTypeIconUrl, TX_TYPES} from '$lib/utils/transactionTypes';
+    import {getStringBadgeStyle} from '$lib/utils/colors';
+    import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // Sentinel keep-imports (used in HTML cells / hover targets but not statically referenced).
     void Calendar1;
     void Hash;
     void LinkIcon;
     void TransactionTypeBadge;
+
+    // Hydrate stores used by the cell renderers.
+    void ensureAssetsLoaded();
+    ensureCurrenciesLoaded($locale ?? 'en');
 
     // =========================================================================
     // Types
@@ -249,6 +256,20 @@
         return brokers.find((b) => b.id === brokerId)?.name ?? `#${brokerId}`;
     }
 
+    /** Resolve the best icon URL for a broker using the fallback chain:
+     *  1. custom icon_url  2. portal_url → favicon.ico  3. null (dot fallback in CSS) */
+    function brokerIconUrl(brokerId: number): string | null {
+        const b = brokers.find((br) => br.id === brokerId);
+        if (!b) return null;
+        if (b.icon_url?.trim()) return b.icon_url;
+        if (b.portal_url?.trim()) {
+            try {
+                return new URL(b.portal_url).origin + '/favicon.ico';
+            } catch {}
+        }
+        return null;
+    }
+
     function brokerStyle(brokerId: number): string {
         const c = getBrokerColor(brokerId, brokers);
         // Inject CSS custom properties used by the row tint, broker badge and
@@ -320,6 +341,16 @@
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    /** Detect coarse pointer (touch-first device) once per script load. */
+    let isCoarsePointer = $state(false);
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+        try {
+            isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+        } catch {
+            isCoarsePointer = false;
+        }
+    }
+
     let columns = $derived<ColumnDef<DisplayRow>[]>([
         {
             id: 'date',
@@ -334,19 +365,64 @@
             id: 'typeIcon',
             header: () => $t('transactions.table.type'),
             type: 'enum',
-            width: 60,
+            width: 64,
             sortable: true,
             filterable: true,
             urlKey: 'types',
-            enumOptions: TX_TYPES.map((tt) => ({value: tt, label: $t(`transactions.types.${tt}`) || tt})),
+            enumOptions: TX_TYPES.map((tt) => ({value: tt, label: $t(`transactions.types.${tt}`) || tt, iconUrl: getTransactionTypeIconUrl(tt)})),
             getValue: (d) => d.tx.type,
             cell: (d) => {
                 const label = $t(`transactions.types.${d.tx.type}`) || d.tx.type;
                 const url = getTransactionTypeIconUrl(d.tx.type);
+                const docUrl = getTxTypeDocUrl(d.tx.type, $locale ?? 'en');
                 return {
                     type: 'html',
-                    html: `<span class="tx-type-icon-wrap" data-testid="tx-type-icon-${d.tx.id}"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" class="tx-type-icon" /></span>`,
+                    html: `<button type="button" class="tx-type-icon-link" data-tx-type-doc="${escapeHtml(docUrl)}" data-testid="tx-type-icon-${d.tx.id}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" class="tx-type-icon" /></button>`,
                     tooltip: {text: label, position: 'top'},
+                };
+            },
+        },
+        {
+            id: 'event',
+            header: () => $t('transactions.table.event') || 'Event',
+            type: 'custom',
+            sortable: false,
+            filterable: false,
+            resizable: false,
+            width: 56,
+            cell: (d) => {
+                if (d.tx.asset_event_id == null) return '';
+                const tip = eventTooltipText(d.tx.asset_event_id);
+                return {
+                    type: 'html',
+                    html: `<div class="tx-event-cell"><button type="button" class="tx-event-dot" data-tx-event="${d.tx.id}" data-testid="tx-event-dot-${d.tx.id}" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}"></button></div>`,
+                };
+            },
+        },
+        {
+            id: 'broker',
+            header: () => $t('transactions.table.broker'),
+            type: 'enum',
+            width: 160,
+            urlKey: 'broker_id',
+            enumOptions: brokers.map((b) => {
+                let iconUrl: string | null = null;
+                if (b.icon_url?.trim()) iconUrl = b.icon_url;
+                else if (b.portal_url?.trim()) {
+                    try {
+                        iconUrl = new URL(b.portal_url).origin + '/favicon.ico';
+                    } catch {}
+                }
+                return {value: String(b.id), label: b.name ?? `#${b.id}`, iconUrl: iconUrl ?? undefined};
+            }),
+            getValue: (d) => String(d.tx.broker_id),
+            cell: (d) => {
+                const name = brokerName(d.tx.broker_id);
+                const iconSrc = brokerIconUrl(d.tx.broker_id);
+                const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" class="tx-broker-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="tx-broker-dot" style="display:none"></span>` : `<span class="tx-broker-dot"></span>`;
+                return {
+                    type: 'html',
+                    html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}" title="${escapeHtml(name)}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span></span>`,
                 };
             },
         },
@@ -365,8 +441,10 @@
                 if (!d.tx.asset_id) return '—';
                 const info = getAssetInfo(d.tx.asset_id);
                 const name = info?.display_name ?? `#${d.tx.asset_id}`;
-                if (info?.icon_url) {
-                    return {type: 'image', src: info.icon_url, alt: name, text: name, size: 20, circle: false};
+                // Fallback chain: icon_url → asset-type PNG → plain text
+                const iconSrc = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
+                if (iconSrc) {
+                    return {type: 'image', src: iconSrc, alt: name, text: name, size: 20, circle: false};
                 }
                 return name;
             },
@@ -387,21 +465,18 @@
             urlKey: 'cash',
             getValue: (d) => (d.tx.cash ? Number(d.tx.cash.amount) : 0),
             getCurrencyValue: (d) => (d.tx.cash ? {code: d.tx.cash.code, amount: Number(d.tx.cash.amount)} : null),
-            cell: (d) => formatCash(d.tx.cash),
-        },
-        {
-            id: 'broker',
-            header: () => $t('transactions.table.broker'),
-            type: 'enum',
-            width: 160,
-            urlKey: 'broker_id',
-            enumOptions: brokers.map((b) => ({value: String(b.id), label: b.name ?? `#${b.id}`})),
-            getValue: (d) => String(d.tx.broker_id),
             cell: (d) => {
-                const name = brokerName(d.tx.broker_id);
+                if (!d.tx.cash) return '—';
+                const code = d.tx.cash.code;
+                const n = Number(d.tx.cash.amount);
+                const info = getCurrencyInfo(code);
+                const symbol = info.symbol ?? '';
+                const sign = n > 0 ? '+' : '';
+                const abs = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                const formatted = `${sign}${n < 0 ? '-' : ''}${abs}`;
                 return {
                     type: 'html',
-                    html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}"><span class="tx-broker-dot"></span><span class="tx-broker-name">${escapeHtml(name)}</span></span>`,
+                    html: `<span class="tx-cash-cell" data-testid="tx-cash-cell-${d.tx.id}" title="${escapeHtml(formatCash(d.tx.cash))}"><span class="tx-cash-amount">${escapeHtml(formatted)}</span> <span class="tx-cash-symbol">${escapeHtml(symbol)}</span> <span class="emoji-flag">${info.flag_emoji ?? ''}</span><span class="tx-cash-code">${escapeHtml(code)}</span></span>`,
                 };
             },
         },
@@ -409,41 +484,26 @@
             id: 'tags',
             header: () => $t('transactions.table.tags'),
             type: 'multi-enum',
-            width: 160,
+            width: 200,
             urlKey: 'tags',
             getValue: (d) => (d.tx.tags ?? []).join(','),
             getMultiValue: (d) => d.tx.tags ?? [],
-            cell: (d) => (d.tx.tags?.length ? d.tx.tags.join(', ') : '—'),
-        },
-        {
-            id: 'links',
-            header: '',
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            resizable: false,
-            width: 70,
             cell: (d) => {
-                const parts: string[] = [];
-                if (d.tx.related_transaction_id != null) {
-                    parts.push(`<button type="button" class="tx-link-icon" data-tx-link="${d.tx.id}" data-testid="tx-link-icon-${d.tx.id}" title="${$t('transactions.gotoLinkedPair') || 'Go to linked pair'}">🔗</button>`);
-                }
-                if (d.isGhost) {
-                    parts.push(`<span class="tx-ghost-chip" data-testid="tx-ghost-chip-${d.tx.id}" title="${$t('transactions.ghost.tooltip') || 'Linked partner shown for context'}">ghost</span>`);
-                }
-                return {type: 'html', html: parts.join(' ')};
+                const tags = d.tx.tags ?? [];
+                if (tags.length === 0) return '—';
+                const html = tags.map((tag) => `<span class="tx-tag-badge" style="${getStringBadgeStyle(tag)}">${escapeHtml(tag)}</span>`).join('');
+                return {type: 'html', html: `<span class="tx-tag-list" data-testid="tx-tag-list-${d.tx.id}">${html}</span>`};
             },
         },
     ]);
 
     let rowActions = $derived<RowAction<DisplayRow>[]>([
         {
-            id: 'event',
-            icon: Sparkles,
-            label: (d) => (d.tx.asset_event_id != null ? eventTooltipText(d.tx.asset_event_id) : ''),
-            iconClass: () => 'text-violet-500 dark:text-violet-300',
-            visible: (d) => d.tx.asset_event_id != null,
-            onClick: (d) => onEventBadgeClick?.(d.tx),
+            id: 'linked-pair',
+            icon: LinkIcon,
+            label: () => $t('transactions.gotoLinkedPair') || 'Go to linked pair',
+            visible: (d: DisplayRow) => d.tx.related_transaction_id != null,
+            onClick: (d) => onLinkedPairClick?.(d.tx),
         },
         {
             id: 'edit',
@@ -467,25 +527,91 @@
     ]);
 
     /**
-     * Click delegation for inline `tx-link-icon` (HtmlCell) buttons.
-     * Listens on the table's container.
+     * Click delegation for inline buttons rendered by HtmlCell:
+     * - `data-tx-link` → goto linked pair
+     * - `data-tx-event` → open event popover (Round 2)
+     * - `data-tx-type-doc` → open mkdocs doc page (desktop click,
+     *   mobile dblclick / long-press only — see pointer handlers below)
      */
+    let pressTimer: ReturnType<typeof setTimeout> | null = null;
+    let longPressFired = false;
+    let pressTargetUrl: string | null = null;
+
+    function openInNewTab(url: string) {
+        try {
+            window.open(url, '_blank', 'noopener,noreferrer');
+        } catch {
+            /* no-op */
+        }
+    }
+
     function handleTableClick(ev: MouseEvent) {
         const target = ev.target as HTMLElement | null;
         if (!target) return;
-        const linkBtn = target.closest('[data-tx-link]') as HTMLElement | null;
-        if (linkBtn) {
-            const id = Number(linkBtn.getAttribute('data-tx-link'));
+        const eventBtn = target.closest('[data-tx-event]') as HTMLElement | null;
+        if (eventBtn) {
+            const id = Number(eventBtn.getAttribute('data-tx-event'));
             const tx = displayRows.find((d) => d.tx.id === id)?.tx;
-            if (tx) onLinkedPairClick?.(tx);
+            if (tx) onEventBadgeClick?.(tx);
+            ev.stopPropagation();
+            return;
+        }
+        const docBtn = target.closest('[data-tx-type-doc]') as HTMLElement | null;
+        if (docBtn) {
+            const url = docBtn.getAttribute('data-tx-type-doc') ?? '';
+            // Mobile/touch: ignore single tap (dblclick or long-press handle it).
+            if (isCoarsePointer) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                return;
+            }
+            // Desktop: single click opens.
+            if (url) openInNewTab(url);
+            ev.stopPropagation();
+            return;
+        }
+    }
+
+    function handleTableDblClick(ev: MouseEvent) {
+        if (!isCoarsePointer) return;
+        const target = ev.target as HTMLElement | null;
+        if (!target) return;
+        const docBtn = target.closest('[data-tx-type-doc]') as HTMLElement | null;
+        if (docBtn) {
+            const url = docBtn.getAttribute('data-tx-type-doc') ?? '';
+            if (url) openInNewTab(url);
             ev.stopPropagation();
         }
+    }
+
+    function handleTablePointerDown(ev: PointerEvent) {
+        if (!isCoarsePointer) return;
+        const target = ev.target as HTMLElement | null;
+        if (!target) return;
+        const docBtn = target.closest('[data-tx-type-doc]') as HTMLElement | null;
+        if (!docBtn) return;
+        pressTargetUrl = docBtn.getAttribute('data-tx-type-doc');
+        longPressFired = false;
+        if (pressTimer) clearTimeout(pressTimer);
+        pressTimer = setTimeout(() => {
+            longPressFired = true;
+            if (pressTargetUrl) openInNewTab(pressTargetUrl);
+        }, 500);
+    }
+
+    function handleTablePointerEnd() {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+        pressTargetUrl = null;
+        longPressFired = false;
     }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="tx-table-wrap" data-testid="tx-table" onclick={handleTableClick}>
+<div class="tx-table-wrap" data-testid="tx-table" onclick={handleTableClick} ondblclick={handleTableDblClick} onpointerdown={handleTablePointerDown} onpointerup={handleTablePointerEnd} onpointercancel={handleTablePointerEnd} onpointerleave={handleTablePointerEnd}>
     <DataTable
         bind:this={tableRef}
         data={visibleRows}
@@ -510,7 +636,7 @@
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
     />
 
-    {#if displayRows.length > Math.min(...[10, 25, 50, 100].filter((x) => x > 0))}
+    {#if totalPages > 1}
         <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={displayRows.length} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
     {/if}
 </div>
@@ -519,26 +645,34 @@
     /* All selectors target HTML injected by DataTable's HtmlCell / row APIs;
        they are not statically visible to Svelte, hence the single :global block. */
     :global {
-        /* Whole-row tint: light translucent broker color in light mode,
-           slightly stronger in dark mode for legibility. */
+        /* Whole-row tint: bumped contrast for clearer broker recognition.
+           Light: 22% / hover 32%. Dark: 38% / hover 48%. */
         .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-bg, transparent) 12%, transparent);
-        }
-        .dark .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-dark-bg, transparent) 22%, transparent);
-        }
-        /* Hover keeps tint readable. */
-        .tx-table-wrap tr.tx-row-tinted:hover > td {
             background: color-mix(in srgb, var(--broker-bg, transparent) 22%, transparent);
         }
-        .dark .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-dark-bg, transparent) 32%, transparent);
+        .dark .tx-table-wrap tr.tx-row-tinted > td {
+            background: color-mix(in srgb, var(--broker-dark-bg, transparent) 38%, transparent);
         }
-        /* Broker cell: colored dot + name. */
+        .tx-table-wrap tr.tx-row-tinted:hover > td {
+            background: color-mix(in srgb, var(--broker-bg, transparent) 32%, transparent);
+        }
+        .dark .tx-table-wrap tr.tx-row-tinted:hover > td {
+            background: color-mix(in srgb, var(--broker-dark-bg, transparent) 48%, transparent);
+        }
+        /* Broker cell: icon/dot + name with proper truncation when narrow. */
         .tx-table-wrap .tx-broker-cell {
             display: inline-flex;
             align-items: center;
             gap: 0.4rem;
+            max-width: 100%;
+            min-width: 0;
+        }
+        .tx-table-wrap .tx-broker-icon {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 3px;
+            object-fit: contain;
+            flex-shrink: 0;
         }
         .tx-table-wrap .tx-broker-dot {
             display: inline-block;
@@ -556,17 +690,122 @@
         .tx-table-wrap .tx-broker-name {
             font-size: 0.8125rem;
             color: inherit;
+            min-width: 0;
+            flex: 1 1 auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
-        /* Type-icon column: icon-only cell. */
-        .tx-table-wrap .tx-type-icon-wrap {
+        /* Type-icon column: clickable button (opens mkdocs doc page). */
+        .tx-table-wrap .tx-type-icon-link {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            border: 0;
+            border-radius: 4px;
+            cursor: pointer;
+            line-height: 1;
+            transition:
+                transform 0.12s ease,
+                background-color 0.12s ease;
+        }
+        .tx-table-wrap .tx-type-icon-link:hover {
+            background: rgb(0 0 0 / 0.05);
+            transform: translateY(-1px);
+        }
+        .dark .tx-table-wrap .tx-type-icon-link:hover {
+            background: rgb(255 255 255 / 0.08);
         }
         .tx-table-wrap .tx-type-icon {
-            width: 1.25rem;
-            height: 1.25rem;
+            width: 1.75rem;
+            height: 1.75rem;
             object-fit: contain;
+            pointer-events: none;
+        }
+        /* Cash cell: amount + symbol + flag emoji + ISO3 code. */
+        .tx-table-wrap .tx-cash-cell {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.8125rem;
+        }
+        .tx-table-wrap .tx-cash-amount {
+            font-variant-numeric: tabular-nums;
+            font-weight: 500;
+            color: #1e293b;
+        }
+        .dark .tx-table-wrap .tx-cash-amount {
+            color: #e2e8f0;
+        }
+        .tx-table-wrap .tx-cash-symbol {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        .dark .tx-table-wrap .tx-cash-symbol {
+            color: #94a3b8;
+        }
+        .tx-table-wrap .tx-cash-cell .emoji-flag {
+            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+            line-height: 1;
+        }
+        .tx-table-wrap .tx-cash-code {
+            font-weight: 500;
+            color: #475569;
+        }
+        .dark .tx-table-wrap .tx-cash-code {
+            color: #cbd5e1;
+        }
+        /* Event dot: dedicated column between type and broker. */
+        .tx-table-wrap .tx-event-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+        .tx-table-wrap .tx-event-dot {
+            display: inline-block;
+            width: 0.625rem;
+            height: 0.625rem;
+            border-radius: 9999px;
+            background: rgb(139 92 246);
+            border: 0;
+            cursor: pointer;
+            box-shadow: 0 0 0 2px rgb(139 92 246 / 0.18);
+            transition: transform 0.12s ease;
+        }
+        .tx-table-wrap .tx-event-dot:hover {
+            transform: scale(1.25);
+        }
+        .dark .tx-table-wrap .tx-event-dot {
+            background: rgb(196 181 253);
+            box-shadow: 0 0 0 2px rgb(196 181 253 / 0.22);
+        }
+        /* Tag badges: colored chips, one per tag, deterministic palette. */
+        .tx-table-wrap .tx-tag-list {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            align-items: center;
+        }
+        .tx-table-wrap .tx-tag-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.05rem 0.45rem;
+            border-radius: 9999px;
+            font-size: 0.6875rem;
+            font-weight: 500;
+            line-height: 1.4;
+            background: var(--badge-bg, #e2e8f0);
+            color: var(--badge-text, #334155);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--badge-text, #334155) 18%, transparent);
+        }
+        .dark .tx-table-wrap .tx-tag-badge {
+            background: var(--badge-dark-bg, #334155);
+            color: var(--badge-dark-text, #e2e8f0);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--badge-dark-text, #e2e8f0) 22%, transparent);
         }
         /* Ghost rows: violet tint (overrides broker tint). */
         .tx-table-wrap tr.tx-row-ghost > td {
@@ -588,26 +827,6 @@
             100% {
                 box-shadow: inset 0 0 0 0 rgb(99 102 241 / 0);
             }
-        }
-        .tx-table-wrap .tx-link-icon {
-            cursor: pointer;
-            font-size: 0.875rem;
-            margin-right: 0.25rem;
-            background: transparent;
-            border: 0;
-            padding: 0;
-        }
-        .tx-table-wrap .tx-ghost-chip {
-            display: inline-block;
-            padding: 0.05rem 0.4rem;
-            border-radius: 0.375rem;
-            font-size: 0.65rem;
-            background: rgb(237 233 254);
-            color: rgb(91 33 182);
-        }
-        .dark .tx-table-wrap .tx-ghost-chip {
-            background: rgb(76 29 149 / 0.4);
-            color: rgb(196 181 253);
         }
     }
 </style>
