@@ -57,6 +57,18 @@
     // Derived state
     let selectedOption = $derived(options.find((o) => o.value === value));
 
+    /** Detect URL-style icons (e.g. `/icons/foo.png`, `https://…`) so we can
+     *  render them as `<img>` instead of leaking the URL string into a
+     *  text node (Bugfix-2 §C7). Emoji/short single-char icons stay as text. */
+    function looksLikeUrl(s: string | undefined | null): boolean {
+        if (!s) return false;
+        return s.startsWith('/') || s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:');
+    }
+    function hideOnError(e: Event) {
+        const img = e.currentTarget as HTMLImageElement | null;
+        if (img) img.style.display = 'none';
+    }
+
     // Item height approximation (px per item)
     const ITEM_HEIGHT = 44;
 
@@ -80,7 +92,9 @@
         }
 
         const rect = containerRef.getBoundingClientRect();
-        const padding = 20; // Safety padding from edges
+        // Bugfix-3 §U15: 80px padding from viewport edges so the dropdown
+        // doesn't overlap modal footers (typical footer height ~60px + slack).
+        const padding = 80;
 
         const spaceBelow = window.innerHeight - rect.bottom - padding;
         const spaceAbove = rect.top - padding;
@@ -326,9 +340,15 @@
             {:else}
                 <div class="flex items-center space-x-2 min-w-0">
                     {#if selectedOption.icon && selectedOption.icon !== selectedOption.value}
-                        <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium emoji-flag">
-                            {selectedOption.icon}
-                        </span>
+                        {#if looksLikeUrl(selectedOption.icon)}
+                            <span class="shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded-lg overflow-hidden">
+                                <img src={selectedOption.icon} alt="" class="w-7 h-7 object-contain" onerror={hideOnError} />
+                            </span>
+                        {:else}
+                            <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium emoji-flag">
+                                {selectedOption.icon}
+                            </span>
+                        {/if}
                     {/if}
                     <div class="min-w-0">
                         <div class="font-medium text-gray-900 dark:text-gray-100">{selectedOption.value}</div>
@@ -394,9 +414,15 @@
                                 </div>
                             {:else}
                                 {#if option.icon && option.icon !== option.value}
-                                    <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium emoji-flag">
-                                        {option.icon}
-                                    </span>
+                                    {#if looksLikeUrl(option.icon)}
+                                        <span class="shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded-lg overflow-hidden">
+                                            <img src={option.icon} alt="" class="w-7 h-7 object-contain" onerror={hideOnError} />
+                                        </span>
+                                    {:else}
+                                        <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium emoji-flag">
+                                            {option.icon}
+                                        </span>
+                                    {/if}
                                 {/if}
                                 <div class="min-w-0 flex-1">
                                     <div class="font-mono text-sm text-gray-700 dark:text-gray-200">{option.value}</div>

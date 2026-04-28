@@ -46,6 +46,10 @@
         label?: string;
         /** Compact mode (smaller text) */
         compact?: boolean;
+        /** Render the trigger as a full-width input-style control matching
+         *  SearchSelect (`w-full px-3 py-2 text-sm`). Useful when used inside
+         *  a DataTable cell or grid alongside other selectors (Bugfix-3 §U13). */
+        inputStyle?: boolean;
         /** Called when user selects a date */
         onchange: (date: string) => void;
         /** Set of dates that cannot be selected */
@@ -54,7 +58,7 @@
         allowFuture?: boolean;
     }
 
-    let {value = $bindable(''), label = 'Date', compact = false, onchange, disabledDates, allowFuture = false}: Props = $props();
+    let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false}: Props = $props();
 
     // =========================================================================
     // State
@@ -186,19 +190,19 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="relative sdp-trigger inline-block">
+<div class="relative sdp-trigger {inputStyle ? 'block w-full' : 'inline-block'}">
     <button
         bind:this={triggerEl}
-        class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
+        class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {inputStyle ? 'w-full px-3 py-2 text-sm' : compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
         onclick={(e) => {
             e.stopPropagation();
             openCalendar();
         }}
         type="button"
     >
-        <Calendar class="text-libre-green flex-shrink-0" size={compact ? 12 : 14} />
+        <Calendar class="text-libre-green flex-shrink-0" size={inputStyle ? 14 : compact ? 12 : 14} />
         {#if label}<span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{label}</span>{/if}
-        <span class="font-mono {compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(value)}</span>
+        <span class="font-mono {inputStyle ? 'text-sm' : compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(value)}</span>
     </button>
 
     {#if calendarOpen}

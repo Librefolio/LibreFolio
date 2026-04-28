@@ -16,15 +16,15 @@ Transactions are the financial heart of LibreFolio. A transaction records a fina
 
 The backend model and bulk API ([[F-046]]) were implemented in Phase 7. The bulk API (`POST /transactions/bulk`) is **multi-broker atomic**: all transactions across any number of brokers in a single call succeed or fail together, with a `validate=true` dry-run mode for previewing without committing. This cross-broker atomicity was required by the DEFERRABLE FK constraint on `link_uuid → related_transaction_id` (TRANSFER pairs can span brokers). Access control is enforced at the API level: GET/PATCH/DELETE are filtered to transactions belonging to brokers the user has access to; creating transactions requires EDITOR role.
 
-The primary user-facing flow for entering transactions is through the BRIM pipeline: upload a broker export file, the system parses it with the appropriate plugin, the user reviews the extracted transactions in a staging area (F-049, in-progress), resolves any unknown assets via the matching wizard, and commits. The staging modal (F-048, planned) will also support manual transaction entry as a unified entry point. The transaction list page (F-047, in-progress) provides a paginated DataTable view with broker and asset filters.
+The primary user-facing flow for entering transactions is through the BRIM pipeline: upload a broker export file, the system parses it with the appropriate plugin, the user reviews the extracted transactions in a staging area (F-049, in-progress), resolves any unknown assets via the matching wizard, and commits. The staging modal (F-048, in-progress) now supports manual transaction entry (`create-many`/`edit-many`); BRIM mode (`create-brim`) arrives in Part 5. The transaction list page (F-047, implemented in Phase 7 Part 4) provides a DataTable view with client-side filters (multi-enum, currency-stack sliders, date pickers) and always-pair-adjacent rendering for TRANSFER/FX_CONVERSION pairs.
 
 ## Feature cluster
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
 | [[F-046]] | Transaction Model & Bulk API | backend | core — data model + multi-broker atomic bulk create with dry-run | implemented |
-| [[F-047]] | Transaction List Page (DataTable + filters) | frontend | display — paginated list with broker/asset/type filters | in-progress |
-| [[F-048]] | Staging Modal (unified manual entry + BRIM output) | frontend | core — review/edit transactions before commit | planned |
+| [[F-047]] | Transaction List Page (DataTable + filters) | frontend | display — client-side filtered DataTable, always-pair-adjacent rendering | implemented |
+| [[F-048]] | Staging Modal (unified manual entry + BRIM output) | frontend | core — manual `create-many`/`edit-many` done; BRIM `create-brim` in Part 5 | in-progress |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | core — wizard to match extracted assets + commit | in-progress |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | support — inline preview of uploaded broker report files | planned |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | support — FK between transactions and asset events + suggest endpoint | implemented |
@@ -57,13 +57,12 @@ graph TD
 
 ## Known problems / limitations
 
-Phase 7 Parts 1+2+3 closed (2026-04-25, backend coverage 87.06%). Remaining items:
+Phase 7 Parts 1+2+3 closed (2026-04-25). Phase 7 Part 4 closed (2026-04-28, frontend). Remaining items:
 
-- **F-048** Unified Staging Modal not yet built — staging UX is currently
-  embedded inside the BRIM import flow (Part 4 work).
-- **F-050** File Preview System still planned (Part 4).
-- **F-049** asset matching wizard live but UX polish (preview columns, filters)
-  ongoing.
+- **F-048** BRIM mode (`create-brim`) for Staging Modal not yet built — Part 5 work.
+- **F-050** File Preview System still planned (Part 5+).
+- **F-049** asset matching wizard live but UX polish ongoing.
+- **F-047** E2E test specs deferred to Phase 7 final.
 - **Currency consistency**: enforced through [[decisions/price-currency-hard-reject]]
   (hard-400 on price/event currency mismatch, HTTP 409 on `Asset.currency`
   PATCH with existing data) and [[decisions/policy-d-currency-wipe]] (destructive

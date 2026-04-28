@@ -510,3 +510,110 @@ F-056 (FIFO runtime — transaction preservation rationale), F-019/F-020 (FX),
 
 **Pages created**: 2 problems + 1 decision + 1 entity = 4 new wiki pages.
 **Pages updated**: 5 source pages + index.md + ingest-registry.md.
+
+---
+
+## [2026-04-28] ingest | Phase 07 Part 4 — /transactions UI + Round 1 + Round 2
+
+Sources:
+- `plan-phase07-transaction-Part4.prompt.md` @ git:`dcb91929`
+- `plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md` @ git:`444b2d16`
+- `plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md` @ git:`29898623`
+
+Phase 7 Part 4 completes the `/transactions` frontend page (F-047 → **implemented**). Round 1 fixed 82+ issues across 14 sub-rounds, establishing 100% client-side filtering (W28 decision). Round 2 introduced `createEntityStore<T>()` factory, `brokerStore`, conditional pair-grouping, per-currency sliders, and `TxTypeIconCell`. F-048 Staging Modal moved from `planned` → **in-progress** (manual `create-many`/`edit-many` done; BRIM mode deferred to Part 5). Critical deviation: original plan had server-side filters on `GET /transactions` → replaced by full client-side filtering; `highlight_id` URL param removed in favour of DOM-direct pulse animation.
+
+**Created**:
+- [[sources/phase07-part4-transactions-ui]]
+- [[sources/phase07-part4-round1]]
+- [[sources/phase07-part4-round2]]
+- [[concepts/entity-store-pattern]]
+- [[concepts/always-pair-adjacent]]
+- [[concepts/opportunistic-cache-merge]]
+- [[decisions/transactions-client-side-filtering]]
+- [[decisions/datatable-tooltip-custom-cell]]
+- [[problems/svelte5-effect-read-write-loop]]
+- [[problems/babel-currency-symbol-locale]]
+- [[problems/datatable-filter-options-disappear]]
+
+**Updated**:
+- [[features/F-047]] (in-progress → implemented, full component inventory)
+- [[features/F-048]] (planned → in-progress, manual mode done)
+- [[features/registry]] (F-047/F-048 status rows)
+- [[domains/transactions]] (F-047/F-048 status, Part 4 context)
+- [[connections/transactions-connections]] (header + gap table Part 4 closure)
+- index.md, ingest-registry.md
+
+**Pages created**: 3 sources + 3 concepts + 2 decisions + 3 problems = 11 new wiki pages.
+**Pages updated**: 5 existing pages + index.md + ingest-registry.md.
+
+---
+
+## [2026-04-28] lint | Wiki lint pass #6 — post Phase 07 Part 4 ingest
+
+**Scope**: health check after Phase 7 Part 4 ingest (11 new pages, 7 updated). Focus: stale endpoint references, F-047/F-048 status drift, orphan pages, index drift.
+
+**Issues found**: 4 (1 high, 2 medium, 1 low)
+**Issues repaired**: 3 (1 high, 2 medium)
+**Deferred**: 1 (low)
+
+### 🔴 High — Repaired
+
+| # | Page | Problem | Fix |
+|---|------|---------|-----|
+| L6-01 | `domains/brokers.md` (Mermaid line 47) | `POST /brokers/:id/transactions/bulk` in Mermaid diagram — **stale broker-scoped endpoint**. Actual endpoint since Phase 7 Part 3 is `POST /transactions/bulk` (multi-broker atomic). This was fixed in `domains/transactions.md` in Lint #4 but the Brokers domain Mermaid was missed. | Replaced with `POST /transactions/bulk` |
+
+### 🟡 Medium — Repaired
+
+| # | Page | Problem | Fix |
+|---|------|---------|-----|
+| L6-02 | `domains/brokers.md` "What comes next" | Described F-048 Staging Modal as entirely future work — stale after Phase 7 Part 4 delivered manual `create-many`/`edit-many` modes | Updated to note manual modes done, BRIM `create-brim` coming in Part 5 |
+| L6-03 | `raw/ingest-registry.md` Round1 entry | `plan-phase07-transaction-Part4_Round1` shows 14-line drift at git `444b2d16`. The diff is trivial: successor link updated from planned placeholder name to actual Round2 filename. Content is accurate; the drift is purely metadata. | Annotated in source page (`phase07-part4-round1.md`) — no re-ingest needed |
+
+### 🟢 Low — Deferred
+
+| # | Page | Problem | Recommendation |
+|---|------|---------|---------------|
+| L6-04 | `features/F-049.md` | F-049 describes "Review staging" in the flow; doesn't mention that F-048 manual mode is now available as an alternative entry to staging for non-BRIM use | P2 — update F-049 in Phase 7 Part 5 when BRIM→staging flow is finalized |
+
+### Drift detection summary
+
+| Source | Hash | Lines changed | Assessment |
+|--------|------|---------------|------------|
+| `plan-phase07-transaction-Part4.prompt.md` | `dcb91929` | 0 | ✅ clean |
+| `plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md` | `444b2d16` | 14 | ⚠️ trivial — successor link metadata only |
+| `plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md` | `29898623` | 0 | ✅ clean |
+
+### Orphan check — ✅ none
+
+All 11 new pages have inbound `[[links]]` from at least 2 other wiki files each (F-047, source pages, index.md, log.md, domain pages). No orphans.
+
+### Index drift — ✅ none
+
+No wiki pages missing from index.md (except individual F-00X feature pages, which are intentionally not individually listed — only notable ones appear under "Individual Feature Pages"). No dead index references found.
+
+### Concept debt — ✅ satisfied by new pages
+
+Terms that appeared 7–18× across wiki pages before this ingest now have concept pages:
+- `entity-store-pattern` (18 occurrences) → [[concepts/entity-store-pattern]] ✅
+- `always-pair-adjacent` (16 occurrences) → [[concepts/always-pair-adjacent]] ✅
+- `opportunistic-cache-merge` (7 occurrences) → [[concepts/opportunistic-cache-merge]] ✅
+
+`TxTypeIconCell` (6 occurrences) is a component name, not a pattern — documented in F-047. No concept page needed.
+
+**Total touched**: `domains/brokers.md` (2 fixes) + log.md. **0 new pages created**, **0 pages deleted**.
+
+## [2026-04-28] correction | Source-verified fixes — 4 factual errors corrected
+
+Cross-checking all Phase 7 Part 4 wiki pages against actual source files (range: `fcdd89e8` → `2989862` HEAD). 4 factual errors corrected:
+
+1. **`TxTypeIconCell.svelte` path** (F-047.md, sources/phase07-part4-round2.md): Missing `cells/` subdirectory. Fixed to `frontend/src/lib/components/transactions/cells/TxTypeIconCell.svelte`.
+
+2. **TxTypeIconCell desktop interaction** (sources/phase07-part4-round2.md): Claimed "single click → open doc". Actual code: **double-click** (`ondblclick`) opens doc; single click shows tooltip only.
+
+3. **assetStore loader endpoint** (concepts/entity-store-pattern.md, concepts/opportunistic-cache-merge.md): Examples used `apiClient.get('/assets/all')`. Actual: `zodiosApi.list_assets_api_v1_assets_query_get()` → `GET /assets/query`.
+
+4. **Babel fix code** (problems/babel-currency-symbol-locale.md): Function signature was `list_currencies(locale: str)` (wrong). Actual: `list_currencies(language: str = "en")`. Code used `locale='en'` string; actual code uses `en_locale = get_babel_locale("en")` (a `babel.Locale` object), then `get_currency_symbol(code, locale=en_locale)`.
+
+**Verified correct**: entityStore.ts API, brokerStore.ts API, isGrouped logic (TransactionsTable), DataTable fullData/onSortChange/getEnumOptionsWithCounts, capture-phase click (use:captureClick action).
+
+**Files corrected**: F-047.md, sources/phase07-part4-round2.md, concepts/entity-store-pattern.md, concepts/opportunistic-cache-merge.md, problems/babel-currency-symbol-locale.md.

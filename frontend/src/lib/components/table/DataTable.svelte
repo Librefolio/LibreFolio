@@ -22,6 +22,7 @@
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, EnumOption, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
+    import {string} from "zod";
 
     interface Props {
         data: T[];
@@ -179,6 +180,10 @@
 
     // Highlighted row (set by navigateToRowId, cleared on user interaction)
     let highlightedRowId = $state<string | null>(null);
+
+    /** Bound on the root `.datatable-container` so `navigateToRowId` can scope
+     *  its DOM lookup to this instance only (Bugfix-4 §C15). */
+    let containerEl: HTMLDivElement | null = null;
 
     // Filter button refs (for fixed-position popover)
     let filterBtnRefs = $state<Record<string, HTMLButtonElement | null>>({});
@@ -506,6 +511,10 @@
         }
         return out;
     }
+
+    /** Empty currency min/max map — extracted to avoid generic syntax `<string, …>` in
+     *  Svelte template `{@const}` blocks where `<` is parsed as an HTML tag. */
+    const EMPTY_CURRENCY_MIN_MAX: Map<string, {min: number; max: number}> = new Map();
 
     function formatDate(value: Date | string, format?: string): string {
         const date = value instanceof Date ? value : new Date(value);
@@ -909,8 +918,11 @@
         import('svelte')
             .then(({tick}) => tick())
             .then(() => {
-                // Find the row in the visible table by scanning for matching row ID
-                const rows = document.querySelectorAll('.datatable tbody tr');
+                // Bugfix-4 §C15: scope the row lookup to THIS datatable's
+                // container so a modal-table navigation doesn't accidentally
+                // scroll a different datatable mounted elsewhere on the page.
+                const root = containerEl ?? document;
+                const rows = root.querySelectorAll('.datatable tbody tr');
                 const positionInPage = enablePagination ? index % pagination.pageSize : index;
                 const targetRow = rows[positionInPage];
                 targetRow?.scrollIntoView({behavior: 'smooth', block: 'center'});
@@ -965,7 +977,7 @@
     }
 </script>
 
-<div class="datatable-container">
+<div class="datatable-container" bind:this={containerEl}>
     <!-- Table -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -1063,7 +1075,7 @@
                                     {@const dynamicEnumOptions =
                                         column.type === 'multi-enum' ? (column.enumOptions && column.enumOptions.length > 0 ? getMultiEnumOptionsWithCounts(column) : getMultiEnumOptions(column)) : column.type === 'enum' ? getEnumOptionsWithCounts(column) : (column.enumOptions ?? [])}
                                     {@const currencyOptions = column.type === 'currency-stack' ? (column.currencyOptions ?? getCurrencyOptions(column)) : []}
-                                    {@const currencyMinMaxByCode = column.type === 'currency-stack' ? getCurrencyMinMaxByCode(column) : new Map<string, {min: number; max: number}>()}
+                                    {@const currencyMinMaxByCode = column.type === 'currency-stack' ? getCurrencyMinMaxByCode(column) : EMPTY_CURRENCY_MIN_MAX}
                                     <DataTableColumnFilter
                                         type={column.type}
                                         enumOptions={dynamicEnumOptions}
