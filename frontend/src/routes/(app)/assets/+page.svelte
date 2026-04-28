@@ -24,6 +24,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import {invalidateAfterMutation} from '$lib/stores/assetStore';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
@@ -557,6 +558,9 @@
             });
             const r = (response as any)?.results?.[0];
             if (r?.success) {
+                // Evict from the shared cache so other pages (transactions
+                // cell, LiveTicker) drop the deleted asset without a reload.
+                invalidateAfterMutation(deletingAsset.id);
                 assets = assets.filter((a) => a.id !== deletingAsset!.id);
                 toasts.success($t('assets.delete.toastOk', {values: {name: deletingAsset!.display_name}}));
             } else if (r?.error_code === 'HAS_TRANSACTIONS') {
@@ -602,6 +606,8 @@
             });
             const res = response as any;
             const succeeded = res.results?.filter((r: any) => r.success).map((r: any) => r.asset_id) ?? [];
+            // Evict each successfully-deleted asset from the shared cache.
+            if (succeeded.length > 0) invalidateAfterMutation(succeeded);
             assets = assets.filter((a) => !succeeded.includes(a.id));
 
             // Populate results for the ConfirmModal

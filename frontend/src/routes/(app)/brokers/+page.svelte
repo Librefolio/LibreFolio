@@ -6,6 +6,7 @@
     import BrokerCard from '$lib/components/brokers/BrokerCard.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import DeleteBrokerDialog from '$lib/components/brokers/DeleteBrokerDialog.svelte';
+    import {refreshAllBrokers, getAllBrokers, invalidateBroker} from '$lib/stores/brokerStore';
     import type {Broker} from '$lib/types';
 
     // State
@@ -34,19 +35,23 @@
         loading = true;
         error = null;
         try {
-            // Load all brokers with their summaries
-            const basicBrokers = await zodiosApi.list_brokers_api_v1_brokers_get();
+            // Refresh the shared brokerStore cache (drives cross-page icon
+            // updates) and pull the basic list from it. Per-broker summaries
+            // (cash_balances/holdings) stay page-specific.
+            await refreshAllBrokers();
+            const basicBrokers = getAllBrokers();
 
             // For each broker, get the summary to get cash_balances and holdings
             const summaries = await Promise.all(basicBrokers.map((b) => zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: b.id}}).catch(() => null)));
 
             brokers = basicBrokers.map((b, i) => {
                 const summary = summaries[i];
-                return {
-                    ...b,
-                    cash_balances: summary?.cash_balances ?? [],
-                    holdings: summary?.holdings ?? [],
-                } as Broker;
+                // Note: `basicBrokers` come from the shared store as `BrokerInfo`,
+                // which marks `created_at`/`updated_at` as optional. The summary
+                // shape carries them too, so the merged value satisfies `Broker`
+                // at runtime — the cast bypasses TS strictness on optionality.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return {...(b as any), cash_balances: summary?.cash_balances ?? [], holdings: summary?.holdings ?? []} as Broker;
             });
         } catch (e) {
             console.error('Failed to load brokers:', e);
@@ -95,6 +100,9 @@
         deleteLoading = true;
         try {
             await zodiosApi.delete_brokers_api_v1_brokers_delete(undefined, {queries: {ids: [deletingBroker.id], force: event.detail.force}});
+            // Evict from shared cache so other pages (transactions, files,
+            // selectors) drop the deleted broker without requiring a reload.
+            invalidateBroker(deletingBroker.id);
             deleteDialogOpen = false;
             deletingBroker = null;
             await loadBrokers();

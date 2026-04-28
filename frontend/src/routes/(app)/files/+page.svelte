@@ -14,7 +14,7 @@
      * - ?size=min-max - Size range filter
      * - ?date=from,to - Date range filter
      */
-    import {onMount} from 'svelte';
+    import {onMount, onDestroy} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
     import {browser} from '$app/environment';
@@ -23,6 +23,7 @@
     import {formatBytes, uploadFile} from '$lib/utils/upload';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/globalSettings';
+    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/brokerStore';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
@@ -232,17 +233,30 @@
 
     async function loadBrokers() {
         try {
-            brokers = (await zodiosApi.list_brokers_api_v1_brokers_get()) as Broker[];
-            brokerMap = new Map(brokers.map((b) => [b.id, {id: b.id, name: b.name, icon_url: (b as any).icon_url ?? null, portal_url: (b as any).portal_url ?? null}]));
-            // If no filter selected, select all brokers by default
-            if (selectedBrokerIds.size === 0 && brokers.length > 0) {
-                selectedBrokerIds = new Set(brokers.map((b) => b.id));
+            await ensureBrokersLoaded();
+            // brokers/brokerMap are kept in sync via the brokerStoreVersion
+            // subscription (see below). Default-select-all runs only on the
+            // first hydration when no filter is active.
+            const list = getAllBrokers();
+            if (selectedBrokerIds.size === 0 && list.length > 0) {
+                selectedBrokerIds = new Set(list.map((b) => b.id));
                 saveBrokerFilter(selectedBrokerIds);
             }
         } catch (e) {
             console.error('Failed to load brokers:', e);
         }
     }
+
+    /** Keep `brokers` + `brokerMap` reactive on the shared store: any cache
+     *  mutation (broker edit/delete/create from elsewhere in the app) bumps
+     *  $brokerStoreVersion → we rebuild the local snapshots so icon/name
+     *  changes propagate without a manual reload. */
+    const _brokerStoreUnsub = brokerStoreVersion.subscribe(() => {
+        const list = getAllBrokers();
+        brokers = list as unknown as Broker[];
+        brokerMap = new Map(list.map((b) => [b.id, {id: b.id, name: b.name, icon_url: b.icon_url ?? null, portal_url: b.portal_url ?? null}]));
+    });
+    onDestroy(() => _brokerStoreUnsub());
 
     async function loadFiles() {
         loading = true;

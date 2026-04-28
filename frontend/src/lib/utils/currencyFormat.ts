@@ -69,3 +69,20 @@ export function formatCurrencyAmountHtml(amount: number, code: string, opts: Cur
     }
     return `<span class="currency-amount">${escapeHtml(formatted)}</span> ${suffixHtml}`;
 }
+
+/**
+ * Format ONLY the currency identifier (no amount): `symbol flag code` —
+ * e.g. `$ 🇺🇸 USD`. Used in filter UIs / labels where we need the rich
+ * "valuta" representation without an associated amount.
+ */
+export function formatCurrencyCodeHtml(code: string): string {
+    const info = getCurrencyInfo(code);
+    const symbol = info.symbol ?? '';
+    const hasRealSymbol = symbol !== '' && symbol !== code;
+    const flagHtml = info.flag_emoji && info.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${info.flag_emoji}</span>` : '';
+    const codeHtml = `<span class="currency-code">${escapeHtml(code)}</span>`;
+    if (hasRealSymbol) {
+        return `<span class="currency-symbol">${escapeHtml(symbol)}</span> ${flagHtml}${codeHtml}`;
+    }
+    return `${flagHtml}${codeHtml}`;
+}

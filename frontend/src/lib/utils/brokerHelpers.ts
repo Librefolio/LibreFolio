@@ -45,4 +45,3 @@ export function getBrokerIconUrlById(brokerId: number, brokers: Map<number, Brok
     }
     return getBrokerIconUrl(brokers.find((b) => b.id === brokerId));
 }
-
