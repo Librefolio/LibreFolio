@@ -36,6 +36,7 @@
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/uuid';
     import {ensureAssetProvidersCached, isParametricProvider} from '$lib/utils/providerHelpers';
+    import {mergeAssets, invalidateAfterMutation} from '$lib/stores/assetStore';
 
     // =========================================================================
     // Types
@@ -849,6 +850,12 @@
         }
         const assetId = result.asset_id;
 
+        // Upsert the new asset into the shared cache so other pages
+        // (transactions cell, AssetCard, LiveTicker, …) reflect the entry
+        // immediately. The BE response only carries `asset_id`; we merge the
+        // fields the FE just submitted (no extra round-trip).
+        mergeAssets([{id: assetId, ...(createPayload[0] as Record<string, unknown>)}]);
+
         // Step 2: Assign provider (separate try/catch — asset already created)
         // Skip assignment for scheduled_investment if no schedule is configured yet
         const skipProviderAssignment = providerCode === 'scheduled_investment' && (!providerParams || !providerParams.schedule?.length);
@@ -968,6 +975,13 @@
             return; // abort save — the modal will either finish the flow or the user cancels
         }
 
+        // PATCH succeeded — sync the patched fields into the shared cache so
+        // every consumer (transactions cell, AssetCard, LiveTicker, …) sees
+        // the new icon/name/etc. without a manual reload. The BE response
+        // only carries `{success, asset_id, message}`; we merge the fields
+        // the FE just submitted.
+        mergeAssets([{id: assetId, ...(patchItem as unknown as Record<string, unknown>)}]);
+
         // Step 2: Handle provider change
         if (providerNoProvider) {
             // Remove provider
@@ -1021,6 +1035,22 @@
         }
 
         toasts.success($t('assets.modal.saveSuccess', {values: {name: displayName}}));
+        open = false;
+        onupdated?.();
+    }
+
+    /**
+     * Currency-change wipe-confirm flow: triggered when the user accepts the
+     * destructive currency change. Sync the patched fields into the shared
+     * cache, then evict so any consumer refetches fresh data on next access.
+     */
+    function handleCurrencyChangeConfirmed(): void {
+        const payload = currencyChangePatchPayload;
+        if (payload && typeof payload.asset_id === 'number') {
+            const id = payload.asset_id;
+            mergeAssets([{id, ...payload}]);
+            invalidateAfterMutation(id);
+        }
         open = false;
         onupdated?.();
     }
@@ -1529,8 +1559,8 @@
         // The flow completed: the child modal already emitted the final
         // `currencyChange.done` toast. I-bis #12 — suppress the generic
         // "updated successfully" toast here to avoid duplicate notifications.
-        open = false;
-        onupdated?.();
+        // Cache eviction + merge handled by `handleCurrencyChangeConfirmed`.
+        handleCurrencyChangeConfirmed();
     }}
     oncanceled={() => {
         currencyChangeBlocker = null;

@@ -25,7 +25,7 @@
 
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
-    import type {ColumnDef, FilterValue, RowAction} from '$lib/components/table/types';
+    import type {ColumnDef, FilterValue, RowAction, SortState} from '$lib/components/table/types';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
     import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/currencyStore';
@@ -36,6 +36,9 @@
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getEventTypeEmoji} from '$lib/utils/eventTypes';
+    import TxTooltipCell from './cells/TxTooltipCell.svelte';
+    import TxLinksCell from './cells/TxLinksCell.svelte';
+    import TxTypeIconCell from './cells/TxTypeIconCell.svelte';
 
     // Sentinel keep-imports (used in reactive expressions but not statically referenced).
     void $currencyStoreVersion;
@@ -113,24 +116,7 @@
         initialFilters?: Record<string, FilterValue>;
     }
 
-    let {
-        mainRows = [],
-        partnerRows = [],
-        brokers = [],
-        eventTooltipMap = new Map(),
-        currentPage = 1,
-        pageSize = 50,
-        onSelectionChange,
-        onLinkedPairClick,
-        onEventBadgeClick,
-        onEditRow,
-        onCloneRow,
-        onDeleteRow,
-        onPageChange,
-        onPageSizeChange,
-        onFiltersChange,
-        initialFilters,
-    }: Props = $props();
+    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEventBadgeClick, onEditRow, onCloneRow, onDeleteRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters}: Props = $props();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -146,6 +132,28 @@
         onFiltersChange?.(record);
     }
 
+    /** Mirror of DataTable's internal `sortState`, exposed via `onSortChange`.
+     *  Used together with `activeColumnFilters` to decide whether linked-pair
+     *  rows must be kept adjacent (pair-grouping ON) or treated as ordinary
+     *  independent rows (pair-grouping OFF). */
+    let activeSort = $state<SortState | null>(null);
+
+    /** Mirror of DataTable's "show selected only" toggle. Used to adjust the
+     *  external paginator totalItems in grouped mode. */
+    let showSelectedOnlyActive = $state(false);
+
+    /** Set of currently selected row IDs (DataTable string keys). Kept in sync
+     *  via `onSelectionChange` so the external paginator can filter by selection
+     *  when `showSelectedOnly` is active. */
+    let selectedIdSet = $state<Set<string>>(new Set());
+
+    /** True when the user has neither active filters nor active sort:
+     *  the natural "browse" mode where giver+receiver pairs stay glued
+     *  together and ghost partners are surfaced. As soon as a filter or
+     *  sort is applied, pairs become regular rows so they participate in
+     *  the user's ordering/filtering on equal footing. */
+    let isGrouped = $derived(Object.keys(activeColumnFilters).length === 0 && activeSort == null);
+
     export function getTableRef() {
         return tableRef;
     }
@@ -159,6 +167,36 @@
     export function resetFilters(): void {
         activeColumnFilters = {};
         tableRef?.clearFilters();
+    }
+
+    /**
+     * Navigate to the page containing a linked partner row, wait for the DOM
+     * to update, then return. The caller is responsible for pulsing the row.
+     *
+     * - **Flat mode**: delegates to DataTable's `navigateToRowId` which
+     *   handles internal pagination + scroll.
+     * - **Grouped mode**: finds the page containing the partner in the
+     *   pair-never-split paginator and emits `onPageChange`.
+     */
+    export async function navigateToPartner(partnerId: number): Promise<void> {
+        const rowId = `tx-${partnerId}`;
+        const ghostId = `ghost-${partnerId}`;
+
+        if (!isGrouped) {
+            // Flat mode — DataTable handles pagination internally.
+            tableRef?.navigateToRowId(rowId);
+        } else {
+            // Grouped mode — find the page containing the partner.
+            const pageIdx = pages.findIndex((p) => p.some((d) => getRowId(d) === rowId || getRowId(d) === ghostId));
+            if (pageIdx >= 0 && pageIdx !== safePage - 1) {
+                onPageChange?.(pageIdx + 1);
+            }
+        }
+
+        // Wait for DOM update after page change.
+        const {tick} = await import('svelte');
+        await tick();
+        await new Promise((r) => requestAnimationFrame(r));
     }
 
     // =========================================================================
@@ -183,14 +221,41 @@
     });
 
     /**
-     * Build display rows with always-pair-adjacent semantics.
+     * Build display rows.
      *
-     * Iterate `mainRows` in their natural order. For each row:
-     *  - If it has a partner that hasn't been rendered yet → emit giver,
-     *    then receiver. Receiver may be a ghost (if not in mainIds).
-     *  - If the row is itself a receiver of a partner already rendered → skip.
+     * **Grouped mode** (no filter + no sort, `isGrouped === true`): always
+     * pair-adjacent semantics — for each main row with a partner, emit
+     * giver+receiver in order; missing partners surface as ghost rows. This
+     * is the "browse" experience: linked TX stay glued together.
+     *
+     * **Flat mode** (any filter or sort active, `isGrouped === false`): each
+     * `mainRows` entry becomes an independent row. Ghost partners are not
+     * synthesized — if the partner doesn't match the active filters the
+     * server didn't return it, so it stays out (consistent with the rest of
+     * the table). The ⬆/⬇ arrow is still rendered when the row has a
+     * partner, so direction is recognizable even out of context — the
+     * tooltip resolves any ambiguity at distance.
      */
     let displayRows = $derived.by<DisplayRow[]>(() => {
+        if (!isGrouped) {
+            // Flat mode: keep `isReceiver` so the ⬆/⬇ arrow still renders
+            // for linked rows (computed from quantity sign / role helper).
+            const out: DisplayRow[] = [];
+            for (const r of mainRows) {
+                const hasPartner = r.related_transaction_id != null;
+                out.push({
+                    tx: r,
+                    isGhost: false,
+                    isReceiver: hasPartner ? !isGiver(r) : false,
+                    // Use the partner-id as anchor so the arrow renders; the
+                    // pair-never-split paginator is bypassed in flat mode.
+                    pairAnchorId: hasPartner ? (r.related_transaction_id ?? null) : null,
+                });
+            }
+            return out;
+        }
+
+        // Grouped mode — original always-pair-adjacent algorithm.
         const mainIds = new Set(mainRows.map((r) => r.id));
         const rendered = new Set<number>();
         const out: DisplayRow[] = [];
@@ -274,16 +339,29 @@
     });
 
     // =========================================================================
-    // Pair-never-split paginator
+    // Paginator
     // =========================================================================
 
     /**
-     * Slice `filteredDisplayRows` into pages, ensuring pairs never cross a page boundary.
-     * Effective page size may be `pageSize ± 1` to preserve adjacency.
+     * Slice `filteredDisplayRows` into pages.
+     *  - Grouped mode (`isGrouped`): pair-never-split — pairs never cross a
+     *    page boundary; effective page size may be `pageSize ± 1` to preserve
+     *    adjacency.
+     *  - Flat mode: standard fixed-size pagination — every row is independent
+     *    and ordering wins over pair coupling. `pageSize === 0` ⇒ single page.
      */
     let pages = $derived.by<DisplayRow[][]>(() => {
         const rows = filteredDisplayRows;
         const result: DisplayRow[][] = [];
+        if (!isGrouped) {
+            if (pageSize <= 0) return rows.length > 0 ? [rows] : [[]];
+            for (let i = 0; i < rows.length; i += pageSize) {
+                result.push(rows.slice(i, i + pageSize));
+            }
+            if (result.length === 0) result.push([]);
+            return result;
+        }
+        // Grouped mode — pair-never-split paginator.
         let buf: DisplayRow[] = [];
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -304,7 +382,17 @@
 
     let totalPages = $derived(pages.length);
     let safePage = $derived(Math.min(Math.max(1, currentPage), totalPages));
-    let visibleRows = $derived(pages[safePage - 1] ?? []);
+    /** In grouped mode: page slice from custom paginator (pre-filtered).
+     *  In flat mode: ALL displayRows — DataTable handles sort+filter+pagination internally. */
+    let visibleRows = $derived(isGrouped ? (pages[safePage - 1] ?? []) : displayRows);
+
+    /** Total items for the external paginator in grouped mode.
+     *  When "show selected only" is active inside DataTable, filter the count
+     *  to match only selected rows — otherwise the paginator shows a stale total. */
+    let externalPaginatorTotal = $derived.by(() => {
+        if (!showSelectedOnlyActive || selectedIdSet.size === 0) return filteredDisplayRows.length;
+        return filteredDisplayRows.filter((d) => selectedIdSet.has(getRowId(d))).length;
+    });
 
     // =========================================================================
     // Helpers
@@ -327,15 +415,6 @@
         const formatted = n.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
         const emoji = n > 0 ? ' 📈' : ' 📉';
         return `${n > 0 ? '+' : ''}${formatted}${emoji}`;
-    }
-
-    function formatCash(cash: TXReadItem['cash']): string {
-        if (!cash || cash.amount === '0') return '—';
-        const n = Number(cash.amount);
-        if (!Number.isFinite(n)) return cash.amount;
-        const sign = n > 0 ? '+' : '';
-        const abs = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        return `${sign}${n < 0 ? '-' : ''}${abs} ${cash.code}`;
     }
 
     function eventTooltipText(eventId: number): string {
@@ -427,11 +506,11 @@
     }
 
     function handleSelectionChange(ids: string[]) {
-        const set = new Set(ids);
+        selectedIdSet = new Set(ids);
         // Map back to TXReadItem from displayRows (giver/receiver/ghost).
         const out: TXReadItem[] = [];
         for (const d of displayRows) {
-            if (set.has(getRowId(d))) out.push(d.tx);
+            if (selectedIdSet.has(getRowId(d))) out.push(d.tx);
         }
         onSelectionChange?.(out);
     }
@@ -466,9 +545,9 @@
                 const url = getTransactionTypeIconUrl(d.tx.type);
                 const docUrl = getTxTypeDocUrl(d.tx.type, $locale ?? 'en');
                 return {
-                    type: 'html',
-                    html: `<a href="${escapeHtml(docUrl)}" target="_blank" rel="noopener noreferrer" class="tx-type-icon-link" data-testid="tx-type-icon-${d.tx.id}" aria-label="${escapeHtml(label)}"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" class="tx-type-icon" /></a>`,
-                    tooltip: {text: label, position: 'top'},
+                    type: 'custom',
+                    component: TxTypeIconCell,
+                    props: {iconUrl: url, label, docUrl, txId: d.tx.id},
                 };
             },
         },
@@ -497,7 +576,7 @@
                 const inner = formatCurrencyAmountHtml(n, code, {showSign: true});
                 return {
                     type: 'html',
-                    html: `<span class="tx-cash-cell" data-testid="tx-cash-cell-${d.tx.id}" title="${escapeHtml(formatCash(d.tx.cash))}">${inner}</span>`,
+                    html: `<span class="tx-cash-cell" data-testid="tx-cash-cell-${d.tx.id}">${inner}</span>`,
                 };
             },
         },
@@ -510,25 +589,34 @@
             resizable: false,
             width: 80,
             cell: (d) => {
+                // `void`s here keep the cell reactive on async store loads
+                // (eventTooltipText/linkedPairTooltip read currency info).
+                void $currencyStoreVersion;
+                void $assetStoreVersion;
                 const hasEvent = d.tx.asset_event_id != null;
                 const hasLink = d.tx.related_transaction_id != null;
                 if (!hasEvent && !hasLink) return '';
-                const parts: string[] = [];
+                let eventHtml = '';
+                let eventTooltip = '';
+                let linkHtml = '';
+                let linkTooltip = '';
                 if (hasEvent) {
-                    const tip = eventTooltipText(d.tx.asset_event_id!);
-                    parts.push(`<button type="button" class="tx-event-dot" data-tx-event="${d.tx.id}" data-testid="tx-event-dot-${d.tx.id}" aria-label="${escapeHtml(tip)}" title="${escapeHtml(tip)}"></button>`);
+                    eventTooltip = eventTooltipText(d.tx.asset_event_id!);
+                    eventHtml = `<button type="button" class="tx-event-dot" data-tx-event="${d.tx.id}" data-testid="tx-event-dot-${d.tx.id}" aria-label="${escapeHtml(eventTooltip)}"></button>`;
                 }
                 if (hasLink) {
                     // Direction arrow: giver ⬇, receiver ⬆
                     const arrow = d.pairAnchorId != null ? (d.isReceiver ? '<span class="tx-pair-arrow">⬆</span>' : '<span class="tx-pair-arrow">⬇</span>') : '';
-                    const linkTip = linkedPairTooltip(d);
-                    parts.push(`${arrow}<button type="button" class="tx-link-icon" data-tx-link="${d.tx.id}" data-testid="tx-link-icon-${d.tx.id}" aria-label="${escapeHtml(linkTip)}" title="${escapeHtml(linkTip)}">🔗</button>`);
+                    linkTooltip = linkedPairTooltip(d);
+                    linkHtml = `${arrow}<button type="button" class="tx-link-icon" data-tx-link="${d.tx.id}" data-testid="tx-link-icon-${d.tx.id}" aria-label="${escapeHtml(linkTooltip)}">🔗</button>`;
                 }
-                const tooltipText = hasEvent ? eventTooltipText(d.tx.asset_event_id!) : linkedPairTooltip(d);
+                // CustomCell with TxLinksCell — two real Tooltip instances
+                // (one per icon), each with its own text. Native `title=""`
+                // is no longer used.
                 return {
-                    type: 'html',
-                    html: `<div class="tx-links-cell">${parts.join('')}</div>`,
-                    tooltip: parts.length === 1 ? {text: tooltipText, position: 'top'} : undefined,
+                    type: 'custom',
+                    component: TxLinksCell,
+                    props: {eventHtml, eventTooltip, linkHtml, linkTooltip},
                 };
             },
         },
@@ -589,9 +677,14 @@
                 const name = brokerName(d.tx.broker_id);
                 const iconSrc = getBrokerIconUrlById(d.tx.broker_id, brokers);
                 const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" class="tx-broker-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="tx-broker-dot" style="display:none"></span>` : `<span class="tx-broker-dot"></span>`;
+                // CustomCell — broker name shown via real Tooltip (no native HTML title).
                 return {
-                    type: 'html',
-                    html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}" title="${escapeHtml(name)}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span></span>`,
+                    type: 'custom',
+                    component: TxTooltipCell,
+                    props: {
+                        html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span></span>`,
+                        tooltip: name,
+                    },
                 };
             },
         },
@@ -689,6 +782,7 @@
     <DataTable
         bind:this={tableRef}
         data={visibleRows}
+        fullData={displayRows}
         {columns}
         {getRowId}
         storageKey="transactions-list"
@@ -696,7 +790,7 @@
         selectionMode="multi"
         enableActions={true}
         {rowActions}
-        enablePagination={false}
+        enablePagination={!isGrouped}
         enableColumnVisibility={true}
         enableColumnFilters={true}
         enableSorting={true}
@@ -706,13 +800,15 @@
         {getRowStyle}
         {isRowSelectable}
         onFiltersChange={handleFiltersChangeInternal}
+        onSortChange={(s) => (activeSort = s)}
+        onShowSelectedOnlyChange={(v) => (showSelectedOnlyActive = v)}
         {initialFilters}
         onSelectionChange={handleSelectionChange}
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
     />
 
-    {#if filteredDisplayRows.length > 0}
-        <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={filteredDisplayRows.length} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
+    {#if isGrouped && externalPaginatorTotal > 0}
+        <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={externalPaginatorTotal} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
     {/if}
 </div>
 

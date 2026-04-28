@@ -63,6 +63,26 @@
         isRowSelectable?: (row: T) => boolean;
         /** Whether the actions column is sticky (default: true) */
         stickyActions?: boolean;
+        /**
+         * Called whenever the sort state changes (column click on a sortable
+         * header, or sort cleared). Consumers can use this to synchronize
+         * external state (e.g. enabling/disabling row-grouping logic when no
+         * sort is active).
+         */
+        onSortChange?: (state: SortState | null) => void;
+        /**
+         * Called whenever the internal "show selected only" toggle changes.
+         * Consumers with external pagination can react to this to adjust
+         * their displayed total count.
+         */
+        onShowSelectedOnlyChange?: (active: boolean) => void;
+        /**
+         * Optional: full unfiltered dataset for computing filter boundaries
+         * (min/max sliders, currency ranges). When provided, filter boundaries
+         * use this instead of `data`. Useful when `data` is a pre-paginated
+         * slice and boundaries should reflect the whole dataset.
+         */
+        fullData?: T[];
     }
 
     let {
@@ -98,7 +118,13 @@
         tableLayout = 'fixed',
         isRowSelectable,
         stickyActions = true,
+        onSortChange,
+        onShowSelectedOnlyChange,
+        fullData,
     }: Props = $props();
+
+    /** Dataset used for computing filter boundaries (min/max, currency ranges). */
+    let boundaryData = $derived(fullData ?? data);
 
     // Derived: effective selection mode
     let effectiveSelectionMode = $derived(!enableSelection ? 'none' : selectionMode);
@@ -360,7 +386,7 @@
         let min = Infinity;
         let max = -Infinity;
 
-        for (const row of data) {
+        for (const row of boundaryData) {
             const getValue = column.getValue ?? column.cell;
             const cellValue = getValue(row);
             let numValue: number;
@@ -453,6 +479,34 @@
         return [...all].sort();
     }
 
+    /**
+     * For `currency-stack` columns: compute per-currency min/max amount from
+     * the dataset. Used by the filter popover to drive a relevant range
+     * editor (slider + inputs) for each currency the user picks — instead
+     * of a single global range that's meaningless when amounts spread
+     * across mixed currencies (e.g. EUR cash deposits vs USD trades).
+     */
+    function getCurrencyMinMaxByCode(column: ColumnDef<T>): Map<string, {min: number; max: number}> {
+        const out = new Map<string, {min: number; max: number}>();
+        if (!column.getCurrencyValue) return out;
+        for (const row of boundaryData) {
+            const cv = column.getCurrencyValue(row);
+            if (!cv || !cv.code || !Number.isFinite(cv.amount)) continue;
+            const cur = out.get(cv.code);
+            if (!cur) {
+                out.set(cv.code, {min: cv.amount, max: cv.amount});
+            } else {
+                if (cv.amount < cur.min) cur.min = cv.amount;
+                if (cv.amount > cur.max) cur.max = cv.amount;
+            }
+        }
+        // Defensive: ensure min < max so the slider remains usable on single-row currencies.
+        for (const v of out.values()) {
+            if (v.min >= v.max) v.max = v.min + 1;
+        }
+        return out;
+    }
+
     function formatDate(value: Date | string, format?: string): string {
         const date = value instanceof Date ? value : new Date(value);
         if (format === 'time') {
@@ -514,6 +568,7 @@
         } else {
             sortState = {columnId, direction: 'asc'};
         }
+        onSortChange?.(sortState);
     }
 
     function toggleAllPageRows() {
@@ -566,6 +621,11 @@
         if (selectedCount === 0 && showSelectedOnly) {
             showSelectedOnly = false;
         }
+    });
+
+    // Notify parent when "show selected only" toggles (for external pagination sync)
+    $effect(() => {
+        onShowSelectedOnlyChange?.(showSelectedOnly);
     });
 
     function handleRowClick(row: T) {
@@ -1003,10 +1063,12 @@
                                     {@const dynamicEnumOptions =
                                         column.type === 'multi-enum' ? (column.enumOptions && column.enumOptions.length > 0 ? getMultiEnumOptionsWithCounts(column) : getMultiEnumOptions(column)) : column.type === 'enum' ? getEnumOptionsWithCounts(column) : (column.enumOptions ?? [])}
                                     {@const currencyOptions = column.type === 'currency-stack' ? (column.currencyOptions ?? getCurrencyOptions(column)) : []}
+                                    {@const currencyMinMaxByCode = column.type === 'currency-stack' ? getCurrencyMinMaxByCode(column) : new Map<string, {min: number; max: number}>()}
                                     <DataTableColumnFilter
                                         type={column.type}
                                         enumOptions={dynamicEnumOptions}
                                         {currencyOptions}
+                                        {currencyMinMaxByCode}
                                         numberMin={minMax.min}
                                         numberMax={minMax.max}
                                         initialValue={columnFilters[column.id]}

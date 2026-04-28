@@ -17,6 +17,8 @@
     import type {ColumnType, EnumOption, FilterValue} from './types';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
+    import {formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
+    import {currencyStoreVersion} from '$lib/stores/currencyStore';
 
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
@@ -26,6 +28,10 @@
         enumOptions?: EnumOption[];
         /** For `currency-stack`: list of currency codes available in the current dataset (seed for the CurrencySearchSelect). */
         currencyOptions?: string[];
+        /** For `currency-stack`: per-currency min/max amount in the dataset.
+         *  Drives a relevant range editor for each picked currency (instead
+         *  of one meaningless global range across mixed currencies). */
+        currencyMinMaxByCode?: Map<string, {min: number; max: number}>;
         numberMin?: number;
         numberMax?: number;
         onApply: (filter: FilterValue | null) => void;
@@ -35,7 +41,10 @@
         anchorElement?: HTMLElement | null;
     }
 
-    let {type, enumOptions = [], currencyOptions = [], numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null, anchorElement = null}: Props = $props();
+    let {type, enumOptions = [], currencyOptions = [], currencyMinMaxByCode = new Map(), numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null, anchorElement = null}: Props = $props();
+
+    // Sentinel: ensure formatCurrencyCodeHtml re-evaluates after currency data loads.
+    void $currencyStoreVersion;
 
     let popoverElement: HTMLDivElement;
 
@@ -119,12 +128,13 @@
     // LINEAR scale: number slider maps 0-100 position linearly to [numberMin, numberMax]
     function sliderPosToNum(pos: number): number {
         const raw = numberMin + (pos / 100) * (numberMax - numberMin);
-        // Round to reasonable precision
+        // Round to reasonable precision based on range magnitude
         const range = numberMax - numberMin;
         if (range < 1) return Math.round(raw * 100000) / 100000;
         if (range < 10) return Math.round(raw * 1000) / 1000;
         if (range < 100) return Math.round(raw * 100) / 100;
-        return Math.round(raw * 10) / 10;
+        if (range < 1000) return Math.round(raw * 10) / 10;
+        return Math.round(raw);
     }
 
     /** Format number for slider labels */
@@ -134,16 +144,43 @@
         return v.toPrecision(3);
     }
 
+    /** Snap threshold: if the slider position is within this many units (out of
+     *  0–100) of an extreme, snap to the exact boundary. This avoids rounding
+     *  artifacts at the edges where the user clearly intends "min" or "max". */
+    const SNAP = 3;
+
     function updateNumMinFromSlider() {
+        // Clamp: prevent crossing
         if (numSliderMinPos > numSliderMaxPos) numSliderMinPos = numSliderMaxPos;
-        numMin = sliderPosToNum(numSliderMinPos);
+        // Compute value with snap (value snaps to exact boundary, position follows mouse)
+        if (numSliderMinPos <= SNAP) {
+            numMin = numberMin;
+        } else if (numSliderMinPos >= 100 - SNAP) {
+            numMin = numberMax;
+        } else {
+            numMin = sliderPosToNum(numSliderMinPos);
+        }
         applyFilter();
     }
 
     function updateNumMaxFromSlider() {
         if (numSliderMaxPos < numSliderMinPos) numSliderMaxPos = numSliderMinPos;
-        numMax = sliderPosToNum(numSliderMaxPos);
+        if (numSliderMaxPos >= 100 - SNAP) {
+            numMax = numberMax;
+        } else if (numSliderMaxPos <= SNAP) {
+            numMax = numberMin;
+        } else {
+            numMax = sliderPosToNum(numSliderMaxPos);
+        }
         applyFilter();
+    }
+
+    /** On mouseup: snap slider position to boundary if within threshold. */
+    function finalizeNumSliders() {
+        if (numSliderMinPos <= SNAP) numSliderMinPos = 0;
+        if (numSliderMinPos >= 100 - SNAP) numSliderMinPos = 100;
+        if (numSliderMaxPos >= 100 - SNAP) numSliderMaxPos = 100;
+        if (numSliderMaxPos <= SNAP) numSliderMaxPos = 0;
     }
 
     function syncNumSlidersFromInput() {
@@ -179,15 +216,42 @@
     let currencyMinPos = $state<Record<number, number>>({});
     let currencyMaxPos = $state<Record<number, number>>({});
 
+    /** Per-currency linear helpers — same math as the global num slider but
+     *  scoped to the min/max of the specific currency code. Falls back to
+     *  `numberMin`/`numberMax` when the code is not in the map (defensive). */
+    function curRange(idx: number): {min: number; max: number} {
+        const code = currencyStack[idx]?.code;
+        if (code) {
+            const r = currencyMinMaxByCode.get(code);
+            if (r) return r;
+        }
+        return {min: numberMin, max: numberMax};
+    }
+    function curNumToSliderPos(idx: number, value: number): number {
+        const r = curRange(idx);
+        if (r.max <= r.min) return 0;
+        return Math.round(((value - r.min) / (r.max - r.min)) * 100);
+    }
+    function curSliderPosToNum(idx: number, pos: number): number {
+        const r = curRange(idx);
+        const raw = r.min + (pos / 100) * (r.max - r.min);
+        const range = r.max - r.min;
+        if (range < 1) return Math.round(raw * 100000) / 100000;
+        if (range < 10) return Math.round(raw * 1000) / 1000;
+        if (range < 100) return Math.round(raw * 100) / 100;
+        if (range < 1000) return Math.round(raw * 10) / 10;
+        return Math.round(raw);
+    }
+
     function curMinPos(idx: number): number {
         if (currencyMinPos[idx] != null) return currencyMinPos[idx];
         const v = currencyStack[idx]?.min;
-        return v == null ? 0 : numToSliderPos(v);
+        return v == null ? 0 : curNumToSliderPos(idx, v);
     }
     function curMaxPos(idx: number): number {
         if (currencyMaxPos[idx] != null) return currencyMaxPos[idx];
         const v = currencyStack[idx]?.max;
-        return v == null ? 100 : numToSliderPos(v);
+        return v == null ? 100 : curNumToSliderPos(idx, v);
     }
 
     // Size filter state (stored in bytes internally)
@@ -293,11 +357,12 @@
 
     // Update bytes from slider change
     function updateSizeMinFromSlider() {
-        // Ensure min doesn't exceed max
-        if (sliderMinPos > sliderMaxPos) {
-            sliderMinPos = sliderMaxPos;
+        if (sliderMinPos > sliderMaxPos) sliderMinPos = sliderMaxPos;
+        if (sliderMinPos <= SNAP) {
+            sizeMinBytes = numberMin;
+        } else {
+            sizeMinBytes = sliderPosToBytes(sliderMinPos);
         }
-        sizeMinBytes = sliderPosToBytes(sliderMinPos);
         const minResult = bytesToUnit(sizeMinBytes);
         sizeMinInputValue = minResult.value;
         sizeMinUnit = minResult.unit;
@@ -305,15 +370,24 @@
     }
 
     function updateSizeMaxFromSlider() {
-        // Ensure max doesn't go below min
-        if (sliderMaxPos < sliderMinPos) {
-            sliderMaxPos = sliderMinPos;
+        if (sliderMaxPos < sliderMinPos) sliderMaxPos = sliderMinPos;
+        if (sliderMaxPos >= 100 - SNAP) {
+            sizeMaxBytes = numberMax;
+        } else {
+            sizeMaxBytes = sliderPosToBytes(sliderMaxPos);
         }
-        sizeMaxBytes = sliderPosToBytes(sliderMaxPos);
         const maxResult = bytesToUnit(sizeMaxBytes);
         sizeMaxInputValue = maxResult.value;
         sizeMaxUnit = maxResult.unit;
         applyFilter();
+    }
+
+    /** On mouseup: snap slider position to boundary if within threshold. */
+    function finalizeSizeSliders() {
+        if (sliderMinPos <= SNAP) sliderMinPos = 0;
+        if (sliderMinPos >= 100 - SNAP) sliderMinPos = 100;
+        if (sliderMaxPos >= 100 - SNAP) sliderMaxPos = 100;
+        if (sliderMaxPos <= SNAP) sliderMaxPos = 0;
     }
 
     // Auto-apply for text filter with debounce
@@ -425,30 +499,67 @@
     function updateCurrencyMin(idx: number, value: string) {
         const v = value === '' ? undefined : Number(value);
         currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, min: Number.isFinite(v as number) ? (v as number) : undefined} : it));
-        currencyMinPos = {...currencyMinPos, [idx]: numToSliderPos(currencyStack[idx]?.min ?? numberMin)};
+        currencyMinPos = {...currencyMinPos, [idx]: curNumToSliderPos(idx, currencyStack[idx]?.min ?? curRange(idx).min)};
         applyFilter();
     }
     function updateCurrencyMax(idx: number, value: string) {
         const v = value === '' ? undefined : Number(value);
         currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, max: Number.isFinite(v as number) ? (v as number) : undefined} : it));
-        currencyMaxPos = {...currencyMaxPos, [idx]: numToSliderPos(currencyStack[idx]?.max ?? numberMax)};
+        currencyMaxPos = {...currencyMaxPos, [idx]: curNumToSliderPos(idx, currencyStack[idx]?.max ?? curRange(idx).max)};
         applyFilter();
     }
-    function updateCurrencyMinSlider(idx: number, pos: number) {
+    function updateCurrencyMinSlider(idx: number, pos: number, el: HTMLInputElement) {
         const maxP = curMaxPos(idx);
+        // Clamp: prevent crossing
         if (pos > maxP) pos = maxP;
+        // Force DOM thumb position (one-way `value={}` doesn't sync during drag)
+        el.value = String(pos);
         currencyMinPos = {...currencyMinPos, [idx]: pos};
-        const v = sliderPosToNum(pos);
+        // Compute value with snap (snap value, not position — position snaps on release)
+        const r = curRange(idx);
+        let v: number;
+        if (pos <= SNAP) {
+            v = r.min;
+        } else if (pos >= 100 - SNAP) {
+            v = r.max;
+        } else {
+            v = curSliderPosToNum(idx, pos);
+        }
         currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, min: v} : it));
         applyFilter();
     }
-    function updateCurrencyMaxSlider(idx: number, pos: number) {
+    function updateCurrencyMaxSlider(idx: number, pos: number, el: HTMLInputElement) {
         const minP = curMinPos(idx);
         if (pos < minP) pos = minP;
+        el.value = String(pos);
         currencyMaxPos = {...currencyMaxPos, [idx]: pos};
-        const v = sliderPosToNum(pos);
+        const r = curRange(idx);
+        let v: number;
+        if (pos >= 100 - SNAP) {
+            v = r.max;
+        } else if (pos <= SNAP) {
+            v = r.min;
+        } else {
+            v = curSliderPosToNum(idx, pos);
+        }
         currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, max: v} : it));
         applyFilter();
+    }
+    /** On mouseup: snap slider thumb position to boundary if within threshold. */
+    function finalizeCurrencySlider(idx: number, el: HTMLInputElement, role: 'min' | 'max') {
+        if (role === 'min') {
+            let p = curMinPos(idx);
+            if (p <= SNAP) p = 0;
+            else if (p >= 100 - SNAP) p = 100;
+            currencyMinPos = {...currencyMinPos, [idx]: p};
+            el.value = String(p);
+        } else {
+            let p = curMaxPos(idx);
+            if (p >= 100 - SNAP) p = 100;
+            else if (p <= SNAP) p = 0;
+            currencyMaxPos = {...currencyMaxPos, [idx]: p};
+            el.value = String(p);
+        }
     }
 
     // Click outside to close
@@ -604,8 +715,8 @@
                         <div class="slider-tick" style="left: 50%"></div>
                         <div class="slider-tick" style="left: 75%"></div>
                     </div>
-                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={numSliderMinPos} oninput={updateNumMinFromSlider} />
-                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={numSliderMaxPos} oninput={updateNumMaxFromSlider} />
+                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={numSliderMinPos} oninput={updateNumMinFromSlider} onchange={finalizeNumSliders} />
+                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={numSliderMaxPos} oninput={updateNumMaxFromSlider} onchange={finalizeNumSliders} />
                 </div>
 
                 <!-- Slider labels with intermediate values -->
@@ -654,8 +765,8 @@
                         <div class="slider-tick" style="left: 50%"></div>
                         <div class="slider-tick" style="left: 75%"></div>
                     </div>
-                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={sliderMinPos} oninput={updateSizeMinFromSlider} />
-                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={sliderMaxPos} oninput={updateSizeMaxFromSlider} />
+                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={sliderMinPos} oninput={updateSizeMinFromSlider} onchange={finalizeSizeSliders} />
+                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={sliderMaxPos} oninput={updateSizeMaxFromSlider} onchange={finalizeSizeSliders} />
                 </div>
 
                 <!-- Slider labels with intermediate values -->
@@ -768,10 +879,10 @@
                     <ul class="currency-stack-list">
                         {#each currencyStack as item, idx (item.code)}
                             <li class="currency-stack-row" data-testid={`filter-currency-row-${item.code}`}>
-                                <span class="currency-stack-code">{item.code}</span>
+                                <span class="currency-stack-code">{@html formatCurrencyCodeHtml(item.code)}</span>
                                 <span class="currency-stack-range">
                                     {#if item.min != null || item.max != null}
-                                        {item.min ?? '−∞'} … {item.max ?? '+∞'}
+                                        {item.min != null ? fmtNum(item.min) : '−∞'} … {item.max != null ? fmtNum(item.max) : '+∞'}
                                     {:else}
                                         <span class="currency-stack-any">{$t('table.filter.currencyStack.any') || 'any amount'}</span>
                                     {/if}
@@ -783,6 +894,7 @@
                                     <Trash2 size={12} />
                                 </button>
                                 {#if currencyOpenIdx === idx}
+                                    {@const r = curRange(idx)}
                                     <div class="currency-stack-range-editor number-filter">
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-min-${idx}`}>{$t('common.min')}</label>
@@ -792,7 +904,7 @@
                                             <label class="range-label" for={`cur-max-${idx}`}>{$t('common.max')}</label>
                                             <input type="number" class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, e.currentTarget.value)} />
                                         </div>
-                                        <!-- Linear dual range slider — same UX as `type:'number'`. -->
+                                        <!-- Linear dual range slider — same UX as `type:'number'`, scoped to per-currency min/max. -->
                                         <div class="size-slider-container">
                                             <div class="size-slider-track">
                                                 <div class="size-slider-range" style="left: {curMinPos(idx)}%; right: {100 - curMaxPos(idx)}%"></div>
@@ -800,15 +912,31 @@
                                                 <div class="slider-tick" style="left: 50%"></div>
                                                 <div class="slider-tick" style="left: 75%"></div>
                                             </div>
-                                            <input type="range" class="size-slider size-slider-min" min="0" max="100" value={curMinPos(idx)} oninput={(e) => updateCurrencyMinSlider(idx, Number(e.currentTarget.value))} />
-                                            <input type="range" class="size-slider size-slider-max" min="0" max="100" value={curMaxPos(idx)} oninput={(e) => updateCurrencyMaxSlider(idx, Number(e.currentTarget.value))} />
+                                            <input
+                                                type="range"
+                                                class="size-slider size-slider-min"
+                                                min="0"
+                                                max="100"
+                                                value={curMinPos(idx)}
+                                                oninput={(e) => updateCurrencyMinSlider(idx, Number(e.currentTarget.value), e.currentTarget)}
+                                                onchange={(e) => finalizeCurrencySlider(idx, e.currentTarget, 'min')}
+                                            />
+                                            <input
+                                                type="range"
+                                                class="size-slider size-slider-max"
+                                                min="0"
+                                                max="100"
+                                                value={curMaxPos(idx)}
+                                                oninput={(e) => updateCurrencyMaxSlider(idx, Number(e.currentTarget.value), e.currentTarget)}
+                                                onchange={(e) => finalizeCurrencySlider(idx, e.currentTarget, 'max')}
+                                            />
                                         </div>
                                         <div class="size-slider-labels">
-                                            <span>{fmtNum(numberMin)}</span>
-                                            <span class="slider-label-mid">{fmtNum(sliderPosToNum(25))}</span>
-                                            <span class="slider-label-mid">{fmtNum(sliderPosToNum(50))}</span>
-                                            <span class="slider-label-mid">{fmtNum(sliderPosToNum(75))}</span>
-                                            <span>{fmtNum(numberMax)}</span>
+                                            <span>{fmtNum(r.min)}</span>
+                                            <span class="slider-label-mid">{fmtNum(curSliderPosToNum(idx, 25))}</span>
+                                            <span class="slider-label-mid">{fmtNum(curSliderPosToNum(idx, 50))}</span>
+                                            <span class="slider-label-mid">{fmtNum(curSliderPosToNum(idx, 75))}</span>
+                                            <span>{fmtNum(r.max)}</span>
                                         </div>
                                     </div>
                                 {/if}
@@ -1409,6 +1537,10 @@
     .currency-stack-range {
         font-size: 0.75rem;
         color: #475569;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 120px;
     }
     :global(.dark) .currency-stack-range {
         color: #cbd5e1;

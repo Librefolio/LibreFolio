@@ -9,6 +9,9 @@
     import {zodiosApi} from '$lib/api';
     import {ensureTxTypesLoaded} from '$lib/stores/txTypeStore';
     import {ensureAssetsLoaded} from '$lib/stores/assetStore';
+    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/brokerStore';
+    import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
+    import {currentLanguage} from '$lib/stores/language';
     import type {BrokerLike} from '$lib/utils/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
     import TransactionsTable from '$lib/components/transactions/TransactionsTable.svelte';
@@ -70,7 +73,13 @@
 
     let mainRows = $state<TXReadItem[]>([]);
     let partnerRows = $state<TXReadItem[]>([]);
-    let brokers = $state<BrokerLike[]>([]);
+    /** Brokers are sourced from the global `brokerStore` cache; this derived
+     *  re-evaluates whenever the store version bumps (load/merge/invalidate),
+     *  so icon/name edits propagate without a manual reload. */
+    let brokers = $derived.by<BrokerLike[]>(() => {
+        void $brokerStoreVersion;
+        return getAllBrokers() as BrokerLike[];
+    });
     let eventTooltipMap = $state<Map<number, AssetEvent>>(new Map());
 
     let loading = $state(true);
@@ -251,13 +260,10 @@
     }
 
     async function loadBrokers(): Promise<void> {
-        try {
-            const res = (await zodiosApi.list_brokers_api_v1_brokers_get()) as Array<{id: number; name: string; icon_url?: string | null; portal_url?: string | null; default_import_plugin?: string | null}>;
-            brokers = res.map((b) => ({id: b.id, name: b.name, icon_url: b.icon_url ?? null, portal_url: b.portal_url ?? null, default_import_plugin: b.default_import_plugin ?? null}));
-        } catch (e) {
-            console.warn('Failed to load brokers:', e);
-            brokers = [];
-        }
+        // Sourced from the shared brokerStore cache. `ensureBrokersLoaded` is
+        // a no-op after the first successful load (until invalidated); the
+        // local `brokers` is a $derived snapshot reactive on $brokerStoreVersion.
+        await ensureBrokersLoaded();
     }
 
     async function loadEventTooltipMap(rows: TXReadItem[]): Promise<void> {
@@ -318,7 +324,12 @@
         if (browser) {
             filters = parseFiltersFromUrl($page.url.searchParams);
         }
-        await Promise.all([ensureTxTypesLoaded(), loadBrokers()]);
+        // Hydrate currency cache so cell builders that call
+        // `formatCurrencyAmountPlain/Html` (event tooltip, cash cell, link
+        // tooltip) render with the proper "$ 🇺🇸 USD" format instead of the
+        // bare-code fallback. `$currencyStoreVersion` is referenced inside
+        // the cell builders so they re-render once data arrives.
+        await Promise.all([ensureTxTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
         await reload();
         urlInitialized = true;
     });
@@ -502,32 +513,40 @@
 
     let highlightClearTimer: ReturnType<typeof setTimeout> | null = null;
 
-    function handleLinkedPairClick(row: TXReadItem) {
-        // Pulse the partner row via direct DOM manipulation.
-        // We bypass the reactive prop chain (highlightId → getRowClass → DataTable)
-        // because DataTable doesn't re-render rows when a closure's captured value
-        // changes (same function reference). Direct DOM is reliable for visual-only
-        // animations.
-        if (row.related_transaction_id == null) return;
-        const partnerId = row.related_transaction_id;
+    function pulseElement(el: HTMLElement) {
         if (highlightClearTimer != null) clearTimeout(highlightClearTimer);
-
-        const el =
-            document.querySelector<HTMLElement>(`[data-row-id="tx-${partnerId}"]`) ??
-            document.querySelector<HTMLElement>(`[data-row-id="ghost-${partnerId}"]`);
-        if (!el) return;
-
-        // Remove class first, force reflow, then re-add → restarts CSS animation.
         el.classList.remove('tx-row-highlight');
-        void el.offsetWidth;
+        void el.offsetWidth; // force reflow → restart animation
         el.classList.add('tx-row-highlight');
         el.scrollIntoView({behavior: 'smooth', block: 'center'});
-
-        // Auto-clear after the pulse animation finishes (1.4s + margin).
         highlightClearTimer = setTimeout(() => {
             el.classList.remove('tx-row-highlight');
             highlightClearTimer = null;
         }, 1600);
+    }
+
+    function findPartnerElement(partnerId: number): HTMLElement | null {
+        return document.querySelector<HTMLElement>(`[data-row-id="tx-${partnerId}"]`) ?? document.querySelector<HTMLElement>(`[data-row-id="ghost-${partnerId}"]`);
+    }
+
+    async function handleLinkedPairClick(row: TXReadItem) {
+        if (row.related_transaction_id == null) return;
+        const partnerId = row.related_transaction_id;
+
+        // Try current page first (fast path).
+        let el = findPartnerElement(partnerId);
+        if (el) {
+            pulseElement(el);
+            return;
+        }
+
+        // Partner on a different page — navigate there, then pulse.
+        await transactionsTableComponent?.navigateToPartner(partnerId);
+
+        el = findPartnerElement(partnerId);
+        if (el) {
+            pulseElement(el);
+        }
     }
 
     function handleEventBadgeClick(_row: TXReadItem) {

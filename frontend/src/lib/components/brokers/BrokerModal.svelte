@@ -10,6 +10,7 @@
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {mergeBrokers} from '$lib/stores/brokerStore';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -75,6 +76,11 @@
                 const createdId = Array.isArray(apiResult?.broker_id) ? apiResult.broker_id[0] : apiResult?.broker_id;
                 const errorMsg = Array.isArray(apiResult?.error) ? apiResult.error[0] : apiResult?.error;
                 if (apiResult?.success && createdId) {
+                    // Upsert the new broker into the shared cache so other
+                    // pages (transactions, files, selectors) see it without
+                    // a manual reload. The BE response only carries the id;
+                    // we merge the fields the FE just submitted.
+                    mergeBrokers([{id: createdId, ...event.detail}]);
                     formTouched = false;
                     dispatch('created', {id: createdId});
                     dispatch('close');
@@ -104,6 +110,22 @@
                     error = result.message;
                     return;
                 }
+                // Sync the patched fields into the cache so other pages
+                // (e.g. icon refresh) reflect the change immediately.
+                mergeBrokers([
+                    {
+                        id: brokerId,
+                        name: event.detail.name,
+                        description: event.detail.description,
+                        portal_url: event.detail.portal_url,
+                        icon_url: event.detail.icon_url,
+                        default_import_plugin: event.detail.default_import_plugin,
+                        allow_cash_overdraft: event.detail.allow_cash_overdraft,
+                        allow_asset_shorting: event.detail.allow_asset_shorting,
+                        is_active: event.detail.is_active,
+                        opened_at: event.detail.opened_at || null,
+                    },
+                ]);
                 formTouched = false;
                 dispatch('updated', {id: brokerId});
                 dispatch('close');

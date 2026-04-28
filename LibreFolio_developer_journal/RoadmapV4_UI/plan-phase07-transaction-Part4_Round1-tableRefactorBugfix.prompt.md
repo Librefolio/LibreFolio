@@ -7,7 +7,8 @@
 
 **Parent plan**: [`plan-phase07-transaction-Part4.prompt.md`](./plan-phase07-transaction-Part4.prompt.md) (Steps 1–10 ✅, ma walkthrough manuale ha rivelato regressioni — vedi sotto)
 **Walkthrough sorgente**: [`walkthrough-phase07-transaction-Part4.md`](./walkthrough-phase07-transaction-Part4.md)
-**Successor (deferito)**: `plan-phase07-transaction-Part4_Round2-stagingModalDataTable.prompt.md` — restyle StagingModal su `DataTable` (titolo "0 of 0 edited", layout non-DataTable, Promote/BulkDelete extender refresh).
+**Successor**: [`plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md`](./plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md) — bugfix walkthrough finale (currency tooltip, `title=""` nativi, currency-stack per-valuta, linked-pair condizionale, cache `assetStore`/`brokerStore` con factory `createEntityStore<T>()`).
+**Successor (deferito)**: `plan-phase07-transaction-Part4_Round3-stagingModalDataTable.prompt.md` — restyle StagingModal su `DataTable` (titolo "0 of 0 edited", layout non-DataTable, Promote/BulkDelete extender refresh).
 
 ---
 
