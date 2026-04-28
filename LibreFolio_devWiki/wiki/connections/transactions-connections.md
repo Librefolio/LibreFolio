@@ -1,8 +1,7 @@
 # Transaction Feature Connections
 
-> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25)**.
-> Backend coverage 87.06% after G-batch6/7. Parts 4–5 (frontend Staging Modal /
-> File Preview) still planned.
+> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25), Part 4✅ DONE (2026-04-28)**.
+> Frontend `/transactions` page fully implemented. F-047 implemented. F-048 manual mode done, BRIM mode deferred to Part 5.
 > See [[connections/dependency-graph]] for the full project view.
 
 ---
@@ -40,8 +39,8 @@ The pre-Phase-7 gap list below was the original analysis. As of 2026-04-25
 | 1 | `Transaction ↔ AssetEvent` link absent | F-051 — `Transaction.asset_event_id` + `POST /transactions/events/suggest` | Part 1 (column) + Part 3 (suggest endpoint) |
 | 2 | Access control for GET/PATCH/DELETE not broker-filtered | F-046 — broker-scoped queries + EDITOR-role write checks | Part 3 |
 | 3 | BRIM no `plugin_version` for cache invalidation | F-013 + [[decisions/brim-parser-only]] (`parse_is_stale` flag) | Part 2 |
-| 4 | Frontend `/transactions` placeholder | F-047 — DataTable + filters | partial (Part 3 backend ready; FE polish in Part 4) |
-| 5 | No unified Staging Area | F-048 | still planned (Part 4) |
+| 4 | Frontend `/transactions` placeholder | F-047 — DataTable + always-pair-adjacent + client-side filters + staging modals | ✅ Part 4 |
+| 5 | No unified Staging Area | F-048 — manual `create-many`/`edit-many` done; BRIM `create-brim` Part 5 | ⏳ Part 5 |
 | 6 | BRIM no metadata UI for preview columns | F-013 / F-049 — `last-parse` cache + dynamic columns | Part 2 + Part 3 |
 | 7 | Bulk TX not atomic per-broker | F-046 — see [[decisions/multi-broker-atomic-tx]] | Part 3 (multi-broker, single DEFERRABLE FK) |
 

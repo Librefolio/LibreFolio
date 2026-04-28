@@ -44,7 +44,7 @@ graph TD
     Degiro --> ParseResult
     Other --> ParseResult
     ParseResult -->|fake asset IDs| StagingUI[F-049 BRIM Import UI<br/>asset matching wizard]
-    StagingUI -->|POST /brokers/:id/transactions/bulk| TxDB[(Transaction DB<br/>F-046)]
+    StagingUI -->|POST /transactions/bulk| TxDB[(Transaction DB<br/>F-046)]
 ```
 
 ## Key decisions that shaped this domain
@@ -63,7 +63,7 @@ Pending gaps (Phase 7, see [[connections/transactions-connections]]):
 
 ## What comes next
 
-- [[F-048]] Staging Modal — unified UI for reviewing, editing, and committing transactions from BRIM or manual entry.
+- [[F-048]] Staging Modal — manual `create-many`/`edit-many` modes done (Phase 7 Part 4); BRIM `create-brim` mode arriving in Part 5.
 - [[F-049]] BRIM Import UI — the asset matching wizard (in-progress in Phase 7).
 - [[F-050]] File Preview System — inline preview panel for uploaded broker report files.
 - [[F-083]] Multi-File Multi-Broker Import — batch-import multiple files from multiple brokers in one workflow.

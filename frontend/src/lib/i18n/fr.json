@@ -76,7 +76,10 @@
         "allCurrencies": "Toutes les devises",
         "noMatchesTitle": "Aucun Résultat",
         "documentation": "Documentation",
-        "deleteSelected": "Supprimer la sélection"
+        "deleteSelected": "Supprimer la sélection",
+        "next": "Suivant",
+        "created": "Créé",
+        "updated": "Mis à jour"
     },
     "table": {
         "columns": "Colonnes",
@@ -222,12 +225,12 @@
         "deposit": "Dépôt",
         "withdraw": "Retrait",
         "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce courtier ?",
-        "confirmDeleteWithTransactions": "Ce courtier a {count} transactions. La suppression forcée supprimera toutes les transactions. Continuer ?",
+        "confirmDeleteWithTransactions": "Ce courtier a {n} transactions. La suppression forcée supprimera toutes les transactions. Continuer ?",
         "forceDelete": "Supprimer de Force",
         "createFailed": "Échec de la création du courtier",
         "updateFailed": "Échec de la mise à jour du courtier",
-        "assets": "{count} actif(s)",
-        "currencies": "{count} devise(s)",
+        "assets": "{n} actif(s)",
+        "currencies": "{n} devise(s)",
         "unsavedChanges": "Vous avez des modifications non enregistrées. Les abandonner ?",
         "discardChangesWarning": "Vous avez des modifications non enregistrées pour ce courtier. Voulez-vous les annuler ?",
         "loadFailed": "Échec du chargement du courtier",
@@ -294,9 +297,9 @@
             "toastOk": "{name} supprimé",
             "toastFailed": "Échec de suppression de {name}",
             "hasTransactions": "Impossible de supprimer \"{name}\" : des transactions existent",
-            "bulkOk": "{count} actifs supprimés",
+            "bulkOk": "{n} actifs supprimés",
             "bulkPartial": "{failed} actifs non supprimés (ont des transactions)",
-            "bulkConfirmMessage": "Supprimer {count} actifs? Les assignations de fournisseurs et historique des prix seront supprimes.",
+            "bulkConfirmMessage": "Supprimer {n} actifs? Les assignations de fournisseurs et historique des prix seront supprimes.",
             "resultDeleted": "supprimé",
             "resultHasTransactions": "a des transactions existantes"
         },
@@ -407,7 +410,7 @@
             "askProviderHint": "Récupérer les identifiants du fournisseur attribué",
             "addIdentifier": "Ajouter identifiant",
             "deleteSelected": "Supprimer les identifiants sélectionnés",
-            "deleteConfirmMessage": "Supprimer {count} identifiants ?"
+            "deleteConfirmMessage": "Supprimer {n} identifiants ?"
         },
         "confirm": {
             "saveWithoutTest": "Enregistrer sans test ?",
@@ -429,7 +432,7 @@
             "providerValue": "Valeur du fournisseur",
             "selectAll": "Tout selectionner",
             "deselectAll": "Tout deselectionner",
-            "applySelected": "Appliquer la selection ({count}/{total})",
+            "applySelected": "Appliquer la selection ({n}/{total})",
             "allMatch": "Toutes les donnees correspondent au fournisseur",
             "noDistributionData": "Le fournisseur n'a pas de données pour : {fields}"
         },
@@ -443,7 +446,7 @@
             "balanceRow": "Équilibrer à 100%",
             "balanceSelected": "Équilibrer les lignes sélectionnées",
             "deleteSelected": "Supprimer les lignes sélectionnées",
-            "deleteConfirmMessage": "Supprimer {count} entrées de cette distribution ?"
+            "deleteConfirmMessage": "Supprimer {n} entrées de cette distribution ?"
         },
         "showInactive": "Inactifs"
     },
@@ -457,7 +460,8 @@
             "edit": "Modifier",
             "clone": "Cloner",
             "delete": "Supprimer",
-            "promotePair": "Promouvoir la paire"
+            "promotePair": "Promouvoir la paire",
+            "view": "Voir"
         },
         "empty": "Aucune transaction",
         "ghost": {
@@ -506,6 +510,85 @@
             "generic": "Virement",
             "depositFrom": "Encaissement de {broker} ({currency})",
             "withdrawalTo": "Retrait vers {broker} ({currency})"
+        },
+        "form": {
+            "titleCreate": "Nouvelle transaction",
+            "titleEdit": "Modifier la transaction",
+            "titleDuplicate": "Dupliquer la transaction",
+            "titleView": "Voir la transaction",
+            "sectionRequired": "Obligatoire",
+            "sectionOptional": "Optionnel",
+            "sectionAdvanced": "Avancé",
+            "tags": "Étiquettes",
+            "tagsPlaceholder": "Ajouter un tag et appuyer sur Entrée",
+            "description": "Description",
+            "assetEvent": "Événement actif",
+            "assetEventNotApplicable": "Le lien d'événement n'est disponible que pour DIVIDEND, INTEREST et ADJUSTMENT après avoir choisi un actif.",
+            "costBasis": "Coût de revient (override)",
+            "linkUuid": "UUID de lien",
+            "pairPartner": "Transaction liée",
+            "unlink": "Délier",
+            "hintQtyPositive": "doit être > 0",
+            "hintQtyNegative": "doit être < 0",
+            "hintQtyZero": "doit être 0",
+            "hintQtyNonzero": "doit être ≠ 0",
+            "rolledBack": "L'enregistrement a été annulé. Aucune modification n'a été persistée.",
+            "rolledBackTitle": "Enregistrement annulé",
+            "saveFailed": "Échec de l'enregistrement de la transaction"
+        },
+        "bulk": {
+            "titleCreate": "Nouvelles transactions",
+            "titleEdit": "Édition en masse",
+            "addRow": "Ajouter une ligne",
+            "resetAll": "Tout réinitialiser",
+            "resetRow": "Réinitialiser la ligne",
+            "removeRow": "Supprimer la ligne",
+            "commitCreate": "Créer {n}",
+            "commitEdit": "Enregistrer {n}",
+            "editHint": "Type et courtier sont immuables en édition. Utilisez Promote pair pour TRANSFER/FX_CONVERSION.",
+            "promotePair": "Promouvoir une paire",
+            "rowN": "Ligne {n}",
+            "status": "Statut",
+            "rolledBack": "Commit annulé — rien n'a été enregistré.",
+            "rolledBackTitle": "Commit annulé",
+            "saveFailed": "Échec du commit en masse"
+        },
+        "promote": {
+            "title": "Promouvoir la paire",
+            "stepN": "Étape {n}/{total}",
+            "fromSlot": "DE (donneur, sortie)",
+            "toSlot": "VERS (récepteur, entrée)",
+            "sourceBulk": "Dans la fenêtre bulk",
+            "sourceSaved": "Transactions enregistrées",
+            "sourceNew": "Créer une nouvelle",
+            "createNew": "Créer une transaction",
+            "searchPlaceholder": "Rechercher par montant, date, courtier…",
+            "noCandidates": "Aucune transaction candidate trouvée.",
+            "brokerAccessHint": "Les courtiers non éditables sont masqués (BrokerUserAccess).",
+            "selectedPair": "Paire sélectionnée :",
+            "promoteTo": "Promouvoir vers :",
+            "eligibleTransfer": "courtiers différents, même devise",
+            "eligibleFx": "même courtier, devises différentes",
+            "reasonSameBroker": "mêmes courtiers — nécessite des courtiers différents",
+            "reasonDiffBrokers": "courtiers différents — nécessite le même courtier",
+            "reasonBothDiffer": "courtiers et devises tous deux différents",
+            "reasonSameCurrencyAndBroker": "même courtier et même devise — aucune règle applicable",
+            "assetMoved": "Actif déplacé",
+            "fxNoFields": "FX_CONVERSION ne nécessite aucun champ supplémentaire.",
+            "impliedRate": "Taux implicite",
+            "atomicWarning": "Ceci SUPPRIMERA les deux lignes sources et CRÉERA 2 lignes liées atomiquement. En cas de rollback, rien ne change.",
+            "commit": "Promouvoir",
+            "failed": "Échec de la promotion",
+            "rolledBack": "Promote annulé — rien n'a été modifié.",
+            "rolledBackTitle": "Annulé"
+        },
+        "validate": {
+            "now": "Valider maintenant",
+            "validating": "validation…",
+            "ok": "valide",
+            "never": "non encore validé",
+            "autoOff": "Auto-validation OFF ({n} lignes > {threshold}) — cliquez sur Valider avant de soumettre",
+            "issuesCount": "{n} problèmes"
         }
     },
     "fx": {
@@ -572,9 +655,9 @@
         "deletePairQuestion": "Supprimer {pair} ?",
         "deletePairWarning": "Cela supprimera la configuration des fournisseurs et tous les taux de change historiques. ⚠️",
         "delete": {
-            "toastOk": "{pair} supprimée ({count} taux supprimés)",
+            "toastOk": "{pair} supprimée ({n} taux supprimés)",
             "toastFailed": "Échec de suppression de {pair}",
-            "resultDeleted": "supprimée ({count} taux)"
+            "resultDeleted": "supprimée ({n} taux)"
         },
         "removeProvider": "Supprimer le fournisseur"
     },
@@ -748,15 +831,15 @@
         "useSelected": "Utiliser la Sélection",
         "selectIcon": "Sélectionner une Icône",
         "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers",
-        "deleteFailedSome": "Échec de la suppression de {count} fichier(s)",
+        "deleteFailedSome": "Échec de la suppression de {n} fichier(s)",
         "uploadFailed": "Échec du téléversement",
         "deleteFailed": "Échec de la suppression",
-        "uploadBatchSucceeded": "{count} fichier(s) téléversé(s)",
+        "uploadBatchSucceeded": "{n} fichier(s) téléversé(s)",
         "deleteSucceeded": "Fichier supprimé",
-        "deleteBatchSucceeded": "{count} fichier(s) supprimé(s)",
+        "deleteBatchSucceeded": "{n} fichier(s) supprimé(s)",
         "confirmBulkDelete": {
             "title": "Supprimer les fichiers",
-            "message": "Supprimer {count} fichier(s) ? Cette action est irréversible."
+            "message": "Supprimer {n} fichier(s) ? Cette action est irréversible."
         }
     },
     "datePicker": {
@@ -824,12 +907,12 @@
         "discard": "Rejeter",
         "removeSignal": "Supprimer le signal",
         "dataMissingBefore": "Les données commencent après la plage du graphique — premier point au {date}. Essayez de synchroniser pour obtenir des données antérieures.",
-        "badgePoints": "{count} points de prix chargés",
-        "badgeDividend": "{count} événements dividende",
-        "badgeInterest": "{count} événements intérêt",
-        "badgePriceAdjustment": "{count} événements ajustement de prix",
-        "badgeMaturitySettlement": "{count} événements échéance/règlement",
-        "badgeSplit": "{count} événements split",
+        "badgePoints": "{n} points de prix chargés",
+        "badgeDividend": "{n} événements dividende",
+        "badgeInterest": "{n} événements intérêt",
+        "badgePriceAdjustment": "{n} événements ajustement de prix",
+        "badgeMaturitySettlement": "{n} événements échéance/règlement",
+        "badgeSplit": "{n} événements split",
         "preview": "Aperçu",
         "previewDescGlobal": "Données synthétiques — montre comment les paramètres affectent tous les graphiques",
         "previewDescPair": "Aperçu en direct avec les données réelles de la paire et les signaux overlay",
@@ -950,8 +1033,8 @@
         "dropFile": "Déposez un fichier .csv ou .txt ici, ou cliquez pour parcourir",
         "dropReplace": "Déposez un autre fichier pour remplacer",
         "noValidRows": "Aucune ligne valide trouvée",
-        "validRows": "{count} ligne(s) valide(s)",
-        "import": "Importer ({count})",
+        "validRows": "{n} ligne(s) valide(s)",
+        "import": "Importer ({n})",
         "helpTitle": "Guide d'importation CSV",
         "helpFormat": "Utilisez le format à 2 colonnes avec un en-tête indiquant la direction :",
         "helpDateFormat": "Les dates doivent utiliser le format YYYY-MM-DD",
@@ -979,7 +1062,7 @@
             "type": "Type",
             "notes": "Notes"
         },
-        "save": "Enregistrer ({count})",
+        "save": "Enregistrer ({n})",
         "saving": "Enregistrement…",
         "autoEvent": {
             "tooltip": "Généré automatiquement par un fournisseur de prix. Les modifications sont désactivées car elles seraient écrasées à la prochaine synchronisation. La suppression est également temporaire — le fournisseur recréera l'événement à la prochaine sync. Pour le retirer définitivement, modifiez la configuration du fournisseur de l'actif."
@@ -1067,9 +1150,9 @@
             "failed": "Échec du changement de devise",
             "syncFailedManualRetry": "Devise changée mais la synchronisation post-effacement a échoué — utilisez le bouton Sync pour réessayer.",
             "changedTo": "Devise changée de {from} à {to}",
-            "summaryPrices": "{count} enregistrements de prix seront supprimés ({oldest} → {newest}).",
+            "summaryPrices": "{n} enregistrements de prix seront supprimés ({oldest} → {newest}).",
             "summaryEvents": "{manual} événements manuels + {provider} événements générés par le fournisseur seront supprimés.",
-            "summaryLinkedTx": "{count} transactions seront DÉCONNECTÉES de leurs événements (les transactions elles-mêmes sont préservées).",
+            "summaryLinkedTx": "{n} transactions seront DÉCONNECTÉES de leurs événements (les transactions elles-mêmes sont préservées).",
             "exportPricesCsv": "Exporter les prix (CSV)",
             "exportPricesJson": "Exporter les prix (JSON)",
             "exportEventsCsv": "Exporter les événements (CSV)",
@@ -1092,10 +1175,10 @@
         "livePrices": "Prix en direct"
     },
     "events": {
-        "deleteSuccess": "{count} événement(s) supprimé(s)",
+        "deleteSuccess": "{n} événement(s) supprimé(s)",
         "deleteNotFound": "Événement(s) introuvable(s) : {ids}",
         "deletePartial": "{deleted} supprimé(s), {inUse} utilisé(s), {notFound} introuvable(s)",
-        "deleteBlocked": "Suppression impossible : {count} événement(s) encore utilisé(s) par des transactions ({accessible} visibles par vous, {hidden} dans les portefeuilles d'autres utilisateurs)",
+        "deleteBlocked": "Suppression impossible : {n} événement(s) encore utilisé(s) par des transactions ({accessible} visibles par vous, {hidden} dans les portefeuilles d'autres utilisateurs)",
         "fxBannerContext": "pour les événements dividendes/cash"
     },
     "import": {

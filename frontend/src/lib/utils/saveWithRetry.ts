@@ -91,6 +91,9 @@ export function extractErrorMessage(err: unknown, fallback: string = 'Operation 
         if (typeof detail === 'string') return detail;
         if (Array.isArray(detail)) {
             // Pydantic validation error array: [{msg, loc, type, ...}, ...]
+            // Use the centralized extractor so callers get loc-aware summaries.
+            const issues = extractValidationIssues(err);
+            if (issues.length > 0) return formatValidationIssues(issues);
             const first = detail[0];
             if (first && typeof first === 'object') {
                 const msg = first.msg ?? first.message;
@@ -118,6 +121,84 @@ export function extractErrorMessage(err: unknown, fallback: string = 'Operation 
  */
 export function extractStatusCode(err: unknown): number | undefined {
     return (err as any)?.response?.status;
+}
+
+/**
+ * Pydantic / FastAPI 422 validation issue, normalized for UI display.
+ *
+ * `loc` is the dot-joined path of the field that failed (e.g.
+ * `"body.creates.0.asset_id"`). `msg` is the error message stripped of the
+ * leading `"Value error, "` prefix.
+ */
+export interface ValidationIssueExtracted {
+    loc: string;
+    msg: string;
+    type?: string;
+}
+
+/**
+ * Extract Pydantic 422 validation issues from an Axios-like error.
+ *
+ * Returns an empty array if the error is not a 422 with a `detail[]` array.
+ * Use this in modals that POST to `/validate` or `/bulk` endpoints to
+ * surface per-field error messages (instead of the generic Axios
+ * `"Request failed with status code 422"`).
+ *
+ * Example output:
+ * ```ts
+ * [
+ *   { loc: "body.creates.0", msg: "BUY requires asset_id", type: "value_error" },
+ *   { loc: "body.creates.1.quantity", msg: "Input should be a valid decimal", type: "decimal_parsing" },
+ * ]
+ * ```
+ */
+export function extractValidationIssues(err: unknown): ValidationIssueExtracted[] {
+    const detail = (err as any)?.response?.data?.detail;
+    if (!Array.isArray(detail)) return [];
+    const out: ValidationIssueExtracted[] = [];
+    for (const item of detail) {
+        if (!item || typeof item !== 'object') continue;
+        const loc = Array.isArray(item.loc) ? item.loc.join('.') : String(item.loc ?? '');
+        let msg = String(item.msg ?? item.message ?? '').trim();
+        // Pydantic v2 prefixes value-error msg with "Value error, " — strip it
+        // for compactness ("Value error, BUY requires asset_id" → "BUY requires asset_id").
+        if (msg.toLowerCase().startsWith('value error, ')) {
+            msg = msg.slice('value error, '.length);
+        }
+        out.push({loc, msg, type: item.type});
+    }
+    return out;
+}
+
+/**
+ * Format a list of validation issues as a single readable string suitable
+ * for an inline banner. Issues are joined with `" · "` and prefixed with
+ * the leaf segment of `loc` when present (e.g.
+ * `"asset_id: BUY requires asset_id · quantity: must be > 0"`).
+ *
+ * Pass `maxIssues` to truncate long lists (default 5; remainder is summed
+ * up as `"… +N more"`).
+ */
+export function formatValidationIssues(issues: ValidationIssueExtracted[], maxIssues = 5): string {
+    if (issues.length === 0) return '';
+    const head = issues.slice(0, maxIssues).map((iss) => {
+        // Try to extract the most informative leaf:
+        //   body.creates.0.asset_id    → "asset_id"
+        //   body.creates.0             → "row 1"  (Pydantic stops at the row index)
+        //   body.updates.2.cash.amount → "cash.amount"
+        const parts = iss.loc.split('.').filter(Boolean);
+        // strip leading "body" and the operation segment ("creates"/"updates"/"deletes")
+        let tail = parts;
+        if (tail[0] === 'body') tail = tail.slice(1);
+        if (tail[0] === 'creates' || tail[0] === 'updates' || tail[0] === 'deletes') tail = tail.slice(1);
+        let leaf = '';
+        if (tail.length === 0) leaf = '';
+        else if (tail.length === 1 && /^\d+$/.test(tail[0])) leaf = `row ${Number(tail[0]) + 1}`;
+        else leaf = tail.filter((p) => !/^\d+$/.test(p)).join('.');
+        return leaf ? `${leaf}: ${iss.msg}` : iss.msg;
+    });
+    const remainder = issues.length - head.length;
+    return remainder > 0 ? `${head.join(' · ')} · … +${remainder} more` : head.join(' · ');
 }
 
 /**

@@ -21,7 +21,7 @@
 -->
 <script lang="ts">
     import {_ as t, locale} from '$lib/i18n';
-    import {Pencil, Copy, Trash2} from 'lucide-svelte';
+    import {Eye, Pencil, Copy, Trash2} from 'lucide-svelte';
 
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
@@ -107,6 +107,7 @@
         onEditRow?: (row: TXReadItem) => void;
         onCloneRow?: (row: TXReadItem) => void;
         onDeleteRow?: (row: TXReadItem) => void;
+        onViewRow?: (row: TXReadItem) => void;
         onPageChange?: (page: number) => void;
         onPageSizeChange?: (pageSize: number) => void;
         /** Bidirectional URL filter sync. When provided, header column filters
@@ -116,7 +117,7 @@
         initialFilters?: Record<string, FilterValue>;
     }
 
-    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEventBadgeClick, onEditRow, onCloneRow, onDeleteRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters}: Props = $props();
+    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEventBadgeClick, onEditRow, onCloneRow, onDeleteRow, onViewRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters}: Props = $props();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -713,6 +714,12 @@
     ]);
 
     let rowActions = $derived<RowAction<DisplayRow>[]>([
+        {
+            id: 'view',
+            icon: Eye,
+            label: () => $t('transactions.actions.view') || 'View',
+            onClick: (d) => onViewRow?.(d.tx),
+        },
         {
             id: 'edit',
             icon: Pencil,

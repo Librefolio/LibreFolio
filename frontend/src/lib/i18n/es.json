@@ -76,7 +76,10 @@
         "allCurrencies": "Todas las divisas",
         "noMatchesTitle": "Sin Resultados",
         "documentation": "Documentación",
-        "deleteSelected": "Eliminar Seleccionados"
+        "deleteSelected": "Eliminar Seleccionados",
+        "next": "Siguiente",
+        "created": "Creado",
+        "updated": "Actualizado"
     },
     "table": {
         "columns": "Columnas",
@@ -222,12 +225,12 @@
         "deposit": "Depósito",
         "withdraw": "Retiro",
         "confirmDelete": "¿Estás seguro de que quieres eliminar este bróker?",
-        "confirmDeleteWithTransactions": "Este bróker tiene {count} transacciones. La eliminación forzada eliminará todas las transacciones. ¿Continuar?",
+        "confirmDeleteWithTransactions": "Este bróker tiene {n} transacciones. La eliminación forzada eliminará todas las transacciones. ¿Continuar?",
         "forceDelete": "Eliminar Forzosamente",
         "createFailed": "Error al crear el bróker",
         "updateFailed": "Error al actualizar el bróker",
-        "assets": "{count} activo(s)",
-        "currencies": "{count} moneda(s)",
+        "assets": "{n} activo(s)",
+        "currencies": "{n} moneda(s)",
         "unsavedChanges": "Tienes cambios sin guardar. ¿Descartarlos?",
         "discardChangesWarning": "Tienes cambios sin guardar en este broker. ¿Quieres descartarlos?",
         "loadFailed": "Error al cargar el broker",
@@ -294,9 +297,9 @@
             "toastOk": "{name} eliminado",
             "toastFailed": "Error al eliminar {name}",
             "hasTransactions": "No se puede eliminar \"{name}\": tiene transacciones existentes",
-            "bulkOk": "{count} activos eliminados",
+            "bulkOk": "{n} activos eliminados",
             "bulkPartial": "{failed} activos no eliminados (tienen transacciones)",
-            "bulkConfirmMessage": "Eliminar {count} activos? Las asignaciones de proveedores y el historial de precios se eliminaran.",
+            "bulkConfirmMessage": "Eliminar {n} activos? Las asignaciones de proveedores y el historial de precios se eliminaran.",
             "resultDeleted": "eliminado",
             "resultHasTransactions": "tiene transacciones existentes"
         },
@@ -407,7 +410,7 @@
             "askProviderHint": "Obtener identificadores del proveedor asignado",
             "addIdentifier": "Añadir identificador",
             "deleteSelected": "Eliminar identificadores seleccionados",
-            "deleteConfirmMessage": "¿Eliminar {count} identificadores?"
+            "deleteConfirmMessage": "¿Eliminar {n} identificadores?"
         },
         "confirm": {
             "saveWithoutTest": "¿Guardar sin probar?",
@@ -429,7 +432,7 @@
             "providerValue": "Valor del proveedor",
             "selectAll": "Seleccionar todo",
             "deselectAll": "Deseleccionar todo",
-            "applySelected": "Aplicar seleccionados ({count}/{total})",
+            "applySelected": "Aplicar seleccionados ({n}/{total})",
             "allMatch": "Todos los datos coinciden con el proveedor",
             "noDistributionData": "El proveedor no tiene datos para: {fields}"
         },
@@ -443,7 +446,7 @@
             "balanceRow": "Equilibrar al 100%",
             "balanceSelected": "Equilibrar filas seleccionadas",
             "deleteSelected": "Eliminar filas seleccionadas",
-            "deleteConfirmMessage": "¿Eliminar {count} entradas de esta distribución?"
+            "deleteConfirmMessage": "¿Eliminar {n} entradas de esta distribución?"
         },
         "showInactive": "Inactivos"
     },
@@ -457,7 +460,8 @@
             "edit": "Editar",
             "clone": "Clonar",
             "delete": "Eliminar",
-            "promotePair": "Promover par"
+            "promotePair": "Promover par",
+            "view": "Ver"
         },
         "empty": "Sin transacciones",
         "ghost": {
@@ -506,6 +510,85 @@
             "generic": "Transferencia de fondos",
             "depositFrom": "Ingreso desde {broker} ({currency})",
             "withdrawalTo": "Retiro hacia {broker} ({currency})"
+        },
+        "form": {
+            "titleCreate": "Nueva transacción",
+            "titleEdit": "Editar transacción",
+            "titleDuplicate": "Duplicar transacción",
+            "titleView": "Ver transacción",
+            "sectionRequired": "Obligatorio",
+            "sectionOptional": "Opcional",
+            "sectionAdvanced": "Avanzado",
+            "tags": "Etiquetas",
+            "tagsPlaceholder": "Añadir etiqueta y pulsar Enter",
+            "description": "Descripción",
+            "assetEvent": "Evento de activo",
+            "assetEventNotApplicable": "El enlace de evento solo está disponible para DIVIDEND, INTEREST y ADJUSTMENT tras elegir un activo.",
+            "costBasis": "Override de coste medio",
+            "linkUuid": "UUID de enlace",
+            "pairPartner": "Transacción vinculada",
+            "unlink": "Desvincular",
+            "hintQtyPositive": "debe ser > 0",
+            "hintQtyNegative": "debe ser < 0",
+            "hintQtyZero": "debe ser 0",
+            "hintQtyNonzero": "debe ser ≠ 0",
+            "rolledBack": "Se revirtió el guardado. No se guardó ningún cambio.",
+            "rolledBackTitle": "Guardado revertido",
+            "saveFailed": "No se pudo guardar la transacción"
+        },
+        "bulk": {
+            "titleCreate": "Nuevas transacciones",
+            "titleEdit": "Edición masiva",
+            "addRow": "Añadir fila",
+            "resetAll": "Restablecer todo",
+            "resetRow": "Restablecer fila",
+            "removeRow": "Eliminar fila",
+            "commitCreate": "Crear {n}",
+            "commitEdit": "Guardar {n}",
+            "editHint": "Tipo y bróker no se pueden cambiar en edición. Usa Promote pair para TRANSFER/FX_CONVERSION.",
+            "promotePair": "Promocionar par",
+            "rowN": "Fila {n}",
+            "status": "Estado",
+            "rolledBack": "Commit revertido — no se guardó nada.",
+            "rolledBackTitle": "Commit revertido",
+            "saveFailed": "Falló el commit masivo"
+        },
+        "promote": {
+            "title": "Promocionar par",
+            "stepN": "Paso {n}/{total}",
+            "fromSlot": "DESDE (emisor, salida)",
+            "toSlot": "A (receptor, entrada)",
+            "sourceBulk": "En la modal bulk",
+            "sourceSaved": "Transacciones guardadas",
+            "sourceNew": "Crear nueva",
+            "createNew": "Crear transacción",
+            "searchPlaceholder": "Buscar por importe, fecha, bróker…",
+            "noCandidates": "No hay transacciones candidatas.",
+            "brokerAccessHint": "Los brókeres no editables se filtran (BrokerUserAccess).",
+            "selectedPair": "Par seleccionado:",
+            "promoteTo": "Promocionar a:",
+            "eligibleTransfer": "brókeres distintos, misma moneda",
+            "eligibleFx": "mismo bróker, monedas distintas",
+            "reasonSameBroker": "mismos brókeres — se requieren distintos",
+            "reasonDiffBrokers": "brókeres distintos — se requiere el mismo",
+            "reasonBothDiffer": "brókeres y monedas distintos",
+            "reasonSameCurrencyAndBroker": "mismo bróker y misma moneda — ninguna regla aplicable",
+            "assetMoved": "Activo movido",
+            "fxNoFields": "FX_CONVERSION no requiere campos adicionales.",
+            "impliedRate": "Tasa implícita",
+            "atomicWarning": "Esto ELIMINARÁ ambas filas origen y CREARÁ 2 filas enlazadas atómicamente. Si hay rollback, nada cambia.",
+            "commit": "Promocionar",
+            "failed": "Fallo en la promoción",
+            "rolledBack": "Promote revertido — no se modificó nada.",
+            "rolledBackTitle": "Revertido"
+        },
+        "validate": {
+            "now": "Validar ahora",
+            "validating": "validando…",
+            "ok": "válido",
+            "never": "aún no validado",
+            "autoOff": "Auto-validación OFF ({n} filas > {threshold}) — pulsa Validar antes del commit",
+            "issuesCount": "{n} problemas"
         }
     },
     "fx": {
@@ -572,9 +655,9 @@
         "deletePairQuestion": "¿Eliminar {pair}?",
         "deletePairWarning": "Esto eliminará la configuración de proveedores y todos los tipos de cambio históricos. ⚠️",
         "delete": {
-            "toastOk": "{pair} eliminado ({count} tasas eliminadas)",
+            "toastOk": "{pair} eliminado ({n} tasas eliminadas)",
             "toastFailed": "Error al eliminar {pair}",
-            "resultDeleted": "eliminado ({count} tasas)"
+            "resultDeleted": "eliminado ({n} tasas)"
         },
         "removeProvider": "Eliminar proveedor"
     },
@@ -748,15 +831,15 @@
         "useSelected": "Usar Seleccionado",
         "selectIcon": "Seleccionar Icono",
         "urlHint": "Introduce una URL remota o una ruta local desde Archivos",
-        "deleteFailedSome": "Error al eliminar {count} archivo(s)",
+        "deleteFailedSome": "Error al eliminar {n} archivo(s)",
         "uploadFailed": "Error al subir",
         "deleteFailed": "Error al eliminar",
-        "uploadBatchSucceeded": "{count} archivo(s) subido(s)",
+        "uploadBatchSucceeded": "{n} archivo(s) subido(s)",
         "deleteSucceeded": "Archivo eliminado",
-        "deleteBatchSucceeded": "{count} archivo(s) eliminado(s)",
+        "deleteBatchSucceeded": "{n} archivo(s) eliminado(s)",
         "confirmBulkDelete": {
             "title": "Eliminar archivos",
-            "message": "¿Eliminar {count} archivo(s)? Esta acción no se puede deshacer."
+            "message": "¿Eliminar {n} archivo(s)? Esta acción no se puede deshacer."
         }
     },
     "datePicker": {
@@ -824,12 +907,12 @@
         "discard": "Descartar",
         "removeSignal": "Eliminar señal",
         "dataMissingBefore": "Los datos empiezan después del rango del gráfico — primer punto en {date}. Intente sincronizar para obtener datos anteriores.",
-        "badgePoints": "{count} puntos de precio cargados",
-        "badgeDividend": "{count} eventos de dividendo",
-        "badgeInterest": "{count} eventos de interés",
-        "badgePriceAdjustment": "{count} eventos de ajuste de precio",
-        "badgeMaturitySettlement": "{count} eventos de vencimiento/liquidación",
-        "badgeSplit": "{count} eventos de split",
+        "badgePoints": "{n} puntos de precio cargados",
+        "badgeDividend": "{n} eventos de dividendo",
+        "badgeInterest": "{n} eventos de interés",
+        "badgePriceAdjustment": "{n} eventos de ajuste de precio",
+        "badgeMaturitySettlement": "{n} eventos de vencimiento/liquidación",
+        "badgeSplit": "{n} eventos de split",
         "preview": "Vista previa",
         "previewDescGlobal": "Datos sintéticos de ejemplo — muestra cómo los ajustes afectan todos los gráficos",
         "previewDescPair": "Vista previa en vivo con datos reales del par y señales overlay",
@@ -950,8 +1033,8 @@
         "dropFile": "Arrastra un archivo .csv o .txt aquí, o haz clic para explorar",
         "dropReplace": "Arrastra otro archivo para reemplazar",
         "noValidRows": "No se encontraron filas válidas",
-        "validRows": "{count} fila(s) válida(s)",
-        "import": "Importar ({count})",
+        "validRows": "{n} fila(s) válida(s)",
+        "import": "Importar ({n})",
         "helpTitle": "Guía de importación CSV",
         "helpFormat": "Usa el formato de 2 columnas con un encabezado que indica la dirección:",
         "helpDateFormat": "Las fechas deben usar el formato YYYY-MM-DD",
@@ -979,7 +1062,7 @@
             "type": "Tipo",
             "notes": "Notas"
         },
-        "save": "Guardar ({count})",
+        "save": "Guardar ({n})",
         "saving": "Guardando…",
         "autoEvent": {
             "tooltip": "Generado automáticamente por un proveedor de precios. Las ediciones están deshabilitadas porque se sobrescribirían en la próxima sincronización. La eliminación también es temporal — el proveedor volverá a crear el evento en la próxima sync. Para eliminarlo de forma permanente, modifica la configuración del proveedor del activo."
@@ -1067,9 +1150,9 @@
             "failed": "Falló el cambio de divisa",
             "syncFailedManualRetry": "Divisa cambiada pero la sincronización post-borrado falló — usa el botón Sync para reintentar.",
             "changedTo": "Moneda cambiada de {from} a {to}",
-            "summaryPrices": "{count} registros de precio se eliminarán ({oldest} → {newest}).",
+            "summaryPrices": "{n} registros de precio se eliminarán ({oldest} → {newest}).",
             "summaryEvents": "{manual} eventos manuales + {provider} eventos generados por el proveedor se eliminarán.",
-            "summaryLinkedTx": "{count} transacciones serán DESCONECTADAS de sus eventos (las transacciones se preservan).",
+            "summaryLinkedTx": "{n} transacciones serán DESCONECTADAS de sus eventos (las transacciones se preservan).",
             "exportPricesCsv": "Exportar precios (CSV)",
             "exportPricesJson": "Exportar precios (JSON)",
             "exportEventsCsv": "Exportar eventos (CSV)",
@@ -1092,10 +1175,10 @@
         "livePrices": "Precios en vivo"
     },
     "events": {
-        "deleteSuccess": "{count} evento(s) eliminado(s)",
+        "deleteSuccess": "{n} evento(s) eliminado(s)",
         "deleteNotFound": "Evento(s) no encontrado(s): {ids}",
         "deletePartial": "{deleted} eliminado(s), {inUse} en uso, {notFound} no encontrado(s)",
-        "deleteBlocked": "No se puede eliminar: {count} evento(s) aún en uso por transacciones ({accessible} visibles para ti, {hidden} en carteras de otros usuarios)",
+        "deleteBlocked": "No se puede eliminar: {n} evento(s) aún en uso por transacciones ({accessible} visibles para ti, {hidden} en carteras de otros usuarios)",
         "fxBannerContext": "para eventos dividendo/efectivo"
     },
     "import": {

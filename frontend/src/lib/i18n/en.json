@@ -76,7 +76,10 @@
         "allCurrencies": "All currencies",
         "noMatchesTitle": "No Matches",
         "documentation": "Documentation",
-        "deleteSelected": "Delete Selected"
+        "deleteSelected": "Delete Selected",
+        "next": "Next",
+        "created": "Created",
+        "updated": "Updated"
     },
     "table": {
         "columns": "Columns",
@@ -222,12 +225,12 @@
         "deposit": "Deposit",
         "withdraw": "Withdraw",
         "confirmDelete": "Are you sure you want to delete this broker?",
-        "confirmDeleteWithTransactions": "This broker has {count} transactions. Force delete will remove all transactions. Continue?",
+        "confirmDeleteWithTransactions": "This broker has {n} transactions. Force delete will remove all transactions. Continue?",
         "forceDelete": "Force Delete",
         "createFailed": "Failed to create broker",
         "updateFailed": "Failed to update broker",
-        "assets": "{count} asset(s)",
-        "currencies": "{count} currency(ies)",
+        "assets": "{n} asset(s)",
+        "currencies": "{n} currency(ies)",
         "unsavedChanges": "You have unsaved changes. Discard them?",
         "discardChangesWarning": "You have unsaved changes to this broker. Do you want to discard them?",
         "loadFailed": "Failed to load broker",
@@ -294,9 +297,9 @@
             "toastOk": "{name} deleted",
             "toastFailed": "Failed to delete {name}",
             "hasTransactions": "Cannot delete \"{name}\": has existing transactions",
-            "bulkOk": "{count} assets deleted",
+            "bulkOk": "{n} assets deleted",
             "bulkPartial": "{failed} assets could not be deleted (have transactions)",
-            "bulkConfirmMessage": "Delete {count} assets? Provider assignments and price history will be removed.",
+            "bulkConfirmMessage": "Delete {n} assets? Provider assignments and price history will be removed.",
             "resultDeleted": "deleted",
             "resultHasTransactions": "has existing transactions"
         },
@@ -407,7 +410,7 @@
             "askProviderHint": "Fetch identifiers from the assigned provider",
             "addIdentifier": "Add identifier",
             "deleteSelected": "Delete selected identifiers",
-            "deleteConfirmMessage": "Delete {count} identifiers?"
+            "deleteConfirmMessage": "Delete {n} identifiers?"
         },
         "confirm": {
             "saveWithoutTest": "Save Without Testing?",
@@ -429,7 +432,7 @@
             "providerValue": "Provider Value",
             "selectAll": "Select All",
             "deselectAll": "Deselect All",
-            "applySelected": "Apply Selected ({count}/{total})",
+            "applySelected": "Apply Selected ({n}/{total})",
             "allMatch": "All data matches provider",
             "noDistributionData": "Provider has no data for: {fields}"
         },
@@ -443,7 +446,7 @@
             "balanceRow": "Balance to 100%",
             "balanceSelected": "Balance selected rows",
             "deleteSelected": "Delete selected rows",
-            "deleteConfirmMessage": "Delete {count} entries from this distribution?"
+            "deleteConfirmMessage": "Delete {n} entries from this distribution?"
         },
         "showInactive": "Inactive"
     },
@@ -474,7 +477,8 @@
             "edit": "Edit",
             "clone": "Clone",
             "delete": "Delete",
-            "promotePair": "Promote pair"
+            "promotePair": "Promote pair",
+            "view": "View"
         },
         "types": {
             "BUY": "Buy",
@@ -506,6 +510,85 @@
             "generic": "Cash transfer",
             "depositFrom": "Cash in from {broker} ({currency})",
             "withdrawalTo": "Cash out to {broker} ({currency})"
+        },
+        "form": {
+            "titleCreate": "New transaction",
+            "titleEdit": "Edit transaction",
+            "titleDuplicate": "Duplicate transaction",
+            "titleView": "View transaction",
+            "sectionRequired": "Required",
+            "sectionOptional": "Optional",
+            "sectionAdvanced": "Advanced",
+            "tags": "Tags",
+            "tagsPlaceholder": "Add tag and press Enter",
+            "description": "Description",
+            "assetEvent": "Asset event",
+            "assetEventNotApplicable": "Asset event link is only available for DIVIDEND, INTEREST and ADJUSTMENT after picking an asset.",
+            "costBasis": "Cost basis override",
+            "linkUuid": "Link UUID",
+            "pairPartner": "Pair partner",
+            "unlink": "Unlink",
+            "hintQtyPositive": "must be > 0",
+            "hintQtyNegative": "must be < 0",
+            "hintQtyZero": "must be 0",
+            "hintQtyNonzero": "must be ≠ 0",
+            "rolledBack": "Save was rolled back. No changes were persisted.",
+            "rolledBackTitle": "Save rolled back",
+            "saveFailed": "Failed to save transaction"
+        },
+        "bulk": {
+            "titleCreate": "New transactions",
+            "titleEdit": "Bulk edit",
+            "addRow": "Add row",
+            "resetAll": "Reset all",
+            "resetRow": "Reset row",
+            "removeRow": "Remove row",
+            "commitCreate": "Create {n}",
+            "commitEdit": "Save {n}",
+            "editHint": "Type & broker are immutable in edit. Use Promote pair for TRANSFER/FX_CONVERSION.",
+            "promotePair": "Promote pair",
+            "rowN": "Row {n}",
+            "status": "Status",
+            "rolledBack": "Commit rolled back — nothing was saved.",
+            "rolledBackTitle": "Commit rolled back",
+            "saveFailed": "Bulk commit failed"
+        },
+        "promote": {
+            "title": "Promote pair",
+            "stepN": "Step {n}/{total}",
+            "fromSlot": "FROM (giver, cash out)",
+            "toSlot": "TO (receiver, cash in)",
+            "sourceBulk": "In bulk modal",
+            "sourceSaved": "Saved transactions",
+            "sourceNew": "Create new",
+            "createNew": "Create new transaction",
+            "searchPlaceholder": "Search by amount, date, broker…",
+            "noCandidates": "No candidate transactions match.",
+            "brokerAccessHint": "Brokers you cannot edit are filtered out (BrokerUserAccess).",
+            "selectedPair": "Selected pair:",
+            "promoteTo": "Promote to:",
+            "eligibleTransfer": "different brokers, same currency",
+            "eligibleFx": "same broker, different currencies",
+            "reasonSameBroker": "brokers match — needs different brokers",
+            "reasonDiffBrokers": "brokers differ — needs same broker",
+            "reasonBothDiffer": "brokers and currencies both differ",
+            "reasonSameCurrencyAndBroker": "same broker and same currency — neither rule fits",
+            "assetMoved": "Asset moved",
+            "fxNoFields": "FX_CONVERSION needs no extra fields.",
+            "impliedRate": "Implied rate",
+            "atomicWarning": "This will DELETE both source rows and CREATE 2 linked rows atomically. On rollback nothing changes.",
+            "commit": "Promote",
+            "failed": "Promote failed",
+            "rolledBack": "Promote was rolled back — nothing was changed.",
+            "rolledBackTitle": "Rolled back"
+        },
+        "validate": {
+            "now": "Validate now",
+            "validating": "validating…",
+            "ok": "valid",
+            "never": "not validated yet",
+            "autoOff": "Auto-validate is OFF ({n} rows > {threshold}) — press Validate now before commit",
+            "issuesCount": "{n} issues"
         }
     },
     "fx": {
@@ -572,9 +655,9 @@
         "deletePairQuestion": "Delete {pair}?",
         "deletePairWarning": "This will remove the provider configuration and all historical exchange rates. ⚠️",
         "delete": {
-            "toastOk": "{pair} deleted ({count} rates removed)",
+            "toastOk": "{pair} deleted ({n} rates removed)",
             "toastFailed": "Failed to delete {pair}",
-            "resultDeleted": "deleted ({count} rates)"
+            "resultDeleted": "deleted ({n} rates)"
         },
         "removeProvider": "Remove provider"
     },
@@ -748,15 +831,15 @@
         "useSelected": "Use Selected",
         "selectIcon": "Select Icon",
         "urlHint": "Enter a remote URL or a local path from Files",
-        "deleteFailedSome": "Failed to delete {count} file(s)",
+        "deleteFailedSome": "Failed to delete {n} file(s)",
         "uploadFailed": "Upload failed",
         "deleteFailed": "Delete failed",
-        "uploadBatchSucceeded": "{count} file(s) uploaded",
+        "uploadBatchSucceeded": "{n} file(s) uploaded",
         "deleteSucceeded": "File deleted",
-        "deleteBatchSucceeded": "{count} file(s) deleted",
+        "deleteBatchSucceeded": "{n} file(s) deleted",
         "confirmBulkDelete": {
             "title": "Delete files",
-            "message": "Delete {count} file(s)? This action cannot be undone."
+            "message": "Delete {n} file(s)? This action cannot be undone."
         }
     },
     "datePicker": {
@@ -824,12 +907,12 @@
         "discard": "Discard",
         "removeSignal": "Remove signal",
         "dataMissingBefore": "Data starts after chart range — first point at {date}. Try syncing to fetch earlier data.",
-        "badgePoints": "{count} price points loaded",
-        "badgeDividend": "{count} dividend events",
-        "badgeInterest": "{count} interest events",
-        "badgePriceAdjustment": "{count} price adjustment events",
-        "badgeMaturitySettlement": "{count} maturity/settlement events",
-        "badgeSplit": "{count} split events",
+        "badgePoints": "{n} price points loaded",
+        "badgeDividend": "{n} dividend events",
+        "badgeInterest": "{n} interest events",
+        "badgePriceAdjustment": "{n} price adjustment events",
+        "badgeMaturitySettlement": "{n} maturity/settlement events",
+        "badgeSplit": "{n} split events",
         "preview": "Preview",
         "previewDescGlobal": "Synthetic demo data — shows how aesthetics affect all charts",
         "previewDescPair": "Live preview with actual pair data and overlay signals",
@@ -950,8 +1033,8 @@
         "dropFile": "Drop a .csv or .txt file here, or click to browse",
         "dropReplace": "Drop another file to replace",
         "noValidRows": "No valid rows found",
-        "validRows": "{count} valid row(s)",
-        "import": "Import ({count})",
+        "validRows": "{n} valid row(s)",
+        "import": "Import ({n})",
         "helpTitle": "CSV Import Guide",
         "helpFormat": "Use 2-column format with a header indicating direction:",
         "helpDateFormat": "Dates must use YYYY-MM-DD format",
@@ -979,7 +1062,7 @@
             "type": "Type",
             "notes": "Notes"
         },
-        "save": "Save ({count})",
+        "save": "Save ({n})",
         "saving": "Saving…",
         "autoEvent": {
             "tooltip": "Auto-generated by a price provider. Edits are disabled because they would be overwritten on the next sync. Deleting is also temporary — the provider will recreate the event on next sync. To remove it permanently, change the asset's provider configuration."
@@ -1067,9 +1150,9 @@
             "failed": "Currency change failed",
             "syncFailedManualRetry": "Currency changed but post-wipe sync failed — use the Sync button to retry.",
             "changedTo": "Currency changed from {from} to {to}",
-            "summaryPrices": "{count} price records will be deleted ({oldest} → {newest}).",
+            "summaryPrices": "{n} price records will be deleted ({oldest} → {newest}).",
             "summaryEvents": "{manual} manual events + {provider} provider-generated events will be deleted.",
-            "summaryLinkedTx": "{count} transactions will be DISCONNECTED from their events (transactions themselves are preserved).",
+            "summaryLinkedTx": "{n} transactions will be DISCONNECTED from their events (transactions themselves are preserved).",
             "exportPricesCsv": "Export prices (CSV)",
             "exportPricesJson": "Export prices (JSON)",
             "exportEventsCsv": "Export events (CSV)",
@@ -1092,10 +1175,10 @@
         "livePrices": "Live Prices"
     },
     "events": {
-        "deleteSuccess": "{count} event(s) deleted",
+        "deleteSuccess": "{n} event(s) deleted",
         "deleteNotFound": "Event(s) not found: {ids}",
         "deletePartial": "{deleted} deleted, {inUse} in use, {notFound} not found",
-        "deleteBlocked": "Cannot delete: {count} event(s) still in use by transactions ({accessible} visible to you, {hidden} in other users' portfolios)",
+        "deleteBlocked": "Cannot delete: {n} event(s) still in use by transactions ({accessible} visible to you, {hidden} in other users' portfolios)",
         "fxBannerContext": "for dividend/cash events"
     },
     "import": {

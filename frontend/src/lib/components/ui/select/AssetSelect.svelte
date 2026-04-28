@@ -83,14 +83,28 @@
 </script>
 
 <div data-testid={testid}>
-    <SearchSelect value={stringValue} {options} {disabled} {loading} placeholder={placeholder ?? $t('common.select')} {compact} onchange={handleChange}>
+    <SearchSelect value={stringValue} {options} {disabled} {loading} placeholder={placeholder ?? $t('common.select')} {compact} inlineSearch={true} onchange={handleChange}>
+        {#snippet selectedItem(option)}
+            {@const a = option.data as AssetInfo | undefined}
+            <div class="flex items-center gap-2 min-w-0">
+                {#if option.icon}
+                    <span class="shrink-0 w-7 h-7 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded overflow-hidden">
+                        <img src={option.icon} alt="" class="w-5 h-5 object-contain" onerror={hideOnError} />
+                    </span>
+                {/if}
+                <div class="min-w-0 flex-1">
+                    <div class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{a?.identifier_ticker || option.label}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}{a?.currency ? ` · ${a.currency}` : ''}</div>
+                </div>
+            </div>
+        {/snippet}
         {#snippet item(option)}
             {@const a = option.data as AssetInfo | undefined}
             <div class="flex items-center gap-2 min-w-0">
                 {#if option.icon}
                     <img src={option.icon} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" onerror={hideOnError} />
                 {/if}
-                <span class="truncate text-sm">{option.label}</span>
+                <span class="truncate text-sm">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
                 {#if a?.currency}
                     <span class="ml-auto text-[10px] font-mono uppercase opacity-60 shrink-0">{a.currency}</span>
                 {/if}

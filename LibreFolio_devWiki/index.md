@@ -43,7 +43,8 @@
 | [[features/F-038]] | EMA Signal | Signals | implemented |
 | [[features/F-039]] | RSI Signal | Signals | implemented |
 | [[features/F-042]] | FX Pair Comparison Signal | Signals | implemented |
-| [[features/F-056]] | FIFO at Runtime | Calculations | implemented |
+| [[features/F-047]] | Transaction List Page (DataTable, always-pair-adjacent, client-side filters) | Transactions | implemented |
+| [[features/F-048]] | Staging Modal (manual mode done, BRIM mode Part 5) | Transactions | in-progress |
 | [[features/F-059]] | Provider Registry Pattern | Infrastructure | implemented |
 | [[features/F-060]] | Thread Isolation for Providers | Infrastructure | implemented |
 | [[features/F-061]] | 5-layer Provider Cache | Infrastructure | implemented |
@@ -83,6 +84,8 @@
 | [[decisions/tx-link-uuid-semantics]] | link_uuid semantics: TRANSFER requires distinct brokers; DEPOSIT/WITHDRAWAL soft-linkable; promote endpoint | 2026-04-21 | transactions, transfer, linking |
 | [[decisions/price-currency-hard-reject]] | Hard 400 on price currency mismatch; 409 on asset currency change with existing prices | 2026-04-21 | prices, currency, api, validation |
 | [[decisions/policy-d-currency-wipe]] | Asset currency change → destructive symmetric wipe (prices + events); transactions preserved with `asset_event_id=NULL`; pre-confirm via new `/backup` router | 2026-04-23 | assets, currency, destructive, fifo, backup |
+| [[decisions/transactions-client-side-filtering]] | All `/transactions` page filtering is client-side; `GET /transactions` loads all records; Refresh button for reload | 2026-04-28 | transactions, frontend, datatable, filtering |
+| [[decisions/datatable-tooltip-custom-cell]] | Tooltips in DataTable cells use `<Tooltip.svelte>` via CustomCell only — `title=""` HTML attribute prohibited | 2026-04-28 | frontend, datatable, tooltip, svelte5 |
 
 ## Concepts
 
@@ -102,6 +105,9 @@
 | [[concepts/responsive-4mode-layout]] | Filter bar pages use 4 breakpoint modes (wide/tablet/tablet-s/mobile) for better intermediate-width UX | frontend, responsive, layout, ux |
 | [[concepts/prices-current-side-effect]] | `/assets/prices/current` is not read-only — it upserts today's OHLC; never chain with `/sync` | backend, frontend, assets, api-contract, side-effect |
 | [[concepts/savewithretry-frontend-pattern]] | Unified modal save helper: error extraction, inline formError, optional toast, onError hook | frontend, ux, error-handling, modals |
+| [[concepts/entity-store-pattern]] | `createEntityStore<T>()` factory for bounded entity caches with proper `invalidate()` semantics | frontend, stores, cache, svelte5 |
+| [[concepts/always-pair-adjacent]] | TRANSFER/FX_CONVERSION pairs always rendered adjacent in TransactionsTable (giver above / receiver below) | frontend, transactions, datatable, rendering |
+| [[concepts/opportunistic-cache-merge]] | Any code with fresh entity data calls `merge()` to deposit into shared store — universal ingress pattern | frontend, stores, cache, assets |
 
 ## Problems
 
@@ -119,6 +125,9 @@
 | [[problems/prices-current-sync-chain-empty-delta]] | Chaining `/prices/current` + `/sync` reports empty `changed_points` — `/current` already persisted today's row | resolved | backend, frontend, assets, prices, anti-pattern |
 | [[problems/assets-wipe-error-attr-mismatch]] | `assets.py` wipe handlers used non-existent `e.code` (should be `e.error_code`) → HTTP 500 instead of 404 | resolved | backend, assets, exceptions, hidden-bug |
 | [[problems/babel-currency-symbol-echo]] | `normalize_currency` echoed unknown garbage codes back as valid (babel quirk) — fixed via strict pycountry lookup | resolved | backend, currency, fx, hidden-bug |
+| [[problems/svelte5-effect-read-write-loop]] | `$effect` reads and writes same `$state` → `effect_update_depth_exceeded` crash | resolved | frontend, svelte5, reactivity, infinite-loop |
+| [[problems/babel-currency-symbol-locale]] | `get_currency_symbol('USD', locale='it')` returns `'USD'` not `'$'` — fix: always use `locale='en'` for symbol | resolved | backend, python, babel, currency, i18n |
+| [[problems/datatable-filter-options-disappear]] | Enum filter options disappeared when count reached 0 due to `.filter(o => o.count > 0)` — removed that filter | resolved | frontend, datatable, filter, enum |
 
 ## Entities
 
@@ -161,3 +170,6 @@
 | [[sources/phase07-part3-api-consolidation]] | `phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3.md` ✅ DONE | 2026-04-24 (upd. 2026-04-25) | phase07, transactions, api, multi-broker, transfer, currency |
 | [[sources/phase07-part3-closure]] | `phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure.md` ✅ DONE | 2026-04-24 (upd. 2026-04-25) | phase07, i-bis, currency, policy-d, wipe, backup |
 | [[sources/phase07-part3-closure2]] | `phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md` (+ Batch4d + BlockG G1..G7) ✅ DONE | 2026-04-24 (upd. 2026-04-25) | phase07, test-coverage, batch4, savewithretry, delta, 87% |
+| [[sources/phase07-part4-transactions-ui]] | `plan-phase07-transaction-Part4.prompt.md` ✅ DONE | 2026-04-28 | phase07, transactions, frontend, datatable, staging, always-pair-adjacent |
+| [[sources/phase07-part4-round1]] | `plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md` ✅ DONE | 2026-04-28 | phase07, transactions, frontend, bugfix, filters, currency-stack, client-side-filtering |
+| [[sources/phase07-part4-round2]] | `plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md` ✅ DONE | 2026-04-28 | phase07, transactions, frontend, entityStore, brokerStore, slider, tooltip |

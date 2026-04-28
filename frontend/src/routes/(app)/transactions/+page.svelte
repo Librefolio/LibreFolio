@@ -17,9 +17,10 @@
     import TransactionsTable from '$lib/components/transactions/TransactionsTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import TransactionStagingModal from '$lib/components/transactions/TransactionStagingModal.svelte';
+    import TransactionFormModal from '$lib/components/transactions/TransactionFormModal.svelte';
+    import TransactionBulkModal from '$lib/components/transactions/TransactionBulkModal.svelte';
     import BulkDeleteLinkedPairModal, {type ProblemPair} from '$lib/components/transactions/BulkDeleteLinkedPairModal.svelte';
-    import TransferPromoteModal from '$lib/components/transactions/TransferPromoteModal.svelte';
+    import PromotePairWizardModal from '$lib/components/transactions/PromotePairWizardModal.svelte';
 
     // =========================================================================
     // Types (local, derived from generated.ts shapes)
@@ -350,9 +351,13 @@
     });
 
     function onAddTransaction() {
-        stagingMode = 'create-many';
-        stagingInitial = [];
-        stagingOpen = true;
+        // Bugfix-4 §A3: revert of A1 — for inserting a single transaction
+        // from scratch the FormModal (single-row, structured) is a clearer
+        // path than seeding a bulk grid. The BulkModal stays available for
+        // multi-row edits via the table's bulk-edit row-action.
+        formMode = 'create';
+        formInitial = null;
+        formOpen = true;
     }
     function onImportFromBroker() {
         // TODO Step 10: open BrokerImportFilesModal
@@ -365,10 +370,22 @@
 
     let selectedRows = $state<TXReadItem[]>([]);
 
-    // Staging modal state.
-    let stagingOpen = $state(false);
-    let stagingMode = $state<'create-many' | 'edit-many'>('create-many');
-    let stagingInitial = $state<TXReadItem[]>([]);
+    // Form modal (single tx: create / edit / duplicate / view).
+    let formOpen = $state(false);
+    let formMode = $state<'create' | 'edit' | 'duplicate' | 'view'>('create');
+    let formInitial = $state<TXReadItem | null>(null);
+
+    // Bulk modal (create-many / edit-many on DataTable).
+    let bulkOpen = $state(false);
+    let bulkMode = $state<'create-many' | 'edit-many'>('create-many');
+    let bulkInitial = $state<TXReadItem[]>([]);
+
+    // Promote pair wizard.
+    let wizardOpen = $state(false);
+    let wizardSeedFrom = $state<TXReadItem | null>(null);
+    let wizardSeedTo = $state<TXReadItem | null>(null);
+    /** When the wizard is opened FROM the bulk modal, this is the live drafts list. */
+    let wizardBulkContext = $state<TXReadItem[] | null>(null);
 
     function handleSelectionChange(rows: TXReadItem[]) {
         selectedRows = rows;
@@ -376,24 +393,28 @@
 
     function onEditBulk() {
         if (selectedRows.length === 0) return;
-        stagingMode = 'edit-many';
-        stagingInitial = [...selectedRows];
-        stagingOpen = true;
+        bulkMode = 'edit-many';
+        bulkInitial = [...selectedRows];
+        bulkOpen = true;
     }
     function onCloneBulk() {
         if (selectedRows.length === 0) return;
-        stagingMode = 'create-many';
+        bulkMode = 'create-many';
         const today = new Date().toISOString().slice(0, 10);
-        stagingInitial = selectedRows.map((r) => ({
+        bulkInitial = selectedRows.map((r) => ({
             ...r,
             id: 0, // ignored on create-many path (id stripped before commit)
             date: today,
             related_transaction_id: null,
         }));
-        stagingOpen = true;
+        bulkOpen = true;
     }
-    function handleStagingCommitted() {
-        stagingOpen = false;
+    function handleFormCommitted() {
+        formOpen = false;
+        void reload();
+    }
+    function handleBulkCommitted() {
+        bulkOpen = false;
         void reload();
     }
 
@@ -470,15 +491,16 @@
     }
 
     // =========================================================================
-    // Promote pair (Step 9)
+    // Promote pair wizard (Step 9 — Round 4 rewrite)
     // =========================================================================
 
-    let promoteOpen = $state(false);
-    let promoteRowA = $state<TXReadItem | null>(null);
-    let promoteRowB = $state<TXReadItem | null>(null);
-
-    /** True when exactly 2 rows are selected matching DEPOSIT+WITHDRAWAL with no link. */
-    let canPromote = $derived.by(() => {
+    /**
+     * True when the current selection is a compatible DEPOSIT+WITHDRAWAL pair
+     * with no existing link. Used to seed the wizard slots with the selected
+     * rows; otherwise the wizard opens empty and the user picks from
+     * "Saved transactions" / "Create new".
+     */
+    let canSeedPromote = $derived.by(() => {
         if (selectedRows.length !== 2) return false;
         const types = new Set(selectedRows.map((r) => r.type));
         if (!types.has('DEPOSIT') || !types.has('WITHDRAWAL')) return false;
@@ -486,14 +508,33 @@
     });
 
     function onPromotePair() {
-        if (!canPromote) return;
-        promoteRowA = selectedRows[0];
-        promoteRowB = selectedRows[1];
-        promoteOpen = true;
+        // Always open the wizard. If selection is a compatible pair → seed it.
+        if (canSeedPromote) {
+            const withdrawal = selectedRows.find((r) => r.type === 'WITHDRAWAL') ?? null;
+            const deposit = selectedRows.find((r) => r.type === 'DEPOSIT') ?? null;
+            wizardSeedFrom = withdrawal;
+            wizardSeedTo = deposit;
+        } else {
+            wizardSeedFrom = null;
+            wizardSeedTo = null;
+        }
+        wizardBulkContext = null;
+        wizardOpen = true;
+    }
+
+    /** Triggered from inside the bulk modal toolbar. */
+    function onOpenPromoteFromBulk() {
+        wizardSeedFrom = null;
+        wizardSeedTo = null;
+        // Snapshot the current bulk drafts as TX-shaped items. The bulk modal
+        // exposes its drafts via a callback (TODO: wire when available); for
+        // now we pass mainRows-derived candidates as fallback.
+        wizardBulkContext = [...bulkInitial];
+        wizardOpen = true;
     }
 
     function handlePromoteCommitted(resp: {new_from_tx_id?: number | null; new_to_tx_id?: number | null}) {
-        promoteOpen = false;
+        wizardOpen = false;
         selectedRows = [];
         const hi = resp.new_from_tx_id ?? resp.new_to_tx_id;
         void reload().then(() => {
@@ -554,16 +595,21 @@
     }
 
     function handleEditRow(row: TXReadItem) {
-        stagingMode = 'edit-many';
-        stagingInitial = [row];
-        stagingOpen = true;
+        formMode = 'edit';
+        formInitial = row;
+        formOpen = true;
     }
 
     function handleCloneRow(row: TXReadItem) {
-        stagingMode = 'create-many';
-        const today = new Date().toISOString().slice(0, 10);
-        stagingInitial = [{...row, id: 0, date: today, related_transaction_id: null}];
-        stagingOpen = true;
+        formMode = 'duplicate';
+        formInitial = row;
+        formOpen = true;
+    }
+
+    function handleViewRow(row: TXReadItem) {
+        formMode = 'view';
+        formInitial = row;
+        formOpen = true;
     }
 
     function handleDeleteRow(row: TXReadItem) {
@@ -606,7 +652,7 @@
                     bulkActions={[
                         {id: 'edit', icon: Pencil, label: () => $_('transactions.actions.edit') || 'Edit', onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
-                        ...(canPromote ? [{id: 'promote', icon: Zap, label: () => $_('transactions.actions.promotePair') || 'Promote pair', onClick: () => onPromotePair()}] : []),
+                        {id: 'promote', icon: Zap, label: () => $_('transactions.actions.promotePair') || 'Promote pair', onClick: () => onPromotePair()},
                         {id: 'delete', icon: Trash2, label: () => $_('transactions.actions.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
                     ]}
                     onClearSelection={() => {
@@ -671,6 +717,7 @@
             onEditRow={handleEditRow}
             onCloneRow={handleCloneRow}
             onDeleteRow={handleDeleteRow}
+            onViewRow={handleViewRow}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
             onFiltersChange={handleColumnFiltersChange}
@@ -678,6 +725,15 @@
     {/if}
 </div>
 
-<TransactionStagingModal open={stagingOpen} mode={stagingMode} initialRows={stagingInitial} {brokers} onClose={() => (stagingOpen = false)} onCommitted={handleStagingCommitted} />
+<TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} />
+<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} onClose={() => (bulkOpen = false)} onCommitted={handleBulkCommitted} onOpenPromoteWizard={onOpenPromoteFromBulk} />
 <BulkDeleteLinkedPairModal open={bulkDeleteOpen} cleanRows={bulkDeleteClean} problemRows={bulkDeleteProblems} onClose={() => (bulkDeleteOpen = false)} onCommitted={handleBulkDeleteCommitted} />
-<TransferPromoteModal open={promoteOpen} rowA={promoteRowA} rowB={promoteRowB} {brokers} onClose={() => (promoteOpen = false)} onCommitted={handlePromoteCommitted} />
+<PromotePairWizardModal
+    open={wizardOpen}
+    savedTransactions={mainRows}
+    bulkContext={wizardBulkContext}
+    seedFrom={wizardSeedFrom}
+    seedTo={wizardSeedTo}
+    onClose={() => (wizardOpen = false)}
+    onCommitted={handlePromoteCommitted}
+/>
