@@ -553,21 +553,20 @@ class TestAdditionalEdgeCases:
 
     @pytest.mark.asyncio
     async def test_zero_quantity_adjustment(self, session, test_broker, test_asset):
-        """Test behavior of ADJUSTMENT with zero quantity.
+        """ADJUSTMENT with quantity=0 is rejected by schema (Phase 7 §B1/§B6).
 
-        Note: Currently zero quantity is allowed for ADJUSTMENT.
-        This documents the actual behavior - may need revisiting.
+        Pre-Bugfix-5 the schema silently allowed it; Rule 10 now requires
+        ADJUSTMENT.quantity != 0 because a zero-delta adjustment carries no
+        information.
         """
-        # Zero quantity ADJUSTMENT is currently allowed
-        item = TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.ADJUSTMENT,
-            date=date.today(),
-            quantity=Decimal("0"),
-        )
-        # If we reach here, it means zero quantity is accepted
-        assert item.quantity == Decimal("0")
+        with pytest.raises(ValidationError, match="ADJUSTMENT requires quantity != 0"):
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date.today(),
+                quantity=Decimal("0"),
+            )
 
     @pytest.mark.asyncio
     async def test_negative_deposit(self, session, test_broker):

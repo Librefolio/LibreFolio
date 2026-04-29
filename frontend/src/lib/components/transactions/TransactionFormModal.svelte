@@ -43,12 +43,13 @@
 
     import {zodiosApi} from '$lib/api';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
+    import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
     import {type TransactionTypeCode, getTransactionTypeIconUrl} from '$lib/utils/transactionTypes';
     import {getTypeRule, isDraftReadyForValidation} from '$lib/utils/transactionTypeRules';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
-    import {saveWithRetry, extractErrorMessage} from '$lib/utils/saveWithRetry';
+    import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
+    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
 
@@ -78,6 +79,11 @@
         index: number;
         ref_id?: number | null;
         error: string;
+        code?: string | null;
+        params?: Record<string, any> | null;
+        field?: string | null;
+        /** Pydantic loc path (e.g. "body.creates.0.broker_id"). */
+        loc?: string;
     }
 
     type Mode = 'create' | 'edit' | 'duplicate' | 'view';
@@ -88,11 +94,31 @@
         initialRow?: TXReadItem | null;
         /** When opened from the wizard: pre-select this broker. */
         forcedBroker?: number | null;
+        /** Bugfix-5 §A4: when `false`, the Save button does NOT call the
+         *  bulk endpoint — instead it invokes `onPushDraft` with the
+         *  collected create-shaped payload, so the parent (BulkModal) can
+         *  apply the change to its in-flight grid. Default `true` (commit). */
+        commitOnSave?: boolean;
+        /** Bugfix-5 §A4: when `true`, override the default immutability of
+         *  `type`/`broker` in `mode='edit'` (deep-edit single row from the
+         *  BulkModal). Default `false`. */
+        unlockImmutable?: boolean;
+        /** Bugfix-5 §U20: client-side tag suggestions for the autocomplete.
+         *  Caller is expected to aggregate from the loaded transactions
+         *  (no dedicated backend endpoint). */
+        availableTags?: string[];
+        /** Z-index override — needed when the form is mounted as a stacked
+         *  modal on top of another (e.g. BulkModal → FormModal). */
+        zIndex?: number;
         onClose: () => void;
         onCommitted?: (resp: {transaction_id?: number | null}) => void;
+        /** Called instead of committing when `commitOnSave=false`. Receives
+         *  the same payload shape as `collectCreate()` (which is also valid
+         *  as an update payload because all fields are present). */
+        onPushDraft?: (payload: Record<string, unknown>) => void;
     }
 
-    let {open, mode, initialRow = null, forcedBroker = null, onClose, onCommitted}: Props = $props();
+    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, onClose, onCommitted, onPushDraft}: Props = $props();
 
     // =========================================================================
     // Form state
@@ -284,8 +310,11 @@
 
     let rule = $derived(getTypeRule(draft.type));
     let isReadonly = $derived(mode === 'view');
-    let typeImmutable = $derived(mode === 'edit' || mode === 'view');
-    let brokerImmutable = $derived(mode === 'edit' || mode === 'view' || forcedBroker != null);
+    // Bugfix-5 §A4: `unlockImmutable=true` (deep-edit from BulkModal) overrides
+    // the default immutability so the user can change `type`/`broker` on an
+    // existing draft. `view` mode always wins (everything stays readonly).
+    let typeImmutable = $derived((mode === 'edit' || mode === 'view') && !unlockImmutable);
+    let brokerImmutable = $derived(((mode === 'edit' || mode === 'view') && !unlockImmutable) || forcedBroker != null);
     let canShowAssetEvent = $derived(rule.eventLinkable && draft.asset_id != null);
 
     // cost_basis_override is meaningful only for the receiver of a TRANSFER pair.
@@ -316,9 +345,21 @@
                 issuesDismissed = false;
                 return {issuesCount: issues.length};
             } catch (e) {
-                // Pydantic 422 → readable per-field summary; otherwise fall back to message.
-                const msg = extractErrorMessage(e, $t('transactions.form.saveFailed'));
-                issues = [{operation: mode === 'edit' ? 'update' : 'create', index: 0, error: msg}];
+                // Pydantic 422 → extract structured codes; otherwise fall back to message.
+                const extracted = extractValidationIssues(e);
+                if (extracted.length > 0) {
+                    issues = extracted.map((iss) => ({
+                        operation: (mode === 'edit' ? 'update' : 'create') as 'create' | 'update',
+                        index: 0,
+                        error: iss.msg,
+                        code: iss.code,
+                        params: iss.params,
+                        loc: iss.loc,
+                    }));
+                } else {
+                    const msg = extractErrorMessage(e, $t('transactions.form.saveFailed'));
+                    issues = [{operation: mode === 'edit' ? 'update' : 'create', index: 0, error: msg}];
+                }
                 lastValidatedDraftKey = sentKey;
                 issuesDismissed = false;
                 return {issuesCount: issues.length};
@@ -335,6 +376,12 @@
     let issuesDismissed = $state(false);
     let isFreshlyValid = $derived(!isReadonly && scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
+
+    /** Context for resolving validation issue codes into translated messages. */
+    let resolverCtx: ResolverContext = $derived({
+        brokers: brokers as unknown as Array<{id: number; name: string}>,
+        assets: getAllAssets() as unknown as Array<{id: number; display_name: string}>,
+    });
     $effect(() => {
         if (!open || isReadonly) return;
         const key = JSON.stringify(draft);
@@ -413,6 +460,16 @@
 
     async function commit() {
         if (isReadonly || committing) return;
+        // Bugfix-5 §A4: when wired from the BulkModal, "Save" pushes the draft
+        // back to the parent grid instead of committing to the backend.
+        if (!commitOnSave) {
+            // Always emit the create-shaped payload — it carries every field
+            // needed to fully replace a draft row in the bulk grid (the parent
+            // decides whether to add or replace based on its own state).
+            onPushDraft?.(collectCreate());
+            onClose();
+            return;
+        }
         committing = true;
         formError = null;
         try {
@@ -517,6 +574,15 @@
         }
     }
 
+    /** Bugfix-5 §U20: filter the parent-supplied tag list against the
+     *  current input buffer and exclude tags already attached to the draft.
+     *  Pure client-side aggregation — no backend endpoint required. */
+    let tagSuggestions = $derived.by<string[]>(() => {
+        const q = tagInputBuffer.trim().toLowerCase();
+        const used = new Set(draft.tags);
+        return availableTags.filter((tg) => !used.has(tg) && (q === '' || tg.toLowerCase().includes(q))).slice(0, 20);
+    });
+
     // =========================================================================
     // Quantity / cash sign hints
     // =========================================================================
@@ -546,7 +612,7 @@
 
 </script>
 
-<ModalBase {open} maxWidth="3xl" onRequestClose={requestClose} testId="tx-form-modal" allowOverflow={true}>
+<ModalBase {open} maxWidth="3xl" onRequestClose={requestClose} testId="tx-form-modal" allowOverflow={true} {zIndex}>
     <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-form-modal-root">
         <!-- ============================================================= -->
         <!-- Header -->
@@ -585,9 +651,10 @@
                 </InfoBanner>
             {:else if showIssuesBanner}
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
-                    <ul class="space-y-0.5" data-testid="tx-form-issues">
+                    <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">{$t('transactions.validate.issuesHeader')}</p>
+                    <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                         {#each issues as issue}
-                            <li data-testid="tx-form-issue">{issue.error}</li>
+                            <li data-testid="tx-form-issue">{resolveIssueMessage(issue, $t, resolverCtx)}</li>
                         {/each}
                     </ul>
                 </InfoBanner>
@@ -598,15 +665,19 @@
                 <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
 
                 <!-- Reordered to match table column order (Bugfix-1 §U5):
-                     Date → Type → Quantity → Cash → Asset → Broker -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                     Date → Type → Quantity → Cash → Asset → Broker.
+                     Bugfix-5 §U21: Date+Type are kept in a 2-col mini-grid
+                     even on mobile (always-on, never wraps to 1-col); Qty/Cash
+                     get their own sub-grid that collapses to a single
+                     full-width Cash row when the type forces quantity=0. -->
+                <div class="grid grid-cols-2 gap-3 text-sm">
                     <!-- Date -->
                     <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
                         <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
                         {#if isReadonly}
                             <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
                         {:else}
-                            <SingleDatePicker bind:value={draft.date} label="" onchange={(d) => setDate(d)} />
+                            <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
                         {/if}
                     </div>
 
@@ -614,30 +685,39 @@
                     <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
                         <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
                         {#if typeImmutable}
-                            <!-- Bugfix-4 §U17: render the readonly type as a
-                                 plain inline [icon] [name] row matching the
-                                 height of other selectors — no big rectangle
-                                 around a tiny badge. -->
+                            <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
+                                 readonly type as a plain inline [icon] [name]
+                                 row matching the table cell rendering — icon
+                                 enlarged (w-6 h-6) so it stays legible
+                                 alongside the other selectors. -->
                             <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
-                                <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-5 h-5 object-contain shrink-0" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />
+                                <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e: Event) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
                                 <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
                             </div>
                         {:else}
                             <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} testid="tx-form-type" />
                         {/if}
                     </div>
+                </div>
 
-                    <!-- Quantity -->
+                <!-- Quantity + Cash sub-grid (Bugfix-5 §U21).
+                     Walkthrough #6: on narrow viewports `Cash` overflows the
+                     2-col grid (CompactCashCell ≈ 12 rem combined). Drop to
+                     1-col so Cash falls below Qty and uses the full row;
+                     2-col only kicks in from `sm:` upwards. -->
+                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     {#if rule.quantityRule !== 'zero'}
+                        <!-- Quantity -->
                         <div class="flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</span>
                             <input
-                                type="text"
+                                type="number"
+                                step="any"
                                 inputmode="decimal"
                                 autocomplete="off"
                                 spellcheck="false"
                                 name="qty-{autocompleteNonce}"
-                                class="px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
                                 value={qtyDisplay}
                                 disabled={isReadonly}
                                 oninput={onQuantityInput}
@@ -648,24 +728,36 @@
                                 <span class="text-[10px] text-gray-400">{qtyHint}</span>
                             {/if}
                         </div>
-                    {:else}
-                        <div class="flex flex-col gap-1 opacity-60" data-testid="tx-form-quantity-locked">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</span>
-                            <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-right text-gray-400 text-xs">0 ({$t('transactions.form.hintQtyZero')})</div>
-                        </div>
-                    {/if}
 
-                    <!-- Cash -->
-                    {#if rule.cashField !== 'forbidden'}
-                        <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}</span>
-                            <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} />
-                        </div>
+                        <!-- Cash -->
+                        {#if rule.cashField !== 'forbidden'}
+                            <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}</span>
+                                <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} />
+                            </div>
+                        {:else}
+                            <div class="flex flex-col gap-1 opacity-60" data-testid="tx-form-cash-locked">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</span>
+                                <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-400 text-xs">— ({$t('transactions.types.' + draft.type)} doesn't use cash)</div>
+                            </div>
+                        {/if}
                     {:else}
-                        <div class="flex flex-col gap-1 opacity-60" data-testid="tx-form-cash-locked">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</span>
-                            <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-400 text-xs">— ({$t('transactions.types.' + draft.type)} doesn't use cash)</div>
-                        </div>
+                        <!-- Quantity locked = "n/a"; Cash takes the full row
+                             (col-span-2) so the input gets breathing room. -->
+                        {#if rule.cashField !== 'forbidden'}
+                            <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}
+                                    <span class="text-[10px] text-gray-400 italic" data-testid="tx-form-quantity-locked">· {$t('transactions.form.hintQtyZero')}</span>
+                                </span>
+                                <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} />
+                            </div>
+                        {:else}
+                            <div class="flex flex-col gap-1 col-span-2 opacity-60" data-testid="tx-form-cash-locked">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</span>
+                                <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-400 text-xs">— ({$t('transactions.types.' + draft.type)} doesn't use cash)</div>
+                            </div>
+                        {/if}
                     {/if}
                 </div>
 
@@ -712,7 +804,23 @@
                                     </span>
                                 {/each}
                                 {#if !isReadonly}
-                                    <input type="text" autocomplete="off" class="flex-1 min-w-[5rem] bg-transparent text-xs outline-none" placeholder={$t('transactions.form.tagsPlaceholder')} bind:value={tagInputBuffer} onkeydown={handleTagKey} data-testid="tx-form-tag-input" />
+                                    <input
+                                        type="text"
+                                        autocomplete="off"
+                                        list="tx-form-tag-suggestions-{autocompleteNonce}"
+                                        class="flex-1 min-w-[5rem] bg-transparent text-xs outline-none"
+                                        placeholder={$t('transactions.form.tagsPlaceholder')}
+                                        bind:value={tagInputBuffer}
+                                        onkeydown={handleTagKey}
+                                        data-testid="tx-form-tag-input"
+                                    />
+                                    <!-- Bugfix-5 §U20: client-side tag suggestions sourced from
+                                         the parent's loaded transactions (no extra endpoint). -->
+                                    <datalist id="tx-form-tag-suggestions-{autocompleteNonce}">
+                                        {#each tagSuggestions as suggestion}
+                                            <option value={suggestion}></option>
+                                        {/each}
+                                    </datalist>
                                 {/if}
                             </div>
                         </div>
@@ -746,7 +854,7 @@
                         {#if showCostBasisField}
                             <label class="flex items-center gap-2">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.costBasis')}</span>
-                                <input type="text" inputmode="decimal" autocomplete="off" name="cb-{autocompleteNonce}" class="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60" placeholder="auto" value={draft.cost_basis_override} disabled={isReadonly} oninput={onCostBasisInput} data-testid="tx-form-cost-basis" />
+                                <input type="number" step="any" inputmode="decimal" autocomplete="off" name="cb-{autocompleteNonce}" class="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60" placeholder="auto" value={draft.cost_basis_override} disabled={isReadonly} oninput={onCostBasisInput} data-testid="tx-form-cost-basis" />
                             </label>
                         {/if}
 
@@ -818,6 +926,21 @@
     onCancel={() => (confirmCloseOpen = false)}
     zIndex={70}
 />
+
+<style>
+    /* Bugfix-5 walkthrough #6: numeric inputs (quantity, cost basis) — hide
+       the browser spinner controls so the field reads cleaner alongside the
+       hint text and matches the CompactCashCell amount input. */
+    :global(.qty-input)::-webkit-outer-spin-button,
+    :global(.qty-input)::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    :global(.qty-input) {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+</style>
 
 
 

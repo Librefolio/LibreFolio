@@ -98,8 +98,9 @@ export interface EditableNumberCell {
     type: 'editable-number';
     /** Current value (null = empty) */
     value: number | null;
-    /** Step for input increment (default: 1) */
-    step?: number;
+    /** Step for input increment (default: 1). Use 'any' to accept arbitrary
+     *  decimals (no spinner step constraint). */
+    step?: number | 'any';
     /** Minimum allowed value */
     min?: number;
     /** Maximum allowed value */

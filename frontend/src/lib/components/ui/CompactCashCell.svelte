@@ -110,7 +110,7 @@
 </script>
 
 <div class="compact-cash" class:sign-ok={signOk} class:sign-bad={signBad} class:disabled data-testid={testid}>
-    <input type="text" inputmode="decimal" class="amount-input" value={amountStr} placeholder={amountPlaceholder} oninput={handleAmountInput} onblur={emit} {disabled} data-testid={`${testid}-amount`} />
+    <input type="number" step="any" inputmode="decimal" autocomplete="off" class="amount-input" value={amountStr} placeholder={amountPlaceholder} oninput={handleAmountInput} onblur={emit} {disabled} data-testid={`${testid}-amount`} />
     <div class="currency-wrap">
         <CurrencySearchSelect bind:value={code} compact={true} {disabled} onchange={handleCurrencyChange} />
         <span class="sr-only" data-testid={`${testid}-currency`}>{code}</span>
@@ -119,19 +119,27 @@
 
 <style>
     .compact-cash {
-        display: inline-flex;
+        display: flex;
         align-items: stretch;
         gap: 0.375rem;
         min-width: 0;
+        width: 100%;
         padding: 0;
     }
     .amount-input {
-        width: 6.5rem;
+        flex: 1 1 auto;
+        min-width: 5rem;
         font-size: 0.875rem;
         line-height: 1.25rem;
         text-align: right;
         /* Bugfix-2 §U12 + Bugfix-3 §C12: monospace + tabular numerals AND a
-           visible input-style border so the field reads as editable. */
+           visible input-style border so the field reads as editable.
+           Bugfix-5 walkthrough #6: switched to `type="number"` so we hide
+           the browser spinner controls (they collapse the horizontal space
+           and look unpolished against the currency picker on the right).
+           Walkthrough #6 (mobile): wrapper is now `flex` and amount input
+           uses `flex: 1` so the field stretches to fill the row when Cash
+           is dropped below Qty on narrow screens. */
         font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
         font-variant-numeric: tabular-nums;
         background: white;
@@ -141,6 +149,13 @@
         outline: none;
         color: inherit;
         transition: border-color 120ms ease, box-shadow 120ms ease;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+    .amount-input::-webkit-outer-spin-button,
+    .amount-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
     }
     :global(.dark) .amount-input {
         background: rgb(30 41 59); /* slate-800 */
@@ -171,7 +186,7 @@
         background: rgb(15 23 42); /* slate-900 */
     }
     .currency-wrap {
-        min-width: 6rem;
+        min-width: 8rem;
     }
     .compact-cash.disabled {
         opacity: 0.6;

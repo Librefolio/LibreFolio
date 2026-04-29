@@ -134,6 +134,10 @@ export interface ValidationIssueExtracted {
     loc: string;
     msg: string;
     type?: string;
+    /** Structured error code from PydanticCustomError (e.g. 'assetRequired'). */
+    code?: string;
+    /** Structured params from PydanticCustomError ctx (e.g. {type: 'BUY'}). */
+    params?: Record<string, any>;
 }
 
 /**
@@ -159,13 +163,31 @@ export function extractValidationIssues(err: unknown): ValidationIssueExtracted[
     for (const item of detail) {
         if (!item || typeof item !== 'object') continue;
         const loc = Array.isArray(item.loc) ? item.loc.join('.') : String(item.loc ?? '');
+
+        // Handle packed multi-error from model_validator:
+        // type="multipleBusinessRuleErrors" carries all business-rule errors
+        // inside ctx.errors[]. Expand them as separate issues sharing the same loc.
+        if (item.type === 'multipleBusinessRuleErrors' && Array.isArray(item.ctx?.errors)) {
+            for (const sub of item.ctx.errors) {
+                const subMsg = String(sub.msg ?? '').trim();
+                out.push({
+                    loc,
+                    msg: subMsg,
+                    type: sub.code,
+                    code: sub.code,
+                    params: sub.ctx && typeof sub.ctx === 'object' ? sub.ctx : undefined,
+                });
+            }
+            continue;
+        }
+
         let msg = String(item.msg ?? item.message ?? '').trim();
         // Pydantic v2 prefixes value-error msg with "Value error, " — strip it
         // for compactness ("Value error, BUY requires asset_id" → "BUY requires asset_id").
         if (msg.toLowerCase().startsWith('value error, ')) {
             msg = msg.slice('value error, '.length);
         }
-        out.push({loc, msg, type: item.type});
+        out.push({loc, msg, type: item.type, code: item.type, params: item.ctx && typeof item.ctx === 'object' ? item.ctx : undefined});
     }
     return out;
 }

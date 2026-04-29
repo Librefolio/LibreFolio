@@ -63,11 +63,15 @@ class BalanceValidationError(Exception):
         currency_or_asset: str,
         balance: Decimal,
         message: str,
+        code: str = "",
+        params: dict | None = None,
     ):
         self.broker_id = broker_id
         self.date = date
         self.currency_or_asset = currency_or_asset
         self.balance = balance
+        self.code = code
+        self.params = params or {}
         super().__init__(message)
 
 
@@ -142,7 +146,7 @@ class TransactionService:
             raise ValueError(f"asset_event_id={asset_event_id} belongs to asset {event.asset_id}, not {expected_asset_id}")
 
     @staticmethod
-    def _validate_linked_pair(a: Transaction, b: Transaction) -> Optional[str]:
+    def _validate_linked_pair(a: Transaction, b: Transaction) -> Optional[tuple[str, str, dict]]:
         """
         Validate semantic coherence of a linked pair (Block H.1).
 
@@ -153,13 +157,21 @@ class TransactionService:
         - DEPOSIT/WITHDRAWAL linked pairs are allowed as "intent markers" for
           cash movements between the user's own brokers (Block H.2).
 
-        Returns None when the pair is valid, otherwise a human-readable error
-        message suitable for the response `errors[]`.
+        Returns None when the pair is valid, otherwise a tuple of
+        (error_message, code, params).
         """
         if a.type != b.type:
-            return f"linked pair must share the same type (got {a.type.value} + {b.type.value})"
+            return (
+                f"linked pair must share the same type (got {a.type.value} + {b.type.value})",
+                "pairTypeMismatch",
+                {"typeA": a.type.value, "typeB": b.type.value},
+            )
         if a.type == TransactionType.TRANSFER and a.broker_id == b.broker_id:
-            return f"TRANSFER requires distinct brokers (both on broker {a.broker_id})"
+            return (
+                f"TRANSFER requires distinct brokers (both on broker {a.broker_id})",
+                "pairSameBroker",
+                {"brokerId": a.broker_id},
+            )
         return None
 
     # =========================================================================
@@ -592,6 +604,8 @@ class TransactionService:
                             index=0,
                             ref_id=None,
                             error=f"Access denied: EDITOR required for broker {broker_id}",
+                            code="accessDenied",
+                            params={"brokerId": broker_id},
                         )
                     )
 
@@ -605,7 +619,7 @@ class TransactionService:
         for idx, tx_id in enumerate(deletes):
             tx = existing_by_id.get(tx_id)
             if tx is None:
-                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=f"Transaction {tx_id} not found"))
+                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=f"Transaction {tx_id} not found", code="txNotFound", params={"id": tx_id}))
                 continue
             try:
                 prev = earliest_date_by_broker.get(tx.broker_id)
@@ -618,7 +632,7 @@ class TransactionService:
         for idx, item in enumerate(updates):
             tx = existing_by_id.get(item.id)
             if tx is None:
-                issues.append(TXValidationIssue(operation="update", index=idx, ref_id=item.id, error=f"Transaction {item.id} not found"))
+                issues.append(TXValidationIssue(operation="update", index=idx, ref_id=item.id, error=f"Transaction {item.id} not found", code="txNotFound", params={"id": item.id}))
                 continue
             try:
                 check_date = tx.date
@@ -641,13 +655,19 @@ class TransactionService:
                         tx.asset_event_id = None
                     else:
                         if tx.asset_id is None:
-                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
+                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")  # code:cannotLinkEventNoAsset
                         await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
                         tx.asset_event_id = item.asset_event_id
                 prev = earliest_date_by_broker.get(tx.broker_id)
                 earliest_date_by_broker[tx.broker_id] = check_date if prev is None else min(prev, check_date)
             except Exception as e:  # noqa: BLE001
-                issues.append(TXValidationIssue(operation="update", index=idx, ref_id=item.id, error=str(e)))
+                # Try to extract structured code from conventions in the message
+                err_str = str(e)
+                issue_code: Optional[str] = None
+                issue_params: Optional[dict] = None
+                if "Cannot link asset_event_id" in err_str:
+                    issue_code = "cannotLinkEventNoAsset"
+                issues.append(TXValidationIssue(operation="update", index=idx, ref_id=item.id, error=err_str, code=issue_code, params=issue_params))
 
         # --- creates ---
         link_uuid_map: Dict[str, List[Transaction]] = defaultdict(list)
@@ -656,7 +676,7 @@ class TransactionService:
                 if item.asset_id is not None:
                     asset_result = await self.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
                     if asset_result.scalar_one_or_none() == AssetType.INDEX:
-                        raise ValueError("Cannot create transactions for INDEX assets")
+                        raise ValueError("Cannot create transactions for INDEX assets")  # code:indexAssetForbidden
                 if item.asset_event_id is not None:
                     assert item.asset_id is not None
                     await self._validate_asset_event_link(item.asset_event_id, item.asset_id)
@@ -682,18 +702,33 @@ class TransactionService:
                 if item.link_uuid:
                     link_uuid_map[item.link_uuid].append(tx)
             except Exception as e:  # noqa: BLE001
-                issues.append(TXValidationIssue(operation="create", index=idx, ref_id=None, error=str(e)))
+                err_str = str(e)
+                issue_code: Optional[str] = None
+                issue_params: Optional[dict] = None
+                if "INDEX assets" in err_str:
+                    issue_code = "indexAssetForbidden"
+                issues.append(TXValidationIssue(operation="create", index=idx, ref_id=None, error=err_str, code=issue_code, params=issue_params))
 
         for link_uuid, pair in link_uuid_map.items():
             if len(pair) == 2:
-                pair_error = self._validate_linked_pair(pair[0], pair[1])
-                if pair_error is not None:
-                    issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=pair_error))
+                pair_result = self._validate_linked_pair(pair[0], pair[1])
+                if pair_result is not None:
+                    pair_error, pair_code, pair_params = pair_result
+                    issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=pair_error, code=pair_code, params=pair_params))
                     continue
                 pair[0].related_transaction_id = pair[1].id
                 pair[1].related_transaction_id = pair[0].id
             else:
-                issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=f"link_uuid '{link_uuid}' has {len(pair)} creates (expected 2)"))
+                issues.append(
+                    TXValidationIssue(
+                        operation="create",
+                        index=0,
+                        ref_id=None,
+                        error=f"link_uuid '{link_uuid}' has {len(pair)} creates (expected 2)",
+                        code="linkUuidPairCount",
+                        params={"linkUuid": link_uuid, "count": len(pair)},
+                    )
+                )
 
         balance_violation = False
         try:
@@ -702,7 +737,7 @@ class TransactionService:
                 await self._validate_broker_balances(broker_id, from_date)
         except BalanceValidationError as e:
             balance_violation = True
-            issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=str(e)))
+            issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=str(e), code=e.code, params=e.params))
         except Exception as e:  # noqa: BLE001
             balance_violation = True
             issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=f"Balance validation error: {e}"))
@@ -777,6 +812,8 @@ class TransactionService:
                             currency_or_asset=currency,
                             balance=balance,
                             message=f"Cash balance for {currency} goes negative ({balance}) on {current_date} for broker {broker_id}",
+                            code="balanceCashNegative",
+                            params={"brokerId": broker_id, "currency": currency, "balance": str(balance), "date": str(current_date)},
                         )
 
             if not broker.allow_asset_shorting:
@@ -788,6 +825,8 @@ class TransactionService:
                             currency_or_asset=f"asset:{asset_id}",
                             balance=balance,
                             message=f"Asset {asset_id} quantity goes negative ({balance}) on {current_date} for broker {broker_id}",
+                            code="balanceAssetNegative",
+                            params={"brokerId": broker_id, "assetId": asset_id, "balance": str(balance), "date": str(current_date)},
                         )
 
             current_date += timedelta(days=1)

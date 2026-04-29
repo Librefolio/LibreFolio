@@ -1495,25 +1495,17 @@ class TestLinkedPairValidation:
                 cash=Currency(code="EUR", amount=Decimal("-500")),
                 link_uuid="cash-transfer-intent",
             ),
+            # Same type on both sides (WITHDRAWAL+WITHDRAWAL) — pair valid per
+            # H.2 (different amounts but we just want the link to resolve).
+            # Both sides carry negative cash to satisfy Rule 11 (cash sign).
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
-                cash=Currency(code="EUR", amount=Decimal("500")),  # incoming is still WITHDRAWAL semantically? use DEPOSIT? test same type
+                cash=Currency(code="EUR", amount=Decimal("-500")),
                 link_uuid="cash-transfer-intent",
             ),
         ]
-        # Same type on both sides (WITHDRAWAL+WITHDRAWAL) — pair valid per H.2
-        # (different amounts but we just want the link to resolve).
-        # Note: the "destination" is actually a DEPOSIT — but H.1 requires
-        # SAME type on both sides. So we use two DEPOSITs instead.
-        items[1] = TXCreateItem(
-            broker_id=test_broker_overdraft.id,
-            type=TransactionType.WITHDRAWAL,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("-500")),
-            link_uuid="cash-transfer-intent",
-        )
         response = await service.create_bulk(items)
         # Both WITHDRAWAL → same type OK; linked pair should succeed.
         assert response.rolled_back is False, response.errors

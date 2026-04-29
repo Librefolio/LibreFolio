@@ -337,6 +337,7 @@
                         placeholder={$t('common.select')}
                         dropdownPosition="auto"
                         maxVisibleItems={8}
+                        inlineSearch={true}
                         onchange={(v) => {
                             addSignal(v);
                             comparisonSelect = '';
@@ -499,6 +500,7 @@
                                                             placeholder="— {$t('chartSettings.params.currencyPair')}"
                                                             dropdownPosition="auto"
                                                             maxVisibleItems={8}
+                                                            inlineSearch={true}
                                                             onchange={(v) => {
                                                                 updateSignalParam(signal.id, desc.key, v);
                                                                 updateSignalParam(signal.id, '_inverted', false);
@@ -556,6 +558,7 @@
                                                             placeholder="— Select asset"
                                                             dropdownPosition="auto"
                                                             maxVisibleItems={8}
+                                                            inlineSearch={true}
                                                             onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
                                                         >
                                                             {#snippet item(option)}

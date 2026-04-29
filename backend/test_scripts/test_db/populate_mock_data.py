@@ -936,7 +936,7 @@ def populate_transactions(session: Session):
             "description": "Monthly platform fee",
         },
         # --- Directa SIM transactions ---
-        # Day -29: Initial deposit to Directa
+        # Day -29: Initial deposit to Directa (EUR)
         {
             "broker": directa,
             "asset": None,
@@ -946,6 +946,17 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 29,
             "description": "Bonifico da conto corrente",
+        },
+        # Day -28: USD deposit to Directa (for US stock purchases)
+        {
+            "broker": directa,
+            "asset": None,
+            "type": TransactionType.DEPOSIT,
+            "quantity": Decimal("0"),
+            "amount": Decimal("2000.00"),
+            "currency": "USD",
+            "days_ago": 28,
+            "description": "Cambio EUR/USD per acquisti US",
         },
         # Day -22: Buy Tesla on Directa
         {
