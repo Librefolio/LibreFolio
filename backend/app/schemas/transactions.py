@@ -26,8 +26,6 @@ from pydantic_core import PydanticCustomError
 
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import (
-    BaseBulkDeleteResponse,
-    BaseBulkResponse,
     BaseDeleteResult,
     Currency,
     DateRangeModel,
@@ -559,90 +557,52 @@ class TXDeleteResult(BaseDeleteResult):
     status: TXItemStatus = Field(default="not_attempted", description="Atomic diagnostic status")
 
 
-class TXBulkDeleteResponse(BaseBulkDeleteResponse[TXDeleteResult]):
-    """
-    Response for bulk transaction deletion.
-
-    `rolled_back=True` means the whole batch was rejected at the DB level,
-    so every item's `status` is either `failed` or `simulated`/`not_attempted`.
-    """
-
-    rolled_back: bool = Field(default=False, description="True if the whole batch was rolled back")
-
-
 # =============================================================================
-# BULK CREATE RESPONSE
+# UNIFIED BATCH (Unified Batch Pipeline — replaces POST/PATCH/DELETE /bulk)
 # =============================================================================
 
 
-class TXCreateResultItem(BaseModel):
-    """Result for a single transaction creation attempt."""
+class TXMixedBatch(BaseModel):
+    """Unified batch body for /validate and /commit.
 
-    model_config = ConfigDict(extra="forbid")
-
-    success: bool
-    status: TXItemStatus = Field(default="not_attempted", description="Atomic diagnostic status")
-    transaction_id: Optional[int] = None
-    link_uuid: Optional[str] = None  # Echo back for client correlation
-    error: Optional[str] = None
-
-
-class TXBulkCreateResponse(BaseBulkResponse[TXCreateResultItem]):
-    """
-    Response for bulk transaction creation.
-
-    Atomic semantics: if `rolled_back=True`, no transaction was persisted.
-    Use per-item `status` to distinguish the failing item from the rest.
-    """
-
-    rolled_back: bool = Field(default=False, description="True if the whole batch was rolled back")
-
-
-# =============================================================================
-# BULK UPDATE RESPONSE
-# =============================================================================
-
-
-class TXUpdateResultItem(BaseModel):
-    """Result for a single transaction update attempt."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: int
-    success: bool
-    status: TXItemStatus = Field(default="not_attempted", description="Atomic diagnostic status")
-    error: Optional[str] = None
-
-
-class TXBulkUpdateResponse(BaseBulkResponse[TXUpdateResultItem]):
-    """
-    Response for bulk transaction update.
-
-    Atomic semantics: see `TXBulkCreateResponse`.
-    """
-
-    rolled_back: bool = Field(default=False, description="True if the whole batch was rolled back")
-
-
-# =============================================================================
-# VALIDATE (DRY-RUN MIXED BATCH — see Block C)
-# =============================================================================
-
-
-class TXValidateBatch(BaseModel):
-    """
-    Input for POST /transactions/validate — mixed dry-run batch.
-
-    The three lists are applied in the order `deletes -> updates -> creates`
-    inside a single session that is always rolled back at the end. Used by
-    the Staging Modal to provide live feedback while the user edits drafts.
+    `creates` and `updates` are List[dict] (not List[TXCreateItem]) so that
+    FastAPI does NOT pre-validate individual rows. The service does per-row
+    model_validate() in try/except, collecting schema errors alongside
+    business-rule and balance violations in one response.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    creates: List[TXCreateItem] = Field(default_factory=list, max_length=500)
-    updates: List[TXUpdateItem] = Field(default_factory=list, max_length=500)
-    deletes: List[int] = Field(default_factory=list, max_length=500, description="Transaction IDs to delete")
+    creates: List[dict] = Field(default_factory=list, max_length=500)
+    updates: List[dict] = Field(default_factory=list, max_length=500)
+    deletes: List[int] = Field(default_factory=list, max_length=500)
+
+
+class TXBatchResultItem(BaseModel):
+    """Per-item result for committed rows."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation: Literal["create", "update", "delete"]
+    index: int
+    id: Optional[int] = None
+    link_uuid: Optional[str] = None
+    status: TXItemStatus
+
+
+class TXBatchResponse(BaseModel):
+    """Unified response for /validate and /commit."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    committed: bool
+    issues: List[TXValidationIssue] = Field(default_factory=list)
+    results: Optional[List[TXBatchResultItem]] = None
+
+
+# =============================================================================
+# VALIDATION ISSUE
+# =============================================================================
 
 
 class TXValidationIssue(BaseModel):
@@ -659,24 +619,6 @@ class TXValidationIssue(BaseModel):
     field: Optional[str] = Field(default=None, description="Draft field that caused the error (e.g. 'asset_id', 'quantity')")
 
 
-class TXValidateResponse(BaseModel):
-    """
-    Result of POST /transactions/validate.
-
-    `would_rollback` is True whenever at least one issue exists OR a balance
-    violation is detected. `balance_preview` and `holdings_preview` are only
-    meaningful when `would_rollback=False`.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    would_rollback: bool
-    issues: List[TXValidationIssue] = Field(default_factory=list)
-    # Per-broker balances keyed by "{broker_id}:{currency}" for cash and
-    # "{broker_id}:asset:{asset_id}" for holdings, so callers can identify
-    # which broker a value belongs to when the batch spans multiple brokers.
-    balance_preview: Dict[str, Decimal] = Field(default_factory=dict)
-    holdings_preview: Dict[str, Decimal] = Field(default_factory=dict)
 
 
 # =============================================================================

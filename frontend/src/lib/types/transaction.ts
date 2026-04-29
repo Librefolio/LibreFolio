@@ -20,17 +20,21 @@ export type Transaction = z.infer<typeof schemas.TXReadItem>;
 /**
  * Request body for creating transactions (input format).
  */
-export type TransactionCreateItem = z.infer<typeof schemas.TXCreateItem_Input>;
+export type TransactionCreateItem = z.infer<typeof schemas.TXCreateItem>;
 
 /**
  * Transaction as returned from parsing (output format with possible fake IDs).
+ * Same as TXCreateItem since the unified pipeline uses dict-based input.
  */
-export type TransactionParsed = z.infer<typeof schemas.TXCreateItem_Output>;
+export type TransactionParsed = z.infer<typeof schemas.TXCreateItem>;
 
 /**
  * Request body for updating a transaction.
+ * NOTE: TXUpdateItem is no longer a standalone API body schema —
+ * updates go through TXMixedBatch.updates as List[dict]. This type
+ * is kept for internal use (e.g. BRIM, upload pipeline).
  */
-export type TransactionUpdateItem = z.infer<typeof schemas.TXUpdateItem>;
+export type TransactionUpdateItem = z.infer<typeof schemas.TXCreateItem>;
 
 /**
  * Metadata about a transaction type (for UI display).

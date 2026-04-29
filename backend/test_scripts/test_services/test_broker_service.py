@@ -39,6 +39,7 @@ from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.broker_service import BrokerService
 from backend.app.services.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
+from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, update_bulk
 
 # ============================================================================
 # PYTEST FIXTURES
@@ -367,7 +368,7 @@ class TestGetSummary:
                 cash=Currency(code="EUR", amount=Decimal("-500")),
             )
         ]
-        await tx_service.create_bulk(buy_items)
+        await create_bulk(tx_service, buy_items)
 
         summary = await service.get_summary(broker_id, user_id=test_user.id)
 
@@ -409,7 +410,7 @@ class TestGetSummary:
                 cash=Currency(code="EUR", amount=Decimal("-1200")),
             ),
         ]
-        await tx_service.create_bulk(buy_items)
+        await create_bulk(tx_service, buy_items)
 
         summary = await service.get_summary(broker_id, user_id=test_user.id)
 
@@ -581,7 +582,7 @@ class TestUpdateBulkFlagValidation:
                 cash=Currency(code="EUR", amount=Decimal("-500")),
             )
         ]
-        await tx_service.create_bulk(tx_items)
+        await create_bulk(tx_service, tx_items)
 
         # Try to disable overdraft - should fail
         update_items = [BRUpdateItem(allow_cash_overdraft=False)]
@@ -618,7 +619,7 @@ class TestUpdateBulkFlagValidation:
                 cash=Currency(code="EUR", amount=Decimal("-500")),
             )
         ]
-        await tx_service.create_bulk(tx_items)
+        await create_bulk(tx_service, tx_items)
 
         # Disable shorting - should succeed
         update_items = [BRUpdateItem(allow_asset_shorting=False)]
@@ -655,7 +656,7 @@ class TestUpdateBulkFlagValidation:
                 cash=Currency(code="EUR", amount=Decimal("500")),
             )
         ]
-        await tx_service.create_bulk(tx_items)
+        await create_bulk(tx_service, tx_items)
 
         # Try to disable shorting - should fail
         update_items = [BRUpdateItem(allow_asset_shorting=False)]

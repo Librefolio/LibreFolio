@@ -1,18 +1,17 @@
 """
 Transaction API endpoints for LibreFolio.
 
-Part 3 atomic multi-broker API:
-- POST   /transactions/bulk           Atomic bulk create (spans multiple brokers)
-- PATCH  /transactions/bulk           Atomic bulk update
-- DELETE /transactions/bulk?ids=…     Atomic bulk delete
+0
+Unified Batch Pipeline:
+- POST   /transactions/validate       Dry-run: always rollback
+- POST   /transactions/commit         Commit if no issues
 - GET    /transactions                Query with filters (access-scoped)
 - GET    /transactions?ids=1,2,3      Batch read preserving input order
 - GET    /transactions/types          Transaction type metadata
 
 Semantics:
 - Access control is EDITOR on every distinct `broker_id` touched by a batch.
-- Any failure → full session rollback, `rolled_back=True`, per-item `status`
-  diagnostic (`success | simulated | failed | not_attempted`).
+- Any failure → full session rollback, `committed=False`, per-item issues.
 - GET /transactions is filtered to brokers the user can at least VIEW.
 """
 
@@ -29,20 +28,17 @@ from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.transactions import (
     TX_TYPE_METADATA,
-    TXBulkCreateResponse,
-    TXBulkDeleteResponse,
-    TXBulkUpdateResponse,
+    TXBatchResponse,
     TXCreateItem,
     TXEventSuggestRequestItem,
     TXEventSuggestResultItem,
+    TXMixedBatch,
     TXQueryParams,
     TXReadItem,
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXTypeMetadata,
     TXUpdateItem,
-    TXValidateBatch,
-    TXValidateResponse,
 )
 from backend.app.services.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
@@ -53,43 +49,121 @@ tx_router = APIRouter(prefix="/transactions", tags=["TX (Transactions)"])
 
 
 # =============================================================================
-# CREATE (atomic bulk, multi-broker)
+# VALIDATE (dry-run unified batch)
 # =============================================================================
 
 
-@tx_router.post("/bulk", response_model=TXBulkCreateResponse)
-async def create_transactions_bulk(
-    items: List[TXCreateItem],
+@tx_router.post(
+    "/validate",
+    response_model=TXBatchResponse,
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "creates": {"type": "array", "items": TXCreateItem.model_json_schema()},
+                            "updates": {"type": "array", "items": TXUpdateItem.model_json_schema()},
+                            "deletes": {"type": "array", "items": {"type": "integer"}},
+                        },
+                    }
+                }
+            }
+        }
+    },
+)
+async def validate_transactions(
+    batch: TXMixedBatch,
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
-) -> TXBulkCreateResponse:
+) -> TXBatchResponse:
     """
-    Atomic bulk create of transactions spanning one or more brokers.
+    Dry-run validator for a mixed batch (creates + updates + deletes).
 
-    Access check EDITOR is applied once per distinct `broker_id`.
-    Any failure (validation, balance, access) rolls back the entire batch
-    and returns `rolled_back=True` with per-item `status`. The router commits
-    only when `rolled_back=False`.
-
-    For linked transactions (TRANSFER, FX_CONVERSION) the two items must
-    share the same `link_uuid` and be in the same request — `link_uuid`
-    resolution is bidirectional (both rows point to each other).
+    Semantics:
+    - Applies `deletes -> updates -> creates` in a single session that is
+      ALWAYS rolled back at the end (never commits).
+    - Does NOT stop at the first error: collects the full set of issues so
+      the UI can show all problems at once.
+    - Schema errors and balance violations coexist in the same response.
+    - `committed` is always False.
     """
-    # Cache user_id before session ops — rollback expires ORM objects, after
-    # which `current_user.id` would trigger a lazy-load and MissingGreenlet.
     user_id = current_user.id
+    service = TransactionService(session)
+    response = await service.execute_batch(
+        creates_raw=batch.creates,
+        updates_raw=batch.updates,
+        deletes=batch.deletes,
+        user_id=user_id,
+        commit=False,
+    )
+    # Always rollback for dry-run
+    await session.rollback()
+    return response
 
-    logger.info("Bulk create %d transactions", len(items), user_id=user_id)
+
+# =============================================================================
+# COMMIT (unified batch)
+# =============================================================================
+
+
+@tx_router.post(
+    "/commit",
+    response_model=TXBatchResponse,
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "creates": {"type": "array", "items": TXCreateItem.model_json_schema()},
+                            "updates": {"type": "array", "items": TXUpdateItem.model_json_schema()},
+                            "deletes": {"type": "array", "items": {"type": "integer"}},
+                        },
+                    }
+                }
+            }
+        }
+    },
+)
+async def commit_transactions(
+    batch: TXMixedBatch,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> TXBatchResponse:
+    """
+    Commit a mixed batch (creates + updates + deletes).
+
+    Semantics:
+    - If any issue is detected → rollback, `committed=False`.
+    - If clean → commit, `committed=True`, `results` populated.
+    """
+    user_id = current_user.id
+    logger.info(
+        "Commit batch: %d creates, %d updates, %d deletes",
+        len(batch.creates),
+        len(batch.updates),
+        len(batch.deletes),
+        user_id=user_id,
+    )
 
     service = TransactionService(session)
-    response = await service.create_bulk(items, user_id=user_id)
+    response = await service.execute_batch(
+        creates_raw=batch.creates,
+        updates_raw=batch.updates,
+        deletes=batch.deletes,
+        user_id=user_id,
+        commit=True,
+    )
 
-    if not response.rolled_back:
+    if response.committed:
         await session.commit()
-        logger.info("Committed %d new transactions", response.success_count, user_id=user_id)
+        logger.info("Batch committed", user_id=user_id)
     else:
         await session.rollback()
-        logger.warning("Bulk create rolled back: %s", response.errors, user_id=user_id)
+        logger.warning("Batch rolled back: %d issues", len(response.issues), user_id=user_id)
 
     return response
 
@@ -155,101 +229,6 @@ async def query_transactions(
 async def get_transaction_types(_current_user: User = Depends(get_current_user)) -> List[TXTypeMetadata]:
     """Get metadata for all transaction types (icons, rules, signs)."""
     return list(TX_TYPE_METADATA.values())
-
-
-# =============================================================================
-# UPDATE (atomic bulk, multi-broker)
-# =============================================================================
-
-
-@tx_router.patch("/bulk", response_model=TXBulkUpdateResponse)
-async def update_transactions_bulk(
-    items: List[TXUpdateItem],
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> TXBulkUpdateResponse:
-    """
-    Atomic bulk update. Type cannot be changed; `related_transaction_id`
-    cannot be updated directly. `asset_event_id=0` unlinks (Part 1 sentinel).
-    """
-    user_id = current_user.id
-    logger.info("Bulk update %d transactions", len(items), user_id=user_id)
-
-    service = TransactionService(session)
-    response = await service.update_bulk(items, user_id=user_id)
-
-    if not response.rolled_back:
-        await session.commit()
-        logger.info("Committed %d transaction updates", response.success_count, user_id=user_id)
-    else:
-        await session.rollback()
-        logger.warning("Bulk update rolled back: %s", response.errors, user_id=user_id)
-
-    return response
-
-
-# =============================================================================
-# DELETE (atomic bulk, multi-broker)
-# =============================================================================
-
-
-@tx_router.delete("/bulk", response_model=TXBulkDeleteResponse)
-async def delete_transactions_bulk(
-    ids: List[int] = Query(..., description="Transaction IDs to delete"),
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> TXBulkDeleteResponse:
-    """
-    Atomic bulk delete. Linked pairs (TRANSFER, FX_CONVERSION) must be
-    deleted together — include both IDs in `ids` or the whole batch is
-    rejected.
-    """
-    user_id = current_user.id
-    logger.info("Bulk delete %d transactions", len(ids), user_id=user_id)
-
-    service = TransactionService(session)
-    response = await service.delete_bulk(ids, user_id=user_id)
-
-    if not response.rolled_back:
-        await session.commit()
-        logger.info("Committed %d transaction deletions", response.total_deleted, user_id=user_id)
-    else:
-        await session.rollback()
-        logger.warning("Bulk delete rolled back: %s", response.errors, user_id=user_id)
-
-    return response
-
-
-# =============================================================================
-# VALIDATE (dry-run mixed batch)
-# =============================================================================
-
-
-@tx_router.post("/validate", response_model=TXValidateResponse)
-async def validate_transactions(
-    batch: TXValidateBatch,
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> TXValidateResponse:
-    """
-    Dry-run validator for a mixed batch (creates + updates + deletes).
-
-    Semantics:
-    - Applies `deletes -> updates -> creates` in a single session that is
-      ALWAYS rolled back at the end (never commits).
-    - Does NOT stop at the first error: collects the full set of issues so
-      the Staging Modal can show all problems at once.
-    - `would_rollback=True` whenever any issue OR a balance violation exists.
-    - `balance_preview` / `holdings_preview` are populated only when the
-      batch would succeed (empty issues and no balance violation).
-    """
-    service = TransactionService(session)
-    return await service.validate_batch(
-        creates=batch.creates,
-        updates=batch.updates,
-        deletes=batch.deletes,
-        user_id=current_user.id,
-    )
 
 
 # =============================================================================

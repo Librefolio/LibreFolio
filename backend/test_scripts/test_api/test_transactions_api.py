@@ -139,18 +139,18 @@ def test_asset_id(test_server) -> int:
                     return assets[0]["id"]
 
             # Create a new asset
-            payload = {
+            payload = [{
                 "display_name": f"API Test Stock {date.today().isoformat()}",
                 "asset_type": "STOCK",
                 "currency": "EUR",
-            }
+            }]
             response = await client.post(
                 f"{API_BASE}/assets",
                 json=payload,
                 timeout=TIMEOUT,
             )
             if response.status_code == 200:
-                return response.json()["id"]
+                return response.json()["results"][0]["asset_id"]
 
             pytest.skip("Could not create test asset")
 
@@ -191,17 +191,17 @@ async def test_post_transactions_single(test_server, test_broker_id):
         ]
 
         response = await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=payload,
+            f"{API_BASE}/transactions/commit",
+            json={"creates": payload},
             timeout=TIMEOUT,
         )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
         data = response.json()
-        assert data["success_count"] == 1
-        assert data["results"][0]["success"] is True
-        assert data["results"][0]["transaction_id"] is not None
+        assert data["committed"] is True
+        assert data["results"][0]["status"] == "success"
+        assert data["results"][0]["id"] is not None
 
         print_success("✓ Created 1 transaction successfully")
 
@@ -247,14 +247,14 @@ async def test_post_transactions_bulk(test_server, test_broker_id):
         ]
 
         response = await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=payload,
+            f"{API_BASE}/transactions/commit",
+            json={"creates": payload},
             timeout=TIMEOUT,
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["success_count"] == 3
+        assert data["committed"] is True
 
         print_success("✓ Created 3 transactions successfully")
 
@@ -289,15 +289,18 @@ async def test_post_transactions_validation_error(test_server, test_broker_id):
         ]
 
         response = await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=payload,
+            f"{API_BASE}/transactions/commit",
+            json={"creates": payload},
             timeout=TIMEOUT,
         )
 
-        # Pydantic validation should return 422
-        assert response.status_code == 422, f"Expected 422, got {response.status_code}"
+        # Unified batch pipeline: schema errors are collected into issues, not 422
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        data = response.json()
+        assert data["committed"] is False, f"Expected committed=False for missing cash. Got: {data}"
+        assert len(data.get("issues", [])) > 0, f"Expected issues for missing cash. Got: {data}"
 
-        print_success("✓ Got 422 Validation Error as expected")
+        print_success("✓ Got committed=False with issues for validation error")
 
 
 @pytest.mark.asyncio
@@ -337,21 +340,18 @@ async def test_post_transactions_balance_error(test_server):
         ]
 
         response = await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=payload,
+            f"{API_BASE}/transactions/commit",
+            json={"creates": payload},
             timeout=TIMEOUT,
         )
 
-        # The endpoint returns 200 with errors array populated when balance validation fails
-        # Transaction was created (success_count=1) but balance validation failed (errors has items)
+        # The endpoint returns 200 with committed=false and issues when balance validation fails
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         data = response.json()
 
-        # Either transaction creation failed OR balance validation failed
-        has_errors = len(data.get("errors", [])) > 0
-        has_failed_results = any(not r.get("success", True) for r in data.get("results", []))
-
-        assert has_errors or has_failed_results, f"Expected either errors or failed results for overdraft. " f"Got: success_count={data.get('success_count')}, errors={data.get('errors')}, results={data.get('results')}"
+        # Unified batch: committed=false and issues list populated on balance violation
+        assert data["committed"] is False, f"Expected committed=False for overdraft. Got: {data}"
+        assert len(data.get("issues", [])) > 0, f"Expected issues for overdraft. Got: {data}"
 
         print_success("✓ Got balance/access error in response as expected")
 
@@ -382,15 +382,15 @@ async def test_get_transactions(test_server, test_broker_id):
 
         # Create a transaction
         await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=[
+            f"{API_BASE}/transactions/commit",
+            json={"creates": [
                 {
                     "broker_id": broker_id,
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "1000"},
                 }
-            ],
+            ]},
             timeout=TIMEOUT,
         )
 
@@ -428,8 +428,8 @@ async def test_get_transactions_with_filters(test_server, test_broker_id):
 
         # Create transactions
         await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=[
+            f"{API_BASE}/transactions/commit",
+            json={"creates": [
                 {
                     "broker_id": broker_id,
                     "type": "DEPOSIT",
@@ -442,7 +442,7 @@ async def test_get_transactions_with_filters(test_server, test_broker_id):
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "-100"},
                 },
-            ],
+            ]},
             timeout=TIMEOUT,
         )
 
@@ -486,8 +486,8 @@ async def test_get_transactions_pagination(test_server, test_broker_id):
 
         # Create several transactions
         await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=[
+            f"{API_BASE}/transactions/commit",
+            json={"creates": [
                 {
                     "broker_id": broker_id,
                     "type": "DEPOSIT",
@@ -506,7 +506,7 @@ async def test_get_transactions_pagination(test_server, test_broker_id):
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "300"},
                 },
-            ],
+            ]},
             timeout=TIMEOUT,
         )
 
@@ -562,11 +562,11 @@ async def test_get_transaction_by_id(test_server, test_broker_id):
             }
         ]
         create_resp = await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=payload,
+            f"{API_BASE}/transactions/commit",
+            json={"creates": payload},
             timeout=TIMEOUT,
         )
-        tx_id = create_resp.json()["results"][0]["transaction_id"]
+        tx_id = create_resp.json()["results"][0]["id"]
 
         # Get by ID via ?ids=N
         response = await client.get(
@@ -684,11 +684,11 @@ async def test_patch_transactions(test_server, test_broker_id):
             }
         ]
         create_resp = await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=payload,
+            f"{API_BASE}/transactions/commit",
+            json={"creates": payload},
             timeout=TIMEOUT,
         )
-        tx_id = create_resp.json()["results"][0]["transaction_id"]
+        tx_id = create_resp.json()["results"][0]["id"]
 
         # Update it
         update_payload = [
@@ -697,15 +697,15 @@ async def test_patch_transactions(test_server, test_broker_id):
                 "description": "Updated via API test",
             }
         ]
-        response = await client.patch(
-            f"{API_BASE}/transactions/bulk",
-            json=update_payload,
+        response = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={"updates": update_payload},
             timeout=TIMEOUT,
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["success_count"] == 1
+        assert data["committed"] is True
 
         print_success("✓ Updated transaction successfully")
 
@@ -725,17 +725,18 @@ async def test_patch_transactions_not_found(test_server):
                 "description": "Should fail",
             }
         ]
-        response = await client.patch(
-            f"{API_BASE}/transactions/bulk",
-            json=update_payload,
+        response = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={"updates": update_payload},
             timeout=TIMEOUT,
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["results"][0]["success"] is False
+        assert data["committed"] is False
+        assert len(data.get("issues", [])) > 0
 
-        print_success("✓ Got success=False for invalid ID")
+        print_success("✓ Got committed=False for invalid ID")
 
 
 # ============================================================================
@@ -778,22 +779,24 @@ async def test_delete_transactions(test_server, test_broker_id):
             },
         ]
         create_resp = await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=payload,
+            f"{API_BASE}/transactions/commit",
+            json={"creates": payload},
             timeout=TIMEOUT,
         )
-        tx_ids = [r["transaction_id"] for r in create_resp.json()["results"]]
+        tx_ids = [r["id"] for r in create_resp.json()["results"]]
 
         # Delete them
-        response = await client.delete(
-            f"{API_BASE}/transactions/bulk",
-            params={"ids": tx_ids},
+        response = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={"deletes": tx_ids},
             timeout=TIMEOUT,
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["total_deleted"] == 2
+        assert data["committed"] is True
+        delete_results = [r for r in data["results"] if r["operation"] == "delete"]
+        assert len(delete_results) == 2
 
         print_success("✓ Deleted 2 transactions")
 
@@ -854,7 +857,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
                 "quantity": "100",
             }
         ]
-        await client.post(f"{API_BASE}/transactions/bulk", json=adj_payload, timeout=TIMEOUT)
+        await client.post(f"{API_BASE}/transactions/commit", json={"creates": adj_payload}, timeout=TIMEOUT)
 
         # Create linked transfer
         link_uuid = f"test-link-api-{uuid.uuid4().hex[:8]}"
@@ -877,23 +880,24 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
             },
         ]
         create_resp = await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=transfer_payload,
+            f"{API_BASE}/transactions/commit",
+            json={"creates": transfer_payload},
             timeout=TIMEOUT,
         )
-        tx_ids = [r["transaction_id"] for r in create_resp.json()["results"]]
+        tx_ids = [r["id"] for r in create_resp.json()["results"]]
 
         # Try to delete only the first one
-        response = await client.delete(
-            f"{API_BASE}/transactions/bulk",
-            params={"ids": [tx_ids[0]]},
+        response = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={"deletes": [tx_ids[0]]},
             timeout=TIMEOUT,
         )
 
         assert response.status_code == 200
         data = response.json()
         # Should fail because pair is missing
-        assert data["results"][0]["success"] is False
-        assert "pair" in data["results"][0]["message"].lower()
+        assert data["committed"] is False
+        assert len(data.get("issues", [])) > 0
+        assert any("pair" in issue.get("error", "").lower() for issue in data["issues"])
 
         print_success("✓ Got error when trying to delete only one of linked pair")

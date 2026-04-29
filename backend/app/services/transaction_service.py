@@ -20,10 +20,11 @@ from collections import defaultdict
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,12 +32,9 @@ from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import (
     EVENT_COMPATIBLE_TYPES,
-    TXBulkCreateResponse,
-    TXBulkDeleteResponse,
-    TXBulkUpdateResponse,
+    TXBatchResponse,
+    TXBatchResultItem,
     TXCreateItem,
-    TXCreateResultItem,
-    TXDeleteResult,
     TXEventSuggestCandidate,
     TXEventSuggestRequestItem,
     TXEventSuggestResultItem,
@@ -45,8 +43,6 @@ from backend.app.schemas.transactions import (
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXUpdateItem,
-    TXUpdateResultItem,
-    TXValidateResponse,
     TXValidationIssue,
     tags_to_csv,
 )
@@ -79,6 +75,59 @@ class LinkedTransactionError(Exception):
     """Raised when linked transaction operations fail."""
 
     pass
+
+
+def _loc_to_field(loc: tuple | list) -> Optional[str]:
+    """Convert Pydantic loc tuple to a dotted field path string."""
+    parts = [str(p) for p in loc if not isinstance(p, int)]
+    return ".".join(parts) if parts else None
+
+
+def _parse_lenient(
+    raw_list: List[dict],
+    model_class: type,
+    operation: str,
+) -> Tuple[List[Tuple[int, Any]], List[TXValidationIssue]]:
+    """Per-row model_validate with error collection.
+
+    Returns (parsed_items, issues) where parsed_items is a list of (index, model)
+    tuples for successfully-parsed rows, and issues contains all schema/business
+    errors from rows that failed validation.
+    """
+    parsed: List[Tuple[int, Any]] = []
+    issues: List[TXValidationIssue] = []
+    for idx, raw in enumerate(raw_list):
+        try:
+            parsed.append((idx, model_class.model_validate(raw)))
+        except ValidationError as e:
+            for err in e.errors():
+                # Handle packed multi-error from model_validator
+                if err.get("type") == "multipleBusinessRuleErrors":
+                    ctx = err.get("ctx", {})
+                    sub_errors = ctx.get("errors", [])
+                    for sub in sub_errors:
+                        issues.append(
+                            TXValidationIssue(
+                                operation=operation,
+                                index=idx,
+                                error=sub.get("msg", ""),
+                                code=sub.get("code"),
+                                params=sub.get("ctx") if sub.get("ctx") else None,
+                                field=None,
+                            )
+                        )
+                    continue
+                issues.append(
+                    TXValidationIssue(
+                        operation=operation,
+                        index=idx,
+                        error=err.get("msg", str(err)),
+                        code=err.get("type"),
+                        params=err.get("ctx") if err.get("ctx") else None,
+                        field=_loc_to_field(err.get("loc", ())),
+                    )
+                )
+    return parsed, issues
 
 
 class TransactionService:
@@ -175,137 +224,6 @@ class TransactionService:
         return None
 
     # =========================================================================
-    # ATOMIC ROLLBACK HELPER
-    # =========================================================================
-
-    def _mark_rolled_back(self, results: list) -> None:
-        """
-        Downgrade any `success` results to `simulated`.
-
-        NOTE: this method does NOT call `session.rollback()` — the router
-        owns the session lifecycle and will roll back when the response
-        carries `rolled_back=True`. Keeping rollback in the router avoids
-        interfering with FastAPI's dependency-managed session greenlet
-        (otherwise aiosqlite may raise MissingGreenlet on subsequent cleanup).
-        """
-        for r in results:
-            if getattr(r, "status", None) == "success":
-                r.success = False
-                r.status = "simulated"
-
-    # =========================================================================
-    # CREATE OPERATIONS
-    # =========================================================================
-
-    async def create_bulk(self, items: List[TXCreateItem], user_id: Optional[int] = None) -> TXBulkCreateResponse:
-        """
-        Atomic multi-broker bulk create.
-
-        Semantics:
-        1. Access check EDITOR on every distinct `broker_id` touched.
-        2. Insert all transactions + bidirectional `link_uuid` pairing (DEFERRABLE FK).
-           TRANSFER cross-broker is supported.
-        3. Balance validation per affected broker.
-        4. On ANY failure → full rollback, `rolled_back=True`, `success_count=0`.
-        """
-        n = len(items)
-        results: List[TXCreateResultItem] = [TXCreateResultItem(success=False, status="not_attempted", link_uuid=it.link_uuid) for it in items]
-
-        if n == 0:
-            return TXBulkCreateResponse(results=results, success_count=0, errors=[])
-
-        # Access check once per distinct broker.
-        await self._enforce_batch_access({it.broker_id for it in items}, user_id, min_role=UserRole.EDITOR)
-
-        link_uuid_map: Dict[str, List[Transaction]] = defaultdict(list)
-        earliest_date_by_broker: Dict[int, date_type] = {}
-
-        # Phase 1: Insert.
-        failure_reason: Optional[str] = None
-
-        for idx, item in enumerate(items):
-            try:
-                # Reject INDEX assets (benchmarks, not tradeable).
-                if item.asset_id is not None:
-                    asset_result = await self.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
-                    if asset_result.scalar_one_or_none() == AssetType.INDEX:
-                        raise ValueError("Cannot create transactions for INDEX assets")
-
-                if item.asset_event_id is not None:
-                    assert item.asset_id is not None  # guaranteed by Pydantic Rule 9
-                    await self._validate_asset_event_link(item.asset_event_id, item.asset_id)
-
-                tx = Transaction(
-                    broker_id=item.broker_id,
-                    asset_id=item.asset_id,
-                    type=item.type,
-                    date=item.date,
-                    quantity=item.quantity,
-                    amount=item.get_amount(),
-                    currency=item.get_currency(),
-                    tags=item.get_tags_csv(),
-                    description=item.description,
-                    cost_basis_override=item.cost_basis_override,
-                    asset_event_id=item.asset_event_id,
-                    created_at=utcnow(),
-                    updated_at=utcnow(),
-                )
-                self.session.add(tx)
-                await self.session.flush()
-
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
-
-                if item.link_uuid:
-                    link_uuid_map[item.link_uuid].append(tx)
-
-                results[idx] = TXCreateResultItem(
-                    success=True,
-                    status="success",
-                    transaction_id=tx.id,
-                    link_uuid=item.link_uuid,
-                )
-            except Exception as e:  # noqa: BLE001
-                failure_reason = str(e)
-                results[idx] = TXCreateResultItem(success=False, status="failed", link_uuid=item.link_uuid, error=failure_reason)
-                break
-
-        if failure_reason is not None:
-            self._mark_rolled_back(results)
-            return TXBulkCreateResponse(results=results, success_count=0, errors=[failure_reason], rolled_back=True)
-
-        # Phase 2: Bidirectional link resolution.
-        link_errors: List[str] = []
-        for link_uuid, txs in link_uuid_map.items():
-            if len(txs) != 2:
-                link_errors.append(f"link_uuid '{link_uuid}' has {len(txs)} transactions (expected 2)")
-                continue
-            pair_error = self._validate_linked_pair(txs[0], txs[1])
-            if pair_error is not None:
-                link_errors.append(pair_error)
-                continue
-            txs[0].related_transaction_id = txs[1].id
-            txs[1].related_transaction_id = txs[0].id
-
-        if link_errors:
-            self._mark_rolled_back(results)
-            return TXBulkCreateResponse(results=results, success_count=0, errors=link_errors, rolled_back=True)
-
-        # Phase 3: Balance validation per affected broker.
-        try:
-            for broker_id, from_date in earliest_date_by_broker.items():
-                await self._validate_broker_balances(broker_id, from_date)
-        except BalanceValidationError as e:
-            self._mark_rolled_back(results)
-            return TXBulkCreateResponse(results=results, success_count=0, errors=[str(e)], rolled_back=True)
-        except Exception as e:  # noqa: BLE001
-            self._mark_rolled_back(results)
-            return TXBulkCreateResponse(results=results, success_count=0, errors=[f"Balance validation error: {e}"], rolled_back=True)
-
-        success_count = sum(1 for r in results if r.status == "success")
-        return TXBulkCreateResponse(results=results, success_count=success_count, errors=[], rolled_back=False)
-
-    # =========================================================================
     # READ OPERATIONS
     # =========================================================================
 
@@ -378,172 +296,8 @@ class TransactionService:
         return list(result.scalars().all())
 
     # =========================================================================
-    # UPDATE OPERATIONS
+    # DELETE OPERATIONS (internal — delete_by_broker only)
     # =========================================================================
-
-    async def update_bulk(self, items: List[TXUpdateItem], user_id: Optional[int] = None) -> TXBulkUpdateResponse:
-        """Atomic multi-broker bulk update."""
-        n = len(items)
-        results: List[TXUpdateResultItem] = [TXUpdateResultItem(id=it.id, success=False, status="not_attempted") for it in items]
-
-        if n == 0:
-            return TXBulkUpdateResponse(results=results, success_count=0, errors=[])
-
-        # Resolve broker ownership of targets up front → access check.
-        existing = {tx.id: tx for tx in await self.get_by_ids([it.id for it in items])}
-        await self._enforce_batch_access({tx.broker_id for tx in existing.values()}, user_id, min_role=UserRole.EDITOR)
-
-        earliest_date_by_broker: Dict[int, date_type] = {}
-        failure_reason: Optional[str] = None
-
-        for idx, item in enumerate(items):
-            try:
-                tx = existing.get(item.id)
-                if tx is None:
-                    raise ValueError(f"Transaction {item.id} not found")
-
-                check_date = tx.date
-
-                if item.date is not None:
-                    check_date = min(check_date, item.date)
-                    tx.date = item.date
-                if item.quantity is not None:
-                    tx.quantity = item.quantity
-                if item.cash is not None:
-                    tx.amount = item.cash.amount
-                    tx.currency = item.cash.code
-                if item.tags is not None:
-                    tx.tags = tags_to_csv(item.tags)
-                if item.description is not None:
-                    tx.description = item.description
-                if item.cost_basis_override is not None:
-                    tx.cost_basis_override = item.cost_basis_override
-
-                # asset_event_id sentinel: None = unchanged, 0 = unlink, >0 = link.
-                if item.asset_event_id is not None:
-                    if item.asset_event_id == 0:
-                        tx.asset_event_id = None
-                    else:
-                        if tx.asset_id is None:
-                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
-                        await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
-                        tx.asset_event_id = item.asset_event_id
-
-                tx.updated_at = utcnow()
-
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = check_date if prev is None else min(prev, check_date)
-
-                results[idx] = TXUpdateResultItem(id=item.id, success=True, status="success")
-            except Exception as e:  # noqa: BLE001
-                failure_reason = str(e)
-                results[idx] = TXUpdateResultItem(id=item.id, success=False, status="failed", error=failure_reason)
-                break
-
-        if failure_reason is not None:
-            self._mark_rolled_back(results)
-            return TXBulkUpdateResponse(results=results, success_count=0, errors=[failure_reason], rolled_back=True)
-
-        await self.session.flush()
-
-        try:
-            for broker_id, from_date in earliest_date_by_broker.items():
-                await self._validate_broker_balances(broker_id, from_date)
-        except BalanceValidationError as e:
-            self._mark_rolled_back(results)
-            return TXBulkUpdateResponse(results=results, success_count=0, errors=[str(e)], rolled_back=True)
-        except Exception as e:  # noqa: BLE001
-            self._mark_rolled_back(results)
-            return TXBulkUpdateResponse(results=results, success_count=0, errors=[f"Balance validation error: {e}"], rolled_back=True)
-
-        success_count = sum(1 for r in results if r.status == "success")
-        return TXBulkUpdateResponse(results=results, success_count=success_count, errors=[], rolled_back=False)
-
-    # =========================================================================
-    # DELETE OPERATIONS
-    # =========================================================================
-
-    async def delete_bulk(self, ids: List[int], user_id: Optional[int] = None) -> TXBulkDeleteResponse:
-        """Atomic multi-broker bulk delete."""
-        n = len(ids)
-        results: List[TXDeleteResult] = [TXDeleteResult(id=i, success=False, deleted_count=0, status="not_attempted", message=None) for i in ids]
-
-        if n == 0:
-            return TXBulkDeleteResponse(results=results, success_count=0, total_deleted=0, errors=[])
-
-        id_set: Set[int] = set(ids)
-        existing = {tx.id: tx for tx in await self.get_by_ids(list(id_set))}
-
-        await self._enforce_batch_access({tx.broker_id for tx in existing.values()}, user_id, min_role=UserRole.EDITOR)
-
-        idx_by_id = {i: k for k, i in enumerate(ids)}
-        failure_reason: Optional[str] = None
-
-        # Pre-check linked-pair integrity.
-        for tx in existing.values():
-            assert tx.id is not None  # persisted row
-            if tx.related_transaction_id and tx.related_transaction_id not in id_set:
-                failure_reason = f"Cannot delete linked transaction {tx.id} without its pair " f"{tx.related_transaction_id}. Include both IDs in the delete request."
-                fi = idx_by_id[tx.id]
-                results[fi] = TXDeleteResult(id=tx.id, success=False, deleted_count=0, status="failed", message=failure_reason)
-                break
-            stmt = select(Transaction).where(Transaction.related_transaction_id == tx.id)
-            related = (await self.session.execute(stmt)).scalar_one_or_none()
-            if related and related.id not in id_set:
-                failure_reason = f"Cannot delete linked transaction {tx.id} without its pair " f"{related.id}. Include both IDs in the delete request."
-                fi = idx_by_id[tx.id]
-                results[fi] = TXDeleteResult(id=tx.id, success=False, deleted_count=0, status="failed", message=failure_reason)
-                break
-
-        if failure_reason is not None:
-            self._mark_rolled_back(results)
-            return TXBulkDeleteResponse(results=results, success_count=0, total_deleted=0, errors=[failure_reason], rolled_back=True)
-
-        # All ids must exist.
-        for idx, tx_id in enumerate(ids):
-            if tx_id not in existing:
-                failure_reason = f"Transaction {tx_id} not found"
-                results[idx] = TXDeleteResult(id=tx_id, success=False, deleted_count=0, status="failed", message=failure_reason)
-                break
-
-        if failure_reason is not None:
-            self._mark_rolled_back(results)
-            return TXBulkDeleteResponse(results=results, success_count=0, total_deleted=0, errors=[failure_reason], rolled_back=True)
-
-        earliest_date_by_broker: Dict[int, date_type] = {}
-        total_deleted = 0
-
-        for idx, tx_id in enumerate(ids):
-            try:
-                tx = existing[tx_id]
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
-                await self.session.delete(tx)
-                total_deleted += 1
-                results[idx] = TXDeleteResult(id=tx_id, success=True, deleted_count=1, status="success", message=None)
-            except Exception as e:  # noqa: BLE001
-                failure_reason = str(e)
-                results[idx] = TXDeleteResult(id=tx_id, success=False, deleted_count=0, status="failed", message=failure_reason)
-                break
-
-        if failure_reason is not None:
-            self._mark_rolled_back(results)
-            return TXBulkDeleteResponse(results=results, success_count=0, total_deleted=0, errors=[failure_reason], rolled_back=True)
-
-        await self.session.flush()
-
-        try:
-            for broker_id, from_date in earliest_date_by_broker.items():
-                await self._validate_broker_balances(broker_id, from_date)
-        except BalanceValidationError as e:
-            self._mark_rolled_back(results)
-            return TXBulkDeleteResponse(results=results, success_count=0, total_deleted=0, errors=[str(e)], rolled_back=True)
-        except Exception as e:  # noqa: BLE001
-            self._mark_rolled_back(results)
-            return TXBulkDeleteResponse(results=results, success_count=0, total_deleted=0, errors=[f"Balance validation error: {e}"], rolled_back=True)
-
-        success_count = sum(1 for r in results if r.status == "success")
-        return TXBulkDeleteResponse(results=results, success_count=success_count, total_deleted=total_deleted, errors=[], rolled_back=False)
 
     async def delete_by_broker(self, broker_id: int) -> int:
         """
@@ -562,205 +316,6 @@ class TransactionService:
             count += 1
 
         return count
-
-    # =========================================================================
-    # VALIDATE (DRY-RUN MIXED BATCH)
-    # =========================================================================
-
-    async def validate_batch(
-        self,
-        creates: List[TXCreateItem],
-        updates: List[TXUpdateItem],
-        deletes: List[int],
-        user_id: Optional[int] = None,
-    ) -> TXValidateResponse:
-        """
-        Dry-run engine for POST /transactions/validate.
-
-        Order: deletes → updates → creates (so creates see DB post-cleanup).
-        Does NOT stop at the first error — collects the full set of issues for
-        the Staging UI. Always rolls back at the end; never commits.
-        """
-        issues: List[TXValidationIssue] = []
-
-        # Determine touched brokers for access check.
-        touched_brokers: Set[int] = {c.broker_id for c in creates}
-        if updates or deletes:
-            ids_to_lookup = {u.id for u in updates} | set(deletes)
-            existing_txs = await self.get_by_ids(list(ids_to_lookup))
-            existing_by_id = {tx.id: tx for tx in existing_txs}
-            touched_brokers |= {tx.broker_id for tx in existing_txs}
-        else:
-            existing_by_id = {}
-
-        # Access check (EDITOR) — report as issue rather than HTTPException.
-        if user_id is not None:
-            for broker_id in touched_brokers:
-                role = await self._check_broker_access(broker_id, user_id, min_role=UserRole.EDITOR)
-                if role is None:
-                    issues.append(
-                        TXValidationIssue(
-                            operation="create",
-                            index=0,
-                            ref_id=None,
-                            error=f"Access denied: EDITOR required for broker {broker_id}",
-                            code="accessDenied",
-                            params={"brokerId": broker_id},
-                        )
-                    )
-
-        if issues:
-            await self.session.rollback()
-            return TXValidateResponse(would_rollback=True, issues=issues)
-
-        earliest_date_by_broker: Dict[int, date_type] = {}
-
-        # --- deletes ---
-        for idx, tx_id in enumerate(deletes):
-            tx = existing_by_id.get(tx_id)
-            if tx is None:
-                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=f"Transaction {tx_id} not found", code="txNotFound", params={"id": tx_id}))
-                continue
-            try:
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
-                await self.session.delete(tx)
-            except Exception as e:  # noqa: BLE001
-                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=str(e)))
-
-        # --- updates ---
-        for idx, item in enumerate(updates):
-            tx = existing_by_id.get(item.id)
-            if tx is None:
-                issues.append(TXValidationIssue(operation="update", index=idx, ref_id=item.id, error=f"Transaction {item.id} not found", code="txNotFound", params={"id": item.id}))
-                continue
-            try:
-                check_date = tx.date
-                if item.date is not None:
-                    check_date = min(check_date, item.date)
-                    tx.date = item.date
-                if item.quantity is not None:
-                    tx.quantity = item.quantity
-                if item.cash is not None:
-                    tx.amount = item.cash.amount
-                    tx.currency = item.cash.code
-                if item.tags is not None:
-                    tx.tags = tags_to_csv(item.tags)
-                if item.description is not None:
-                    tx.description = item.description
-                if item.cost_basis_override is not None:
-                    tx.cost_basis_override = item.cost_basis_override
-                if item.asset_event_id is not None:
-                    if item.asset_event_id == 0:
-                        tx.asset_event_id = None
-                    else:
-                        if tx.asset_id is None:
-                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")  # code:cannotLinkEventNoAsset
-                        await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
-                        tx.asset_event_id = item.asset_event_id
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = check_date if prev is None else min(prev, check_date)
-            except Exception as e:  # noqa: BLE001
-                # Try to extract structured code from conventions in the message
-                err_str = str(e)
-                issue_code: Optional[str] = None
-                issue_params: Optional[dict] = None
-                if "Cannot link asset_event_id" in err_str:
-                    issue_code = "cannotLinkEventNoAsset"
-                issues.append(TXValidationIssue(operation="update", index=idx, ref_id=item.id, error=err_str, code=issue_code, params=issue_params))
-
-        # --- creates ---
-        link_uuid_map: Dict[str, List[Transaction]] = defaultdict(list)
-        for idx, item in enumerate(creates):
-            try:
-                if item.asset_id is not None:
-                    asset_result = await self.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
-                    if asset_result.scalar_one_or_none() == AssetType.INDEX:
-                        raise ValueError("Cannot create transactions for INDEX assets")  # code:indexAssetForbidden
-                if item.asset_event_id is not None:
-                    assert item.asset_id is not None
-                    await self._validate_asset_event_link(item.asset_event_id, item.asset_id)
-                tx = Transaction(
-                    broker_id=item.broker_id,
-                    asset_id=item.asset_id,
-                    type=item.type,
-                    date=item.date,
-                    quantity=item.quantity,
-                    amount=item.get_amount(),
-                    currency=item.get_currency(),
-                    tags=item.get_tags_csv(),
-                    description=item.description,
-                    cost_basis_override=item.cost_basis_override,
-                    asset_event_id=item.asset_event_id,
-                    created_at=utcnow(),
-                    updated_at=utcnow(),
-                )
-                self.session.add(tx)
-                await self.session.flush()
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
-                if item.link_uuid:
-                    link_uuid_map[item.link_uuid].append(tx)
-            except Exception as e:  # noqa: BLE001
-                err_str = str(e)
-                issue_code: Optional[str] = None
-                issue_params: Optional[dict] = None
-                if "INDEX assets" in err_str:
-                    issue_code = "indexAssetForbidden"
-                issues.append(TXValidationIssue(operation="create", index=idx, ref_id=None, error=err_str, code=issue_code, params=issue_params))
-
-        for link_uuid, pair in link_uuid_map.items():
-            if len(pair) == 2:
-                pair_result = self._validate_linked_pair(pair[0], pair[1])
-                if pair_result is not None:
-                    pair_error, pair_code, pair_params = pair_result
-                    issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=pair_error, code=pair_code, params=pair_params))
-                    continue
-                pair[0].related_transaction_id = pair[1].id
-                pair[1].related_transaction_id = pair[0].id
-            else:
-                issues.append(
-                    TXValidationIssue(
-                        operation="create",
-                        index=0,
-                        ref_id=None,
-                        error=f"link_uuid '{link_uuid}' has {len(pair)} creates (expected 2)",
-                        code="linkUuidPairCount",
-                        params={"linkUuid": link_uuid, "count": len(pair)},
-                    )
-                )
-
-        balance_violation = False
-        try:
-            await self.session.flush()
-            for broker_id, from_date in earliest_date_by_broker.items():
-                await self._validate_broker_balances(broker_id, from_date)
-        except BalanceValidationError as e:
-            balance_violation = True
-            issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=str(e), code=e.code, params=e.params))
-        except Exception as e:  # noqa: BLE001
-            balance_violation = True
-            issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=f"Balance validation error: {e}"))
-
-        balance_preview: Dict[str, Decimal] = {}
-        holdings_preview: Dict[str, Decimal] = {}
-        if not issues and not balance_violation:
-            for broker_id in earliest_date_by_broker:
-                cash = await self.get_cash_balances(broker_id)
-                for currency, value in cash.items():
-                    balance_preview[f"{broker_id}:{currency}"] = value
-                holdings = await self.get_asset_holdings(broker_id)
-                for asset_id, qty in holdings.items():
-                    holdings_preview[f"{broker_id}:asset:{asset_id}"] = qty
-
-        await self.session.rollback()
-
-        return TXValidateResponse(
-            would_rollback=bool(issues) or balance_violation,
-            issues=issues,
-            balance_preview=balance_preview,
-            holdings_preview=holdings_preview,
-        )
 
     # =========================================================================
     # BALANCE VALIDATION
@@ -1011,74 +566,283 @@ class TransactionService:
         to_description: Optional[str] = to_tx.description
         to_tags_csv: Optional[str] = to_tx.tags
 
-        # Step 1: delete the pair (atomic).
-        del_resp = await self.delete_bulk([req.from_tx_id, req.to_tx_id], user_id=user_id)
-        if del_resp.rolled_back:
-            return TXTransferPromoteResponse(rolled_back=True, errors=del_resp.errors or ["delete step failed"])
-
-        # Step 2: build the new pair.
+        # Build the new pair.
         link_uuid = str(uuid4())
         from_tags = [t.strip() for t in from_tags_csv.split(",")] if from_tags_csv else None
         to_tags = [t.strip() for t in to_tags_csv.split(",")] if to_tags_csv else None
 
         if req.new_type == TransactionType.TRANSFER:
-            # TRANSFER: quantity +/- with asset, no cash; sign mirrors from/to.
             qty = req.quantity
             assert qty is not None
-            create_from = TXCreateItem(
-                broker_id=from_broker_id,
-                asset_id=req.asset_id,
-                type=TransactionType.TRANSFER,
-                date=from_date,
-                quantity=-abs(qty),
-                cash=None,
-                link_uuid=link_uuid,
-                tags=from_tags,
-                description=from_description,
-            )
-            create_to = TXCreateItem(
-                broker_id=to_broker_id,
-                asset_id=req.asset_id,
-                type=TransactionType.TRANSFER,
-                date=to_date,
-                quantity=abs(qty),
-                cash=None,
-                link_uuid=link_uuid,
-                tags=to_tags,
-                description=to_description,
-                cost_basis_override=req.cost_basis_override,
-            )
+            create_from_dict = {
+                "broker_id": from_broker_id,
+                "asset_id": req.asset_id,
+                "type": TransactionType.TRANSFER.value,
+                "date": from_date.isoformat(),
+                "quantity": str(-abs(qty)),
+                "link_uuid": link_uuid,
+                "tags": from_tags,
+                "description": from_description,
+            }
+            create_to_dict = {
+                "broker_id": to_broker_id,
+                "asset_id": req.asset_id,
+                "type": TransactionType.TRANSFER.value,
+                "date": to_date.isoformat(),
+                "quantity": str(abs(qty)),
+                "link_uuid": link_uuid,
+                "tags": to_tags,
+                "description": to_description,
+                "cost_basis_override": str(req.cost_basis_override) if req.cost_basis_override is not None else None,
+            }
         else:  # FX_CONVERSION
             if from_currency is None or to_currency is None:
                 return TXTransferPromoteResponse(rolled_back=True, errors=["FX_CONVERSION requires both sides to have a currency"])
-            create_from = TXCreateItem(
-                broker_id=from_broker_id,
-                type=TransactionType.FX_CONVERSION,
-                date=from_date,
-                cash=Currency(code=from_currency, amount=from_amount),
-                link_uuid=link_uuid,
-                tags=from_tags,
-                description=from_description,
-            )
-            create_to = TXCreateItem(
-                broker_id=to_broker_id,
-                type=TransactionType.FX_CONVERSION,
-                date=to_date,
-                cash=Currency(code=to_currency, amount=to_amount),
-                link_uuid=link_uuid,
-                tags=to_tags,
-                description=to_description,
-            )
+            create_from_dict = {
+                "broker_id": from_broker_id,
+                "type": TransactionType.FX_CONVERSION.value,
+                "date": from_date.isoformat(),
+                "cash": {"code": from_currency, "amount": str(from_amount)},
+                "link_uuid": link_uuid,
+                "tags": from_tags,
+                "description": from_description,
+            }
+            create_to_dict = {
+                "broker_id": to_broker_id,
+                "type": TransactionType.FX_CONVERSION.value,
+                "date": to_date.isoformat(),
+                "cash": {"code": to_currency, "amount": str(to_amount)},
+                "link_uuid": link_uuid,
+                "tags": to_tags,
+                "description": to_description,
+            }
 
-        create_resp = await self.create_bulk([create_from, create_to], user_id=user_id)
-        if create_resp.rolled_back:
-            # create_bulk already marked results simulated; propagate errors.
-            # Router will rollback the whole session, including the deletes.
-            return TXTransferPromoteResponse(rolled_back=True, errors=create_resp.errors or ["create step failed"])
+        # Atomic: delete originals + create new pair via unified pipeline.
+        resp = await self.execute_batch(
+            creates_raw=[create_from_dict, create_to_dict],
+            updates_raw=[],
+            deletes=[req.from_tx_id, req.to_tx_id],
+            user_id=user_id,
+            commit=True,
+        )
 
-        new_ids = [r.transaction_id for r in create_resp.results]
+        if resp.issues:
+            err_msgs = [iss.error for iss in resp.issues]
+            return TXTransferPromoteResponse(rolled_back=True, errors=err_msgs)
+
+        # Extract IDs of the two created transactions.
+        new_ids = [r.id for r in (resp.results or []) if r.operation == "create"]
         return TXTransferPromoteResponse(
             rolled_back=False,
-            new_from_tx_id=new_ids[0],
-            new_to_tx_id=new_ids[1],
+            new_from_tx_id=new_ids[0] if len(new_ids) > 0 else None,
+            new_to_tx_id=new_ids[1] if len(new_ids) > 1 else None,
         )
+
+    # =========================================================================
+    # UNIFIED BATCH PIPELINE (replaces separate create/update/delete bulk)
+    # =========================================================================
+
+    async def execute_batch(
+        self,
+        creates_raw: List[dict],
+        updates_raw: List[dict],
+        deletes: List[int],
+        user_id: Optional[int] = None,
+        commit: bool = False,
+    ) -> TXBatchResponse:
+        """Unified pipeline for both /validate (commit=False) and /commit (commit=True).
+
+        Order: lenient parse → access check → deletes → updates → creates →
+        link resolution → balance walk → commit/rollback.
+
+        Always collects the full set of issues instead of failing fast.
+        """
+        issues: List[TXValidationIssue] = []
+        results: List[TXBatchResultItem] = []
+
+        # 1. Lenient per-row parse
+        parsed_creates, create_issues = _parse_lenient(creates_raw, TXCreateItem, "create")
+        parsed_updates, update_issues = _parse_lenient(updates_raw, TXUpdateItem, "update")
+        issues.extend(create_issues)
+        issues.extend(update_issues)
+
+        # 2. Determine touched brokers for access check
+        touched_brokers: Set[int] = set()
+        for _, item in parsed_creates:
+            touched_brokers.add(item.broker_id)
+
+        # Lookup existing TXs for updates and deletes
+        ids_to_lookup: Set[int] = set(deletes)
+        for _, item in parsed_updates:
+            ids_to_lookup.add(item.id)
+        existing_by_id: Dict[int, Transaction] = {}
+        if ids_to_lookup:
+            existing_txs = await self.get_by_ids(list(ids_to_lookup))
+            existing_by_id = {tx.id: tx for tx in existing_txs}
+            touched_brokers |= {tx.broker_id for tx in existing_txs}
+
+        # Access check (EDITOR) — report as issues, not HTTPException
+        if user_id is not None:
+            for broker_id in touched_brokers:
+                role = await self._check_broker_access(broker_id, user_id, min_role=UserRole.EDITOR)
+                if role is None:
+                    issues.append(
+                        TXValidationIssue(
+                            operation="create",
+                            index=0,
+                            ref_id=None,
+                            error=f"Access denied: EDITOR required for broker {broker_id}",
+                            code="accessDenied",
+                            params={"brokerId": broker_id},
+                        )
+                    )
+
+        # If access denied, stop early
+        if any(i.code == "accessDenied" for i in issues):
+            return TXBatchResponse(committed=False, issues=issues)
+
+        earliest_date_by_broker: Dict[int, date_type] = {}
+
+        # 3. Apply deletes
+        id_set_deletes = set(deletes)
+        for idx, tx_id in enumerate(deletes):
+            tx = existing_by_id.get(tx_id)
+            if tx is None:
+                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=f"Transaction {tx_id} not found", code="txNotFound", params={"id": tx_id}))
+                continue
+            # Linked-pair integrity check
+            if tx.related_transaction_id and tx.related_transaction_id not in id_set_deletes:
+                issues.append(
+                    TXValidationIssue(
+                        operation="delete",
+                        index=idx,
+                        ref_id=tx_id,
+                        error=f"Cannot delete linked transaction {tx_id} without its pair {tx.related_transaction_id}",
+                        code="pairDeleteIncomplete",
+                        params={"id": tx_id, "partnerId": tx.related_transaction_id},
+                    )
+                )
+                continue
+            try:
+                prev = earliest_date_by_broker.get(tx.broker_id)
+                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
+                await self.session.delete(tx)
+                results.append(TXBatchResultItem(operation="delete", index=idx, id=tx_id, status="success"))
+            except Exception as e:  # noqa: BLE001
+                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=str(e)))
+
+        # 4. Apply updates (only successfully-parsed rows)
+        for orig_idx, item in parsed_updates:
+            tx = existing_by_id.get(item.id)
+            if tx is None:
+                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=f"Transaction {item.id} not found", code="txNotFound", params={"id": item.id}))
+                continue
+            try:
+                check_date = tx.date
+                if item.date is not None:
+                    check_date = min(check_date, item.date)
+                    tx.date = item.date
+                if item.quantity is not None:
+                    tx.quantity = item.quantity
+                if item.cash is not None:
+                    tx.amount = item.cash.amount
+                    tx.currency = item.cash.code
+                if item.tags is not None:
+                    tx.tags = tags_to_csv(item.tags)
+                if item.description is not None:
+                    tx.description = item.description
+                if item.cost_basis_override is not None:
+                    tx.cost_basis_override = item.cost_basis_override
+                if item.asset_event_id is not None:
+                    if item.asset_event_id == 0:
+                        tx.asset_event_id = None
+                    else:
+                        if tx.asset_id is None:
+                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
+                        await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
+                        tx.asset_event_id = item.asset_event_id
+                tx.updated_at = utcnow()
+                prev = earliest_date_by_broker.get(tx.broker_id)
+                earliest_date_by_broker[tx.broker_id] = check_date if prev is None else min(prev, check_date)
+                results.append(TXBatchResultItem(operation="update", index=orig_idx, id=item.id, status="success"))
+            except Exception as e:  # noqa: BLE001
+                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=str(e)))
+
+        # 5. Apply creates (only successfully-parsed rows)
+        link_uuid_map: Dict[str, List[Tuple[int, Transaction]]] = defaultdict(list)
+        for orig_idx, item in parsed_creates:
+            try:
+                if item.asset_id is not None:
+                    asset_result = await self.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
+                    if asset_result.scalar_one_or_none() == AssetType.INDEX:
+                        raise ValueError("Cannot create transactions for INDEX assets")
+                if item.asset_event_id is not None:
+                    assert item.asset_id is not None
+                    await self._validate_asset_event_link(item.asset_event_id, item.asset_id)
+                tx = Transaction(
+                    broker_id=item.broker_id,
+                    asset_id=item.asset_id,
+                    type=item.type,
+                    date=item.date,
+                    quantity=item.quantity,
+                    amount=item.get_amount(),
+                    currency=item.get_currency(),
+                    tags=item.get_tags_csv(),
+                    description=item.description,
+                    cost_basis_override=item.cost_basis_override,
+                    asset_event_id=item.asset_event_id,
+                    created_at=utcnow(),
+                    updated_at=utcnow(),
+                )
+                self.session.add(tx)
+                await self.session.flush()
+                prev = earliest_date_by_broker.get(tx.broker_id)
+                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
+                if item.link_uuid:
+                    link_uuid_map[item.link_uuid].append((orig_idx, tx))
+                results.append(TXBatchResultItem(operation="create", index=orig_idx, id=tx.id, link_uuid=item.link_uuid, status="success"))
+            except Exception as e:  # noqa: BLE001
+                issues.append(TXValidationIssue(operation="create", index=orig_idx, ref_id=None, error=str(e)))
+
+        # 6. Link resolution
+        for link_uuid, pairs in link_uuid_map.items():
+            if len(pairs) == 2:
+                pair_result = self._validate_linked_pair(pairs[0][1], pairs[1][1])
+                if pair_result is not None:
+                    pair_error, pair_code, pair_params = pair_result
+                    issues.append(TXValidationIssue(operation="create", index=pairs[0][0], ref_id=None, error=pair_error, code=pair_code, params=pair_params))
+                    continue
+                pairs[0][1].related_transaction_id = pairs[1][1].id
+                pairs[1][1].related_transaction_id = pairs[0][1].id
+            else:
+                issues.append(
+                    TXValidationIssue(
+                        operation="create",
+                        index=pairs[0][0] if pairs else 0,
+                        ref_id=None,
+                        error=f"link_uuid '{link_uuid}' has {len(pairs)} creates (expected 2)",
+                        code="linkUuidPairCount",
+                        params={"linkUuid": link_uuid, "count": len(pairs)},
+                    )
+                )
+
+        # 7. Balance walk per affected broker
+        try:
+            await self.session.flush()
+            for broker_id, from_date in earliest_date_by_broker.items():
+                await self._validate_broker_balances(broker_id, from_date)
+        except BalanceValidationError as e:
+            issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=str(e), code=e.code, params=e.params))
+        except Exception as e:  # noqa: BLE001
+            issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=f"Balance validation error: {e}"))
+
+        # 8. Decision
+        if issues:
+            return TXBatchResponse(committed=False, issues=issues)
+        elif not commit:
+            # Dry-run: clean batch but caller requested validate-only
+            return TXBatchResponse(committed=False, issues=[], results=results)
+        else:
+            # Commit: caller (router) will session.commit()
+            return TXBatchResponse(committed=True, issues=[], results=results)
+

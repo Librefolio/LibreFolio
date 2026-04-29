@@ -38,6 +38,7 @@ from backend.app.schemas.transactions import (
 from backend.app.services.transaction_service import (
     TransactionService,
 )
+from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, update_bulk
 from backend.app.utils.datetime_utils import utcnow
 
 # ============================================================================
@@ -144,7 +145,7 @@ class TestCreateBulkBasic:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
 
         assert response.success_count == 1
         assert response.results[0].success is True
@@ -178,7 +179,7 @@ class TestCreateBulkBasic:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
 
         assert response.success_count == 3
         assert all(r.success for r in response.results)
@@ -197,7 +198,7 @@ class TestCreateBulkBasic:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx_id = response.results[0].transaction_id
 
         # Fetch the transaction
@@ -221,7 +222,7 @@ class TestCreateBulkBasic:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx_id = response.results[0].transaction_id
 
         tx = await session.get(Transaction, tx_id)
@@ -243,7 +244,7 @@ class TestCreateBulkBasic:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx_id = response.results[0].transaction_id
 
         tx = await session.get(Transaction, tx_id)
@@ -275,7 +276,7 @@ class TestCreateBulkLinkResolution:
                 quantity=Decimal("100"),
             )
         ]
-        await service.create_bulk(setup_items)
+        await create_bulk(service, setup_items)
         await session.flush()
 
         # Now do the transfer
@@ -299,7 +300,7 @@ class TestCreateBulkLinkResolution:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
 
         assert response.success_count == 2
         assert not response.errors
@@ -329,7 +330,7 @@ class TestCreateBulkLinkResolution:
                 quantity=Decimal("100"),
             )
         ]
-        await service.create_bulk(setup_items)
+        await create_bulk(service, setup_items)
 
         items = [
             TXCreateItem(
@@ -342,12 +343,12 @@ class TestCreateBulkLinkResolution:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
 
         # Atomic semantics (Part 3): lone link_uuid fails the whole batch.
         assert response.rolled_back is True
         assert response.success_count == 0
-        assert any("has 1 transactions (expected 2)" in err for err in response.errors)
+        assert any("(expected 2)" in err for err in response.errors)
 
 
 # ============================================================================
@@ -379,7 +380,7 @@ class TestCreateBulkBalanceValidation:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
 
         # Atomic semantics (Part 3): any balance violation → whole-batch rollback.
         assert response.rolled_back is True
@@ -407,7 +408,7 @@ class TestCreateBulkBalanceValidation:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
 
         assert response.success_count == 2
         assert not response.errors  # No validation errors
@@ -443,7 +444,7 @@ class TestCreateBulkBalanceValidation:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
 
         assert response.rolled_back is True
         assert response.success_count == 0
@@ -480,7 +481,7 @@ class TestCreateBulkBalanceValidation:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
 
         assert response.success_count == 3
         assert not response.errors
@@ -514,7 +515,7 @@ class TestQueryFiltering:
                 cash=Currency(code="USD", amount=Decimal("200")),
             ),
         ]
-        await service.create_bulk(items)
+        await create_bulk(service, items)
 
         params = TXQueryParams(broker_id=test_broker.id)
         results = await service.query(params)
@@ -541,7 +542,7 @@ class TestQueryFiltering:
                 cash=Currency(code="EUR", amount=Decimal("200")),
             ),
         ]
-        await service.create_bulk(items)
+        await create_bulk(service, items)
 
         params = TXQueryParams(broker_id=test_broker.id)
         results = await service.query(params)
@@ -567,7 +568,7 @@ class TestQueryFiltering:
                 cash=Currency(code="EUR", amount=Decimal("-100")),
             ),
         ]
-        await service.create_bulk(items)
+        await create_bulk(service, items)
 
         params = TXQueryParams(broker_id=test_broker.id, types=[TransactionType.DEPOSIT])
         results = await service.query(params)
@@ -593,7 +594,7 @@ class TestQueryFiltering:
                 cash=Currency(code="USD", amount=Decimal("200")),
             ),
         ]
-        await service.create_bulk(items)
+        await create_bulk(service, items)
 
         params = TXQueryParams(broker_id=test_broker.id, currency="EUR")
         results = await service.query(params)
@@ -624,7 +625,7 @@ class TestQueryBidirectionalLink:
                 quantity=Decimal("100"),
             )
         ]
-        await service.create_bulk(setup_items)
+        await create_bulk(service, setup_items)
 
         # Create transfer pair
         link_uuid = "bidirectional-test-uuid"
@@ -647,7 +648,7 @@ class TestQueryBidirectionalLink:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx1_id = response.results[0].transaction_id
         tx2_id = response.results[1].transaction_id
 
@@ -673,7 +674,7 @@ class TestQueryBidirectionalLink:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx_id = response.results[0].transaction_id
 
         tx_read = await session.get(Transaction, tx_id)
@@ -699,7 +700,7 @@ class TestQueryBidirectionalLink:
                 quantity=Decimal("100"),
             )
         ]
-        await service.create_bulk(setup_items)
+        await create_bulk(service, setup_items)
 
         # Create transfer pair
         link_uuid = "db-bidirectional-test"
@@ -722,7 +723,7 @@ class TestQueryBidirectionalLink:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx1_id = response.results[0].transaction_id
         tx2_id = response.results[1].transaction_id
 
@@ -756,7 +757,7 @@ class TestGetById:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx_id = response.results[0].transaction_id
 
         result = await session.get(Transaction, tx_id)
@@ -795,13 +796,13 @@ class TestUpdateBulk:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx_id = response.results[0].transaction_id
 
         new_date = date.today() - timedelta(days=5)
         update_items = [TXUpdateItem(id=tx_id, date=new_date)]
 
-        update_response = await service.update_bulk(update_items)
+        update_response = await update_bulk(service, update_items)
 
         assert update_response.success_count == 1
 
@@ -822,12 +823,12 @@ class TestUpdateBulk:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx_id = response.results[0].transaction_id
 
         update_items = [TXUpdateItem(id=tx_id, description="Updated description")]
 
-        update_response = await service.update_bulk(update_items)
+        update_response = await update_bulk(service, update_items)
 
         assert update_response.success_count == 1
 
@@ -841,7 +842,7 @@ class TestUpdateBulk:
 
         update_items = [TXUpdateItem(id=999999, description="Should fail")]
 
-        response = await service.update_bulk(update_items)
+        response = await update_bulk(service, update_items)
 
         assert response.results[0].success is False
         assert "not found" in response.results[0].error.lower()
@@ -870,10 +871,10 @@ class TestDeleteBulkBasic:
             )
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx_id = response.results[0].transaction_id
 
-        delete_response = await service.delete_bulk([tx_id])
+        delete_response = await delete_bulk(service, [tx_id])
 
         assert delete_response.success_count == 1
         assert delete_response.total_deleted == 1
@@ -909,13 +910,13 @@ class TestDeleteBulkBasic:
                 cash=Currency(code="EUR", amount=Decimal("-80")),
             ),
         ]
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         deposit_id = response.results[0].transaction_id
         withdrawal_id = response.results[1].transaction_id
 
         # Attempting to delete the deposit (leaving only the -80 withdrawal)
         # must trigger a balance violation → rollback, no rows deleted.
-        delete_response = await service.delete_bulk([deposit_id])
+        delete_response = await delete_bulk(service, [deposit_id])
 
         assert delete_response.success_count == 0, "no successful deletion expected"
         assert delete_response.total_deleted == 0
@@ -952,7 +953,7 @@ class TestDeleteBulkLinkedEnforcement:
                 quantity=Decimal("100"),
             )
         ]
-        await service.create_bulk(setup_items)
+        await create_bulk(service, setup_items)
 
         # Create transfer pair
         link_uuid = "delete-test-uuid"
@@ -975,11 +976,11 @@ class TestDeleteBulkLinkedEnforcement:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx1_id = response.results[0].transaction_id
 
         # Try to delete only the first one
-        delete_response = await service.delete_bulk([tx1_id])
+        delete_response = await delete_bulk(service, [tx1_id])
 
         # Should fail
         assert delete_response.results[0].success is False
@@ -1000,7 +1001,7 @@ class TestDeleteBulkLinkedEnforcement:
                 quantity=Decimal("100"),
             )
         ]
-        await service.create_bulk(setup_items)
+        await create_bulk(service, setup_items)
 
         # Create transfer pair
         link_uuid = "delete-both-test-uuid"
@@ -1023,12 +1024,12 @@ class TestDeleteBulkLinkedEnforcement:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx1_id = response.results[0].transaction_id
         tx2_id = response.results[1].transaction_id
 
         # Delete both
-        delete_response = await service.delete_bulk([tx1_id, tx2_id])
+        delete_response = await delete_bulk(service, [tx1_id, tx2_id])
 
         assert delete_response.success_count == 2
         assert delete_response.total_deleted == 2
@@ -1053,7 +1054,7 @@ class TestDeleteBulkLinkedEnforcement:
                 quantity=Decimal("100"),
             )
         ]
-        await service.create_bulk(setup_items)
+        await create_bulk(service, setup_items)
 
         # Create transfer pair with bidirectional linking
         link_uuid = "deferrable-fk-test"
@@ -1076,7 +1077,7 @@ class TestDeleteBulkLinkedEnforcement:
             ),
         ]
 
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         tx1_id = response.results[0].transaction_id
         tx2_id = response.results[1].transaction_id
 
@@ -1087,7 +1088,7 @@ class TestDeleteBulkLinkedEnforcement:
         assert tx2_db.related_transaction_id == tx1_id, "Pre-condition: TX2 must point to TX1"
 
         # Delete both - this would FAIL without DEFERRABLE FK
-        delete_response = await service.delete_bulk([tx1_id, tx2_id])
+        delete_response = await delete_bulk(service, [tx1_id, tx2_id])
 
         # Verify delete succeeded
         assert delete_response.success_count == 2, f"Delete should succeed. Errors: {[r.message for r in delete_response.results if not r.success]}"
@@ -1132,7 +1133,7 @@ class TestBalanceQueryMethods:
                 cash=Currency(code="EUR", amount=Decimal("-200")),
             ),
         ]
-        await service.create_bulk(items)
+        await create_bulk(service, items)
 
         balances = await service.get_cash_balances(test_broker.id)
 
@@ -1167,7 +1168,7 @@ class TestBalanceQueryMethods:
                 cash=Currency(code="EUR", amount=Decimal("1500")),
             ),
         ]
-        await service.create_bulk(items)
+        await create_bulk(service, items)
 
         holdings = await service.get_asset_holdings(test_broker.id)
 
@@ -1202,7 +1203,7 @@ class TestBalanceQueryMethods:
                 cash=Currency(code="EUR", amount=Decimal("-1200")),
             ),
         ]
-        await service.create_bulk(items)
+        await create_bulk(service, items)
 
         cost_basis = await service.get_cost_basis(test_broker.id, test_asset.id)
 
@@ -1250,7 +1251,7 @@ class TestAssetEventLinkService:
                 asset_event_id=test_asset_event.id,
             )
         ]
-        resp = await service.create_bulk(items)
+        resp = await create_bulk(service, items)
         assert resp.success_count == 1
         tx_id = resp.results[0].transaction_id
         tx_row = await session.get(Transaction, tx_id)
@@ -1282,7 +1283,7 @@ class TestAssetEventLinkService:
                 asset_event_id=test_asset_event.id,  # belongs to test_asset, not `other`
             )
         ]
-        resp = await service.create_bulk(items)
+        resp = await create_bulk(service, items)
         assert resp.success_count == 0
         assert resp.results[0].success is False
         assert "belongs to asset" in (resp.results[0].error or "")
@@ -1301,7 +1302,7 @@ class TestAssetEventLinkService:
                 asset_event_id=999_999,
             )
         ]
-        resp = await service.create_bulk(items)
+        resp = await create_bulk(service, items)
         assert resp.success_count == 0
         assert "not found" in (resp.results[0].error or "")
 
@@ -1310,7 +1311,7 @@ class TestAssetEventLinkService:
         """asset_event_id=0 on update unlinks the transaction."""
         service = TransactionService(session)
 
-        create_resp = await service.create_bulk(
+        create_resp = await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker_overdraft.id,
@@ -1324,7 +1325,7 @@ class TestAssetEventLinkService:
         )
         tx_id = create_resp.results[0].transaction_id
 
-        upd_resp = await service.update_bulk([TXUpdateItem(id=tx_id, asset_event_id=0)])
+        upd_resp = await update_bulk(service, [TXUpdateItem(id=tx_id, asset_event_id=0)])
         assert upd_resp.success_count == 1
         tx_row = await session.get(Transaction, tx_id)
         await session.refresh(tx_row)
@@ -1348,7 +1349,7 @@ class TestAssetEventLinkService:
         await session.flush()
 
         service = TransactionService(session)
-        create_resp = await service.create_bulk(
+        create_resp = await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker_overdraft.id,
@@ -1362,7 +1363,7 @@ class TestAssetEventLinkService:
         )
         tx_id = create_resp.results[0].transaction_id
 
-        upd_resp = await service.update_bulk([TXUpdateItem(id=tx_id, asset_event_id=other_event.id)])
+        upd_resp = await update_bulk(service, [TXUpdateItem(id=tx_id, asset_event_id=other_event.id)])
         assert upd_resp.success_count == 1
 
 
@@ -1395,7 +1396,7 @@ class TestLinkedPairValidation:
             ),
         ]
         # Same link_uuid but DEPOSIT+WITHDRAWAL — different types → rejected.
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         assert response.rolled_back is True
         assert any("share the same type" in err for err in response.errors)
 
@@ -1404,7 +1405,7 @@ class TestLinkedPairValidation:
         """TRANSFER pair on the same broker is a no-op and rejected."""
         service = TransactionService(session)
         # Seed asset holding via ADJUSTMENT to avoid shorting violation.
-        await service.create_bulk(
+        await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker.id,
@@ -1433,7 +1434,7 @@ class TestLinkedPairValidation:
                 link_uuid="same-broker-transfer",
             ),
         ]
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         assert response.rolled_back is True
         assert any("distinct brokers" in err for err in response.errors)
 
@@ -1442,7 +1443,7 @@ class TestLinkedPairValidation:
         """FX_CONVERSION intra-broker is a valid multi-currency use case."""
         service = TransactionService(session)
         # Fund the broker first.
-        await service.create_bulk(
+        await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker.id,
@@ -1468,7 +1469,7 @@ class TestLinkedPairValidation:
                 link_uuid="fx-same-broker",
             ),
         ]
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         assert response.rolled_back is False
         assert response.success_count == 2
 
@@ -1477,7 +1478,7 @@ class TestLinkedPairValidation:
         """H.2 — DEPOSIT/WITHDRAWAL pair linked by link_uuid: allowed as intent marker."""
         service = TransactionService(session)
         # Fund source broker.
-        await service.create_bulk(
+        await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker.id,
@@ -1506,7 +1507,7 @@ class TestLinkedPairValidation:
                 link_uuid="cash-transfer-intent",
             ),
         ]
-        response = await service.create_bulk(items)
+        response = await create_bulk(service, items)
         # Both WITHDRAWAL → same type OK; linked pair should succeed.
         assert response.rolled_back is False, response.errors
         assert response.success_count == 2
@@ -1555,7 +1556,7 @@ class TestQueryFiltersH3:
                 cash=Currency(code="EUR", amount=Decimal("2000")),
             ),
         ]
-        resp = await service.create_bulk(items)
+        resp = await create_bulk(service, items)
         assert resp.rolled_back is False
         await session.flush()
         return [r.transaction_id for r in resp.results]
@@ -1575,7 +1576,7 @@ class TestQueryFiltersH3:
         """only_unlinked excludes rows with related_transaction_id."""
         service = TransactionService(session)
         # Create a linked pair (both DEPOSIT, different brokers, same link_uuid).
-        await service.create_bulk(
+        await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker.id,
@@ -1629,7 +1630,7 @@ class TestTransferPromotion:
     async def cash_pair_cross_broker(self, session, test_broker_overdraft, test_broker_shorting):
         """Create a WITHDRAWAL/DEPOSIT pair across two brokers (not linked)."""
         service = TransactionService(session)
-        resp = await service.create_bulk(
+        resp = await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker_overdraft.id,
@@ -1653,7 +1654,7 @@ class TestTransferPromotion:
         from_id, to_id = cash_pair_cross_broker
         service = TransactionService(session)
         # Seed asset holding on the source broker so TRANSFER -10 doesn't short.
-        await service.create_bulk(
+        await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker_overdraft.id,
@@ -1688,7 +1689,7 @@ class TestTransferPromotion:
     @pytest.mark.asyncio
     async def test_promote_deposit_withdrawal_to_fx_conversion_intra_broker(self, session, test_broker_overdraft):
         service = TransactionService(session)
-        resp = await service.create_bulk(
+        resp = await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker_overdraft.id,
@@ -1720,7 +1721,7 @@ class TestTransferPromotion:
     @pytest.mark.asyncio
     async def test_promote_rejects_transfer_same_broker(self, session, test_broker_overdraft, test_asset):
         service = TransactionService(session)
-        resp = await service.create_bulk(
+        resp = await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker_overdraft.id,
@@ -1752,7 +1753,7 @@ class TestTransferPromotion:
     @pytest.mark.asyncio
     async def test_promote_rejects_fx_conversion_same_currency(self, session, test_broker_overdraft, test_broker_shorting):
         service = TransactionService(session)
-        resp = await service.create_bulk(
+        resp = await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker_overdraft.id,
@@ -1783,7 +1784,7 @@ class TestTransferPromotion:
     async def test_promote_atomicity_on_create_failure(self, session, test_broker_overdraft, test_broker_shorting):
         """If the re-create step fails, originals must still be restored (via rollback)."""
         service = TransactionService(session)
-        resp = await service.create_bulk(
+        resp = await create_bulk(service, 
             [
                 TXCreateItem(
                     broker_id=test_broker_overdraft.id,

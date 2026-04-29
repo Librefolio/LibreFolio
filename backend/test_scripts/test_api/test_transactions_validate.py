@@ -101,13 +101,13 @@ async def _create_asset(client: httpx.AsyncClient, currency: str = "EUR") -> int
 
 async def _post_tx(client: httpx.AsyncClient, items: list[dict]) -> list[int]:
     """Actually persist transactions; return their IDs."""
-    resp = await client.post(f"{API_BASE}/transactions/bulk", json=items, timeout=TIMEOUT)
+    resp = await client.post(f"{API_BASE}/transactions/commit", json={"creates": items}, timeout=TIMEOUT)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     ids: list[int] = []
     for r in body.get("results", []):
-        assert r.get("success"), f"create failed: {r}"
-        ids.append(r["transaction_id"])
+        assert r.get("status") == "success", f"create failed: {r}"
+        ids.append(r["id"])
     return ids
 
 
@@ -145,8 +145,8 @@ async def _list_txs(client: httpx.AsyncClient, broker_id: int) -> list[dict]:
 
 @pytest.mark.asyncio
 async def test_validate_clean_batch_populates_previews(test_server):
-    """Clean create-only batch → would_rollback=False + previews populated."""
-    print_section("G.3.1 — clean batch populates balance/holdings preview")
+    """Clean create-only batch → committed=False, no issues, results populated."""
+    print_section("G.3.1 — clean batch has no issues")
     async with httpx.AsyncClient() as client:
         await create_test_user(client)
         broker_id = await _create_broker(client, allow_cash_overdraft=True)
@@ -172,11 +172,12 @@ async def test_validate_clean_batch_populates_previews(test_server):
                 },
             ],
         )
-        assert body["would_rollback"] is False, body
-        assert body["issues"] == []
-        assert body["balance_preview"].get(f"{broker_id}:EUR") == "9500.00" or Decimal(body["balance_preview"][f"{broker_id}:EUR"]) == Decimal("9500"), body["balance_preview"]
-        assert Decimal(body["holdings_preview"][f"{broker_id}:asset:{asset_id}"]) == Decimal("5")
-        print_success(f"cash preview={body['balance_preview'][f'{broker_id}:EUR']}, " f"holdings={body['holdings_preview'][f'{broker_id}:asset:{asset_id}']}")
+        assert body["committed"] is False, body
+        assert body["issues"] == [], body
+        # Results should be populated for a clean dry-run batch
+        assert body.get("results") is not None, "results should be populated on clean batch"
+        assert len(body["results"]) == 2, f"expected 2 results, got {len(body['results'])}"
+        print_success(f"Clean batch validated with {len(body['results'])} results, no issues")
 
 
 @pytest.mark.asyncio
@@ -200,7 +201,8 @@ async def test_validate_never_persists(test_server):
                 }
             ],
         )
-        assert body["would_rollback"] is False
+        assert body["committed"] is False
+        assert body["issues"] == []
         after = await _list_txs(client, broker_id)
         # Lists should be identical — dry-run rolled back the create.
         assert len(after) == len(before), f"DB mutated: before={len(before)} after={len(after)}"
@@ -229,22 +231,19 @@ async def test_validate_collects_all_issues(test_server):
             ],
             deletes=[999999999],
         )
-        assert body["would_rollback"] is True
+        assert body["committed"] is False
         issues = body["issues"]
         ops = sorted({i["operation"] for i in issues})
         assert "delete" in ops, body
         assert "update" in ops, body
         assert len(issues) >= 3, f"expected ≥3 issues, got {len(issues)}"
-        # Preview dicts must be empty on a dirty batch.
-        assert body["balance_preview"] == {}
-        assert body["holdings_preview"] == {}
         print_success(f"Collected {len(issues)} issues across ops: {ops}")
 
 
 @pytest.mark.asyncio
 async def test_validate_flags_balance_violation(test_server):
     """Broker without overdraft → negative cash preview triggers balance issue."""
-    print_section("G.3.4 — balance violation → would_rollback=True + no preview")
+    print_section("G.3.4 — balance violation → issues present")
     async with httpx.AsyncClient() as client:
         await create_test_user(client)
         broker_id = await _create_broker(client, allow_cash_overdraft=False, allow_asset_shorting=False)
@@ -261,11 +260,8 @@ async def test_validate_flags_balance_violation(test_server):
                 }
             ],
         )
-        assert body["would_rollback"] is True, body
+        assert body["committed"] is False, body
         assert body["issues"], "expected at least one balance-violation issue"
-        # Previews must stay empty on a violating batch.
-        assert body["balance_preview"] == {}
-        assert body["holdings_preview"] == {}
         print_success(f"Balance violation surfaced: {body['issues'][0]['error'][:80]}")
 
 
@@ -302,11 +298,8 @@ async def test_validate_update_delete_existing_tx(test_server):
             updates=[{"id": ids[0], "description": "would-be-updated"}],
             deletes=[ids[1]],
         )
-        assert body["would_rollback"] is False, body
-        assert body["issues"] == []
-        # Post-validate previews reflect the hypothetical state:
-        # after deleting tx #2 (€2000), only tx #1 (€1000) survives.
-        assert Decimal(body["balance_preview"][f"{broker_id}:EUR"]) == Decimal("1000")
+        assert body["committed"] is False, body
+        assert body["issues"] == [], body
 
         # Verify rollback: both txs must still be present with the original
         # description (NOT "would-be-updated").
@@ -331,7 +324,7 @@ async def test_validate_ghost_id_reports_not_found(test_server):
             updates=[{"id": 987654321, "description": "ghost"}],
             deletes=[987654322],
         )
-        assert body["would_rollback"] is True
+        assert body["committed"] is False
         ref_ids = {i.get("ref_id") for i in body["issues"]}
         assert 987654321 in ref_ids, body
         assert 987654322 in ref_ids, body
@@ -344,15 +337,15 @@ async def test_validate_ghost_id_reports_not_found(test_server):
 
 @pytest.mark.asyncio
 async def test_validate_update_asset_event_without_asset_id(test_server):
-    """G7§4 — Update setting asset_event_id on a tx with no asset_id is captured
+    """G74 — Update setting asset_event_id on a tx with no asset_id is captured
     as a per-op issue (not raised) thanks to the bare-except wrapper around
     each update step (transaction_service.py L623-L650).
 
     Contract: ``_check_asset_event_link`` raises ``ValueError`` and the issue
-    is collected; ``would_rollback=True`` and the rest of the batch is
+    is collected; the batch has issues and the rest of the batch is
     rolled back.
     """
-    print_section("G7§4.1 — update asset_event_id without asset_id is reported")
+    print_section("G74.1 — update asset_event_id without asset_id is reported")
     async with httpx.AsyncClient() as client:
         await create_test_user(client)
         broker_id = await _create_broker(client, allow_cash_overdraft=True)
@@ -380,7 +373,7 @@ async def test_validate_update_asset_event_without_asset_id(test_server):
             client,
             updates=[{"id": cash_tx_id, "asset_event_id": 12345}],
         )
-        assert body["would_rollback"] is True, body
+        assert body["committed"] is False, body
         assert body["issues"], "expected at least one issue"
         match = next(
             (i for i in body["issues"] if i["operation"] == "update" and i["ref_id"] == cash_tx_id),
@@ -391,7 +384,7 @@ async def test_validate_update_asset_event_without_asset_id(test_server):
         print_success("✓ asset_event_id without asset_id surfaces as a validate-issue")
 
 
-# Note (G7§4.2 dropped): the originally-planned "delete with cascade-fail"
+# Note (G74.2 dropped): the originally-planned "delete with cascade-fail"
 # test cannot be exercised through the public validate endpoint. The
 # bare-except wrapper around ``session.delete(tx)`` (transaction_service.py
 # L614) is a pure defensive guard — DEFERRABLE INITIALLY DEFERRED FKs +

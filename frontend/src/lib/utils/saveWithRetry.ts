@@ -143,18 +143,13 @@ export interface ValidationIssueExtracted {
 /**
  * Extract Pydantic 422 validation issues from an Axios-like error.
  *
- * Returns an empty array if the error is not a 422 with a `detail[]` array.
- * Use this in modals that POST to `/validate` or `/bulk` endpoints to
- * surface per-field error messages (instead of the generic Axios
- * `"Request failed with status code 422"`).
+ * **Safety net only** — with the Unified Batch Pipeline, /validate and /commit
+ * accept `List[dict]` so Pydantic 422 should never fire for per-row schema
+ * errors. This function remains as a defensive fallback for edge cases
+ * (e.g. network serialization failures, future schema-level `extra="forbid"` on
+ * the outer TXMixedBatch wrapper).
  *
- * Example output:
- * ```ts
- * [
- *   { loc: "body.creates.0", msg: "BUY requires asset_id", type: "value_error" },
- *   { loc: "body.creates.1.quantity", msg: "Input should be a valid decimal", type: "decimal_parsing" },
- * ]
- * ```
+ * Returns an empty array if the error is not a 422 with a `detail[]` array.
  */
 export function extractValidationIssues(err: unknown): ValidationIssueExtracted[] {
     const detail = (err as any)?.response?.data?.detail;

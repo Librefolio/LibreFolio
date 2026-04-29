@@ -15,7 +15,7 @@
   is debounced (1 s) + idle-fire (60 s) when N ≤ 50; above that threshold only
   the manual `⚡ Validate now` button works (toolbar shows ⓘ hint).
 
-  Commit: POST /transactions/bulk (create) or PATCH (edit). On `rolled_back=true`
+  Commit: POST /transactions/commit with creates or updates. On `committed=false`
   the modal stays open with a persistent banner; clicking an issue scrolls to
   the offending row via `tableRef.navigateToRowId(tempId)`.
 
@@ -429,13 +429,13 @@
             // the response comes back we know whether the drafts have drifted.
             const sentKey = lastDraftKey;
             try {
-                const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {issues?: ValidationIssue[]};
+                const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
                 issues = res?.issues ?? [];
                 lastValidatedDraftKey = sentKey;
                 issuesDismissed = false;
                 return {issuesCount: issues.length};
             } catch (e) {
-                // Pydantic 422 → expand into per-row issues so the banner is actionable.
+                // 422 safety net — should rarely fire now that /validate uses List[dict].
                 const extracted = extractValidationIssues(e);
                 if (extracted.length > 0) {
                     issues = extracted.map((iss) => {
@@ -501,14 +501,14 @@
                     onClose();
                     return;
                 }
-                const result = await saveWithRetry(() => zodiosApi.update_transactions_bulk_api_v1_transactions_bulk_patch(items as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
+                const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post({updates: items} as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
                 if (result.status === 'error') {
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {rolled_back?: boolean; errors?: string[]};
-                if (resp.rolled_back) {
-                    formError = (resp.errors?.[0] ?? $t('transactions.bulk.rolledBack')) as string;
+                const resp = result.data as {committed?: boolean; issues?: Array<{error: string}>};
+                if (!resp.committed) {
+                    formError = (resp.issues?.[0]?.error ?? $t('transactions.bulk.rolledBack')) as string;
                     // Re-run validate to surface per-row issues that match.
                     scheduler.trigger('manual');
                     return;
@@ -517,14 +517,14 @@
                 onClose();
             } else {
                 const items = drafts.map(collectCreate);
-                const result = await saveWithRetry(() => zodiosApi.create_transactions_bulk_api_v1_transactions_bulk_post(items as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
+                const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post({creates: items} as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
                 if (result.status === 'error') {
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {rolled_back?: boolean; errors?: string[]};
-                if (resp.rolled_back) {
-                    formError = (resp.errors?.[0] ?? $t('transactions.bulk.rolledBack')) as string;
+                const resp = result.data as {committed?: boolean; issues?: Array<{error: string}>};
+                if (!resp.committed) {
+                    formError = (resp.issues?.[0]?.error ?? $t('transactions.bulk.rolledBack')) as string;
                     scheduler.trigger('manual');
                     return;
                 }

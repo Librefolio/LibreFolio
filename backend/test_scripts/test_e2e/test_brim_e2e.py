@@ -147,15 +147,15 @@ class TestBRIME2EImport:
 
             # Step 3: Import via transactions endpoint
             import_response = await client.post(
-                f"{API_BASE}/transactions/bulk",
-                json=transactions,
+                f"{API_BASE}/transactions/commit",
+                json={"creates": transactions},
                 timeout=TIMEOUT,
             )
 
-            # Transactions endpoint returns 200 with success_count
+            # Transactions endpoint returns 200 with committed=True
             assert import_response.status_code == 200, f"Import failed: {import_response.text}"
             import_data = import_response.json()
-            assert import_data["success_count"] == 2
+            assert import_data["committed"] is True
 
     @pytest.mark.asyncio
     async def test_full_import_flow_with_assets(self, test_server):
@@ -264,7 +264,7 @@ class TestBRIME2EImport:
             tx1 = parse1.json()["transactions"]
 
             # Import both
-            import1 = await client.post(f"{API_BASE}/transactions/bulk", json=tx1, timeout=TIMEOUT)
+            import1 = await client.post(f"{API_BASE}/transactions/commit", json={"creates": tx1}, timeout=TIMEOUT)
             assert import1.status_code == 200
 
             # Second upload with one new, one duplicate
@@ -298,13 +298,13 @@ class TestBRIME2EImport:
             # Import only unique
             if transactions_to_import:
                 import2 = await client.post(
-                    f"{API_BASE}/transactions/bulk",
-                    json=transactions_to_import,
+                    f"{API_BASE}/transactions/commit",
+                    json={"creates": transactions_to_import},
                     timeout=TIMEOUT,
                 )
                 assert import2.status_code == 200
                 # Should import only the new one
-                assert import2.json()["success_count"] == len(unique_indices)
+                assert import2.json()["committed"] is True
 
     @pytest.mark.asyncio
     async def test_reimport_detects_duplicates(self, test_server):
@@ -343,7 +343,7 @@ class TestBRIME2EImport:
             tx1 = parse1.json()["transactions"]
 
             # Import first time
-            await client.post(f"{API_BASE}/transactions/bulk", json=tx1, timeout=TIMEOUT)
+            await client.post(f"{API_BASE}/transactions/commit", json={"creates": tx1}, timeout=TIMEOUT)
 
             # Second upload of same content
             files2 = {"file": (f"dup_test_{unique_id}_2.csv", io.BytesIO(csv_content), "text/csv")}

@@ -47,7 +47,6 @@ from backend.app.schemas.brokers import (
     BRUpdateResult,
 )
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.transaction_service import (
     BalanceValidationError,
     TransactionService,
@@ -156,25 +155,30 @@ class BrokerService:
                 # Create initial deposits
                 deposits_created = 0
                 if item.initial_balances:
-                    deposit_items = []
+                    deposit_dicts = []
                     for currency_obj in item.initial_balances:
                         if currency_obj.is_positive():
-                            deposit_items.append(
-                                TXCreateItem(
-                                    broker_id=broker.id,
-                                    type=TransactionType.DEPOSIT,
-                                    date=today_date(),
-                                    cash=currency_obj,
-                                )
+                            deposit_dicts.append(
+                                {
+                                    "broker_id": broker.id,
+                                    "type": "DEPOSIT",
+                                    "date": today_date().isoformat(),
+                                    "cash": {"code": currency_obj.code, "amount": str(currency_obj.amount)},
+                                }
                             )
 
-                    if deposit_items:
-                        deposit_response = await self.tx_service.create_bulk(deposit_items)
-                        deposits_created = deposit_response.success_count
+                    if deposit_dicts:
+                        deposit_response = await self.tx_service.execute_batch(
+                            creates_raw=deposit_dicts,
+                            updates_raw=[],
+                            deletes=[],
+                            commit=True,
+                        )
+                        deposits_created = len([r for r in (deposit_response.results or []) if r.status == "success"])
 
                         # Add any deposit errors to broker errors
-                        if deposit_response.errors:
-                            errors.extend([f"Broker '{item.name}': {err}" for err in deposit_response.errors])
+                        if deposit_response.issues:
+                            errors.extend([f"Broker '{item.name}': {iss.error}" for iss in deposit_response.issues])
 
                 results.append(
                     BRCreateResult(
