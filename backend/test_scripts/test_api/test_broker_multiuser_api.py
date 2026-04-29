@@ -266,10 +266,11 @@ class TestMultiUserRoles:
                 }
             ]
 
-            resp = await editor_client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
+            resp = await editor_client.post(f"{API_BASE}/transactions/commit", json={"creates": tx_payload}, timeout=TIMEOUT)
 
             assert resp.status_code == 200
-            assert resp.json()["success_count"] == 1
+            data = resp.json()
+            assert data["committed"] is True
 
             print_success("✓ Editor created transaction")
 
@@ -296,11 +297,12 @@ class TestMultiUserRoles:
                 }
             ]
 
-            resp = await viewer_client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
+            resp = await viewer_client.post(f"{API_BASE}/transactions/commit", json={"creates": tx_payload}, timeout=TIMEOUT)
 
-            # Part 3: access check is batch-level → HTTP 403 (not per-item error).
-            assert resp.status_code == 403
-            assert "editor" in resp.json()["detail"].lower() or "access" in resp.json()["detail"].lower()
+            # Part 3: access check is batch-level → committed=false with issues (not HTTP 403).
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["committed"] is False
 
             print_success("✓ Viewer correctly blocked from creating transactions")
 
@@ -322,22 +324,23 @@ class TestMultiUserRoles:
                     "cash": {"code": "EUR", "amount": "1000"},
                 }
             ]
-            post_resp = await owner_client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
+            post_resp = await owner_client.post(f"{API_BASE}/transactions/commit", json={"creates": tx_payload}, timeout=TIMEOUT)
             assert post_resp.status_code == 200, post_resp.text
-            tx_id = post_resp.json()["results"][0]["transaction_id"]
+            tx_id = post_resp.json()["results"][0]["id"]
 
-            # Viewer is granted access then attempts PATCH.
+            # Viewer is granted access then attempts update via commit.
             viewer_id, _ = await create_user_and_login(viewer_client)
             await add_access(owner_client, broker_id, viewer_id, "VIEWER")
 
-            patch_resp = await viewer_client.patch(
-                f"{API_BASE}/transactions/bulk",
-                json=[{"id": tx_id, "description": "viewer tried to patch"}],
+            patch_resp = await viewer_client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"updates": [{"id": tx_id, "description": "viewer tried to patch"}]},
                 timeout=TIMEOUT,
             )
-            # Batch-level access check → 403 (symmetric to the POST case).
-            assert patch_resp.status_code == 403, patch_resp.text
-            assert "editor" in patch_resp.json()["detail"].lower() or "access" in patch_resp.json()["detail"].lower()
+            # Batch-level access check → committed=false with accessDenied issue.
+            assert patch_resp.status_code == 200, patch_resp.text
+            data = patch_resp.json()
+            assert data["committed"] is False
 
             print_success("✓ Viewer correctly blocked from patching transactions")
 
@@ -358,20 +361,21 @@ class TestMultiUserRoles:
                     "cash": {"code": "EUR", "amount": "500"},
                 }
             ]
-            post_resp = await owner_client.post(f"{API_BASE}/transactions/bulk", json=tx_payload, timeout=TIMEOUT)
+            post_resp = await owner_client.post(f"{API_BASE}/transactions/commit", json={"creates": tx_payload}, timeout=TIMEOUT)
             assert post_resp.status_code == 200, post_resp.text
-            tx_id = post_resp.json()["results"][0]["transaction_id"]
+            tx_id = post_resp.json()["results"][0]["id"]
 
             viewer_id, _ = await create_user_and_login(viewer_client)
             await add_access(owner_client, broker_id, viewer_id, "VIEWER")
 
-            del_resp = await viewer_client.delete(
-                f"{API_BASE}/transactions/bulk",
-                params={"ids": [tx_id]},
+            del_resp = await viewer_client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"deletes": [tx_id]},
                 timeout=TIMEOUT,
             )
-            assert del_resp.status_code == 403, del_resp.text
-            assert "editor" in del_resp.json()["detail"].lower() or "access" in del_resp.json()["detail"].lower()
+            assert del_resp.status_code == 200, del_resp.text
+            data = del_resp.json()
+            assert data["committed"] is False
 
             # Transaction still present.
             check = await owner_client.get(f"{API_BASE}/transactions", params={"broker_id": broker_id}, timeout=TIMEOUT)

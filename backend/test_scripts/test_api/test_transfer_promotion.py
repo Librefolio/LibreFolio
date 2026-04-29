@@ -73,11 +73,11 @@ async def _create_cash_pair(client: httpx.AsyncClient, broker_a: int, broker_b: 
             "cash": {"code": currency_b, "amount": amount},
         },
     ]
-    r = await client.post(f"{API_BASE}/transactions/bulk", json=payload, timeout=TIMEOUT)
+    r = await client.post(f"{API_BASE}/transactions/commit", json={"creates": payload}, timeout=TIMEOUT)
     assert r.status_code == 200, r.text
     data = r.json()
-    assert data["rolled_back"] is False, data
-    return data["results"][0]["transaction_id"], data["results"][1]["transaction_id"]
+    assert data["committed"] is True, data
+    return data["results"][0]["id"], data["results"][1]["id"]
 
 
 @pytest.mark.asyncio
@@ -173,8 +173,8 @@ async def test_query_amount_abs_range_filter(test_server):
         broker_id = await _create_broker(client, "H3")
 
         await client.post(
-            f"{API_BASE}/transactions/bulk",
-            json=[
+            f"{API_BASE}/transactions/commit",
+            json={"creates": [
                 {
                     "broker_id": broker_id,
                     "type": "DEPOSIT",
@@ -193,7 +193,7 @@ async def test_query_amount_abs_range_filter(test_server):
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "2000"},
                 },
-            ],
+            ]},
             timeout=TIMEOUT,
         )
 

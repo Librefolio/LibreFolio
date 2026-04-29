@@ -13,7 +13,7 @@
       `remove`  → drop the row from the deletion batch
     A global toggle at the top syncs all per-row choices.
   - Other selected rows (without partner conflicts) are deleted unchanged.
-  - On commit: a single `DELETE /transactions/bulk?ids=…` (atomic, multi-broker).
+  - On commit: `POST /transactions/commit` with `{deletes: [...]}` (atomic, multi-broker).
 
   When there are no problematic rows the caller should bypass this modal and
   use a plain ConfirmModal instead.
@@ -125,11 +125,11 @@
         committing = true;
         rolledBack = null;
         try {
-            const res = (await zodiosApi.delete_transactions_bulk_api_v1_transactions_bulk_delete(undefined, {
-                queries: {ids: finalIds},
-            } as never)) as {rolled_back: boolean; errors?: string[]};
-            if (res.rolled_back) {
-                rolledBack = {errors: res.errors ?? []};
+            const res = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({
+                deletes: finalIds,
+            } as never)) as {committed: boolean; issues?: Array<{error: string}>};
+            if (!res.committed) {
+                rolledBack = {errors: (res.issues ?? []).map((i) => i.error)};
             } else {
                 onCommitted?.(res);
                 onClose();

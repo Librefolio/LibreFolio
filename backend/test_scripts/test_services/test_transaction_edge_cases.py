@@ -34,6 +34,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem, TXQueryParams
 from backend.app.services.transaction_service import TransactionService
+from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, update_bulk
 from backend.app.utils.datetime_utils import utcnow
 
 # ============================================================================
@@ -112,7 +113,7 @@ class TestDecimalPrecision:
             )
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         assert result.success_count == 1
@@ -137,7 +138,7 @@ class TestDecimalPrecision:
                 cash=Currency(code="EUR", amount=Decimal("100")),
             )
         ]
-        await service.create_bulk(deposit)
+        await create_bulk(service, deposit)
         await session.commit()
 
         # Buy with tiny quantity
@@ -152,7 +153,7 @@ class TestDecimalPrecision:
             )
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         assert result.success_count == 1
@@ -187,7 +188,7 @@ class TestDecimalPrecision:
             )
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         assert result.success_count == 1
@@ -228,7 +229,7 @@ class TestCurrencyValidation:
             ),
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         assert result.success_count == 2
@@ -253,7 +254,7 @@ class TestCurrencyValidation:
             ),
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         assert result.success_count == 2
@@ -307,7 +308,7 @@ class TestDateEdgeCases:
             ),
         ]
 
-        await service.create_bulk(items)
+        await create_bulk(service, items)
         await session.commit()
 
         # Query with same start and end date
@@ -365,7 +366,7 @@ class TestDateEdgeCases:
             ),
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         # All should succeed (end of day balance = 700)
@@ -414,7 +415,7 @@ class TestDateEdgeCases:
             ),
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         # All should succeed
@@ -445,7 +446,7 @@ class TestEmptyNullHandling:
             )
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         assert result.success_count == 1
@@ -471,7 +472,7 @@ class TestEmptyNullHandling:
             )
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         assert result.success_count == 1
@@ -497,7 +498,7 @@ class TestEmptyNullHandling:
             )
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         assert result.success_count == 1
@@ -522,7 +523,7 @@ class TestEmptyNullHandling:
                 cash=Currency(code="EUR", amount=Decimal("100")),
             )
         ]
-        await service.create_bulk(items)
+        await create_bulk(service, items)
         await session.commit()
 
         # Query with impossible date range (in the past before any transactions)
@@ -601,7 +602,7 @@ class TestAdditionalEdgeCases:
             )
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         # Future dates should be allowed (scheduled transactions)
@@ -623,7 +624,7 @@ class TestAdditionalEdgeCases:
             )
         ]
 
-        result = await service.create_bulk(items)
+        result = await create_bulk(service, items)
         await session.commit()
 
         # Old dates should be allowed (historical transactions)

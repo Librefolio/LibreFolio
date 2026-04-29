@@ -2,9 +2,9 @@
   TransactionFormModal.svelte — Single-row CRUD modal for transactions.
 
   Modes:
-  - 'create'   → blank form, POST /transactions/bulk with 1 item
+  - 'create'   → blank form, POST /transactions/commit with 1 item in creates
   - 'edit'     → pre-filled from initialRow (id immutable, type/broker locked),
-                 PATCH /transactions/bulk with 1 TXUpdateItem
+                 POST /transactions/commit with 1 TXUpdateItem in updates
   - 'duplicate'→ pre-filled, id stripped, link_uuid regenerated, date=today,
                  commits as 'create'
   - 'view'     → readonly display (Save button hidden)
@@ -339,13 +339,13 @@
             const payload = mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
             const sentKey = lastDraftKey;
             try {
-                const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {issues?: ValidationIssue[]};
+                const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
                 issues = res?.issues ?? [];
                 lastValidatedDraftKey = sentKey;
                 issuesDismissed = false;
                 return {issuesCount: issues.length};
             } catch (e) {
-                // Pydantic 422 → extract structured codes; otherwise fall back to message.
+                // 422 safety net — should rarely fire now that /validate uses List[dict].
                 const extracted = extractValidationIssues(e);
                 if (extracted.length > 0) {
                     issues = extracted.map((iss) => ({
@@ -474,31 +474,33 @@
         formError = null;
         try {
             if (mode === 'edit') {
-                const result = await saveWithRetry(() => zodiosApi.update_transactions_bulk_api_v1_transactions_bulk_patch([collectUpdate()] as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
+                const payload = {updates: [collectUpdate()]};
+                const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
                 if (result.status === 'error') {
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {rolled_back?: boolean; errors?: string[]; results?: Array<{id: number}>};
-                if (resp.rolled_back) {
-                    formError = (resp.errors?.[0] ?? $t('transactions.form.rolledBack')) as string;
+                const resp = result.data as {committed?: boolean; issues?: Array<{error: string}>; results?: Array<{id?: number}>};
+                if (!resp.committed) {
+                    formError = (resp.issues?.[0]?.error ?? $t('transactions.form.rolledBack')) as string;
                     return;
                 }
                 onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
                 onClose();
             } else {
                 // create / duplicate
-                const result = await saveWithRetry(() => zodiosApi.create_transactions_bulk_api_v1_transactions_bulk_post([collectCreate()] as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
+                const payload = {creates: [collectCreate()]};
+                const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
                 if (result.status === 'error') {
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {rolled_back?: boolean; errors?: string[]; results?: Array<{transaction_id?: number | null}>};
-                if (resp.rolled_back) {
-                    formError = (resp.errors?.[0] ?? $t('transactions.form.rolledBack')) as string;
+                const resp = result.data as {committed?: boolean; issues?: Array<{error: string}>; results?: Array<{id?: number | null}>};
+                if (!resp.committed) {
+                    formError = (resp.issues?.[0]?.error ?? $t('transactions.form.rolledBack')) as string;
                     return;
                 }
-                onCommitted?.({transaction_id: resp.results?.[0]?.transaction_id ?? null});
+                onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
                 onClose();
             }
         } finally {

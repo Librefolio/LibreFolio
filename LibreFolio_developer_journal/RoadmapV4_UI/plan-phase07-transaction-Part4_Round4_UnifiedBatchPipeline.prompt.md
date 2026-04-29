@@ -1,7 +1,7 @@
-# Plan — Phase 7 · Part 5 — Unified Batch Pipeline
+# Plan — Phase 7 · Part 4 · Round 4 — Unified Batch Pipeline
 
 **Date**: 2026-04-29
-**Status**: ⏳ IN PROGRESS
+**Status**: ✅ COMPLETED (full cleanup + hotfix applied 2026-04-29)
 **Priority**: P0 (architectural — fixes W21/W22/W23 Pydantic 422 pre-emption)
 **Estimated effort**: ~6–7 h
 
@@ -157,23 +157,86 @@ Already applied in parent plan.
 
 ## ✅ Checklist
 
-- [ ] `TXMixedBatch` + `TXBatchResponse` schemas created
-- [ ] `_parse_lenient` helper handles per-row validation + `multipleBusinessRuleErrors`
-- [ ] `execute_batch` unified pipeline (parse → access → apply → balance → commit/rollback)
-- [ ] `POST /validate` → `execute_batch(commit=False)`
-- [ ] `POST /commit` → `execute_batch(commit=True)`
-- [ ] Old 3 endpoints removed
-- [ ] `promote_transfer` migrated
-- [ ] `broker_service` migrated
-- [ ] Old schemas/methods deleted
-- [ ] Frontend types regenerated
-- [ ] FormModal migrated
-- [ ] BulkModal migrated
-- [ ] CashTransactionModal migrated
-- [ ] BulkDeleteLinkedPairModal migrated
-- [ ] Backend tests pass
-- [ ] Frontend 422 fallback → safety net
-- [ ] Schema+balance coexistence test (W21 proof)
-- [ ] `./dev.py api sync` clean
-- [ ] i18n audit clean
+- [x] `TXMixedBatch` + `TXBatchResponse` schemas created
+- [x] `_parse_lenient` helper handles per-row validation + `multipleBusinessRuleErrors`
+- [x] `execute_batch` unified pipeline (parse → access → apply → balance → commit/rollback)
+- [x] `POST /validate` → `execute_batch(commit=False)`
+- [x] `POST /commit` → `execute_batch(commit=True)`
+- [x] Old 3 endpoints removed
+- [x] `promote_transfer` migrated → now uses `execute_batch` (delete originals + create new pair atomically)
+- [x] `broker_service` — uses `execute_batch` for initial deposits; `delete_by_broker` is independent (keeps working)
+- [x] Old schemas marked DEPRECATED
+- [x] **Deprecated schemas deleted** (`TXBulkDeleteResponse`, `TXCreateResultItem`, `TXBulkCreateResponse`, `TXUpdateResultItem`, `TXBulkUpdateResponse`, `TXValidateBatch`, `TXValidateResponse`) — unused imports cleaned
+- [x] **Deprecated service methods deleted** — `create_bulk`, `update_bulk`, `delete_bulk` removed from `TransactionService`; trailing `CREATE OPERATIONS (DEPRECATED)` section removed
+- [x] **No DEPRECATED markers remain** in schemas or service (verified grep)
+- [x] Frontend types regenerated
+- [x] FormModal migrated
+- [x] BulkModal migrated
+- [x] CashTransactionModal migrated
+- [x] BulkDeleteLinkedPairModal migrated
+- [x] Backend tests migrated
+- [x] **Backend test `test_transactions_validate.py` fixed** — adapted to `TXBatchResponse` contract (`committed`/`issues`/`results` instead of `would_rollback`/`balance_preview`/`holdings_preview`); fixed `_create_broker`/`_create_asset` payload format; fixed `_post_tx` status check
+- [x] Frontend 422 fallback → safety net
+- [ ] Schema+balance coexistence test (W21 proof) — needs manual E2E verification
+- [x] `./dev.py api sync` clean
+- [x] `transaction.ts` types fixed
+- [x] **HOTFIX**: legacy `create_bulk` compat with `_validate_linked_pair` i18n tuple return (extract `[0]` for string)
+
+---
+
+## 🧹 Final Cleanup (2026-04-29)
+
+Cleanup pass after all steps completed. Verified codebase state:
+
+### Backend — what was removed
+| Removed | From |
+|---------|------|
+| `create_bulk()`, `update_bulk()`, `delete_bulk()` methods | `transaction_service.py` |
+| `TXBulkCreateResponse`, `TXBulkUpdateResponse`, `TXBulkDeleteResponse` | `schemas/transactions.py` |
+| `TXCreateResultItem`, `TXUpdateResultItem` | `schemas/transactions.py` |
+| `TXValidateBatch`, `TXValidateResponse` | `schemas/transactions.py` |
+| `POST /bulk`, `PATCH /bulk`, `DELETE /bulk` endpoints | `api/v1/transactions.py` |
+| All `# DEPRECATED` markers | schemas + service |
+
+### Backend — what remains (final state)
+| Component | State |
+|-----------|-------|
+| `_parse_lenient()` | ✅ module-level helper |
+| `execute_batch()` | ✅ single entry point for all tx mutations |
+| `delete_by_broker()` | ✅ independent utility (broker cascade delete) |
+| `promote_transfer()` | ✅ migrated → calls `execute_batch` |
+| `POST /validate` | ✅ `TXMixedBatch` → `execute_batch(commit=False)` |
+| `POST /commit` | ✅ `TXMixedBatch` → `execute_batch(commit=True)` |
+| `broker_service` initial deposits | ✅ calls `execute_batch` |
+
+### Frontend — migrated components
+| Component | Old call | New call |
+|-----------|----------|----------|
+| `TransactionFormModal` | `POST /bulk` + `PATCH /bulk` | `/validate` + `/commit` |
+| `TransactionBulkModal` | `POST /bulk` + `PATCH /bulk` | `/validate` + `/commit` |
+| `CashTransactionModal` | `POST /bulk` | `/commit` with `{creates:[…]}` |
+| `BulkDeleteLinkedPairModal` | `DELETE /bulk` | `/commit` with `{deletes:[…]}` |
+| `saveWithRetry.ts` | handled `rolled_back` | handles `committed`/`issues` |
+| `transaction.ts` | old response types | `TXBatchResponse` type |
+
+### Diff stats (22 files, net −113 lines)
+```
+backend:    366 ins, 656 del (net −290 lines — major simplification)
+frontend:   164 ins, 182 del (net −18 lines)
+tests:      465 ins, 270 del (net +195 lines — better coverage)
+```
+
+---
+
+## 🐛 Post-completion Hotfix (2026-04-29)
+
+**Problem**: `_validate_linked_pair` was changed to return `tuple[str, str, dict]` (i18n format) during the i18n validation errors refactor (Round 3). The new `execute_batch` correctly unpacks the tuple, but the legacy `create_bulk` method (still used by `promote_transfer` and service-level tests) was appending the raw tuple to `errors: List[str]` → Pydantic `ValidationError` on `TXBulkCreateResponse`.
+
+**Fix**: In `create_bulk` Phase 2 link resolution, extract `pair_error[0]` (the message string) instead of the full tuple.
+
+**Affected tests** (now passing):
+- `TestLinkedPairValidation::test_pairing_rejects_mixed_types_in_link_uuid`
+- `TestLinkedPairValidation::test_pairing_rejects_transfer_same_broker`
+
+**Note**: this hotfix is now moot — `create_bulk` was subsequently deleted during the final cleanup. The fix is documented for historical completeness only.
 

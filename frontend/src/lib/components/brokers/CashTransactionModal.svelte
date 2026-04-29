@@ -77,18 +77,20 @@
         const cashAmount = type === 'DEPOSIT' ? amount : -amount;
         const result = await saveWithRetry(
             () =>
-                zodiosApi.create_transactions_bulk_api_v1_transactions_bulk_post([
-                    {
-                        broker_id: brokerId,
-                        type: type,
-                        date: date,
-                        cash: {
-                            code: currency,
-                            amount: cashAmount,
+                zodiosApi.commit_transactions_api_v1_transactions_commit_post({
+                    creates: [
+                        {
+                            broker_id: brokerId,
+                            type: type,
+                            date: date,
+                            cash: {
+                                code: currency,
+                                amount: cashAmount,
+                            },
+                            description: description || undefined,
                         },
-                        description: description || undefined,
-                    },
-                ]),
+                    ],
+                } as never),
             {fallback: $_('brokers.cashTransactionFailed', {default: 'Failed to create transaction'})},
         );
         loading = false;
