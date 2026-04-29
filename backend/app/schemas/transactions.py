@@ -19,9 +19,10 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import (
@@ -110,8 +111,8 @@ class TXCreateItem(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    broker_id: int = Field(..., gt=0, description="Broker ID")
-    asset_id: Optional[int] = Field(default=None, gt=0, description="Asset ID. NULL for pure cash transactions")
+    broker_id: int = Field(..., description="Broker ID")
+    asset_id: Optional[int] = Field(default=None, description="Asset ID. NULL for pure cash transactions")
 
     type: TransactionType = Field(..., description="Transaction type")
     date: date_type = Field(..., description="Settlement date")
@@ -141,7 +142,7 @@ class TXCreateItem(BaseModel):
     # Only valid for event-compatible types (see EVENT_COMPATIBLE_TYPES).
     # Cross-record check (asset_id must match event.asset_id) is done in service layer.
     # Omit or set to None to leave the transaction unlinked.
-    asset_event_id: Optional[int] = Field(default=None, gt=0, description="Link to AssetEvent (DIVIDEND/INTEREST/ADJUSTMENT only). Omit to leave unlinked.")
+    asset_event_id: Optional[int] = Field(default=None, description="Link to AssetEvent (DIVIDEND/INTEREST/ADJUSTMENT only). Omit to leave unlinked.")
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -150,41 +151,50 @@ class TXCreateItem(BaseModel):
 
     @model_validator(mode="after")
     def validate_transaction_rules(self) -> TXCreateItem:
-        """Validate transaction business rules based on 1.4 Constraint Analysis table."""
+        """Validate transaction business rules based on 1.4 Constraint Analysis table.
 
-        # TODO(frozenset): the inline tuples below (TRANSFER/FX_CONVERSION,
-        # DEPOSIT/WITHDRAWAL) and the local sets `asset_required_types` /
-        # `cash_required_types` are rebuilt on every validate call. Promote to
-        # module-level `frozenset[TransactionType]` constants (next to
-        # EVENT_COMPATIBLE_TYPES) for O(1) membership + immutability + no
-        # per-call allocation. Purely a cleanup: no behavior change.
+        Collects ALL violations instead of raising at the first one, so the
+        frontend can display a full error list in a single validate round-trip.
+        """
+        t = self.type.value  # shorthand for error params
+        errors: list[PydanticCustomError] = []
+
+        # Field-level positivity checks (moved from Field(gt=0) so they are
+        # collected alongside business-rule errors instead of blocking them).
+        if self.broker_id <= 0:
+            errors.append(PydanticCustomError("brokerRequired", "Please select a broker (broker_id must be > 0)", {"broker_id": self.broker_id}))
+        if self.asset_id is not None and self.asset_id <= 0:
+            errors.append(PydanticCustomError("assetIdInvalid", "asset_id must be > 0 when provided", {"asset_id": self.asset_id}))
+        if self.asset_event_id is not None and self.asset_event_id <= 0:
+            errors.append(PydanticCustomError("assetEventIdInvalid", "asset_event_id must be > 0 when provided", {"asset_event_id": self.asset_event_id}))
+
         # Rule 1: TRANSFER and FX_CONVERSION require link_uuid
         if self.type in (TransactionType.TRANSFER, TransactionType.FX_CONVERSION):
             if not self.link_uuid:
-                raise ValueError(f"{self.type.value} requires link_uuid for pairing")
+                errors.append(PydanticCustomError("linkUuidRequired", "{type} requires link_uuid for pairing", {"type": t}))
 
         # Rule 2: TRANSFER requires asset_id and quantity != 0, no cash
         if self.type == TransactionType.TRANSFER:
             if not self.asset_id:
-                raise ValueError("TRANSFER requires asset_id")
+                errors.append(PydanticCustomError("assetRequired", "TRANSFER requires asset_id", {"type": t}))
             if self.quantity == Decimal("0"):
-                raise ValueError("TRANSFER requires quantity != 0")
+                errors.append(PydanticCustomError("qtyNonzero", "TRANSFER requires quantity != 0", {"type": t}))
             if self.cash is not None and not self.cash.is_zero():
-                raise ValueError("TRANSFER should not have cash movement")
+                errors.append(PydanticCustomError("cashForbidden", "TRANSFER should not have cash movement", {"type": t}))
 
         # Rule 3: FX_CONVERSION requires quantity = 0 and cash with amount != 0, no asset
         if self.type == TransactionType.FX_CONVERSION:
             if self.asset_id is not None:
-                raise ValueError("FX_CONVERSION should not have asset_id")
+                errors.append(PydanticCustomError("assetForbidden", "FX_CONVERSION should not have asset_id", {"type": t}))
             if self.quantity != Decimal("0"):
-                raise ValueError("FX_CONVERSION should have quantity = 0")
+                errors.append(PydanticCustomError("fxConversionQtyZero", "FX_CONVERSION should have quantity = 0", {"type": t}))
             if self.cash is None or self.cash.is_zero():
-                raise ValueError("FX_CONVERSION requires cash with amount != 0")
+                errors.append(PydanticCustomError("fxConversionCashRequired", "FX_CONVERSION requires cash with amount != 0", {"type": t}))
 
         # Rule 4: DEPOSIT/WITHDRAWAL are pure cash - no asset allowed
         if self.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL):
             if self.asset_id is not None:
-                raise ValueError(f"{self.type.value} should not have asset_id")
+                errors.append(PydanticCustomError("assetForbidden", "{type} should not have asset_id", {"type": t}))
 
         # Rule 5: Asset REQUIRED for BUY, SELL, DIVIDEND, TRANSFER, ADJUSTMENT
         asset_required_types = {
@@ -195,12 +205,9 @@ class TXCreateItem(BaseModel):
             TransactionType.ADJUSTMENT,
         }
         if self.type in asset_required_types and not self.asset_id:
-            raise ValueError(f"{self.type.value} requires asset_id")
+            errors.append(PydanticCustomError("assetRequired", "{type} requires asset_id", {"type": t}))
 
         # Rule 6: Asset OPTIONAL for INTEREST, FEE, TAX (no validation needed)
-        # - INTEREST: bond interest (asset) vs deposit interest (no asset)
-        # - FEE: trading commission (asset) vs annual fee (no asset)
-        # - TAX: capital gain tax (asset) vs stamp duty (no asset)
 
         # Rule 7: Cash REQUIRED for all types except TRANSFER, ADJUSTMENT
         cash_required_types = {
@@ -216,20 +223,80 @@ class TXCreateItem(BaseModel):
         }
         if self.type in cash_required_types:
             if self.cash is None:
-                raise ValueError(f"{self.type.value} requires cash (amount + currency)")
+                errors.append(PydanticCustomError("cashRequired", "{type} requires cash (amount + currency)", {"type": t}))
 
         # Rule 8: ADJUSTMENT should not have cash
         if self.type == TransactionType.ADJUSTMENT:
             if self.cash is not None and not self.cash.is_zero():
-                raise ValueError("ADJUSTMENT should not have cash movement")
+                errors.append(PydanticCustomError("cashForbidden", "ADJUSTMENT should not have cash movement", {"type": t}))
 
         # Rule 9: asset_event_id requires event-compatible type + asset_id present.
-        # NOTE: cross-record check (asset_id == asset_event.asset_id) is in service layer.
         if self.asset_event_id is not None:
             if self.type not in EVENT_COMPATIBLE_TYPES:
-                raise ValueError(f"{self.type.value} cannot be linked to an asset_event " f"(only {sorted(t.value for t in EVENT_COMPATIBLE_TYPES)} can)")
+                allowed = sorted(tt.value for tt in EVENT_COMPATIBLE_TYPES)
+                errors.append(
+                    PydanticCustomError(
+                        "eventTypeIncompatible",
+                        "{type} cannot be linked to an asset_event (only {allowed} can)",
+                        {"type": t, "allowed": ", ".join(allowed)},
+                    )
+                )
             if self.asset_id is None:
-                raise ValueError("asset_event_id requires asset_id")
+                errors.append(PydanticCustomError("eventRequiresAsset", "asset_event_id requires asset_id", {"type": t}))
+
+        # Rule 10: Per-type quantity sign enforcement
+        zero = Decimal("0")
+        if self.type == TransactionType.BUY and self.quantity <= zero:
+            errors.append(PydanticCustomError("qtyPositive", "BUY requires quantity > 0", {"type": t}))
+        if self.type == TransactionType.SELL and self.quantity >= zero:
+            errors.append(PydanticCustomError("qtyNegative", "SELL requires quantity < 0", {"type": t}))
+        if (
+            self.type
+            in (
+                TransactionType.DIVIDEND,
+                TransactionType.INTEREST,
+                TransactionType.DEPOSIT,
+                TransactionType.WITHDRAWAL,
+                TransactionType.FEE,
+                TransactionType.TAX,
+            )
+            and self.quantity != zero
+        ):
+            errors.append(PydanticCustomError("qtyZero", "{type} requires quantity = 0", {"type": t}))
+        if self.type == TransactionType.ADJUSTMENT and self.quantity == zero:
+            errors.append(PydanticCustomError("qtyNonzero", "ADJUSTMENT requires quantity != 0", {"type": t}))
+
+        # Rule 11: Per-type cash sign enforcement
+        if self.cash is not None and not self.cash.is_zero():
+            amt = self.cash.amount
+            if self.type in (TransactionType.BUY, TransactionType.WITHDRAWAL, TransactionType.FEE, TransactionType.TAX) and amt >= zero:
+                errors.append(PydanticCustomError("cashSignNegative", "{type} requires cash.amount < 0", {"type": t}))
+            if self.type in (TransactionType.SELL, TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.DEPOSIT) and amt <= zero:
+                errors.append(PydanticCustomError("cashSignPositive", "{type} requires cash.amount > 0", {"type": t}))
+
+        # Pydantic v2 model_validator can only raise a single exception.
+        # When there are multiple business-rule errors, we pack them ALL into
+        # one PydanticCustomError with type "multipleBusinessRuleErrors" and
+        # the full list serialised in ctx.errors.  The frontend unpacks this
+        # special type back into separate per-issue messages.
+        if errors:
+            if len(errors) == 1:
+                raise errors[0]
+            raise PydanticCustomError(
+                "multipleBusinessRuleErrors",
+                "{error_count} business-rule validation errors",
+                {
+                    "error_count": len(errors),
+                    "errors": [
+                        {
+                            "code": e.type,
+                            "msg": e.message_template,
+                            "ctx": e.context or {},
+                        }
+                        for e in errors
+                    ],
+                },
+            )
 
         return self
 
@@ -360,7 +427,9 @@ class TXUpdateItem(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: int = Field(..., gt=0, description="Transaction ID to update")
+    # NOTE: gt=0 removed from Field — enforced in model_validator so that
+    # Pydantic doesn't short-circuit and the full error set is returned.
+    id: int = Field(..., description="Transaction ID to update")
 
     date: Optional[date_type] = Field(default=None, description="New settlement date")
     quantity: Optional[Decimal] = Field(default=None, description="New quantity")
@@ -387,6 +456,18 @@ class TXUpdateItem(BaseModel):
     @classmethod
     def _validate_tags(cls, v):
         return validate_tags_list(v)
+
+    @model_validator(mode="after")
+    def _business_rules(self) -> "TXUpdateItem":
+        """Validate id > 0 in the model_validator so Pydantic doesn't
+        short-circuit and the full error set is always returned."""
+        if self.id is not None and self.id <= 0:
+            raise PydanticCustomError(
+                "idRequired",
+                "Transaction id must be > 0",
+                {"id": self.id},
+            )
+        return self
 
     def get_tags_csv(self) -> Optional[str]:
         """Convert tags list to comma-separated string for DB storage."""
@@ -573,6 +654,9 @@ class TXValidationIssue(BaseModel):
     index: int = Field(..., ge=0, description="Index within the corresponding list")
     ref_id: Optional[int] = Field(default=None, description="Transaction ID for update/delete, None for create")
     error: str
+    code: Optional[str] = Field(default=None, description="i18n error code from the catalog (e.g. 'assetRequired')")
+    params: Optional[Dict[str, Any]] = Field(default=None, description="Structured params for frontend i18n resolver (IDs, dates, amounts)")
+    field: Optional[str] = Field(default=None, description="Draft field that caused the error (e.g. 'asset_id', 'quantity')")
 
 
 class TXValidateResponse(BaseModel):

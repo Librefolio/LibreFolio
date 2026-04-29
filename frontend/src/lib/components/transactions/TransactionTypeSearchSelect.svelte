@@ -66,7 +66,7 @@
             <div class="flex items-center gap-2 min-w-0">
                 {#if option.icon}
                     <span class="shrink-0 w-7 h-7 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded overflow-hidden">
-                        <img src={option.icon} alt="" class="w-5 h-5 object-contain" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />
+                        <img src={option.icon} alt="" class="w-5 h-5 object-contain" onerror={(e: Event) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
                     </span>
                 {/if}
                 <span class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{option.label}</span>
@@ -75,7 +75,7 @@
         {#snippet item(option)}
             <div class="flex items-center gap-2 min-w-0">
                 {#if option.icon}
-                    <img src={option.icon} alt="" class="w-4 h-4 object-contain shrink-0" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} />
+                    <img src={option.icon} alt="" class="w-4 h-4 object-contain shrink-0" onerror={(e: Event) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
                 {/if}
                 <span class="truncate text-sm">{option.label}</span>
                 <span class="ml-auto text-[10px] font-mono uppercase opacity-50 shrink-0">{option.value}</span>
