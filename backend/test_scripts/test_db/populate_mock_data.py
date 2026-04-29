@@ -999,7 +999,7 @@ def populate_transactions(session: Session):
             "asset": None,
             "type": TransactionType.DEPOSIT,
             "quantity": Decimal("0"),
-            "amount": Decimal("5000.00"),
+            "amount": Decimal("10000.00"),
             "currency": "USD",
             "days_ago": 27,
             "description": "Bank transfer for crypto purchase",
@@ -1009,8 +1009,8 @@ def populate_transactions(session: Session):
             "broker": coinbase,
             "asset": btc,
             "type": TransactionType.BUY,
-            "quantity": Decimal("0.05"),
-            "amount": Decimal("-2150.00"),  # 0.05 * 43000
+            "quantity": Decimal("0.15"),
+            "amount": Decimal("-6450.00"),  # 0.15 * 43000
             "currency": "USD",
             "days_ago": 26,
             "description": "BTC purchase",

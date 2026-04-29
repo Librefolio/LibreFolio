@@ -550,9 +550,9 @@
             "promotePair": "Promocionar par",
             "rowN": "Fila {n}",
             "status": "Estado",
-            "rolledBack": "Commit revertido — no se guardó nada.",
-            "rolledBackTitle": "Commit revertido",
-            "saveFailed": "Falló el commit masivo"
+            "rolledBack": "Guardado revertido — no se guardó nada.",
+            "rolledBackTitle": "Guardado revertido",
+            "saveFailed": "Falló el guardado masivo"
         },
         "promote": {
             "title": "Promocionar par",

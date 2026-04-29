@@ -472,7 +472,7 @@
         "table": {
             "asset": "Asset",
             "broker": "Broker",
-            "cash": "Cassa",
+            "cash": "Importo",
             "date": "Data",
             "quantity": "Qtà",
             "tags": "Tag",
@@ -550,9 +550,9 @@
             "promotePair": "Promuovi coppia",
             "rowN": "Riga {n}",
             "status": "Stato",
-            "rolledBack": "Commit annullato — nessuna modifica salvata.",
-            "rolledBackTitle": "Commit annullato",
-            "saveFailed": "Commit multiplo fallito"
+            "rolledBack": "Salvataggio annullato — nessuna modifica salvata.",
+            "rolledBackTitle": "Salvataggio annullato",
+            "saveFailed": "Salvataggio multiplo fallito"
         },
         "promote": {
             "title": "Promuovi coppia",

@@ -569,3 +569,293 @@ Risultato: se `broker_id=0` (campo) E `quantity=0` (campo), li vedi entrambi. Se
 - [x] Backend tests passano (65/65)
 - [x] i18n audit clean (1083/1083)
 - [ ] Walkthrough #5 utente
+
+---
+
+## 🔁 Walkthrough #5 — feedback utente (2026-04-29)
+
+### Findings
+
+8 issue identificati, classificati per area.
+
+#### UX/i18n (quick fix)
+
+| # | Issue | Dettaglio |
+|---|-------|-----------|
+| W16 | Label "Cassa" → "Importo" in IT | `transactions.table.cash` = "Cassa" nella tabella, ma il campo errori usa correttamente "Importo" (`transactions.fields.cash`). L'header della colonna DataTable e del form dovrebbe diventare "Importo" per coerenza. |
+| W17 | "Commit annullato" → "Salvataggio annullato" nel bulk | `transactions.bulk.rolledBackTitle` = "Commit annullato" — gergo tecnico, l'utente non sa cos'è un "commit". Uniformare a "Salvataggio annullato" (già usato nel FormModal). |
+| W18 | Validate button nel BulkModal diverso dal FormModal | Il FormModal ha il validate scheduler auto; il BulkModal ha un bottone `⚡ Validate now` nel footer. UX incoerente — l'utente si aspetta lo stesso pattern. |
+
+#### Data / Mock (quick fix)
+
+| # | Issue | Dettaglio |
+|---|-------|-----------|
+| W19 | Bitcoin va in negativo su Coinbase | Root cause: BUY 0.05 BTC (riga 1012 mock data), poi TRANSFER OUT −0.1 BTC (riga 1139). Saldo: 0.05−0.1 = −0.05. Fix: aumentare il BUY a 0.15 BTC (saldo post-transfer: +0.05 BTC). |
+
+#### Feature request (minor, rapido)
+
+| # | Issue | Dettaglio |
+|---|-------|-----------|
+| W20 | Currency auto-align: "back to asset currency" button | Quando l'utente seleziona un asset, la currency del campo Cash si auto-allinea — feature apprezzata. Ma se la cambia manualmente, vorrebbe un mini-pulsante per tornare alla valuta dell'asset (come nell'FX conversion wizard). |
+
+#### Architettura (major — richiede design)
+
+| # | Issue | Root cause | Impatto |
+|---|-------|------------|---------|
+| W21 | Validate endpoint: riga 1 (balance violation) mancante dalla response | **Pydantic 422 pre-emption**: il body `TXValidateBatch.creates` è `List[TXCreateItem]`. Se QUALSIASI riga fallisce la schema-validation Pydantic (es. riga 2 con `cashSignNegative`), FastAPI restituisce un 422 raw PRIMA che l'endpoint `validate_transactions` venga invocato. Il `service.validate_batch()` (che contiene la balance walk per riga 1) non gira mai. Risultato: errori di balance (service-layer) invisibili ogni volta che coesistono con errori di schema (Pydantic). |
+| W22 | Bulk create (`POST /bulk`): stessi errori raw, non strutturati | **Stessa root cause**: il body è `List[TXCreateItem]`. Pydantic 422 → raw English ("BUY requires cash.amount < 0") nel banner di rollback. Il bulk commit non passa dalla `validate_batch`, quindi nessun issue strutturato con code/params. |
+| W23 | Bulk rollback banner: errori non tradotti | Corollario di W22: il banner dell'errore in commit mostra il `msg` raw di Pydantic, non il messaggio tradotto. Il frontend `extractValidationIssues` lo cattura ma il `resolveIssueMessage` poi vede il `code` = `cashSignNegative` ma senza il tradotto `type`. Per i balance errors il problema è peggiore: non arrivano mai al frontend nel flusso commit. |
+
+---
+
+### Analisi architetturale W21/W22/W23
+
+#### Problema fondamentale
+
+Il flusso attuale ha uno split nel percorso di validazione:
+
+```
+                              ┌─ Pydantic 422 (schema errors)
+POST /validate ─► FastAPI ─►──┤                                    ← gli errori schema
+  body: TXValidateBatch       └─ validate_batch() (service errors)    e service NON coesistono
+                                                                      nella stessa response
+```
+
+FastAPI deserializza `TXValidateBatch.creates: List[TXCreateItem]` PRIMA di eseguire l'handler. Se riga N fallisce il `model_validator` di `TXCreateItem`, Pydantic ritorna 422 per TUTTE le righe fallite — ma `validate_batch` non gira mai e le righe valide non vengono controllate per balance.
+
+**Idem per `POST /bulk`**: body è `List[TXCreateItem]` → Pydantic 422 pre-empts il service layer.
+
+#### Soluzione proposta: "Lenient Validation Gateway"
+
+**Idea**: disaccoppiare schema-validation da HTTP parsing, così che il service layer possa raccogliere TUTTI gli errori (schema + business + balance) in un unico pass.
+
+**Approccio A — Raw JSON + per-row validation nel service** (preferito):
+
+1. Cambiare `POST /validate` per accettare un body `dict` (o un modello con campi `List[dict]`):
+   ```python
+   class TXValidateBatchRaw(BaseModel):
+       creates: List[dict] = Field(default_factory=list, max_length=500)
+       updates: List[dict] = Field(default_factory=list, max_length=500)
+       deletes: List[int] = Field(default_factory=list, max_length=500)
+   ```
+
+2. Nel `validate_batch`, fare try/except per-row:
+   ```python
+   parsed_creates = []
+   for idx, raw in enumerate(raw_creates):
+       try:
+           item = TXCreateItem.model_validate(raw)
+           parsed_creates.append(item)
+       except ValidationError as e:
+           for err in e.errors():
+               issues.append(TXValidationIssue(
+                   operation="create", index=idx,
+                   error=err["msg"],
+                   code=err["type"],
+                   params=err.get("ctx"),
+                   field=".".join(str(p) for p in err["loc"]),
+               ))
+   ```
+
+3. Continuare con i `parsed_creates` validi per la balance validation.
+
+4. **Per il bulk commit** (`POST /bulk`, `PATCH /bulk`): fare internamente la stessa "lenient parse" e se ci sono errori schema, restituire `rolled_back=True` con issues strutturate SENZA mai provare l'insert. Se tutti passano, procedere col flusso attuale.
+
+**Vantaggi**:
+- Un solo punto di validazione per schema E business E balance
+- Frontend riceve SEMPRE risposta strutturata (mai 422 raw)
+- Le balance violations e gli schema errors coesistono nella stessa risposta
+- Il bulk commit diventa "validate-first, then commit" senza duplicare codice
+- Il frontend `extractValidationIssues` non serve più per il caso Pydantic 422 (diventa solo fallback safety net)
+
+**Approccio B — Exception handler middleware** (scartato):
+Intercettare `RequestValidationError` a livello FastAPI, parsare gli errori Pydantic e trasformarli in `TXValidateResponse`. Fragile: non distingue le rotte, non può fare balance validation sulle righe valide.
+
+**Approccio C — Validate-then-commit** (complementare ad A):
+Il bulk commit chiama internamente `validate_batch` prima di procedere. Se `would_rollback=True`, restituisce gli issues strutturati senza tentare inserimenti. Se `would_rollback=False`, procede col flusso create/update.
+
+**Raccomandazione**: **A + C combinati**.
+- A per il validate endpoint (raccoglie tutto in un pass)
+- C per il bulk commit (riusa `validate_batch` come pre-check: zero duplicazione di logica)
+
+#### Effort stimato
+
+| Task | Stima |
+|------|-------|
+| `TXValidateBatchRaw` + lenient per-row parse | 1 h |
+| `validate_batch` refactor per accettare mix `parsed` + `issues` | 45 min |
+| Bulk create/update → validate-first pattern | 45 min |
+| Frontend: rimuovere 422 fallback special-cases (cleanup) | 30 min |
+| Tests + walkthrough | 1 h |
+| **Totale** | ~4 h |
+
+---
+
+### Quick fixes (W16–W20) — implementabili subito
+
+| # | File(s) | Fix |
+|---|---------|-----|
+| W16 | `it.json` (+ FR/ES check) | `transactions.table.cash` → "Importo" |
+| W17 | `it.json` (+ FR/ES check) | `transactions.bulk.rolledBackTitle` → "Salvataggio annullato", `.rolledBack` → "Salvataggio annullato — nessuna modifica salvata." |
+| W18 | BulkModal template | Allineare bottone validate al pattern FormModal (inline nel toolbar, stessa label/icona) |
+| W19 | `populate_mock_data.py` | BUY BTC quantity 0.05 → 0.15 |
+| W20 | `CompactCashCell.svelte` | Mini-pulsante "↩ reset currency" quando la valuta corrente ≠ asset currency (da implementare in un pass successivo — richiede props `assetCurrency` e UI del pulsante) |
+
+---
+
+### Proposta di procedura
+
+**Fase 1 (quick, ~30 min)**: W16 + W17 + W19 — label IT, bulk banner copy, mock data BTC fix.
+
+**Fase 2 (medium, ~1 h)**: W18 + W20 — allineare validate button, currency reset button.
+
+**Fase 3 (major, ~4 h)**: W21 + W22 + W23 — Lenient Validation Gateway (approccio A + C). Questo è il refactoring strutturale che risolve il problema fondamentale di coesistenza errori schema/business.
+
+**Decisione utente richiesta**: procedere con Fase 1 subito, e quanto delle Fase 2/3 fare ora vs. in un piano separato?
+
+---
+
+## 🏗️ Decisione architetturale: Unified Batch Pipeline (2026-04-29)
+
+### Decisione presa dall'utente
+
+- ❌ **Approccio A** (`TXValidateBatchRaw` con `List[dict]`) — **scartato**. I tipi `TXCreateItem`/`TXUpdateItem` esistono già e sono auto-validanti. Non serve un tipo raw.
+- ❌ **Thin wrappers** sui vecchi 3 endpoint — **scartato**. Rompere il frontend ora, no backward compat.
+- ❌ **Middleware** (Approccio B) — **scartato**. Fragile, non distingue rotte.
+- ✅ **Approccio C evoluto**: **2 soli endpoint**, stessa struttura body, stessa pipeline interna.
+
+### Design finale: 2 endpoint
+
+| Endpoint | Body | Semantica |
+|----------|------|-----------|
+| `POST /api/v1/transactions/validate` | `TXMixedBatch` | Dry-run: always rollback |
+| `POST /api/v1/transactions/commit` | `TXMixedBatch` | Commit if no issues, rollback otherwise |
+
+```python
+class TXMixedBatch(BaseModel):
+    """Unified batch: creates + updates + deletes in one request."""
+    model_config = ConfigDict(extra="forbid")
+    creates: List[dict] = Field(default_factory=list, max_length=500)
+    updates: List[dict] = Field(default_factory=list, max_length=500)
+    deletes: List[int] = Field(default_factory=list, max_length=500)
+```
+
+**Perché `List[dict]` nel body HTTP ma `TXCreateItem` internamente?**
+
+Il body HTTP DEVE essere `List[dict]` (non `List[TXCreateItem]`) perché FastAPI deserializza il body _prima_ dell'handler. Se una riga ha un errore schema → Pydantic 422 → handler non gira → balance violations invisibili.
+
+Con `List[dict]`, FastAPI non valida le singole righe. Il service fa `TXCreateItem.model_validate(raw)` per-row in try/except → raccoglie errori schema + prosegue con righe valide per balance check.
+
+I tipi `TXCreateItem`/`TXUpdateItem` restano INVARIATI — li usiamo internamente per la validazione, non come body HTTP.
+
+**OpenAPI**: `openapi_extra` nel decoratore per documentare lo schema atteso (es. `requestBody.content.application/json.schema`).
+
+### Pipeline interna
+
+```python
+async def _execute_batch(batch: TXMixedBatch, user_id: int, commit: bool, session) -> TXBatchResponse:
+    issues = []
+    
+    # 1. Lenient per-row parse
+    parsed_creates, create_issues = _parse_lenient(batch.creates, TXCreateItem, "create")
+    parsed_updates, update_issues = _parse_lenient(batch.updates, TXUpdateItem, "update")
+    issues.extend(create_issues + update_issues)
+    
+    # 2. Service-layer: access check, apply deletes→updates→creates, balance walk
+    #    Uses ONLY the successfully-parsed rows.
+    #    Collects service issues (txNotFound, accessDenied, balance violations, pair errors).
+    service_result = await service.validate_and_apply(
+        parsed_creates, parsed_updates, batch.deletes, user_id
+    )
+    issues.extend(service_result.issues)
+    
+    # 3. Commit or rollback
+    if issues:
+        await session.rollback()
+        return TXBatchResponse(committed=False, issues=issues)
+    elif not commit:
+        await session.rollback()
+        return TXBatchResponse(committed=False, issues=[])  # dry-run OK
+    else:
+        await session.commit()
+        return TXBatchResponse(committed=True, issues=[], results=service_result.results)
+```
+
+### Endpoint vecchi → rimossi
+
+| Prima | Dopo |
+|-------|------|
+| `POST /bulk` (create) | ❌ rimosso → usa `/commit` con `creates` |
+| `PATCH /bulk` (update) | ❌ rimosso → usa `/commit` con `updates` |
+| `DELETE /bulk` (delete) | ❌ rimosso → usa `/commit` con `deletes` |
+| `POST /validate` | ✅ refactored → usa `_execute_batch(commit=False)` |
+| — | ✅ nuovo: `POST /commit` → usa `_execute_batch(commit=True)` |
+
+### Vantaggi
+
+1. **Zero duplicazione** — 1 pipeline per tutto
+2. **Schema + business + balance errors coesistono** nella stessa response
+3. **Creates + updates + deletes nella stessa request** → operazioni miste
+4. **Per-day balance invariant** — ordine `delete→update→create`, balance walk per data crescente
+5. **Frontend semplificato** — 1 endpoint commit, 1 preview
+6. **Futuro**: edit+create simultaneo, delete nello stesso flusso
+
+### Helper `_parse_lenient`
+
+```python
+def _parse_lenient(
+    raw_list: List[dict], model_class: type, operation: str
+) -> Tuple[List, List[TXValidationIssue]]:
+    parsed, issues = [], []
+    for idx, raw in enumerate(raw_list):
+        try:
+            parsed.append((idx, model_class.model_validate(raw)))
+        except ValidationError as e:
+            for err in e.errors():
+                issues.append(TXValidationIssue(
+                    operation=operation, index=idx,
+                    error=err["msg"], code=err["type"],
+                    params=err.get("ctx"),
+                    field=_loc_to_field(err.get("loc", [])),
+                ))
+    return parsed, issues
+```
+
+`parsed` è `List[Tuple[int, TXCreateItem]]` — preserva l'indice originale per mappare issues → riga nel frontend.
+
+### Response schema
+
+```python
+class TXBatchResponse(BaseModel):
+    committed: bool  # True = salvato, False = rollback (dry-run o errori)
+    issues: List[TXValidationIssue] = []
+    results: Optional[List[TXBatchResultItem]] = None  # solo se committed=True
+```
+
+Sostituisce `TXBulkCreateResponse`, `TXBulkUpdateResponse`, `TXValidateResponse` → un solo tipo di risposta.
+
+### Steps di implementazione
+
+| # | Task | Effort |
+|---|------|--------|
+| 1 | Schema: `TXMixedBatch` + `TXBatchResponse` + `TXBatchResultItem` | 30 min |
+| 2 | Service: `_parse_lenient` + refactor `validate_batch` → `execute_batch` | 1.5 h |
+| 3 | Router: `POST /validate` + `POST /commit` (con `openapi_extra`) | 30 min |
+| 4 | Router: rimuovi `POST /bulk`, `PATCH /bulk`, `DELETE /bulk` | 15 min |
+| 5 | `./dev.py api sync` → regen TypeScript client | 5 min |
+| 6 | Frontend: BulkModal/FormModal → usa `/commit` e `/validate` con `TXMixedBatch` | 1 h |
+| 7 | Frontend: cleanup `extractValidationIssues` 422 fallback (safety net only) | 15 min |
+| 8 | Backend tests: aggiornare per nuovi endpoint | 45 min |
+| 9 | Mock data: W19 BTC fix (0.05→0.15) | 5 min |
+| 10 | i18n: W16 (Cassa→Importo), W17 (Commit→Salvataggio) | 10 min |
+| **Totale** | | **~5 h** |
+
+### Nota: questo va in un piano separato
+
+Questo refactoring è troppo grande per restare nel bugfix i18n. Creare:
+`plan-phase07-transaction-Part5_UnifiedBatchPipeline.prompt.md`
+
+Il piano corrente (Bugfix-2 i18n) si chiude con i quick fixes W16/W17/W19 e rimanda al nuovo piano per W21–W23.
+
+**→ Piano successivo**: [`plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md`](./plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md)
+

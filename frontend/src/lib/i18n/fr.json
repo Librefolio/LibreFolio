@@ -550,9 +550,9 @@
             "promotePair": "Promouvoir une paire",
             "rowN": "Ligne {n}",
             "status": "Statut",
-            "rolledBack": "Commit annulé — rien n'a été enregistré.",
-            "rolledBackTitle": "Commit annulé",
-            "saveFailed": "Échec du commit en masse"
+            "rolledBack": "Sauvegarde annulée — rien n'a été enregistré.",
+            "rolledBackTitle": "Sauvegarde annulée",
+            "saveFailed": "Échec de la sauvegarde en masse"
         },
         "promote": {
             "title": "Promouvoir la paire",
