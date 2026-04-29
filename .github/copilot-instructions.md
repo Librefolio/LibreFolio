@@ -39,6 +39,7 @@ LibreFolio/
 
 ## Fundamental Rules
 
+- **Caveman mode ultra** — always active. Use `caveman` skill at `ultra` intensity. Max compression, abbrevs, arrows for causality (X → Y). Off only if user says "stop caveman" or "normal mode".
 - **ALWAYS use `./dev.py`** for complex operations — never manual commands
 - **No backward compatibility** — clean up instead of maintaining legacy
 - **Code in English** — comments, docstrings, variables, README
@@ -121,6 +122,8 @@ Each `phase-{NN}-subplan/README.md` contains a table of all sub-plans with step,
 ### Skills
 
 Use the `plan-archive` skill for plan verification and archiving operations (see `.github/skills/plan-archive/SKILL.md`).
+
+Use the `find-skills` skill when looking for new capabilities to install (see `~/.agents/skills/find-skills/SKILL.md`).
 
 ## Persistent Knowledge Layer (devWiki)
 
