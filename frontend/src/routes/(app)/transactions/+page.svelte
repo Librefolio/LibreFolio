@@ -351,13 +351,14 @@
     });
 
     function onAddTransaction() {
-        // Bugfix-4 §A3: revert of A1 — for inserting a single transaction
-        // from scratch the FormModal (single-row, structured) is a clearer
-        // path than seeding a bulk grid. The BulkModal stays available for
-        // multi-row edits via the table's bulk-edit row-action.
-        formMode = 'create';
-        formInitial = null;
-        formOpen = true;
+        // Bugfix-5 §A4: revert to BulkModal as the entrypoint for `+ Add`.
+        // BulkModal seeds 1 empty draft when `initialRows=[]`, and its
+        // toolbar `+ Add row` opens a nested FormModal (single-row UX) that
+        // pushes its draft back to the grid without committing — best of
+        // both worlds (structured single-row form + multi-row batch commit).
+        bulkMode = 'create-many';
+        bulkInitial = [];
+        bulkOpen = true;
     }
     function onImportFromBroker() {
         // TODO Step 10: open BrokerImportFilesModal
@@ -631,6 +632,16 @@
 
     /** Reference to the TransactionsTable component for visibility/selection control. */
     let transactionsTableComponent = $state<TransactionsTable | undefined>(undefined);
+
+    /** Bugfix-5 §U20: aggregated tag list for autocomplete in the form
+     *  modals — sourced from the already-loaded transactions (main + partner
+     *  rows) so no extra backend endpoint is required. */
+    let availableTags = $derived.by<string[]>(() => {
+        const seen = new Set<string>();
+        for (const r of mainRows) for (const tg of r.tags ?? []) if (tg) seen.add(tg);
+        for (const r of partnerRows) for (const tg of r.tags ?? []) if (tg) seen.add(tg);
+        return [...seen].sort((a, b) => a.localeCompare(b));
+    });
 </script>
 
 <div class="space-y-6">
@@ -725,8 +736,8 @@
     {/if}
 </div>
 
-<TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} />
-<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} onClose={() => (bulkOpen = false)} onCommitted={handleBulkCommitted} onOpenPromoteWizard={onOpenPromoteFromBulk} />
+<TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} />
+<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} onClose={() => (bulkOpen = false)} onCommitted={handleBulkCommitted} onOpenPromoteWizard={onOpenPromoteFromBulk} />
 <BulkDeleteLinkedPairModal open={bulkDeleteOpen} cleanRows={bulkDeleteClean} problemRows={bulkDeleteProblems} onClose={() => (bulkDeleteOpen = false)} onCommitted={handleBulkDeleteCommitted} />
 <PromotePairWizardModal
     open={wizardOpen}

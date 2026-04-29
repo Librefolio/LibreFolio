@@ -26,7 +26,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, Zap} from 'lucide-svelte';
+    import {X, Zap, Plus, Pencil} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -41,14 +41,16 @@
 
     import type {ColumnDef, CellContent} from '$lib/components/table/types';
     import {zodiosApi} from '$lib/api';
-    import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
+    import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {type TransactionTypeCode} from '$lib/utils/transactionTypes';
-    import {STANDALONE_TX_TYPES, getTypeRule, isDraftReadyForValidation} from '$lib/utils/transactionTypeRules';
+    import {getTypeRule, isDraftReadyForValidation} from '$lib/utils/transactionTypeRules';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
+    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
+    import TransactionFormModal from './TransactionFormModal.svelte';
 
     // =========================================================================
     // Types
@@ -76,6 +78,11 @@
         index: number;
         ref_id?: number | null;
         error: string;
+        code?: string | null;
+        params?: Record<string, any> | null;
+        field?: string | null;
+        /** Pydantic loc path (e.g. "body.creates.0.broker_id"). */
+        loc?: string;
     }
 
     type Mode = 'create-many' | 'edit-many';
@@ -104,13 +111,18 @@
         open: boolean;
         mode: Mode;
         initialRows?: TXReadItem[];
+        /** Bugfix-5 §U20: tag suggestions sourced from the parent's loaded
+         *  transactions. The bulk modal augments this list with any tag that
+         *  appears in its in-flight drafts (so newly-typed tags are
+         *  immediately available across rows). */
+        availableTags?: string[];
         onClose: () => void;
         onCommitted?: (resp: unknown) => void;
         /** Open the Promote wizard (passed by parent page; modal stays open). */
         onOpenPromoteWizard?: () => void;
     }
 
-    let {open, mode, initialRows = [], onClose, onCommitted, onOpenPromoteWizard}: Props = $props();
+    let {open, mode, initialRows = [], availableTags = [], onClose, onCommitted, onOpenPromoteWizard}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -192,9 +204,21 @@
             issues = [];
             formError = null;
             confirmCloseOpen = false;
-            const next: DraftRow[] = rows.length > 0 ? rows.map((r) => fromTx(r, m)) : m === 'create-many' ? [emptyDraft()] : [];
+            // Bugfix-2: in create-many with no initial rows, start with an
+            // EMPTY grid — the user adds rows via the nested FormModal.
+            const next: DraftRow[] = rows.length > 0 ? rows.map((r) => fromTx(r, m)) : [];
             drafts = next;
             initialDraftsKey = serializeDrafts(next);
+            // Auto-open the nested FormModal when the grid starts empty
+            // so the user can immediately start filling in the first row.
+            if (m === 'create-many' && rows.length === 0) {
+                queueMicrotask(() => {
+                    formOpen = true;
+                    formMode = 'create';
+                    formInitial = null;
+                    formEditingTempId = null;
+                });
+            }
         });
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded()]);
@@ -262,12 +286,67 @@
     }
 
     function addRow() {
-        // Bugfix-4 §A3: kept for future create-many flows but currently unused
-        // (toolbar entry removed). Reference via `void` to keep tree-shaking
-        // from complaining about an exported helper.
+        // Bugfix-5 §A4: kept as a programmatic helper. The toolbar entrypoint
+        // now opens TransactionFormModal (commitOnSave=false) and pushes the
+        // resulting draft into the grid via `addRowFromForm`.
         drafts = [...drafts, emptyDraft()];
     }
     void addRow;
+
+    /** Convert a DraftRow to a TXReadItem-shaped object so it can be fed back
+     *  into TransactionFormModal as `initialRow`. We reuse the BulkModal's
+     *  in-flight draft state, NOT a server-persisted row, so id/timestamps
+     *  are synthetic. */
+    function draftToTxLike(d: DraftRow): TXReadItem {
+        return {
+            id: d.id ?? 0,
+            broker_id: d.broker_id,
+            asset_id: d.asset_id,
+            type: d.type,
+            date: d.date,
+            quantity: d.quantity,
+            cash: d.cash,
+            related_transaction_id: null,
+            tags: d.tags,
+            description: d.description,
+            cost_basis_override: d.cost_basis_override || null,
+            asset_event_id: d.asset_event_id,
+            created_at: d.created_at,
+            updated_at: d.updated_at,
+        };
+    }
+
+    /** Apply the form-collected payload to a brand-new draft row. */
+    function addRowFromForm(payload: Record<string, unknown>) {
+        const next = emptyDraft();
+        applyFormPayload(next, payload);
+        drafts = [...drafts, next];
+    }
+
+    /** Apply the form-collected payload to an existing draft (deep-edit). */
+    function patchRowFromForm(tempId: string, payload: Record<string, unknown>) {
+        drafts = drafts.map((d) => {
+            if (d.tempId !== tempId) return d;
+            const merged = {...d};
+            applyFormPayload(merged, payload);
+            if (merged.status === 'original') merged.status = 'edited';
+            return merged;
+        });
+    }
+
+    function applyFormPayload(target: DraftRow, p: Record<string, unknown>) {
+        if (typeof p.broker_id === 'number') target.broker_id = p.broker_id;
+        if (typeof p.type === 'string') target.type = p.type as TransactionTypeCode;
+        if (typeof p.date === 'string') target.date = p.date;
+        if (typeof p.quantity === 'string') target.quantity = p.quantity;
+        target.asset_id = (p.asset_id as number | null | undefined) ?? null;
+        target.cash = (p.cash as DraftRow['cash']) ?? null;
+        target.tags = Array.isArray(p.tags) ? (p.tags as string[]) : [];
+        target.description = typeof p.description === 'string' ? p.description : '';
+        target.asset_event_id = (p.asset_event_id as number | null | undefined) ?? null;
+        target.cost_basis_override = typeof p.cost_basis_override === 'string' ? p.cost_basis_override : '';
+        if (typeof p.link_uuid === 'string') target.link_uuid = p.link_uuid;
+    }
 
     function removeRow(tempId: string) {
         drafts = drafts.filter((d) => d.tempId !== tempId);
@@ -369,7 +448,7 @@
                                 break;
                             }
                         }
-                        return {operation: mode === 'edit-many' ? 'update' : 'create', index: idx, error: iss.msg};
+                        return {operation: mode === 'edit-many' ? 'update' : 'create', index: idx, error: iss.msg, code: iss.code, params: iss.params, loc: iss.loc} as ValidationIssue;
                     });
                 } else {
                     issues = [{operation: mode === 'edit-many' ? 'update' : 'create', index: 0, error: extractErrorMessage(e, $t('transactions.bulk.saveFailed'))}];
@@ -392,6 +471,12 @@
 
     let isFreshlyValid = $derived(scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
+
+    /** Context for resolving validation issue codes into translated messages. */
+    let resolverCtx: ResolverContext = $derived({
+        brokers: brokers as unknown as Array<{id: number; name: string}>,
+        assets: getAllAssets() as unknown as Array<{id: number; display_name: string}>,
+    });
 
     $effect(() => {
         if (!open) return;
@@ -497,7 +582,7 @@
                 id: 'date',
                 header: () => $t('transactions.table.date'),
                 type: 'custom',
-                width: 160,
+                width: 140,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => ({
@@ -517,7 +602,7 @@
                 id: 'type',
                 header: () => $t('transactions.table.type'),
                 type: 'custom',
-                width: 170,
+                width: 140,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
@@ -542,7 +627,7 @@
                 id: 'asset',
                 header: () => $t('transactions.table.asset'),
                 type: 'custom',
-                width: 200,
+                width: 180,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => ({
@@ -561,7 +646,7 @@
                 id: 'quantity',
                 header: () => $t('transactions.table.quantity'),
                 type: 'number',
-                width: 110,
+                width: 85,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
@@ -574,9 +659,10 @@
                         return {type: 'html', html: '<span class="text-gray-400 italic" title="Not applicable: quantity must be 0 for this transaction type">n/a</span>'};
                     }
                     return {
-                        type: 'editable-text',
-                        value: row.quantity,
-                        onchange: (v) => patchDraft(row.tempId, {quantity: v}),
+                        type: 'editable-number',
+                        value: row.quantity === '' || row.quantity == null ? null : Number(row.quantity),
+                        step: 'any',
+                        onchange: (v) => patchDraft(row.tempId, {quantity: v == null ? '' : String(v)}),
                     };
                 },
             },
@@ -584,7 +670,7 @@
                 id: 'cash',
                 header: () => $t('transactions.table.cash'),
                 type: 'custom',
-                width: 220,
+                width: 295,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => ({
@@ -604,7 +690,7 @@
                 id: 'broker',
                 header: () => $t('transactions.table.broker'),
                 type: 'custom',
-                width: 200,
+                width: 140,
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: false,
@@ -714,6 +800,12 @@
         editMode
             ? [
                   {
+                      id: 'edit-single',
+                      icon: Pencil,
+                      label: () => $t('transactions.bulk.editSingle') || 'Edit row',
+                      onClick: (row: DraftRow) => openEditRowForm(row),
+                  },
+                  {
                       id: 'reset',
                       icon: () => '↺',
                       label: () => $t('transactions.bulk.resetRow'),
@@ -722,6 +814,12 @@
                   },
               ]
             : [
+                  {
+                      id: 'edit-single',
+                      icon: Pencil,
+                      label: () => $t('transactions.bulk.editSingle') || 'Edit row',
+                      onClick: (row: DraftRow) => openEditRowForm(row),
+                  },
                   {
                       id: 'remove',
                       icon: X,
@@ -753,6 +851,50 @@
     let editedCount = $derived(drafts.filter((d) => d.status === 'edited' || d.status === 'new').length);
     let commitDisabled = $derived(committing || drafts.length === 0 || (mode === 'edit-many' && editedCount === 0));
     let commitLabel = $derived(committing ? $t('common.saving') : mode === 'create-many' ? $t('transactions.bulk.commitCreate', {values: {n: drafts.length}}) : $t('transactions.bulk.commitEdit', {values: {n: editedCount}}));
+
+    // -------------------------------------------------------------------------
+    // Nested FormModal (Bugfix-5 §A4): "+ Add row" + row-action "Edit single".
+    // -------------------------------------------------------------------------
+    let formOpen = $state(false);
+    let formMode = $state<'create' | 'edit'>('create');
+    let formInitial = $state<TXReadItem | null>(null);
+    /** Set to a tempId when the FormModal is editing an existing draft row.
+     *  When null, a successful Save = push as a brand-new row. */
+    let formEditingTempId = $state<string | null>(null);
+
+    /** Aggregated tag suggestions: union of tags currently in any draft +
+     *  any tag in the initialRows snapshot + the parent-supplied
+     *  `availableTags` (sourced from the loaded transactions table). Drives
+     *  the autocomplete in the nested FormModal's tag field (Bugfix-5 §U20
+     *  client-side MVP). */
+    let aggregatedTags = $derived.by<string[]>(() => {
+        const seen = new Set<string>(availableTags);
+        for (const d of drafts) for (const tg of d.tags ?? []) if (tg) seen.add(tg);
+        for (const r of initialRows) for (const tg of r.tags ?? []) if (tg) seen.add(tg);
+        return [...seen].sort((a, b) => a.localeCompare(b));
+    });
+
+    function openAddRowForm() {
+        formMode = 'create';
+        formInitial = null;
+        formEditingTempId = null;
+        formOpen = true;
+    }
+    function openEditRowForm(row: DraftRow) {
+        formMode = 'edit';
+        formInitial = draftToTxLike(row);
+        formEditingTempId = row.tempId;
+        formOpen = true;
+    }
+    function handleFormPushed(payload: Record<string, unknown>) {
+        if (formEditingTempId != null) {
+            patchRowFromForm(formEditingTempId, payload);
+        } else {
+            addRowFromForm(payload);
+        }
+        formOpen = false;
+        formEditingTempId = null;
+    }
 
     // Cast to `never` is required because DataTable<T> is generic and Svelte 5
     // template attribute type-checking can't refine through the bind:this ref.
@@ -794,11 +936,12 @@
             {/if}
             {#if showIssuesBanner && !formError}
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
-                    <ul class="space-y-0.5" data-testid="tx-bulk-issues">
+                    <p class="font-semibold text-sm mb-1.5" data-testid="tx-bulk-issues-header">{$t('transactions.validate.issuesHeader')}</p>
+                    <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-bulk-issues">
                         {#each issues as issue}
                             <li>
                                 <button type="button" class="underline hover:opacity-80" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
-                                    {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {issue.error}
+                                    {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {resolveIssueMessage(issue, $t, resolverCtx)}
                                 </button>
                             </li>
                         {/each}
@@ -814,11 +957,17 @@
 
         <!-- Toolbar (Bugfix-2 §U9: action buttons right-aligned, most important first
              from the right via flex-row-reverse).
-             Bugfix-4 §A3: `+ Add row` removed — single-row create now goes
-             through TransactionFormModal. BulkModal toolbar serves edit-many
-             multi-select flows only. -->
+             Bugfix-5 §A4: `+ Add row` re-introduced — opens a nested
+             TransactionFormModal that pushes its draft into the grid (no
+             commit) so the user gets the structured single-row UX while
+             staying in the bulk batch. -->
         <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0">
             <div class="ml-auto flex flex-row-reverse items-center gap-2 flex-wrap">
+                {#if mode === 'create-many'}
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row">
+                        <Plus size={12} /> {$t('transactions.bulk.addRow') || 'Add row'}
+                    </button>
+                {/if}
                 {#if mode === 'edit-many'}
                     <button type="button" class="px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all">{$t('transactions.bulk.resetAll')}</button>
                 {/if}
@@ -844,7 +993,7 @@
                 enablePagination={false}
                 enableSorting={false}
                 enableColumnVisibility={true}
-                enableActions={mode === 'create-many'}
+                enableActions={true}
                 rowActions={rowActionsForTable}
                 stickyActions={false}
             />
@@ -886,5 +1035,24 @@
     onConfirm={confirmDiscardAndClose}
     onCancel={() => (confirmCloseOpen = false)}
     zIndex={70}
+/>
+
+<!-- Bugfix-5 §A4: nested single-row form. `commitOnSave={false}` makes the
+     Save button push the collected draft back to the bulk grid instead of
+     committing to the backend; `unlockImmutable={true}` lets the user change
+     `type` and `broker` even when editing an existing draft (deep-edit). -->
+<TransactionFormModal
+    open={formOpen}
+    mode={formMode}
+    initialRow={formInitial}
+    commitOnSave={false}
+    unlockImmutable={formMode === 'edit'}
+    availableTags={aggregatedTags}
+    zIndex={70}
+    onClose={() => {
+        formOpen = false;
+        formEditingTempId = null;
+    }}
+    onPushDraft={handleFormPushed}
 />
 

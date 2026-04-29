@@ -80,7 +80,7 @@ class TestTransferRules:
 
     def test_transfer_requires_asset_id(self):
         """TX-S-010: TRANSFER without asset_id should fail."""
-        with pytest.raises(ValidationError, match="TRANSFER requires asset_id"):
+        with pytest.raises(ValidationError, match="assetRequired|multipleBusinessRuleErrors"):
             TXCreateItem(
                 broker_id=1,
                 type=TransactionType.TRANSFER,
@@ -163,7 +163,7 @@ class TestFxConversionRules:
 
     def test_fx_requires_cash(self):
         """TX-S-022: FX_CONVERSION without cash should fail."""
-        with pytest.raises(ValidationError, match="FX_CONVERSION requires cash with amount != 0"):
+        with pytest.raises(ValidationError, match="fxConversionCashRequired|multipleBusinessRuleErrors"):
             TXCreateItem(
                 broker_id=1,
                 type=TransactionType.FX_CONVERSION,
@@ -723,3 +723,124 @@ class TestAssetEventLink:
         true_in_meta = {t for t, m in TX_TYPE_METADATA.items() if m.event_compatible}
         assert true_in_meta == expected_true
         assert len(TX_TYPE_METADATA) == 11
+
+
+# ============================================================================
+# STRUCTURED ERROR CODES — verify PydanticCustomError codes propagate to
+# ValidationError detail so frontend can extract code + params for i18n.
+# ============================================================================
+
+
+class TestStructuredErrorCodes:
+    """Verify PydanticCustomError codes appear in ValidationError.errors()."""
+
+    @staticmethod
+    def _get_first_error(create_kwargs: dict) -> dict:
+        """Try to create a TXCreateItem and return the first validation error dict."""
+        with pytest.raises(ValidationError) as exc_info:
+            TXCreateItem(**create_kwargs)
+        errors = exc_info.value.errors()
+        assert len(errors) >= 1
+        return errors[0]
+
+    def test_asset_required_code(self):
+        """BUY without asset_id → code='assetRequired', ctx has type='BUY'."""
+        err = self._get_first_error(
+            {
+                "broker_id": 1,
+                "type": TransactionType.BUY,
+                "date": date.today(),
+                "quantity": Decimal("5"),
+                "cash": Currency(code="USD", amount=Decimal("-100")),
+            }
+        )
+        assert err["type"] == "assetRequired"
+        assert err["ctx"]["type"] == "BUY"
+
+    def test_qty_positive_code(self):
+        """BUY with quantity=0 → code='qtyPositive'."""
+        err = self._get_first_error(
+            {
+                "broker_id": 1,
+                "asset_id": 1,
+                "type": TransactionType.BUY,
+                "date": date.today(),
+                "quantity": Decimal("0"),
+                "cash": Currency(code="USD", amount=Decimal("-50")),
+            }
+        )
+        assert err["type"] == "qtyPositive"
+        assert err["ctx"]["type"] == "BUY"
+
+    def test_cash_sign_negative_code(self):
+        """BUY with positive cash → code='cashSignNegative'."""
+        err = self._get_first_error(
+            {
+                "broker_id": 1,
+                "asset_id": 1,
+                "type": TransactionType.BUY,
+                "date": date.today(),
+                "quantity": Decimal("5"),
+                "cash": Currency(code="USD", amount=Decimal("100")),
+            }
+        )
+        assert err["type"] == "cashSignNegative"
+        assert err["ctx"]["type"] == "BUY"
+
+    def test_cash_forbidden_code(self):
+        """ADJUSTMENT with cash → code='cashForbidden'."""
+        err = self._get_first_error(
+            {
+                "broker_id": 1,
+                "asset_id": 1,
+                "type": TransactionType.ADJUSTMENT,
+                "date": date.today(),
+                "quantity": Decimal("5"),
+                "cash": Currency(code="USD", amount=Decimal("100")),
+            }
+        )
+        assert err["type"] == "cashForbidden"
+
+    def test_event_type_incompatible_code(self):
+        """BUY with asset_event_id → code='eventTypeIncompatible', ctx has allowed."""
+        err = self._get_first_error(
+            {
+                "broker_id": 1,
+                "asset_id": 1,
+                "type": TransactionType.BUY,
+                "date": date.today(),
+                "quantity": Decimal("5"),
+                "cash": Currency(code="USD", amount=Decimal("-100")),
+                "asset_event_id": 99,
+            }
+        )
+        assert err["type"] == "eventTypeIncompatible"
+        assert "allowed" in err["ctx"]
+
+    def test_qty_zero_code(self):
+        """DIVIDEND with quantity != 0 → code='qtyZero'."""
+        err = self._get_first_error(
+            {
+                "broker_id": 1,
+                "asset_id": 1,
+                "type": TransactionType.DIVIDEND,
+                "date": date.today(),
+                "quantity": Decimal("5"),
+                "cash": Currency(code="USD", amount=Decimal("100")),
+            }
+        )
+        assert err["type"] == "qtyZero"
+        assert err["ctx"]["type"] == "DIVIDEND"
+
+    def test_link_uuid_required_code(self):
+        """TRANSFER without link_uuid → code='linkUuidRequired'."""
+        err = self._get_first_error(
+            {
+                "broker_id": 1,
+                "asset_id": 1,
+                "type": TransactionType.TRANSFER,
+                "date": date.today(),
+                "quantity": Decimal("5"),
+            }
+        )
+        assert err["type"] == "linkUuidRequired"

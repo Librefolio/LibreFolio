@@ -649,14 +649,19 @@ Nel readonly type render, sostituire `w-5 h-5` → `w-6 h-6` (o `w-7 h-7`) e l'i
 
 ## ✅ Final-check Bugfix-5 (target)
 
-- [ ] A4 — `+ Add` → BulkModal; `+ Add row` → FormModal create-no-commit; row-action deep-edit → FormModal unlockImmutable
-- [ ] C16 — Cash input Tailwind-based restyle
-- [ ] C17 — BulkModal qty cell formatDecimalForDisplay
-- [ ] U21 — Mobile layout: Date+Type always 2-col, Cash col-span when qty locked
-- [ ] U22 — Type icon size align con main table
-- [ ] U20 — Tags autocomplete (se time permits, altrimenti Bugfix-6)
-- [ ] i18n audit clean (eredità Bugfix-1)
-- [ ] svelte-check clean
+- [x] A4 — `+ Add` → BulkModal; `+ Add row` → FormModal create-no-commit; row-action deep-edit → FormModal unlockImmutable
+- [x] C16 — Cash input visible border (CSS già applicato in Bugfix-3 §C12; mantenuto invariato — il restyle Tailwind era opzionale, il bordo grigio + focus ring è già presente)
+- [x] C17 — BulkModal qty cell formatDecimalForDisplay
+- [x] U21 — Mobile layout: Date+Type always 2-col, Cash col-span when qty locked
+- [x] U22 — Type icon size align con main table (w-5→w-6)
+- [x] U20 — Tags autocomplete (client-side aggregation dai mainRows + drafts; nessun endpoint backend per richiesta utente)
+- [x] B1/B6 (backend) — Pydantic enforcement aggiuntivo: Rule 10 quantità per type, Rule 11 segno cash per type. Test aggiornati (2 fix).
+- [x] i18n audit clean — 1026/1026 chiavi complete su 4 lingue
+- [x] svelte-check clean (0 errors, 0 warnings)
 - [ ] walkthrough #6 utente
 
+---
 
+## ➡️ Follow-up
+
+- [`plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md`](./plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md) — i18n strutturato per tutti i messaggi di validazione (codici + params, frontend risolve nomi da store)
