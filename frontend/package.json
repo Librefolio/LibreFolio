@@ -1,7 +1,7 @@
 {
   "name": "librefolio-frontend",
   "private": true,
-  "version": "0.5.x",
+  "version": "0.6.x",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

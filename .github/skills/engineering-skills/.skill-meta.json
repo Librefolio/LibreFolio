@@ -1,0 +1,13 @@
+{
+  "sourceType": "github",
+  "source": "github",
+  "url": "https://github.com/alirezarezvani/claude-skills",
+  "repo": "alirezarezvani/claude-skills",
+  "ref": null,
+  "subpath": "engineering-team",
+  "installSource": "alirezarezvani/claude-skills/engineering-team",
+  "skillName": "engineering-skills",
+  "scope": "legacy",
+  "installedAt": "2026-04-30T18:11:17.697Z",
+  "updatedAt": "2026-04-30T18:11:17.697Z"
+}

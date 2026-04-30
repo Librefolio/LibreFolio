@@ -1,32 +1,39 @@
 <!--
-  TransactionBulkModal.svelte — Bulk create/edit editor for transactions.
+  TransactionBulkModal.svelte — Unified bulk editor for transactions.
 
-  Built on top of `DataTable.svelte` with editable cells. Replaces the
-  hand-rolled `<table>` of the legacy `TransactionStagingModal` and reuses the
-  full DataTable ecosystem (column visibility eye-toggle, custom cells,
-  navigateToRowId for issue-banner deep-links, etc).
+  Built on top of `DataTable.svelte` with editable cells. Supports a mixed bag
+  of new drafts + existing rows + rows marked for deletion, validated+committed
+  together via the unified backend pipeline.
 
-  Modes:
-  - 'create-many' → drafts seeded from `initialRows` (id stripped, link_uuid
-                    regenerated for pairs) or one blank row.
-  - 'edit-many'   → drafts pre-filled from `initialRows`, type+broker locked.
+  Modes (backward compat — internally everything is a mixed batch):
+  - 'create-many' → drafts seeded from `initialRows` (id stripped) or one blank row.
+  - 'edit-many'   → drafts pre-filled from `initialRows`.
+
+  Row states:
+  - 'new'      → brand new draft, committed as CREATE
+  - 'original' → existing row loaded but unmodified (skipped on commit)
+  - 'edited'   → existing row with changes, committed as UPDATE
+  - 'delete'   → existing row marked for deletion, committed as DELETE
+
+  Features:
+  - Checkbox selection with bulk actions (delete selected)
+  - Date sorting (asc/desc)
+  - Row actions: edit, clone, remove, mark/unmark delete
+  - Nested TransactionFormModal for structured single-row editing
+  - Paired rows (TRANSFER/FX_CONVERSION) with special rendering (future)
 
   Validation: 100% server-side via POST /transactions/validate. Auto-validate
   is debounced (1 s) + idle-fire (60 s) when N ≤ 50; above that threshold only
   the manual `⚡ Validate now` button works (toolbar shows ⓘ hint).
 
-  Commit: POST /transactions/commit with creates or updates. On `committed=false`
-  the modal stays open with a persistent banner; clicking an issue scrolls to
-  the offending row via `tableRef.navigateToRowId(tempId)`.
-
-  Pair types (TRANSFER, FX_CONVERSION) are NOT selectable here — they live in
-  the Promote wizard. The toolbar exposes a `⚡ Promote pair` shortcut.
+  Commit: POST /transactions/commit with creates + updates + deletes. On
+  `committed=false` the modal stays open with a persistent banner.
 -->
 <script lang="ts">
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, Plus, Pencil} from 'lucide-svelte';
+    import {X, Plus, Pencil, Copy, Trash2} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -88,7 +95,7 @@
 
     interface DraftRow {
         tempId: string; // stable id used by DataTable.getRowId + navigateToRowId
-        status: 'new' | 'edited' | 'original';
+        status: 'new' | 'edited' | 'original' | 'delete';
         id?: number; // present in edit-many
         original?: TXReadItem;
         broker_id: number;
@@ -308,10 +315,9 @@
     }
     void addRow;
 
-    /** Convert a DraftRow to a TXReadItem-shaped object so it can be fed back
-     *  into TransactionFormModal as `initialRow`. We reuse the BulkModal's
-     *  in-flight draft state, NOT a server-persisted row, so id/timestamps
-     *  are synthetic. */
+    /** Convert a DraftRow to a TXReadItem-shaped object so it can be fed back to
+     *  TransactionFormModal as `initialRow`. We reuse the BulkModal's in-flight
+     *  draft state, NOT a server-persisted row, so id/timestamps are synthetic. */
     function draftToTxLike(d: DraftRow): TXReadItem {
         return {
             id: d.id ?? 0,
@@ -365,6 +371,34 @@
 
     function removeRow(tempId: string) {
         drafts = drafts.filter((d) => d.tempId !== tempId);
+    }
+
+    /** R6-B.4: Mark an existing row for deletion (toggle). */
+    function markDelete(tempId: string) {
+        drafts = drafts.map((d) => {
+            if (d.tempId !== tempId) return d;
+            if (d.status === 'delete') {
+                // Unmark: revert to 'edited' (user already touched it) or 'original'
+                return {...d, status: d.original ? 'edited' : 'new'};
+            }
+            return {...d, status: 'delete'};
+        });
+    }
+
+    /** R6-B.4: Clone a draft row as a new row. */
+    function cloneRow(tempId: string) {
+        const src = drafts.find((d) => d.tempId === tempId);
+        if (!src) return;
+        const clone: DraftRow = {
+            ...src,
+            tempId: generateUUID(),
+            status: 'new',
+            id: undefined,
+            original: undefined,
+            link_uuid: src.link_uuid ? generateUUID() : null,
+            date: todayIso(),
+        };
+        drafts = [...drafts, clone];
     }
 
     function resetRow(tempId: string) {
@@ -431,22 +465,12 @@
         return out;
     }
 
-    function collectAllUpdates(): Record<string, unknown>[] {
-        const out: Record<string, unknown>[] = [];
-        for (const d of drafts) {
-            if (d.status !== 'edited') continue;
-            const upd = collectUpdate(d);
-            if (upd && Object.keys(upd).length > 1) out.push(upd);
-        }
-        return out;
-    }
-
     // =========================================================================
     // Validate scheduler
     // =========================================================================
 
     const scheduler = createValidateScheduler({
-        enabled: () => drafts.length > 0 && drafts.length <= AUTO_VALIDATE_THRESHOLD && drafts.some(isDraftReadyForValidation),
+        enabled: () => drafts.length > 0 && drafts.length <= AUTO_VALIDATE_THRESHOLD && drafts.some((d) => d.status !== 'delete' && isDraftReadyForValidation(d)),
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (drafts.length === 0) {
@@ -455,7 +479,23 @@
                 issuesDismissed = false;
                 return {issuesCount: 0};
             }
-            const payload = mode === 'edit-many' ? {updates: collectAllUpdates()} : {creates: drafts.map(collectCreate)};
+            // R6-B.4: build mixed payload matching commit logic
+            const creates: Record<string, unknown>[] = [];
+            const updates: Record<string, unknown>[] = [];
+            const deletes: number[] = [];
+            for (const d of drafts) {
+                if (d.status === 'new') creates.push(collectCreate(d));
+                else if (d.status === 'edited') {
+                    const upd = collectUpdate(d);
+                    if (upd && Object.keys(upd).length > 1) updates.push(upd);
+                } else if (d.status === 'delete' && d.id != null) {
+                    deletes.push(d.id);
+                }
+            }
+            const payload: Record<string, unknown> = {};
+            if (creates.length > 0) payload.creates = creates;
+            if (updates.length > 0) payload.updates = updates;
+            if (deletes.length > 0) payload.deletes = deletes;
             // Snapshot the key at the moment we *send* the payload — so when
             // the response comes back we know whether the drafts have drifted.
             const sentKey = lastDraftKey;
@@ -479,10 +519,10 @@
                                 break;
                             }
                         }
-                        return {operation: mode === 'edit-many' ? 'update' : 'create', index: idx, error: iss.msg, code: iss.code, params: iss.params, loc: iss.loc} as ValidationIssue;
+                        return {operation: 'create' as const, index: idx, error: iss.msg, code: iss.code, params: iss.params, loc: iss.loc} as ValidationIssue;
                     });
                 } else {
-                    issues = [{operation: mode === 'edit-many' ? 'update' : 'create', index: 0, error: extractErrorMessage(e, $t('transactions.bulk.saveFailed'))}];
+                    issues = [{operation: 'create', index: 0, error: extractErrorMessage(e, $t('transactions.bulk.saveFailed'))}];
                 }
                 lastValidatedDraftKey = sentKey;
                 issuesDismissed = false;
@@ -561,43 +601,50 @@
             return;
         }
         try {
-            if (mode === 'edit-many') {
-                const items = collectAllUpdates();
-                if (items.length === 0) {
-                    onClose();
-                    return;
+            // R6-B.4: unified mixed batch — creates + updates + deletes in one call.
+            const creates: Record<string, unknown>[] = [];
+            const updates: Record<string, unknown>[] = [];
+            const deletes: number[] = [];
+
+            for (const d of drafts) {
+                if (d.status === 'new') {
+                    creates.push(collectCreate(d));
+                } else if (d.status === 'edited') {
+                    const upd = collectUpdate(d);
+                    if (upd && Object.keys(upd).length > 1) updates.push(upd);
+                } else if (d.status === 'delete' && d.id != null) {
+                    deletes.push(d.id);
                 }
-                const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post({updates: items} as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
-                if (result.status === 'error') {
-                    formError = result.message;
-                    return;
-                }
-                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]};
-                if (!resp.committed) {
-                    issues = resp.issues ?? [];
-                    issuesDismissed = false;
-                    commitFailed = true;
-                    return;
-                }
-                onCommitted?.(resp);
-                onClose();
-            } else {
-                const items = drafts.map(collectCreate);
-                const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post({creates: items} as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
-                if (result.status === 'error') {
-                    formError = result.message;
-                    return;
-                }
-                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]};
-                if (!resp.committed) {
-                    issues = resp.issues ?? [];
-                    issuesDismissed = false;
-                    commitFailed = true;
-                    return;
-                }
-                onCommitted?.(resp);
-                onClose();
+                // 'original' rows are unchanged — skip
             }
+
+            if (creates.length === 0 && updates.length === 0 && deletes.length === 0) {
+                onClose();
+                return;
+            }
+
+            const payload: Record<string, unknown> = {};
+            if (creates.length > 0) payload.creates = creates;
+            if (updates.length > 0) payload.updates = updates;
+            if (deletes.length > 0) payload.deletes = deletes;
+
+            const result = await saveWithRetry(
+                () => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never),
+                {fallback: $t('transactions.bulk.saveFailed'), toast: false},
+            );
+            if (result.status === 'error') {
+                formError = result.message;
+                return;
+            }
+            const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]};
+            if (!resp.committed) {
+                issues = resp.issues ?? [];
+                issuesDismissed = false;
+                commitFailed = true;
+                return;
+            }
+            onCommitted?.(resp);
+            onClose();
         } finally {
             committing = false;
             lastCommitDraftKey = currentKey;
@@ -634,7 +681,7 @@
                 hiddenByDefault: true,
                 cell: (row): CellContent => ({
                     type: 'html',
-                    html: row.status === 'new' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>' : row.status === 'edited' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>' : '<span class="text-gray-300 dark:text-gray-600">·</span>',
+                    html: row.status === 'new' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>' : row.status === 'edited' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>' : row.status === 'delete' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>' : '<span class="text-gray-300 dark:text-gray-600">·</span>',
                 }),
             },
             {
@@ -865,39 +912,46 @@
     // Row actions (remove / reset)
     // =========================================================================
 
-    let rowActions = $derived(
-        editMode
-            ? [
-                  {
-                      id: 'edit-single',
-                      icon: Pencil,
-                      label: () => $t('transactions.bulk.editSingle') || 'Edit row',
-                      onClick: (row: DraftRow) => openEditRowForm(row),
-                  },
-                  {
-                      id: 'reset',
-                      icon: () => '↺',
-                      label: () => $t('transactions.bulk.resetRow'),
-                      onClick: (row: DraftRow) => resetRow(row.tempId),
-                      visible: (row: DraftRow) => !!row.original,
-                  },
-              ]
-            : [
-                  {
-                      id: 'edit-single',
-                      icon: Pencil,
-                      label: () => $t('transactions.bulk.editSingle') || 'Edit row',
-                      onClick: (row: DraftRow) => openEditRowForm(row),
-                  },
-                  {
-                      id: 'remove',
-                      icon: X,
-                      label: () => $t('transactions.bulk.removeRow'),
-                      onClick: (row: DraftRow) => removeRow(row.tempId),
-                      variant: 'danger' as const,
-                  },
-              ],
-    );
+    let rowActions = $derived([
+        {
+            id: 'edit-single',
+            icon: Pencil,
+            label: () => $t('transactions.bulk.editSingle') || 'Edit row',
+            onClick: (row: DraftRow) => openEditRowForm(row),
+            visible: (row: DraftRow) => row.status !== 'delete',
+        },
+        {
+            id: 'clone',
+            icon: Copy,
+            label: () => $t('transactions.bulk.cloneRow') || 'Clone row',
+            onClick: (row: DraftRow) => cloneRow(row.tempId),
+            visible: (row: DraftRow) => row.status !== 'delete',
+        },
+        {
+            id: 'mark-delete',
+            icon: Trash2,
+            label: (row: DraftRow) => row.status === 'delete'
+                ? ($t('transactions.bulk.unmarkDelete') || 'Restore')
+                : ($t('transactions.bulk.markDelete') || 'Mark for deletion'),
+            onClick: (row: DraftRow) => {
+                if (row.id != null) {
+                    // Existing row: toggle delete state
+                    markDelete(row.tempId);
+                } else {
+                    // New draft: just remove from batch
+                    removeRow(row.tempId);
+                }
+            },
+            variant: 'danger' as const,
+        },
+        {
+            id: 'reset',
+            icon: () => '↺',
+            label: () => $t('transactions.bulk.resetRow'),
+            onClick: (row: DraftRow) => resetRow(row.tempId),
+            visible: (row: DraftRow) => !!row.original && row.status !== 'delete',
+        },
+    ]);
 
     // =========================================================================
     // Issue → row navigation
@@ -918,9 +972,12 @@
     // of truth. Footer keeps only an inline "Validating…" indicator.
 
 
-    let editedCount = $derived(drafts.filter((d) => d.status === 'edited' || d.status === 'new').length);
-    let commitDisabled = $derived(committing || drafts.length === 0 || (mode === 'edit-many' && editedCount === 0));
-    let commitLabel = $derived(committing ? $t('common.saving') : mode === 'create-many' ? $t('transactions.bulk.commitCreate', {values: {n: drafts.length}}) : $t('transactions.bulk.commitEdit', {values: {n: editedCount}}));
+    let newCount = $derived(drafts.filter((d) => d.status === 'new').length);
+    let editedCount = $derived(drafts.filter((d) => d.status === 'edited').length);
+    let deleteCount = $derived(drafts.filter((d) => d.status === 'delete').length);
+    let actionCount = $derived(newCount + editedCount + deleteCount);
+    let commitDisabled = $derived(committing || drafts.length === 0 || actionCount === 0);
+    let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
 
     // -------------------------------------------------------------------------
     // Nested FormModal (Bugfix-5 §A4): "+ Add row" + row-action "Edit single".
@@ -971,6 +1028,30 @@
     // Doing this in script keeps the template free of `as` casts (parser-friendly).
     let tableRefForToggle = $derived(tableRef as never);
     let rowActionsForTable = $derived(rowActions as never);
+
+    /** R6-B.4: Red tint for rows marked for deletion. */
+    function getRowClass(row: DraftRow): string {
+        if (row.status === 'delete') return 'bg-red-50/60 dark:bg-red-950/20 line-through opacity-60';
+        return '';
+    }
+
+    /** R6-B.4: Bulk actions for selected rows. */
+    let bulkDeleteSelected = $derived({
+        id: 'delete-selected',
+        icon: Trash2,
+        label: () => $t('transactions.bulk.deleteSelected') || 'Delete selected',
+        variant: 'danger' as const,
+        onClick: (rows: DraftRow[]) => {
+            for (const r of rows) {
+                if (r.id != null) {
+                    markDelete(r.tempId);
+                } else {
+                    removeRow(r.tempId);
+                }
+            }
+        },
+    });
+    let bulkActionsForTable = $derived([bulkDeleteSelected] as never);
 </script>
 
 <ModalBase {open} maxWidth="none" onRequestClose={requestClose} testId="tx-bulk-modal" allowOverflow={true} contentClass="max-w-[95vw] w-[95vw]">
@@ -978,10 +1059,11 @@
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title">
-                {#if mode === 'create-many'}
-                    ➕ {$t('transactions.bulk.titleCreate')} <span class="text-sm font-normal text-gray-500 dark:text-gray-400">· {drafts.length}</span>
-                {:else}
-                    ✎ {$t('transactions.bulk.titleEdit')} <span class="text-sm font-normal text-gray-500 dark:text-gray-400">· {editedCount}/{drafts.length}</span>
+                📋 {$t('transactions.bulk.title', {values: {total: drafts.length}})}
+                {#if actionCount > 0}
+                    <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
+                        ({#if newCount > 0}<span class="text-emerald-600 dark:text-emerald-400">{newCount} {$t('transactions.bulk.stateNew')}</span>{/if}{#if newCount > 0 && (editedCount > 0 || deleteCount > 0)} · {/if}{#if editedCount > 0}<span class="text-amber-600 dark:text-amber-400">{editedCount} {$t('transactions.bulk.stateEdit')}</span>{/if}{#if editedCount > 0 && deleteCount > 0} · {/if}{#if deleteCount > 0}<span class="text-red-600 dark:text-red-400">{deleteCount} {$t('transactions.bulk.stateDel')}</span>{/if})
+                    </span>
                 {/if}
             </h2>
             <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={requestClose} data-testid="tx-bulk-close" aria-label="Close">
@@ -1083,11 +1165,9 @@
              staying in the bulk batch. -->
         <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0">
             <div class="ml-auto flex flex-row-reverse items-center gap-2 flex-wrap">
-                {#if mode === 'create-many'}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row">
-                        <Plus size={12} /> {$t('transactions.bulk.addRow') || 'Add row'}
-                    </button>
-                {/if}
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row">
+                    <Plus size={12} /> {$t('transactions.bulk.addRow') || 'Add row'}
+                </button>
                 {#if mode === 'edit-many'}
                     <button type="button" class="px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all">{$t('transactions.bulk.resetAll')}</button>
                 {/if}
@@ -1108,14 +1188,16 @@
                 {columns}
                 getRowId={(d) => d.tempId}
                 storageKey="tx-bulk-modal"
-                enableSelection={false}
+                enableSelection={true}
                 enableColumnFilters={false}
                 enablePagination={false}
                 enableSorting={false}
                 enableColumnVisibility={true}
                 enableActions={true}
                 rowActions={rowActionsForTable}
+                bulkActions={bulkActionsForTable}
                 stickyActions={false}
+                {getRowClass}
             />
         </div>
 
@@ -1130,14 +1212,11 @@
                 {#if scheduler.state.isValidating}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>
                 {/if}
-                {#if mode === 'edit-many'}
-                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{$t('transactions.bulk.editHint')}</span>
-                {/if}
             </div>
             <div class="flex items-center gap-2">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={requestClose} data-testid="tx-bulk-cancel">{$t('common.cancel')}</button>
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50" disabled={commitDisabled} onclick={commit} data-testid="tx-bulk-commit">
-                    {commitLabel}
+                    💾 {commitLabel}
                 </button>
             </div>
         </div>

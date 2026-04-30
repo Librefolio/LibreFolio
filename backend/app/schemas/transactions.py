@@ -719,6 +719,10 @@ SignType = Literal["positive", "negative", "zero", "nonzero", "free"]
 # Shared by asset_mode, cash_mode, quantity_mode.
 FieldMode = Literal["required", "optional", "forbidden"]
 
+# Pair form layout — controls the dual-transaction form layout in the frontend.
+# None = standard single form, otherwise specifies which dual form to show.
+PairFormLayout = Literal["fx", "transfer_asset", "transfer_cash"]
+
 
 class TXTypeMetadata(BaseModel):
     """
@@ -750,6 +754,15 @@ class TXTypeMetadata(BaseModel):
 
     # Whether this type can be linked to an AssetEvent (see EVENT_COMPATIBLE_TYPES)
     event_compatible: bool = Field(..., description="Can be linked to an AssetEvent")
+
+    # Pair form layout — tells frontend which dual-transaction form to use.
+    # None = standard single form. Set for types that are inherently paired.
+    pair_form_layout: PairFormLayout | None = Field(
+        None,
+        description="Dual-form layout: 'fx' (2 currencies, 1 broker), "
+        "'transfer_asset' (2 brokers, 1 asset), 'transfer_cash' (2 brokers, 1 currency). "
+        "None = standard single form.",
+    )
 
 
 # Precomputed metadata for all transaction types
@@ -823,6 +836,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         quantity_sign="zero",
         cash_sign="positive",
         event_compatible=False,
+        pair_form_layout="transfer_cash",
     ),
     TransactionType.WITHDRAWAL: TXTypeMetadata(
         code="WITHDRAWAL",
@@ -837,6 +851,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         quantity_sign="zero",
         cash_sign="negative",
         event_compatible=False,
+        pair_form_layout="transfer_cash",
     ),
     TransactionType.FEE: TXTypeMetadata(
         code="FEE",
@@ -879,6 +894,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         quantity_sign="nonzero",
         cash_sign="zero",
         event_compatible=False,
+        pair_form_layout="transfer_asset",
     ),
     TransactionType.FX_CONVERSION: TXTypeMetadata(
         code="FX_CONVERSION",
@@ -893,6 +909,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         quantity_sign="zero",
         cash_sign="nonzero",
         event_compatible=False,
+        pair_form_layout="fx",
     ),
     TransactionType.ADJUSTMENT: TXTypeMetadata(
         code="ADJUSTMENT",

@@ -272,7 +272,7 @@ Clicking sets `draft.cash.code = assetCurrency`. Only shown when there's a misma
 
 ---
 
-### R6-B: Dual-Transaction Form — ✅ DECISION: Option A
+### R6-B: Dual-Transaction Form — ✅ DECISION: Option A · ⏳ IMPLEMENTING
 
 **Decision**: `pair_form_layout` explicit in backend metadata.
 
@@ -601,20 +601,29 @@ are hidden from the picker so the user can't add duplicates.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│  ☑ 2 selezionate   [🗑 Elimina sel.]  [🔗 Collega coppia]             │
-├────────────────────────────────────────────────────────────────────────┤
-│  Clicking 🔗 → inline confirmation banner:                            │
-│  ┌──────────────────────────────────────────────────────────────────┐ │
-│  │ ⚠ Collegare come coppia DEPOSIT ↔ WITHDRAWAL?                   │ │
-│  │   Riga 3: IBKR +1.000 EUR (DEPOSIT)                             │ │
-│  │   Riga 5: Fineco -1.000 EUR (WITHDRAWAL)                        │ │
-│  │                                        [Annulla]  [✓ Collega]   │ │
-│  └──────────────────────────────────────────────────────────────────┘ │
-│                                                                       │
-│  After confirm → rows merge into a single paired row with Da:/A:      │
-│  labels. The pair is committed as linked on 💾 Salva.                  │
+│  ☑ 2 selezionate   [🗑 Elimina sel.]  [🔗 Collega coppia]  ← click    │
 └────────────────────────────────────────────────────────────────────────┘
 ```
+
+→ Si apre una **ConfirmModal sopra tutto** (z-index > BulkModal, con backdrop scuro):
+```
+ ╔══════════════════════════════════════════════════════════════════╗
+ ║                                                                  ║
+ ║   🔗 Collegare come coppia CASH_TRANSFER?                    [X] ║
+ ║                                                                  ║
+ ║   Riga 3: IBKR +1.000 EUR (DEPOSIT)                             ║
+ ║   Riga 5: Fineco -1.000 EUR (WITHDRAWAL)                        ║
+ ║                                                                  ║
+ ║   ⚡ Operazione immediata                                       ║
+ ║                                                                  ║
+ ║                                  [Annulla]  [✓ Collega]         ║
+ ║                                                                  ║
+ ╚══════════════════════════════════════════════════════════════════╝
+      ░░░░░░░░░░░░░░ backdrop scuro (BulkModal sotto) ░░░░░░░░░░░░
+```
+
+After confirm → rows merge into a single paired row with Da:/A:
+labels. The pair is committed immediately (POST /promote).
 
 **Compatibility check** (frontend-side, before showing 🔗):
 - Both rows must have `requires_link === true` (pair types only)
@@ -622,26 +631,33 @@ are hidden from the picker so the user can't add duplicates.
 - For `transfer_cash`: same currency, different broker, type DEPOSIT+WITHDRAWAL
 - For `fx`: same broker, different currency, type === FX_CONVERSION
 
-**Split (Unlink)**: Row action `⛓💥` on a paired row → confirmation → pair splits
-into 2 independent rows in the grid.
+**Split (Unlink)**: Row action `⛓💥` on a paired row:
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│  Row actions for a paired row:                                         │
-│                          [✎ Edit] [📋 Clone] [➖ Remove] [🗑 Del] [⛓💥] │
-│                                                                        │
-│  Clicking ⛓💥 → inline confirmation banner:                            │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ ⚠ Scollegare questa coppia?                                     │  │
-│  │   Le 2 transazioni diventeranno righe indipendenti.              │  │
-│  │   IBKR: +1.000 EUR (DEPOSIT) ↔ Fineco: -1.000 EUR (WITHDRAWAL) │  │
-│  │                                     [Annulla]  [⛓💥 Scollega]   │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│                                                                        │
-│  After confirm → paired row splits into 2 separate rows in the grid.   │
-│  The unlink is committed on 💾 Salva.                                   │
-└────────────────────────────────────────────────────────────────────────┘
+  Row actions for a paired row:
+                    [✎ Edit] [📋 Clone] [➖ Remove] [🗑 Del] [⛓💥]
+                                                               ↑ click
 ```
+
+→ Si apre una **ConfirmModal sopra tutto**:
+```
+ ╔══════════════════════════════════════════════════════════════════╗
+ ║                                                                  ║
+ ║   ⚠ Scollegare questa coppia?                               [X] ║
+ ║                                                                  ║
+ ║   Le 2 transazioni diventeranno righe indipendenti.              ║
+ ║   IBKR: +1.000 EUR (DEPOSIT) ↔ Fineco: -1.000 EUR (WITHDRAWAL) ║
+ ║                                                                  ║
+ ║   ⚡ Operazione immediata                                       ║
+ ║                                                                  ║
+ ║                                  [Annulla]  [⛓💥 Scollega]      ║
+ ║                                                                  ║
+ ╚══════════════════════════════════════════════════════════════════╝
+      ░░░░░░░░░░░░░░ backdrop scuro (BulkModal sotto) ░░░░░░░░░░░░
+```
+
+After confirm → paired row splits into 2 separate rows in the grid.
+The unlink is committed immediately (POST /split).
 
 ---
 
@@ -658,30 +674,47 @@ without opening the bulk modal:
 │  ☑ 26/04     │ 🏦   │  0   │ +1.000 EUR  │  —    │ IBKR    │     │
 │  ☑ 26/04     │ 🏦   │  0   │ -1.000 EUR  │  —    │ Fineco  │     │
 ├──────────────┴──────┴──────┴─────────────┴───────┴─────────┴─────┤
-│  ☑ 2 sel.  [🗑 Elimina]  [🔗 Collega come coppia]               │
-│                                                                   │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │ ⚠ Collegare come DEPOSIT↔WITHDRAWAL?                       │  │
-│  │   IBKR: +1.000 EUR · Fineco: -1.000 EUR                    │  │
-│  │                              [Annulla]  [✓ Collega]         │  │
-│  └─────────────────────────────────────────────────────────────┘  │
+│  ☑ 2 sel.  [🗑 Elimina]  [🔗 Collega come coppia]  ← click      │
 └──────────────────────────────────────────────────────────────────┘
+```
+
+→ Si apre la **ConfirmModal sopra tutto**:
+```
+ ╔══════════════════════════════════════════════════════════════════╗
+ ║                                                                  ║
+ ║   🔗 Collegare come CASH_TRANSFER?                           [X] ║
+ ║                                                                  ║
+ ║   IBKR: +1.000 EUR · Fineco: -1.000 EUR                         ║
+ ║                                                                  ║
+ ║   ⚡ Operazione immediata                                       ║
+ ║                                                                  ║
+ ║                                  [Annulla]  [✓ Collega]         ║
+ ║                                                                  ║
+ ╚══════════════════════════════════════════════════════════════════╝
+      ░░░░░░░░░░░░ backdrop scuro (Main Table sotto) ░░░░░░░░░░░░░
 ```
 
 **Split**: Per-row action `⛓💥` (shown only on linked rows):
 ```
 │  26/04  │ 🏦  │ 0  │+1.000 EUR │⬆🔗│ — │ IBKR  │ [👁][✎][📋][🗑][⛓💥] │
-                                                      ↑ Scollega coppia
+                                                      ↑ click
+```
 
-      │ click ⛓💥
-      ▼
-
-┌──────────────────────────────────────────────────────────────────┐
-│ ⚠ Scollegare questa coppia?                                     │
-│   Le 2 transazioni diventeranno indipendenti.                    │
-│   IBKR: +1.000 EUR (DEPOSIT) ↔ Fineco: -1.000 EUR (WITHDRAWAL) │
-│                         [Annulla]  [⛓💥 Scollega]                │
-└──────────────────────────────────────────────────────────────────┘
+→ Si apre la **ConfirmModal sopra tutto**:
+```
+ ╔══════════════════════════════════════════════════════════════════╗
+ ║                                                                  ║
+ ║   ⚠ Scollegare questa coppia?                               [X] ║
+ ║                                                                  ║
+ ║   Le 2 transazioni diventeranno indipendenti.                    ║
+ ║   IBKR: +1.000 EUR (DEPOSIT) ↔ Fineco: -1.000 EUR (WITHDRAWAL) ║
+ ║                                                                  ║
+ ║   ⚡ Operazione immediata                                       ║
+ ║                                                                  ║
+ ║                                  [Annulla]  [⛓💥 Scollega]      ║
+ ║                                                                  ║
+ ╚══════════════════════════════════════════════════════════════════╝
+      ░░░░░░░░░░░░ backdrop scuro (Main Table sotto) ░░░░░░░░░░░░░
 ```
 
 ---
@@ -704,7 +737,7 @@ without opening the bulk modal:
               │  - pre-pop rows    │
               │  - + Nuova riga    │
               │  - 🔍 Picker modal │←── TransactionsTable (pickerMode)
-              │  - ☐ selection     │      same component, excludeIds
+              │  - ☐ selection     │
               │  - 🔗 link pair    │
               │  - ⛓💥 split pair  │
               │  - 🔴 mark delete  │
@@ -717,10 +750,33 @@ without opening the bulk modal:
 **Flow: Edit single TX** → opens BulkModal with that TX loaded. If paired, partner auto-loaded.
 **Flow: Edit N selected** → opens BulkModal with all N rows. Paired partners auto-loaded.
 **Flow: Add existing** → from BulkModal: 🔍 → TransactionPickerModal (full table) → select → Aggiungi.
-**Flow: Promote** → from BulkModal: add 2 TXs via picker → select both → 🔗 Collega.
-  Or from main table: select 2 → 🔗 quick action (backend PATCH immediately).
+**Flow: Promote** → from BulkModal: add 2 TXs via picker → select both → 🔗 Collega → ConfirmModal sopra tutto → POST /promote immediato.
+  Or from main table: select 2 → 🔗 quick action → ConfirmModal → POST /promote immediato.
 **Flow: Delete** → from BulkModal: add TX via picker → mark 🔴 delete → on 💾 Salva → backend DELETE.
   Or from main table: 🗑 per-row action (existing behavior).
-**Flow: Split** → from BulkModal: ⛓💥 on paired row → splits in grid → committed on save.
-  Or from main table: ⛓💥 per-row action → confirmation → backend PATCH immediately.
+**Flow: Split** → from BulkModal: ⛓💥 on paired row → ConfirmModal sopra tutto → POST /split immediato.
+  Or from main table: ⛓💥 per-row action → ConfirmModal → POST /split immediato.
 
+---
+
+## ✅ R6-B Implementation Checklist
+
+- [x] R6-B.0: Backend `pair_form_layout` field in `TXTypeMetadata` + `PairFormLayout` type
+- [x] R6-B.0b: `./dev.py api sync` → Zod client updated
+- [x] R6-B.0c: `transactionTypeStore.ts` — `PairFormLayout` type + `pairFormLayout` in `TypeRule` + helpers
+- [x] R6-B.1: TransactionFormModal — FX dual form (pair_form_layout = "fx")
+- [x] R6-B.2: TransactionFormModal — Transfer Asset dual form (pair_form_layout = "transfer_asset")
+- [x] R6-B.3: TransactionFormModal — Cash Transfer dual form (pair_form_layout = "transfer_cash")
+- [x] R6-B.4a: Unified BulkModal — `delete` row state, mixed-batch commit (creates+updates+deletes)
+- [x] R6-B.4b: Unified BulkModal — row actions (edit/clone/mark-delete/reset), `+ Add row` in both modes
+- [x] R6-B.4c: Unified BulkModal — checkbox selection + bulk "Delete selected" action
+- [x] R6-B.4d: Unified BulkModal — red tint styling for `delete` rows (line-through + opacity)
+- [x] R6-B.4e: Unified BulkModal — header with status counts (N new · M edit · K del), unified "💾 Save all"
+- [x] R6-B.4f: i18n keys for unified BulkModal (11 keys × 4 locales)
+- [ ] R6-B.4g: Paired row rendering (2 internal lines per pair in DataTable — Da:/A: labels)
+- [ ] R6-B.4h: Date sorting (asc/desc) + column filters (type, broker, asset)
+- [ ] R6-B.Bugfix1: → [`plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md) — W32-W39 fixes
+- [ ] R6-B.5: TransactionPickerModal — reuse TransactionsTable with pickerMode
+- [ ] R6-B.6: Promote & Split within BulkModal
+- [ ] R6-B.7: Main Table — Promote & Split quick actions
+- [ ] R6-B.8: Entry point wiring + flow integration

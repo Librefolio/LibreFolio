@@ -110,9 +110,9 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-046]] | Transaction Model & Bulk API | backend | `implemented` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
-| [[F-047]] | Transaction List Page (DataTable + filters) | frontend | `implemented` | — |
-| [[F-048]] | Staging Modal (manual done; BRIM Part 5) | frontend | `in-progress` | — |
+| [[F-046]] | Transaction Model & Unified Batch API (validate + commit) | fullstack | `implemented` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
+| [[F-047]] | Transaction List Page (DataTable + filters + dual-form modals) | frontend | `implemented` | — |
+| [[F-048]] | Transaction Modals (Form / Bulk / Promote Wizard + server-driven type rules) | frontend | `in-progress` | — |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | `in-progress` | — |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `planned` | — |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |
@@ -209,7 +209,7 @@
 | FX | 9 | 9 | 0 | 0 |
 | ASSETS | 13 | 13 | 0 | 0 |
 | SIGNALS | 9 | 9 | 0 | 0 |
-| TRANSACTIONS | 6 | 0 | 3 | 3 |
+| TRANSACTIONS | 6 | 3 | 1 | 2 |
 | SCHEDULER | 2 | 0 | 0 | 2 |
 | DASHBOARD | 2 | 0 | 0 | 2 |
 | CALCULATIONS | 3 | 2 | 0 | 1 |

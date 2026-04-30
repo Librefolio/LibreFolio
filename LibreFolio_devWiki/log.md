@@ -617,3 +617,57 @@ Cross-checking all Phase 7 Part 4 wiki pages against actual source files (range:
 **Verified correct**: entityStore.ts API, brokerStore.ts API, isGrouped logic (TransactionsTable), DataTable fullData/onSortChange/getEnumOptionsWithCounts, capture-phase click (use:captureClick action).
 
 **Files corrected**: F-047.md, sources/phase07-part4-round2.md, concepts/entity-store-pattern.md, concepts/opportunistic-cache-merge.md, problems/babel-currency-symbol-locale.md.
+
+---
+
+## [2026-05-25] file | Dual-Transaction Form — TransactionFormModal paired mode (R6-B.1–B.3)
+
+Filed discovery: TransactionFormModal.svelte now supports paired transactions (FX_CONVERSION, TRANSFER_ASSET, TRANSFER_CASH) via a dual-form mode driven by `pairFormLayout` from `transactionTypeStore`.
+
+**Created**:
+- [[decisions/dual-transaction-form-design]] — design choices: single modal with From/To layout, Da/A sign-based detection on edit, swap normalisation, `collectDualCreates()` / `collectDualUpdates()`, client-side same-currency/same-broker validation
+
+**Updated**:
+- [[features/F-047]] — added TransactionFormModal to modal inventory + source files table; added `dual-transaction-form-design` to `related_decisions`
+- `index.md` — added decision entry
+
+Key implementation details captured: 3 layout modes (fx, transfer_asset, transfer_cash), `DualDraftTo` state type, partner auto-fetch in edit mode, 7 new i18n keys across 4 locales, type selector readonly in dual mode, advanced section hidden, tags/description shared across pair sides.
+
+## [2026-05-25] ingest | Phase 7 Part 4 Rounds 3–5 (5 plan files)
+
+Batch ingest of 5 Phase 7 Part 4 plan files covering the transaction modal system rewrite, i18n validation errors, unified batch pipeline, and server-driven type rules.
+
+**Source files ingested** (git hash `133cb0d4`):
+- `plan-phase07-transaction-Part4_Round3-stagingModalRewrite.prompt.md`
+- `plan-phase07-transaction-Part4_Round3_Bugfix1-formModalRedesign.prompt.md`
+- `plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md`
+- `plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md`
+- `plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md`
+
+**Created**:
+- [[sources/phase07-part4-round3-staging-rewrite]] — three-component split (FormModal/BulkModal/PromoteWizard)
+- [[sources/phase07-part4-round4-unified-pipeline]] — 4 endpoints → 2 with lenient parse
+- [[sources/phase07-part4-round5-server-type-rules]] — transactionTypeStore + auto-sign + dual-form
+- [[problems/pydantic-422-preemption]] — Pydantic 422 blocks service-layer validation (resolved)
+
+**Updated**:
+- [[sources/phase07-part4-round3-bugfix1]] — 5 walkthrough rounds, A1→A3→A4 pivot, field reset, unsaved-changes
+- [[sources/phase07-part4-round3-bugfix2]] — structured error codes, PydanticCustomError, resolveIssueMessage
+- [[features/F-046]] → title updated (Unified Batch API), layer→fullstack
+- [[features/F-047]] → confirmed implemented, dual-form modals
+- [[features/F-048]] → confirmed in-progress (R6-B items pending)
+- `features/registry.md` — TRANSACTIONS domain: 3 implemented, 1 in-progress, 2 planned
+- `index.md` — 2 decisions, 2 concepts, 2 problems, 5 sources added
+- `raw/ingest-registry.md` — 5 new entries at `133cb0d4`
+
+**Key decisions surfaced**:
+- [[decisions/unified-batch-pipeline]] — already existed
+- [[decisions/server-driven-type-rules]] — already existed
+
+**Key concepts surfaced**:
+- [[concepts/validate-scheduler-pattern]] — already existed
+- [[concepts/resolve-validation-message-pattern]] — already existed
+
+**Key problems surfaced**:
+- [[problems/pydantic-422-preemption]] — new (resolved by unified pipeline)
+- [[problems/browser-autofill-numeric-fields]] — already existed
