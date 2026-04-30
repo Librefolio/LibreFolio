@@ -24,7 +24,7 @@ The primary user-facing flow for entering transactions is through the BRIM pipel
 |------|---------|-------|----------------|--------|
 | [[F-046]] | Transaction Model & Bulk API | backend | core — data model + multi-broker atomic bulk create with dry-run | implemented |
 | [[F-047]] | Transaction List Page (DataTable + filters) | frontend | display — client-side filtered DataTable, always-pair-adjacent rendering | implemented |
-| [[F-048]] | Staging Modal (unified manual entry + BRIM output) | frontend | core — manual `create-many`/`edit-many` done; BRIM `create-brim` in Part 5 | in-progress |
+| [[F-048]] | Transaction Modals (Form / Bulk / Promote Wizard) | frontend | core — FormModal (single + dual-form), BulkModal (DataTable-based, mixed row states), PromoteWizard; unified batch pipeline, server-driven type rules, i18n validation errors | in-progress |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | core — wizard to match extracted assets + commit | in-progress |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | support — inline preview of uploaded broker report files | planned |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | support — FK between transactions and asset events + suggest endpoint | implemented |
@@ -57,16 +57,16 @@ graph TD
 
 ## Known problems / limitations
 
-Phase 7 Parts 1+2+3 closed (2026-04-25). Phase 7 Part 4 closed (2026-04-28, frontend). Remaining items:
+Phase 7 Parts 1+2+3 closed (2026-04-25). Phase 7 Part 4 Rounds 1–5 closed (2026-04-30). Remaining items:
 
-- **F-048** BRIM mode (`create-brim`) for Staging Modal not yet built — Part 5 work.
+- **F-048** BRIM mode (`create-brim`) for modals not yet built — Part 5 work.
+- **F-048** R6-B.4g–B.8: paired row rendering in DataTable, TransactionPickerModal, Promote/Split within bulk — in progress.
 - **F-050** File Preview System still planned (Part 5+).
 - **F-049** asset matching wizard live but UX polish ongoing.
 - **F-047** E2E test specs deferred to Phase 7 final.
-- **Currency consistency**: enforced through [[decisions/price-currency-hard-reject]]
-  (hard-400 on price/event currency mismatch, HTTP 409 on `Asset.currency`
-  PATCH with existing data) and [[decisions/policy-d-currency-wipe]] (destructive
-  symmetric wipe; transactions preserved with `asset_event_id = NULL`).
+- **Unified batch pipeline**: `POST /validate` + `/commit` replace 4 old endpoints ([[decisions/unified-batch-pipeline]])
+- **Server-driven type rules**: frontend auto-adapts to backend metadata ([[decisions/server-driven-type-rules]])
+- **Currency consistency**: enforced through [[decisions/price-currency-hard-reject]] and [[decisions/policy-d-currency-wipe]].
 
 Two production bugs were surfaced by the Phase 7 Part 3 BlockG coverage push and
 have been filed:

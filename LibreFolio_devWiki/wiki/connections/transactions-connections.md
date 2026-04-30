@@ -1,7 +1,7 @@
 # Transaction Feature Connections
 
-> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25), Part 4✅ DONE (2026-04-28)**.
-> Frontend `/transactions` page fully implemented. F-047 implemented. F-048 manual mode done, BRIM mode deferred to Part 5.
+> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25), Part 4✅ DONE (Rounds 1–5, 2026-04-30)**.
+> Frontend `/transactions` page fully implemented. F-047 implemented. F-048 modals rewritten (FormModal + BulkModal + PromoteWizard) with unified batch pipeline, server-driven type rules, dual-transaction form, i18n validation errors. BRIM mode deferred to Part 5.
 > See [[connections/dependency-graph]] for the full project view.
 
 ---
@@ -59,8 +59,9 @@ Additional Phase 7 deliverables not in the original gap list:
 
 | Backend | Interface | Frontend |
 |---------|-----------|----------|
-| [[F-046]] TX Bulk API | `POST /api/v1/transactions/bulk` | [[F-048]] Staging Modal commit |
+| [[F-046]] TX Unified Pipeline | `POST /api/v1/transactions/validate` + `/commit` | [[F-048]] Form/Bulk/Promote modals |
 | [[F-046]] TX List | `GET /api/v1/transactions` | [[F-047]] Transaction List Page |
+| [[F-046]] TX Type Metadata | `GET /api/v1/transactions/types` | [[F-048]] server-driven type rules |
 | [[F-013]] BRIM parse | `POST /api/v1/brokers/import/files/{id}/parse` | [[F-049]] BRIM Import UI |
 | [[F-013]] Last parse cache | `GET /api/v1/brokers/import/files/{id}/last-parse` | [[F-049]] Re-open Staging |
 | [[F-050]] File preview | `GET /api/v1/uploads/{id}/preview` (planned) | [[F-050]] Inline preview |

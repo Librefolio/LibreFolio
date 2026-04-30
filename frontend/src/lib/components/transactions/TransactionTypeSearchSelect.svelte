@@ -15,7 +15,7 @@
     import {_ as t} from '$lib/i18n';
     import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
-    import {TX_TYPES, getTransactionTypeIconUrl, getStandaloneTypes, type TransactionTypeCode} from '$lib/stores/transactionTypeStore';
+    import {TX_TYPES, getTransactionTypeIconUrl, getTypeRule, type TransactionTypeCode} from '$lib/stores/transactionTypeStore';
 
     interface Props {
         /** Currently selected type. */
@@ -38,15 +38,19 @@
 
     let {value = $bindable('BUY' as TransactionTypeCode), disabled = false, types, placeholder, compact = false, testid = 'tx-type-select', onchange}: Props = $props();
 
-    let optionTypes = $derived<ReadonlyArray<TransactionTypeCode>>(types ?? getStandaloneTypes());
+    let optionTypes = $derived<ReadonlyArray<TransactionTypeCode>>(types ?? [...TX_TYPES]);
 
     let options = $derived<SelectOption[]>(
-        optionTypes.map((tt) => ({
-            value: tt,
-            label: $t(`transactions.types.${tt}`) || tt,
-            searchText: tt,
-            icon: getTransactionTypeIconUrl(tt),
-        })),
+        optionTypes.map((tt) => {
+            const label = $t(`transactions.types.${tt}`) || tt;
+            const isPair = getTypeRule(tt).requiresPair;
+            return {
+                value: tt,
+                label: isPair ? `↔ ${label}` : label,
+                searchText: `${tt} ${label}`,
+                icon: getTransactionTypeIconUrl(tt),
+            };
+        }),
     );
 
     function handleChange(v: string) {

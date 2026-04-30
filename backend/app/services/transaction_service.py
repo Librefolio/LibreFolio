@@ -217,11 +217,18 @@ class TransactionService:
         (error_message, code, params).
         """
         if a.type != b.type:
-            return (
-                f"linked pair must share the same type (got {a.type.value} + {b.type.value})",
-                "pairTypeMismatch",
-                {"typeA": a.type.value, "typeB": b.type.value},
-            )
+            # W34: Allow WITHDRAWAL↔DEPOSIT pairs (cash transfer / "Bonifico").
+            # These are deliberately different types linked to represent a cash
+            # movement between the user's own brokers (Block H.2).
+            valid_mixed = {
+                frozenset({TransactionType.WITHDRAWAL, TransactionType.DEPOSIT}),
+            }
+            if frozenset({a.type, b.type}) not in valid_mixed:
+                return (
+                    f"linked pair must share the same type (got {a.type.value} + {b.type.value})",
+                    "pairTypeMismatch",
+                    {"typeA": a.type.value, "typeB": b.type.value},
+                )
         if a.type == TransactionType.TRANSFER and a.broker_id == b.broker_id:
             return (
                 f"TRANSFER requires distinct brokers (both on broker {a.broker_id})",

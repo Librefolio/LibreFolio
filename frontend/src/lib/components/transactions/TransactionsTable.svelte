@@ -828,7 +828,7 @@
            Light: --broker-vivid-light (hsl hue, 60%, 80%) mixed with white.
            Dark: --broker-vivid (hsl hue, 75%, 50%) mixed with near-black. */
         .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 60%, white);
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 30%, white);
         }
         .dark .tx-table-wrap tr.tx-row-tinted > td {
             background: color-mix(in srgb, var(--broker-vivid, transparent) 15%, #0f0f18);

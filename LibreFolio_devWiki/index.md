@@ -86,6 +86,9 @@
 | [[decisions/policy-d-currency-wipe]] | Asset currency change → destructive symmetric wipe (prices + events); transactions preserved with `asset_event_id=NULL`; pre-confirm via new `/backup` router | 2026-04-23 | assets, currency, destructive, fifo, backup |
 | [[decisions/transactions-client-side-filtering]] | All `/transactions` page filtering is client-side; `GET /transactions` loads all records; Refresh button for reload | 2026-04-28 | transactions, frontend, datatable, filtering |
 | [[decisions/datatable-tooltip-custom-cell]] | Tooltips in DataTable cells use `<Tooltip.svelte>` via CustomCell only — `title=""` HTML attribute prohibited | 2026-04-28 | frontend, datatable, tooltip, svelte5 |
+| [[decisions/dual-transaction-form-design]] | TransactionFormModal dual mode: single modal produces 2 linked payloads for FX/Transfer pairs | 2026-05-25 | frontend, transactions, modal, dual-form, pair |
+| [[decisions/unified-batch-pipeline]] | 4 TX mutation endpoints → 2 (validate + commit) with TXMixedBatch + lenient per-row parse | 2026-04-29 | backend, transactions, api, architecture, pipeline |
+| [[decisions/server-driven-type-rules]] | Replace 3 hardcoded frontend type-rule files with server-fetched `transactionTypeStore` | 2026-04-30 | backend, frontend, transactions, type-rules, auto-sign |
 
 ## Concepts
 
@@ -108,6 +111,8 @@
 | [[concepts/entity-store-pattern]] | `createEntityStore<T>()` factory for bounded entity caches with proper `invalidate()` semantics | frontend, stores, cache, svelte5 |
 | [[concepts/always-pair-adjacent]] | TRANSFER/FX_CONVERSION pairs always rendered adjacent in TransactionsTable (giver above / receiver below) | frontend, transactions, datatable, rendering |
 | [[concepts/opportunistic-cache-merge]] | Any code with fresh entity data calls `merge()` to deposit into shared store — universal ingress pattern | frontend, stores, cache, assets |
+| [[concepts/validate-scheduler-pattern]] | Debounce 1s + idle 60s + manual validate with anti-bounce 10s; auto-disable above 50 rows | frontend, transactions, validation, scheduling |
+| [[concepts/resolve-validation-message-pattern]] | Frontend i18n error resolution: code→i18n key, ID→name via stores, amount→formatted | frontend, transactions, i18n, error-handling |
 
 ## Problems
 
@@ -128,6 +133,8 @@
 | [[problems/svelte5-effect-read-write-loop]] | `$effect` reads and writes same `$state` → `effect_update_depth_exceeded` crash | resolved | frontend, svelte5, reactivity, infinite-loop |
 | [[problems/babel-currency-symbol-locale]] | `get_currency_symbol('USD', locale='it')` returns `'USD'` not `'$'` — fix: always use `locale='en'` for symbol | resolved | backend, python, babel, currency, i18n |
 | [[problems/datatable-filter-options-disappear]] | Enum filter options disappeared when count reached 0 due to `.filter(o => o.count > 0)` — removed that filter | resolved | frontend, datatable, filter, enum |
+| [[problems/pydantic-422-preemption]] | Pydantic 422 pre-emption blocked service-layer validation; fixed by lenient per-row parse in unified pipeline | resolved | backend, pydantic, fastapi, transactions |
+| [[problems/browser-autofill-numeric-fields]] | Chrome autofill on numeric text inputs — fixed with `autocomplete="off"` + randomised `name` | resolved | frontend, ux, forms, autofill |
 
 ## Entities
 
@@ -173,3 +180,8 @@
 | [[sources/phase07-part4-transactions-ui]] | `plan-phase07-transaction-Part4.prompt.md` ✅ DONE | 2026-04-28 | phase07, transactions, frontend, datatable, staging, always-pair-adjacent |
 | [[sources/phase07-part4-round1]] | `plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md` ✅ DONE | 2026-04-28 | phase07, transactions, frontend, bugfix, filters, currency-stack, client-side-filtering |
 | [[sources/phase07-part4-round2]] | `plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md` ✅ DONE | 2026-04-28 | phase07, transactions, frontend, entityStore, brokerStore, slider, tooltip |
+| [[sources/phase07-part4-round3-staging-rewrite]] | `plan-phase07-transaction-Part4_Round3-stagingModalRewrite.prompt.md` ✅ DONE | 2026-05-25 | phase07, transactions, formModal, bulkModal, promoteWizard, validate-scheduler |
+| [[sources/phase07-part4-round3-bugfix1]] | `plan-phase07-transaction-Part4_Round3_Bugfix1-formModalRedesign.prompt.md` ✅ DONE | 2026-05-25 | phase07, transactions, bugfix, UX, unsaved-changes, tags-autocomplete |
+| [[sources/phase07-part4-round3-bugfix2]] | `plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md` ✅ DONE | 2026-05-25 | phase07, transactions, i18n, validation, pydantic, structured-errors |
+| [[sources/phase07-part4-round4-unified-pipeline]] | `plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md` ✅ DONE | 2026-05-25 | phase07, transactions, api, pipeline, lenient-parse, breaking-change |
+| [[sources/phase07-part4-round5-server-type-rules]] | `plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` ✅ DONE | 2026-05-25 | phase07, transactions, type-rules, auto-sign, dual-form, dark-mode |
