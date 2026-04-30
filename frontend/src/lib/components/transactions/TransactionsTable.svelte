@@ -33,9 +33,8 @@
     import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
     import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
     import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
-    import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES} from '$lib/utils/transactionTypes';
+    import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES, getEventTypeEmoji} from '$lib/stores/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {getEventTypeEmoji} from '$lib/utils/eventTypes';
     import TxTooltipCell from './cells/TxTooltipCell.svelte';
     import TxLinksCell from './cells/TxLinksCell.svelte';
     import TxTypeIconCell from './cells/TxTypeIconCell.svelte';

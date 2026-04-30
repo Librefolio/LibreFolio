@@ -240,3 +240,148 @@ tests:      465 ins, 270 del (net +195 lines — better coverage)
 
 **Note**: this hotfix is now moot — `create_bulk` was subsequently deleted during the final cleanup. The fix is documented for historical completeness only.
 
+---
+
+## 🐛 Frontend Issues Found (manual E2E 2026-04-29)
+
+### W24 — Balance error `index` always 0 (backend)
+
+**Severity**: P1 (misleading)
+**Where**: `transaction_service.py` L835 — `BalanceValidationError` catch uses hardcoded `index=0`
+**Problem**: Balance violations (`balanceAssetNegative`, `balanceCashNegative`) are broker-wide — they don't originate from a single row. But the code reports `index: 0`, making the frontend display "Riga 1:" even when the offending tx is row 2+.
+**Fix**: Use `index=-1` (or `null`) as sentinel for "broker-level, no specific row". Frontend `resolveIssueMessage` should skip the row prefix when `index < 0` or `null`. BulkModal `jumpToIssue` should not scroll when index is sentinel.
+
+### W25 — Commit banner shows only first raw error, not translated
+
+**Severity**: P1 (UX regression — validate shows proper i18n but commit doesn't)
+**Where**: `TransactionFormModal.svelte` L485/L500, `TransactionBulkModal.svelte` L511/L527
+**Problem**: On `committed: false`, both modals do `formError = resp.issues?.[0]?.error` — takes only the first issue's raw English string. The validate banner (green/warning) correctly uses `resolveIssueMessage()` + shows all issues as a list.
+**Fix**: On commit failure, set `issues = resp.issues` and show the same styled warning banner as validate does (with all issues, translated, clickable in bulk). `formError` should only be used for HTTP/network errors from `saveWithRetry`. This unifies the error display and avoids duplication.
+
+### W26 — Validate button style inconsistency (Form vs Bulk)
+
+**Severity**: P2 (cosmetic)
+**Where**: `TransactionFormModal.svelte` L906, `TransactionBulkModal.svelte` L1007
+**Problem**: FormModal validate button is plain text (`⚡ Verifica ora`), positioned right-side alongside Cancel/Save. BulkModal has a proper `<Zap>` icon button on the left side of the footer.
+**Desiderata**: Both modals should use the BulkModal's style — `<Zap>` icon + button on the **left** side of the footer, with Cancel/Save on the right. FormModal footer should mirror BulkModal's layout.
+
+### W27 — HTTP 200 for validation failures (by design)
+
+**Severity**: P3 (design question — no change needed)
+**Where**: `POST /validate` and `POST /commit` return 200 even with `committed: false`
+**Rationale**: 200 is correct — the server successfully processed the request and returned a structured response. The `committed` boolean is the semantic indicator. Using 422 would conflict with Pydantic's own 422 format and break the "lenient parse" design (schema errors coexist with business-rule errors in `issues[]`). A hypothetical 409 (Conflict) could work but adds complexity with no benefit since the client already checks `committed`. **Decision: keep 200.**
+
+---
+
+## 📋 Round 5 Plan — Frontend Error Display Unification
+
+**Goal**: Unify error display in Form+Bulk modals so commit failures use the same translated, categorized issue list as validation.
+
+### Step R5-1 — Backend: sentinel index for balance errors ✅
+
+**File**: `backend/app/services/transaction_service.py` L835
+- Changed `index=0` → `index=-1` for `BalanceValidationError` catch
+- Updated `TXValidationIssue.index` schema: `ge=0` → `ge=-1`
+- All 87 backend tx tests pass (7 validate + 80 api/service)
+
+### Step R5-2 — Frontend: commit failure → red ⛔ banner with categorized issues ✅
+
+**Files**: `TransactionFormModal.svelte`, `TransactionBulkModal.svelte`
+- Added `commitFailed` state flag (reset on open, on draft change, on new commit)
+- On `committed: false`: sets `issues = resp.issues` + `commitFailed = true`
+- **Commit failure**: RED ⛔ banner (variant="error") with `rolledBackTitle`, then two sections:
+  - **Field errors** (index ≥ 0): labeled `issuesHeader`, clickable "Riga N:" in bulk
+  - **Balance errors** (index < 0): labeled `balanceIssuesHeader`, no row prefix, with `{@html}` for bold
+- **Validate issues**: YELLOW banner (variant="warning"), same two-section layout
+- `formError` reserved for HTTP/network errors only
+- Banner auto-clears when user edits a draft (`commitFailed = false` in change $effect)
+
+### Step R5-3 — Frontend: restore emoji ⚡ validate button ✅
+
+**Files**: `TransactionFormModal.svelte`, `TransactionBulkModal.svelte`
+- Reverted Zap SVG → emoji ⚡ in both footer validate buttons
+- Removed unused `Zap` import from both files
+- Layout kept: ⚡ button on LEFT side, Cancel+Save on RIGHT (mirrors BulkModal)
+
+### Step R5-3b — i18n: balance error messages with `<strong>` ✅
+
+**Files**: `en.json`, `it.json`, `fr.json`, `es.json`
+- `balanceAssetNegative`: `<strong>` around asset name + balance amount
+- `balanceCashNegative`: `<strong>` around currency + formatted balance
+- New key `balanceIssuesHeader`: "This configuration causes data inconsistencies" (4 locales)
+
+### Step R5-4 — Frontend: row prefix for index=-1 ✅
+
+**File**: `TransactionBulkModal.svelte`
+- `jumpToIssue()`: early return when `issue.index < 0` (no row to scroll to)
+- Banner: `{#if issue.index >= 0}` → clickable button with "Riga N:"; else plain `<span>` without prefix
+
+### Step R5-5 — Anti-bounce 10s for validate + commit ✅
+
+**Problem**: Clicking validate/commit multiple times without editing sends duplicate network requests.
+**Fix**: Three-layer anti-bounce:
+
+1. **Validate scheduler** (`useValidateScheduler.svelte.ts`):
+   - Added `draftKey` option + `antiBounceMs` (default 10s)
+   - `runValidate()` checks: if `draftKey()` unchanged AND < 10s since last validate → skip
+   - Tracks `lastValidatedDraftKey` internally
+
+2. **Commit function** (both modals):
+   - Added `lastCommitDraftKey` + `lastCommitAt` state tracking
+   - At start of `commit()`: if `lastDraftKey === lastCommitDraftKey` AND < 10s → skip (no-op)
+   - Updated in `finally` block after every commit attempt
+
+3. **Wiring**: both modals pass `draftKey: () => lastDraftKey` to the scheduler
+
+### Step R5-6 — Manual test
+
+- Manual test: commit a bad batch → see red ⛔ banner with categorized issues
+- Manual test: click commit again without editing → no network request for 10s
+- Manual test: click ⚡ validate again without editing → no network request for 10s
+- Manual test: edit a field → anti-bounce resets, next click fires immediately
+
+---
+
+## 🐛 Frontend Issues Found (manual E2E 2026-04-30)
+
+### W28 — Balance errors not attributed to the offending row
+
+**Severity**: P1 (misleading)
+**Where**: BulkModal banner — balance issues (`index: -1`) shown without "Riga N:" prefix, but the user expects to see WHICH row caused the violation.
+**Example**: 3 rows in batch, row 2 is a SELL that causes Bitcoin to go negative → banner shows the error without any row reference. User expects "Riga 2: Le posizioni di Bitcoin vanno in negativo…"
+**Root cause**: Backend `BalanceValidationError` is broker-level (`index: -1`). It knows `brokerId` + `assetId` (or `currency`) but not which specific batch row triggered it.
+**Proposed fix**: Frontend-side row attribution. When rendering a balance issue with `index < 0`, scan the draft rows for the last match on `brokerId + assetId` (for asset errors) or `brokerId + cash.code` (for cash errors) using the issue's `params`. Show "Riga N:" with the matched row, clickable for scroll. If no match → show without prefix (current behavior).
+**Scope**: BulkModal only (FormModal has a single row, no prefix needed).
+
+### W29 — Server-driven type rules + auto-sign for quantity/cash
+
+**Severity**: P2 (UX improvement + future-proofing)
+**Where**: Frontend type rules are hardcoded in `transactionTypeRules.ts`. Backend already exposes `GET /api/v1/transactions/types` with full metadata per type.
+**Current state**: The endpoint returns `allowed_quantity_sign` and `allowed_cash_sign` (`"+"`, `"-"`, `"0"`, `"+/-"`) plus `asset_mode`, `requires_cash`, `requires_link`, `event_compatible`. Frontend duplicates these rules locally.
+**Problem**: User must enter negative numbers for SELL quantity and BUY cash — counter-intuitive. Rules are duplicated between backend response and frontend `transactionTypeRules.ts`.
+
+**Proposed change — 2 parts**:
+
+#### W29a — Auto-sign negation (UX)
+When a type has `allowed_quantity_sign: "-"` or `allowed_cash_sign: "-"`, the frontend should:
+1. Accept **positive** input from the user (more intuitive)
+2. Auto-negate the value before sending to the backend (`collectCreate()` / `collectUpdate()`)
+3. Show a visual hint (e.g. "−" prefix or label like "Amount to pay") so the user knows the value will be negated
+4. For `"+/-"` signs, no auto-negation — user enters the sign explicitly (as today)
+5. For `"0"`, force `quantity = 0` or hide the field (as today)
+
+#### W29b — Server-driven rules (architecture)
+Replace `transactionTypeRules.ts` hardcoded rules with data from `GET /transactions/types`:
+1. Fetch types on app init (or lazy on first modal open), cache in a store
+2. Map `asset_mode` → field visibility (`REQUIRED` = show + required, `OPTIONAL` = show, `FORBIDDEN` = hide)
+3. Map `requires_cash` → cash field visibility
+4. Map `allowed_quantity_sign` / `allowed_cash_sign` → sign behavior (positive-only input + auto-negate, or free sign)
+5. Update `icon` field to return the correct asset path (currently emoji, should be `/icons/transactions/sell.png` etc.)
+6. `isDraftReadyForValidation()` derives from the fetched rules instead of local switch/case
+
+**Benefits**: Single source of truth in backend. Adding a new transaction type only requires backend changes — frontend auto-adapts.
+
+**Estimated effort**: ~3–4 h (W29a auto-sign) + ~2 h (W29b server-driven rules) = ~5–6 h total.
+**Prerequisite**: W28 (row attribution) should be done first as it's a quick win.
+
+**→ Full implementation plan**: [`plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md`](./plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md)

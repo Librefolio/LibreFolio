@@ -24,7 +24,7 @@
     import EventDataImportModal from './EventDataImportModal.svelte';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {_ as t, locale} from '$lib/i18n';
-    import {getEventTypeEmoji} from '$lib/utils/eventTypes';
+    import {getEventTypeEmoji} from '$lib/stores/transactionTypeStore';
 
     // =========================================================================
     // Props
