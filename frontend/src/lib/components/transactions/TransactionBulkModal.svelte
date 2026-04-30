@@ -26,7 +26,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, Zap, Plus, Pencil} from 'lucide-svelte';
+    import {X, Plus, Pencil} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -44,8 +44,7 @@
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {type TransactionTypeCode} from '$lib/utils/transactionTypes';
-    import {getTypeRule, isDraftReadyForValidation} from '$lib/utils/transactionTypeRules';
+    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
@@ -157,6 +156,16 @@
 
     function fromTx(tx: TXReadItem, m: Mode): DraftRow {
         const isCreate = m === 'create-many';
+        const txRule = getTypeRule(tx.type);
+        // Auto-sign: show positive values for auto-negated types
+        let qty = tx.quantity;
+        if (txRule.quantityRule === 'negative' && Number(qty) < 0) {
+            qty = String(Math.abs(Number(qty)));
+        }
+        let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
+        if (cash && txRule.cashSign === 'negative' && Number(cash.amount) < 0) {
+            cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
+        }
         return {
             tempId: generateUUID(),
             status: isCreate ? 'new' : 'original',
@@ -166,8 +175,8 @@
             asset_id: tx.asset_id ?? null,
             type: tx.type as TransactionTypeCode,
             date: isCreate ? todayIso() : tx.date,
-            quantity: tx.quantity,
-            cash: tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null,
+            quantity: qty,
+            cash,
             tags: [...(tx.tags ?? [])],
             description: tx.description ?? '',
             asset_event_id: tx.asset_event_id ?? null,
@@ -187,7 +196,12 @@
     let drafts = $state<DraftRow[]>([]);
     let issues = $state<ValidationIssue[]>([]);
     let formError = $state<string | null>(null);
+    let commitFailed = $state(false);
     let committing = $state(false);
+    /** Anti-bounce: track last commit draft key + timestamp. */
+    let lastCommitDraftKey = $state('');
+    let lastCommitAt = $state(0);
+    const COMMIT_ANTI_BOUNCE_MS = 10000;
     let tableRef = $state<DataTable<DraftRow> | undefined>(undefined);
     /** Snapshot of `drafts` at modal-open time, used to detect unsaved changes
      *  for the close-confirmation guard (Bugfix-3 §C11). */
@@ -203,6 +217,7 @@
         untrack(() => {
             issues = [];
             formError = null;
+            commitFailed = false;
             confirmCloseOpen = false;
             // Bugfix-2: in create-many with no initial rows, start with an
             // EMPTY grid — the user adds rows via the nested FormModal.
@@ -221,7 +236,7 @@
             }
         });
         void (async () => {
-            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded()]);
+            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
         })();
     });
 
@@ -276,7 +291,7 @@
                 const r = getTypeRule(merged.type);
                 if (r.assetField === 'forbidden') merged.asset_id = null;
                 if (r.cashField === 'forbidden') merged.cash = null;
-                if (r.quantityRule === 'zero') merged.quantity = '0';
+                if (r.quantityMode === 'forbidden') merged.quantity = '0';
                 if (!r.eventLinkable) merged.asset_event_id = null;
                 if (merged.type !== 'TRANSFER') merged.cost_basis_override = '';
             }
@@ -370,14 +385,19 @@
 
     function collectCreate(d: DraftRow): Record<string, unknown> {
         const rule = getTypeRule(d.type);
+        const negQty = rule.quantityRule === 'negative';
+        const negCash = rule.cashSign === 'negative';
         const out: Record<string, unknown> = {
             broker_id: d.broker_id,
             type: d.type,
             date: d.date,
-            quantity: d.quantity,
+            quantity: negQty ? String(-Math.abs(Number(d.quantity))) : d.quantity,
         };
         if (d.asset_id != null && rule.assetField !== 'forbidden') out.asset_id = d.asset_id;
-        if (d.cash && rule.cashField !== 'forbidden') out.cash = d.cash;
+        if (d.cash && rule.cashField !== 'forbidden') {
+            const amt = negCash ? String(-Math.abs(Number(d.cash.amount))) : d.cash.amount;
+            out.cash = {code: d.cash.code, amount: amt};
+        }
         if (d.tags.length > 0) out.tags = d.tags;
         if (d.description.trim()) out.description = d.description.trim();
         if (d.asset_event_id != null && rule.eventLinkable) out.asset_event_id = d.asset_event_id;
@@ -388,11 +408,21 @@
 
     function collectUpdate(d: DraftRow): Record<string, unknown> | null {
         if (!d.original || d.id == null) return null;
+        const rule = getTypeRule(d.type);
+        const negQty = rule.quantityRule === 'negative';
+        const negCash = rule.cashSign === 'negative';
         const out: Record<string, unknown> = {id: d.id};
         const orig = d.original;
         if (d.date !== orig.date) out.date = d.date;
-        if (d.quantity !== orig.quantity) out.quantity = d.quantity;
-        if (JSON.stringify(d.cash ?? null) !== JSON.stringify(orig.cash ?? null)) out.cash = d.cash ?? null;
+        const qty = negQty ? String(-Math.abs(Number(d.quantity))) : d.quantity;
+        const origQty = negQty ? String(-Math.abs(Number(orig.quantity))) : orig.quantity;
+        if (qty !== origQty) out.quantity = qty;
+        const buildCash = (c: {code: string; amount: string} | null | undefined) => {
+            if (!c) return null;
+            if (negCash) return {code: c.code, amount: String(-Math.abs(Number(c.amount)))};
+            return {code: c.code, amount: c.amount};
+        };
+        if (JSON.stringify(buildCash(d.cash)) !== JSON.stringify(buildCash(orig.cash))) out.cash = buildCash(d.cash);
         if (JSON.stringify(d.tags) !== JSON.stringify(orig.tags ?? [])) out.tags = d.tags;
         if ((d.description || null) !== (orig.description ?? null)) out.description = d.description || null;
         if ((d.cost_basis_override || null) !== (orig.cost_basis_override ?? null)) out.cost_basis_override = d.cost_basis_override || null;
@@ -417,6 +447,7 @@
 
     const scheduler = createValidateScheduler({
         enabled: () => drafts.length > 0 && drafts.length <= AUTO_VALIDATE_THRESHOLD && drafts.some(isDraftReadyForValidation),
+        draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (drafts.length === 0) {
                 issues = [];
@@ -471,6 +502,33 @@
 
     let isFreshlyValid = $derived(scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
+    let fieldIssues = $derived(issues.filter((i) => i.index >= 0));
+    let balanceIssues = $derived(issues.filter((i) => i.index < 0));
+
+    /**
+     * For balance issues (index=-1), try to find the draft row that caused
+     * the violation by matching brokerId + assetId/currency from issue params.
+     * Returns the 0-based index of the last matching draft, or -1 if unresolvable.
+     */
+    function findRowForBalanceIssue(issue: ValidationIssue): number {
+        const p = issue.params;
+        if (!p) return -1;
+        const brokerId = Number(p.brokerId);
+        if (!brokerId) return -1;
+
+        if (issue.code === 'balanceAssetNegative') {
+            const assetId = Number(p.assetId);
+            for (let i = drafts.length - 1; i >= 0; i--) {
+                if (drafts[i].broker_id === brokerId && drafts[i].asset_id === assetId) return i;
+            }
+        } else if (issue.code === 'balanceCashNegative') {
+            const currency = p.currency as string;
+            for (let i = drafts.length - 1; i >= 0; i--) {
+                if (drafts[i].broker_id === brokerId && drafts[i].cash?.code === currency) return i;
+            }
+        }
+        return -1;
+    }
 
     /** Context for resolving validation issue codes into translated messages. */
     let resolverCtx: ResolverContext = $derived({
@@ -483,6 +541,7 @@
         const key = JSON.stringify(drafts);
         if (key === lastDraftKey) return;
         lastDraftKey = key;
+        commitFailed = false;
         scheduler.trigger('change');
     });
 
@@ -494,6 +553,13 @@
         if (committing) return;
         committing = true;
         formError = null;
+        commitFailed = false;
+        // Anti-bounce: if drafts unchanged and < 10s since last commit attempt, skip.
+        const currentKey = lastDraftKey;
+        if (currentKey === lastCommitDraftKey && Date.now() - lastCommitAt < COMMIT_ANTI_BOUNCE_MS) {
+            committing = false;
+            return;
+        }
         try {
             if (mode === 'edit-many') {
                 const items = collectAllUpdates();
@@ -506,11 +572,11 @@
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {committed?: boolean; issues?: Array<{error: string}>};
+                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]};
                 if (!resp.committed) {
-                    formError = (resp.issues?.[0]?.error ?? $t('transactions.bulk.rolledBack')) as string;
-                    // Re-run validate to surface per-row issues that match.
-                    scheduler.trigger('manual');
+                    issues = resp.issues ?? [];
+                    issuesDismissed = false;
+                    commitFailed = true;
                     return;
                 }
                 onCommitted?.(resp);
@@ -522,10 +588,11 @@
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {committed?: boolean; issues?: Array<{error: string}>};
+                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]};
                 if (!resp.committed) {
-                    formError = (resp.issues?.[0]?.error ?? $t('transactions.bulk.rolledBack')) as string;
-                    scheduler.trigger('manual');
+                    issues = resp.issues ?? [];
+                    issuesDismissed = false;
+                    commitFailed = true;
                     return;
                 }
                 onCommitted?.(resp);
@@ -533,6 +600,8 @@
             }
         } finally {
             committing = false;
+            lastCommitDraftKey = currentKey;
+            lastCommitAt = Date.now();
         }
     }
 
@@ -655,7 +724,7 @@
                     // /FEE/TAX/ADJUSTMENT…), render a readonly `n/a` italic
                     // placeholder so the user can clearly see the field is
                     // not applicable to the current type.
-                    if (getTypeRule(row.type).quantityRule === 'zero') {
+                    if (getTypeRule(row.type).quantityMode === 'forbidden') {
                         return {type: 'html', html: '<span class="text-gray-400 italic" title="Not applicable: quantity must be 0 for this transaction type">n/a</span>'};
                     }
                     return {
@@ -835,6 +904,7 @@
     // =========================================================================
 
     function jumpToIssue(issue: ValidationIssue) {
+        if (issue.index < 0) return; // broker-level error, no specific row
         const draft = drafts[issue.index];
         if (!draft) return;
         tableRef?.navigateToRowId(draft.tempId);
@@ -926,26 +996,76 @@
                     <p class="font-semibold mb-1" data-testid="tx-bulk-error">⛔ {$t('transactions.bulk.rolledBackTitle')}</p>
                     <p>{formError}</p>
                 </InfoBanner>
+            {:else if commitFailed && issues.length > 0}
+                <InfoBanner variant="error">
+                    <p class="font-semibold mb-1" data-testid="tx-bulk-error">⛔ {$t('transactions.bulk.rolledBackTitle')}</p>
+                    {#if fieldIssues.length > 0}
+                        <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
+                        <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-bulk-issues">
+                            {#each fieldIssues as issue}
+                                <li>
+                                    <button type="button" class="underline hover:opacity-80" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
+                                        {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {resolveIssueMessage(issue, $t, resolverCtx)}
+                                    </button>
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                    {#if balanceIssues.length > 0}
+                        <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
+                        <ul class="list-disc list-inside space-y-0.5 text-sm">
+                            {#each balanceIssues as issue}
+                                {@const resolvedRow = findRowForBalanceIssue(issue)}
+                                <li>
+                                    {#if resolvedRow >= 0}
+                                        <button type="button" class="underline hover:opacity-80" onclick={() => { const d = drafts[resolvedRow]; if (d) tableRef?.navigateToRowId(d.tempId); }}>
+                                            {$t('transactions.bulk.rowN', {values: {n: resolvedRow + 1}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        </button>
+                                    {:else}
+                                        {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                    {/if}
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                </InfoBanner>
             {/if}
-            {#if isFreshlyValid && !formError}
-                <!-- Bugfix-4 §U16: green "all valid" banner; auto-dismisses on
-                     the next edit (because lastValidatedDraftKey ≠ lastDraftKey). -->
+            {#if isFreshlyValid && !formError && !commitFailed}
                 <InfoBanner variant="success">
                     <p data-testid="tx-bulk-valid">✓ {$t('transactions.validate.ok')}</p>
                 </InfoBanner>
             {/if}
-            {#if showIssuesBanner && !formError}
+            {#if showIssuesBanner && !formError && !commitFailed}
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
-                    <p class="font-semibold text-sm mb-1.5" data-testid="tx-bulk-issues-header">{$t('transactions.validate.issuesHeader')}</p>
-                    <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-bulk-issues">
-                        {#each issues as issue}
-                            <li>
-                                <button type="button" class="underline hover:opacity-80" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
-                                    {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {resolveIssueMessage(issue, $t, resolverCtx)}
-                                </button>
-                            </li>
-                        {/each}
-                    </ul>
+                    {#if fieldIssues.length > 0}
+                        <p class="font-semibold text-sm mb-1.5" data-testid="tx-bulk-issues-header">{$t('transactions.validate.issuesHeader')}</p>
+                        <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-bulk-issues">
+                            {#each fieldIssues as issue}
+                                <li>
+                                    <button type="button" class="underline hover:opacity-80" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
+                                        {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {resolveIssueMessage(issue, $t, resolverCtx)}
+                                    </button>
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                    {#if balanceIssues.length > 0}
+                        <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1.5">{$t('transactions.validate.balanceIssuesHeader')}</p>
+                        <ul class="list-disc list-inside space-y-0.5 text-sm">
+                            {#each balanceIssues as issue}
+                                {@const resolvedRow = findRowForBalanceIssue(issue)}
+                                <li>
+                                    {#if resolvedRow >= 0}
+                                        <button type="button" class="underline hover:opacity-80" onclick={() => { const d = drafts[resolvedRow]; if (d) tableRef?.navigateToRowId(d.tempId); }}>
+                                            {$t('transactions.bulk.rowN', {values: {n: resolvedRow + 1}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        </button>
+                                    {:else}
+                                        {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                    {/if}
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
                 </InfoBanner>
             {/if}
             {#if drafts.length > AUTO_VALIDATE_THRESHOLD}
@@ -1005,7 +1125,7 @@
         <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
             <div class="flex items-center gap-2 flex-wrap">
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now">
-                    <Zap size={12} /> {$t('transactions.validate.now')}
+                    ⚡ {$t('transactions.validate.now')}
                 </button>
                 {#if scheduler.state.isValidating}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>

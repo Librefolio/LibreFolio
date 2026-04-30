@@ -154,7 +154,7 @@ from backend.app.schemas.refresh import (
 )
 from backend.app.schemas.transactions import (
     TX_TYPE_METADATA,
-    AssetMode,
+    FieldMode,
     # Type aliases
     SignType,
     TXBatchResponse,
@@ -214,7 +214,7 @@ __all__ = [
     "TX_TYPE_METADATA",
     # Transaction type aliases
     "SignType",
-    "AssetMode",
+    "FieldMode",
     # Transaction utilities
     "validate_tags_list",
     "tags_to_csv",

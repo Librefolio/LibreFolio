@@ -45,8 +45,7 @@
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
-    import {type TransactionTypeCode, getTransactionTypeIconUrl} from '$lib/utils/transactionTypes';
-    import {getTypeRule, isDraftReadyForValidation} from '$lib/utils/transactionTypeRules';
+    import {type TransactionTypeCode, getTransactionTypeIconUrl, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
@@ -164,13 +163,23 @@
     }
 
     function fromTx(tx: TXReadItem, opts: {regenerateLink?: boolean; resetDate?: boolean} = {}): FormDraft {
+        const txRule = getTypeRule(tx.type);
+        // Auto-sign: show positive values for auto-negated types
+        let qty = tx.quantity;
+        if (txRule.quantityRule === 'negative' && Number(qty) < 0) {
+            qty = String(Math.abs(Number(qty)));
+        }
+        let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
+        if (cash && txRule.cashSign === 'negative' && Number(cash.amount) < 0) {
+            cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
+        }
         return {
             broker_id: tx.broker_id,
             asset_id: tx.asset_id ?? null,
             type: tx.type as TransactionTypeCode,
             date: opts.resetDate ? todayIso() : tx.date,
-            quantity: tx.quantity,
-            cash: tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null,
+            quantity: qty,
+            cash,
             tags: [...(tx.tags ?? [])],
             description: tx.description ?? '',
             asset_event_id: tx.asset_event_id ?? null,
@@ -183,7 +192,12 @@
     let draft = $state<FormDraft>(emptyDraft());
     let issues = $state<ValidationIssue[]>([]);
     let formError = $state<string | null>(null);
+    let commitFailed = $state(false);
     let committing = $state(false);
+    /** Anti-bounce: track last commit draft key + timestamp to prevent duplicate network requests. */
+    let lastCommitDraftKey = $state('');
+    let lastCommitAt = $state(0);
+    const COMMIT_ANTI_BOUNCE_MS = 10000;
     let optionalOpen = $state(false);
     let advancedOpen = $state(false);
     /** Snapshot of `draft` at modal-open time, used to detect unsaved
@@ -207,6 +221,7 @@
         untrack(() => {
             issues = [];
             formError = null;
+            commitFailed = false;
             optionalOpen = false;
             advancedOpen = false;
             confirmCloseOpen = false;
@@ -225,7 +240,7 @@
         });
         // Async hydration (brokers + currencies + asset cache for the picked asset).
         void (async () => {
-            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded()]);
+            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
             // After brokers loaded, backfill broker_id only if a single broker is
             // available (Bugfix-2 §C9) — otherwise leave it 0 so the user must
             // pick. `forcedBroker` (from the wizard's "Create new") still wins.
@@ -283,7 +298,7 @@
             const next = {...draft};
             if (r.assetField === 'forbidden' && next.asset_id != null) next.asset_id = null;
             if (r.cashField === 'forbidden' && next.cash != null) next.cash = null;
-            if (r.quantityRule === 'zero') {
+            if (r.quantityMode === 'forbidden') {
                 next.quantity = '0';
                 qtyDisplay = '0';
             }
@@ -309,6 +324,9 @@
     // =========================================================================
 
     let rule = $derived(getTypeRule(draft.type));
+    /** Auto-sign: user enters positive, backend expects negative. */
+    let autoNegateQty = $derived(rule.quantityRule === 'negative');
+    let autoNegateCash = $derived(rule.cashSign === 'negative');
     let isReadonly = $derived(mode === 'view');
     // Bugfix-5 §A4: `unlockImmutable=true` (deep-edit from BulkModal) overrides
     // the default immutability so the user can change `type`/`broker` on an
@@ -334,6 +352,7 @@
         // for its type are populated (Bugfix-2 §C5). Manual ⚡ Validate now
         // always fires regardless.
         enabled: () => !isReadonly && isDraftReadyForValidation(draft),
+        draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (isReadonly) return {issuesCount: 0};
             const payload = mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
@@ -376,6 +395,8 @@
     let issuesDismissed = $state(false);
     let isFreshlyValid = $derived(!isReadonly && scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
+    let fieldIssues = $derived(issues.filter((i) => i.index >= 0));
+    let balanceIssues = $derived(issues.filter((i) => i.index < 0));
 
     /** Context for resolving validation issue codes into translated messages. */
     let resolverCtx: ResolverContext = $derived({
@@ -387,6 +408,7 @@
         const key = JSON.stringify(draft);
         if (key === lastDraftKey) return;
         lastDraftKey = key;
+        commitFailed = false;
         scheduler.trigger('change');
     });
 
@@ -414,14 +436,19 @@
     // =========================================================================
 
     function collectCreate(): Record<string, unknown> {
+        // Auto-sign: negate values the user entered as positive
+        const qty = autoNegateQty ? String(-Math.abs(Number(draft.quantity))) : draft.quantity;
         const out: Record<string, unknown> = {
             broker_id: draft.broker_id,
             type: draft.type,
             date: draft.date,
-            quantity: draft.quantity,
+            quantity: qty,
         };
         if (draft.asset_id != null && rule.assetField !== 'forbidden') out.asset_id = draft.asset_id;
-        if (draft.cash && rule.cashField !== 'forbidden') out.cash = draft.cash;
+        if (draft.cash && rule.cashField !== 'forbidden') {
+            const cashAmount = autoNegateCash ? String(-Math.abs(Number(draft.cash.amount))) : draft.cash.amount;
+            out.cash = {code: draft.cash.code, amount: cashAmount};
+        }
         if (draft.tags.length > 0) out.tags = draft.tags;
         if (draft.description.trim()) out.description = draft.description.trim();
         if (draft.asset_event_id != null && rule.eventLinkable) out.asset_event_id = draft.asset_event_id;
@@ -433,11 +460,19 @@
     function collectUpdate(): Record<string, unknown> {
         const out: Record<string, unknown> = {id: initialRow?.id};
         if (!initialRow) return out;
+        // Auto-sign: re-negate user-facing positive values back for backend
+        const qty = autoNegateQty ? String(-Math.abs(Number(draft.quantity))) : draft.quantity;
+        const origQty = autoNegateQty ? String(-Math.abs(Number(initialRow.quantity))) : initialRow.quantity;
+        if (qty !== origQty) out.quantity = qty;
         if (draft.date !== initialRow.date) out.date = draft.date;
-        if (draft.quantity !== initialRow.quantity) out.quantity = draft.quantity;
-        const origCash = JSON.stringify(initialRow.cash ?? null);
-        const newCash = JSON.stringify(draft.cash ?? null);
-        if (origCash !== newCash) out.cash = draft.cash ?? null;
+        const buildCash = (c: {code: string; amount: string} | null | undefined) => {
+            if (!c) return null;
+            if (autoNegateCash) return {code: c.code, amount: String(-Math.abs(Number(c.amount)))};
+            return {code: c.code, amount: c.amount};
+        };
+        const origCash = JSON.stringify(buildCash(initialRow.cash));
+        const newCash = JSON.stringify(buildCash(draft.cash));
+        if (origCash !== newCash) out.cash = buildCash(draft.cash);
         const origTags = JSON.stringify(initialRow.tags ?? []);
         const newTags = JSON.stringify(draft.tags);
         if (origTags !== newTags) out.tags = draft.tags;
@@ -472,6 +507,13 @@
         }
         committing = true;
         formError = null;
+        commitFailed = false;
+        // Anti-bounce: if draft unchanged and < 10s since last commit attempt, skip.
+        const currentKey = lastDraftKey;
+        if (currentKey === lastCommitDraftKey && Date.now() - lastCommitAt < COMMIT_ANTI_BOUNCE_MS) {
+            committing = false;
+            return;
+        }
         try {
             if (mode === 'edit') {
                 const payload = {updates: [collectUpdate()]};
@@ -480,9 +522,11 @@
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {committed?: boolean; issues?: Array<{error: string}>; results?: Array<{id?: number}>};
+                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number}>};
                 if (!resp.committed) {
-                    formError = (resp.issues?.[0]?.error ?? $t('transactions.form.rolledBack')) as string;
+                    issues = resp.issues ?? [];
+                    issuesDismissed = false;
+                    commitFailed = true;
                     return;
                 }
                 onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
@@ -495,9 +539,11 @@
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {committed?: boolean; issues?: Array<{error: string}>; results?: Array<{id?: number | null}>};
+                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number | null}>};
                 if (!resp.committed) {
-                    formError = (resp.issues?.[0]?.error ?? $t('transactions.form.rolledBack')) as string;
+                    issues = resp.issues ?? [];
+                    issuesDismissed = false;
+                    commitFailed = true;
                     return;
                 }
                 onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
@@ -505,6 +551,8 @@
             }
         } finally {
             committing = false;
+            lastCommitDraftKey = currentKey;
+            lastCommitAt = Date.now();
         }
     }
 
@@ -588,21 +636,34 @@
     // =========================================================================
     // Quantity / cash sign hints
     // =========================================================================
+    // Sign hints — unified for both quantity and cash fields
+    // =========================================================================
 
-    let qtyHint = $derived.by(() => {
-        switch (rule.quantityRule) {
-            case 'positive':
-                return $t('transactions.form.hintQtyPositive');
-            case 'negative':
-                return $t('transactions.form.hintQtyNegative');
-            case 'zero':
-                return $t('transactions.form.hintQtyZero');
-            case 'nonzero':
-                return $t('transactions.form.hintQtyNonzero');
-            default:
-                return '';
+    /** Label suffix for a sign rule: (+), (−), (≠0), or empty. */
+    function signLabel(sign: import('$lib/stores/transactionTypeStore').SignRule): string {
+        switch (sign) {
+            case 'positive': return '(+)';
+            case 'negative': return '(−)';
+            case 'nonzero': return '(≠0)';
+            default: return '';
         }
-    });
+    }
+
+    /** Hint text below the field explaining the sign constraint. */
+    function signHintText(sign: import('$lib/stores/transactionTypeStore').SignRule): string {
+        switch (sign) {
+            case 'positive': return $t('transactions.form.hintSignPositive');
+            case 'negative': return $t('transactions.form.hintSignNegative');
+            case 'zero': return $t('transactions.form.hintSignZero');
+            case 'nonzero': return $t('transactions.form.hintSignNonzero');
+            default: return '';
+        }
+    }
+
+    let qtyHint = $derived(signHintText(rule.quantityRule));
+    let qtyLabel = $derived(signLabel(rule.quantityRule));
+    let cashHint = $derived(signHintText(rule.cashSign));
+    let cashLabel = $derived(signLabel(rule.cashSign));
 
     // =========================================================================
     // Validate-state chip text
@@ -640,12 +701,32 @@
         <!-- Body (scrollable) -->
         <!-- ============================================================= -->
         <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4" data-testid="tx-form-body">
-            <!-- Inline banners (Bugfix-4 §U16: green ✓ when validate is fresh
-                 and clean; warning with × dismiss when there are issues). -->
+            <!-- Inline banners: red ⛔ for commit failure, green ✓ for valid,
+                 yellow for validate issues. Both error types show categorized lists. -->
             {#if formError}
                 <InfoBanner variant="error">
                     <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('transactions.form.rolledBackTitle')}</p>
                     <p>{formError}</p>
+                </InfoBanner>
+            {:else if commitFailed && issues.length > 0}
+                <InfoBanner variant="error">
+                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('transactions.form.rolledBackTitle')}</p>
+                    {#if fieldIssues.length > 0}
+                        <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
+                        <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
+                            {#each fieldIssues as issue}
+                                <li data-testid="tx-form-issue">{resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                            {/each}
+                        </ul>
+                    {/if}
+                    {#if balanceIssues.length > 0}
+                        <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
+                        <ul class="list-disc list-inside space-y-0.5 text-sm">
+                            {#each balanceIssues as issue}
+                                <li>{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                            {/each}
+                        </ul>
+                    {/if}
                 </InfoBanner>
             {:else if isFreshlyValid}
                 <InfoBanner variant="success">
@@ -653,12 +734,22 @@
                 </InfoBanner>
             {:else if showIssuesBanner}
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
-                    <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">{$t('transactions.validate.issuesHeader')}</p>
-                    <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
-                        {#each issues as issue}
-                            <li data-testid="tx-form-issue">{resolveIssueMessage(issue, $t, resolverCtx)}</li>
-                        {/each}
-                    </ul>
+                    {#if fieldIssues.length > 0}
+                        <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">{$t('transactions.validate.issuesHeader')}</p>
+                        <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
+                            {#each fieldIssues as issue}
+                                <li data-testid="tx-form-issue">{resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                            {/each}
+                        </ul>
+                    {/if}
+                    {#if balanceIssues.length > 0}
+                        <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1.5">{$t('transactions.validate.balanceIssuesHeader')}</p>
+                        <ul class="list-disc list-inside space-y-0.5 text-sm">
+                            {#each balanceIssues as issue}
+                                <li>{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                            {/each}
+                        </ul>
+                    {/if}
                 </InfoBanner>
             {/if}
 
@@ -693,7 +784,7 @@
                                  enlarged (w-6 h-6) so it stays legible
                                  alongside the other selectors. -->
                             <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
-                                <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e: Event) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
+                                <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
                                 <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
                             </div>
                         {:else}
@@ -702,16 +793,16 @@
                     </div>
                 </div>
 
-                <!-- Quantity + Cash sub-grid (Bugfix-5 §U21).
-                     Walkthrough #6: on narrow viewports `Cash` overflows the
-                     2-col grid (CompactCashCell ≈ 12 rem combined). Drop to
-                     1-col so Cash falls below Qty and uses the full row;
-                     2-col only kicks in from `sm:` upwards. -->
+                <!-- Quantity + Cash sub-grid.
+                     Symmetric visibility: forbidden fields disappear entirely,
+                     the remaining field takes full width (col-span-2). -->
                 <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    {#if rule.quantityRule !== 'zero'}
-                        <!-- Quantity -->
+                    {#if rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden'}
+                        <!-- Both visible: 2-col layout -->
                         <div class="flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                {$t('transactions.table.quantity')}{#if qtyLabel} <span class="text-amber-500">{qtyLabel}</span>{/if}
+                            </span>
                             <input
                                 type="number"
                                 step="any"
@@ -730,37 +821,53 @@
                                 <span class="text-[10px] text-gray-400">{qtyHint}</span>
                             {/if}
                         </div>
-
-                        <!-- Cash -->
-                        {#if rule.cashField !== 'forbidden'}
-                            <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}</span>
-                                <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} />
-                            </div>
-                        {:else}
-                            <div class="flex flex-col gap-1 opacity-60" data-testid="tx-form-cash-locked">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</span>
-                                <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-400 text-xs">— ({$t('transactions.types.' + draft.type)} doesn't use cash)</div>
-                            </div>
-                        {/if}
-                    {:else}
-                        <!-- Quantity locked = "n/a"; Cash takes the full row
-                             (col-span-2) so the input gets breathing room. -->
-                        {#if rule.cashField !== 'forbidden'}
-                            <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}
-                                    <span class="text-[10px] text-gray-400 italic" data-testid="tx-form-quantity-locked">· {$t('transactions.form.hintQtyZero')}</span>
-                                </span>
-                                <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} />
-                            </div>
-                        {:else}
-                            <div class="flex flex-col gap-1 col-span-2 opacity-60" data-testid="tx-form-cash-locked">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</span>
-                                <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-400 text-xs">— ({$t('transactions.types.' + draft.type)} doesn't use cash)</div>
-                            </div>
-                        {/if}
+                        <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel} <span class="text-amber-500">{cashLabel}</span>{/if}
+                            </span>
+                            <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined} />
+                            {#if cashHint}
+                                <span class="text-[10px] text-gray-400">{cashHint}</span>
+                            {/if}
+                        </div>
+                    {:else if rule.quantityMode !== 'forbidden'}
+                        <!-- Only quantity visible (cash forbidden) → full width -->
+                        <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-quantity-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                {$t('transactions.table.quantity')}{#if qtyLabel} <span class="text-amber-500">{qtyLabel}</span>{/if}
+                            </span>
+                            <input
+                                type="number"
+                                step="any"
+                                inputmode="decimal"
+                                autocomplete="off"
+                                spellcheck="false"
+                                name="qty-{autocompleteNonce}"
+                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                value={qtyDisplay}
+                                disabled={isReadonly}
+                                oninput={onQuantityInput}
+                                onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
+                                data-testid="tx-form-quantity"
+                            />
+                            {#if qtyHint}
+                                <span class="text-[10px] text-gray-400">{qtyHint}</span>
+                            {/if}
+                        </div>
+                    {:else if rule.cashField !== 'forbidden'}
+                        <!-- Only cash visible (quantity forbidden) → full width -->
+                        <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel} <span class="text-amber-500">{cashLabel}</span>{/if}
+                                <span class="text-[10px] text-gray-400 italic" data-testid="tx-form-quantity-locked">· {$t('transactions.form.hintSignZero')}</span>
+                            </span>
+                            <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined} />
+                            {#if cashHint}
+                                <span class="text-[10px] text-gray-400">{cashHint}</span>
+                            {/if}
+                        </div>
                     {/if}
+                    <!-- Both forbidden: nothing rendered (no current type uses this) -->
                 </div>
 
                 <!-- Asset (full width) -->
@@ -894,17 +1001,18 @@
         <!-- ============================================================= -->
         <!-- Footer -->
         <!-- ============================================================= -->
-        <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0">
-            <!-- Bugfix-4 §U16: drop the chip — the green/warning banner above
-                 already conveys validate state. Show only "Validating…" while
-                 a request is in flight. -->
-            <span class="text-[11px] text-gray-500 dark:text-gray-400">
-                {#if scheduler.state.isValidating}{$t('transactions.validate.validating')}{/if}
-            </span>
-            <div class="flex items-center gap-2">
+        <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
+            <div class="flex items-center gap-2 flex-wrap">
                 {#if !isReadonly}
-                    <button type="button" class="px-3 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-form-validate-now">⚡ {$t('transactions.validate.now')}</button>
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-form-validate-now">
+                        ⚡ {$t('transactions.validate.now')}
+                    </button>
                 {/if}
+                {#if scheduler.state.isValidating}
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating')}</span>
+                {/if}
+            </div>
+            <div class="flex items-center gap-2">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={requestClose} data-testid="tx-form-cancel">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</button>
                 {#if !isReadonly}
                     <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50" disabled={committing} onclick={commit} data-testid="tx-form-save">

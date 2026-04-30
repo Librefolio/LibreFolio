@@ -611,14 +611,12 @@ class TXValidationIssue(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     operation: Literal["create", "update", "delete"]
-    index: int = Field(..., ge=0, description="Index within the corresponding list")
+    index: int = Field(..., ge=-1, description="Index within the corresponding list (-1 = broker-level, not row-specific)")
     ref_id: Optional[int] = Field(default=None, description="Transaction ID for update/delete, None for create")
     error: str
     code: Optional[str] = Field(default=None, description="i18n error code from the catalog (e.g. 'assetRequired')")
     params: Optional[Dict[str, Any]] = Field(default=None, description="Structured params for frontend i18n resolver (IDs, dates, amounts)")
     field: Optional[str] = Field(default=None, description="Draft field that caused the error (e.g. 'asset_id', 'quantity')")
-
-
 
 
 # =============================================================================
@@ -713,12 +711,13 @@ class TXTransferPromoteResponse(BaseModel):
 # TRANSACTION TYPE METADATA
 # =============================================================================
 
-# Sign types for validation
-# + := must be positive, - := must be negative, 0 := must be zero, +/- := any non-zero value
-SignType = Literal["+", "-", "0", "+/-"]
+# Sign types for validation — semantic enum used by both quantity and cash fields.
+# All values lowercase so the frontend can use them as-is without mapping.
+SignType = Literal["positive", "negative", "zero", "nonzero", "free"]
 
-# Asset requirement modes
-AssetMode = Literal["REQUIRED", "OPTIONAL", "FORBIDDEN"]
+# Field mode — controls whether a field is shown / required / hidden.
+# Shared by asset_mode, cash_mode, quantity_mode.
+FieldMode = Literal["required", "optional", "forbidden"]
 
 
 class TXTypeMetadata(BaseModel):
@@ -726,7 +725,7 @@ class TXTypeMetadata(BaseModel):
     Metadata about a transaction type.
 
     Used by GET /api/v1/transactions/types endpoint.
-    Frontend uses this to validate user input before submission.
+    Frontend uses these values directly (all lowercase, no mapping needed).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -734,157 +733,234 @@ class TXTypeMetadata(BaseModel):
     code: str = Field(..., description="Enum code (e.g., 'BUY')")
     name: str = Field(..., description="Display name")
     description: str = Field(..., description="Human-readable description")
-    icon: str = Field(..., description="Icon identifier or emoji")
+    icon_slug: str = Field(..., description="Slug for icon path (e.g. 'buy' → /icons/transactions/buy.png)")
+    doc_slug: str | None = Field(None, description="Slug for docs page (e.g. 'buy-sell' → mkdocs path). None if no dedicated page.")
 
-    # Validation rules for frontend
-    asset_mode: AssetMode = Field(
-        ...,
-        description="REQUIRED: must have asset_id, OPTIONAL: can have, FORBIDDEN: must not have",
-    )
+    # Field modes — frontend uses these directly for show/hide/required gating
+    asset_mode: FieldMode = Field(..., description="required: must have asset_id, optional: can have, forbidden: must not have")
+    cash_mode: FieldMode = Field(..., description="required: must have cash, optional: can have, forbidden: must not have")
+    quantity_mode: FieldMode = Field(..., description="required: must have quantity ≠ 0, optional: can have, forbidden: must be 0")
+
+    # Whether link_uuid is required (paired transactions: TRANSFER, FX_CONVERSION)
     requires_link: bool = Field(..., description="Whether link_uuid is required")
-    requires_cash: bool = Field(..., description="Whether cash is required")
 
-    # Allowed signs for validation ('+', '-', '0', '+/-')
-    allowed_quantity_sign: SignType = Field(..., description="Allowed quantity sign")
-    allowed_cash_sign: SignType = Field(..., description="Allowed cash amount sign")
+    # Sign constraints (lowercase, frontend uses as-is)
+    quantity_sign: SignType = Field(..., description="Allowed quantity sign constraint")
+    cash_sign: SignType = Field(..., description="Allowed cash amount sign constraint")
 
     # Whether this type can be linked to an AssetEvent (see EVENT_COMPATIBLE_TYPES)
     event_compatible: bool = Field(..., description="Can be linked to an AssetEvent")
 
 
-# TODO: aggiornare le Icone passando le immagini di icone che svilupperemo
 # Precomputed metadata for all transaction types
 TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
     TransactionType.BUY: TXTypeMetadata(
         code="BUY",
         name="Buy",
         description="Purchase asset with cash",
-        icon="🛒",
-        asset_mode="REQUIRED",
+        icon_slug="buy",
+        doc_slug="buy-sell",
+        asset_mode="required",
+        cash_mode="required",
+        quantity_mode="required",
         requires_link=False,
-        requires_cash=True,
-        allowed_quantity_sign="+",
-        allowed_cash_sign="-",
+        quantity_sign="positive",
+        cash_sign="negative",
         event_compatible=False,
     ),
     TransactionType.SELL: TXTypeMetadata(
         code="SELL",
         name="Sell",
         description="Sell asset for cash",
-        icon="💸",
-        asset_mode="REQUIRED",
+        icon_slug="sell",
+        doc_slug="buy-sell",
+        asset_mode="required",
+        cash_mode="required",
+        quantity_mode="required",
         requires_link=False,
-        requires_cash=True,
-        allowed_quantity_sign="-",
-        allowed_cash_sign="+",
+        quantity_sign="negative",
+        cash_sign="positive",
         event_compatible=False,
     ),
     TransactionType.DIVIDEND: TXTypeMetadata(
         code="DIVIDEND",
         name="Dividend",
         description="Dividend payment received",
-        icon="💵",
-        asset_mode="REQUIRED",
+        icon_slug="dividend",
+        doc_slug="dividend",
+        asset_mode="required",
+        cash_mode="required",
+        quantity_mode="forbidden",
         requires_link=False,
-        requires_cash=True,
-        allowed_quantity_sign="0",
-        allowed_cash_sign="+",
+        quantity_sign="zero",
+        cash_sign="positive",
         event_compatible=True,
     ),
     TransactionType.INTEREST: TXTypeMetadata(
         code="INTEREST",
         name="Interest",
         description="Interest payment (bond or deposit)",
-        icon="📈",
-        asset_mode="OPTIONAL",
+        icon_slug="interest",
+        doc_slug="interest",
+        asset_mode="optional",
+        cash_mode="required",
+        quantity_mode="forbidden",
         requires_link=False,
-        requires_cash=True,
-        allowed_quantity_sign="0",
-        allowed_cash_sign="+",
+        quantity_sign="zero",
+        cash_sign="positive",
         event_compatible=True,
     ),
     TransactionType.DEPOSIT: TXTypeMetadata(
         code="DEPOSIT",
         name="Deposit",
         description="Add cash to broker account",
-        icon="💰",
-        asset_mode="FORBIDDEN",
+        icon_slug="deposit",
+        doc_slug="deposit-withdrawal",
+        asset_mode="forbidden",
+        cash_mode="required",
+        quantity_mode="forbidden",
         requires_link=False,
-        requires_cash=True,
-        allowed_quantity_sign="0",
-        allowed_cash_sign="+",
+        quantity_sign="zero",
+        cash_sign="positive",
         event_compatible=False,
     ),
     TransactionType.WITHDRAWAL: TXTypeMetadata(
         code="WITHDRAWAL",
         name="Withdrawal",
         description="Remove cash from broker account",
-        icon="🏧",
-        asset_mode="FORBIDDEN",
+        icon_slug="withdrawal",
+        doc_slug="deposit-withdrawal",
+        asset_mode="forbidden",
+        cash_mode="required",
+        quantity_mode="forbidden",
         requires_link=False,
-        requires_cash=True,
-        allowed_quantity_sign="0",
-        allowed_cash_sign="-",
+        quantity_sign="zero",
+        cash_sign="negative",
         event_compatible=False,
     ),
     TransactionType.FEE: TXTypeMetadata(
         code="FEE",
         name="Fee",
         description="Fee or commission (trading or account)",
-        icon="📋",
-        asset_mode="OPTIONAL",
+        icon_slug="fee",
+        doc_slug="fee",
+        asset_mode="optional",
+        cash_mode="required",
+        quantity_mode="forbidden",
         requires_link=False,
-        requires_cash=True,
-        allowed_quantity_sign="0",
-        allowed_cash_sign="-",
+        quantity_sign="zero",
+        cash_sign="negative",
         event_compatible=False,
     ),
     TransactionType.TAX: TXTypeMetadata(
         code="TAX",
         name="Tax",
         description="Tax payment (capital gain or stamp duty)",
-        icon="🏛️",
-        asset_mode="OPTIONAL",
+        icon_slug="tax",
+        doc_slug="fee",
+        asset_mode="optional",
+        cash_mode="required",
+        quantity_mode="forbidden",
         requires_link=False,
-        requires_cash=True,
-        allowed_quantity_sign="0",
-        allowed_cash_sign="-",
+        quantity_sign="zero",
+        cash_sign="negative",
         event_compatible=False,
     ),
     TransactionType.TRANSFER: TXTypeMetadata(
         code="TRANSFER",
         name="Transfer",
         description="Asset transfer between brokers",
-        icon="🔄",
-        asset_mode="REQUIRED",
+        icon_slug="transfer",
+        doc_slug="transfer",
+        asset_mode="required",
+        cash_mode="forbidden",
+        quantity_mode="required",
         requires_link=True,
-        requires_cash=False,
-        allowed_quantity_sign="+/-",
-        allowed_cash_sign="0",
+        quantity_sign="nonzero",
+        cash_sign="zero",
         event_compatible=False,
     ),
     TransactionType.FX_CONVERSION: TXTypeMetadata(
         code="FX_CONVERSION",
         name="FX Conversion",
         description="Currency exchange",
-        icon="💱",
-        asset_mode="FORBIDDEN",
+        icon_slug="fx-conversion",
+        doc_slug=None,
+        asset_mode="forbidden",
+        cash_mode="required",
+        quantity_mode="forbidden",
         requires_link=True,
-        requires_cash=True,
-        allowed_quantity_sign="0",
-        allowed_cash_sign="+/-",
+        quantity_sign="zero",
+        cash_sign="nonzero",
         event_compatible=False,
     ),
     TransactionType.ADJUSTMENT: TXTypeMetadata(
         code="ADJUSTMENT",
         name="Adjustment",
         description="Manual quantity correction (splits, gifts)",
-        icon="⚙️",
-        asset_mode="REQUIRED",
+        icon_slug="adjustment",
+        doc_slug=None,
+        asset_mode="required",
+        cash_mode="forbidden",
+        quantity_mode="required",
         requires_link=False,
-        requires_cash=False,
-        allowed_quantity_sign="+/-",
-        allowed_cash_sign="0",
+        quantity_sign="nonzero",
+        cash_sign="zero",
         event_compatible=True,
     ),
 }
+
+
+class EventTypeMetadata(BaseModel):
+    """Metadata about an asset event type for frontend rendering."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., description="Enum code (e.g., 'DIVIDEND')")
+    name: str = Field(..., description="Display name")
+    emoji: str = Field(..., description="Emoji icon for rendering")
+    compatible_tx_types: list[str] = Field(..., description="Transaction types that can link to this event type")
+
+
+class TXTypesResponse(BaseModel):
+    """Combined response for GET /transactions/types."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    transaction_types: list[TXTypeMetadata]
+    event_types: list[EventTypeMetadata]
+
+
+# Precomputed metadata for all event types
+EVENT_TYPE_METADATA: list[EventTypeMetadata] = [
+    EventTypeMetadata(
+        code="DIVIDEND",
+        name="Dividend",
+        emoji="💰",
+        compatible_tx_types=["DIVIDEND"],
+    ),
+    EventTypeMetadata(
+        code="INTEREST",
+        name="Interest",
+        emoji="📈",
+        compatible_tx_types=["INTEREST"],
+    ),
+    EventTypeMetadata(
+        code="SPLIT",
+        name="Split",
+        emoji="✂️",
+        compatible_tx_types=["ADJUSTMENT"],
+    ),
+    EventTypeMetadata(
+        code="PRICE_ADJUSTMENT",
+        name="Price Adjustment",
+        emoji="📊",
+        compatible_tx_types=["ADJUSTMENT"],
+    ),
+    EventTypeMetadata(
+        code="MATURITY_SETTLEMENT",
+        name="Maturity Settlement",
+        emoji="🏁",
+        compatible_tx_types=["INTEREST"],
+    ),
+]

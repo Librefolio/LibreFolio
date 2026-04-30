@@ -27,6 +27,7 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.transactions import (
+    EVENT_TYPE_METADATA,
     TX_TYPE_METADATA,
     TXBatchResponse,
     TXCreateItem,
@@ -38,6 +39,7 @@ from backend.app.schemas.transactions import (
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXTypeMetadata,
+    TXTypesResponse,
     TXUpdateItem,
 )
 from backend.app.services.transaction_service import TransactionService
@@ -225,10 +227,13 @@ async def query_transactions(
     return await service.query(params, user_id=current_user.id)
 
 
-@tx_router.get("/types", response_model=List[TXTypeMetadata])
-async def get_transaction_types(_current_user: User = Depends(get_current_user)) -> List[TXTypeMetadata]:
-    """Get metadata for all transaction types (icons, rules, signs)."""
-    return list(TX_TYPE_METADATA.values())
+@tx_router.get("/types", response_model=TXTypesResponse)
+async def get_transaction_types(_current_user: User = Depends(get_current_user)) -> TXTypesResponse:
+    """Get metadata for all transaction types and event types (icons, rules, signs)."""
+    return TXTypesResponse(
+        transaction_types=list(TX_TYPE_METADATA.values()),
+        event_types=EVENT_TYPE_METADATA,
+    )
 
 
 # =============================================================================

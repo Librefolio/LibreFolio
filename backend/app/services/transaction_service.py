@@ -106,24 +106,31 @@ def _parse_lenient(
                     ctx = err.get("ctx", {})
                     sub_errors = ctx.get("errors", [])
                     for sub in sub_errors:
+                        # sub.ctx is always our own PydanticCustomError context
+                        # (e.g. {"type": "BUY"}) — safe to pass as-is.
                         issues.append(
                             TXValidationIssue(
                                 operation=operation,
                                 index=idx,
                                 error=sub.get("msg", ""),
                                 code=sub.get("code"),
-                                params=sub.get("ctx") if sub.get("ctx") else None,
+                                params=sub.get("ctx") or None,
                                 field=None,
                             )
                         )
                     continue
+                # Standard Pydantic errors: ctx can contain non-serializable
+                # objects (e.g. {'error': ValueError('...')}), so we don't
+                # forward it as params.  The error message already carries the
+                # human-readable description; `code` = Pydantic error type
+                # (e.g. "value_error", "missing"); `field` pinpoints the loc.
                 issues.append(
                     TXValidationIssue(
                         operation=operation,
                         index=idx,
                         error=err.get("msg", str(err)),
                         code=err.get("type"),
-                        params=err.get("ctx") if err.get("ctx") else None,
+                        params=None,
                         field=_loc_to_field(err.get("loc", ())),
                     )
                 )
@@ -832,9 +839,9 @@ class TransactionService:
             for broker_id, from_date in earliest_date_by_broker.items():
                 await self._validate_broker_balances(broker_id, from_date)
         except BalanceValidationError as e:
-            issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=str(e), code=e.code, params=e.params))
+            issues.append(TXValidationIssue(operation="create", index=-1, ref_id=None, error=str(e), code=e.code, params=e.params))
         except Exception as e:  # noqa: BLE001
-            issues.append(TXValidationIssue(operation="create", index=0, ref_id=None, error=f"Balance validation error: {e}"))
+            issues.append(TXValidationIssue(operation="create", index=-1, ref_id=None, error=f"Balance validation error: {e}"))
 
         # 8. Decision
         if issues:
