@@ -26,10 +26,14 @@ export interface ValidateSchedulerOptions {
     enabled: () => boolean;
     /** Async validate function (typically calls POST /transactions/validate). */
     validateFn: (reason: ValidateReason) => Promise<{issuesCount: number}>;
+    /** Returns a key representing the current draft state. When unchanged, anti-bounce kicks in. */
+    draftKey?: () => string;
     /** Debounce window after a `change` trigger. Default 1000 ms. */
     debounceMs?: number;
     /** Idle window before auto-firing without changes. Default 60 000 ms. */
     idleMs?: number;
+    /** Anti-bounce window: skip re-validate if draft unchanged within this window. Default 10 000 ms. */
+    antiBounceMs?: number;
 }
 
 export interface ValidateSchedulerState {
@@ -55,6 +59,7 @@ export interface ValidateScheduler {
 export function createValidateScheduler(opts: ValidateSchedulerOptions): ValidateScheduler {
     const debounceMs = opts.debounceMs ?? 1000;
     const idleMs = opts.idleMs ?? 60000;
+    const antiBounceMs = opts.antiBounceMs ?? 10000;
 
     const state = $state<ValidateSchedulerState>({
         isValidating: false,
@@ -68,6 +73,8 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
     let disposed = false;
     /** Monotonic seq# — late responses with stale seq are dropped. */
     let runSeq = 0;
+    /** Draft key at the time of the last completed validate call. */
+    let lastValidatedDraftKey: string | null = null;
 
     function clearDebounce() {
         if (debounceTimer != null) {
@@ -92,6 +99,17 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
 
     async function runValidate(reason: ValidateReason) {
         if (disposed) return;
+        // Anti-bounce: if draft hasn't changed since last validate and we're within the window, skip.
+        if (opts.draftKey) {
+            const currentKey = opts.draftKey();
+            if (
+                currentKey === lastValidatedDraftKey &&
+                state.lastValidatedAt != null &&
+                Date.now() - state.lastValidatedAt < antiBounceMs
+            ) {
+                return;
+            }
+        }
         const seq = ++runSeq;
         state.isValidating = true;
         try {
@@ -99,9 +117,11 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
             if (seq !== runSeq || disposed) return; // stale response or disposed
             state.lastValidatedAt = Date.now();
             state.issuesCount = res.issuesCount;
+            if (opts.draftKey) lastValidatedDraftKey = opts.draftKey();
         } catch {
             if (seq !== runSeq || disposed) return;
             // Leave previous lastValidatedAt/issuesCount as-is; caller surfaces banner.
+            if (opts.draftKey) lastValidatedDraftKey = opts.draftKey();
         } finally {
             if (seq === runSeq && !disposed) {
                 state.isValidating = false;

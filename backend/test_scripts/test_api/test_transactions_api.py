@@ -638,16 +638,31 @@ async def test_get_transaction_types(test_server):
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) > 0
+        assert isinstance(data, dict)
+        assert "transaction_types" in data
+        assert "event_types" in data
 
-        # Each item should have type metadata fields
-        for item in data:
+        tx_types = data["transaction_types"]
+        assert isinstance(tx_types, list)
+        assert len(tx_types) > 0
+
+        # Each tx type item should have metadata fields
+        for item in tx_types:
             assert "code" in item  # e.g., "BUY", "SELL"
             assert "name" in item  # e.g., "Buy", "Sell"
             assert "description" in item
+            assert "icon_slug" in item  # e.g., "buy", "sell"
 
-        print_success(f"✓ Got {len(data)} transaction types")
+        # Event types should have emoji + compatible_tx_types
+        ev_types = data["event_types"]
+        assert isinstance(ev_types, list)
+        assert len(ev_types) > 0
+        for item in ev_types:
+            assert "code" in item
+            assert "emoji" in item
+            assert "compatible_tx_types" in item
+
+        print_success(f"✓ Got {len(tx_types)} transaction types, {len(ev_types)} event types")
 
 
 # ============================================================================
