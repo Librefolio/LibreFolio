@@ -142,11 +142,13 @@ export function resolveIssueMessage(
     const enriched: Record<string, any> = {...rawParams};
 
     // Resolve type code → translated type name (e.g. "BUY" → "Acquisto")
-    if (rawParams.type && typeof rawParams.type === 'string') {
-        const typeKey = `transactions.types.${rawParams.type}`;
-        const translatedType = t(typeKey);
-        if (translatedType !== typeKey) {
-            enriched.type = translatedType;
+    for (const typeParam of ['type', 'typeA', 'typeB']) {
+        if (rawParams[typeParam] && typeof rawParams[typeParam] === 'string') {
+            const typeKey = `transactions.types.${rawParams[typeParam]}`;
+            const translatedType = t(typeKey);
+            if (translatedType !== typeKey) {
+                enriched[typeParam] = translatedType;
+            }
         }
     }
 

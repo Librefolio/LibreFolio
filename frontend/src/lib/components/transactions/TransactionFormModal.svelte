@@ -19,6 +19,12 @@
                              pair-partner chip (clickable → stack-modal)
    • Read-only footer (edit/view): id, created_at, updated_at
 
+  Dual-form mode (R6-B.1–B.3):
+   • When pairLayout !== null, shows a dual-transaction form
+   • FX: shared date+broker, two CompactCashCells (Da/A)
+   • Transfer Asset: shared date+asset+qty, two broker selects (Da/A)
+   • Transfer Cash: shared date+cash, two broker selects (Da/A)
+
   Validate scheduler: 1 row → always under threshold → debounce + idle ON.
   On commit rolled_back=true → banner persistent, modal stays open.
 
@@ -29,7 +35,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X} from 'lucide-svelte';
+    import {X, ArrowRight, ArrowDown} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
@@ -40,12 +46,14 @@
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from './TransactionTypeSearchSelect.svelte';
+    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
     import {zodiosApi} from '$lib/api';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
-    import {type TransactionTypeCode, getTransactionTypeIconUrl, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded} from '$lib/stores/transactionTypeStore';
+    import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/assetStore';
+    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, refreshAllBrokers, type BrokerInfo} from '$lib/stores/brokerStore';
+    import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
@@ -137,6 +145,14 @@
         link_uuid: string | null;
     }
 
+    /** Dual-form "To" side state — only used when pairLayout !== null. */
+    interface DualDraftTo {
+        /** For transfer_asset / transfer_cash: the "To" broker. */
+        broker_id: number;
+        /** For fx: the "To" cash (different currency). */
+        cash: {code: string; amount: string} | null;
+    }
+
     function todayIso(): string {
         return new Date().toISOString().slice(0, 10);
     }
@@ -160,6 +176,10 @@
             cost_basis_override: '',
             link_uuid: null,
         };
+    }
+
+    function emptyDualTo(): DualDraftTo {
+        return {broker_id: 0, cash: null};
     }
 
     function fromTx(tx: TXReadItem, opts: {regenerateLink?: boolean; resetDate?: boolean} = {}): FormDraft {
@@ -190,6 +210,12 @@
 
     // Single source-of-truth state (computed from props in $effect, never read inside the same effect).
     let draft = $state<FormDraft>(emptyDraft());
+    /** Dual-form "To" side — populated when pairLayout !== null. */
+    let dualTo = $state<DualDraftTo>(emptyDualTo());
+    /** The partner TXReadItem when editing a paired transaction. */
+    let partnerRow = $state<TXReadItem | null>(null);
+    /** Loading state for the partner fetch. */
+    let loadingPartner = $state(false);
     let issues = $state<ValidationIssue[]>([]);
     let formError = $state<string | null>(null);
     let commitFailed = $state(false);
@@ -225,17 +251,29 @@
             optionalOpen = false;
             advancedOpen = false;
             confirmCloseOpen = false;
+            partnerRow = null;
+            loadingPartner = false;
+            dualTo = emptyDualTo();
             if (m === 'create') {
                 draft = emptyDraft();
             } else if (m === 'duplicate' && row) {
                 draft = fromTx(row, {regenerateLink: row.related_transaction_id != null, resetDate: true});
             } else if ((m === 'edit' || m === 'view') && row) {
                 draft = fromTx(row);
+                // If the row has a linked partner and its type has a pairFormLayout,
+                // fetch the partner for dual-form editing.
+                if (row.related_transaction_id != null) {
+                    const layout = getPairFormLayout(row.type);
+                    if (layout) {
+                        loadingPartner = true;
+                        fetchPartner(row);
+                    }
+                }
             } else {
                 draft = emptyDraft();
             }
             lastTypeForReset = draft.type;
-            initialDraftKey = JSON.stringify(draft);
+            initialDraftKey = JSON.stringify(draft) + JSON.stringify(dualTo);
             qtyDisplay = formatDecimalForDisplay(draft.quantity);
         });
         // Async hydration (brokers + currencies + asset cache for the picked asset).
@@ -256,15 +294,86 @@
                 // Refresh the unsaved-changes baseline now that any auto-set
                 // broker_id is in place — otherwise the user would be asked
                 // to confirm "discard" on a broker we ourselves just picked.
-                initialDraftKey = JSON.stringify(draft);
+                initialDraftKey = JSON.stringify(draft) + JSON.stringify(dualTo);
             });
         })();
     });
 
+    // =========================================================================
+    // Dual-form: partner fetch for edit mode
+    // =========================================================================
+
+    async function fetchPartner(row: TXReadItem) {
+        if (!row.related_transaction_id) return;
+        try {
+            const results = await zodiosApi.query_transactions_api_v1_transactions_get({
+                queries: {ids: [row.related_transaction_id], limit: 1},
+            }) as unknown as TXReadItem[];
+            if (results.length > 0) {
+                const partner = results[0];
+                partnerRow = partner;
+                const layout = getPairFormLayout(row.type);
+                if (layout === 'fx') {
+                    // FX: the "From" side is the one with negative cash (or the current row).
+                    // Determine which is "From" and which is "To":
+                    // The initialRow is always "From", partner is "To".
+                    // But we need to figure out the actual Da/A semantics:
+                    // In FX_CONVERSION, both sides have cash. The "Da" has negative cash,
+                    // the "A" has positive cash. If current row has positive cash, swap.
+                    const myAmount = Number(row.cash?.amount ?? 0);
+                    const partnerAmount = Number(partner.cash?.amount ?? 0);
+                    if (myAmount > 0 && partnerAmount < 0) {
+                        // Current row is the "To" side — swap: draft becomes partner, dualTo becomes current
+                        draft = fromTx(partner);
+                        dualTo = {
+                            broker_id: partner.broker_id,
+                            cash: row.cash ? {code: row.cash.code, amount: String(Math.abs(Number(row.cash.amount)))} : null,
+                        };
+                    } else {
+                        // Current row is "From" — dualTo is the partner
+                        // draft is already set from fromTx(row) — cash shows positive (auto-sign)
+                        dualTo = {
+                            broker_id: partner.broker_id,
+                            cash: partner.cash ? {code: partner.cash.code, amount: String(Math.abs(Number(partner.cash.amount)))} : null,
+                        };
+                    }
+                } else if (layout === 'transfer_asset') {
+                    // Transfer: the "From" has negative qty, "To" has positive.
+                    const myQty = Number(row.quantity);
+                    if (myQty > 0) {
+                        // Current row is receiver ("To") → swap
+                        draft = fromTx(partner);
+                        dualTo = {broker_id: row.broker_id, cash: null};
+                        qtyDisplay = formatDecimalForDisplay(draft.quantity);
+                    } else {
+                        dualTo = {broker_id: partner.broker_id, cash: null};
+                    }
+                } else if (layout === 'transfer_cash') {
+                    // Cash transfer: WITHDRAWAL is "From" (negative), DEPOSIT is "To" (positive)
+                    const isWithdrawal = row.type === 'WITHDRAWAL';
+                    const fromRow = isWithdrawal ? row : partner;
+                    const toRow = isWithdrawal ? partner : row;
+                    draft = fromTx(fromRow);
+                    // Show positive amount for the user
+                    if (draft.cash && Number(draft.cash.amount) < 0) {
+                        draft = {...draft, cash: {code: draft.cash.code, amount: String(Math.abs(Number(draft.cash.amount)))}};
+                    }
+                    dualTo = {broker_id: toRow.broker_id, cash: null};
+                    qtyDisplay = formatDecimalForDisplay(draft.quantity);
+                }
+                initialDraftKey = JSON.stringify(draft) + JSON.stringify(dualTo);
+            }
+        } catch (e) {
+            console.error('[TransactionFormModal] Failed to fetch partner', e);
+        } finally {
+            loadingPartner = false;
+        }
+    }
+
     /** Detect unsaved changes vs. the snapshot taken at modal-open. */
     function hasUnsavedChanges(): boolean {
         if (isReadonly) return false;
-        return JSON.stringify(draft) !== initialDraftKey;
+        return (JSON.stringify(draft) + JSON.stringify(dualTo)) !== initialDraftKey;
     }
 
     function requestClose() {
@@ -307,6 +416,12 @@
             // Clear cost basis when not a TRANSFER (only meaningful there).
             if (t !== 'TRANSFER' && next.cost_basis_override) next.cost_basis_override = '';
             draft = next;
+            // Reset dualTo when switching to/from dual mode
+            const newLayout = getPairFormLayout(t);
+            if (!newLayout) {
+                dualTo = emptyDualTo();
+                partnerRow = null;
+            }
         });
     });
 
@@ -324,6 +439,21 @@
     // =========================================================================
 
     let rule = $derived(getTypeRule(draft.type));
+    /** Dual-form layout — null for standard single form.
+     *  W32 fix: dual mode ONLY when the type requires a link (TRANSFER,
+     *  FX_CONVERSION) OR when editing an existing linked pair. Types like
+     *  DEPOSIT/WITHDRAWAL have pair_form_layout set but requires_link=false
+     *  → they stay in single form by default. */
+    let pairLayout = $derived.by<PairFormLayout | null>(() => {
+        const r = getTypeRule(draft.type);
+        // Types that ALWAYS require a pair → auto dual
+        if (r.requiresPair) return r.pairFormLayout;
+        // When editing an existing linked pair → use the layout
+        if (initialRow?.related_transaction_id != null) {
+            return getPairFormLayout(initialRow.type);
+        }
+        return null;
+    });
     /** Auto-sign: user enters positive, backend expects negative. */
     let autoNegateQty = $derived(rule.quantityRule === 'negative');
     let autoNegateCash = $derived(rule.cashSign === 'negative');
@@ -340,8 +470,44 @@
     // field whenever type=TRANSFER and let the backend enforce semantics.
     let showCostBasisField = $derived(draft.type === 'TRANSFER');
 
-    // Pair partner chip (only when editing an existing linked tx).
-    let pairPartnerId = $derived(initialRow?.related_transaction_id ?? null);
+    // Pair partner chip (only when editing an existing linked tx — non-dual mode).
+    let pairPartnerId = $derived(pairLayout ? null : (initialRow?.related_transaction_id ?? null));
+
+    // =========================================================================
+    // Dual-form title
+    // =========================================================================
+
+    let dualTitle = $derived.by(() => {
+        if (!pairLayout) return '';
+        switch (pairLayout) {
+            case 'fx': return $t('transactions.form.fxTitle');
+            case 'transfer_asset': return $t('transactions.form.transferAssetTitle');
+            case 'transfer_cash': return $t('transactions.form.transferCashTitle');
+            default: return '';
+        }
+    });
+
+    // =========================================================================
+    // Dual-form validation helpers
+    // =========================================================================
+
+    /** Client-side validation error for the dual form (shown in the form, not from backend). */
+    let dualValidationError = $derived.by<string | null>(() => {
+        if (!pairLayout) return null;
+        if (pairLayout === 'fx') {
+            const fromCode = draft.cash?.code ?? '';
+            const toCode = dualTo.cash?.code ?? '';
+            if (fromCode && toCode && fromCode === toCode) {
+                return $t('transactions.form.sameCurrencyError');
+            }
+        } else {
+            // transfer_asset / transfer_cash: brokers must differ
+            if (draft.broker_id && dualTo.broker_id && draft.broker_id === dualTo.broker_id) {
+                return $t('transactions.form.sameBrokerError');
+            }
+        }
+        return null;
+    });
 
     // =========================================================================
     // Validate scheduler — debounced/manual/idle, always enabled (1 row).
@@ -355,6 +521,40 @@
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (isReadonly) return {issuesCount: 0};
+            if (pairLayout) {
+                // Dual mode: validate both sides
+                const items = collectDualCreates();
+                const payload = mode === 'edit' ? {updates: items.map((item, i) => {
+                    const rowId = i === 0 ? initialRow?.id : partnerRow?.id;
+                    return {...item, id: rowId};
+                })} : {creates: items};
+                const sentKey = lastDraftKey;
+                try {
+                    const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
+                    issues = res?.issues ?? [];
+                    lastValidatedDraftKey = sentKey;
+                    issuesDismissed = false;
+                    return {issuesCount: issues.length};
+                } catch (e) {
+                    const extracted = extractValidationIssues(e);
+                    if (extracted.length > 0) {
+                        issues = extracted.map((iss) => ({
+                            operation: (mode === 'edit' ? 'update' : 'create') as 'create' | 'update',
+                            index: 0,
+                            error: iss.msg,
+                            code: iss.code,
+                            params: iss.params,
+                            loc: iss.loc,
+                        }));
+                    } else {
+                        const msg = extractErrorMessage(e, $t('transactions.form.saveFailed'));
+                        issues = [{operation: mode === 'edit' ? 'update' : 'create', index: 0, error: msg}];
+                    }
+                    lastValidatedDraftKey = sentKey;
+                    issuesDismissed = false;
+                    return {issuesCount: issues.length};
+                }
+            }
             const payload = mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
             const sentKey = lastDraftKey;
             try {
@@ -405,7 +605,7 @@
     });
     $effect(() => {
         if (!open || isReadonly) return;
-        const key = JSON.stringify(draft);
+        const key = JSON.stringify(draft) + JSON.stringify(dualTo);
         if (key === lastDraftKey) return;
         lastDraftKey = key;
         commitFailed = false;
@@ -423,13 +623,21 @@
 
     /** Show the Advanced disclosure only if at least one of its sub-fields
      *  is meaningful for the current type/state (Bugfix-1 §U6). */
-    let showAdvancedSection = $derived((rule.eventLinkable && draft.asset_id != null) || draft.type === 'TRANSFER' || pairPartnerId != null || (mode === 'edit' && draft.link_uuid != null));
+    let showAdvancedSection = $derived(!pairLayout && ((rule.eventLinkable && draft.asset_id != null) || draft.type === 'TRANSFER' || pairPartnerId != null || (mode === 'edit' && draft.link_uuid != null)));
 
     /** BrokerSearchSelect expects `BrokerSelectItem[]`; the brokerStore's
      *  `BrokerInfo` is structurally compatible (id/name/icon_url present)
      *  but TS can't widen via the prop attribute. We cast in script. */
     let brokersForSelect = $derived(brokers as unknown as Array<{id: number; name: string; icon_url?: string | null}>);
+    /** W37: Filtered broker lists for dual form — prevent same broker on both sides. */
+    let brokersForFrom = $derived(pairLayout && pairLayout !== 'fx'
+        ? brokersForSelect.filter((b) => b.id !== dualTo.broker_id || !dualTo.broker_id)
+        : brokersForSelect);
+    let brokersForTo = $derived(pairLayout && pairLayout !== 'fx'
+        ? brokersForSelect.filter((b) => b.id !== draft.broker_id || !draft.broker_id)
+        : brokersForSelect);
     let brokerIdValue = $derived<number | null>(draft.broker_id || null);
+    let brokerToIdValue = $derived<number | null>(dualTo.broker_id || null);
 
     // =========================================================================
     // Sanitizers
@@ -490,11 +698,148 @@
     }
 
     // =========================================================================
+    // Dual-form collect helpers
+    // =========================================================================
+
+    /**
+     * Build 2 TXCreateItem payloads for dual-form mode.
+     * Shared link_uuid connects them as a pair.
+     */
+    function collectDualCreates(): Record<string, unknown>[] {
+        const linkUuid = generateUUID();
+        const sharedTags = draft.tags.length > 0 ? draft.tags : undefined;
+        const sharedDesc = draft.description.trim() || undefined;
+
+        if (pairLayout === 'fx') {
+            // FX_CONVERSION: both sides qty=0, different currencies
+            const fromCashAmt = draft.cash?.amount ? String(-Math.abs(Number(draft.cash.amount))) : '0';
+            const toCashAmt = dualTo.cash?.amount ? String(Math.abs(Number(dualTo.cash.amount))) : '0';
+            const fromItem: Record<string, unknown> = {
+                broker_id: draft.broker_id,
+                type: 'FX_CONVERSION',
+                date: draft.date,
+                quantity: '0',
+                cash: {code: draft.cash?.code ?? '', amount: fromCashAmt},
+                link_uuid: linkUuid,
+            };
+            const toItem: Record<string, unknown> = {
+                broker_id: draft.broker_id,
+                type: 'FX_CONVERSION',
+                date: draft.date,
+                quantity: '0',
+                cash: {code: dualTo.cash?.code ?? '', amount: toCashAmt},
+                link_uuid: linkUuid,
+            };
+            if (sharedTags) { fromItem.tags = sharedTags; toItem.tags = sharedTags; }
+            if (sharedDesc) { fromItem.description = sharedDesc; toItem.description = sharedDesc; }
+            return [fromItem, toItem];
+        }
+
+        if (pairLayout === 'transfer_asset') {
+            // TRANSFER: from = negative qty, to = positive qty
+            const absQty = String(Math.abs(Number(draft.quantity)));
+            const fromItem: Record<string, unknown> = {
+                broker_id: draft.broker_id,
+                type: 'TRANSFER',
+                date: draft.date,
+                quantity: String(-Math.abs(Number(draft.quantity))),
+                link_uuid: linkUuid,
+            };
+            const toItem: Record<string, unknown> = {
+                broker_id: dualTo.broker_id,
+                type: 'TRANSFER',
+                date: draft.date,
+                quantity: absQty,
+                link_uuid: linkUuid,
+            };
+            if (draft.asset_id != null) { fromItem.asset_id = draft.asset_id; toItem.asset_id = draft.asset_id; }
+            if (draft.cost_basis_override.trim()) toItem.cost_basis_override = draft.cost_basis_override.trim();
+            if (sharedTags) { fromItem.tags = sharedTags; toItem.tags = sharedTags; }
+            if (sharedDesc) { fromItem.description = sharedDesc; toItem.description = sharedDesc; }
+            return [fromItem, toItem];
+        }
+
+        if (pairLayout === 'transfer_cash') {
+            // WITHDRAWAL (from, negative cash) + DEPOSIT (to, positive cash)
+            const absAmount = draft.cash?.amount ? String(Math.abs(Number(draft.cash.amount))) : '0';
+            const cashCode = draft.cash?.code ?? '';
+            const fromItem: Record<string, unknown> = {
+                broker_id: draft.broker_id,
+                type: 'WITHDRAWAL',
+                date: draft.date,
+                quantity: '0',
+                cash: {code: cashCode, amount: String(-Math.abs(Number(absAmount)))},
+                link_uuid: linkUuid,
+            };
+            const toItem: Record<string, unknown> = {
+                broker_id: dualTo.broker_id,
+                type: 'DEPOSIT',
+                date: draft.date,
+                quantity: '0',
+                cash: {code: cashCode, amount: absAmount},
+                link_uuid: linkUuid,
+            };
+            if (sharedTags) { fromItem.tags = sharedTags; toItem.tags = sharedTags; }
+            if (sharedDesc) { fromItem.description = sharedDesc; toItem.description = sharedDesc; }
+            return [fromItem, toItem];
+        }
+
+        // Fallback — should not happen
+        return [collectCreate()];
+    }
+
+    /**
+     * Build 2 TXUpdateItem payloads for dual-form edit mode.
+     */
+    function collectDualUpdates(): Record<string, unknown>[] {
+        if (!initialRow || !partnerRow) return [];
+        const items = collectDualCreates();
+        // Attach IDs — item[0] is "From", item[1] is "To".
+        // We must figure out which initialRow/partnerRow is From vs To.
+        if (pairLayout === 'fx') {
+            const myAmount = Number(initialRow.cash?.amount ?? 0);
+            if (myAmount > 0) {
+                // initialRow was "To", partnerRow was "From" — we swapped during fetch
+                items[0] = {...items[0], id: partnerRow.id};
+                items[1] = {...items[1], id: initialRow.id};
+            } else {
+                items[0] = {...items[0], id: initialRow.id};
+                items[1] = {...items[1], id: partnerRow.id};
+            }
+        } else if (pairLayout === 'transfer_asset') {
+            const myQty = Number(initialRow.quantity);
+            if (myQty > 0) {
+                // initialRow was "To" — swapped
+                items[0] = {...items[0], id: partnerRow.id};
+                items[1] = {...items[1], id: initialRow.id};
+            } else {
+                items[0] = {...items[0], id: initialRow.id};
+                items[1] = {...items[1], id: partnerRow.id};
+            }
+        } else if (pairLayout === 'transfer_cash') {
+            const isWithdrawal = initialRow.type === 'WITHDRAWAL';
+            if (isWithdrawal) {
+                items[0] = {...items[0], id: initialRow.id};
+                items[1] = {...items[1], id: partnerRow.id};
+            } else {
+                items[0] = {...items[0], id: partnerRow.id};
+                items[1] = {...items[1], id: initialRow.id};
+            }
+        }
+        return items;
+    }
+
+    // =========================================================================
     // Commit
     // =========================================================================
 
     async function commit() {
         if (isReadonly || committing) return;
+        // Client-side dual validation
+        if (pairLayout && dualValidationError) {
+            formError = dualValidationError;
+            return;
+        }
         // Bugfix-5 §A4: when wired from the BulkModal, "Save" pushes the draft
         // back to the parent grid instead of committing to the backend.
         if (!commitOnSave) {
@@ -515,7 +860,26 @@
             return;
         }
         try {
-            if (mode === 'edit') {
+            if (pairLayout) {
+                // Dual-form commit — create or update 2 linked transactions
+                if (mode === 'edit' && partnerRow) {
+                    const payload = {updates: collectDualUpdates()};
+                    const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
+                    if (result.status === 'error') { formError = result.message; return; }
+                    const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number}>};
+                    if (!resp.committed) { issues = resp.issues ?? []; issuesDismissed = false; commitFailed = true; return; }
+                    onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
+                    onClose();
+                } else {
+                    const payload = {creates: collectDualCreates()};
+                    const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
+                    if (result.status === 'error') { formError = result.message; return; }
+                    const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number | null}>};
+                    if (!resp.committed) { issues = resp.issues ?? []; issuesDismissed = false; commitFailed = true; return; }
+                    onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
+                    onClose();
+                }
+            } else if (mode === 'edit') {
                 const payload = {updates: [collectUpdate()]};
                 const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
                 if (result.status === 'error') {
@@ -566,6 +930,9 @@
     function setBroker(v: number) {
         draft = {...draft, broker_id: v};
     }
+    function setBrokerTo(v: number) {
+        dualTo = {...dualTo, broker_id: v};
+    }
     function setDate(v: string) {
         draft = {...draft, date: v};
     }
@@ -582,6 +949,24 @@
     }
     function setCash(v: {code: string; amount: string} | null) {
         draft = {...draft, cash: v};
+    }
+    function setCashTo(v: {code: string; amount: string} | null) {
+        dualTo = {...dualTo, cash: v};
+    }
+    /** W36: Swap Da↔A sides in dual form. */
+    function swapDualSides() {
+        if (!pairLayout) return;
+        if (pairLayout === 'fx') {
+            // Swap cash (currencies)
+            const tmpCash = draft.cash;
+            draft = {...draft, cash: dualTo.cash};
+            dualTo = {...dualTo, cash: tmpCash};
+        } else {
+            // transfer_asset / transfer_cash: swap brokers
+            const tmpBroker = draft.broker_id;
+            draft = {...draft, broker_id: dualTo.broker_id};
+            dualTo = {...dualTo, broker_id: tmpBroker};
+        }
     }
     function addTag(raw: string) {
         const v = raw.trim();
@@ -666,6 +1051,22 @@
     let cashLabel = $derived(signLabel(rule.cashSign));
 
     // =========================================================================
+    // W39: Inline broker / asset creation modals
+    // =========================================================================
+    let createBrokerOpen = $state(false);
+    let createAssetOpen = $state(false);
+
+    function handleBrokerCreated(e: CustomEvent<{id: number}>) {
+        // BrokerModal dispatches 'created' with {id} + already merges into brokerStore
+        draft = {...draft, broker_id: e.detail.id};
+        createBrokerOpen = false;
+    }
+    function handleAssetCreated(assetId: number) {
+        draft = {...draft, asset_id: assetId};
+        createAssetOpen = false;
+    }
+
+    // =========================================================================
     // Validate-state chip text
     // =========================================================================
 
@@ -682,7 +1083,10 @@
         <!-- ============================================================= -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-form-title">
-                {#if mode === 'create'}
+                {#if pairLayout}
+                    {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
+                    {#if mode === 'edit'}✎ {dualTitle} #{initialRow?.id}{:else}{dualTitle}{/if}
+                {:else if mode === 'create'}
                     ➕ {$t('transactions.form.titleCreate')}
                 {:else if mode === 'duplicate'}
                     📋 {$t('transactions.form.titleDuplicate')}
@@ -728,6 +1132,10 @@
                         </ul>
                     {/if}
                 </InfoBanner>
+            {:else if dualValidationError}
+                <InfoBanner variant="warning">
+                    <p data-testid="tx-form-dual-error">⚠ {dualValidationError}</p>
+                </InfoBanner>
             {:else if isFreshlyValid}
                 <InfoBanner variant="success">
                     <p data-testid="tx-form-valid">✓ {$t('transactions.validate.ok')}</p>
@@ -753,147 +1161,309 @@
                 </InfoBanner>
             {/if}
 
-            <!-- Required section -->
-            <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
-                <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
+            <!-- Loading partner indicator (dual-form edit) -->
+            {#if loadingPartner}
+                <InfoBanner variant="info">
+                    <p class="text-sm">{$t('transactions.form.loadingPartner')}</p>
+                </InfoBanner>
+            {/if}
 
-                <!-- Reordered to match table column order (Bugfix-1 §U5):
-                     Date → Type → Quantity → Cash → Asset → Broker.
-                     Bugfix-5 §U21: Date+Type are kept in a 2-col mini-grid
-                     even on mobile (always-on, never wraps to 1-col); Qty/Cash
-                     get their own sub-grid that collapses to a single
-                     full-width Cash row when the type forces quantity=0. -->
-                <div class="grid grid-cols-2 gap-3 text-sm">
-                    <!-- Date -->
-                    <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
-                        {#if isReadonly}
-                            <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
-                        {:else}
-                            <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
-                        {/if}
-                    </div>
+            <!-- ============================================================= -->
+            <!-- DUAL FORM — FX / Transfer Asset / Transfer Cash -->
+            <!-- ============================================================= -->
+            {#if pairLayout}
+                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
+                    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
 
-                    <!-- Type -->
-                    <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
-                        {#if typeImmutable}
-                            <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
-                                 readonly type as a plain inline [icon] [name]
-                                 row matching the table cell rendering — icon
-                                 enlarged (w-6 h-6) so it stays legible
-                                 alongside the other selectors. -->
+                    <!-- Date + Type (readonly in dual mode — type is implicit from pairLayout) -->
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <!-- Date -->
+                        <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                            {#if isReadonly}
+                                <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
+                            {:else}
+                                <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
+                            {/if}
+                        </div>
+
+                        <!-- Type (always readonly in dual mode — shown as badge) -->
+                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
                             <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
                                 <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
-                                <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
+                                <span class="font-medium">{dualTitle}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FX: shared broker -->
+                    {#if pairLayout === 'fx'}
+                        <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-broker-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+                            {#if brokerImmutable}
+                                {@const b = brokers.find((br) => br.id === draft.broker_id)}
+                                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-broker-readonly">
+                                    <BrokerIcon iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
+                                    <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
+                                </div>
+                            {:else}
+                                <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} />
+                            {/if}
+                        </div>
+                    {/if}
+
+                    <!-- Transfer Asset: shared asset + quantity -->
+                    {#if pairLayout === 'transfer_asset'}
+                        <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')} *</span>
+                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" />
+                        </div>
+                        <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                {$t('transactions.table.quantity')} <span class="text-amber-500">(+)</span>
+                            </span>
+                            <input
+                                type="number"
+                                step="any"
+                                inputmode="decimal"
+                                autocomplete="off"
+                                spellcheck="false"
+                                name="qty-{autocompleteNonce}"
+                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                value={qtyDisplay}
+                                disabled={isReadonly}
+                                oninput={onQuantityInput}
+                                onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
+                                data-testid="tx-form-quantity"
+                            />
+                        </div>
+                    {/if}
+
+                    <!-- Transfer Cash: shared cash -->
+                    {#if pairLayout === 'transfer_cash'}
+                        <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-cash-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                {$t('transactions.table.cash')} *
+                            </span>
+                            <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash" defaultCode="EUR" />
+                        </div>
+                    {/if}
+
+                    <!-- ============================================================= -->
+                    <!-- Da / A split section -->
+                    <!-- ============================================================= -->
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start" data-testid="tx-form-dual-split">
+                        <!-- DA (From) -->
+                        <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3" data-testid="tx-form-dual-from">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.from')}</div>
+                            {#if pairLayout === 'fx'}
+                                <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash-from" defaultCode="EUR" />
+                            {:else}
+                                <!-- transfer_asset / transfer_cash: broker from -->
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+                                    <BrokerSearchSelect brokers={brokersForFrom} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} disabled={isReadonly} />
+                                </div>
+                            {/if}
+                        </div>
+
+                        <!-- Arrow (clickable to swap Da↔A) -->
+                        <button type="button" class="hidden sm:flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-libre-green self-center p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={swapDualSides} title={$t('transactions.form.swapSides') || 'Swap sides'} data-testid="tx-form-dual-swap" disabled={isReadonly}>
+                            <ArrowRight size={20} />
+                        </button>
+                        <button type="button" class="flex sm:hidden items-center justify-center text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-libre-green p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={swapDualSides} title={$t('transactions.form.swapSides') || 'Swap sides'} data-testid="tx-form-dual-swap-mobile" disabled={isReadonly}>
+                            <ArrowDown size={20} />
+                        </button>
+
+                        <!-- A (To) -->
+                        <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3" data-testid="tx-form-dual-to">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.to')}</div>
+                            {#if pairLayout === 'fx'}
+                                <CompactCashCell value={dualTo.cash} onChange={setCashTo} signHint="positive" disabled={isReadonly} testid="tx-form-cash-to" defaultCode="USD" />
+                            {:else}
+                                <!-- transfer_asset / transfer_cash: broker to -->
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+                                    <BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly} />
+                                </div>
+                            {/if}
+                        </div>
+                    </div>
+
+                    <!-- Cost basis override for transfer_asset -->
+                    {#if pairLayout === 'transfer_asset'}
+                        <div class="mt-3 flex flex-col gap-1">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.costBasis')}</span>
+                            <input
+                                type="number"
+                                step="any"
+                                inputmode="decimal"
+                                autocomplete="off"
+                                name="cb-{autocompleteNonce}"
+                                class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30 text-sm"
+                                placeholder="auto"
+                                value={draft.cost_basis_override}
+                                disabled={isReadonly}
+                                oninput={onCostBasisInput}
+                                data-testid="tx-form-cost-basis"
+                            />
+                        </div>
+                    {/if}
+                </fieldset>
+
+            <!-- ============================================================= -->
+            <!-- STANDARD SINGLE FORM (unchanged) -->
+            <!-- ============================================================= -->
+            {:else}
+                <!-- Required section -->
+                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
+                    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
+
+                    <!-- Reordered to match table column order (Bugfix-1 §U5):
+                         Date → Type → Quantity → Cash → Asset → Broker.
+                         Bugfix-5 §U21: Date+Type are kept in a 2-col mini-grid
+                         even on mobile (always-on, never wraps to 1-col); Qty/Cash
+                         get their own sub-grid that collapses to a single
+                         full-width Cash row when the type forces quantity=0. -->
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <!-- Date -->
+                        <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                            {#if isReadonly}
+                                <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
+                            {:else}
+                                <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
+                            {/if}
+                        </div>
+
+                        <!-- Type -->
+                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
+                            {#if typeImmutable}
+                                <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
+                                     readonly type as a plain inline [icon] [name]
+                                     row matching the table cell rendering — icon
+                                     enlarged (w-6 h-6) so it stays legible
+                                     alongside the other selectors. -->
+                                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
+                                    <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
+                                    <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
+                                </div>
+                            {:else}
+                                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} testid="tx-form-type" />
+                            {/if}
+                        </div>
+                    </div>
+
+                    <!-- Quantity + Cash sub-grid.
+                         Symmetric visibility: forbidden fields disappear entirely,
+                         the remaining field takes full width (col-span-2). -->
+                    <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        {#if rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden'}
+                            <!-- Both visible: 2-col layout -->
+                            <div class="flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    {$t('transactions.table.quantity')}{#if qtyLabel} <span class="text-amber-500">{qtyLabel}</span>{/if}
+                                </span>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    inputmode="decimal"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                    name="qty-{autocompleteNonce}"
+                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                    value={qtyDisplay}
+                                    disabled={isReadonly}
+                                    oninput={onQuantityInput}
+                                    onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
+                                    data-testid="tx-form-quantity"
+                                />
+                                {#if qtyHint}
+                                    <span class="text-[10px] text-gray-400">{qtyHint}</span>
+                                {/if}
+                            </div>
+                            <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel} <span class="text-amber-500">{cashLabel}</span>{/if}
+                                </span>
+                                <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined} />
+                                {#if cashHint}
+                                    <span class="text-[10px] text-gray-400">{cashHint}</span>
+                                {/if}
+                            </div>
+                        {:else if rule.quantityMode !== 'forbidden'}
+                            <!-- Only quantity visible (cash forbidden) → full width -->
+                            <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-quantity-wrap">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    {$t('transactions.table.quantity')}{#if qtyLabel} <span class="text-amber-500">{qtyLabel}</span>{/if}
+                                </span>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    inputmode="decimal"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                    name="qty-{autocompleteNonce}"
+                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                    value={qtyDisplay}
+                                    disabled={isReadonly}
+                                    oninput={onQuantityInput}
+                                    onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
+                                    data-testid="tx-form-quantity"
+                                />
+                                {#if qtyHint}
+                                    <span class="text-[10px] text-gray-400">{qtyHint}</span>
+                                {/if}
+                            </div>
+                        {:else if rule.cashField !== 'forbidden'}
+                            <!-- Only cash visible (quantity forbidden) → full width -->
+                            <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel} <span class="text-amber-500">{cashLabel}</span>{/if}
+                                    <span class="text-[10px] text-gray-400 italic" data-testid="tx-form-quantity-locked">· {$t('transactions.form.hintSignZero')}</span>
+                                </span>
+                                <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined} />
+                                {#if cashHint}
+                                    <span class="text-[10px] text-gray-400">{cashHint}</span>
+                                {/if}
+                            </div>
+                        {/if}
+                        <!-- Both forbidden: nothing rendered (no current type uses this) -->
+                    </div>
+
+                    <!-- Asset (full width) -->
+                    {#if rule.assetField !== 'forbidden'}
+                        <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}{rule.assetField === 'required' ? ' *' : ''}</span>
+                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" />
+                            {#if !isReadonly && draft.asset_id == null}
+                                <button type="button" class="text-[11px] text-libre-green hover:underline mt-0.5" onclick={() => (createAssetOpen = true)} data-testid="tx-form-add-asset">+ {$t('assets.create') || 'Add asset'}</button>
+                            {/if}
+                        </div>
+                    {/if}
+
+                    <!-- Broker (full width, last) -->
+                    <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-broker-wrap">
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+                        {#if brokerImmutable}
+                            {@const b = brokers.find((br) => br.id === draft.broker_id)}
+                            <!-- Bugfix-4 §U19: readonly broker also shows the icon
+                                 (parity with the editable BrokerSearchSelect). -->
+                            <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-broker-readonly">
+                                <BrokerIcon iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
+                                <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                             </div>
                         {:else}
-                            <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} testid="tx-form-type" />
+                            <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} />
+                            {#if !draft.broker_id}
+                                <button type="button" class="text-[11px] text-libre-green hover:underline mt-0.5" onclick={() => (createBrokerOpen = true)} data-testid="tx-form-add-broker">+ {$t('brokers.create') || 'Add broker'}</button>
+                            {/if}
                         {/if}
                     </div>
-                </div>
-
-                <!-- Quantity + Cash sub-grid.
-                     Symmetric visibility: forbidden fields disappear entirely,
-                     the remaining field takes full width (col-span-2). -->
-                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    {#if rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden'}
-                        <!-- Both visible: 2-col layout -->
-                        <div class="flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">
-                                {$t('transactions.table.quantity')}{#if qtyLabel} <span class="text-amber-500">{qtyLabel}</span>{/if}
-                            </span>
-                            <input
-                                type="number"
-                                step="any"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                spellcheck="false"
-                                name="qty-{autocompleteNonce}"
-                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
-                                value={qtyDisplay}
-                                disabled={isReadonly}
-                                oninput={onQuantityInput}
-                                onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
-                                data-testid="tx-form-quantity"
-                            />
-                            {#if qtyHint}
-                                <span class="text-[10px] text-gray-400">{qtyHint}</span>
-                            {/if}
-                        </div>
-                        <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">
-                                {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel} <span class="text-amber-500">{cashLabel}</span>{/if}
-                            </span>
-                            <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined} />
-                            {#if cashHint}
-                                <span class="text-[10px] text-gray-400">{cashHint}</span>
-                            {/if}
-                        </div>
-                    {:else if rule.quantityMode !== 'forbidden'}
-                        <!-- Only quantity visible (cash forbidden) → full width -->
-                        <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-quantity-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">
-                                {$t('transactions.table.quantity')}{#if qtyLabel} <span class="text-amber-500">{qtyLabel}</span>{/if}
-                            </span>
-                            <input
-                                type="number"
-                                step="any"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                spellcheck="false"
-                                name="qty-{autocompleteNonce}"
-                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
-                                value={qtyDisplay}
-                                disabled={isReadonly}
-                                oninput={onQuantityInput}
-                                onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
-                                data-testid="tx-form-quantity"
-                            />
-                            {#if qtyHint}
-                                <span class="text-[10px] text-gray-400">{qtyHint}</span>
-                            {/if}
-                        </div>
-                    {:else if rule.cashField !== 'forbidden'}
-                        <!-- Only cash visible (quantity forbidden) → full width -->
-                        <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                                {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel} <span class="text-amber-500">{cashLabel}</span>{/if}
-                                <span class="text-[10px] text-gray-400 italic" data-testid="tx-form-quantity-locked">· {$t('transactions.form.hintSignZero')}</span>
-                            </span>
-                            <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined} />
-                            {#if cashHint}
-                                <span class="text-[10px] text-gray-400">{cashHint}</span>
-                            {/if}
-                        </div>
-                    {/if}
-                    <!-- Both forbidden: nothing rendered (no current type uses this) -->
-                </div>
-
-                <!-- Asset (full width) -->
-                {#if rule.assetField !== 'forbidden'}
-                    <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}{rule.assetField === 'required' ? ' *' : ''}</span>
-                        <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" />
-                    </div>
-                {/if}
-
-                <!-- Broker (full width, last) -->
-                <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-broker-wrap">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
-                    {#if brokerImmutable}
-                        {@const b = brokers.find((br) => br.id === draft.broker_id)}
-                        <!-- Bugfix-4 §U19: readonly broker also shows the icon
-                             (parity with the editable BrokerSearchSelect). -->
-                        <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-broker-readonly">
-                            <BrokerIcon iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
-                            <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
-                        </div>
-                    {:else}
-                        <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} />
-                    {/if}
-                </div>
-            </fieldset>
+                </fieldset>
+            {/if}
 
             <!-- Optional disclosure -->
             {#if !isReadonly || draft.tags.length > 0 || draft.description.trim()}
@@ -943,7 +1513,7 @@
                 </details>
             {/if}
 
-            <!-- Advanced disclosure (Bugfix-1 §U6: gated) -->
+            <!-- Advanced disclosure (Bugfix-1 §U6: gated) — hidden in dual mode -->
             {#if showAdvancedSection}
                 <details class="border border-gray-200 dark:border-slate-700 rounded-lg" bind:open={advancedOpen}>
                     <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-advanced-toggle">{$t('transactions.form.sectionAdvanced')}</summary>
@@ -992,6 +1562,7 @@
             {#if (mode === 'edit' || mode === 'view') && initialRow}
                 <div class="text-[10px] text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-slate-800 pt-3" data-testid="tx-form-readonly-footer">
                     ID #{initialRow.id}
+                    {#if partnerRow}+ #{partnerRow.id}{/if}
                     {#if initialRow.created_at}· {$t('common.created')} {initialRow.created_at}{/if}
                     {#if initialRow.updated_at}· {$t('common.updated')} {initialRow.updated_at}{/if}
                 </div>
@@ -1015,7 +1586,7 @@
             <div class="flex items-center gap-2">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={requestClose} data-testid="tx-form-cancel">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</button>
                 {#if !isReadonly}
-                    <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50" disabled={committing} onclick={commit} data-testid="tx-form-save">
+                    <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50" disabled={committing || loadingPartner || !!dualValidationError} onclick={commit} data-testid="tx-form-save">
                         {committing ? $t('common.saving') : $t('common.save')}
                     </button>
                 {/if}
@@ -1037,6 +1608,12 @@
     zIndex={70}
 />
 
+<!-- W39: Inline broker creation modal. BrokerModal is Svelte 4 (event dispatcher). -->
+<BrokerModal isOpen={createBrokerOpen} mode="create" on:created={handleBrokerCreated} on:close={() => (createBrokerOpen = false)} />
+
+<!-- W39: Inline asset creation modal. AssetModal is Svelte 5 (runes). -->
+<AssetModal bind:open={createAssetOpen} oncreated={handleAssetCreated} onclose={() => (createAssetOpen = false)} />
+
 <style>
     /* Bugfix-5 walkthrough #6: numeric inputs (quantity, cost basis) — hide
        the browser spinner controls so the field reads cleaner alongside the
@@ -1051,15 +1628,4 @@
         appearance: textfield;
     }
 </style>
-
-
-
-
-
-
-
-
-
-
-
 

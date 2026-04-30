@@ -39,6 +39,9 @@ export type FieldMode = ServerTXType['asset_mode'];
 /** Sign constraint — derived from backend SignType enum. */
 export type SignRule = ServerTXType['quantity_sign'];
 
+/** Pair form layout — derived from backend PairFormLayout enum. */
+export type PairFormLayout = NonNullable<ServerTXType['pair_form_layout']>;
+
 // =============================================================================
 //  TypeRule — frontend-friendly shape (renamed fields for readability)
 // =============================================================================
@@ -51,6 +54,7 @@ export interface TypeRule {
 	cashSign: SignRule;
 	eventLinkable: boolean;
 	requiresPair: boolean;
+	pairFormLayout: PairFormLayout | null;
 }
 
 export interface ValidatableDraft {
@@ -83,6 +87,7 @@ function serverTypeToRule(s: ServerTXType): TypeRule {
 		cashSign: s.cash_sign,
 		eventLinkable: s.event_compatible,
 		requiresPair: s.requires_link,
+		pairFormLayout: s.pair_form_layout ?? null,
 	};
 }
 
@@ -106,6 +111,7 @@ const FALLBACK_RULE: TypeRule = {
 	cashSign: 'free',
 	eventLinkable: false,
 	requiresPair: false,
+	pairFormLayout: null,
 };
 
 // =============================================================================
@@ -190,6 +196,16 @@ export function getStandaloneTypes(): TransactionTypeCode[] {
 /** Pair-only types — created via promote wizard. */
 export function getPairTypes(): TransactionTypeCode[] {
 	return TX_TYPES.filter((t) => getTypeRule(t).requiresPair);
+}
+
+/** Types that have a dual-transaction form layout. */
+export function getDualFormTypes(): TransactionTypeCode[] {
+	return TX_TYPES.filter((t) => getTypeRule(t).pairFormLayout != null);
+}
+
+/** Get the pair form layout for a type (null = standard single form). */
+export function getPairFormLayout(type: string | null | undefined): PairFormLayout | null {
+	return getTypeRule(type).pairFormLayout;
 }
 
 /** Types that may link to an AssetEvent. */

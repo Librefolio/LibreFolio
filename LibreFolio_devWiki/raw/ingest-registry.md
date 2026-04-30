@@ -72,3 +72,8 @@
 | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4.prompt.md` | `dcb91929` | 2026-04-28 | [[sources/phase07-part4-transactions-ui]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md` | `444b2d16` | 2026-04-28 | [[sources/phase07-part4-round1]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md` | `29898623` | 2026-04-28 | [[sources/phase07-part4-round2]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round3-stagingModalRewrite.prompt.md` | `133cb0d4` | 2026-05-25 | [[sources/phase07-part4-round3-staging-rewrite]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round3_Bugfix1-formModalRedesign.prompt.md` | `133cb0d4` | 2026-05-25 | [[sources/phase07-part4-round3-bugfix1]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md` | `133cb0d4` | 2026-05-25 | [[sources/phase07-part4-round3-bugfix2]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md` | `133cb0d4` | 2026-05-25 | [[sources/phase07-part4-round4-unified-pipeline]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` | `133cb0d4` | 2026-05-25 | [[sources/phase07-part4-round5-server-type-rules]] |
