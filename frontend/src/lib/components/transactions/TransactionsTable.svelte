@@ -404,9 +404,10 @@
 
     function brokerStyle(brokerId: number): string {
         const c = getBrokerColor(brokerId, brokers);
-        // Inject CSS custom properties used by the row tint, broker badge and
-        // (legacy) color band. Row tint uses --broker-bg with low alpha.
-        return `--broker-bg:${c.bg};--broker-text:${c.text};--broker-dark-bg:${c.darkBg};--broker-dark-text:${c.darkText};`;
+        // Inject CSS custom properties for row tint, broker badge, and dot.
+        // --broker-vivid is hsl(hue, 75%, 50%) for dark-mode row tints.
+        // --broker-vivid-light is hsl(hue, 60%, 80%) for light-mode row tints.
+        return `--broker-bg:${c.bg};--broker-text:${c.text};--broker-dark-bg:${c.darkBg};--broker-dark-text:${c.darkText};--broker-vivid:${c.vivid};--broker-vivid-light:${c.vividLight};`;
     }
 
     function formatQty(q: string): string {
@@ -824,20 +825,19 @@
     :global {
         /* Whole-row tint: broker color recognition.
            ── TUNE THESE VALUES to adjust row saturation ──
-           Mixed with white (light) / #1e1e2e (dark) instead of transparent.
-           Dark uses --broker-bg (high lightness) at low % to get visible tint.
-           Light: base 60% / hover 75%.  Dark: base 18% / hover 25%. */
+           Light: --broker-vivid-light (hsl hue, 60%, 80%) mixed with white.
+           Dark: --broker-vivid (hsl hue, 75%, 50%) mixed with near-black. */
         .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-bg, transparent) 60%, white);
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 60%, white);
         }
         .dark .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-bg, transparent) 18%, #1e1e2e);
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 15%, #0f0f18);
         }
         .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-bg, transparent) 75%, white);
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 75%, white);
         }
         .dark .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-bg, transparent) 25%, #1e1e2e);
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, #0f0f18);
         }
         /* Broker cell: icon/dot + name with proper truncation when narrow. */
         .tx-table-wrap .tx-broker-cell {
@@ -913,31 +913,31 @@
             gap: 0.25rem;
             font-size: 0.8125rem;
         }
-        .tx-table-wrap .tx-cash-amount {
+        .tx-table-wrap .currency-amount {
             font-variant-numeric: tabular-nums;
-            font-weight: 500;
+            font-weight: 600;
             color: #1e293b;
         }
-        .dark .tx-table-wrap .tx-cash-amount {
+        .dark .tx-table-wrap .currency-amount {
             color: #e2e8f0;
         }
-        .tx-table-wrap .tx-cash-symbol {
+        .tx-table-wrap .currency-symbol {
             font-size: 0.75rem;
-            color: #64748b;
+            color: #475569;
         }
-        .dark .tx-table-wrap .tx-cash-symbol {
-            color: #94a3b8;
+        .dark .tx-table-wrap .currency-symbol {
+            color: #cbd5e1;
         }
         .tx-table-wrap .tx-cash-cell .emoji-flag {
             font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
             line-height: 1;
         }
-        .tx-table-wrap .tx-cash-code {
+        .tx-table-wrap .currency-code {
             font-weight: 500;
             color: #475569;
         }
-        .dark .tx-table-wrap .tx-cash-code {
-            color: #cbd5e1;
+        .dark .tx-table-wrap .currency-code {
+            color: #e2e8f0;
         }
         /* Links column: event dot + chain icon side by side. */
         .tx-table-wrap .tx-links-cell {

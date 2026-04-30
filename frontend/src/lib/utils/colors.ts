@@ -17,6 +17,10 @@ export interface ColorSet {
     text: string;
     darkBg: string;
     darkText: string;
+    /** Fully-saturated vivid color at the same hue — for dark row tints. */
+    vivid: string;
+    /** Medium-saturated pastel at the same hue — for light row tints. */
+    vividLight: string;
 }
 
 /**
@@ -43,8 +47,8 @@ export function getIndexColor(
     const sat = opts?.saturation ?? 35 + (index % 5) * 5; // 35-55%
     const bgL = opts?.bgLightness ?? 92;
     const txtL = opts?.textLightness ?? 30;
-    const dBgL = opts?.darkBgLightness ?? 20;
-    const dTxtL = opts?.darkTextLightness ?? 75;
+    const dBgL = opts?.darkBgLightness ?? 25;
+    const dTxtL = opts?.darkTextLightness ?? 82;
 
     // Rotate hue by golden angle per index
     const hue = (startHue + index * GOLDEN_RATIO * 360) % 360;
@@ -52,8 +56,10 @@ export function getIndexColor(
     return {
         bg: `hsl(${hue}, ${sat}%, ${bgL}%)`,
         text: `hsl(${hue}, ${sat + 10}%, ${txtL}%)`,
-        darkBg: `hsl(${hue}, ${sat - 10}%, ${dBgL}%)`,
-        darkText: `hsl(${hue}, ${sat}%, ${dTxtL}%)`,
+        darkBg: `hsl(${hue}, ${sat}%, ${dBgL}%)`,
+        darkText: `hsl(${hue}, ${sat + 10}%, ${dTxtL}%)`,
+        vivid: `hsl(${hue}, 75%, 50%)`,
+        vividLight: `hsl(${hue}, 60%, 80%)`,
     };
 }
 
