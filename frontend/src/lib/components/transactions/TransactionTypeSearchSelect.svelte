@@ -22,10 +22,12 @@
         value: TransactionTypeCode;
         /** Disable the select. */
         disabled?: boolean;
-        /** Limit options to the given subset. Default: `STANDALONE_TX_TYPES`
-         *  (TRANSFER/FX_CONVERSION require the Promote wizard). Pass
-         *  `TX_TYPES` to expose pair types too (e.g. read-only display). */
+        /** Limit options to the given subset. Default: all TX_TYPES.
+         *  Overridden by `filterPairOnly` when set. */
         types?: ReadonlyArray<TransactionTypeCode>;
+        /** When true, show only pair types (requiresPair=true). Used in
+         *  create dual-form mode (W41). Overrides `types`. */
+        filterPairOnly?: boolean;
         /** Placeholder when no value is selected. */
         placeholder?: string;
         /** Compact trigger (smaller padding, text-xs). */
@@ -36,9 +38,13 @@
         onchange?: (value: TransactionTypeCode) => void;
     }
 
-    let {value = $bindable('BUY' as TransactionTypeCode), disabled = false, types, placeholder, compact = false, testid = 'tx-type-select', onchange}: Props = $props();
+    let {value = $bindable('BUY' as TransactionTypeCode), disabled = false, types, filterPairOnly = false, placeholder, compact = false, testid = 'tx-type-select', onchange}: Props = $props();
 
-    let optionTypes = $derived<ReadonlyArray<TransactionTypeCode>>(types ?? [...TX_TYPES]);
+    let optionTypes = $derived<ReadonlyArray<TransactionTypeCode>>(
+        filterPairOnly
+            ? TX_TYPES.filter((tt) => getTypeRule(tt).requiresPair)
+            : (types ?? [...TX_TYPES])
+    );
 
     let options = $derived<SelectOption[]>(
         optionTypes.map((tt) => {

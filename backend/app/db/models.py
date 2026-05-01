@@ -254,8 +254,13 @@ class TransactionType(StrEnum):
       Requires: related_transaction_id (links to paired conversion)
       Example: Convert €1000 to $1090
 
+    - CASH_TRANSFER: Wire transfer / bonifico between brokers
+      Signs: quantity = 0, amount +/- (nonzero)
+      Requires: related_transaction_id (links to paired cash transfer)
+      Example: Transfer €5000 from IBKR to Fineco
+
     Impact:
-    - TRANSFER and FX_CONVERSION require related_transaction_id
+    - TRANSFER, FX_CONVERSION and CASH_TRANSFER require related_transaction_id
     - Validation ensures sign rules are followed
     - All calculations based on settlement date
     """
@@ -270,6 +275,7 @@ class TransactionType(StrEnum):
     TAX = "TAX"
     TRANSFER = "TRANSFER"
     FX_CONVERSION = "FX_CONVERSION"
+    CASH_TRANSFER = "CASH_TRANSFER"
     ADJUSTMENT = "ADJUSTMENT"
 
 

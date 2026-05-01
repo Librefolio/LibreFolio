@@ -2,7 +2,7 @@
  * useValidateScheduler — debounced + idle + manual server-validate trigger.
  *
  * Centralizes the scheduling logic shared by `TransactionFormModal` (1 row),
- * `TransactionBulkModal` (N rows), and `PromotePairWizardModal` (Step 3).
+ * `TransactionBulkModal` (N rows).
  *
  * Three triggers, all routed to a single `validateFn`:
  * - `'change'`: debounced 1 s, used on every editable-field mutation.

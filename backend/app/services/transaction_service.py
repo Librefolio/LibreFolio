@@ -32,14 +32,21 @@ from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import (
     EVENT_COMPATIBLE_TYPES,
+    TX_TYPE_METADATA,
     TXBatchResponse,
     TXBatchResultItem,
     TXCreateItem,
     TXEventSuggestCandidate,
     TXEventSuggestRequestItem,
     TXEventSuggestResultItem,
+    TXPromoteItem,
+    TXPromoteResultItem,
+    TXPromoteResponse,
     TXQueryParams,
     TXReadItem,
+    TXSplitItem,
+    TXSplitResultItem,
+    TXSplitResponse,
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXUpdateItem,
@@ -210,28 +217,26 @@ class TransactionService:
         - Both items must share the same `type` (no mixing e.g. TRANSFER + SELL).
         - TRANSFER requires distinct brokers (same-broker TRANSFER is a no-op).
         - FX_CONVERSION intra-broker is allowed (multi-currency account use case).
-        - DEPOSIT/WITHDRAWAL linked pairs are allowed as "intent markers" for
-          cash movements between the user's own brokers (Block H.2).
+        - CASH_TRANSFER requires distinct brokers (same-broker is a no-op).
 
         Returns None when the pair is valid, otherwise a tuple of
         (error_message, code, params).
         """
         if a.type != b.type:
-            # W34: Allow WITHDRAWAL↔DEPOSIT pairs (cash transfer / "Bonifico").
-            # These are deliberately different types linked to represent a cash
-            # movement between the user's own brokers (Block H.2).
-            valid_mixed = {
-                frozenset({TransactionType.WITHDRAWAL, TransactionType.DEPOSIT}),
-            }
-            if frozenset({a.type, b.type}) not in valid_mixed:
-                return (
-                    f"linked pair must share the same type (got {a.type.value} + {b.type.value})",
-                    "pairTypeMismatch",
-                    {"typeA": a.type.value, "typeB": b.type.value},
-                )
+            return (
+                f"linked pair must share the same type (got {a.type.value} + {b.type.value})",
+                "pairTypeMismatch",
+                {"typeA": a.type.value, "typeB": b.type.value},
+            )
         if a.type == TransactionType.TRANSFER and a.broker_id == b.broker_id:
             return (
                 f"TRANSFER requires distinct brokers (both on broker {a.broker_id})",
+                "pairSameBroker",
+                {"brokerId": a.broker_id},
+            )
+        if a.type == TransactionType.CASH_TRANSFER and a.broker_id == b.broker_id:
+            return (
+                f"CASH_TRANSFER requires distinct brokers (both on broker {a.broker_id})",
                 "pairSameBroker",
                 {"brokerId": a.broker_id},
             )
@@ -651,6 +656,264 @@ class TransactionService:
             new_from_tx_id=new_ids[0] if len(new_ids) > 0 else None,
             new_to_tx_id=new_ids[1] if len(new_ids) > 1 else None,
         )
+
+    # =========================================================================
+    # BULK SPLIT / PROMOTE (server-driven, immediate)
+    # =========================================================================
+
+    # Deterministic type mutation maps for split/promote.
+    # Key: paired type → (from_type, to_type).
+    # "from" = negative/source side, "to" = positive/destination side.
+    SPLIT_TYPE_MAP: dict[TransactionType, tuple[TransactionType, TransactionType]] = {
+        TransactionType.CASH_TRANSFER: (TransactionType.WITHDRAWAL, TransactionType.DEPOSIT),
+        TransactionType.TRANSFER: (TransactionType.ADJUSTMENT, TransactionType.ADJUSTMENT),
+        TransactionType.FX_CONVERSION: (TransactionType.WITHDRAWAL, TransactionType.DEPOSIT),
+    }
+
+    # Inverse: (type_a, type_b) → target paired type.
+    # type_a/type_b ordering comes from promote_from metadata.
+    # For WITHDRAWAL+DEPOSIT we need to distinguish CASH_TRANSFER vs FX_CONVERSION
+    # using field constraints, so the service checks dynamically.
+
+    async def split_pairs(
+        self,
+        items: List[TXSplitItem],
+        user_id: Optional[int] = None,
+    ) -> TXSplitResponse:
+        """
+        Split linked pairs into standalone rows (immediate, not deferred).
+
+        For each item.id:
+        1. Find the transaction and its partner via related_transaction_id
+        2. Determine "from" (negative side) and "to" (positive side)
+        3. Mutate types per SPLIT_TYPE_MAP
+        4. Remove related_transaction_id from both
+        5. Return the updated rows
+        """
+        results: List[TXSplitResultItem] = []
+
+        # Collect all IDs to look up
+        all_ids: set[int] = set()
+        for item in items:
+            all_ids.add(item.id)
+
+        # Fetch all transactions
+        existing = await self.get_by_ids(list(all_ids))
+        by_id = {tx.id: tx for tx in existing}
+
+        # Also fetch partners
+        partner_ids: set[int] = set()
+        for item in items:
+            tx = by_id.get(item.id)
+            if tx and tx.related_transaction_id:
+                partner_ids.add(tx.related_transaction_id)
+        if partner_ids - all_ids:
+            partners = await self.get_by_ids(list(partner_ids - all_ids))
+            for tx in partners:
+                by_id[tx.id] = tx
+
+        # Access check on all touched brokers
+        touched_brokers: set[int] = {tx.broker_id for tx in by_id.values()}
+        await self._enforce_batch_access(touched_brokers, user_id, min_role=UserRole.EDITOR)
+
+        for item in items:
+            tx = by_id.get(item.id)
+            if tx is None:
+                raise HTTPException(status_code=422, detail=f"Transaction {item.id} not found")
+            if tx.related_transaction_id is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transaction {item.id} has no related_transaction_id — cannot split",
+                )
+
+            partner = by_id.get(tx.related_transaction_id)
+            if partner is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Partner transaction {tx.related_transaction_id} not found",
+                )
+
+            split_types = self.SPLIT_TYPE_MAP.get(tx.type)
+            if split_types is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transaction type {tx.type.value} cannot be split",
+                )
+
+            from_type, to_type = split_types
+
+            # Determine which is "from" and which is "to" based on value signs
+            # For TRANSFER/CASH_TRANSFER: negative side = from, positive = to
+            # For FX_CONVERSION: negative cash = from, positive cash = to
+            if tx.type == TransactionType.TRANSFER:
+                if tx.quantity < Decimal("0"):
+                    tx_from, tx_to = tx, partner
+                else:
+                    tx_from, tx_to = partner, tx
+            else:
+                # Cash-based: negative amount = from
+                if tx.amount < Decimal("0"):
+                    tx_from, tx_to = tx, partner
+                else:
+                    tx_from, tx_to = partner, tx
+
+            # Mutate types
+            tx_from.type = from_type
+            tx_to.type = to_type
+
+            # Remove link
+            tx_from.related_transaction_id = None
+            tx_to.related_transaction_id = None
+
+            # For TRANSFER → ADJUSTMENT: keep asset_id and quantity, clear cash
+            # For CASH_TRANSFER/FX → WITHDRAWAL/DEPOSIT: keep cash, clear asset
+            if split_types == (TransactionType.ADJUSTMENT, TransactionType.ADJUSTMENT):
+                # Already correct: TRANSFER has asset+qty, no cash
+                pass
+            else:
+                # WITHDRAWAL/DEPOSIT: clear asset fields
+                tx_from.asset_id = None
+                tx_to.asset_id = None
+
+            tx_from.updated_at = utcnow()
+            tx_to.updated_at = utcnow()
+
+            results.append(
+                TXSplitResultItem(
+                    from_tx=TXReadItem.from_db_model(tx_from),
+                    to_tx=TXReadItem.from_db_model(tx_to),
+                )
+            )
+
+        await self.session.flush()
+        return TXSplitResponse(results=results)
+
+    async def promote_pairs(
+        self,
+        items: List[TXPromoteItem],
+        user_id: Optional[int] = None,
+    ) -> TXPromoteResponse:
+        """
+        Promote standalone rows into linked pairs (immediate, not deferred).
+
+        For each item (id_a, id_b):
+        1. Fetch both transactions
+        2. Scan TX_TYPE_METADATA promote_from rules for a match
+        3. Validate field constraints
+        4. Mutate types to the target paired type
+        5. Generate link_uuid and set related_transaction_id
+        6. Return the updated rows
+        """
+        results: List[TXPromoteResultItem] = []
+
+        # Collect all IDs
+        all_ids: set[int] = set()
+        for item in items:
+            all_ids.add(item.id_a)
+            all_ids.add(item.id_b)
+
+        existing = await self.get_by_ids(list(all_ids))
+        by_id = {tx.id: tx for tx in existing}
+
+        # Access check
+        touched_brokers: set[int] = {tx.broker_id for tx in by_id.values()}
+        await self._enforce_batch_access(touched_brokers, user_id, min_role=UserRole.EDITOR)
+
+        for item in items:
+            tx_a = by_id.get(item.id_a)
+            tx_b = by_id.get(item.id_b)
+
+            if tx_a is None:
+                raise HTTPException(status_code=422, detail=f"Transaction {item.id_a} not found")
+            if tx_b is None:
+                raise HTTPException(status_code=422, detail=f"Transaction {item.id_b} not found")
+
+            if tx_a.related_transaction_id is not None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transaction {item.id_a} is already linked to {tx_a.related_transaction_id}",
+                )
+            if tx_b.related_transaction_id is not None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transaction {item.id_b} is already linked to {tx_b.related_transaction_id}",
+                )
+
+            # Find matching promote rule
+            target_type: TransactionType | None = None
+            for pair_type, meta in TX_TYPE_METADATA.items():
+                if meta.promote_from is None:
+                    continue
+                for rule in meta.promote_from:
+                    # Check type match (either order)
+                    if (tx_a.type.value == rule.type_a and tx_b.type.value == rule.type_b) or (
+                        tx_a.type.value == rule.type_b and tx_b.type.value == rule.type_a
+                    ):
+                        # Check field constraints
+                        if self._check_promote_constraints(tx_a, tx_b, rule.field_constraints):
+                            target_type = pair_type
+                            break
+                if target_type is not None:
+                    break
+
+            if target_type is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"No matching promote rule for {tx_a.type.value} + {tx_b.type.value}",
+                )
+
+            # Mutate types
+            tx_a.type = target_type
+            tx_b.type = target_type
+
+            # Set bidirectional link
+            tx_a.related_transaction_id = tx_b.id
+            tx_b.related_transaction_id = tx_a.id
+
+            tx_a.updated_at = utcnow()
+            tx_b.updated_at = utcnow()
+
+            results.append(
+                TXPromoteResultItem(
+                    pair_a=TXReadItem.from_db_model(tx_a),
+                    pair_b=TXReadItem.from_db_model(tx_b),
+                )
+            )
+
+        await self.session.flush()
+        return TXPromoteResponse(results=results)
+
+    @staticmethod
+    def _check_promote_constraints(
+        tx_a: Transaction, tx_b: Transaction, constraints: list
+    ) -> bool:
+        """Check if two transactions satisfy promote field constraints."""
+        from backend.app.schemas.transactions import PairFieldConstraint
+
+        for c in constraints:
+            assert isinstance(c, PairFieldConstraint)
+            if c.field == "broker_id":
+                if c.relation == "equal" and tx_a.broker_id != tx_b.broker_id:
+                    return False
+                if c.relation == "different" and tx_a.broker_id == tx_b.broker_id:
+                    return False
+            elif c.field == "asset_id":
+                if c.relation == "equal" and tx_a.asset_id != tx_b.asset_id:
+                    return False
+                if c.relation == "different" and tx_a.asset_id == tx_b.asset_id:
+                    return False
+            elif c.field == "cash_currency":
+                if c.relation == "equal" and tx_a.currency != tx_b.currency:
+                    return False
+                if c.relation == "different" and tx_a.currency == tx_b.currency:
+                    return False
+            elif c.field == "cash_amount":
+                if c.relation == "opposite" and tx_a.amount != -tx_b.amount:
+                    return False
+            elif c.field == "quantity":
+                if c.relation == "opposite" and tx_a.quantity != -tx_b.quantity:
+                    return False
+        return True
 
     # =========================================================================
     # UNIFIED BATCH PIPELINE (replaces separate create/update/delete bulk)

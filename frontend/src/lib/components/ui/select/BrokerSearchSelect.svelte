@@ -29,10 +29,14 @@
         disabledIds?: Set<number>;
         dropdownPosition?: 'top' | 'bottom' | 'auto';
         maxVisibleItems?: number;
+        /** W43/W44: "Create new" footer label. When set, shows a sticky footer. */
+        createLabel?: string;
+        /** W43/W44: Callback when "Create new" footer is clicked. */
+        onCreateNew?: () => void;
         onchange?: (brokerId: number | null) => void;
     }
 
-    let {brokers, value = $bindable(null), placeholder = '', disabled = false, disabledIds = new Set(), dropdownPosition = 'auto', maxVisibleItems = 6, onchange}: Props = $props();
+    let {brokers, value = $bindable(null), placeholder = '', disabled = false, disabledIds = new Set(), dropdownPosition = 'auto', maxVisibleItems = 6, createLabel = '', onCreateNew, onchange}: Props = $props();
 
     // Convert brokers to SelectOption format
     let brokerOptions = $derived<SelectOption[]>(
@@ -58,7 +62,7 @@
     }
 </script>
 
-<SearchSelect {disabled} {dropdownPosition} inlineSearch={true} {maxVisibleItems} onchange={handleChange} options={brokerOptions} placeholder={placeholder || $_('uploads.selectBroker')} value={stringValue}>
+<SearchSelect {disabled} {dropdownPosition} inlineSearch={true} {maxVisibleItems} onchange={handleChange} options={brokerOptions} placeholder={placeholder || $_('uploads.selectBroker')} value={stringValue} {createLabel} {onCreateNew}>
     {#snippet item(option)}
         {@const broker = option.data as BrokerSelectItem}
         <div class="flex items-center gap-2">

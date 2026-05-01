@@ -121,9 +121,9 @@ Each `phase-{NN}-subplan/README.md` contains a table of all sub-plans with step,
 
 ### Skills
 
-Use the `plan-archive` skill for plan verification and archiving operations (see `.github/skills/plan-archive/SKILL.md`).
+Use the `plan-archive` skill for plan verification and archiving operations (see `.github/skills/planning/plan-archive/SKILL.md`).
 
-Use the `find-skills` skill when looking for new capabilities to install (see `~/.agents/skills/find-skills/SKILL.md`).
+Use the `find-skills` skill when looking for new capabilities to install (see `~/.github/skills/find-skills/SKILL.md`).
 
 ## Persistent Knowledge Layer (devWiki)
 

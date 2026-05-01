@@ -7,7 +7,7 @@
 <script lang="ts">
     import type {Snippet} from 'svelte';
     import type {SelectOption} from './types';
-    import {ChevronDown, Search, X} from 'lucide-svelte';
+    import {ChevronDown, Search, X, Plus} from 'lucide-svelte';
     import {_} from '$lib/i18n';
 
     interface Props {
@@ -37,9 +37,15 @@
         onchange?: (value: string) => void;
         /** Compact mode: smaller trigger padding to match standard inputs */
         compact?: boolean;
+        /** W43/W44: Label for the "Create new" sticky footer action.
+         *  When set (non-empty), a persistent footer row is rendered at the
+         *  bottom of the dropdown. Clicking it fires `onCreateNew`. */
+        createLabel?: string;
+        /** W43/W44: Callback fired when the "Create new" footer is clicked. */
+        onCreateNew?: () => void;
     }
 
-    let {value = $bindable(''), options, placeholder = '', disabled = false, loading = false, dropdownPosition = 'bottom', inlineSearch = false, maxVisibleItems = 8, class: className = '', item, selectedItem, onchange, compact = false}: Props = $props();
+    let {value = $bindable(''), options, placeholder = '', disabled = false, loading = false, dropdownPosition = 'bottom', inlineSearch = false, maxVisibleItems = 8, class: className = '', item, selectedItem, onchange, compact = false, createLabel = '', onCreateNew}: Props = $props();
 
     // Internal state
     let isOpen = $state(false);
@@ -433,6 +439,19 @@
                     {/each}
                 {/if}
             </div>
+
+            <!-- W43/W44: Sticky "Create new" footer -->
+            {#if createLabel && onCreateNew}
+                <button
+                    type="button"
+                    class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-libre-green hover:bg-libre-green/10 dark:hover:bg-libre-green/20 border-t border-gray-100 dark:border-slate-700 transition-colors"
+                    onclick={(e) => { e.stopPropagation(); closeDropdown(); onCreateNew?.(); }}
+                    data-testid="search-select-create-new"
+                >
+                    <Plus size={14} class="shrink-0" />
+                    <span class="font-medium">{createLabel}</span>
+                </button>
+            {/if}
         </div>
     {/if}
 </div>

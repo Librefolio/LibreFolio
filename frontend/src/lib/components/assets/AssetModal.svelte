@@ -79,12 +79,14 @@
         open?: boolean;
         editMode?: boolean;
         editData?: AssetData | null;
+        /** Z-index override for stacked modal contexts. */
+        zIndex?: number;
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, oncreated, onupdated, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, zIndex = 50, oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -1074,7 +1076,7 @@
     }
 </script>
 
-<ModalBase {open} maxWidth="4xl" allowOverflow={true} onRequestClose={handleClose}>
+<ModalBase {open} maxWidth="4xl" allowOverflow={true} onRequestClose={handleClose} {zIndex}>
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
